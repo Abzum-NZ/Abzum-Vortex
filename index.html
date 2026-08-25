@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Abzum Vortex</title>
+<style>
+  :root {
+    --paper: #F5F6F2; --ink: #101C1A; --muted: #5C6862; --faint: #8A968F;
+    --rule: #D9DDD4; --accent: #166B5E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0C1513; --ink: #E4EAE5; --muted: #93A29A; --faint: #6B7A73;
+      --rule: #1F2E2A; --accent: #5CC2AE;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    padding: 32px; background: var(--paper); color: var(--ink);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 34rem; }
+  .mark {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 10px; font-weight: 600;
+  }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 16px; }
+  p { color: var(--muted); margin: 0 0 14px; }
+  dl { margin: 26px 0 0; padding-top: 20px; border-top: 1px solid var(--rule); }
+  dl > div { display: flex; gap: 14px; padding: 7px 0; }
+  dt { flex: 0 0 8.5rem; color: var(--faint); font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
+  dd { margin: 0; font-size: 15px; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="mark">Abzum Vortex</p>
+  <h1>The platform is not built yet.</h1>
+  <p>
+    This address serves the delivery pipeline while the application is being written.
+    It is replaced by the Next.js application when phase&nbsp;1 lands.
+  </p>
+  <p>
+    What it proves today: a commit reaches this domain, a pull request gets its own
+    preview, and the testing branch has a fixed address of its own.
+  </p>
+  <dl>
+    <div><dt>Repository</dt><dd><a href="https://github.com/Abzum-NZ/Abzum-Vortex">Abzum-NZ/Abzum-Vortex</a></dd></div>
+    <div><dt>Board</dt><dd><a href="https://github.com/orgs/Abzum-NZ/projects/2">Project board</a></dd></div>
+    <div><dt>Specification</dt><dd><a href="https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4">Platform Specification</a></dd></div>
+    <div><dt>Build plan</dt><dd><a href="https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef">Ten phases</a></dd></div>
+  </dl>
+</main>
+</body>
+</html>
