@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, testing]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Types, lint, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The application does not exist yet. Until web/package.json lands (phase 1),
+      # CI records that there is nothing to check and passes, so branch protection
+      # can require this job from the first commit.
+      - name: Detect application
+        id: app
+        run: |
+          if [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.app.outputs.present == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.app.outputs.present == 'true'
+        run: npm ci
+
+      - name: Types
+        if: steps.app.outputs.present == 'true'
+        run: npm run typecheck
+
+      - name: Lint
+        if: steps.app.outputs.present == 'true'
+        run: npm run lint
+
+      - name: Unit tests
+        if: steps.app.outputs.present == 'true'
+        run: npm test
+
+      - name: Database access-rule tests
+        if: steps.app.outputs.present == 'true'
+        run: npm run test:access
+        # Runs the isolation suite against a disposable database. Wired in phase 2.
+
+      - name: Build
+        if: steps.app.outputs.present == 'true'
+        run: npm run build
+
+      - name: Nothing to check yet
+        if: steps.app.outputs.present == 'false'
+        run: echo "No application present. CI passes vacuously until phase 1 lands package.json."

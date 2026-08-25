@@ -1,0 +1,22 @@
+name: Bug
+description: Something behaves differently from the specification
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What was done, what happened, and what the specification says should happen. Name the chapter and section.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: Environment and page.
