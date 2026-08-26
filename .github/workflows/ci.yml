@@ -1,8 +1,25 @@
 name: CI
 
+# This workflow is the gate, not the deployer.
+#
+# Vercel's Git integration builds and deploys on its own: a preview per pull
+# request, the `testing` branch at its own alias, and `main` to production. It
+# needs nothing from here.
+#
+# What stops a bad change moving from `testing` to `main` is branch protection,
+# and what branch protection requires is this job. So Actions is deliberately in
+# the promotion path and deliberately out of the deployment path.
+#
+# It runs only what Vercel does not: types, linting, the package boundary rules,
+# unit tests and the database access-rule tests. It does not build, because
+# Vercel already builds every pull request and its check is required alongside
+# this one. Building twice doubles the wall time and adds no signal.
+#
+# It holds no credential. The access-rule tests run against a throwaway Postgres
+# in the runner, never against the Supabase project, so no connection string is
+# stored in Actions.
+
 on:
-  push:
-    branches: [main, testing]
   pull_request:
 
 concurrency:
@@ -11,15 +28,15 @@ concurrency:
 
 jobs:
   checks:
-    name: Types, lint, tests, build
+    name: Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # The application does not exist yet. Until web/package.json lands (phase 1),
-      # CI records that there is nothing to check and passes, so branch protection
-      # can require this job from the first commit.
-      - name: Detect application
+      # The workspace does not exist yet. Until the root package.json lands in
+      # phase 1, this records that there is nothing to check and passes, so
+      # branch protection can require this job from the first commit.
+      - name: Detect workspace
         id: app
         run: |
           if [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
@@ -42,6 +59,11 @@ jobs:
         if: steps.app.outputs.present == 'true'
         run: npm run lint
 
+      - name: Package boundaries
+        if: steps.app.outputs.present == 'true'
+        run: npm run boundaries
+        # Direction, environment and shipping rules. Wired in phase 1 by #10.
+
       - name: Unit tests
         if: steps.app.outputs.present == 'true'
         run: npm test
@@ -49,12 +71,11 @@ jobs:
       - name: Database access-rule tests
         if: steps.app.outputs.present == 'true'
         run: npm run test:access
-        # Runs the isolation suite against a disposable database. Wired in phase 2.
-
-      - name: Build
-        if: steps.app.outputs.present == 'true'
-        run: npm run build
+        # Wired in phase 2, against a Postgres service container declared here at
+        # that point. The isolation suite runs twice: as the application account,
+        # where every case must be refused, and as the owner of the tables, where
+        # every case must succeed.
 
       - name: Nothing to check yet
         if: steps.app.outputs.present == 'false'
-        run: echo "No application present. CI passes vacuously until phase 1 lands package.json."
+        run: echo "No workspace present. This passes until phase 1 lands the workspace root."
