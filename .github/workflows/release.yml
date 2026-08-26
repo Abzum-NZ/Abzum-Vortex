@@ -1,8 +1,12 @@
 name: Release
 
-# A release is tagged from main after the change has been through testing.
-# Vercel's Git integration deploys main to production; this workflow records the
-# release against the Production environment and publishes the release notes.
+# This workflow does not deploy. Vercel deploys `main` to production on merge,
+# tag or no tag, so nothing here stands between a change and production.
+#
+# What it does is keep the record. A release tagged from `main` gets its notes
+# published, so the rollback in Chapter 24 has something to name and the
+# deployment record says what shipped. It runs on a tag and on nothing else, so
+# it is not in the path of an ordinary change.
 
 on:
   push:
@@ -10,13 +14,11 @@ on:
 
 permissions:
   contents: write
-  deployments: write
 
 jobs:
   release:
-    name: Publish release
+    name: Publish release notes
     runs-on: ubuntu-latest
-    environment: Production
     steps:
       - uses: actions/checkout@v4
         with:
