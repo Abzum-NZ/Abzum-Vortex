@@ -22,8 +22,16 @@ name: CI
 on:
   pull_request:
 
+# One run per pull request: a new push supersedes the run still going, which
+# will matter more as this job grows past the seconds it takes today.
+#
+# The group is namespaced by workflow name. `ci-${{ github.ref }}` was not, and
+# that is a trap worth avoiding: any second workflow adopting the same shape
+# would share the group and cancel this one, and a superseded run reports to
+# branch protection as a failure rather than as "never mind" — so a collision
+# does not just waste a run, it blocks the merge.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
