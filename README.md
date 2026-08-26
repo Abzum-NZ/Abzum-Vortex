@@ -57,6 +57,39 @@ feature branch ──PR──▶ testing ──PR──▶ main
 - `main` is production. It takes pull requests from `testing` only, and a release is tagged from it.
 - Rolling back a build never reverses an applied migration.
 
+## Addresses
+
+| Environment | Address | Serves |
+|---|---|---|
+| Production | `https://vortex.abzum.com` | `main` |
+| Testing | `https://vortex-testing.abzum.com` | `testing`, behind Vercel Authentication |
+| Development | A preview address issued per pull request | that pull request's branch |
+
+The tenant's short name is the first path segment (Specification, section 2.7):
+
+```
+https://vortex.abzum.com/{tenant}/{application}/{page}
+```
+
+Signing in happens at one address, outside any tenant. The Tenant Portal is an application like any
+other and is installed in every tenant, so it is served under that tenant's own segment alongside
+every other application.
+
+The first path segment is therefore shared between tenant short names and the platform's own paths,
+so `signin`, `auth`, `health` and `api` are reserved and refused as short names (Specification,
+section 2.2). The reserved list is read from the same table the platform reads addresses from, and a
+path added to the platform is added to that list in the same change.
+
+Tenant subdomains, `{tenant}.abzum.com`, are not in the first release (Specification, Appendix D.2).
+Adding them later needs a wildcard domain on the Vercel project, which is a paid feature, and the
+address verification of section 2.7 — an address becomes usable only once verified, and an
+unrecognised address is refused rather than falling back to a default. A blanket wildcard would
+contradict that rule, so none is configured. The `*.abzum.com` record that exists in Cloudflare today
+points elsewhere and is not part of this platform.
+
+DNS is served by Cloudflare. Both platform records are `CNAME` to Vercel with the proxy disabled;
+Vercel terminates TLS itself and a proxied record would break certificate issue.
+
 ## Working here
 
 - The project board at https://github.com/orgs/Abzum-NZ/projects/2 is the single source of truth
