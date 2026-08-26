@@ -44,9 +44,14 @@ the host with any mount it chose, which is root on the machine that also runs Co
 runs customer-defined workflows, so that mount would hand a tenant the host. The Docker task runner
 is given up until there is a sandbox for it.
 
-**Both images are pinned.** Kestra's file uses `kestra/kestra:latest`. Pinned, the workflow engine
-changes only as its own reviewed change, which is the same rule
+**Both images are pinned, to the LTS line.** Kestra's file uses `kestra/kestra:latest`. Pinned, the
+workflow engine changes only as its own reviewed change, the same rule
 [#6](https://github.com/Abzum-NZ/Abzum-Vortex/issues/6) applies to Next.js and Puck.
+
+The tag is `v1.0.57`, not the newer `v1.3.x`. The 1.0 line is what `latest-lts` tracks, it is patched
+on the same day as the current line, and the workflow engine is the part of this platform that should
+be dull. A first attempt pinned `v1.3.35` because that was the newest GitHub release; the deployment
+failed because **no image is published under that tag**. Check Docker Hub, not the release list.
 
 **No password is written down.** Kestra's file publishes `POSTGRES_PASSWORD: k3str4` in its own
 public repository.
