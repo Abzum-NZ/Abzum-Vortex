@@ -1,0 +1,93 @@
+# The workflow engine of Specification section 24.1.
+#
+# Kestra open source and its own PostgreSQL, both on the Coolify-managed server.
+# Kestra keeps its state here and never touches the customer database, which is
+# what stops its write volume reaching Supabase.
+#
+# Three deliberate departures from the compose file Kestra publishes:
+#
+#   1. /var/run/docker.sock is NOT mounted. Kestra's own file mounts it into a
+#      container running as root. Anything able to schedule a Docker task could
+#      then start a container on the host with any mount it liked, which is root
+#      on the box. This platform runs customer-defined workflows, so that mount
+#      would hand a tenant the host. The Docker task runner is given up until
+#      there is a sandbox to run it in.
+#   2. Both images are pinned. Kestra's file uses kestra/kestra:latest, which
+#      would let the workflow engine change under the platform between two
+#      deployments of unrelated code.
+#   3. No password is written here. Kestra's file publishes POSTGRES_PASSWORD:
+#      k3str4 in its own repository. Every secret below comes from the
+#      environment and is held in the secret manager.
+#
+# Memory limits are set because the server has 8 GB shared with Coolify and a
+# STUN/TURN service, and Kestra is a JVM: given no limit it takes what it finds.
+
+volumes:
+  kestra-postgres-data:
+    driver: local
+  kestra-storage:
+    driver: local
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    volumes:
+      - kestra-postgres-data:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: kestra
+      POSTGRES_USER: kestra
+      POSTGRES_PASSWORD: ${KESTRA_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  kestra:
+    image: kestra/kestra:v1.3.35
+    restart: unless-stopped
+    stop_grace_period: 6m
+    user: "root"
+    command: server standalone
+    volumes:
+      - kestra-storage:/app/storage
+      - /tmp/kestra-wd:/tmp/kestra-wd
+    environment:
+      SERVICE_FQDN_KESTRA_8080: /
+      KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://postgres:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: kestra
+            password: ${KESTRA_DB_PASSWORD}
+        kestra:
+          server:
+            basic-auth:
+              enabled: true
+              username: ${KESTRA_BASIC_AUTH_USERNAME}
+              password: ${KESTRA_BASIC_AUTH_PASSWORD}
+          repository:
+            type: postgres
+          storage:
+            type: local
+            local:
+              base-path: "/app/storage"
+          queue:
+            type: postgres
+          tasks:
+            tmp-dir:
+              path: /tmp/kestra-wd/tmp
+          url: ${SERVICE_FQDN_KESTRA_8080}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 3g
