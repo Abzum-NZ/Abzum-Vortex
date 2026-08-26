@@ -12,9 +12,14 @@
 #      on the box. This platform runs customer-defined workflows, so that mount
 #      would hand a tenant the host. The Docker task runner is given up until
 #      there is a sandbox to run it in.
-#   2. Both images are pinned. Kestra's file uses kestra/kestra:latest, which
-#      would let the workflow engine change under the platform between two
-#      deployments of unrelated code.
+#   2. Both images are pinned, to the LTS line. Kestra's file uses
+#      kestra/kestra:latest, which would let the workflow engine change under
+#      the platform between two deployments of unrelated code. The tag is
+#      v1.0.57 and not the newer v1.3.x: the 1.0 line is what latest-lts tracks,
+#      it is still patched on the same day as the current line, and a workflow
+#      engine is the part of this platform that should be dull. v1.3.35 also has
+#      a GitHub release with no image published against it, which a deployment
+#      found the hard way.
 #   3. No password is written here. Kestra's file publishes POSTGRES_PASSWORD:
 #      k3str4 in its own repository. Every secret below comes from the
 #      environment and is held in the secret manager.
@@ -49,7 +54,7 @@ services:
           memory: 1g
 
   kestra:
-    image: kestra/kestra:v1.3.35
+    image: kestra/kestra:v1.0.57
     restart: unless-stopped
     stop_grace_period: 6m
     user: "root"
@@ -83,7 +88,7 @@ services:
           tasks:
             tmp-dir:
               path: /tmp/kestra-wd/tmp
-          url: ${SERVICE_FQDN_KESTRA_8080}
+          url: ${KESTRA_PUBLIC_URL}
     depends_on:
       postgres:
         condition: service_healthy
