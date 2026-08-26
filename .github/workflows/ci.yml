@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.app.outputs.present == 'true'
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install

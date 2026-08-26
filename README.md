@@ -64,6 +64,27 @@ feature branch ──PR──▶ testing ──PR──▶ main
 - `main` is production. It takes pull requests from `testing` only, and a release is tagged from it.
 - Rolling back a build never reverses an applied migration.
 
+## Pinned versions
+
+Each of these moves only as its own pull request, never as a side effect of another change. No caret
+and no range on any of them.
+
+| Dependency | Pin | Why this one |
+|---|---|---|
+| `next` | `16.3.3` | Newest stable 16.x. Every page renders through it. |
+| `react`, `react-dom` | `19.2.8` | Next.js and Puck each constrain React. It is chosen rather than resolved. |
+| `@puckeditor/core` | `0.23.0` | The page designer. |
+| Node | `.nvmrc` | Next.js 16 requires `>= 20.9.0`. CI and Vercel both read the file rather than repeating the number. |
+
+**Puck is `@puckeditor/core`, not `@measured/puck`.** The project renamed its package. The old name
+is frozen at `0.20.2` from September 2025 and receives nothing, while the project itself released
+`0.23.0` in August 2026 and is actively committed to. Reaching for the old name gets a package a year
+stale that looks maintained because the project is.
+
+Puck is still pre-1.0. Appendix D chose it knowing that, and the answer is the block registration
+contract of Specification section 29.9: the platform depends on Puck through one registration layer,
+so a breaking change upstream is absorbed in one place rather than across the block library.
+
 ## Addresses
 
 | Environment | Address | Serves |
