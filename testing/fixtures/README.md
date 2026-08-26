@@ -44,7 +44,7 @@ would be invention.
 **Starter data.** [B.10](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#appb)
 loads starter tags from the tags and categories module, which is one of the three absent above.
 
-## One thing the specification leaves unclear, and one that has been settled
+## Two things that were unclear, both now settled
 
 **Workflows and pipelines are carried, and that is now settled.** Section 26.2 said an application
 *carries inside it* "its workflows, its process pipelines"; section 29.2 said it held *references* to
@@ -55,21 +55,34 @@ application publishes every page, workflow and pipeline in it, in one revision.
 
 This file carries both, written from B.7 and B.8.
 
-**`vortex.crm.deal.mark_won` guards an option rather than an action.** Appendix A gives the permission
-"mark a deal as won" but no action to attach it to. The nearest mechanism the contract offers is
-[section 28.8](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#s28-8)'s
-`permission` on a choice option, so the `closed_won` option on the deal's stage field carries it. That
-matches the intent — only a sales manager moves a deal to won — but it is a reading, not something the
-appendix states.
+**`vortex.crm.deal.mark_won` guards the `closed_won` option, and that is the mechanism rather than a
+substitute for one.** Appendix A gives the permission "mark a deal as won" and declares no action to
+attach it to. That is the appendix's choice, not a gap in the contract:
+[section 27.3](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#s27-3) lets a module declare up to a
+hundred actions, and this one declares none.
+
+The permission belongs on the option because that is what the platform offers for this exact shape, and it
+is enforced rather than merely drawn. [Section 28.8](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#s28-8)
+says only a person holding the permission may set the field to that option, and that **the server refuses a
+save that sets an option the caller does not hold the permission for, whatever the browser sent**. An action
+would guard one operation and leave the plain field write beside it open; the permission on the option
+guards every way into the value — a form, the API, an import, and a workflow acting as its `runs_as` role.
+
+None of that is particular to selling. "Only this role may move a record into this state" is what an
+approval, a publishing state, an order being fulfilled and an expense being signed off all need, and the
+platform answers all of them with the one mechanism. Two rules come with it, and both hold here: the module
+registers `vortex.crm.deal.mark_won`, and the deal's stage starts at `discovery`, which needs no
+permission — a starting value a person may not pick is refused.
 
 ## Checked before landing
 
-603 assertions were run over both files, taken from the rules the contract chapters state: the
+669 assertions were run over both files, taken from the rules the contract chapters state: the
 envelope's names, the closed list of body names, the twenty-two field types and their required
 settings, the settings each type refuses, the reserved field keys, what may title a record, permission
 key shapes, that every total names a reverse key some link actually produces, that every navigation
-entry and role home page points at a real page, and that every permission a role names is one a module
-registers or the application declares.
+entry and role home page points at a real page, that every permission a role names is one a module registers
+or the application declares, that every option guarded by a permission names one the module registers, and
+that no value a new record starts with is one a person may need permission to pick.
 
 They all pass. That is not the same as passing the real validator, which
 [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16) runs once phase 1 has built it — and where
