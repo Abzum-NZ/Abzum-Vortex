@@ -44,17 +44,16 @@ would be invention.
 **Starter data.** [B.10](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#appb)
 loads starter tags from the tags and categories module, which is one of the three absent above.
 
-## Two things the specification leaves unclear
+## One thing the specification leaves unclear, and one that has been settled
 
-Recorded here rather than resolved by guessing.
+**Workflows and pipelines are carried, and that is now settled.** Section 26.2 said an application
+*carries inside it* "its workflows, its process pipelines"; section 29.2 said it held *references* to
+them. The two decided different things about whether publishing an application publishes its
+pipelines in the same revision, so the specification was corrected: 29.2 now reads "list of workflow
+definitions" and "list of process pipeline definitions", and 26.2 says plainly that publishing an
+application publishes every page, workflow and pipeline in it, in one revision.
 
-**Are workflows and pipelines inside an application or beside it?**
-[Section 26.2](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#s26-2) lists what
-an application *carries inside it*: "its workflows, its process pipelines". Section 29.2 gives both as
-"a list of **references** to" definitions. Carried inside and referenced are different things, and
-they decide whether publishing an application publishes its pipelines in the same revision. These
-files follow 29.2 and hold references, because 29.2 is the contract chapter. If 26.2 is the intent,
-29.2 needs changing and so do these files.
+This file carries both, written from B.7 and B.8.
 
 **`vortex.crm.deal.mark_won` guards an option rather than an action.** Appendix A gives the permission
 "mark a deal as won" but no action to attach it to. The nearest mechanism the contract offers is
@@ -75,3 +74,17 @@ registers or the application declares.
 They all pass. That is not the same as passing the real validator, which
 [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16) runs once phase 1 has built it — and where
 these files and the contracts disagree, the appendices win and the contract is corrected.
+
+## Two readings inside the workflow and the pipeline
+
+Appendix B describes both in prose, and two details had to be read rather than copied.
+
+**The Slack step stops the run when its retries are exhausted.** B.8 says the platform retries and
+*"the deal is unaffected"*. The deal is unaffected whatever happens, because the whole run is
+background work. What B.8 does not say is what follows a step that never succeeds, so the step keeps
+section 30.10's default of `stop`. The onboarding task is created first, so it survives.
+
+**The Close stage requires the stage field.** B.7 says the work leaving that stage needs *"stage set
+to Closed Won"*, which is a value rather than a filled-in field. `required_fields` holds field keys,
+so it names `stage`. Requiring the particular value belongs on the move's `condition`, and there is
+no move out of Close to hang it on.
