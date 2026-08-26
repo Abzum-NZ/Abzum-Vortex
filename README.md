@@ -51,7 +51,14 @@ feature branch ──PR──▶ testing ──PR──▶ main
   (preview per PR)  (staging alias)  (live domain)
 ```
 
-- Every pull request runs types, linting, unit tests, the database access-rule tests and a build.
+- Vercel builds and deploys. Its Git integration builds every pull request and every branch, so
+  no GitHub Actions run stands between a change and a deployment.
+- Actions is the promotion gate instead. Branch protection on `testing` and `main` requires two
+  checks before a merge: `Checks` from Actions and `Vercel` from the build.
+- `Checks` runs only what Vercel does not: types, linting, the package boundary rules, unit
+  tests and the database access-rule tests. It does not build, because Vercel already has.
+- No credential is stored in Actions. The access-rule tests use a throwaway Postgres in the
+  runner, never the Supabase project.
 - Every schema change ships as a migration file with its permission tests in the same change.
 - `testing` is the integration branch. Vercel serves it at the staging alias.
 - `main` is production. It takes pull requests from `testing` only, and a release is tagged from it.
