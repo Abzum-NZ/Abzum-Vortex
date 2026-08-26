@@ -56,6 +56,18 @@ failed because **no image is published under that tag**. Check Docker Hub, not t
 **No password is written down.** Kestra's file publishes `POSTGRES_PASSWORD: k3str4` in its own
 public repository.
 
+## Usage reporting is off
+
+Kestra ships with `anonymous-usage-report.enabled: true`, which posts to
+`https://api.kestra.io/v1/reports/server-events` every hour, and a second browser-side report from the
+interface. The payload carries the instance and session identifiers, the server type and version, the
+host's time zone, and system, feature, service and plugin usage counts. No flow content and no records.
+
+Both are turned off. This engine runs tenants' business processes on a server that also holds its own
+database, and a standing hourly call outward from it is a decision, not a default. Chapter 24,
+section 24.9 already refuses third-party analytics on customer pages; this is the same rule one layer
+down.
+
 ## Memory
 
 The server has 8 GB and already runs Coolify and a STUN/TURN service. Kestra is a JVM and takes what

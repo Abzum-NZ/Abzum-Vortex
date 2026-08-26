@@ -72,6 +72,10 @@ services:
             username: kestra
             password: ${KESTRA_DB_PASSWORD}
         kestra:
+          anonymous-usage-report:
+            enabled: false
+          ui-anonymous-usage-report:
+            enabled: false
           server:
             basic-auth:
               enabled: true
