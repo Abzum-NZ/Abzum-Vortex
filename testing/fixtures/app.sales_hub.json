@@ -18,7 +18,6 @@
     "home_page": "executive_dashboard",
     "currency": "USD",
     "financial_year_start_month": 4,
-
     "modules": [
       {
         "module": "vortex.crm",
@@ -26,7 +25,6 @@
         "version": "1.0.0"
       }
     ],
-
     "options": [
       {
         "id": "discount_override",
@@ -47,11 +45,12 @@
         "default": true
       }
     ],
-
     "app_permissions": [
-      { "id": "export_forecast", "label": "Export the forecast" }
+      {
+        "id": "export_forecast",
+        "label": "Export the forecast"
+      }
     ],
-
     "app_roles": [
       {
         "id": "sales_representative",
@@ -110,7 +109,6 @@
         ]
       }
     ],
-
     "navigation": {
       "sections": [
         {
@@ -122,24 +120,54 @@
               "id": "pipeline_and_revenue",
               "label": "Pipeline and revenue",
               "entries": [
-                { "id": "nav_executive_dashboard", "label": "Executive dashboard", "icon": "layout-dashboard", "page": "executive_dashboard" },
-                { "id": "nav_deals_pipeline", "label": "Deals pipeline", "icon": "columns", "page": "deals_pipeline" },
-                { "id": "nav_leads", "label": "Leads", "icon": "user-plus", "page": "leads" }
+                {
+                  "id": "nav_executive_dashboard",
+                  "label": "Executive dashboard",
+                  "icon": "layout-dashboard",
+                  "page": "executive_dashboard"
+                },
+                {
+                  "id": "nav_deals_pipeline",
+                  "label": "Deals pipeline",
+                  "icon": "columns",
+                  "page": "deals_pipeline"
+                },
+                {
+                  "id": "nav_leads",
+                  "label": "Leads",
+                  "icon": "user-plus",
+                  "page": "leads"
+                }
               ]
             },
             {
               "id": "customer_directory",
               "label": "Customer directory",
               "entries": [
-                { "id": "nav_accounts", "label": "Accounts", "icon": "building", "page": "accounts" },
-                { "id": "nav_contacts", "label": "Contacts", "icon": "users", "page": "contacts" }
+                {
+                  "id": "nav_accounts",
+                  "label": "Accounts",
+                  "icon": "building",
+                  "page": "accounts"
+                },
+                {
+                  "id": "nav_contacts",
+                  "label": "Contacts",
+                  "icon": "users",
+                  "page": "contacts"
+                }
               ]
             },
             {
               "id": "work_and_activities",
               "label": "Work and activities",
               "entries": [
-                { "id": "nav_my_open_tasks", "label": "My open tasks", "icon": "check-square", "page": "my_open_tasks" }
+                {
+                  "id": "nav_my_open_tasks",
+                  "label": "My open tasks",
+                  "icon": "check-square",
+                  "page": "my_open_tasks"
+                }
               ]
             }
           ]
@@ -166,7 +194,6 @@
         }
       ]
     },
-
     "pages": [
       {
         "id": "executive_dashboard",
@@ -175,9 +202,39 @@
         "opened_by": "anyone_signed_in",
         "in_menu": true,
         "blocks": [
-          { "id": "revenue_won_this_year", "block": "figure", "settings": { "record_type": "vortex.crm:deal", "operation": "sum", "field": "amount" } },
-          { "id": "pipeline_by_stage", "block": "bar_chart", "settings": { "record_type": "vortex.crm:deal", "group_by": "stage", "operation": "sum", "field": "amount" } },
-          { "id": "open_deals_over_fifty_thousand", "block": "table", "settings": { "record_type": "vortex.crm:deal", "fields": ["name", "account", "amount", "stage", "close_date"] } }
+          {
+            "id": "revenue_won_this_year",
+            "block": "figure",
+            "settings": {
+              "record_type": "vortex.crm:deal",
+              "operation": "sum",
+              "field": "amount"
+            }
+          },
+          {
+            "id": "pipeline_by_stage",
+            "block": "bar_chart",
+            "settings": {
+              "record_type": "vortex.crm:deal",
+              "group_by": "stage",
+              "operation": "sum",
+              "field": "amount"
+            }
+          },
+          {
+            "id": "open_deals_over_fifty_thousand",
+            "block": "table",
+            "settings": {
+              "record_type": "vortex.crm:deal",
+              "fields": [
+                "name",
+                "account",
+                "amount",
+                "stage",
+                "close_date"
+              ]
+            }
+          }
         ]
       },
       {
@@ -189,7 +246,15 @@
         "in_menu": true,
         "empty_message": "No deals yet. Create one, or convert a lead.",
         "blocks": [
-          { "id": "pipeline_board", "block": "board", "settings": { "record_type": "vortex.crm:deal", "group_by": "stage", "inline_edit": true } }
+          {
+            "id": "pipeline_board",
+            "block": "board",
+            "settings": {
+              "record_type": "vortex.crm:deal",
+              "group_by": "stage",
+              "inline_edit": true
+            }
+          }
         ]
       },
       {
@@ -201,7 +266,21 @@
         "in_menu": true,
         "empty_message": "No leads yet.",
         "blocks": [
-          { "id": "leads_table", "block": "table", "settings": { "record_type": "vortex.crm:lead", "fields": ["company_name", "last_name", "status", "estimated_budget", "lead_score"], "accepts_address_filter": true } }
+          {
+            "id": "leads_table",
+            "block": "table",
+            "settings": {
+              "record_type": "vortex.crm:lead",
+              "fields": [
+                "company_name",
+                "last_name",
+                "status",
+                "estimated_budget",
+                "lead_score"
+              ],
+              "accepts_address_filter": true
+            }
+          }
         ]
       },
       {
@@ -213,7 +292,19 @@
         "in_menu": true,
         "empty_message": "No accounts yet.",
         "blocks": [
-          { "id": "accounts_table", "block": "table", "settings": { "record_type": "vortex.crm:account", "fields": ["name", "industry", "annual_revenue", "total_won_revenue"] } }
+          {
+            "id": "accounts_table",
+            "block": "table",
+            "settings": {
+              "record_type": "vortex.crm:account",
+              "fields": [
+                "name",
+                "industry",
+                "annual_revenue",
+                "total_won_revenue"
+              ]
+            }
+          }
         ]
       },
       {
@@ -225,7 +316,19 @@
         "in_menu": true,
         "empty_message": "No contacts yet.",
         "blocks": [
-          { "id": "contacts_table", "block": "table", "settings": { "record_type": "vortex.crm:contact", "fields": ["full_name", "account", "email", "job_title"] } }
+          {
+            "id": "contacts_table",
+            "block": "table",
+            "settings": {
+              "record_type": "vortex.crm:contact",
+              "fields": [
+                "full_name",
+                "account",
+                "email",
+                "job_title"
+              ]
+            }
+          }
         ]
       },
       {
@@ -237,7 +340,19 @@
         "in_menu": true,
         "empty_message": "Nothing open. ",
         "blocks": [
-          { "id": "my_tasks_table", "block": "table", "settings": { "record_type": "vortex.crm:activity", "fields": ["subject", "activity_type", "due_date", "completed"] } }
+          {
+            "id": "my_tasks_table",
+            "block": "table",
+            "settings": {
+              "record_type": "vortex.crm:activity",
+              "fields": [
+                "subject",
+                "activity_type",
+                "due_date",
+                "completed"
+              ]
+            }
+          }
         ]
       },
       {
@@ -250,7 +365,20 @@
         "requires_option": "public_enquiry_form",
         "commit_action": "vortex.crm.lead.create_from_enquiry",
         "blocks": [
-          { "id": "enquiry_form", "block": "form", "settings": { "record_type": "vortex.crm:lead", "fields": ["company_name", "first_name", "last_name", "email", "estimated_budget"] } }
+          {
+            "id": "enquiry_form",
+            "block": "form",
+            "settings": {
+              "record_type": "vortex.crm:lead",
+              "fields": [
+                "company_name",
+                "first_name",
+                "last_name",
+                "email",
+                "estimated_budget"
+              ]
+            }
+          }
         ]
       },
       {
@@ -266,7 +394,20 @@
             "id": "confirm_the_contact_and_the_company",
             "label": "Confirm the contact and the company",
             "blocks": [
-              { "id": "step_one_form", "block": "form", "settings": { "record_type": "vortex.crm:lead", "fields": ["company_name", "first_name", "last_name", "email", "estimated_budget"] } }
+              {
+                "id": "step_one_form",
+                "block": "form",
+                "settings": {
+                  "record_type": "vortex.crm:lead",
+                  "fields": [
+                    "company_name",
+                    "first_name",
+                    "last_name",
+                    "email",
+                    "estimated_budget"
+                  ]
+                }
+              }
             ]
           },
           {
@@ -275,11 +416,30 @@
             "shown_when": {
               "join": "and",
               "tests": [
-                { "left": { "source": "field", "name": "estimated_budget" }, "operator": "is_more_than", "right": 50000 }
+                {
+                  "left": {
+                    "source": "field",
+                    "name": "estimated_budget"
+                  },
+                  "operator": "is_more_than",
+                  "right": 50000
+                }
               ]
             },
             "blocks": [
-              { "id": "enterprise_form", "block": "form", "settings": { "record_type": "vortex.crm:deal", "fields": ["name", "amount", "discount", "payment_schedule"] } }
+              {
+                "id": "enterprise_form",
+                "block": "form",
+                "settings": {
+                  "record_type": "vortex.crm:deal",
+                  "fields": [
+                    "name",
+                    "amount",
+                    "discount",
+                    "payment_schedule"
+                  ]
+                }
+              }
             ]
           },
           {
@@ -289,18 +449,42 @@
               "join": "and",
               "negate": true,
               "tests": [
-                { "left": { "source": "field", "name": "estimated_budget" }, "operator": "is_more_than", "right": 50000 }
+                {
+                  "left": {
+                    "source": "field",
+                    "name": "estimated_budget"
+                  },
+                  "operator": "is_more_than",
+                  "right": 50000
+                }
               ]
             },
             "blocks": [
-              { "id": "standard_form", "block": "form", "settings": { "record_type": "vortex.crm:deal", "fields": ["name", "amount", "close_date"] } }
+              {
+                "id": "standard_form",
+                "block": "form",
+                "settings": {
+                  "record_type": "vortex.crm:deal",
+                  "fields": [
+                    "name",
+                    "amount",
+                    "close_date"
+                  ]
+                }
+              }
             ]
           },
           {
             "id": "review_and_convert",
             "label": "Review and convert",
             "blocks": [
-              { "id": "review_summary", "block": "summary", "settings": { "record_type": "vortex.crm:lead" } }
+              {
+                "id": "review_summary",
+                "block": "summary",
+                "settings": {
+                  "record_type": "vortex.crm:lead"
+                }
+              }
             ]
           }
         ]
@@ -313,16 +497,200 @@
         "opened_by": "vortex.crm.deal.read",
         "in_menu": false,
         "blocks": [
-          { "id": "deal_fields", "block": "record_fields", "settings": { "record_type": "vortex.crm:deal" } },
-          { "id": "deal_payment_schedule", "block": "record_table_field", "settings": { "record_type": "vortex.crm:deal", "field": "payment_schedule" } },
-          { "id": "deal_activities", "block": "table", "settings": { "record_type": "vortex.crm:activity", "through": "regarding" } }
+          {
+            "id": "deal_fields",
+            "block": "record_fields",
+            "settings": {
+              "record_type": "vortex.crm:deal"
+            }
+          },
+          {
+            "id": "deal_payment_schedule",
+            "block": "record_table_field",
+            "settings": {
+              "record_type": "vortex.crm:deal",
+              "field": "payment_schedule"
+            }
+          },
+          {
+            "id": "deal_activities",
+            "block": "table",
+            "settings": {
+              "record_type": "vortex.crm:activity",
+              "through": "regarding"
+            }
+          }
         ]
       }
     ],
-
-    "process_pipelines": ["app.sales_hub.qualification"],
-    "workflows": ["app.sales_hub.on_deal_won"],
-    "connections": ["conn.slack", "conn.email_sending"],
+    "process_pipelines": [
+      {
+        "id": "app.sales_hub.qualification",
+        "name": "Qualification",
+        "record_type": "vortex.crm:lead",
+        "stages": [
+          {
+            "id": "qualify",
+            "label": "Qualify",
+            "owner_role": "sales_representative",
+            "required_fields": [
+              "company_name",
+              "email",
+              "estimated_budget"
+            ],
+            "time_target_hours": 24
+          },
+          {
+            "id": "discovery",
+            "label": "Discovery",
+            "owner_role": "sales_representative",
+            "required_fields": [
+              "lead_score"
+            ],
+            "time_target_hours": 48
+          },
+          {
+            "id": "proposal",
+            "label": "Proposal",
+            "record_type": "vortex.crm:deal",
+            "owner_role": "sales_representative",
+            "required_fields": [
+              "amount",
+              "close_date"
+            ],
+            "time_target_hours": 72
+          },
+          {
+            "id": "close",
+            "label": "Close",
+            "record_type": "vortex.crm:deal",
+            "owner_role": "sales_manager",
+            "required_fields": [
+              "stage"
+            ]
+          }
+        ],
+        "moves": [
+          {
+            "from": "qualify",
+            "to": "discovery",
+            "kind": "advance",
+            "permission": "vortex.crm.lead.update"
+          },
+          {
+            "from": "discovery",
+            "to": "qualify",
+            "kind": "go_back",
+            "permission": "vortex.crm.lead.update"
+          },
+          {
+            "from": "discovery",
+            "to": "proposal",
+            "kind": "advance",
+            "permission": "vortex.crm.lead.convert"
+          },
+          {
+            "from": "proposal",
+            "to": "discovery",
+            "kind": "go_back",
+            "permission": "vortex.crm.deal.update"
+          },
+          {
+            "from": "proposal",
+            "to": "close",
+            "kind": "advance",
+            "permission": "vortex.crm.deal.update"
+          },
+          {
+            "from": "close",
+            "to": "proposal",
+            "kind": "go_back",
+            "permission": "vortex.crm.deal.update"
+          }
+        ]
+      }
+    ],
+    "workflows": [
+      {
+        "id": "app.sales_hub.on_deal_won",
+        "name": "When a deal is won",
+        "trigger": {
+          "kind": "event",
+          "event": "vortex.crm.deal.stage_changed",
+          "filter": {
+            "join": "and",
+            "tests": [
+              {
+                "left": {
+                  "source": "carried",
+                  "name": "new_stage"
+                },
+                "operator": "is",
+                "right": "closed_won"
+              }
+            ]
+          }
+        },
+        "runs_as": "sales_manager",
+        "subject": {
+          "source": "carried",
+          "name": "deal"
+        },
+        "on_existing_run": "keep",
+        "steps": [
+          {
+            "id": "create_onboarding_task",
+            "kind": "create_record",
+            "settings": {
+              "record_type": "vortex.crm:activity",
+              "values": {
+                "subject": "Onboard the customer",
+                "activity_type": "to_do",
+                "due_date": {
+                  "operation": "add_days",
+                  "parts": [
+                    {
+                      "source": "now"
+                    },
+                    {
+                      "source": "literal",
+                      "value": 3
+                    }
+                  ]
+                },
+                "completed": false,
+                "regarding": {
+                  "source": "carried",
+                  "name": "deal"
+                }
+              }
+            },
+            "retries": 5,
+            "retry_first_delay_seconds": 10,
+            "on_error": "stop"
+          },
+          {
+            "id": "announce_in_slack",
+            "kind": "call_a_connection",
+            "settings": {
+              "connection": "conn.slack",
+              "request_template": "post_message",
+              "values": {
+                "channel": "sales",
+                "text": "A deal has been won."
+              }
+            },
+            "retries": 5,
+            "retry_first_delay_seconds": 10,
+            "on_error": "stop"
+          }
+        ]
+      }
+    ],
+    "connections": [
+      "conn.slack",
+      "conn.email_sending"
+    ],
     "search_scope": [
       "vortex.crm:account",
       "vortex.crm:contact",
