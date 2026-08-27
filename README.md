@@ -77,7 +77,20 @@ and no range on any of them.
 | `next` | `16.3.3` | Newest stable 16.x. Every page renders through it. |
 | `react`, `react-dom` | `19.2.8` | Next.js and Puck each constrain React. It is chosen rather than resolved. |
 | `@puckeditor/core` | `0.23.0` | The page designer. |
-| Node | `.nvmrc` | Next.js 16 requires `>= 20.9.0`. Vercel reads the file rather than repeating the number. |
+| Node | `24` | Next.js 16 requires `>= 20.9.0`. 24 is current long-term support and what Vercel selects by default, so there is one less thing to keep in step. Pinned in three files — see below. |
+
+**Node is pinned in three places, and it has to be.** Vercel does not read `.nvmrc`. It reads
+`engines.node` in `package.json` first, then a `.node-version` file, then the project setting in the
+Vercel dashboard. `.nvmrc` exists for local tooling only. Set one and miss the others and the machine
+you develop on quietly runs a different Node from the one that builds production — which is exactly
+what happened here: `.nvmrc` said 22 while Vercel built with 24, and nobody would have noticed until
+something broke that only breaks on one of them.
+
+| File | Read by |
+|---|---|
+| `.nvmrc` | `nvm` and local tooling. Vercel ignores it. |
+| `.node-version` | Vercel, and most version managers. |
+| `engines.node` in `package.json` | Vercel, above everything else. Added when the workspace root lands (#10). |
 
 **Puck is `@puckeditor/core`, not `@measured/puck`.** The project renamed its package. The old name
 is frozen at `0.20.2` from September 2025 and receives nothing, while the project itself released
