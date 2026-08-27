@@ -1,0 +1,6 @@
+* text=auto
+
+# Read by a build, one value per line. A stray carriage return makes the value
+# unparseable, and the machine that commits it never sees the failure.
+.nvmrc          text eol=lf
+.node-version   text eol=lf
