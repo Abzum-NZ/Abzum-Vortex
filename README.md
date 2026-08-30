@@ -26,21 +26,51 @@ Three services and no others (Specification, Chapter 24):
 
 ## Repository layout
 
-One repository, one deployable application (Specification, section 24.3). Packages depend one way
-only, and a deep import fails the build.
+One repository, one deployable application (Specification, section 24.3).
 
-```
-web/        The Next.js application. The only thing deployed.
-contracts/  The shapes of modules, pages, records and events. Depends on nothing.
-db/         Database clients, the server's data layer, the access rules, generated types.
-runtime/    The module registry, records and fields, rules, pages, search.
-ui/         The shadcn/ui base and the block library.
-studio/     The designers.
-modules/    The module definitions Abzum ships.
-testing/    Fixtures, the permission matrix, the database tests.
-migrations/ Ordered database migrations and their tests.
-workflows/  Workflow definitions deployed to the workflow engine.
-```
+### The packages
+
+| Package | Holds |
+|---|---|
+| `web/` | The Next.js application. The only thing deployed. |
+| `contracts/` | The shapes of modules, pages, records and events. Depends on nothing. |
+| `db/` | Database clients, the server's data layer, the access rules, generated types. |
+| `runtime/` | The module registry, records and fields, rules, pages, search. **One package per engine**, as Specification section 25.1 lists them, rather than one package holding all sixteen. |
+| `ui/` | The shadcn/ui base and the block library. |
+| `studio/` | The designers. |
+| `modules/` | The module definitions Abzum ships. |
+| `testing/` | Fixtures, the permission matrix, the database tests. |
+
+Dependencies run one way only. Nothing depends upward and no package reaches inside another
+package's files. Every package states what it makes public, and a deep import fails the build. Every
+package also states where it sits in the engine order of Specification section 25.3 and whether it
+may run in a browser, and the build derives the allowed dependency graph from those statements
+rather than from a list kept by hand. Database credentials and secrets are marked server-only and
+cannot enter a package that runs in a browser.
+
+### Alongside the packages
+
+These are not packages. Nothing imports them.
+
+| Directory | Holds |
+|---|---|
+| `migrations/` | Ordered database migrations and their tests. Applied by Kestra, never by the application. |
+| `workflows/` | Kestra flow definitions that operate the platform: applying migrations, running the access-rule tests. |
+
+### "Module" means two different things, and they are not related
+
+| Sense | Where it lives | What it is |
+|---|---|---|
+| A **Vortex module** | rows in the database; the ones Abzum ships are authored under `modules/` | A metadata definition — record types, fields, relationships, permissions, rules, events. What a customer's application is assembled from. Specification chapter 27 |
+| A **package** | a directory in this repository | Code that ships, listed in the table above |
+
+So `studio/` is a package and not a Vortex module. It is code — the designers — and it is never
+stored as rows or carried by an application.
+
+The same split applies to the word *workflow*. A workflow **inside an application** is a metadata
+definition, carried by that application and published in the same revision (Specification section
+26.2). The `workflows/` directory holds something unrelated: Kestra flow definitions that operate the
+platform itself. One is product, the other is plumbing.
 
 ## How a change reaches production
 
