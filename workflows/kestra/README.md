@@ -96,26 +96,37 @@ that reports success is a backup that genuinely restores.
 It verifies a backup. It does not recover one. Replacing the live database is a decision a person
 makes after working out what went wrong, so that stays manual.
 
-Run it on the server, or as a Coolify scheduled task against the Kestra resource:
+### Where the settings live
+
+Doppler project **`abzum-kestra`**, config **`prd`**. That project exists to keep server-side secrets
+apart from `abzum-vortex`, whose `dev`, `stg` and `prd` configs all sync to Vercel. Nothing here is
+wanted by the web application, and a secret placed in `abzum-vortex` would be pushed to every Vercel
+build and function for no reason.
+
+Four of the six values are already there and are not secret: `R2_ENDPOINT`, `R2_BUCKET`, `R2_PREFIX`
+and `PG_CONTAINER`. The two credentials, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, are added by
+hand.
+
+Doppler has no Coolify sync — its catalogue covers Vercel, Netlify, Render, Fly.io and the rest, but
+not Coolify — so the values do not arrive on the server on their own. Install the Doppler CLI there,
+give it a service token scoped to `abzum-kestra` / `prd`, and let the script read them at run time:
 
 ```
-R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com \
-R2_ACCESS_KEY_ID=... \
-R2_SECRET_ACCESS_KEY=... \
-R2_BUCKET=abzum-console-backups \
-R2_PREFIX=data/coolify/backups/volumes/root-team-0/<uuid>/ \
-PG_CONTAINER=<the Kestra postgres container> \
-./verify-restore.sh
+doppler run --project abzum-kestra --config prd -- ./verify-restore.sh
 ```
 
-Schedule it weekly rather than nightly. The point is to catch a backup that has quietly stopped being
-restorable, and a week is soon enough to notice while the older copies are still inside the
+Reading them at run time is what keeps the promise that a credential is changed in one place. Copying
+the values into Coolify's own environment variables would work today and drift tomorrow, because
+rotating the R2 key would then mean remembering to change it twice.
+
+Run it as a weekly Coolify scheduled task on the Kestra resource. Weekly, not nightly — enough to
+catch a backup that has quietly stopped restoring while the older copies are still inside the
 seven-day retention window.
 
 ### The token this needs
 
 Create an R2 API token in Cloudflare with **Object Read only**, scoped to the `abzum-console-backups`
-bucket, and put it in the secret manager alongside the other credentials.
+bucket, and put its Access Key ID and Secret Access Key into Doppler under `abzum-kestra` / `prd`.
 
 Read-only is not caution for its own sake. This token sits on the same server as the thing it backs
 up. A token that could also write or delete would let anyone who took the server destroy the offsite
