@@ -12,11 +12,17 @@ apart from every other organisation's.
 
 | Document | Where |
 |---|---|
-| Platform Specification (33 chapters, 5 appendices) | https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4 |
-| Build Plan (prerequisites, dependency map, ten phases) | https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef |
-| Project board | https://github.com/orgs/Abzum-NZ/projects/2 |
+| Platform Specification 2.0 review draft | [docs/specification/README.md](docs/specification/README.md) |
+| Revised Build Plan 2.0 review draft | [docs/build-plan/README.md](docs/build-plan/README.md) |
+| Open business decisions | [docs/specification/appendices/decisions.md](docs/specification/appendices/decisions.md) |
+| Coverage of the earlier specification and plan | [docs/specification/appendices/traceability.md](docs/specification/appendices/traceability.md) |
+| Project board | [Vortex GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2) |
+| Earlier Platform Specification (source under review) | [33 chapters and 5 appendices](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4) |
+| Earlier Build Plan (source under review) | [Prerequisites, dependency map and ten phases](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef) |
 
-The specification decides. Change the specification before you change behaviour, never after.
+The 2.0 specification becomes authoritative when its blocking decisions are approved. Until then,
+conflicting requirements are review items rather than instructions to build. Change the specification
+before changing behaviour, never after.
 
 ## What runs
 
@@ -120,6 +126,10 @@ application carries it and publishes it in the same revision (Specification sect
 as applying migrations. One is product. The other is plumbing.
 
 ## How a change reaches production
+
+> **Under review:** The flow below describes the current repository setup. The required pre-merge
+> database check is not yet settled; see [Decision D20](docs/specification/appendices/decisions.md#d20-pre-merge-database-testing)
+> and [Delivery environments, database changes and testing](docs/specification/18-delivery-and-testing.md).
 
 ```
 feature branch ──PR──▶ testing ──PR──▶ main
