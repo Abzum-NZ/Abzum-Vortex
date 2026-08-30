@@ -79,3 +79,45 @@ it is given, so both containers carry a limit: 3 GB for Kestra, 1 GB for Postgre
 that runs pause and resume from their last completed step when the server returns. That holds only
 while `kestra-postgres-data` survives, so it is backed up on a schedule. Losing it loses every run in
 flight, and nobody would find out until a restore.
+
+The backup runs nightly and the archive is sent to Cloudflare R2. As of 31 August 2026 no local copy
+is kept: the Coolify backup's **Local copy** setting is *Delete after S3 upload*, so the only copy
+that survives the server is the one in R2. The full backup and restore procedure, with the checksums
+and row counts from a rehearsal, is written out on
+[issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132).
+
+## Checking that the backup still restores
+
+A backup nobody has restored is a guess. `verify-restore.sh` turns that guess into a fact: it pulls
+the newest archive from Cloudflare R2, restores it into a throwaway database beside the live one,
+checks the flow definitions came back, and drops it again. It fails loudly at every step, so a run
+that reports success is a backup that genuinely restores.
+
+It verifies a backup. It does not recover one. Replacing the live database is a decision a person
+makes after working out what went wrong, so that stays manual.
+
+Run it on the server, or as a Coolify scheduled task against the Kestra resource:
+
+```
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com \
+R2_ACCESS_KEY_ID=... \
+R2_SECRET_ACCESS_KEY=... \
+R2_BUCKET=abzum-console-backups \
+R2_PREFIX=data/coolify/backups/volumes/root-team-0/<uuid>/ \
+PG_CONTAINER=<the Kestra postgres container> \
+./verify-restore.sh
+```
+
+Schedule it weekly rather than nightly. The point is to catch a backup that has quietly stopped being
+restorable, and a week is soon enough to notice while the older copies are still inside the
+seven-day retention window.
+
+### The token this needs
+
+Create an R2 API token in Cloudflare with **Object Read only**, scoped to the `abzum-console-backups`
+bucket, and put it in the secret manager alongside the other credentials.
+
+Read-only is not caution for its own sake. This token sits on the same server as the thing it backs
+up. A token that could also write or delete would let anyone who took the server destroy the offsite
+copies too, which is the single thing an offsite copy exists to survive. Read-only means the worst
+they can do is read backups they already have the database for.
