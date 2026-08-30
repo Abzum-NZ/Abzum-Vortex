@@ -59,13 +59,83 @@ feature branch ──PR──▶ testing ──PR──▶ main
   fixed. That cost is accepted deliberately, in exchange for one system rather than two.
 - **There is no GitHub Actions.** Nothing here runs on it and no credential is stored there. A
   release is cut with `gh release create --generate-notes`, which needs no workflow.
-- The database access-rule tests need a database of their own to create and destroy, which a Vercel
-  build cannot provide. Kestra runs them. Kestra also applies migrations: automatically to testing,
-  and to production only with approval.
+- The database access-rule tests create roles and switch row-level security on and off, which needs a
+  real Postgres session that a Vercel build cannot hold. Kestra runs them, against the second Supabase
+  project — the testing one. Kestra also applies migrations: automatically to testing, and to
+  production only with approval.
 - Every schema change ships as a migration file with its permission tests in the same change.
 - `testing` is the integration branch. Vercel serves it at the staging alias.
 - `main` is production. It takes pull requests from `testing` only, and a release is tagged from it.
 - Rolling back a build never reverses an applied migration.
+
+## Secrets and connections
+
+Doppler holds every secret. Nothing is typed into Vercel by hand.
+
+| Doppler config | Vercel environment | Serves |
+|---|---|---|
+| `prd` | Production | `main` |
+| `stg` | Preview | `testing` and every pull request preview |
+| `dev` | Development | `vercel dev` on your own machine |
+
+Change a value in Doppler and it reaches Vercel within seconds. A value changed in Vercel is
+overwritten on the next sync and lost, so there is one place to change anything.
+
+**Never add a variable in Vercel by hand.** Beyond the obvious drift, doing so can silently break the
+sync — see below.
+
+### The rule that will cost you an hour if you do not know it
+
+Vercel lets a variable be marked **Sensitive**, meaning nobody can read it back afterwards, not even
+you. Doppler writes its variables that way. Vercel also enforces that **one name is the same kind
+everywhere**: a name cannot be Sensitive in Production and ordinary in Preview.
+
+So if a hand-made, ordinary variable already exists under a name Doppler is about to own, Vercel
+refuses to create Doppler's — and **says nothing**. Doppler's dashboard continues to report `In Sync`,
+Vercel shows no error, and the variable simply never appears. This happened twice while the project
+was being set up, to `DATABASE_URL` and to the three `KESTRA_API_*` values.
+
+If a secret exists in Doppler with a value and has not appeared in Vercel: look for a hand-made copy
+of that name on another environment, delete it, then re-sync from Doppler's **Config Syncs** tab. A
+sync reporting `In Sync` is not evidence that anything was written.
+
+### A password appears in one place only
+
+`DATABASE_URL` does not contain the password. It references it:
+
+```
+postgresql://postgres.<project-ref>:${DATABASE_PASSWORD}@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres
+```
+
+Doppler resolves the reference when it syncs, so Vercel receives a complete string. Rotating the
+password means changing `DATABASE_PASSWORD` alone; the connection string rebuilds itself. Nobody has
+to remember that a password is also embedded in a URL somewhere.
+
+### Names the browser can see
+
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` carry the prefix because Next.js
+exposes only prefixed variables to browser code, and the Supabase client used for signing in and for
+live updates runs in the browser. Both values are public by design. Dropping the prefix does not make
+them secret; it makes them unreadable to the code that needs them.
+
+There is deliberately **no Supabase service-role key anywhere**. The application connects as the
+application database account over Postgres, per Specification section 2.12. If one appears, it is a bug.
+
+### Two ways into the database, on purpose
+
+| Caller | Route | Port | Why |
+|---|---|---|---|
+| The web application | session pooler | 5432 | Vercel egresses over IPv4. The direct host is IPv6-only, and the transaction pooler needs the paid IPv4 add-on |
+| Kestra, applying migrations and running the access-rule tests | direct connection | 5432 | Both need a real Postgres session: migrations take a session-level advisory lock, and the access-rule tests create roles and change row-level security. Kestra runs on our own server, where IPv6 is available |
+
+Session mode behaves like a direct connection, so the client needs no special configuration. If the
+IPv4 add-on is ever bought and the application moves to the transaction pooler on 6543, prepared
+statements must be turned off in the client — transaction mode gives the next statement a different
+physical connection.
+
+The pooler allows **15 connections** on the current compute, and in session mode a caller holds one
+for as long as it stays connected. Keep the client pool to one or two per instance; a library default
+of ten exhausts the pool with two warm instances.
 
 ## Pinned versions
 
