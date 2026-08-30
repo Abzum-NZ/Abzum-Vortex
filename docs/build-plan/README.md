@@ -61,7 +61,7 @@ Required work:
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
 - Complete or explicitly rescope [M0 issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and [M0 issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139).
 - Update [Phase 1 epic #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9) so every active M0 gate is a native dependency.
-- Configure usable Priority options, a real Bugs filter, roadmap dates when scheduling begins, native blocked-by links, and epic completion criteria on the [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1).
+- Assign the existing Priority values to active work, add a real Bugs filter, add roadmap dates when scheduling begins, use native blocked-by links, and add epic completion criteria on the [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1).
 
 Exit proof:
 
@@ -366,7 +366,7 @@ The current [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1
 4. Split current Phase 10 into Phases 10–13 above and rehome its child issues.
 5. Make [Phase 7 #75](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75) depend on [Phase 6 #63](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63).
 6. Give [Phase 8 #87](https://github.com/Abzum-NZ/Abzum-Vortex/issues/87) separate core and experience dependencies.
-7. Configure Priority options before using the Prioritized backlog view; filter the Bugs view; populate roadmap dates only after scheduling; use Iteration only when work is actually planned.
+7. Assign the existing Priority values before relying on the Prioritized backlog view; filter the Bugs view; populate roadmap dates only after scheduling; use Iteration only when work is actually planned.
 8. Update or supersede outdated [bootstrap issue #1](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1), clarify [continuous-integration issue #17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17), close or rescope [#132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132), and update [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) from its recorded decisions.
 
 Project mutations should follow the approved [foundation decisions](../specification/appendices/decisions.md#foundation-decisions--decide-before-phase-1) so issue wording does not get rewritten twice.

@@ -54,7 +54,7 @@ One repository, one deployable application (Specification, section 24.3).
 The root `package.json` declares the workspace. It also pins the Node version and holds the scripts
 every package shares.
 
-```
+```text
 package.json          The workspace root. It declares the members below.
 web/                  The Next.js application. The only thing Vercel deploys.
 contracts/            The shapes of modules, pages, records and events. Depends on nothing.
@@ -78,7 +78,7 @@ The workspace members are:
 rather than one package holding all sixteen. So `runtime/` is a directory that contains packages, and
 is never a package itself. The sixteen, in the order section 25.1 lists them:
 
-```
+```text
 runtime/definition   runtime/identity   runtime/access      runtime/module
 runtime/record       runtime/query      runtime/rule        runtime/event
 runtime/workflow     runtime/app        runtime/page        runtime/theme
@@ -131,7 +131,7 @@ as applying migrations. One is product. The other is plumbing.
 > database check is not yet settled; see [Decision D20](docs/specification/appendices/decisions.md#d20-pre-merge-database-testing)
 > and [Delivery environments, database changes and testing](docs/specification/18-delivery-and-testing.md).
 
-```
+```text
 feature branch ──PR──▶ testing ──PR──▶ main
      │                    │              │
   Development          Testing       Production
@@ -188,7 +188,7 @@ That is why nobody adds a variable in Vercel by hand.
 
 `DATABASE_URL` does not contain the password. It points at it:
 
-```
+```text
 postgresql://postgres.<project-ref>:${DATABASE_PASSWORD}@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres
 ```
 
@@ -269,7 +269,7 @@ breaking change upstream lands in one place rather than across the whole block l
 
 The organisation's short name is the first path segment (Specification, section 2.7):
 
-```
+```text
 https://vortex.abzum.com/{organisation}/{application}/{page}
 ```
 
@@ -294,10 +294,10 @@ switched off. Vercel terminates TLS itself, and a proxied record would break cer
 
 ## Working here
 
-- The project board at https://github.com/orgs/Abzum-NZ/projects/2 records what anyone is working on.
+- The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2) records what anyone is working on.
   Every change belongs to an issue. Update the issue when the work lands.
-- Issues follow the ten phases of the Build Plan. An issue's "Blocked by" list is real: start an issue
-  only once everything blocking it is closed.
+- Issues follow the phases in the [revised Build Plan](docs/build-plan/README.md). Use GitHub's native
+  dependency links: start an issue only once everything blocking it is closed.
 - Where an issue touches something a person sees, attach a screenshot of the built functionality to
   the issue before closing it.
 - **Everything fails loudly.** Nothing falls back to a default, carries on with a wrong value, or
