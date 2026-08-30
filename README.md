@@ -59,9 +59,10 @@ feature branch ──PR──▶ testing ──PR──▶ main
   fixed. That cost is accepted deliberately, in exchange for one system rather than two.
 - **There is no GitHub Actions.** Nothing here runs on it and no credential is stored there. A
   release is cut with `gh release create --generate-notes`, which needs no workflow.
-- The database access-rule tests need a database of their own to create and destroy, which a Vercel
-  build cannot provide. Kestra runs them. Kestra also applies migrations: automatically to testing,
-  and to production only with approval.
+- The database access-rule tests create roles and switch row-level security on and off, which needs a
+  real Postgres session that a Vercel build cannot hold. Kestra runs them, against the second Supabase
+  project — the testing one. Kestra also applies migrations: automatically to testing, and to
+  production only with approval.
 - Every schema change ships as a migration file with its permission tests in the same change.
 - `testing` is the integration branch. Vercel serves it at the staging alias.
 - `main` is production. It takes pull requests from `testing` only, and a release is tagged from it.
@@ -125,7 +126,7 @@ application database account over Postgres, per Specification section 2.12. If o
 | Caller | Route | Port | Why |
 |---|---|---|---|
 | The web application | session pooler | 5432 | Vercel egresses over IPv4. The direct host is IPv6-only, and the transaction pooler needs the paid IPv4 add-on |
-| The migration job on Kestra | direct connection | 5432 | Migrations take a session-level advisory lock so two runs cannot collide. A pooler can lose that lock. Kestra runs on our own server, where IPv6 is available |
+| Kestra, applying migrations and running the access-rule tests | direct connection | 5432 | Both need a real Postgres session: migrations take a session-level advisory lock, and the access-rule tests create roles and change row-level security. Kestra runs on our own server, where IPv6 is available |
 
 Session mode behaves like a direct connection, so the client needs no special configuration. If the
 IPv4 add-on is ever bought and the application moves to the transaction pooler on 6543, prepared
