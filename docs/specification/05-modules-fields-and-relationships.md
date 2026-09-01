@@ -20,7 +20,7 @@ flowchart TD
     APP --> OV[Labels, option loaders and page use]
 ```
 
-Examples are provided in the [CRM and Sales Hub worked examples](appendices/worked-examples.md).
+Examples are provided in the [CRM and Service Desk worked examples](appendices/worked-examples.md).
 
 ## Module requirements
 
@@ -181,7 +181,7 @@ Changing stored meaning is never an arbitrary in-place retype. Only a proven wid
 - A field with an unknown property or unsupported setting cannot be published.
 - A required relationship cannot be configured to become empty on parent deletion.
 - A workflow-backed choice belongs to an application binding, not to the reusable module.
-- Every reference in the [Sales Hub example](appendices/worked-examples.md) resolves to a published module, application component, or documented platform definition.
+- Every reference in the [CRM and Service Desk examples](appendices/worked-examples.md) resolves to a published module, application component, or documented platform definition.
 - A link field targeting a record type in another module requires a declared module dependency.
 - Removing a record type targeted by a cross-module link is refused with links to every dependent module.
 - A cross-organisation grant does not bypass the same-organisation rule for stored relationships.

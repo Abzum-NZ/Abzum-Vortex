@@ -1,0 +1,59 @@
+{
+  "fixture_set": "vortex.complete.examples",
+  "schema_version": "2.0.0",
+  "version": "1.0.0",
+  "description": "Complete, self-contained definition fixtures for the CRM and Service Desk applications.",
+  "files": [
+    "connection-types/email.json",
+    "connection-types/calendar.json",
+    "connection-types/webhook.json",
+    "modules/crm.organisations.json",
+    "modules/crm.people.json",
+    "modules/crm.opportunities.json",
+    "modules/crm.activities.json",
+    "modules/crm.tags.json",
+    "modules/service-desk.sla.json",
+    "modules/service-desk.cases.json",
+    "modules/service-desk.knowledge.json",
+    "applications/crm.json",
+    "applications/service-desk.json",
+    "scenarios/cross-application-sharing.json"
+  ],
+  "applications": ["vortex.app.crm", "vortex.app.service_desk"],
+  "shared_modules": ["vortex.crm.organisations", "vortex.crm.people"],
+  "required_field_types": [
+    "text", "long_text", "formatted_text", "whole_number", "decimal_number", "money",
+    "yes_no", "date", "date_time", "choice", "several_choices", "reference_number",
+    "email_address", "phone_number", "web_address", "table", "link",
+    "link_to_one_of_several", "link_to_person", "calculation", "total", "attachment"
+  ],
+  "required_workflow_nodes": [
+    "start", "condition", "decision_table", "bounded_loop", "delay", "wait_until",
+    "start_workflow", "stop", "create_record", "change_record", "run_action",
+    "soft_delete_record", "duplicate_record", "convert_record", "add_relationship",
+    "copy_relationships", "add_comment", "change_tags", "request_form",
+    "request_approval", "create_task", "create_calendar_event", "notification",
+    "send_email", "query_records", "set_values", "format_value", "generate_export",
+    "attach_file", "move_file", "generate_document", "call_connection",
+    "acknowledge_message"
+  ],
+  "required_cross_application_cases": [
+    {
+      "module": "vortex.crm.organisations",
+      "record_type": "company",
+      "applications": ["vortex.app.crm", "vortex.app.service_desk"]
+    },
+    {
+      "module": "vortex.crm.people",
+      "record_type": "contact",
+      "applications": ["vortex.app.crm", "vortex.app.service_desk"]
+    },
+    {
+      "module": "vortex.service_desk.cases",
+      "record_type": "case",
+      "source_application": "vortex.app.service_desk",
+      "recipient_application": "vortex.app.crm",
+      "requires_grant": true
+    }
+  ]
+}

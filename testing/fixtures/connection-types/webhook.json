@@ -1,0 +1,4 @@
+{
+  "schema_version":"2.0.0","kind":"connection_type","root_id":"connection_webhook","key":"vortex.connection.webhook","version":"1.0.0","revision":1,"state":"published","content_fingerprint":"fixture:vortex.connection.webhook:1.0.0",
+  "body":{"name":"Webhook","authentication":{"kind":"signed_secret","secret_fields":["signing_secret"]},"allowed_hosts":["hooks.example"],"operations":[{"key":"post_json","method":"POST","path":"/events","input":"signed_json","output":"webhook_receipt","timeout_seconds":15,"max_attempts":5}],"incoming_messages":[{"key":"case_created","signature":"hmac_sha256","replay_window_seconds":300,"input":"external_case"}]}
+}

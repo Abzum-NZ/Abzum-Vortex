@@ -15,7 +15,6 @@ flowchart TD
     APP --> ROLE[Application roles]
     APP --> BEHAVIOUR[Rules, events, workflows and pipelines]
     APP --> THEME[Theme]
-    APP --> ASSISTANT[Assistant settings]
 ```
 
 All these application components are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
@@ -31,7 +30,6 @@ An application records:
 - Application roles and assignments.
 - Actions, rules, events, workflows, and pipelines.
 - Theme and allowed organisation-level theme adjustments.
-- Assistant policy.
 - Public addresses and programmable interfaces.
 - Default landing page and empty, denied, not-found, and error experiences.
 
@@ -43,6 +41,36 @@ Navigation is an ordered tree of headings, page links, and approved external lin
 - A heading with no visible children is omitted.
 - An external link is visibly identified and must use an approved secure address.
 - Phone navigation uses the same information architecture in a compact form; it is not a separate definition.
+
+## Core UI continuity and motion
+
+The [Next.js application](https://nextjs.org/docs/app/getting-started/linking-and-navigating) must feel continuous during ordinary use. Opening another page, changing a section, submitting an action, or refreshing data must not blank or reload the whole application shell. The smallest complete part affected by the change updates in place, together with any totals or related components that would otherwise become inconsistent.
+
+- Internal navigation uses client-side transitions. The application shell, primary navigation, and unaffected page regions remain mounted and usable while the destination loads.
+- Every route and independently loaded data region has an immediate, meaningful loading state. [Next.js loading boundaries](https://nextjs.org/docs/app/api-reference/file-conventions/loading) are placed close enough to the data they protect that one slow block does not replace the whole page with a loader.
+- Route code and likely destinations are prefetched where appropriate. Code and data that are not needed for the current view load on demand without freezing the visible interface.
+- Page transitions, block insertion, loading-to-content changes, refreshed values, list changes, and success or failure feedback use short, restrained motion that explains what changed. There are no looping decorative animations or delays added merely to make motion visible.
+- A save or refresh keeps unaffected content stable. The changed component shows pending state, prevents unsafe duplicate submission, then transitions to the confirmed result or a recoverable error without losing unrelated form, selection, focus, or scroll state.
+- An access removal, deletion, or security refusal is never delayed for animation. Shared data is removed as soon as the next access check refuses it, and the affected component changes to a plain access-ended state.
+- Motion respects the person's reduced-motion setting. With reduced motion enabled, the same state changes remain clear without movement, flashing, or time-dependent understanding.
+- A full document reload is reserved for the initial visit, an approved external destination, sign-out, a platform update that cannot safely continue in the current client, or recovery from an unrecoverable client failure. Unsaved work receives the applicable protection before any such reload.
+
+The platform supplies common transition and loading patterns so applications do not invent inconsistent motion. Application builders may select from approved patterns but cannot provide executable animation code or override accessibility safeguards.
+
+### Animation implementation standard
+
+[Motion for React](https://motion.dev/docs/react-layout-animations), installed as `motion` and imported from `motion/react`, is the approved animation library for Next.js page-region transitions, component entry and exit, reordered lists, expanding sections, dialogs, drawers, and other layout changes that need coordinated motion. It works at the React component boundary and can wrap or extend the same components used by [shadcn/ui](https://ui.shadcn.com/).
+
+The implementation follows these boundaries:
+
+- Ordinary colour, opacity, focus, hover, and pressed feedback uses CSS transitions supplied by the design system. Motion is not added where CSS already communicates the change clearly.
+- Coordinated entry, exit, reordering, and layout changes use Motion's presence and layout features. They animate the actual affected components, not a screenshot of the whole page.
+- Shared Motion features load through [LazyMotion](https://motion.dev/docs/react-reduce-bundle-size) so animation support does not unnecessarily increase the initial application download.
+- Durations, easing, distance, and spring behaviour come from a small platform motion-token set. Feature code does not invent one-off timing values.
+- The platform uses Motion's [reduced-motion support](https://motion.dev/docs/react-use-reduced-motion) together with the browser preference. Spatial movement is removed or replaced with a simple non-moving state change where appropriate.
+- Exit animation never keeps protected data readable after access is removed and never delays a save, refusal, navigation, or other business operation.
+
+The experimental [Next.js View Transition integration](https://nextjs.org/docs/app/api-reference/config/next-config-js/viewTransition) is not a production dependency. It may be reconsidered after Next.js marks it production-ready and the platform has proved interruption, accessibility, browser support, and component-scoped behaviour. This avoids building a core experience on a feature that Next.js currently advises against using in production.
 
 ## Page types
 
@@ -123,6 +151,7 @@ Every page and block follows [quality and acceptance](20-quality-and-acceptance.
 - Text and controls reflow without horizontal page scrolling at supported phone widths.
 - Form controls have programmatic labels, help, errors, and summaries.
 - Live changes are announced without repeatedly interrupting assistive technology.
+- Loading, completion, access-ended, and failure states are announced at the affected component rather than as an unrelated page-wide interruption.
 
 ## Acceptance examples
 
@@ -131,3 +160,6 @@ Every page and block follows [quality and acceptance](20-quality-and-acceptance.
 - Moving a board card without the named action permission is refused by the server.
 - A fixture page has a defined desktop layout and phone order.
 - A hidden page remains inaccessible through a copied address.
+- Internal navigation preserves the application shell and shows immediate destination feedback without a full document reload.
+- Refreshing one list updates that list and its dependent totals without replacing unrelated blocks or losing their state.
+- Every page and independently loaded block demonstrates loading-to-content, success, recoverable failure, and reduced-motion behaviour where applicable.
