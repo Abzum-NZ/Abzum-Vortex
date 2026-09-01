@@ -66,9 +66,26 @@ The implementation follows these boundaries:
 - Ordinary colour, opacity, focus, hover, and pressed feedback uses CSS transitions supplied by the design system. Motion is not added where CSS already communicates the change clearly.
 - Coordinated entry, exit, reordering, and layout changes use Motion's presence and layout features. They animate the actual affected components, not a screenshot of the whole page.
 - Shared Motion features load through [LazyMotion](https://motion.dev/docs/react-reduce-bundle-size) so animation support does not unnecessarily increase the initial application download.
-- Durations, easing, distance, and spring behaviour come from a small platform motion-token set. Feature code does not invent one-off timing values.
+- Durations, easing, distance, and spring behaviour come from the small platform motion-token set below. Feature code does not invent one-off timing values.
 - The platform uses Motion's [reduced-motion support](https://motion.dev/docs/react-use-reduced-motion) together with the browser preference. Spatial movement is removed or replaced with a simple non-moving state change where appropriate.
 - Exit animation never keeps protected data readable after access is removed and never delays a save, refusal, navigation, or other business operation.
+
+The first release has six semantic tokens and no customer-adjustable motion modes or extension system:
+
+| Token | Purpose | Initial calibration band |
+|---|---|---|
+| `feedback` | Pressed feedback and tiny state confirmation, normally using CSS | 80–120 ms |
+| `enter_exit` | Tooltip, menu, popover, and small component entry or exit | 140–180 ms |
+| `refresh` | Loading-to-content, local data refresh, and row-value change | 200–250 ms |
+| `panel` | Dialog, drawer, expanding section, and larger local panel | 280–350 ms |
+| `page` | The changing page region while the application shell remains stable | 300–450 ms |
+| `layout_spring` | Reordering, resizing, dragging, and board-card movement | One responsive platform spring, calibrated with the real UI |
+
+These bands guide the first CRM and Service Desk implementation; they are not values stored in application definitions. The first complete desktop and phone UI fixes one platform value, easing curve, distance, and spring configuration for each token. Those central values are then versioned with the design system. Application definitions, modules, blocks, and features consume the semantic token names and cannot supply arbitrary Motion parameters.
+
+Motion is interruptible and state-driven. A newer navigation, user action, server result, or access decision cancels or replaces obsolete visual work. A late response for an earlier selection cannot flash old content, move focus backward, or overwrite the current screen. The current authorised application state always wins; animation only explains the transition to that state.
+
+Phone calibration uses shorter movement and may use the faster end of a token's band. Low-performance-device testing must show that motion neither blocks interaction nor produces sustained dropped frames. Reduced-motion mode removes spatial movement and preserves immediate, understandable state changes.
 
 The experimental [Next.js View Transition integration](https://nextjs.org/docs/app/api-reference/config/next-config-js/viewTransition) is not a production dependency. It may be reconsidered after Next.js marks it production-ready and the platform has proved interruption, accessibility, browser support, and component-scoped behaviour. This avoids building a core experience on a feature that Next.js currently advises against using in production.
 
@@ -163,3 +180,4 @@ Every page and block follows [quality and acceptance](20-quality-and-acceptance.
 - Internal navigation preserves the application shell and shows immediate destination feedback without a full document reload.
 - Refreshing one list updates that list and its dependent totals without replacing unrelated blocks or losing their state.
 - Every page and independently loaded block demonstrates loading-to-content, success, recoverable failure, and reduced-motion behaviour where applicable.
+- Rapidly navigating from one record to another and opening another component cannot allow a late response or unfinished animation from the first record to reappear or replace the current state.

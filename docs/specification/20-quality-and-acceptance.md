@@ -101,6 +101,8 @@ Every visible issue includes evidence at supported desktop and phone widths. Evi
 
 Visible page work also includes evidence that internal navigation keeps the application shell mounted, a slow route or block receives immediate local loading feedback, a data refresh changes only affected components and dependent totals, unsaved unrelated state remains intact, and reduced-motion mode communicates the same result without animation. Automated browser checks refuse routine internal navigation that causes a full document reload.
 
+Motion evidence uses the six registered semantic tokens and contains no feature-specific duration, easing, distance, or spring value. Interruption tests navigate from record A to record B, open another component, and then complete record A's delayed response; record A must not flash, regain focus, finish an obsolete transition, or replace any part of the current state. The same cases run at desktop and phone widths, on a throttled low-performance profile, and with reduced motion enabled.
+
 ## Performance measurement
 
 Performance tests state hardware class, network profile, dataset size, cache state, region, percentile, and measured action. “Fast on a mid-range phone” without those values is not a useful measurement.
