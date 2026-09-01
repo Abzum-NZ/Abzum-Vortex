@@ -59,6 +59,12 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 - File metadata, previews, extracted text, and deletion jobs carry the same organisation identifier as the original.
 - Storage policies and application checks both enforce organisation separation.
 
+## Attachments on shared records
+
+A record-sharing grant does not automatically grant file access. The grant must name the attachment field as readable, and every list, preview, and download rechecks the source record, grant, field, recipient organisation account, and recipient application. Bytes remain in the source organisation's storage; the recipient receives only a short-lived, request-bound download instruction.
+
+Uploading an attachment from another organisation requires a separately allowed attachment action. The new file is owned by the source organisation, follows its limits and retention policy, and records both the acting global identity and recipient organisation account. A recipient cannot browse the source organisation's file store, reuse a download instruction for another account, or attach one source organisation's file to its own record.
+
 ## Deletion, retention and legal hold
 
 A file follows the lifecycle of the record attachment that owns it unless it has another active owner. Soft deletion preserves the file through the recovery period. Permanent removal follows [privacy and retention](14-activity-privacy-and-retention.md). A legal hold prevents removal but not access restrictions.
@@ -74,3 +80,5 @@ Uploads enforce per-file, per-field, per-request, and organisation storage limit
 - A signed download address from one organisation cannot retrieve a file from another.
 - An abandoned upload is removed without creating record activity.
 - Restoring a record restores only files still inside their recovery period and not rejected by safety policy.
+- Sharing a record without naming its attachment field exposes neither file metadata nor file content.
+- A shared-file download remains source-owned, short lived, and checked against the grant on every request.

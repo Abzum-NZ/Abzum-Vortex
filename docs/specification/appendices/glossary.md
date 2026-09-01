@@ -4,8 +4,8 @@
 
 ```mermaid
 flowchart TD
-    ORG[Organisation] --> MEMBER[Membership]
-    MEMBER --> PERSON[Person account]
+    IDENTITY[Global identity] --> ACCOUNT[Organisation account]
+    ORG[Organisation] --> ACCOUNT
     ORG --> APP[Application]
     APP --> MODULE[Module]
     MODULE --> TYPE[Record type]
@@ -17,10 +17,12 @@ flowchart TD
 | Term | Meaning and governing section |
 |---|---|
 | Access decision | The allow-or-refuse answer described in [Access and permissions](../04-access-and-permissions.md). |
+| Access grant | A source organisation's limited, approved, and revocable permission for a named recipient context to use specified records, actions, and fields under [Shared-record access](../04-access-and-permissions.md#shared-record-access). |
 | Action | A named operation that participates in one [record save](../08-forms-actions-rules-and-events.md#actions). |
 | Application | A published user experience composed from modules, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md). |
 | Application binding | Application-specific settings attached to a reusable module field or record type, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#application-level-bindings). |
 | Application role | A collection of permissions inside one [application](../04-access-and-permissions.md#application-roles). |
+| Approval request | A protected request whose immutable decisions allow an owning platform service to perform one exact governed action under the [approval contract](data-contracts.md#approval-request-contract). |
 | Assistant | The optional model-assisted experience governed by [Assistant and model-assisted work](../13-assistant.md). |
 | Attachment | A record field linking one or more files under [Files and attachments](../11-files-and-attachments.md). |
 | Block | A platform-supplied page component with a validated setting contract, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#page-composition). |
@@ -38,18 +40,18 @@ flowchart TD
 | Event outbox | Database records written with a business save and later delivered safely. |
 | Field | One named value on a record type, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#common-field-properties). |
 | Gallery | A reviewed catalogue of definition packages under [Copying, sharing, import and export](../16-copying-sharing-import-export.md#gallery). |
+| Global identity | One human sign-in that can be linked to a separate account in several organisations under [People, organisations and sign-in](../02-people-organisations-and-sign-in.md). |
 | Guided form | A form split into two to twenty steps and committed once, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#forms-and-guided-forms). |
 | Interface | A versioned catalogue of operations for approved software callers, described in [Connections and programmable interfaces](../12-connections-and-interfaces.md#programmable-interfaces). |
 | Legal hold | A protected instruction that prevents permanent removal of matching data under [Activity history, privacy and retention](../14-activity-privacy-and-retention.md#legal-holds). |
-| Membership | The connection between one person account and one organisation, described in [People, organisations and sign-in](../02-people-organisations-and-sign-in.md). |
 | Module | A reusable description of business data and meaning, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md). |
 | Organisation | One customer's private workspace. The user interface does not use the technical word “tenant.” |
+| Organisation account | One global identity's separate account inside one organisation, with its own status, profile, roles, teams, preferences, and application access. Earlier drafts called this a membership. |
 | Organisation role | A collection of organisation-wide permissions under [Access and permissions](../04-access-and-permissions.md#organisation-roles). |
 | Page | A published application screen type and block layout under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#page-types). |
 | Permission | One permanently named right that a role may grant. |
-| Person account | One human identity that can have memberships in several organisations under [People, organisations and sign-in](../02-people-organisations-and-sign-in.md). |
 | Process pipeline | The ordered business stages of a record under [Workflows and process pipelines](../09-workflows-and-pipelines.md#process-pipelines). |
-| Public operation | A narrowly published page or interface operation that does not require an organisation membership. |
+| Public operation | A narrowly published page or interface operation that does not require an organisation account. |
 | Published version | An immutable, numbered snapshot used by live requests under [Platform composition and publication](../03-composition-and-publication.md#draft-and-published-versions). |
 | Query | A validated request for bounded rows, groups or totals under [Queries, reports, search and live updates](../10-queries-reports-search.md#query-contract). |
 | Record | One organisation-owned instance of a record type under [Records and their lifecycle](../06-records-and-lifecycle.md). |
@@ -57,6 +59,7 @@ flowchart TD
 | Root definition | One independently published module, application, theme, connection type, interface, or organisation role. |
 | Rule | Immediate typed logic evaluated during a record save under [Forms, actions, rules and events](../08-forms-actions-rules-and-events.md#rules). |
 | Saved view | A saved query and arrangement under [Queries, reports, search and live updates](../10-queries-reports-search.md#saved-views). |
+| Saved sharing condition | A published and tested condition that defines which changing source records a grant may cover under [Record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions). |
 | Sensitive field | A field carrying higher-risk personal or confidential data under [Activity history, privacy and retention](../14-activity-privacy-and-retention.md#personal-data-classification). |
 | Soft deletion | Recoverable deletion before permanent removal under [Records and their lifecycle](../06-records-and-lifecycle.md#deletion-and-restoration). |
 | Theme | Published, validated design values used by an application under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#themes). |

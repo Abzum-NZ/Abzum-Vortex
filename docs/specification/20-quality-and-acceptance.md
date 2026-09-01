@@ -38,10 +38,14 @@ Run through the non-owning application database role and expect refusal or no ro
 
 1. Read, insert, update, and delete another organisation's rows.
 2. Change an owned row's organisation identifier.
-3. Read as a suspended membership context.
+3. Read as a suspended organisation-account context.
 4. Read without required request context.
 5. Reuse one database connection alternately for two organisations and prove context does not leak.
 6. Use service, background, assistant, and public caller contexts across organisations.
+7. Read a source organisation's shareable rows from a recipient context with no grant, an inactive grant, and an expired grant.
+8. With one active grant, read only its records and fields; refuse every administrative or non-shareable table.
+9. Prove two incomplete grants cannot be combined to create one complete permission.
+10. Revoke a grant and prove the next statement in a fresh request context cannot use it.
 
 Then run matching raw row operations through the table-owner role and prove the test data exists and is technically reachable. Only these database cases use the owner-control run; the owner never represents a web, file, cache, subscription, or public caller.
 
@@ -49,16 +53,19 @@ Then run matching raw row operations through the table-owner role and prove the 
 
 Run through ordinary product surfaces:
 
-7. An unauthenticated request sees only an explicitly published public operation and approved fields.
-8. List, upload, replace, download, and delete another organisation's files are refused.
-9. A live subscription receives no other-organisation change.
-10. Organisation-owned cache entries primed in one organisation miss in another; content-hashed application assets are tested separately as the documented safe shared exception.
-11. A field the caller cannot read is absent from records, search, reports, exports, assistant tools, workflow inputs, and interfaces.
-12. Search reveals no title, count, filter value, suggestion, or highlight from another organisation.
-13. Connection, workflow, interface, and assistant calls cannot cross organisation boundaries.
-14. Organisation switching clears organisation-specific browser and server state.
-15. Public and private file addresses cannot be exchanged to gain access.
-16. Builds, logs, traces, screenshots, and error reports contain no credentials or prohibited sensitive content.
+11. An unauthenticated request sees only an explicitly published public operation and approved fields.
+12. List, upload, replace, download, and delete another organisation's files are refused.
+13. A live subscription receives no other-organisation change or source values in a shared-record invalidation.
+14. Organisation-owned cache entries primed in one organisation miss in another; content-hashed application assets are tested separately as the documented safe shared exception.
+15. A field the caller cannot read is absent from records, search, reports, exports, assistant tools, workflow inputs, and interfaces.
+16. Search reveals no title, count, filter value, suggestion, or highlight from another organisation.
+17. Connection, workflow, interface, and assistant calls cannot cross organisation boundaries.
+18. Organisation switching clears organisation-specific browser and server state.
+19. Public and private file addresses cannot be exchanged to gain access.
+20. One global identity with accounts in source and recipient organisations cannot combine their roles in one request.
+21. Directly editing an approval display record does not activate a grant; only the protected Access-service operation can do so.
+22. Shared-record lists, fields, actions, exports, files, revocation, expiry, deletion, and restoration match the approved grant policy in both directions.
+23. Builds, logs, traces, screenshots, and error reports contain no credentials or prohibited sensitive content.
 
 Every case runs in both directions between two populated organisations. Tests use recognisably different canary values so accidental mixing is visible.
 

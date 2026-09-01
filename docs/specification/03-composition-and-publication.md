@@ -28,7 +28,7 @@ An [application](07-applications-pages-and-themes.md) selects modules and adds t
 
 ### Organisation-data layer
 
-[Records](06-records-and-lifecycle.md), files, memberships, saved views, activity entries, workflow runs, usage, and billing belong to one organisation. They are not part of a reusable definition.
+[Records](06-records-and-lifecycle.md), files, organisation accounts, saved views, activity entries, workflow runs, usage, and billing belong to one organisation. They are not part of a reusable definition.
 
 ## Definition ownership
 
@@ -107,9 +107,22 @@ The graph is used to validate publication, load the live application, copy defin
 - Interface version compatibility follows [connections and programmable interfaces](12-connections-and-interfaces.md).
 - The platform never guesses that two differently identified definitions mean the same thing.
 
+## Definition distribution is not record access
+
+Copying or installing a published definition never grants access to the publisher's records. It creates a draft or installed definition owned by the receiving organisation, as described in [copying, sharing, import and export](16-copying-sharing-import-export.md#definition-packages).
+
+A record-sharing grant is live access state owned by the [Access service](04-access-and-permissions.md#shared-record-access). It is not a definition, does not publish with an application, and does not change the definition dependency graph. A target application can use shared records only when it has a compatible binding to the source module; a grant never substitutes for the record-type definition needed to validate and display those records.
+
+Whether same-cluster cross-organisation sharing is included in the first release remains [Decision D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope). The detailed product behaviour is specified in [record sharing](16-copying-sharing-import-export.md#record-sharing).
+
 ## Acceptance examples
 
 - Publishing an application produces one consistent snapshot containing its pages, rules, workflows, and roles.
 - Editing a page after publication does not change the live application until the application is published again.
 - Removing a field referenced by a report, rule, page, or interface is refused with links to every dependant.
 - Restoring a prior published version creates a reviewable draft and does not erase later history.
+- Installing or copying an application does not grant access to the publisher's records.
+- A target application without a compatible module binding cannot use a record grant.
+- A cross-organisation grant does not copy records into the target organisation's storage.
+- Revoking a sharing grant immediately removes the target's ability to query shared records.
+- A cross-organisation grant never exposes fields classified as sensitive.

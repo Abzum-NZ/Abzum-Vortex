@@ -18,7 +18,7 @@ flowchart TD
     REMOVE --> RECEIPT[Keep non-content removal receipt]
 ```
 
-The inventory covers person accounts, memberships, definitions, records, relationships, files and previews, search documents, saved views, guided-form drafts, activity, events, workflow inputs and history, connection messages, assistant conversations, notifications, usage, billing, exports, backups, caches, logs, and support records.
+The inventory covers global identities, organisation accounts, definitions, records, relationships, files and previews, search documents, saved views, guided-form drafts, activity, events, workflow inputs and history, connection messages, assistant conversations, notifications, usage, billing, exports, backups, caches, logs, and support records.
 
 ## Activity history
 
@@ -54,7 +54,7 @@ The platform supports discovery, export, correction through ordinary permissions
 
 The scope of account-level versus organisation-level erasure is [Decision D15](appendices/decisions.md#d15-personal-data-erasure-scope). The workflow must cover:
 
-- Account and memberships.
+- Global identity and organisation accounts.
 - Record fields and linked records.
 - Files, previews, search entries, and caches.
 - Events and workflow payloads.
@@ -68,6 +68,14 @@ The scope of account-level versus organisation-level erasure is [Decision D15](a
 
 A legal hold is an organisation-owned record with scope, reason, authorised creator, start time, review date, and release approval. It prevents permanent removal of matching data but does not make that data more visible. Creating, changing, or releasing a hold requires a dedicated permission and recent sign-in confirmation.
 
+## Shared-record accountability
+
+Creating, approving, refusing, activating, using, changing, expiring, or revoking a cross-organisation grant is material activity. The source history records the source organisation, recipient organisation, acting global identity, acting organisation account, grant, approved scope, action, outcome, and correlation identifier. The recipient history records its request and approval activity without copying source record values.
+
+The source organisation remains responsible for record retention, legal hold, correction, and erasure. A recipient cannot extend retention or prevent source deletion merely because it can read the record. When an erasure, field removal, or legal restriction changes what may be shared, the next request applies the new result and any derived recipient content permitted under [D34](appendices/decisions.md#d34-shared-record-product-surfaces) must be removed.
+
+A grant never authorises the recipient to include shared personal data in a general export, assistant conversation, search index, workflow payload, or connection message unless the relevant product surface and field are separately approved. Export remains a distinct grant choice under [D33](appendices/decisions.md#d33-shared-actions-fields-and-export).
+
 ## Isolation and administration
 
 Privacy administrators act within one organisation unless a separate platform-operator process is invoked. Support access is time limited, purpose bound, approved, and recorded. Privacy export packages are encrypted, short lived, access checked at every download, and never delivered through an ordinary public file link.
@@ -79,3 +87,5 @@ Privacy administrators act within one organisation unless a separate platform-op
 - Restoring an older backup does not resurrect data with a later permanent-removal receipt.
 - A legal hold stops deletion without granting the hold administrator read access to the held records.
 - An erasure request reports every category searched and any lawful exception rather than claiming success after deleting only the main record.
+- Revoking a grant removes future access without erasing the immutable record that approval and authorised use occurred.
+- A recipient organisation cannot use a shared record to place a legal hold on the source organisation's data.

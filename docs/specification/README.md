@@ -1,7 +1,7 @@
 # Abzum Vortex platform specification
 
 **Status:** Review draft 2.0  
-**Date:** 31 August 2026  
+**Date:** 1 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)  
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)  
 **Delivery board:** [Vortex GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1)
@@ -89,4 +89,5 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.0-draft.2 | Review draft | 1 September 2026 | D01 approved as one global identity with separate organisation accounts; contributed record-sharing proposal reviewed, corrected, and placed behind explicit D26–D34 choices. |
 | 2.0-draft.1 | Review draft | 31 August 2026 | New structure, contradictions exposed as choices, delivery plan reconciled with the repository. |

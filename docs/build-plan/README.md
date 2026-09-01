@@ -35,7 +35,7 @@ flowchart TD
     P6 --> P9[Phase 9<br/>Connections, Interfaces and Assistant]
     P7 --> P9
     P8U --> P9
-    P6 --> P10[Phase 10<br/>Copy, gallery, import and export]
+    P6 --> P10[Phase 10<br/>Copy, gallery, sharing, import and export]
     P8U --> P10
     P9 --> P10
     P9 --> P11[Phase 11<br/>Privacy and retention]
@@ -101,7 +101,7 @@ Exit proof:
 
 Build:
 
-- [Identity and membership records](../specification/appendices/data-contracts.md#identity-and-membership-records), invitations, sessions and organisation launcher.
+- [Identity and organisation-account records](../specification/appendices/data-contracts.md#identity-and-organisation-account-records), invitations, sessions and organisation launcher.
 - Neutral bootstrap sign-in selected in [D01](../specification/appendices/decisions.md#d01-account-and-sign-in-model).
 - Definition draft concurrency, validation, immutable revision publication, dependency graph and restore.
 - Platform bootstrap definitions required before the Page service exists.
@@ -109,7 +109,7 @@ Build:
 
 Exit proof:
 
-- One account can safely switch between two organisations.
+- One identity can safely switch between its separate accounts in two organisations.
 - A stale draft cannot overwrite a later edit.
 - Publishing is atomic and a restored version becomes a new draft.
 - Definition and identity tables pass their database separation tests.
@@ -269,17 +269,20 @@ Exit proof:
 - Assistant tools cannot exceed the person's direct access or obey instructions found in records.
 - Deprecated interface versions cannot be removed while a protected dependency remains.
 
-## Phase 10 — Copy, gallery, import and export
+## Phase 10 — Copy, gallery, sharing, import and export
 
 **Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
-**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy).
+**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy) and sharing decisions [D26–D34](../specification/appendices/decisions.md#sharing-and-federation-decisions).
 
-**Outcome:** Definitions and records move through explicit, previewed, access-checked formats without moving secrets or pretending record import is disaster recovery.
+**Outcome:** Definitions move without source records, record files move through explicit import/export formats, and—if [D31](../specification/appendices/decisions.md#d31-cross-organisation-sharing-release-scope) selects it—approved same-cluster recipients can use narrowly shared live records without copying them.
 
 Build:
 
 - Signed definition package manifest, dependency preview, identifier remapping, incomplete-draft handling and reviewed gallery.
+- Clear Organisation Portal separation between installing definitions and sharing live records.
+- Access-owned sharing grants with one explicit scope, recipient application and roles, action/field allowlists, expiry, revocation, and two-sided protected approvals if selected.
+- Dedicated shared lists and record detail, plus source-owned file access, activity, privacy, and organisation-separation checks if selected.
 - Record import mapping, dry run, duplicate policy, bounded background execution and result report.
 - Access-checked expiring record export.
 - Complete encrypted organisation archive and controlled restore as a separate operator operation.
@@ -287,6 +290,8 @@ Build:
 Exit proof:
 
 - Cross-organisation copy removes or remaps organisation-specific state.
+- Installing a definition never grants record access, and a record grant never copies or installs a definition.
+- If sharing ships, direct approval-record edits cannot activate grants; revocation takes effect on the next request; sensitive fields, re-sharing, recipient indexing, and unapproved export are refused.
 - Import dry run matches execution.
 - Complete archive restore proves definitions, roles, records, files, workflow state and privacy-removal replay.
 

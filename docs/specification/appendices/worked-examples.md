@@ -99,3 +99,56 @@ The complete fixture suite must prove:
 - Every referenced module and service definition is present; the validator never relaxes reference checks merely to accept a partial example.
 - The fixtures use draft and published root envelopes chosen in [D02](decisions.md#d02-publication-boundaries).
 - The fixture assertion count is generated from the current contract catalogue rather than maintained as a fixed marketing number.
+
+## Sharing examples
+
+These examples extend the CRM and Sales Hub fixtures to demonstrate the proposed [shared-record access](../04-access-and-permissions.md#shared-record-access) model. They remain blocked by [D26–D34](decisions.md#sharing-and-federation-decisions).
+
+### Inter-application sharing
+
+A Support Portal and Sales Hub both bind a compatible version of the CRM module. Because CRM accounts use `organisation_shared` storage, no sharing grant is needed: each application's roles still require their own account-read permission.
+
+An Executive Review application also binds the Service Desk module. Draft response records use `application_contained` storage, so a narrow inter-application grant is required before Executive Review can read them.
+
+That grant names:
+
+- Source and recipient applications: Support Portal and Executive Review.
+- Module and record type: Service Desk and `draft_response`.
+- Scope kind: record type.
+- Allowed action: read only.
+- Readable fields: subject, safe response text, status, and owner.
+- Export: refused.
+
+The grant does not let Executive Review use any Service Desk record type, field, or action that is not named. It also does not create a second copy of a draft response.
+
+### Cross-organisation sharing with filter
+
+Organisation A operates a Sales Hub application. Organisation B is a partner. Organisation A shares deals that are tagged for partner collaboration.
+
+The proposed grant:
+
+- Source organisation: Organisation A.
+- Recipient organisation: Organisation B.
+- Recipient application and role: Partner Portal, Partner Manager.
+- Module: `vortex.crm`.
+- Record type: `deal`.
+- Scope: published saved sharing condition `partner_deals`, with Organisation B as its declared partner parameter.
+- Allowed actions: read, add a comment, and change `partner_status`.
+- Readable fields: deal name, stage, close date, amount, and `partner_status`.
+- Changeable field: `partner_status` only.
+- Export: refused.
+- Expiry: required by the approved sharing policy.
+
+Organisation B's Partner Managers can use a dedicated shared-deals list, view matching deals, add comments, and update `partner_status`. They cannot see unnamed or sensitive fields, change the amount, export, re-share, or access deals that no longer match. The records do not enter Organisation B's global search index.
+
+### Approval workflow for cross-organisation sharing
+
+Before the cross-organisation grant above becomes active:
+
+1. An administrator in Organisation A proposes the exact grant through the platform-owned `vortex.approvals` experience.
+2. The protected request fingerprints its source, recipient, application, roles, saved condition and parameters, actions, fields, export choice, start, and expiry.
+3. An authorised source approver records an immutable decision.
+4. Whether Organisation B must also accept depends on [D26](decisions.md#d26-cross-organisation-sharing-approval).
+5. The Access service verifies the unchanged fingerprint and required decisions, activates the grant, and increases both organisations' access versions.
+6. A later authorised revocation ends the grant and records a separate event; it does not rewrite the original approval.
+7. Directly editing an approval display record never creates, activates, or revokes a grant.

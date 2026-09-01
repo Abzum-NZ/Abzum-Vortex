@@ -28,7 +28,7 @@ A module definition records:
 - A permanent key, display name, description, and owning publisher.
 - Its [published versions](03-composition-and-publication.md).
 - Its record types and the relationships between them.
-- Dependencies on other modules and allowed versions.
+- Dependencies on other modules and allowed versions. A dependency is required when a link field targets a record type in another module.
 - Standard record actions and extension points.
 - Whether its records are shared across applications in an organisation or kept within one application.
 - Import, export, search, retention, and activity defaults that applications may narrow but not silently weaken.
@@ -93,7 +93,7 @@ The platform supports these twenty-two types:
 | `table` | Repeating structured rows | Columns and minimum/maximum rows |
 | `link` | Link to one record type | Target, delete behaviour, reverse name |
 | `link_to_one_of_several` | Link to one of several record types | Allowed targets |
-| `link_to_person` | Link to a person account | Optional application-access requirement through an application binding |
+| `link_to_person` | Link to an organisation account | Optional application-access requirement through an application binding |
 | `calculation` | Value calculated from the record | Expression and result type |
 | `total` | Aggregate across a relationship | Relationship, operation, field, filter |
 | `attachment` | One or more files | The canonical settings in [files and attachments](11-files-and-attachments.md) |
@@ -130,6 +130,16 @@ Allowed parent-deletion behaviour is:
 Emptying a required link is invalid. How builders migrate an existing required relationship is covered by [Decision D07](appendices/decisions.md#d07-required-links-and-deletion).
 
 Many-to-many relationships use an explicit joining record type so ownership, permissions, activity, fields, and deletion behaviour remain visible.
+
+### Cross-module relationships
+
+A link field may target a record type in another module. The owning module declares a dependency on the target module with an allowed version range. In builder-facing contracts, the link uses the declared dependency key followed by the target record-type key. Published contracts resolve both to stable platform identifiers; a text key is never treated as sufficient identity by itself.
+
+Cross-module links follow the same relationship rules as intra-module links: one owning field, a generated or named reverse path, and a declared parent-deletion behaviour. The dependency graph built during [publication](03-composition-and-publication.md#dependency-graph) validates that the target module exists, the version is compatible, and the target record type is present.
+
+Removing a record type that is the target of a cross-module link is an incompatible change and is refused with links to every dependent module.
+
+A relationship still joins records owned by the same organisation. Viewing a source organisation's record through a cross-organisation grant does not permit creating a stored relationship from a recipient-owned record to that source record. A separately designed federation-reference field would be required for that future behaviour.
 
 ## Application-level bindings
 
@@ -170,3 +180,6 @@ Changing stored meaning is not performed as an arbitrary in-place retype. For an
 - A required relationship cannot be configured to become empty on parent deletion.
 - A workflow-backed choice belongs to an application binding, not to the reusable module.
 - Every reference in the [Sales Hub example](appendices/worked-examples.md) resolves to a published module, application component, or documented platform definition.
+- A link field targeting a record type in another module requires a declared module dependency.
+- Removing a record type targeted by a cross-module link is refused with links to every dependent module.
+- A cross-organisation grant does not bypass the same-organisation rule for stored relationships.

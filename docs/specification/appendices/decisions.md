@@ -23,11 +23,16 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 
 **Question:** How should one person enter several organisations?
 
-- **A — One global person account and neutral sign-in (recommended).** After sign-in, active memberships determine available organisations. Organisation-specific addresses may add branding but never determine access.
+- **A — One global identity with a separate account in each organisation (chosen).** After neutral sign-in, active organisation accounts determine which organisations are available. Each organisation account has separate roles, profile, settings, and application access. Organisation-specific addresses may add branding but never determine access.
 - **B — Separate account per organisation.** The same email may represent unrelated accounts and the person signs in separately for each organisation.
 - **C — Global account, organisation address required.** Identity is shared, but every sign-in starts from a named organisation.
 
-**Draft effect:** [People, organisations and sign-in](../02-people-organisations-and-sign-in.md) currently follows A.
+- **Status:** Decided.
+- **Chosen option:** A, clarified as one global identity plus one separate organisation account per organisation.
+- **Decision owner:** Vijay Tilak.
+- **Date:** 1 September 2026.
+- **Reason:** One person should sign in once and move between organisations, while every organisation retains a separate account, profile, role set, application access, and lifecycle for that person.
+- **Affected links:** [People, organisations and sign-in](../02-people-organisations-and-sign-in.md), [access and permissions](../04-access-and-permissions.md), [identity contracts](data-contracts.md#identity-and-organisation-account-records), [glossary](glossary.md), [Phase 2](../../build-plan/README.md#phase-2--definition-and-identity), and [Gate 0 issue #151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151).
 
 ### D02 Publication boundaries
 
@@ -155,7 +160,7 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 
 **Question:** How quickly must a removal of access take effect?
 
-- **A — The next request (recommended).** Every request reads current membership and access version before person-specific cache use.
+- **A — The next request (recommended).** Every request reads current organisation-account state and access version before person-specific cache use.
 - **B — Within 30 seconds.** Allows short caching of access context.
 - **C — Within 60 seconds.** Lower database load but a larger revocation window.
 
@@ -197,8 +202,8 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 
 **Question:** How should erasure work for a person belonging to several organisations?
 
-- **A — Two explicit request scopes (recommended).** An organisation request removes or anonymises that organisation's personal data; closing the global account separately coordinates all memberships and global identity data.
-- **B — Organisation request always deletes the global account.** One organisation could affect unrelated memberships.
+- **A — Two explicit request scopes (recommended).** An organisation request removes or anonymises that organisation's personal data; closing the global identity separately coordinates all organisation accounts and global identity data.
+- **B — Organisation request always deletes the global identity.** One organisation could affect unrelated organisation accounts.
 - **C — Global account is never erased through the product.** Only organisation data is handled in-product; global requests require operator work.
 
 **Draft effect:** [Activity history, privacy and retention](../14-activity-privacy-and-retention.md) follows A.
@@ -207,7 +212,7 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 
 **Question:** What happens when payment fails or an organisation exceeds a limit?
 
-- **A — Warning then grace period; refuse new consumption but preserve read/export (recommended).** Security or legal suspension is separate. Count active memberships as seats.
+- **A — Warning then grace period; refuse new consumption but preserve read/export (recommended).** Security or legal suspension is separate. Count active organisation accounts as seats.
 - **B — Immediate read-only state after payment failure.** Strong collection control with higher customer disruption.
 - **C — Allow measured overage.** Continue service and bill approved overages; requires explicit plan terms.
 
@@ -249,7 +254,7 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 
 ### D23 Groups and teams
 
-**Question:** May one membership belong to more than one group or team?
+**Question:** May one organisation account belong to more than one group or team?
 
 - **A — Several teams per person (recommended).** Matches role assignment and record collaboration but needs explicit team-management and visibility rules.
 - **B — Exactly one group per organisation.** Simpler and matches the earlier specification.
@@ -263,6 +268,8 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 - **B — Yes, read-only individual sharing.** Requires share lifecycle, search, export and activity support.
 - **C — Yes, configurable read/change sharing.** Largest permission and audit surface.
 
+**Boundary:** This decides direct sharing with an organisation account or team inside one organisation. A cross-organisation grant to recipient roles is separately governed by [D31](#d31-cross-organisation-sharing-release-scope) and [D32](#d32-recipient-audience).
+
 ### D25 Organisation creation
 
 **Question:** Who can create a new organisation?
@@ -270,6 +277,98 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 - **A — Abzum operator only (recommended first release).** No public organisation sign-up.
 - **B — Invited partner administrators.** Controlled delegated creation.
 - **C — Public self-service with trial and billing setup.** Requires abuse, verification and automated lifecycle controls.
+
+## Sharing and federation decisions
+
+### D26 Cross-organisation sharing approval
+
+**Question:** What approval is required before one organisation can expose records to another?
+
+- **A — Approve on both sides for every grant (recommended).** A source administrator approves the exact data, actions, fields, and expiry; a recipient administrator accepts the exact audience and responsibility before activation.
+- **B — Source approval only.** The source may push access to the recipient without recipient acceptance.
+- **C — Standing trust agreement.** Both organisations first approve a limited relationship; later source grants inside those limits do not need separate recipient approval.
+
+**Draft effect:** [Shared-record access](../04-access-and-permissions.md#shared-record-access), [record sharing](../16-copying-sharing-import-export.md#record-sharing), and the [approval contract](data-contracts.md#approval-request-contract) are written toward A but do not treat it as decided.
+
+### D27 Filter grant condition complexity
+
+**Question:** How may a grant describe a changing set of records?
+
+- **A — Inline simple comparisons.** Each grant stores field comparisons that are validated when the grant is proposed.
+- **B — Published saved sharing conditions only (recommended).** A source definition publishes and tests a named condition; a grant may supply only its declared parameters.
+- **C — No changing-set filter in the first release.** Grants may cover a module, record type, or specific record only.
+
+**Draft effect:** [Record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions), [queries](../10-queries-reports-search.md#shared-record-reads), and the [grant contract](data-contracts.md#access-grant-contract) follow B.
+
+### D28 Cross-organisation sharing chains
+
+**Question:** May a target organisation re-share records it received from another organisation?
+
+- **A — No re-sharing in the first release (recommended).** A grant from Org A to Org B does not allow Org B to create a further grant to Org C.
+- **B — Controlled re-sharing with source consent.** The original grant includes a re-sharing flag and audit trail.
+- **C — Unrestricted re-sharing.** Any granted record may be shared further.
+
+**Draft effect:** [Record sharing](../16-copying-sharing-import-export.md#actions-fields-export-and-re-sharing) follows A.
+
+### D29 Cross-cluster federation approach
+
+**Question:** What should the current specification commit to for sharing between different Vortex clusters?
+
+- **A — Defer architecture and delivery (recommended).** The first release supports no cross-cluster grant. Research must settle residency, deletion, latency, outage, identity, conflict, and audit requirements before choosing a protocol.
+- **B — Native Vortex protocol in the current plan.** Add an authenticated service protocol and explicitly designed remote read/write behaviour.
+- **C — Direct database federation in the current plan.** Connect clusters at the database layer, accepting the operational and isolation coupling this creates.
+
+**Draft effect:** The [current sharing scope](../16-copying-sharing-import-export.md#record-sharing) and [revised build plan](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export) follow A. [Future issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156) remains research only.
+
+### D30 Data residency for shared records
+
+**Question:** If cross-cluster sharing is later approved, who controls where shared data may be processed or stored?
+
+- **A — Source policy per data class and destination (recommended for future design).** The source organisation chooses approved recipient regions and whether transient response, cache, or replication is allowed; sensitive fields may impose stricter limits.
+- **B — No storage outside the source cluster.** Authorised responses may be displayed remotely, but the recipient cluster keeps no copy; this still does not promise that data never crosses a regional boundary.
+- **C — Platform-wide replication policy.** Approved clusters may retain shared projections under one global retention and deletion policy.
+
+**Draft effect:** No current implementation follows any option because [D29](#d29-cross-cluster-federation-approach) recommends deferral. The chosen policy must be added before future federation design begins.
+
+### D31 Cross-organisation sharing release scope
+
+**Question:** Is cross-organisation record sharing part of the first release?
+
+- **A — Same-cluster sharing only (recommended if partner collaboration is required).** Build governed sharing between organisations stored in the same Vortex cluster; defer federation.
+- **B — Defer all cross-organisation record sharing.** Keep application-definition distribution and within-organisation application sharing only.
+- **C — Exclude cross-organisation record sharing from Vortex.** Use explicit exports and external integrations instead.
+
+**Draft effect:** The new sharing sections and proposed [grant issue #153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153), [approval issue #154](https://github.com/Abzum-NZ/Abzum-Vortex/issues/154), and [experience issue #155](https://github.com/Abzum-NZ/Abzum-Vortex/issues/155) are written toward A, but they must not enter implementation until this is decided.
+
+### D32 Recipient audience
+
+**Question:** Which accounts inside the recipient organisation may use a grant?
+
+- **A — Named recipient application and roles (recommended).** The recipient administrator selects an application and one or more roles; only accounts holding those roles in that application may use the grant.
+- **B — Everyone with access to the recipient application.** Simpler, but a later application assignment may silently widen access.
+- **C — Individually named organisation accounts.** Most precise, with more administration and account-lifecycle work.
+
+**Draft effect:** [Shared-record access](../04-access-and-permissions.md#between-organisations) and the [grant contract](data-contracts.md#access-grant-contract) follow A.
+
+### D33 Shared actions, fields, and export
+
+**Question:** How should a grant describe what recipients can do?
+
+- **A — Read only in the first release.** Allow named readable fields; refuse every change and export.
+- **B — Explicit action and field allowlists (recommended).** Name readable fields, changeable fields, and allowed actions; exclude sensitive fields; make export a separate approval that defaults to off.
+- **C — Broad levels such as read, collaborative, and full edit.** Easier to configure but leaves delete, restore, export, files, ownership, and future actions ambiguous.
+
+**Draft effect:** [Access and permissions](../04-access-and-permissions.md#shared-actions-fields-and-export), [record sharing](../16-copying-sharing-import-export.md#actions-fields-export-and-re-sharing), and the [grant contract](data-contracts.md#access-grant-contract) follow B.
+
+### D34 Shared-record product surfaces
+
+**Question:** Where may shared records appear in the first release?
+
+- **A — Dedicated shared lists and record detail only (recommended).** No recipient search copy, ordinary dashboard total, bulk action, workflow, assistant context, or connection message.
+- **B — Also search, reports, and approved export.** Requires recipient indexing or remote search, derived-data deletion, total semantics, and broader caching tests.
+- **C — Full product parity.** Also allow workflows, bulk work, assistant tools, and connections; largest privacy and operational scope.
+
+**Draft effect:** [Queries, reports, search and live updates](../10-queries-reports-search.md#shared-record-reads) and [privacy and retention](../14-activity-privacy-and-retention.md#shared-record-accountability) follow A.
 
 ## Decision record template
 

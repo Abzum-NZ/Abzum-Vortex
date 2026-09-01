@@ -40,7 +40,7 @@ sequenceDiagram
 
 The save transaction performs these steps in order:
 
-1. Confirm session, organisation, membership, and [access](04-access-and-permissions.md).
+1. Confirm session, organisation account, and [access](04-access-and-permissions.md).
 2. Load one published definition set for the full request.
 3. Refuse unknown or unwritable fields.
 4. Validate required values, formats, choices, relationships, uniqueness, and application bindings.
@@ -94,6 +94,26 @@ stateDiagram-v2
 
 Bulk create, update, delete, restore, import, and export use the same validation and [access](04-access-and-permissions.md) as single-record operations. They process records in bounded batches, return a result per record, can be safely retried, and do not turn one invalid record into an unbounded transaction.
 
+## Sharing lifecycle
+
+If selected in [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope), a record may become visible to another application or organisation through an [access grant](04-access-and-permissions.md#shared-record-access). The sharing lifecycle does not duplicate or transfer ownership of the record.
+
+### Grant activation
+
+An access grant becomes active only after the Access service verifies every approval required by [D26](appendices/decisions.md#d26-cross-organisation-sharing-approval). No editable approval record or ordinary workflow can activate it. Activation changes no record fields and increases the access versions of both source and recipient organisations.
+
+### Grant revocation and expiry
+
+Revoking or expiring a grant removes the recipient's ability to query shared records on its next request. Source and recipient administrators receive one grant-level notification; the platform does not send one notification per affected record. Activity entries created while the grant was active remain in the source organisation's history and record the acting identity, recipient organisation account, recipient organisation, and grant.
+
+### Collaborative access
+
+The grant lists each action and readable or changeable field. If it permits a comment, attachment, or field update, that operation follows the same [save sequence](#save-sequence), validation, file checks, activity rules, and source-organisation retention as an owner operation. The recipient cannot create relationships to its own organisation's records, change ownership, delete, restore, export, or re-share unless that exact capability is separately allowed by the approved policy.
+
+### Record deletion and shared visibility
+
+Soft-deleting a shared record removes it from recipient queries through the normal lifecycle-state check. Restoring it restores visibility only if the grant is still active and the record still matches its scope. Permanent removal follows the source organisation's [retention](14-activity-privacy-and-retention.md) policy regardless of active grants.
+
 ## Acceptance examples
 
 - Two people changing the same version cannot silently overwrite one another.
@@ -101,3 +121,7 @@ Bulk create, update, delete, restore, import, and export use the same validation
 - A record outside the person's visibility scope is never fetched for display or export.
 - Restoring a record that conflicts with a current unique value follows the selected [restoration policy](appendices/decisions.md#d10-uniqueness-and-restoration).
 - A bulk operation reports allowed, refused, invalid, conflict, and completed results separately.
+- Approving a sharing grant does not create a copy of the shared records in the target organisation.
+- A soft-deleted record is not visible through a cross-organisation grant.
+- Activity created by a cross-organisation collaborator records the global identity, recipient organisation account, recipient organisation, source organisation, and grant.
+- Revoking a grant preserves its earlier approval decisions and creates a separate revocation record.

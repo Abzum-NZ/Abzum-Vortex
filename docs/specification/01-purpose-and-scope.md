@@ -33,7 +33,7 @@ An organisation can:
 3. Control who can discover, read, create, change, delete, export, or administer information through [access and permissions](04-access-and-permissions.md).
 4. Guide work through [forms, rules and events](08-forms-actions-rules-and-events.md) and [workflows and process pipelines](09-workflows-and-pipelines.md).
 5. Read information through [queries, reports, search and live updates](10-queries-reports-search.md).
-6. Exchange information through [files](11-files-and-attachments.md), [connections and programmable interfaces](12-connections-and-interfaces.md), and [import and export](16-copying-sharing-import-export.md).
+6. Exchange information through [files](11-files-and-attachments.md), [connections and programmable interfaces](12-connections-and-interfaces.md), and explicit [sharing, import, and export](16-copying-sharing-import-export.md).
 7. Meet operational obligations through [privacy and retention](14-activity-privacy-and-retention.md), [delivery and testing](18-delivery-and-testing.md), and [backup and recovery](19-operations-backup-and-recovery.md).
 
 ## Product boundaries
@@ -47,6 +47,7 @@ The first complete release includes:
 - Public pages and programmable interfaces where an organisation explicitly enables them.
 - An optional assistant that follows the same access rules as the person using it.
 - Plans, usage measurement, billing, export, retention, activity history, and recovery.
+- Governed same-cluster cross-organisation record sharing only if [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) includes it.
 
 The first complete release does not include:
 
@@ -54,6 +55,7 @@ The first complete release does not include:
 - A general-purpose website hosting product.
 - Direct customer access to platform databases or infrastructure accounts.
 - Automatic sharing of records, definitions, files, or learned information between organisations.
+- Cross-cluster or cross-region record federation in the current release under [D29](appendices/decisions.md#d29-cross-cluster-federation-approach).
 - A marketplace in which unreviewed packages become automatically trusted.
 
 ## Product principles
@@ -69,4 +71,4 @@ The first complete release does not include:
 
 - A builder can explain whether a requirement belongs to a [module](05-modules-fields-and-relationships.md), an [application](07-applications-pages-and-themes.md), or organisation data in [records](06-records-and-lifecycle.md).
 - A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [acceptance test](20-quality-and-acceptance.md), and [build phase](../build-plan/README.md).
-- No feature requires sharing one organisation's private state with another organisation.
+- No core feature requires sharing one organisation's private state with another. If [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) includes record sharing, every grant is explicit, limited, revocable, and independently testable.

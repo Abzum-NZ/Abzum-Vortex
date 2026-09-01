@@ -22,7 +22,7 @@ flowchart LR
 A published plan names:
 
 - Included platform capabilities.
-- Included active members and applications.
+- Included active organisation accounts and applications.
 - Record, file-storage, workflow, connection, interface, assistant, and export limits.
 - Usage period and overage policy.
 - Support and retention options.
@@ -48,15 +48,15 @@ The supported organisation states include trial, active, past due, grace period,
 
 Limits distinguish existing access from new consumption:
 
-- Reaching a limit normally refuses creating additional members, records, bytes, runs, or calls while preserving authorised read and export access.
+- Reaching a limit normally refuses creating additional organisation accounts, records, bytes, runs, or calls while preserving authorised read and export access.
 - A security or legal suspension may restrict more broadly through a separately recorded decision.
 - Downgrading produces an impact preview and a resolution period; it does not silently delete data.
 - Overage billing occurs only when the accepted plan explicitly allows it.
 - Usage warnings are sent before a hard limit where measurement permits.
 
-## Seats and members
+## Seats and organisation accounts
 
-The plan must define whether invited, active, suspended, service, and external people count as seats. A change in counting rules creates a new plan version. The unresolved business choices appear in [Decision D16](appendices/decisions.md#d16-billing-and-limit-enforcement).
+The plan must define whether invited, active, suspended, service, and external organisation accounts count as seats. A change in counting rules creates a new plan version. The unresolved business choices appear in [Decision D16](appendices/decisions.md#d16-billing-and-limit-enforcement).
 
 ## Administrative safety
 

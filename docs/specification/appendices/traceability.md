@@ -49,7 +49,7 @@ flowchart LR
 | 28. Field and relationship definitions | [Modules](../05-modules-fields-and-relationships.md), [Files](../11-files-and-attachments.md), [Data contracts](data-contracts.md#field-contract) | All types retained; attachment and loaded-option conflicts corrected. |
 | 29. Application, navigation and page definitions | [Applications](../07-applications-pages-and-themes.md), [Data contracts](data-contracts.md) | Components publish with application; six page types retained. |
 | 30. Behaviour definitions | [Forms, actions, rules and events](../08-forms-actions-rules-and-events.md), [Workflows](../09-workflows-and-pipelines.md) | Model step added as an explicit decision; event ordering fixed. |
-| 31. Access and identity definitions | [People](../02-people-organisations-and-sign-in.md), [Access](../04-access-and-permissions.md), [Data contracts](data-contracts.md#identity-and-membership-records) | Global sign-in, application access, access version ownership, SQL/server split and wildcard choice clarified. |
+| 31. Access and identity definitions | [People](../02-people-organisations-and-sign-in.md), [Access](../04-access-and-permissions.md), [Data contracts](data-contracts.md#identity-and-organisation-account-records) | Global identity, separate organisation accounts, application access, access-version ownership, and SQL/server split clarified. |
 | 32. Service definitions | [Themes](../07-applications-pages-and-themes.md#themes), [Files](../11-files-and-attachments.md), [Connections](../12-connections-and-interfaces.md), [Assistant](../13-assistant.md) | Split by service and conflicting attachment contract removed. |
 | 33. Caching and request speed | [Runtime services, storage and caching](../17-runtime-storage-and-caching.md#cache-model) | Distributed-cache feasibility corrected; shared static asset exception made explicit. |
 | Appendix A. CRM example | [Worked examples](worked-examples.md#crm-module) | Retained as a contract fixture; missing actions must be supplied. |
@@ -72,7 +72,7 @@ flowchart LR
 | 7. Workflow | [Phase 7](../../build-plan/README.md#phase-7--workflow-and-pipeline-execution) | Depends on Phase 6; callback contract and reconciliation required. |
 | 8. Search and File | [Phase 8](../../build-plan/README.md#phase-8--search-and-file) | Can start after Phase 4, but file UI and purge work have explicit later dependencies. |
 | 9. Connection and Interface | [Phase 9](../../build-plan/README.md#phase-9--connections-interfaces-and-assistant) | Adds OAuth, network safety, interface ranges and assistant policy; model step is in the contract. |
-| 10. Extension, distribution and operations | [Phases 10–13](../../build-plan/README.md#phase-10--copy-gallery-import-and-export) | Split into distribution, privacy, billing, and operations because the original phase was too broad. |
+| 10. Extension, distribution and operations | [Phases 10–13](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export) | Split into distribution, privacy, billing, and operations because the original phase was too broad. |
 
 ## Identified-review finding coverage
 
@@ -110,7 +110,21 @@ flowchart LR
 | Delivery plan disagrees with repository | [Delivery](../18-delivery-and-testing.md) and [D20](decisions.md#d20-pre-merge-database-testing) |
 | Arbitrary field retype conflict | [D09](decisions.md#d09-field-type-changes) |
 | Unreproducible performance target | [D22](decisions.md#d22-performance-budgets) |
-| Original Phase 10 too large | [Revised phases 10–13](../../build-plan/README.md#phase-10--copy-gallery-import-and-export) |
+| Original Phase 10 too large | [Revised phases 10–13](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export) |
+
+## Contributed sharing-change review
+
+| Proposed addition | Review outcome and governing link |
+|---|---|
+| Global identity with organisation-local accounts | Approved as [D01](decisions.md#d01-account-and-sign-in-model); contracts now separate global identity from each [organisation account](data-contracts.md#identity-and-organisation-account-records). |
+| Definition sharing versus record sharing | Retained and clarified in [composition](../03-composition-and-publication.md#definition-distribution-is-not-record-access) and [record sharing](../16-copying-sharing-import-export.md#record-sharing). |
+| Cross-module relationships | Retained with stable dependency resolution and the same-organisation relationship boundary in [modules and relationships](../05-modules-fields-and-relationships.md#cross-module-relationships). |
+| Hierarchical access grants | Revised to one explicit scope per grant, explicit actions and field allowlists, and decision gates in the [grant contract](data-contracts.md#access-grant-contract). |
+| Editable `vortex.approvals` module activates grants | Corrected: the UI may display requests, but only the protected owning service can record decisions and activate a grant under the [approval contract](data-contracts.md#approval-request-contract). |
+| Dynamic filter executed inside every row rule | Replaced with a choice between published saved conditions or narrower scopes in [D27](decisions.md#d27-filter-grant-condition-complexity). |
+| Cross-organisation sharing as settled first-release scope | Reopened explicitly as [D31](decisions.md#d31-cross-organisation-sharing-release-scope). |
+| Cross-cluster native protocol selected now | Reclassified as future research in [D29](decisions.md#d29-cross-cluster-federation-approach) and [issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156). |
+| Sharing coverage | Added query, cache, file, privacy, activity, identity, and boundary-test requirements through [D34](decisions.md#d34-shared-record-product-surfaces). |
 
 ## Completion check
 

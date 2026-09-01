@@ -54,6 +54,14 @@ The term **saved view** replaces the outdated terms “prepared list,” “prep
 
 Every chart or report states its measure, grouping, filter, time zone, and treatment of missing values. Money results follow [Decision D08](appendices/decisions.md#d08-multi-currency-totals).
 
+## Shared-record reads
+
+If same-cluster cross-organisation sharing is selected in [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope), a shared-record query uses the same validated query contract but names the source organisation and grant context. Every returned row retains its source-organisation identity. A query cannot join, group, or total source-owned records with recipient-owned records as though they had one owner.
+
+The first-release draft exposes shared records through dedicated shared lists and record detail only. It does not place them in the recipient's global search index, ordinary dashboards, workflow selections, assistant context, or bulk operations. The product boundary remains [Decision D34](appendices/decisions.md#d34-shared-record-product-surfaces).
+
+Shared queries bypass the cross-request data-result cache under [runtime and caching](17-runtime-storage-and-caching.md#grant-cache-invalidation). Pagination, counts, and fields are calculated using one independently sufficient active grant; a query cannot combine scope from one grant with fields or actions from another.
+
 ## Search
 
 Search keeps a separate organisation-scoped index built only from fields marked searchable.
@@ -74,6 +82,7 @@ sequenceDiagram
 - Sensitive fields are never copied into the search index.
 - Personal fields are indexed only if explicitly marked searchable and permitted by the organisation privacy policy.
 - Results are scoped by organisation, application discoverability, record visibility, and field access.
+- A recipient organisation's index never receives another organisation's shared record content in the first release.
 - Candidate results are rechecked against current access before display.
 - Deleted or newly hidden records are removed or made unavailable within the limit recorded in [Decision D18](appendices/decisions.md#d18-search-and-cache-freshness).
 - Search priority `first`, `normal`, and `last` affects ranking without overriding access.
@@ -82,7 +91,7 @@ sequenceDiagram
 
 Live updates tell an open page that relevant data may have changed. They carry organisation, application, record type, record identifier, change kind, and sequence—not private field values.
 
-The client re-runs a permitted query or reloads the permitted record. Subscription channels are organisation-scoped and authorised on connection and renewal. A live message never makes an unreadable record visible.
+The client re-runs a permitted query or reloads the permitted record. Subscription channels are organisation-scoped and authorised on connection and renewal. A shared-record screen may receive a content-free invalidation tied to an active grant, then re-run its authorised query. A live message never carries source record values or makes an unreadable record visible.
 
 ## Acceptance examples
 
@@ -91,3 +100,4 @@ The client re-runs a permitted query or reloads the permitted record. Subscripti
 - Count, chart, export, and list results agree for the same access scope and filter.
 - Pagination neither duplicates nor skips records when several records share the visible sort value.
 - Removing access prevents live updates and makes subsequent refreshes refuse the record.
+- Shared records do not appear in recipient search, ordinary dashboards, workflows, assistant context, or bulk operations unless [D34](appendices/decisions.md#d34-shared-record-product-surfaces) deliberately expands the first release.

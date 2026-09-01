@@ -55,7 +55,7 @@ Rules must declare their read fields and write fields. Publication refuses cycle
 
 ## Conditions
 
-Conditions use a closed, typed vocabulary such as equals, not equals, comparison, between, empty, not empty, contains, changed, and membership. Operators are allowed only for compatible field types.
+Conditions use a closed, typed vocabulary such as equals, not equals, comparison, between, empty, not empty, contains, changed, and is one of. Operators are allowed only for compatible field types.
 
 Conditions may refer to:
 

@@ -85,6 +85,8 @@ The platform records the accepted step outcome before acknowledging it. Repeatin
 
 An ask step creates one task with assignee rules, form, due time, and timeout path. Only an authorised assignee can complete it. Reassignment, completion, expiry, and cancellation appear in [activity history](14-activity-privacy-and-retention.md).
 
+An ordinary builder-created approval step cannot grant permissions or activate a cross-organisation sharing grant. The platform-owned `vortex.approvals` capability may use the same task experience, but the owning service verifies the immutable approval decisions and exact payload before performing a protected action under the [approval contract](appendices/data-contracts.md#approval-request-contract).
+
 ## Process pipelines
 
 A pipeline belongs to an application and one record type. It defines ordered stages, allowed transitions, stage-entry and stage-exit work, optional time targets, and escalation events.

@@ -8,7 +8,7 @@ Every protected operation asks one question: **May this person perform this acti
 
 ```mermaid
 flowchart LR
-    REQ[Request] --> ID[Confirm person, session and organisation membership]
+    REQ[Request] --> ID[Confirm identity, session and organisation account]
     ID --> PERM[Check organisation and application permissions]
     PERM --> SCOPE[Check record visibility, ownership and sharing]
     SCOPE --> FIELD[Check field and action restrictions]
@@ -19,7 +19,7 @@ flowchart LR
 
 The decision receives:
 
-- The person account and active organisation membership from [people, organisations and sign-in](02-people-organisations-and-sign-in.md).
+- The global identity and active organisation account from [people, organisations and sign-in](02-people-organisations-and-sign-in.md).
 - The requested action.
 - The target definition, record, field, file, workflow, connection, or administration function.
 - The current [application](07-applications-pages-and-themes.md), when the operation occurs inside an application.
@@ -48,7 +48,7 @@ An application role grants permissions inside one [application](07-applications-
 
 ### Assignment
 
-A membership may have several organisation roles and several application roles. The effective permission set is the union of active role grants, followed by field restrictions and record-scope restrictions. There is no hidden default administrator permission.
+An organisation account may have several organisation roles and several application roles. The effective permission set is the union of active role grants, followed by field restrictions and record-scope restrictions. There is no hidden default administrator permission.
 
 ## Permission names
 
@@ -72,7 +72,7 @@ A record scope may include:
 - All records the role can access.
 - Records owned by the person.
 - Records owned by a named team to which the person belongs.
-- Records explicitly shared with the person or one of their teams.
+- Records explicitly shared with the organisation account or one of its teams only if [D24](appendices/decisions.md#d24-individual-record-sharing) includes direct record sharing.
 - Records reachable through an approved relationship from another visible record.
 - A saved, validated condition defined by the application.
 
@@ -83,6 +83,48 @@ The scope is translated into database conditions. Records outside it must not be
 A role can allow or refuse reading or changing named fields. A response omits unreadable fields; it does not return them with blank or masked values unless a specific masking policy is later added to the [decision register](appendices/decisions.md).
 
 Fields marked `sensitive` in [modules, fields and relationships](05-modules-fields-and-relationships.md) require an explicit read grant and are never copied to general search.
+
+## Shared-record access
+
+Sharing is an additional restriction, never a replacement for ordinary access. A recipient must pass both its own organisation/application checks and a source-issued grant. Missing, invalid, expired, or undecided information refuses access.
+
+```mermaid
+flowchart LR
+    REQ[Request in recipient organisation account] --> LOCAL[Check recipient account, application and roles]
+    LOCAL --> GRANT[Find one active grant covering this record and action]
+    GRANT --> SOURCE[Check source organisation, record state and sharing policy]
+    SOURCE --> FIELDS[Keep only fields allowed by that same grant]
+    FIELDS --> DB[Database row restriction permits the operation]
+    DB --> RESULT[Return or save within the source organisation]
+```
+
+### Between applications in one organisation
+
+For `organisation_shared` storage, each application must bind the module and grant its own roles the required permissions; a separate sharing grant is unnecessary. For `application_contained` storage, another application also needs an active inter-application grant. The recipient application must bind a compatible version of the module so it can validate and display the records.
+
+### Between organisations
+
+If [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) includes the capability, a source organisation may grant limited access to a recipient organisation in the same Vortex cluster. The request acts through the person's active organisation account in the recipient organisation. It never uses roles from another account held by the same global identity.
+
+The access decision confirms all of the following:
+
+1. The global identity, recipient organisation account, recipient organisation, and recipient application are active.
+2. The recipient account has a role allowed by the grant under [D32](appendices/decisions.md#d32-recipient-audience).
+3. One active grant independently covers the source record, requested action, and requested fields.
+4. The record still matches the grant's approved scope under [D27](appendices/decisions.md#d27-filter-grant-condition-complexity).
+5. The source organisation, record lifecycle, retention, and legal-hold rules permit the operation.
+
+Two grants cannot be combined to manufacture permission: the scope from one grant cannot be joined to the action or fields of another. If several grants independently permit the same request, the request is allowed and the activity entry records the grant identifiers used.
+
+### Shared actions, fields, and export
+
+Cross-organisation grants use explicit readable-field and allowed-action lists. They do not use the ambiguous `full_edit` shortcut. Fields classified as `sensitive` are unavailable in the first release. Omitted fields are not returned at all. Export is a separate permission and is refused unless the grant explicitly allows it. The final collaboration policy is [Decision D33](appendices/decisions.md#d33-shared-actions-fields-and-export).
+
+### Protected approvals
+
+The platform-owned `vortex.approvals` capability presents approval requests in the Organisation Portal, but an editable record or workflow cannot activate a grant. The Access service owns the grant and activates it only after verifying the required immutable approval decisions. Changing a displayed approval record directly has no security effect.
+
+An approval decision is not later rewritten as revoked. Ending access revokes the grant through a new authorised action, preserving the original decision and recording the revocation separately. Approval ownership remains [Decision D26](appendices/decisions.md#d26-cross-organisation-sharing-approval).
 
 ## Public access
 
@@ -98,7 +140,7 @@ The final business policy for public fields is [Decision D04](appendices/decisio
 
 ## Access-change speed
 
-Role, membership, team, sharing, and public-policy changes increase an organisation access version. Every cached access answer includes that version. A request with an old version is recalculated.
+Role, organisation-account, team, sharing, and public-policy changes increase an organisation access version. Every cached access answer includes that version. A request with an old version is recalculated.
 
 The platform must define and test the maximum time before a removal takes effect. The options are in [Decision D17](appendices/decisions.md#d17-access-change-speed).
 
@@ -107,7 +149,7 @@ The platform must define and test the maximum time before a removal takes effect
 - A person cannot grant a permission they do not hold unless a separately authorised owner-recovery process is used.
 - The last active organisation owner cannot remove or demote themselves until another owner is active.
 - High-impact changes require recent sign-in confirmation.
-- Role, membership, public-access, connection-secret, export, retention, and billing changes are written to [activity history](14-activity-privacy-and-retention.md).
+- Role, organisation-account, public-access, connection-secret, export, retention, and billing changes are written to [activity history](14-activity-privacy-and-retention.md).
 
 ## Acceptance examples
 
@@ -116,3 +158,8 @@ The platform must define and test the maximum time before a removal takes effect
 - A page hidden in navigation remains protected when its address is entered directly.
 - A public page cannot display a field merely because the field is not classified as personal data.
 - Database tests and end-to-end tests use the same access examples but are run at the layer each example actually tests.
+- A read-only cross-organisation grant does not allow creating, changing, deleting, exporting, commenting on, or attaching files to records.
+- A sensitive field is never included in cross-organisation query results even when the grant does not specify a field mask.
+- Revoking a cross-organisation grant makes previously cached permission answers for that grant unusable.
+- A person with accounts in both organisations cannot use roles from the source account while acting through the recipient account.
+- Directly changing an approval record cannot activate a sharing grant.

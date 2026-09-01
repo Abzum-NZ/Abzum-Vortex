@@ -30,14 +30,14 @@ The codebase is divided into sixteen named services. These are package and owner
 | Service | Owns |
 |---|---|
 | Definition | Drafts, validation, immutable published revisions, dependency graph, restore |
-| Identity | Person accounts, organisations, memberships, invitations, sessions, sign-in |
-| Access | Permissions, roles, assignments, access versions, allow/refuse decision |
+| Identity | Global identities, organisations, organisation accounts, invitations, sessions, sign-in |
+| Access | Permissions, roles, assignments, sharing grants, access versions, allow/refuse decision, protected grant activation |
 | Module | Module installation, dependencies, generated storage changes |
 | Record | Record validation, storage, calculations, totals, concurrency, data versions |
 | Query | Tables, boards, calendars, summaries and saved views |
 | Rule | Typed conditions and immediate rule effects |
 | Event | Transactional event outbox, queue dispatch, retries and failed sequences |
-| Workflow | Run contracts, schedules, tasks, notifications and the [Kestra](https://kestra.io/docs) boundary |
+| Workflow | Run contracts, schedules, human approval tasks, notifications and the [Kestra](https://kestra.io/docs) boundary |
 | App | Application assembly, module bindings, navigation, options and application roles |
 | Page | Block registration, page resolution, form drafts, page states and rendering contract |
 | Theme | Published theme values, inheritance and legibility validation |
@@ -52,9 +52,10 @@ Each service owns its tables and public contract. Another service calls that con
 
 - Every organisation-owned row carries its organisation identifier and is indexed with that identifier first where the access path requires it.
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
+- Only business-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, billing, secrets, connections, activity, approval decisions, access-control rows, and other administrative tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
 - The table-owner role is limited to migration and controlled verification work.
-- Every database transaction establishes person or system actor, organisation, application, and correlation context before reading organisation data.
+- Every database transaction establishes global identity or system actor, organisation account, organisation, application, and correlation context before reading organisation data.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
 
@@ -70,7 +71,7 @@ The cache model distinguishes shared public assets, shared organisation-keyed va
 
 ```mermaid
 flowchart TD
-    REQ[Request] --> LIVE[Read live session, membership, access version and root pointers]
+    REQ[Request] --> LIVE[Read live session, organisation account, access version and root pointers]
     LIVE --> DEF{Immutable definition in shared cache?}
     DEF -- Yes --> RESOLVE[Resolve application for this request]
     DEF -- No --> DBDEF[Load revision from database and cache by organisation and revision]
@@ -92,7 +93,7 @@ The allowed layers are:
 | Resolved application and theme | Shared cache, keyed by organisation, published revisions, person where needed, and current access version | A request reads current pointers and access version before using the entry. |
 | Initial data-block result | Shared cache only when explicitly allowed; keyed by organisation, person, access version, record-type data versions and query fingerprint | Never stores sensitive fields. A record save increments the owning Record service's data version, making old results unreachable. |
 
-Current published pointers, current membership, current access version, permission decisions, secrets, and responses containing sensitive fields are never served from a cross-request cache.
+Current published pointers, current organisation-account state, current access version, permission decisions, secrets, and responses containing sensitive fields are never served from a cross-request cache.
 
 The [Access service](04-access-and-permissions.md) owns access versions. The [Record service](06-records-and-lifecycle.md) owns record-type data versions. Neither counter is stored on an Identity-owned organisation row.
 
@@ -105,10 +106,18 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
 
+### Grant cache invalidation
+
+Creating, activating, changing, revoking, or expiring a cross-organisation grant increases both the source and recipient organisations' access versions in one protected operation. A cached permission answer computed under either old version is not served.
+
+The first release does not place cross-organisation shared-record results in the shared data-result cache. A source record can change without changing the recipient organisation's own data version, so disabling this cache prevents stale or over-broad results until a complete cross-organisation version contract is proven. Published saved sharing conditions are evaluated by the database at query time; free-form grant conditions are not executed.
+
 ## Acceptance examples
 
 - The static application shell can be a cross-organisation cache hit because it contains no organisation state.
 - Priming every organisation-owned cache layer in Organisation A cannot create a hit in Organisation B.
-- Suspending a membership makes the next request refuse before any person-specific cache value is used.
+- Suspending an organisation account makes the next request refuse before any person-specific cache value is used.
 - Publishing a definition makes the next request read the new live pointer without waiting five minutes.
 - Changing a record makes a cached data result under the old record-type data version unreachable.
+- A cross-organisation shared-record query bypasses the cross-request data-result cache.
+- A grant cannot expose an identity, billing, connection, activity, approval, or access-control row.
