@@ -6,7 +6,7 @@
       {"module":"vortex.crm.organisations","version":"1.0.0","purpose":"primary"},{"module":"vortex.crm.people","version":"1.0.0","purpose":"primary"},{"module":"vortex.crm.opportunities","version":"1.0.0","purpose":"primary"},{"module":"vortex.crm.activities","version":"1.0.0","purpose":"primary"},{"module":"vortex.crm.tags","version":"1.0.0","purpose":"primary"},{"module":"vortex.service_desk.cases","version":"1.0.0","purpose":"compatible_shared_record_display"}
     ],
     "theme":{"mode":"application","light_and_dark":true,"tokens":{"brand":"indigo","density":"comfortable","corners":"medium","focus":"high_contrast"}},
-    "motion":{"library":"motion/react","simple_feedback":"css","feature_loading":"lazy","tokens":"platform_default","reduced_motion":"required","experimental_view_transitions":false},
+    "motion":{"library":"motion/react","simple_feedback":"css","feature_loading":"lazy","tokens":"platform_default","semantic_tokens":["feedback","enter_exit","refresh","panel","page","layout_spring"],"current_state_wins":true,"reduced_motion":"required","experimental_view_transitions":false},
     "permissions":[
       {"key":"application.crm.open","label":"Open CRM"},{"key":"application.crm.manage","label":"Manage CRM"},{"key":"application.crm.shared_cases.read","label":"Read granted case summaries"},{"key":"application.crm.shared_cases.collaborate","label":"Collaborate on granted cases"}
     ],
