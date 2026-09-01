@@ -7,15 +7,16 @@
 The platform uses three operated services:
 
 - [Vercel](https://vercel.com/docs) runs the [Next.js](https://nextjs.org/docs) web application, server routes, and shared runtime cache.
-- [Supabase](https://supabase.com/docs) provides [PostgreSQL](https://www.postgresql.org/docs/) data storage, authentication support, file storage, live updates, and a durable [message queue](https://supabase.com/docs/guides/queues).
+- [Supabase](https://supabase.com/docs) provides [PostgreSQL](https://www.postgresql.org/docs/) data storage, identity-authority support, file storage, live updates, and a durable [message queue](https://supabase.com/docs/guides/queues).
 - [Kestra](https://kestra.io/docs) executes durable workflows, schedules, migrations, access-test orchestration, backups, and operational jobs.
 
 [Doppler](https://docs.doppler.com/docs) distributes environment secrets. It is a secret-management control, not an application data store.
 
 ```mermaid
 flowchart LR
-    PERSON[Browser or approved client] --> VERCEL[Vercel web and server]
-    VERCEL --> SUPA[Supabase data, identity, files, live updates and queue]
+    PERSON[Browser or approved client] --> IDP[Vortex Identity Authority]
+    IDP --> VERCEL[Vercel web and server]
+    VERCEL --> SUPA[Supabase data, accounts, files, live updates and queue]
     SUPA -->|event wake-up| VERCEL
     VERCEL -->|start or advance run| KESTRA[Kestra workflow execution]
     KESTRA -->|signed step callback| VERCEL
@@ -44,7 +45,7 @@ The codebase is divided into sixteen named services. These are package and owner
 | Search | Search-document maintenance, ranking and access recheck |
 | File | Upload admission, metadata, lifecycle, storage allowance and download grants |
 | Connection | Connection types, secret grants, outgoing calls, incoming messages and health |
-| Interface | Versioned operation catalogue, public interface boundary and assistant tools |
+| Interface | Versioned operation catalogue, public interface boundary, assistant tools, cluster directory and federation transport |
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
@@ -58,6 +59,78 @@ Each service owns its tables and public contract. Another service calls that con
 - Every database transaction establishes global identity or system actor, organisation account, organisation, application, and correlation context before reading organisation data.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
+
+## Vortex federation between clusters
+
+All Vortex clusters use the same published data contracts, but clusters may run different compatible releases during deployment and remain separate security, availability, and data-residency boundaries. Cross-cluster sharing therefore uses a versioned Vortex service contract, not a direct database connection.
+
+```mermaid
+flowchart LR
+    PERSON[Person in recipient organisation] --> RG[Recipient shared-record gateway]
+    RG --> ROUTE{Where is the source?}
+    ROUTE -- Same cluster --> LOCAL[Local adapter]
+    ROUTE -- Another cluster --> SIGN[Signed HTTPS federation request]
+    LOCAL --> ACCESS[Source Access service]
+    SIGN --> FED[Source federation endpoint]
+    FED --> ACCESS
+    ACCESS --> RECORD[Source Record or File service]
+    RECORD --> RLS[Source database row restrictions]
+    RLS --> RESULT[Approved fields or refusal]
+    RESULT --> PERSON
+```
+
+The **shared-record gateway** is one product-facing contract with two adapters:
+
+- The local adapter calls the source Access, Record, Query, and File services inside the current cluster and relies on the source database row restrictions.
+- The remote adapter sends the same bounded request to the source cluster's protected federation endpoint. The source runs the access decision and database query; the recipient does not receive database credentials, raw SQL access, or a broad unfiltered result.
+
+The route is an implementation detail. Grant identifiers, query shapes, actions, field allowlists, result envelopes, errors, activity, and user-visible states are the same. A cross-cluster route may have higher latency or a source-unavailable state, but it does not have different sharing permissions.
+
+### Cluster identity and discovery
+
+Every cluster has a permanent `cluster_id` and a signed manifest registered in the Vortex cluster directory. The protected directory stores operational metadata: approved federation address, environment, service region, status, supported federation protocol versions, supported shared-contract versions, current and next public signing keys, and the organisation identifiers currently routed to that cluster. It stores no organisation profile, account, role, record, file, or shared field value.
+
+Clusters cache a verified directory entry for a bounded time and fail closed when they cannot establish a currently approved route. Private signing keys remain in [Doppler](https://docs.doppler.com/docs), and rotation overlaps old and new public keys for a documented verification window.
+
+The shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) issues asymmetric identity tokens whose public keys are available for local verification. Each cluster stores and authorises its own organisation accounts; a global identity token alone never proves organisation membership or a recipient role.
+
+### Cross-cluster request
+
+The recipient cluster first verifies the person's current identity, local organisation account, application access, roles, and access version. It then creates a short-lived recipient assertion containing only the identifiers and security context required by the [federation contract](appendices/data-contracts.md#federation-contracts). The source federation endpoint verifies it and establishes source-database request context containing the recipient cluster, organisation, account, application, roles, grant, and correlation identifier. The source's [PostgreSQL row-security policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) remain the final database boundary.
+
+The remote request uses HTTPS and an asymmetric [HTTP Message Signature](https://www.rfc-editor.org/rfc/rfc9421.html). The signature covers the request method, target address and path, destination authority, issue and expiry times, one-use nonce, federation version, correlation identifier, and [Content-Digest](https://www.rfc-editor.org/rfc/rfc9530.html). The source verifies the registered recipient-cluster key, intended audience, digest, clock window, nonce, compatible versions, and grant before calling a business service. A nonce cannot be accepted twice inside the replay window. The source signs the response status, correlation identifier, issue time, and content digest so the recipient can verify its origin and body before display.
+
+The first release exposes only bounded protected operations:
+
+- Shared-record query with source-side filters, sorts, field projection, cursor pagination, and page limits.
+- Named record action with the expected concurrency number and a duplicate-protection key.
+- Grant proposal, acceptance, activation receipt, revocation notice, and authoritative status reconciliation.
+- Source-owned file upload admission, upload completion, preview, or download through a short-lived grant or bounded stream.
+- Content-free invalidation that tells an open recipient screen to re-run its authorised query.
+
+Raw SQL, cross-cluster joins, unbounded reads, arbitrary source URLs, database credentials, and distributed database transactions are not federation operations.
+
+### Grant activation and reconciliation
+
+The source cluster owns the grant. The recipient cluster owns a non-content mirror used to show pending and active sharing, route requests, and store signed evidence. Cross-cluster activation follows the signed proposal, acceptance, activation-receipt, and status-reconciliation sequence in [record sharing](16-copying-sharing-import-export.md#creating-a-grant).
+
+Every message has a permanent operation identifier, payload fingerprint, sender and receiver cluster, issue and expiry time, and duplicate-protection key. Repeating the same message returns the existing result. A message with the same operation identifier and different fingerprint is refused. There is no attempt to commit both databases atomically.
+
+Source revocation and expiry take effect on the next source request even if the recipient mirror or notification is delayed. Reconciliation updates the mirror and its local access version; it never restores access the source has ended.
+
+### Versions, failures, and efficiency
+
+Every request names the federation protocol version, shared-contract version and fingerprint, relevant published module revision, and validated source-to-recipient definition mapping. A cluster accepts a documented compatible range during rolling deployment and refuses an unsupported version with a safe, stable error. Matching database structures do not allow this check to be skipped because migrations and application deployments may temporarily differ.
+
+Remote queries are efficient by contract: filters, sorting, field selection, counts, and cursor pagination run at the source; records are returned in bounded batches; transport connections may be reused; and timeouts and failure isolation prevent one unavailable cluster consuming the recipient's request capacity. Both clusters apply their selected [shared-record usage policy](appendices/decisions.md#d36-shared-record-usage-allocation), and the source rate-limits by recipient cluster, organisation, grant, and operation. The recipient may cache signed cluster metadata, public keys, definition fingerprints, grant mirrors, and content-free invalidations. Under approved [D30](appendices/decisions.md#d30-data-residency-for-shared-records), it does not persist business-record responses, files, search documents, report results, workflow payloads, or cross-request shared-data cache entries.
+
+A timeout, unreachable source, invalid signature, replay, version mismatch, disabled route, rate or plan refusal, unapproved recipient region, or uncertain grant status fails closed. The screen shows that the source organisation is temporarily unavailable when retry is safe; it never displays a stored stale record as if it were current. Shared-record responses use private no-store browser and intermediary caching instructions.
+
+### Why database federation and replication are excluded
+
+Matching schemas make contract validation and query translation easier, but they do not make database-level federation the simpler customer-sharing boundary. [PostgreSQL foreign data wrappers](https://www.postgresql.org/docs/current/postgres-fdw.html) require foreign servers, user mappings, remote credentials, matching column definitions, and coupled remote connections and transactions. That is useful for controlled operator analytics, not for carrying a different recipient account and grant through every customer request.
+
+[PostgreSQL logical replication](https://www.postgresql.org/docs/current/logical-replication-restrictions.html) copies data and does not replicate schema changes, so subscriber schemas must still be coordinated. It would also add recipient storage, conflict, deletion, retention, search, recovery, and residency obligations that approved [D30](appendices/decisions.md#d30-data-residency-for-shared-records) deliberately avoids.
 
 ## Event dispatch without a permanent web worker
 
@@ -108,7 +181,7 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 
 ### Grant cache invalidation
 
-Creating, activating, changing, revoking, or expiring a cross-organisation grant increases both the source and recipient organisations' access versions in one protected operation. A cached permission answer computed under either old version is not served.
+Creating, activating, changing, revoking, or expiring a cross-organisation grant increases the source organisation's access version and the recipient organisation's local access version. Inside one cluster this is one protected transaction. Across clusters, signed duplicate-safe messages and reconciliation update each side independently; the source decision never waits on a recipient cache or mirror.
 
 The first release does not place cross-organisation shared-record results in the shared data-result cache. A source record can change without changing the recipient organisation's own data version, so disabling this cache prevents stale or over-broad results until a complete cross-organisation version contract is proven. Published saved sharing conditions are evaluated by the database at query time; free-form grant conditions are not executed.
 
@@ -121,3 +194,7 @@ The first release does not place cross-organisation shared-record results in the
 - Changing a record makes a cached data result under the old record-type data version unreachable.
 - A cross-organisation shared-record query bypasses the cross-request data-result cache.
 - A grant cannot expose an identity, billing, connection, activity, approval, or access-control row.
+- A same-cluster request and its cross-cluster equivalent produce the same allowed fields, action outcome, and stable refusal code.
+- A remote request with an altered body, reused nonce, expired signature, unregistered cluster, or incompatible contract version is refused before record access.
+- Source revocation refuses a cross-cluster request even while the recipient mirror still says active.
+- No cross-cluster request requires a database password for another cluster.

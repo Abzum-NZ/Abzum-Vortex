@@ -46,7 +46,9 @@ Removing a gallery listing does not remove installed definitions. A security wit
 
 Record sharing makes records owned by one organisation or application available to an approved recipient without copying or transferring ownership. It is distinct from definition copying, gallery distribution, record import/export, and whole-organisation restore.
 
-Same-cluster cross-organisation sharing is proposed for the first release but remains open in [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope). Cross-cluster sharing is not part of the current build plan; [D29](appendices/decisions.md#d29-cross-cluster-federation-approach) records that future boundary.
+Approved [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) gives the user one sharing experience whether the recipient is in the source cluster or another Vortex cluster. The product never asks the user to choose a transport. The shared-record gateway resolves the organisations and selects either the local adapter or the signed [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
+
+The source cluster remains authoritative in both cases. Under approved [D30](appendices/decisions.md#d30-data-residency-for-shared-records), a cross-cluster response may travel through the recipient service and browser for display or an approved action, but no persistent business-record copy is stored in the recipient cluster.
 
 ### App-definition sharing versus record sharing
 
@@ -65,22 +67,39 @@ The Organisation Portal presents “Install a definition” and “Share records
 ```mermaid
 sequenceDiagram
     participant Source as Source administrator
-    participant Access as Access service
+    participant SourceAccess as Source Access service
     participant Recipient as Recipient administrator
-    participant Record as Record service
-    Source->>Access: Propose scope, audience, actions, fields, and expiry
-    Access->>Access: Validate definitions and policy
-    Access->>Recipient: Request approval when required
-    Recipient-->>Access: Approve or refuse
-    Access->>Access: Record immutable decisions and activate grant
-    Recipient->>Record: Request a shared record
-    Record->>Access: Check one complete matching grant
-    Access-->>Record: Allow named action and fields, or refuse
+    participant RecipientAccess as Recipient Access service
+    participant Gateway as Shared-record gateway
+    participant Record as Source Record service
+    Source->>SourceAccess: Propose scope, audience, actions, fields, and expiry
+    SourceAccess->>SourceAccess: Validate source definitions and policy
+    SourceAccess->>RecipientAccess: Send signed proposal
+    RecipientAccess->>Recipient: Request approval when required
+    Recipient-->>RecipientAccess: Approve or refuse exact fingerprint
+    RecipientAccess-->>SourceAccess: Send signed decision
+    SourceAccess->>SourceAccess: Activate authoritative grant
+    SourceAccess-->>RecipientAccess: Send signed activation receipt
+    Recipient->>Gateway: Request a shared record
+    Gateway->>Record: Use local adapter or signed federation request
+    Record->>SourceAccess: Check one complete matching grant
+    SourceAccess-->>Record: Allow named action and fields, or refuse
+    Record-->>Gateway: Return approved projection or refusal
 ```
 
-A proposed grant names one source organisation, one recipient organisation or application, one scope, its audience, allowed actions, readable and changeable fields, export choice, start, and optional expiry. It cannot become active until all required approvals are recorded. The approval choice is [D26](appendices/decisions.md#d26-cross-organisation-sharing-approval), and the recipient audience is [D32](appendices/decisions.md#d32-recipient-audience).
+A proposed grant names one source organisation, one recipient organisation or application, one scope, its audience, allowed actions, readable and changeable fields, export choice, approved recipient region, start, and optional expiry. It also names the source record-contract lineage and the recipient application's proven compatibility mapping. The recipient organisation is resolved using the method selected in [D35](appendices/decisions.md#d35-finding-a-recipient-organisation); discovering it grants no access. The proposal cannot become active until all required approvals are recorded. The approval choice is [D26](appendices/decisions.md#d26-cross-organisation-sharing-approval), and the recipient audience is [D32](appendices/decisions.md#d32-recipient-audience).
 
 The platform-owned `vortex.approvals` capability supplies the Organisation Portal screens and protected approval path. The Access service remains authoritative for activation. Approval decisions are immutable; later revocation is a separate recorded action.
+
+For a same-cluster grant, the source and recipient protected records can be changed in one database transaction. For a cross-cluster grant, activation uses signed, duplicate-safe messages rather than pretending two databases share a transaction:
+
+1. The source creates and signs an immutable proposal fingerprint.
+2. The recipient verifies the source cluster, application binding, roles, destination policy, and required approval; it returns a signed acceptance or refusal for that exact fingerprint.
+3. The source verifies the response and activates the authoritative grant.
+4. The source returns a signed activation receipt, and the recipient marks its non-content grant mirror active.
+5. Either side can ask the source for the current status and safely repair a missed message through [reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation).
+
+The recipient mirror contains routing, audience, status, identifiers, fingerprints, compatibility mapping reference, and receipts only. It never contains source record values. Revocation and expiry are authoritative at the source, so a delayed mirror update cannot keep access alive. A move to a different recipient region suspends the source grant until that destination is included in a newly approved payload.
 
 ### Scope and saved sharing conditions
 
@@ -126,6 +145,9 @@ Restore is an operator-controlled disaster-recovery or migration process with co
 - Sharing records with another organisation does not create copies in the target's storage.
 - A saved-condition grant automatically includes new records that match the condition and excludes records that no longer match.
 - Revoking a sharing grant does not affect the source organisation's records.
+- The same approved grant produces the same visible fields and allowed actions across local and remote routes.
+- Losing a cross-cluster activation receipt is recoverable by reconciliation and never produces two grants or a partial record copy.
+- A source-cluster or network outage displays a temporary-unavailability state and never falls back to an older recipient-stored record.
 - Changing an approval display record directly cannot activate a grant.
 - A recipient cannot re-share a source record to a third organisation.
 - Import dry-run and confirmed execution use the same mapping and validation rules.

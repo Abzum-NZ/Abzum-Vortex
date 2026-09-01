@@ -102,7 +102,7 @@ The complete fixture suite must prove:
 
 ## Sharing examples
 
-These examples extend the CRM and Sales Hub fixtures to demonstrate the proposed [shared-record access](../04-access-and-permissions.md#shared-record-access) model. They remain blocked by [D26–D34](decisions.md#sharing-and-federation-decisions).
+These examples extend the CRM and Sales Hub fixtures to demonstrate the approved local-and-cross-cluster [shared-record access](../04-access-and-permissions.md#shared-record-access) architecture. Implementation remains blocked by open business-policy decisions [D26–D28](decisions.md#d26-cross-organisation-sharing-approval) and [D32–D36](decisions.md#d32-recipient-audience).
 
 ### Inter-application sharing
 
@@ -141,6 +141,29 @@ The proposed grant:
 
 Organisation B's Partner Managers can use a dedicated shared-deals list, view matching deals, add comments, and update `partner_status`. They cannot see unnamed or sensitive fields, change the amount, export, re-share, or access deals that no longer match. The records do not enter Organisation B's global search index.
 
+### The same grant across two clusters
+
+Organisation A is hosted in Cluster North and Organisation B is hosted in Cluster South. The grant above is unchanged; it additionally records the two cluster identifiers and compatible contract fingerprint.
+
+```mermaid
+sequenceDiagram
+    participant Person as Partner Manager in Organisation B
+    participant South as Cluster South gateway
+    participant North as Cluster North federation endpoint
+    participant Access as Cluster North Access service
+    participant Records as Cluster North Record service
+    Person->>South: Open shared deals with filter and page size
+    South->>South: Verify identity, account, app, role and access version
+    South->>North: Send signed bounded query and recipient assertion
+    North->>Access: Verify cluster, assertion and authoritative grant
+    Access->>Records: Run approved source-side query and field projection
+    Records-->>North: Approved fields and continuation token
+    North-->>South: Signed response
+    South-->>Person: Display the shared list without persisting it
+```
+
+If both organisations later move into one cluster, the gateway uses its local adapter and the visible result is the same. If Cluster North is unavailable, Organisation B sees “Source organisation temporarily unavailable” and no stored deal list. Revoking the source grant refuses the next request even if Cluster South has not yet received the revocation notice.
+
 ### Approval workflow for cross-organisation sharing
 
 Before the cross-organisation grant above becomes active:
@@ -149,6 +172,8 @@ Before the cross-organisation grant above becomes active:
 2. The protected request fingerprints its source, recipient, application, roles, saved condition and parameters, actions, fields, export choice, start, and expiry.
 3. An authorised source approver records an immutable decision.
 4. Whether Organisation B must also accept depends on [D26](decisions.md#d26-cross-organisation-sharing-approval).
-5. The Access service verifies the unchanged fingerprint and required decisions, activates the grant, and increases both organisations' access versions.
-6. A later authorised revocation ends the grant and records a separate event; it does not rewrite the original approval.
-7. Directly editing an approval display record never creates, activates, or revokes a grant.
+5. Organisation B's cluster returns a signed acceptance for the unchanged fingerprint.
+6. Organisation A's Access service verifies the required decisions and acceptance, activates the authoritative grant, changes its local access version, and returns a signed activation receipt.
+7. Organisation B stores the receipt in a non-content grant mirror and changes its local access version. A missed message is repaired by asking Organisation A for authoritative status.
+8. A later authorised revocation ends the source grant and records a separate event; it does not rewrite the original approval. Delayed recipient notification cannot keep access alive.
+9. Directly editing an approval display record never creates, activates, or revokes a grant.

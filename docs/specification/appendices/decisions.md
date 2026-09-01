@@ -280,7 +280,7 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 
 ## Sharing and federation decisions
 
-Decision order matters: decide [D31](#d31-cross-organisation-sharing-release-scope) and [D29](#d29-cross-cluster-federation-approach) first. If D31 includes same-cluster sharing, D26–D28 and D32–D34 block its implementation. If D29 defers federation, D30 remains recorded future work and does not block the first release.
+[D29](#d29-cross-cluster-federation-approach), [D30](#d30-data-residency-for-shared-records), and [D31](#d31-cross-organisation-sharing-release-scope) are decided together: the first release provides one sharing experience across clusters, keeps the source cluster authoritative, and stores no persistent record copy in the recipient cluster. [D26–D28](#d26-cross-organisation-sharing-approval) and [D32–D36](#d32-recipient-audience) still block sharing implementation because they decide the business policy inside that architecture.
 
 ### D26 Cross-organisation sharing approval
 
@@ -316,31 +316,62 @@ Decision order matters: decide [D31](#d31-cross-organisation-sharing-release-sco
 
 **Question:** What should the current specification commit to for sharing between different Vortex clusters?
 
-- **A — Defer architecture and delivery (recommended).** The first release supports no cross-cluster grant. Research must settle residency, deletion, latency, outage, identity, conflict, and audit requirements before choosing a protocol.
-- **B — Native Vortex protocol in the current plan.** Add an authenticated service protocol and explicitly designed remote read/write behaviour.
-- **C — Direct database federation in the current plan.** Connect clusters at the database layer, accepting the operational and isolation coupling this creates.
+- **A — Defer architecture and delivery.** The first release supports no cross-cluster grant.
+- **B — Signed Vortex Federation API (chosen).** The recipient cluster sends a bounded, signed Vortex request to the source cluster. The source remains authoritative and applies the same grant, query, record, file, and activity rules used for a local request.
+- **C — Direct database federation.** Connect clusters with database credentials and foreign tables.
+- **D — Replicate shared records.** Copy selected source data into recipient-cluster storage and reconcile later changes and removals.
 
-**Draft effect:** The [current sharing scope](../16-copying-sharing-import-export.md#record-sharing) and [revised build plan](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export) follow A. [Future issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156) remains research only.
+**Status:** Decided.
+
+**Chosen option:** B — Signed Vortex Federation API.
+
+**Decision owner:** Vijay Tilak.
+
+**Date:** 1 September 2026.
+
+**Reason:** One product contract can use a local adapter when both organisations share a cluster and a remote adapter otherwise. The remote adapter uses HTTPS, signed requests, bounded versioned contracts, source-side filtering, and source-side access enforcement. This avoids sharing database credentials, coupling database transactions, copying records, or making database migrations move in lockstep. Matching database structures simplify the shared contracts but do not remove identity, authentication, deployment-version, outage, residency, or audit boundaries.
+
+**Affected links:** [Record sharing](../16-copying-sharing-import-export.md#record-sharing), [federation runtime](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters), [federation contracts](data-contracts.md#federation-contracts), [Phase 9 transport issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157), [Phase 10](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export), and [sharing execution issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156).
 
 ### D30 Data residency for shared records
 
-**Question:** If cross-cluster sharing is later approved, who controls where shared data may be processed or stored?
+**Question:** Where may a cross-cluster shared-record response be processed or stored?
 
-- **A — Source policy per data class and destination (recommended for future design).** The source organisation chooses approved recipient regions and whether transient response, cache, or replication is allowed; sensitive fields may impose stricter limits.
-- **B — No storage outside the source cluster.** Authorised responses may be displayed remotely, but the recipient cluster keeps no copy; this still does not promise that data never crosses a regional boundary.
+- **A — Source policy per data class and destination.** The source organisation chooses approved recipient regions and whether transient response, cache, or replication is allowed.
+- **B — No persistent recipient-cluster storage (chosen for the first release).** Authorised values may travel through the recipient service and browser for display or an approved action, but the recipient cluster keeps no business-record copy, derived search document, report materialisation, workflow payload, or cross-request result cache.
 - **C — Platform-wide replication policy.** Approved clusters may retain shared projections under one global retention and deletion policy.
 
-**Draft effect:** No current implementation follows any option because [D29](#d29-cross-cluster-federation-approach) recommends deferral. The chosen policy must be added before future federation design begins.
+**Status:** Decided.
+
+**Chosen option:** B — No persistent recipient-cluster storage.
+
+**Decision owner:** Vijay Tilak.
+
+**Date:** 1 September 2026.
+
+**Reason:** Keeping the only persistent business record in the source cluster makes revocation, expiry, correction, retention, deletion, legal hold, and recovery authoritative in one place. This is not a promise that the values never cross a regional boundary: they necessarily travel to the authorised recipient for display or an approved action. The source cluster's sharing policy must allow that destination before activation.
+
+**Affected links:** [Shared-record reads](../10-queries-reports-search.md#shared-record-reads), [files](../11-files-and-attachments.md#attachments-on-shared-records), [privacy](../14-activity-privacy-and-retention.md#shared-record-accountability), [record sharing](../16-copying-sharing-import-export.md#record-sharing), and [federation runtime](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 
 ### D31 Cross-organisation sharing release scope
 
 **Question:** Is cross-organisation record sharing part of the first release?
 
-- **A — Same-cluster sharing only (recommended if partner collaboration is required).** Build governed sharing between organisations stored in the same Vortex cluster; defer federation.
+- **A — One sharing experience across same-cluster and cross-cluster recipients (chosen).** Product behaviour, grants, approvals, fields, actions, and screens are the same. The runtime uses a local path inside one cluster and the signed [Vortex Federation API](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters) between clusters.
 - **B — Defer all cross-organisation record sharing.** Keep application-definition distribution and within-organisation application sharing only.
 - **C — Exclude cross-organisation record sharing from Vortex.** Use explicit exports and external integrations instead.
 
-**Draft effect:** The new sharing sections and proposed [grant issue #153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153), [approval issue #154](https://github.com/Abzum-NZ/Abzum-Vortex/issues/154), and [experience issue #155](https://github.com/Abzum-NZ/Abzum-Vortex/issues/155) are written toward A, but they must not enter implementation until this is decided.
+**Status:** Decided.
+
+**Chosen option:** A — One sharing experience across same-cluster and cross-cluster recipients.
+
+**Decision owner:** Vijay Tilak.
+
+**Date:** 1 September 2026.
+
+**Reason:** A user should choose the source, recipient, scope, audience, fields, actions, and expiry—not a database topology. The shared-record gateway selects the local or remote path after resolving the two organisations' clusters. Cross-cluster latency or source outage is shown clearly, but it does not create a second business model.
+
+**Affected links:** [Shared-record access](../04-access-and-permissions.md#shared-record-access), [record sharing](../16-copying-sharing-import-export.md#record-sharing), [grant issue #153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153), [approval issue #154](https://github.com/Abzum-NZ/Abzum-Vortex/issues/154), [experience issue #155](https://github.com/Abzum-NZ/Abzum-Vortex/issues/155), and [federation issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156).
 
 ### D32 Recipient audience
 
@@ -371,6 +402,26 @@ Decision order matters: decide [D31](#d31-cross-organisation-sharing-release-sco
 - **C — Full product parity.** Also allow workflows, bulk work, assistant tools, and connections; largest privacy and operational scope.
 
 **Draft effect:** [Queries, reports, search and live updates](../10-queries-reports-search.md#shared-record-reads) and [privacy and retention](../14-activity-privacy-and-retention.md#shared-record-accountability) follow A.
+
+### D35 Finding a recipient organisation
+
+**Question:** How does a source administrator select the correct recipient organisation without exposing a global customer directory?
+
+- **A — Copyable organisation sharing code or signed invitation link (recommended).** The recipient provides a code or the source sends a link; the protected directory resolves it to the exact organisation and shows only its approved name and region before approval.
+- **B — Searchable Vortex organisation directory.** Easier discovery, but organisations need listing, visibility, impersonation, and name-collision policies.
+- **C — Operator-mediated setup.** An Abzum operator links the organisations before a grant can be proposed; lowest customer flexibility.
+
+**Draft effect:** [Record sharing](../16-copying-sharing-import-export.md#creating-a-grant) and the [cluster directory](../17-runtime-storage-and-caching.md#cluster-identity-and-discovery) follow A. The sharing code is an identifier, not a secret or permission; recipient approval is still required according to [D26](#d26-cross-organisation-sharing-approval).
+
+### D36 Shared-record usage allocation
+
+**Question:** Which organisation's plan and usage record pays for a shared-record request?
+
+- **A — Each organisation pays for its own work (recommended).** Recipient seats and gateway requests count to the recipient; source queries, actions, stored files, and any network delivery count to the source. One unit of work is not charged twice to the same category, and the rule is the same for local and remote routes.
+- **B — Recipient pays all shared-request and delivery usage.** Useful if access is treated as a recipient service, but requires transferring source infrastructure cost.
+- **C — Source pays all sharing usage.** Simple for recipients, but a source can incur unpredictable cost from recipient activity.
+
+**Draft effect:** [Plans, billing and usage](../15-plans-billing-and-usage.md#shared-record-usage) follows A. Limits refuse new remote work with a stable source- or recipient-limit outcome and never broaden access or fall back to copied data.
 
 ## Decision record template
 

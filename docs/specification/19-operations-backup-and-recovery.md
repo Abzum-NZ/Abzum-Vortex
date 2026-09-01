@@ -31,6 +31,7 @@ Required measures include:
 - Search indexing delay and access-recheck refusal.
 - Cache hit, miss, unsafe-write refusal and version mismatch.
 - Connection failure, rate limiting, secret refresh and incoming verification failure.
+- Federation request rate, source latency, timeout, signature refusal, replay refusal, incompatible version, grant-reconciliation age, and recipient-mirror difference by source and recipient cluster.
 - Billing event age, usage reconciliation and entitlement mismatch.
 - Backup age, size, off-site copy, restore result and privacy-removal replay result.
 
@@ -70,7 +71,7 @@ Recovery objectives for maximum data loss and restoration time are business choi
 
 ## Secret management
 
-[Doppler](https://docs.doppler.com/docs) provides environment-scoped secrets. Secrets are never committed, copied into fixtures, printed by builds, placed in browser bundles, or included in definition exports. Rotation procedures cover application, database, storage, [Kestra](https://kestra.io/docs), [Stripe](https://docs.stripe.com/), model providers, and connection encryption keys.
+[Doppler](https://docs.doppler.com/docs) provides environment-scoped secrets. Secrets are never committed, copied into fixtures, printed by builds, placed in browser bundles, or included in definition exports. Rotation procedures cover application, database, storage, [Kestra](https://kestra.io/docs), [Stripe](https://docs.stripe.com/), model providers, connection encryption keys, identity-authority signing keys, and cluster federation signing keys. Federation rotation publishes the next public key before use, overlaps verification for in-flight messages, then removes the retired key after the replay and reconciliation windows close.
 
 ## Support access
 
@@ -78,7 +79,7 @@ Support access requires a named operator role, strong sign-in, a ticket, purpose
 
 ## Runbooks
 
-At minimum, runbooks cover deployment failure, database migration failure, organisation-separation incident, lost or exposed secret, stalled event sequence, workflow outage, file-scan outage, connection-provider outage, billing mismatch, search delay, backup failure, complete restore, privacy-removal failure, and provider-region failure.
+At minimum, runbooks cover deployment failure, database migration failure, organisation-separation incident, lost or exposed secret, stalled event sequence, workflow outage, file-scan outage, connection-provider outage, billing mismatch, search delay, backup failure, complete restore, privacy-removal failure, provider-region failure, federation signing-key exposure, one-cluster outage, incompatible federation release, cluster-directory error, and grant-mirror reconciliation backlog.
 
 ## Acceptance examples
 
@@ -87,3 +88,5 @@ At minimum, runbooks cover deployment failure, database migration failure, organ
 - A log scan finds no credentials or sensitive values in successful and failing paths.
 - Support access expires automatically and appears in the organisation's activity.
 - Every production alert links to a tested runbook and an accountable owner.
+- Disabling one cluster's federation route stops new remote requests without requiring database credential rotation in every other cluster.
+- Restoring a source cluster replays later grant revocations and privacy-removal receipts before cross-cluster access is reopened.

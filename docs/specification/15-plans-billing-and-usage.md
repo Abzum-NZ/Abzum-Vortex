@@ -58,6 +58,12 @@ Limits distinguish existing access from new consumption:
 
 The plan must define whether invited, active, suspended, service, and external organisation accounts count as seats. A change in counting rules creates a new plan version. The unresolved business choices appear in [Decision D16](appendices/decisions.md#d16-billing-and-limit-enforcement).
 
+## Shared-record usage
+
+Shared-record work records separate source and recipient usage events tied by one correlation identifier. The draft follows [D36 option A](appendices/decisions.md#d36-shared-record-usage-allocation): recipient seats and gateway requests count to the recipient organisation, while the source query, action, stored file, and any network delivery count to the source organisation. The rule is the same for local and remote routes, and the same operation is not counted twice in one usage category.
+
+If either organisation has reached a hard limit for the required work, the request refuses with a stable outcome that states whether the source or recipient limit prevented it. Billing state never turns a refused grant into an allowed one, causes a persistent recipient copy, or reveals a source record's existence.
+
 ## Administrative safety
 
 - Billing administration requires a dedicated permission and recent sign-in confirmation.
@@ -72,3 +78,4 @@ The plan must define whether invited, active, suspended, service, and external o
 - Downgrading below current storage does not delete files; it prevents additional storage according to the chosen policy.
 - An organisation can export its data during a normal billing grace period.
 - Plan and usage decisions are explainable from versioned inputs.
+- One federated request produces linked source and recipient usage entries without double-counting one category.

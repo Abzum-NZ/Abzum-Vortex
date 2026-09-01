@@ -47,7 +47,7 @@ The first complete release includes:
 - Public pages and programmable interfaces where an organisation explicitly enables them.
 - An optional assistant that follows the same access rules as the person using it.
 - Plans, usage measurement, billing, export, retention, activity history, and recovery.
-- Governed same-cluster cross-organisation record sharing only if [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) includes it.
+- Governed cross-organisation record sharing with the same product behaviour whether the organisations are in one cluster or different clusters, as approved in [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope).
 
 The first complete release does not include:
 
@@ -55,7 +55,7 @@ The first complete release does not include:
 - A general-purpose website hosting product.
 - Direct customer access to platform databases or infrastructure accounts.
 - Automatic sharing of records, definitions, files, or learned information between organisations.
-- Cross-cluster or cross-region record federation in the current release under [D29](appendices/decisions.md#d29-cross-cluster-federation-approach).
+- Replicating shared records into recipient-cluster storage or directly connecting customer databases. Cross-cluster access uses the approved [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 - A marketplace in which unreviewed packages become automatically trusted.
 
 ## Product principles
@@ -71,4 +71,4 @@ The first complete release does not include:
 
 - A builder can explain whether a requirement belongs to a [module](05-modules-fields-and-relationships.md), an [application](07-applications-pages-and-themes.md), or organisation data in [records](06-records-and-lifecycle.md).
 - A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [acceptance test](20-quality-and-acceptance.md), and [build phase](../build-plan/README.md).
-- No core feature requires sharing one organisation's private state with another. If [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) includes record sharing, every grant is explicit, limited, revocable, and independently testable.
+- No core feature automatically shares one organisation's private state with another. Every cross-organisation grant is explicit, limited, revocable, independently testable, and enforced by the source organisation's cluster under [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope).

@@ -56,11 +56,13 @@ Every chart or report states its measure, grouping, filter, time zone, and treat
 
 ## Shared-record reads
 
-If same-cluster cross-organisation sharing is selected in [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope), a shared-record query uses the same validated query contract but names the source organisation and grant context. Every returned row retains its source-organisation identity. A query cannot join, group, or total source-owned records with recipient-owned records as though they had one owner.
+A shared-record query uses the same validated query contract whether the source is local or in another cluster under approved [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope). It names the source cluster, source organisation, and grant context. Every returned row retains those source identities. A query cannot join, group, or total source-owned records with recipient-owned records as though they had one owner, and one query cannot join records from several source clusters.
+
+For a cross-cluster read, the complete filter, sort, field projection, page size, and continuation token are sent once to the source through the [federation query contract](appendices/data-contracts.md#federated-query-and-action). The source validates and executes the query, applies the grant and database row restrictions, and returns only the approved fields. The recipient never fetches a broad remote set and filters it locally, and it never makes one remote call per returned record.
 
 The first-release draft exposes shared records through dedicated shared lists and record detail only. It does not place them in the recipient's global search index, ordinary dashboards, workflow selections, assistant context, or bulk operations. The product boundary remains [Decision D34](appendices/decisions.md#d34-shared-record-product-surfaces).
 
-Shared queries bypass the cross-request data-result cache under [runtime and caching](17-runtime-storage-and-caching.md#grant-cache-invalidation). Pagination, counts, and fields are calculated using one independently sufficient active grant; a query cannot combine scope from one grant with fields or actions from another.
+Shared queries bypass the cross-request business-data cache under [runtime and caching](17-runtime-storage-and-caching.md#grant-cache-invalidation). Pagination, counts, and fields are calculated in the source cluster using one independently sufficient active grant; a query cannot combine scope from one grant with fields or actions from another. A source or network outage fails closed and shows that the source organisation is temporarily unavailable; the recipient does not display an older persisted result.
 
 ## Search
 
@@ -101,3 +103,4 @@ The client re-runs a permitted query or reloads the permitted record. Subscripti
 - Pagination neither duplicates nor skips records when several records share the visible sort value.
 - Removing access prevents live updates and makes subsequent refreshes refuse the record.
 - Shared records do not appear in recipient search, ordinary dashboards, workflows, assistant context, or bulk operations unless [D34](appendices/decisions.md#d34-shared-record-product-surfaces) deliberately expands the first release.
+- Same-cluster and cross-cluster shared lists return the same fields and refusal meanings for the same grant; only measured latency and source-availability states may differ.

@@ -66,6 +66,12 @@ A published **interface** contains named operations. Each operation declares:
 
 Interfaces use the same [actions](08-forms-actions-rules-and-events.md), [queries](10-queries-reports-search.md), [access](04-access-and-permissions.md), and [activity history](14-activity-privacy-and-retention.md) as the web application.
 
+## Internal cluster federation interface
+
+The [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters) is a protected platform-to-platform interface, not a customer connection or public programmable interface. Only an active cluster registered in the [cluster directory](17-runtime-storage-and-caching.md#cluster-identity-and-discovery) can call it. Customers cannot configure its address, credentials, retry policy, or operation catalogue.
+
+It reuses the published query, action, grant, file, error, and activity contracts rather than inventing remote versions of business behaviour. The Interface service owns transport, signatures, replay checks, request limits, and version negotiation; the Identity service proves the person; the recipient Access service proves its local account and roles; and the source Access, Query, Record, and File services remain authoritative for the requested work.
+
 ## Interface versions
 
 ```mermaid
@@ -95,3 +101,4 @@ Public access uses explicitly published operations, approved fields from [public
 - Revoking a connection prevents later workflow attempts from using cached credentials.
 - An interface write repeated with the same duplicate-protection key returns the original outcome.
 - Removing an interface version is refused while an active application requires it, unless a reviewed security exception is recorded.
+- A customer-created interface or connection cannot call an internal federation operation or claim to be another Vortex cluster.

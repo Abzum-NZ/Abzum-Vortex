@@ -13,6 +13,9 @@ flowchart TD
     RECORD --> EVENT[Event envelopes]
     EVENT --> RUN[Workflow runs and callbacks]
     RECORD --> FILE[Files, search and activity]
+    RECORD --> FED[Federated query or action envelope]
+    ACCESS --> FED
+    FED --> REMOTE[Another registered Vortex cluster]
 ```
 
 ## Identifier rules
@@ -57,6 +60,10 @@ Organisation states are active, suspended, archived, and removal pending. Exact 
 
 `identity_id`, verified primary email, identity state, second-factor enrolment state, creation time, and last successful sign-in time. Credentials and second-factor secrets are stored only by the identity-provider boundary, not in this record.
 
+### Identity authority
+
+Each environment has one Vortex Identity Authority shared by its clusters. Its public contract provides authority identifier, environment, token issuer, intended audience rules, current and next asymmetric public keys, key identifiers, activation and retirement times, and supported token-contract versions. An identity token provides `identity_id`, issue and expiry times, authentication strength, session identifier, and issuer; it does not contain authoritative organisation roles or substitute for an active [organisation account](../02-people-organisations-and-sign-in.md#concepts).
+
 ### Organisation account
 
 `organisation_account_id`, `organisation_id`, `identity_id`, organisation-specific display name, state, optional language and time-zone preferences, invitation details, activation/suspension/closure times, and access-version contribution. The pair `organisation_id` and `identity_id` is unique, so one identity cannot have two accounts in the same organisation. Group/team assignment shape follows [Decision D23](decisions.md#d23-groups-and-teams).
@@ -88,6 +95,8 @@ The Access service owns an `access_version` per organisation. Every organisation
 A module contains identity and publication metadata, dependencies, record types, module actions, business events, and extension points.
 
 A record type contains key, labels, title-field reference, storage scope, ownership mode, fields, relationships, standard actions, and custom action references.
+
+Installing a definition package also records a lineage entry with source publisher, source root and component identifiers, source release version and content fingerprint, local root and component identifiers, local published revision, compatibility state, and mapping fingerprint. A federation-compatible application binding names that lineage entry and the source contract range it can display. Visual similarity or matching builder keys without proven lineage are insufficient.
 
 Storage scope is `organisation_shared` or `application_contained`. Ownership mode and within-organisation individual sharing depend on [D24](decisions.md#d24-individual-record-sharing); cross-organisation sharing depends on [D31](decisions.md#d31-cross-organisation-sharing-release-scope).
 
@@ -129,8 +138,10 @@ Every access grant provides:
 | Name | Requirement |
 |---|---|
 | `grant_id` | Required permanent grant identity. |
+| `source_cluster_id` | Required cluster that authoritatively stores the grant and records. |
 | `source_organisation_id` | Required organisation that owns the records. |
 | `source_application_id` | Required only when sharing application-contained records. |
+| `recipient_cluster_id` | Required cluster that stores the recipient organisation account, application, roles, and non-content grant mirror. May equal the source cluster. |
 | `recipient_organisation_id` | Required for cross-organisation grants; equal to the source for inter-application grants. |
 | `recipient_application_id` | Required application from which the records may be requested. It must have a compatible module binding. |
 | `recipient_role_ids` | Recipient roles allowed to use the grant if [D32](decisions.md#d32-recipient-audience) chooses role-scoped access. |
@@ -143,10 +154,13 @@ Every access grant provides:
 | `readable_field_ids` | Required explicit field allowlist. Sensitive fields are refused in the first release. |
 | `changeable_field_ids` | Required subset of readable fields; empty for read-only grants. |
 | `export_allowed` | Required boolean; defaults to false in the creation experience and requires separate approval when true. |
+| `approved_recipient_region` | Required source-approved service region for a cross-cluster grant. A different current recipient region suspends access until a newly approved payload activates. |
 | `starts_at`, `expires_at` | Required start and optional expiry. No indefinite default is inferred. |
-| `status` | `draft`, `pending_approval`, `active`, `revoked`, or `expired`. |
+| `status` | `draft`, `pending_approval`, `active`, `suspended`, `revoked`, or `expired`. |
 | `created_by_organisation_account_id` | Required source organisation account that proposed the grant. |
 | `approval_request_id` | Required for a cross-organisation grant and links the exact approved payload fingerprint. |
+| `contract_version`, `contract_fingerprint` | Required published source record contract understood by source and recipient applications. |
+| `recipient_binding_id`, `definition_mapping_fingerprint` | Required recipient application binding and validated source-to-local component mapping. |
 | `activated_at` | Present only after the Access service verifies the required decisions and activates the grant. |
 | `revoked_at` | Present after revocation. |
 | `revoked_by_organisation_account_id`, `revocation_reason` | Present after an authorised revocation. |
@@ -163,6 +177,7 @@ An approval request records a protected governance decision for cross-organisati
 |---|---|
 | `request_id` | Required permanent request identity. |
 | `source_organisation_id` | Required organisation proposing the protected action. |
+| `source_cluster_id` | Required cluster that owns the protected action. |
 | `request_type` | Required: `cross_app_grant`, `cross_org_share`, or `record_action`. |
 | `title` | Required human-readable description, 1–200 characters. |
 | `payload_fingerprint` | Required fingerprint of the complete proposed action; changing the payload invalidates earlier decisions. |
@@ -170,11 +185,57 @@ An approval request records a protected governance decision for cross-organisati
 | `requested_by_organisation_account_id` | Required organisation account that created the request. |
 | `requested_at` | Required creation timestamp. |
 | `recipient_organisation_id` | Required for cross-organisation requests. |
+| `recipient_cluster_id` | Required for cross-organisation requests and may equal the source cluster. |
 | `required_decisions` | Required source and recipient approver sides and role identifiers under [D26](decisions.md#d26-cross-organisation-sharing-approval). |
 | `expires_at` | Required deadline after which undecided requests expire. |
 | `result_resource_id` | Present after the owning service executes the approved action. |
 
 Each approval decision is an immutable child entry with request, payload fingerprint, approver organisation, approver organisation account, decision (`approved` or `refused`), time, optional safe note, authentication strength, and correlation identifier. A later revocation of the resulting grant creates a separate grant event; it does not rewrite the approval history.
+
+## Federation contracts
+
+Federation transports the existing grant, query, action, file, and refusal contracts between clusters. It never exposes database tables or accepts raw SQL.
+
+### Cluster manifest
+
+| Name | Requirement |
+|---|---|
+| `cluster_id` | Required permanent cluster identity. |
+| `environment` | Required `local`, `testing`, or `production`; requests cannot cross environments. |
+| `federation_base_address` | Required approved HTTPS address. |
+| `service_region` | Required deployment region used by sharing-policy checks. Changing it suspends grants that did not approve the new region. |
+| `routed_organisation_ids` | Protected list of globally unique organisation identifiers currently served by the cluster; it contains no organisation profile or business data. |
+| `status` | `active`, `draining`, `disabled`, or `retired`. Only `active` accepts new grants. |
+| `protocol_versions` | Required supported federation protocol versions and compatibility ranges. |
+| `shared_contract_versions` | Required supported query, action, grant, file, error, and identity-assertion contract versions. |
+| `signing_keys` | Current and next public keys with key identifier, approved asymmetric algorithm, activation time, and retirement time. Verifiers accept only the platform algorithm allowlist; private keys never appear. |
+| `issued_at`, `expires_at`, `manifest_signature` | Required directory-issued validity and integrity evidence. |
+
+### Recipient discovery entry
+
+The draft [D35](decisions.md#d35-finding-a-recipient-organisation) contract stores a one-way fingerprint of the organisation sharing code, permanent organisation identifier, current cluster identifier, approved organisation display name, service region, state, issue and rotation times, and directory signature. A successful exact lookup returns only the approved name, region, and a short-lived proposal address. It returns no people, account, role, application, record, file, plan, or billing information. Rotating the sharing code does not change existing grants because they use the permanent organisation identifier.
+
+### Recipient assertion
+
+A recipient assertion is short lived and signed by the recipient cluster. It contains `assertion_id`, `recipient_cluster_id`, `recipient_cluster_region`, `recipient_organisation_id`, `recipient_organisation_account_id`, global `identity_id`, `recipient_application_id`, current recipient role identifiers, recipient `access_version`, requested `grant_id`, intended `source_cluster_id`, authentication strength, issue and expiry times, one-use nonce, and correlation identifier. It contains no password, identity-provider private key, database credential, source role, or record value.
+
+### Federated request envelope
+
+Every cross-cluster request provides federation protocol version, operation name, sender and intended receiver cluster, issue and expiry times, one-use nonce, correlation identifier, duplicate-protection key where the operation can change state, shared-contract version and fingerprint, and a typed operation payload. A shared-record query, action, or file request also requires the recipient assertion; grant-control messages instead carry their exact signed proposal, decision, receipt, or revocation evidence. HTTPS protects transport. The [HTTP Message Signature](https://www.rfc-editor.org/rfc/rfc9421.html) and [Content-Digest](https://www.rfc-editor.org/rfc/rfc9530.html) protect the signed request components and body.
+
+The response provides the same correlation identifier, source cluster, operation outcome, shared-contract version, source issue time, optional continuation token or result, and a stable safe error. A response never reveals whether an unapproved record exists.
+
+### Federated query and action
+
+A federated query provides `grant_id`, source organisation, module, record type, published module revision, readable field projection, validated filter, stable sort, bounded page size, optional continuation token, and optional permitted count request. The source performs every filter, sort, grant, field, row-restriction, and pagination check before returning records. Each record reference contains source cluster, source organisation, record type, record identifier, and concurrency number.
+
+A federated action provides `grant_id`, one source record reference, named action, validated action input, expected concurrency number, and duplicate-protection key. The source returns the ordinary action outcome and new concurrency number. A remote action cannot create a recipient-owned relationship or span a transaction in both clusters.
+
+A federated file operation provides `grant_id`, source record reference, attachment field, operation (`upload_admit`, `upload_complete`, `preview`, or `download`), expected record concurrency where a save is involved, file identifier where present, and duplicate-protection key for a changing operation. The source File and Record services own every instruction, byte, scan, attachment, limit, and retention decision.
+
+### Recipient grant mirror
+
+The recipient stores one non-content mirror with `grant_id`, source and recipient cluster/organisation/application identifiers, approved recipient region, recipient role identifiers, contract version and fingerprint, definition-mapping fingerprint, source route, state, source proposal fingerprint, recipient decision reference, signed activation receipt, local access-version contribution, last reconciliation time, and safe last outcome. It stores no source record fields, files, query results, search documents, or workflow payloads. The source grant remains authoritative when the mirror disagrees or is stale.
 
 ## Action, rule and condition contracts
 

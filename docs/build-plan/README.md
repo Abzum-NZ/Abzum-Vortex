@@ -1,8 +1,11 @@
 # Abzum Vortex revised build plan
 
-**Status:** Review draft 2.0  
-**Date:** 31 August 2026  
-**Governing specification:** [Abzum Vortex platform specification](../specification/README.md)  
+**Status:** Review draft 2.0
+
+**Date:** 1 September 2026
+
+**Governing specification:** [Abzum Vortex platform specification](../specification/README.md)
+
 **Delivery board:** [Vortex GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1)
 
 This plan replaces the sequencing of the earlier [Build Plan](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef). It keeps the useful ownership boundaries while correcting missing dependencies, an impossible background-worker assumption, incomplete fixtures, and an oversized final phase.
@@ -56,6 +59,7 @@ Required work:
 
 - Decide foundation choices [D01–D10](../specification/appendices/decisions.md#foundation-decisions--decide-before-phase-1).
 - Decide the pre-merge database check in [D20](../specification/appendices/decisions.md#d20-pre-merge-database-testing).
+- Record approved [D29–D31](../specification/appendices/decisions.md#d29-cross-cluster-federation-approach) and update the sharing plan so cluster location is not a product choice.
 - Publish Specification 2.0 and update its version history.
 - Rewrite the [CRM and Sales Hub fixtures](../specification/appendices/worked-examples.md), including the three missing platform modules, actions, connection types, interface, theme, roles, workflows, and pipeline.
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
@@ -80,7 +84,7 @@ Build:
 
 - Shared identifier, error, actor, organisation context, revision, dependency and version-range contracts.
 - Root and contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
-- All [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow callbacks, files, connections, interfaces, privacy, billing and cache versions.
+- All [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow callbacks, files, connections, interfaces, federation envelopes, privacy, billing and cache versions.
 - Contract validator with stable error codes and exact component paths.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
 - Types, lint, unit tests, contract tests and build checks that run without a database.
@@ -101,7 +105,7 @@ Exit proof:
 
 Build:
 
-- [Identity and organisation-account records](../specification/appendices/data-contracts.md#identity-and-organisation-account-records), invitations, sessions and organisation launcher.
+- One environment-wide [Vortex Identity Authority](../specification/02-people-organisations-and-sign-in.md#identity-across-clusters), plus cluster-local organisation-account records, invitations, sessions and organisation launcher.
 - Neutral bootstrap sign-in selected in [D01](../specification/appendices/decisions.md#d01-account-and-sign-in-model).
 - Definition draft concurrency, validation, immutable revision publication, dependency graph and restore.
 - Platform bootstrap definitions required before the Page service exists.
@@ -109,7 +113,8 @@ Build:
 
 Exit proof:
 
-- One identity can safely switch between its separate accounts in two organisations.
+- One identity can safely switch between its separate accounts in two organisations, including when those accounts are stored in different test clusters.
+- Both clusters verify the same signed identity token locally while refusing an account or role that exists only in the other cluster.
 - A stale draft cannot overwrite a later edit.
 - Publishing is atomic and a restored version becomes a new draft.
 - Definition and identity tables pass their database separation tests.
@@ -129,6 +134,7 @@ Build:
 - Server Access library for files, caches, search, connections, workflows, interfaces and assistant tools.
 - Access-version ownership and revocation path.
 - Field-level response filtering where specified.
+- Source-authoritative grant evaluation that can be called through the same local or federated shared-record gateway contract.
 - Split database and end-to-end [organisation separation suite](../specification/20-quality-and-acceptance.md#organisation-separation-suite).
 
 Exit proof:
@@ -254,12 +260,13 @@ Exit proof:
 
 **Needs:** Phases 6–8 and decisions [D13](../specification/appendices/decisions.md#d13-model-assisted-workflow-step) and [D14](../specification/appendices/decisions.md#d14-assistant-provider-and-data-policy).
 
-**Outcome:** Approved systems and model providers can interact through narrow, versioned, monitored operations.
+**Outcome:** Approved systems, model providers, and registered Vortex clusters can interact through narrow, versioned, monitored operations.
 
 Build:
 
 - Connection types and instances, OAuth lifecycle, secret rotation, outgoing operations, incoming verification, network-address safety, shared retry budgets and health.
 - Versioned interface operations, authentication, duplicate protection, rate limits, compatibility ranges and deprecation.
+- [Federation transport and cluster trust issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157): Vortex cluster directory, signed manifests, request-signing and verification library, replay protection, and version negotiation used by the [federation runtime](../specification/17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 - Assistant policy, tools, context access, prompt-injection boundaries, structured output, confirmations, transcripts, usage and model-assisted workflow execution if selected.
 
 Exit proof:
@@ -268,21 +275,25 @@ Exit proof:
 - Incoming and interface writes are safe under replay.
 - Assistant tools cannot exceed the person's direct access or obey instructions found in records.
 - Deprecated interface versions cannot be removed while a protected dependency remains.
+- [Issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157) proves signed two-cluster transport, replay refusal, compatible rolling versions, key rotation, route shutdown, and bounded outage before record-sharing operations use it.
 
 ## Phase 10 — Copy, gallery, sharing, import and export
 
 **Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
-**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy) and sharing decisions [D26–D34](../specification/appendices/decisions.md#sharing-and-federation-decisions).
+**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy) and open sharing-policy decisions [D26–D28](../specification/appendices/decisions.md#d26-cross-organisation-sharing-approval) and [D32–D36](../specification/appendices/decisions.md#d32-recipient-audience). The transport and release-scope choices [D29–D31](../specification/appendices/decisions.md#d29-cross-cluster-federation-approach) are approved.
 
-**Outcome:** Definitions move without source records, record files move through explicit import/export formats, and—if [D31](../specification/appendices/decisions.md#d31-cross-organisation-sharing-release-scope) selects it—approved same-cluster recipients can use narrowly shared live records without copying them.
+**Outcome:** Definitions move without source records, record files move through explicit import/export formats, and approved recipients can use narrowly shared live records without copying them, with the same product behaviour inside one cluster and across clusters.
 
 Build:
 
 - Signed definition package manifest, dependency preview, identifier remapping, incomplete-draft handling and reviewed gallery.
 - Clear Organisation Portal separation between installing definitions and sharing live records.
-- Access-owned sharing grants with one explicit scope, recipient application and roles, action/field allowlists, expiry, revocation, and two-sided protected approvals if selected.
-- Dedicated shared lists and record detail, plus source-owned file access, activity, privacy, and organisation-separation checks if selected.
+- Access-owned sharing grants with one explicit scope, recipient application and roles, action/field allowlists, expiry, revocation, and protected approvals selected by [D26](../specification/appendices/decisions.md#d26-cross-organisation-sharing-approval).
+- [Cross-cluster execution issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156): one shared-record gateway with a local adapter and signed remote adapter; source-authoritative query, action, file, revocation, and audit behaviour.
+- Signed duplicate-safe cross-cluster proposal, acceptance, activation receipt, revocation notice, and status reconciliation.
+- Protected recipient discovery and shared-record usage allocation chosen in [D35](../specification/appendices/decisions.md#d35-finding-a-recipient-organisation) and [D36](../specification/appendices/decisions.md#d36-shared-record-usage-allocation).
+- Dedicated shared lists and record detail, plus source-owned file access, activity, privacy, same-cluster tests, and two-cluster tests.
 - Record import mapping, dry run, duplicate policy, bounded background execution and result report.
 - Access-checked expiring record export.
 - Complete encrypted organisation archive and controlled restore as a separate operator operation.
@@ -291,7 +302,9 @@ Exit proof:
 
 - Cross-organisation copy removes or remaps organisation-specific state.
 - Installing a definition never grants record access, and a record grant never copies or installs a definition.
-- If sharing ships, direct approval-record edits cannot activate grants; revocation takes effect on the next request; sensitive fields, re-sharing, recipient indexing, and unapproved export are refused.
+- Direct approval-record edits cannot activate grants; source revocation takes effect on the next request; sensitive fields, re-sharing, recipient indexing, persistent remote copies, and unapproved export are refused.
+- The same fixture grant passes through both local and remote adapters with the same fields, actions, activity meaning, and stable refusal codes.
+- A lost cross-cluster message reconciles safely; an altered, replayed, expired, incorrectly addressed, or version-incompatible request fails closed.
 - Import dry run matches execution.
 - Complete archive restore proves definitions, roles, records, files, workflow state and privacy-removal replay.
 

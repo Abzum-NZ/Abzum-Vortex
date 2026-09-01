@@ -30,6 +30,23 @@ flowchart LR
 6. Leaving an organisation closes only that organisation account. It does not delete the identity or accounts in other organisations.
 7. Suspending the global identity prevents every sign-in. Suspending one organisation account prevents access only to that organisation.
 
+## Identity across clusters
+
+Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It proves the global identity and issues a short-lived, asymmetrically signed identity token. Every cluster verifies that token from published public keys, then loads only the organisation account stored in its own cluster. [Supabase supports verifying third-party and custom JWTs from published keys](https://supabase.com/docs/guides/auth/jwts), so clusters do not need the authority's private signing key. Production, Testing, and Local identity authorities remain separate under [delivery environments](18-delivery-and-testing.md#environments).
+
+```mermaid
+flowchart LR
+    PERSON[Person signs in once] --> AUTH[Vortex Identity Authority]
+    AUTH -->|Signed identity token| A[Cluster A]
+    AUTH -->|Same identity token| B[Cluster B]
+    A --> AA[Organisation account in A]
+    B --> BA[Organisation account in B]
+    AA --> AR[Roles and applications in A]
+    BA --> BR[Roles and applications in B]
+```
+
+The token identifies the person but does not grant access to an organisation. Each cluster still requires an active local organisation account, roles, application access, and current access version. A [cross-cluster shared-record request](17-runtime-storage-and-caching.md#cross-cluster-request) carries a short-lived assertion signed by the recipient cluster; it never sends an identity-provider private key or database credential to the source cluster.
+
 ## Invitations
 
 - An invitation names one organisation, one email address, an expiry time, and the organisation roles to grant after acceptance.
@@ -59,12 +76,13 @@ This distinction also defines “must have application access” for a [person-l
 Every organisation receives one protected platform application called the **Organisation Portal**. It cannot be removed. Its areas are:
 
 - Company profile: legal and trading names, registration details, industry, addresses, and contact details.
-- People and access: invitations, organisation accounts, teams/groups, organisation roles, application access, sign-in policy, and protected sharing approvals if [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) includes them.
+- People and access: invitations, organisation accounts, teams/groups, organisation roles, application access, sign-in policy, and protected sharing approvals included by [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) and governed by [D26](appendices/decisions.md#d26-cross-organisation-sharing-approval).
 - Applications: installed applications, available updates, publication state, and gallery access.
 - Connected services: organisation-owned [connections](12-connections-and-interfaces.md).
 - Billing: selected plan, seat use, payment state, invoices, and current [usage](15-plans-billing-and-usage.md).
 - Preferences: approved logo and icon, language, time zone, currency, financial-year start, and date and number formats.
 - Business calendar: working days, working hours, and public or organisation holidays used by [workflows and pipeline targets](09-workflows-and-pipelines.md).
+- Sharing identity: the organisation's protected recipient-discovery setting selected in [D35](appendices/decisions.md#d35-finding-a-recipient-organisation); it reveals no people, applications, roles, records, or billing state.
 
 An organisation account's language and time-zone preference overrides the organisation default for that person's display in that organisation. An application does not silently override language, time zone, currency, financial year, or business calendar; where an application needs a deliberate alternative, that setting is explicit in its definition and states which calculations it changes.
 
@@ -90,6 +108,7 @@ Exact fields and ownership appear in the [data contracts](appendices/data-contra
 - A suspended or closed organisation account stops new requests immediately and invalidates its active organisation sessions within the limit chosen in [Decision D17](appendices/decisions.md#d17-access-change-speed).
 - Account recovery cannot reveal whether an email address belongs to a particular organisation.
 - Organisation branding cannot insert scripts or unsafe markup into the sign-in page.
+- A token issued for Local or Testing is refused by Production, and a token's global identity never substitutes for an active organisation account in the current cluster.
 
 ## Acceptance examples
 
@@ -97,3 +116,4 @@ Exact fields and ownership appear in the [data contracts](appendices/data-contra
 - Closing a person's account in one organisation does not change the same identity's account in another organisation.
 - Entering an organisation's address without an active organisation account never grants or implies access.
 - A reusable module can link to a person, while an application binding can additionally require that person to have application access.
+- The same global identity can use organisation accounts hosted in two clusters without either cluster copying the other account's roles or profile.

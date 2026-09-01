@@ -70,11 +70,13 @@ A legal hold is an organisation-owned record with scope, reason, authorised crea
 
 ## Shared-record accountability
 
-Creating, approving, refusing, activating, using, changing, expiring, or revoking a cross-organisation grant is material activity. The source history records the source organisation, recipient organisation, acting global identity, acting organisation account, grant, approved scope, action, outcome, and correlation identifier. The recipient history records its request and approval activity without copying source record values.
+Creating, approving, refusing, activating, using, changing, expiring, or revoking a cross-organisation grant is material activity. The source history records the source and recipient clusters, source and recipient organisations, acting global identity, acting organisation account, grant, approved scope, action, outcome, and correlation identifier. One federated query produces one safe request-level activity entry rather than one entry for every returned row. The recipient history records its local request, remote outcome, and correlation identifier without copying source record values.
 
 The source organisation remains responsible for record retention, legal hold, correction, and erasure. A recipient cannot extend retention or prevent source deletion merely because it can read the record. When an erasure, field removal, or legal restriction changes what may be shared, the next request applies the new result and any derived recipient content permitted under [D34](appendices/decisions.md#d34-shared-record-product-surfaces) must be removed.
 
 A grant never authorises the recipient to include shared personal data in a general export, assistant conversation, search index, workflow payload, or connection message unless the relevant product surface and field are separately approved. Export remains a distinct grant choice under [D33](appendices/decisions.md#d33-shared-actions-fields-and-export).
+
+Approved [D30](appendices/decisions.md#d30-data-residency-for-shared-records) permits authorised record values to pass through the recipient service and browser for the requested display or action, but forbids persistent recipient-cluster business-data storage in the first release. The source sharing policy checks the recipient cluster and region before grant activation. Logs, traces, request mirrors, retry records, and signed receipts contain identifiers and fingerprints only, not shared field values.
 
 ## Isolation and administration
 

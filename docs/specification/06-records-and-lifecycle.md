@@ -96,15 +96,15 @@ Bulk create, update, delete, restore, import, and export use the same validation
 
 ## Sharing lifecycle
 
-If selected in [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope), a record may become visible to another application or organisation through an [access grant](04-access-and-permissions.md#shared-record-access). The sharing lifecycle does not duplicate or transfer ownership of the record.
+A record may become visible to another application or organisation through an [access grant](04-access-and-permissions.md#shared-record-access) under approved [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope). The sharing lifecycle does not duplicate or transfer ownership of the record, including when the recipient uses another cluster.
 
 ### Grant activation
 
-An access grant becomes active only after the Access service verifies every approval required by [D26](appendices/decisions.md#d26-cross-organisation-sharing-approval). No editable approval record or ordinary workflow can activate it. Activation changes no record fields and increases the access versions of both source and recipient organisations.
+An access grant becomes active only after the source Access service verifies every approval required by [D26](appendices/decisions.md#d26-cross-organisation-sharing-approval). No editable approval record or ordinary workflow can activate it. Activation changes no record fields. In one cluster, both organisations' access versions change in the protected activation transaction. Across clusters, each cluster changes its local access version while exchanging signed acceptance and activation receipts through the retry-safe [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation) contract.
 
 ### Grant revocation and expiry
 
-Revoking or expiring a grant removes the recipient's ability to query shared records on its next request. Source and recipient administrators receive one grant-level notification; the platform does not send one notification per affected record. Activity entries created while the grant was active remain in the source organisation's history and record the acting identity, recipient organisation account, recipient organisation, and grant.
+Revoking or expiring a grant removes the recipient's ability to query shared records on its next request. The source grant is authoritative, so a stale recipient mirror cannot preserve access. Source and recipient administrators receive one grant-level notification; the platform does not send one notification per affected record. Activity entries created while the grant was active remain in the source organisation's history and record the acting identity, recipient organisation account, recipient organisation, recipient cluster, and grant.
 
 ### Collaborative access
 

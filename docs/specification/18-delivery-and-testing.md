@@ -4,7 +4,7 @@
 
 ## Environments
 
-The platform uses separate Local, Testing, and Production environments. Each has separate [Supabase](https://supabase.com/docs), [Vercel](https://vercel.com/docs), [Kestra](https://kestra.io/docs), [Doppler](https://docs.doppler.com/docs), addresses, secrets, files, queues, connections, billing mode, and model-provider credentials.
+The platform uses separate Local, Testing, and Production environments. Each has separate [Supabase](https://supabase.com/docs), [Vercel](https://vercel.com/docs), [Kestra](https://kestra.io/docs), [Doppler](https://docs.doppler.com/docs), addresses, secrets, files, queues, connections, billing mode, and model-provider credentials. An environment may contain several Vortex clusters, but it has one shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) and no identity, trust, or federation route crosses into another environment.
 
 No environment reads another environment's database, file store, queue, workflow state, cache, or secrets.
 
@@ -74,6 +74,12 @@ The [organisation separation suite](20-quality-and-acceptance.md#organisation-se
 - The previous web deployment remains available for rollback only while it is compatible with the current database shape.
 - A deployment records code revision, migration set, definition-contract version, fixture version, operator, approvals, and verification outcome.
 
+## Federation compatibility during delivery
+
+The [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters) is deployed with an overlap window: a cluster must continue accepting the previous compatible protocol and shared-contract version until every production cluster has moved beyond it. The cluster manifest advertises only versions the running deployment actually supports.
+
+Before promotion, Testing runs a two-cluster matrix with the new release against the current production-compatible release in both source and recipient directions. It proves signed identity and recipient assertions, grant reconciliation, queries, actions, files, revocation, replay refusal, and safe unsupported-version errors. A database change that makes the same shared contract mean something different in the two versions is refused.
+
 ## Acceptance examples
 
 - The documented branch flow and actual required checks agree.
@@ -81,3 +87,4 @@ The [organisation separation suite](20-quality-and-acceptance.md#organisation-se
 - An access-rule test failure prevents production promotion.
 - Testing cannot send a live customer email, charge a live payment method, or call a production connection.
 - A released revision can be traced from Git commit through migration, test, deployment, and verification records.
+- A rolling deployment keeps cross-cluster sharing safe between adjacent supported releases and fails closed outside the declared compatibility range.

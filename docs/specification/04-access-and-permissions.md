@@ -89,13 +89,18 @@ Fields marked `sensitive` in [modules, fields and relationships](05-modules-fiel
 Sharing is an additional restriction, never a replacement for ordinary access. A recipient must pass both its own organisation/application checks and a source-issued grant. Missing, invalid, expired, or undecided information refuses access.
 
 ```mermaid
-flowchart LR
+flowchart TD
     REQ[Request in recipient organisation account] --> LOCAL[Check recipient account, application and roles]
-    LOCAL --> GRANT[Find one active grant covering this record and action]
+    LOCAL --> ROUTE{Source cluster?}
+    ROUTE -- This cluster --> ADAPTER[Use local shared-record adapter]
+    ROUTE -- Another cluster --> SIGN[Sign a short-lived recipient assertion]
+    SIGN --> REMOTE[Send bounded request to source federation endpoint]
+    ADAPTER --> GRANT[Source Access service checks one complete active grant]
+    REMOTE --> GRANT
     GRANT --> SOURCE[Check source organisation, record state and sharing policy]
     SOURCE --> FIELDS[Keep only fields allowed by that same grant]
-    FIELDS --> DB[Database row restriction permits the operation]
-    DB --> RESULT[Return or save within the source organisation]
+    FIELDS --> DB[Source database row restriction permits the operation]
+    DB --> RESULT[Return or save in the source organisation]
 ```
 
 ### Between applications in one organisation
@@ -104,7 +109,9 @@ For `organisation_shared` storage, each application must bind the module and gra
 
 ### Between organisations
 
-If [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) includes the capability, a source organisation may grant limited access to a recipient organisation in the same Vortex cluster. The request acts through the person's active organisation account in the recipient organisation. It never uses roles from another account held by the same global identity.
+A source organisation may grant limited access to a recipient organisation under approved [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope). The business checks and screens do not change when the organisations are in different clusters. The shared-record gateway chooses a local adapter inside one cluster or a signed request to the source cluster through the [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
+
+The request acts through the person's active organisation account in the recipient organisation. It never uses roles from another account held by the same global identity. For a cross-cluster request, the recipient cluster verifies that local account and signs a short-lived assertion of its identity, application, roles, and access version. The source accepts that assertion only from the registered recipient cluster and still makes the authoritative grant and record decision itself.
 
 The access decision confirms all of the following:
 
@@ -113,6 +120,7 @@ The access decision confirms all of the following:
 3. One active grant independently covers the source record, requested action, and requested fields.
 4. The record still matches the grant's approved scope under [D27](appendices/decisions.md#d27-filter-grant-condition-complexity).
 5. The source organisation, record lifecycle, retention, and legal-hold rules permit the operation.
+6. For a cross-cluster request, the recipient cluster signature, intended source audience, issue and expiry times, one-use nonce, protocol version, content fingerprint, and approved recipient region are valid.
 
 Two grants cannot be combined to manufacture permission: the scope from one grant cannot be joined to the action or fields of another. If several grants independently permit the same request, the request is allowed and the activity entry records the grant identifiers used.
 
@@ -125,6 +133,8 @@ Cross-organisation grants use explicit readable-field and allowed-action lists. 
 The platform-owned `vortex.approvals` capability presents approval requests in the Organisation Portal, but an editable record or workflow cannot activate a grant. The Access service owns the grant and activates it only after verifying the required immutable approval decisions. Changing a displayed approval record directly has no security effect.
 
 An approval decision is not later rewritten as revoked. Ending access revokes the grant through a new authorised action, preserving the original decision and recording the revocation separately. Approval ownership remains [Decision D26](appendices/decisions.md#d26-cross-organisation-sharing-approval).
+
+For a cross-cluster grant, each cluster stores its own protected approval evidence. The source grant is authoritative. The recipient stores only a routing and user-interface mirror plus the source's signed activation receipt. A missed receipt is repaired through [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation), not by a distributed database transaction.
 
 ## Public access
 
@@ -163,3 +173,5 @@ The platform must define and test the maximum time before a removal takes effect
 - Revoking a cross-organisation grant makes previously cached permission answers for that grant unusable.
 - A person with accounts in both organisations cannot use roles from the source account while acting through the recipient account.
 - Directly changing an approval record cannot activate a sharing grant.
+- Moving either organisation to another cluster in an already approved region does not change the grant's business meaning; the gateway changes route after the protected directory and grant routing state are updated and verified. Moving the recipient to a different region suspends the grant until the source approves that destination.
+- A forged, expired, replayed, version-incompatible, or incorrectly addressed cross-cluster request is refused before any source record is queried.

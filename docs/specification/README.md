@@ -89,5 +89,6 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.0-draft.3 | Review draft | 1 September 2026 | D29–D31 approved: one sharing experience uses a local adapter inside a cluster and a signed, source-authoritative Vortex Federation API across clusters, with no persistent recipient-cluster record copy. |
 | 2.0-draft.2 | Review draft | 1 September 2026 | D01 approved as one global identity with separate organisation accounts; contributed record-sharing proposal reviewed, corrected, and placed behind explicit D26–D34 choices. |
 | 2.0-draft.1 | Review draft | 31 August 2026 | New structure, contradictions exposed as choices, delivery plan reconciled with the repository. |

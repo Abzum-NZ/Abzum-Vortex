@@ -47,6 +47,8 @@ Run through the non-owning application database role and expect refusal or no ro
 9. Prove two incomplete grants cannot be combined to create one complete permission.
 10. Revoke a grant and prove the next statement in a fresh request context cannot use it.
 
+These database cases prove source-cluster row enforcement. They run for a local recipient context and for the source context created only after a valid federation assertion; no database test opens a connection from one cluster to another.
+
 Then run matching raw row operations through the table-owner role and prove the test data exists and is technically reachable. Only these database cases use the owner-control run; the owner never represents a web, file, cache, subscription, or public caller.
 
 ### End-to-end boundary tests
@@ -66,8 +68,15 @@ Run through ordinary product surfaces:
 21. Directly editing an approval display record does not activate a grant; only the protected Access-service operation can do so.
 22. Shared-record lists, fields, actions, exports, files, revocation, expiry, deletion, and restoration match the approved grant policy in both directions.
 23. Builds, logs, traces, screenshots, and error reports contain no credentials or prohibited sensitive content.
+24. Run one approved grant through same-cluster and cross-cluster routes and prove identical fields, actions, lifecycle behaviour, activity meaning, and stable refusal codes.
+25. Alter a federated body, signature, audience, cluster identifier, contract fingerprint, issue time, expiry, and nonce; every case is refused before a source business query.
+26. Replay an accepted signed envelope and prove its reused nonce is refused. Retry an action with a new envelope and the same duplicate-protection key and prove it returns the existing result without applying twice.
+27. Delay or drop proposal, acceptance, activation, revocation-notice, and reconciliation messages; source status remains authoritative and both mirrors converge without a distributed transaction.
+28. Stop the source cluster or network and prove the recipient shows temporary unavailability without a stale persisted record or unbounded retry.
+29. Run adjacent supported cluster releases in both source directions, then prove an unsupported version fails with a safe stable error.
+30. Prove cross-cluster record values do not enter recipient database tables, files, search, reports, workflow state, cross-request cache, logs, traces, or grant mirrors.
 
-Every case runs in both directions between two populated organisations. Tests use recognisably different canary values so accidental mixing is visible.
+Every applicable case runs in both directions between two populated organisations in one cluster and in a two-cluster topology. Tests use recognisably different canary values so accidental mixing is visible.
 
 ## Accessibility acceptance
 
