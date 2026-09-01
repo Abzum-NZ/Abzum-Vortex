@@ -1,0 +1,60 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "module",
+  "root_id": "mod_crm_organisations",
+  "key": "vortex.crm.organisations",
+  "version": "1.0.0",
+  "revision": 1,
+  "state": "published",
+  "content_fingerprint": "fixture:vortex.crm.organisations:1.0.0",
+  "body": {
+    "name": "CRM Organisations",
+    "description": "Companies and their organisational details, shared by compatible applications in one organisation.",
+    "category": "CRM",
+    "dependencies": [],
+    "record_types": [
+      {
+        "id": "rt_crm_company",
+        "key": "company",
+        "name": "Company",
+        "plural_name": "Companies",
+        "description": "A customer, prospect, supplier or partner organisation.",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "team",
+        "title_field": "name",
+        "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+        "fields": [
+          {"id":"fld_company_number","key":"company_number","type":"reference_number","label":"Company number","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"prefix":"COM-","digits":7}},
+          {"id":"fld_company_name","key":"name","type":"text","label":"Company name","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"none","public_display":true,"settings":{"max_length":255}},
+          {"id":"fld_company_kind","key":"company_kind","type":"several_choices","label":"Company type","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"options":[{"value":"customer","label":"Customer"},{"value":"prospect","label":"Prospect"},{"value":"partner","label":"Partner"},{"value":"supplier","label":"Supplier"}]}},
+          {"id":"fld_company_industry","key":"industry","type":"choice","label":"Industry","required":false,"unique":false,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"options":[{"value":"technology","label":"Technology"},{"value":"financial_services","label":"Financial services"},{"value":"healthcare","label":"Healthcare"},{"value":"manufacturing","label":"Manufacturing"},{"value":"retail","label":"Retail"},{"value":"other","label":"Other"}]}},
+          {"id":"fld_company_revenue","key":"annual_revenue","type":"money","label":"Annual revenue","required":false,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"currency_mode":"organisation_default","minimum":0}},
+          {"id":"fld_company_employees","key":"employee_count","type":"whole_number","label":"Employee count","required":false,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"minimum":0}},
+          {"id":"fld_company_website","key":"website","type":"web_address","label":"Website","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"allowed_schemes":["https"]}},
+          {"id":"fld_company_phone","key":"phone","type":"phone_number","label":"Main phone","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"default_country":"NZ"}},
+          {"id":"fld_company_description","key":"description","type":"formatted_text","label":"Description","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"allowed_blocks":["paragraph","heading","list","link"]}},
+          {"id":"fld_company_parent","key":"parent_company","type":"link","label":"Parent company","required":false,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"target":"vortex.crm.organisations:company","reverse_key":"subsidiaries","on_parent_delete":"empty_optional"}},
+          {"id":"fld_company_logo","key":"logo","type":"attachment","label":"Logo","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"none","personal_data":"none","public_display":true,"settings":{"maximum_files":1,"allowed_media_types":["image/png","image/jpeg","image/svg+xml"],"maximum_bytes":5242880}},
+          {"id":"fld_company_created","key":"customer_since","type":"date","label":"Customer since","required":false,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{}}
+        ]
+      }
+    ],
+    "permissions": [
+      {"key":"vortex.crm.organisations.company.merge","record_type":"company","label":"Merge duplicate companies"}
+    ],
+    "actions": [
+      {"id":"act_company_merge","key":"vortex.crm.organisations.company.merge","record_type":"company","permission":"vortex.crm.organisations.company.merge","inputs":[{"key":"duplicate_company","type":"link","required":true,"settings":{"target":"vortex.crm.organisations:company"}}],"effects":["move_relationships","soft_delete_source","emit_event"],"shareable":false}
+    ],
+    "events": [
+      {"id":"evt_company_created","key":"vortex.crm.organisations.company.created","record_type":"company","carries":["company_number","name","company_kind"]},
+      {"id":"evt_company_merged","key":"vortex.crm.organisations.company.merged","record_type":"company","carries":["company_number"]}
+    ],
+    "rules": [
+      {"id":"rule_company_name","key":"company_name_required","record_type":"company","moment":"saving","condition":{"field":"name","operator":"is_empty"},"effect":"refuse","message":"Enter a company name."}
+    ],
+    "extension_points": [
+      {"id":"ext_company_fields","key":"company_fields","record_type":"company","accepts":["field"]},
+      {"id":"ext_company_actions","key":"company_actions","record_type":"company","accepts":["action"]}
+    ]
+  }
+}

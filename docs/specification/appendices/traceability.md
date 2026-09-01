@@ -53,7 +53,7 @@ flowchart LR
 | 32. Service definitions | [Themes](../07-applications-pages-and-themes.md#themes), [Files](../11-files-and-attachments.md), [Connections](../12-connections-and-interfaces.md) | Split by service, conflicting attachment contract removed, and AI scope removed. |
 | 33. Caching and request speed | [Runtime services, storage and caching](../17-runtime-storage-and-caching.md#cache-model) | Distributed-cache feasibility corrected; shared static asset exception made explicit. |
 | Appendix A. CRM example | [Worked examples](worked-examples.md#crm-module) | Retained as a contract fixture; missing actions must be supplied. |
-| Appendix B. Sales Hub example | [Worked examples](worked-examples.md#sales-hub-application) | Retained; complete dependency fixture set now required. |
+| Appendix B. CRM application example | [Worked examples](worked-examples.md#crm-application) | Rewritten as part of the complete CRM and Service Desk dependency fixture set. |
 | Appendix C. Glossary | [Plain-language glossary](glossary.md) | Rewritten and linked. |
 | Appendix D. Decisions register | [Decision register](decisions.md) | Kept clear after resolved choices are incorporated into permanent requirements. |
 | Appendix E. Data model | [Data contracts](data-contracts.md) | Missing concurrency, lifecycle, activity, workflow, interface and cache-version contracts supplied. |

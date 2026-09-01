@@ -1,0 +1,22 @@
+{
+  "schema_version":"2.0.0","kind":"acceptance_scenario","root_id":"scenario_cross_application_sharing","key":"vortex.scenario.cross_application_sharing","version":"1.0.0",
+  "body":{
+    "organisation":"org_fixture_alpha",
+    "applications":["vortex.app.crm","vortex.app.service_desk"],
+    "same_record_cases":[
+      {"record_type":"vortex.crm.organisations:company","record_id":"company_fixture_1","created_in":"vortex.app.crm","read_in":["vortex.app.crm","vortex.app.service_desk"],"expected_physical_records":1,"grant_required":false},
+      {"record_type":"vortex.crm.people:contact","record_id":"contact_fixture_1","created_in":"vortex.app.crm","read_in":["vortex.app.crm","vortex.app.service_desk"],"expected_physical_records":1,"grant_required":false}
+    ],
+    "inter_application_grant":{
+      "id":"grant_fixture_service_case_to_crm","source_application":"vortex.app.service_desk","recipient_application":"vortex.app.crm","recipient_roles":["crm_contributor","crm_manager"],"module":"vortex.service_desk.cases","record_type":"case","scope":{"kind":"record","record_id":"case_fixture_1"},"readable_fields":["case_number","subject","status","priority","customer_company","resolved_at"],"changeable_fields":["status","priority"],"allowed_actions":["vortex.service_desk.cases.case.add_public_comment"],"export_allowed":false,"state":"active","expected_physical_records":1
+    },
+    "assertions":[
+      {"id":"assert_same_company","when":"both applications read company_fixture_1","expect":"same_record_id_and_current_values"},
+      {"id":"assert_same_contact","when":"both applications read contact_fixture_1","expect":"same_record_id_and_current_values"},
+      {"id":"assert_limited_case","when":"CRM reads case_fixture_1","expect_fields":["case_number","subject","status","priority","customer_company","resolved_at"],"refuse_fields":["description","requester","owner","first_response_due_at","resolution_due_at","breached","attachments"]},
+      {"id":"assert_collaboration","when":"CRM changes priority or status or adds a public comment","expect":"source_case_saved_once_and_visible_in_both_applications"},
+      {"id":"assert_refuse_excess","when":"CRM changes another field or invokes another action","expect":"refused"},
+      {"id":"assert_revocation","when":"grant_fixture_service_case_to_crm is revoked","expect":"next_access_check_removes_rendered_values_and_cache_cannot_restore_them"}
+    ]
+  }
+}

@@ -60,7 +60,7 @@ Required work:
 - Verify the settled tenant, definition-version, access, field, workflow, privacy, billing, delivery, recovery, and performance requirements against the [data contracts](../specification/appendices/data-contracts.md).
 - Keep cluster location out of the product-level sharing choices: one shared-record gateway uses a local adapter or the signed Vortex Federation API.
 - Publish Specification 2.0 and update its version history.
-- Rewrite the [CRM and Sales Hub fixtures](../specification/appendices/worked-examples.md), including the three missing platform modules, actions, connection types, interface, theme, roles, workflows, and pipeline.
+- Write and validate the complete [CRM and Service Desk fixture set](../specification/appendices/worked-examples.md), including every module, action, connection type, interface, theme, role, workflow, pipeline, page, query, and cross-application scenario before Phase 1 engine code.
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
 - Complete or explicitly rescope [M0 issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and [M0 issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139).
 - Update [Phase 1 epic #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9) so every active M0 gate is a native dependency.
@@ -204,14 +204,16 @@ Build:
 - Module bindings, application roles, options, navigation and application resolution.
 - Application-contained theme settings, platform-theme binding, inheritance and legibility checking.
 - Six page types, four list arrangements, registered blocks, twelve-column responsive layout and page states.
+- [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, shared motion tokens and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.
 - Forms, guided-form drafts, action buttons and public pages.
 - Complete process-pipeline definition, transition gates and visible stage controls. Timed execution comes in Phase 7.
 - Platform Sign-in, Tenant Portal, and Organisation Portal application definitions.
 
 Exit proof:
 
-- Complete Sales Hub application publishes as one root revision.
+- Complete CRM and Service Desk applications each publish as one root revision with exact module-version bindings.
 - Every fixture page passes desktop, phone, keyboard, validation, empty, refused, conflict and failure checks that apply.
+- Internal navigation never performs a routine full document reload; slow routes and blocks show immediate local feedback, and refreshing data updates only affected components and dependent totals without losing unrelated state.
 - Direct addresses cannot bypass page and action permissions.
 
 ## Phase 7 — Workflow and pipeline execution
@@ -290,6 +292,7 @@ Build:
 - Signed definition package manifest, dependency preview, identifier remapping, incomplete-draft handling and reviewed gallery.
 - Clear Organisation Portal separation between installing definitions and sharing live records.
 - Access-owned sharing grants with one explicit scope, one recipient application, one or more recipient application roles, action/field allowlists, export defaulting off, required expiry, and source-authoritative revocation.
+- Inter-application collaborative grants that keep the source record authoritative while allowing only named fields and published shareable actions; the CRM and Service Desk fixture proves a limited case presentation with controlled changes and no copied summary record.
 - Published, version-pinned saved sharing conditions with declared parameters; no inline grant filters and no silent widening after publication.
 - Protected source approval and recipient acceptance over the same complete proposal fingerprint for every cross-organisation grant.
 - [Cross-cluster execution issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156): one shared-record gateway with a local adapter and signed remote adapter; source-authoritative query, action, file, revocation, and audit behaviour.
@@ -308,6 +311,7 @@ Exit proof:
 - Installing a definition never grants record access, and a record grant never copies or installs a definition.
 - Direct approval-record edits cannot activate grants; every grant proves source approval and recipient acceptance over one fingerprint; a changed condition, role, field, action, export choice, region, or expiry requires both approvals again.
 - Source revocation takes effect on the next request; sensitive fields, inline conditions, live re-sharing, recipient indexing, materialised shared reports, persistent remote copies, and unapproved export are refused.
+- Revoking the fixture's case grant removes already rendered values on the next access check and prevents browser history, client cache, subscriptions, or offline state from retaining access.
 - Shared lists, details, search, reports, dashboard blocks, actions, files, and approved exports have the same permission and result meaning through local and remote adapters while clearly showing source ownership.
 - The same fixture grant passes through both local and remote adapters with the same fields, actions, activity meaning, and stable refusal codes.
 - A lost cross-cluster message reconciles safely; an altered, replayed, expired, incorrectly addressed, or version-incompatible request fails closed.
