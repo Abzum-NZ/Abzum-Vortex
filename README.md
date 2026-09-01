@@ -12,11 +12,17 @@ apart from every other organisation's.
 
 | Document | Where |
 |---|---|
-| Platform Specification (33 chapters, 5 appendices) | https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4 |
-| Build Plan (prerequisites, dependency map, ten phases) | https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef |
-| Project board | https://github.com/orgs/Abzum-NZ/projects/2 |
+| Platform Specification 2.0 | [docs/specification/README.md](docs/specification/README.md) |
+| Build Plan 2.0 | [docs/build-plan/README.md](docs/build-plan/README.md) |
+| Open business decisions | [docs/specification/appendices/decisions.md](docs/specification/appendices/decisions.md) |
+| Coverage of the earlier specification and plan | [docs/specification/appendices/traceability.md](docs/specification/appendices/traceability.md) |
+| Project board | [Vortex GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2) |
+| Earlier Platform Specification (source under review) | [33 chapters and 5 appendices](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4) |
+| Earlier Build Plan (source under review) | [Prerequisites, dependency map and ten phases](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef) |
 
-The specification decides. Change the specification before you change behaviour, never after.
+The 2.0 specification becomes authoritative when its blocking decisions are approved. Until then,
+conflicting requirements are review items rather than instructions to build. Change the specification
+before changing behaviour, never after.
 
 ## What runs
 
@@ -48,7 +54,7 @@ One repository, one deployable application (Specification, section 24.3).
 The root `package.json` declares the workspace. It also pins the Node version and holds the scripts
 every package shares.
 
-```
+```text
 package.json          The workspace root. It declares the members below.
 web/                  The Next.js application. The only thing Vercel deploys.
 contracts/            The shapes of modules, pages, records and events. Depends on nothing.
@@ -72,7 +78,7 @@ The workspace members are:
 rather than one package holding all sixteen. So `runtime/` is a directory that contains packages, and
 is never a package itself. The sixteen, in the order section 25.1 lists them:
 
-```
+```text
 runtime/definition   runtime/identity   runtime/access      runtime/module
 runtime/record       runtime/query      runtime/rule        runtime/event
 runtime/workflow     runtime/app        runtime/page        runtime/theme
@@ -121,7 +127,11 @@ as applying migrations. One is product. The other is plumbing.
 
 ## How a change reaches production
 
-```
+This flow is the approved delivery policy. Pull requests do not start a database; database migrations
+and access tests run after merge to `testing` and must pass before that revision can be promoted to
+`main`. See [Delivery environments, database changes and testing](docs/specification/18-delivery-and-testing.md).
+
+```text
 feature branch ──PR──▶ testing ──PR──▶ main
      │                    │              │
   Development          Testing       Production
@@ -130,8 +140,8 @@ feature branch ──PR──▶ testing ──PR──▶ main
 
 - Vercel builds, deploys, and gates. Its Git integration builds every pull request and every branch.
   Branch protection on `testing` and `main` requires one check before a merge: `Vercel`.
-- The build runs the checks before it builds: types, linting, the package boundary rules and unit
-  tests. A failing check fails the build, so the change cannot merge and gets no preview until
+- The build runs formatting, types, linting, package-boundary, unit, contract and build checks without
+  a database. A failing check fails the build, so the change cannot merge and gets no preview until
   someone fixes it. We accept that cost deliberately, to run one system rather than two.
 - **Nothing runs on GitHub Actions, and nothing stores a credential there.** Cut a release with
   `gh release create --generate-notes`, which needs no workflow.
@@ -178,7 +188,7 @@ That is why nobody adds a variable in Vercel by hand.
 
 `DATABASE_URL` does not contain the password. It points at it:
 
-```
+```text
 postgresql://postgres.<project-ref>:${DATABASE_PASSWORD}@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres
 ```
 
@@ -259,7 +269,7 @@ breaking change upstream lands in one place rather than across the whole block l
 
 The organisation's short name is the first path segment (Specification, section 2.7):
 
-```
+```text
 https://vortex.abzum.com/{organisation}/{application}/{page}
 ```
 
@@ -284,10 +294,10 @@ switched off. Vercel terminates TLS itself, and a proxied record would break cer
 
 ## Working here
 
-- The project board at https://github.com/orgs/Abzum-NZ/projects/2 records what anyone is working on.
+- The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2) records what anyone is working on.
   Every change belongs to an issue. Update the issue when the work lands.
-- Issues follow the ten phases of the Build Plan. An issue's "Blocked by" list is real: start an issue
-  only once everything blocking it is closed.
+- Issues follow the phases in the [revised Build Plan](docs/build-plan/README.md). Use GitHub's native
+  dependency links: start an issue only once everything blocking it is closed.
 - Where an issue touches something a person sees, attach a screenshot of the built functionality to
   the issue before closing it.
 - **Everything fails loudly.** Nothing falls back to a default, carries on with a wrong value, or

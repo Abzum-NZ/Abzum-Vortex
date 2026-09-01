@@ -4,3 +4,7 @@
 # unparseable, and the machine that commits it never sees the failure.
 .nvmrc          text eol=lf
 .node-version   text eol=lf
+
+# Run by a Linux shell. A carriage return in the shebang line makes the file
+# unrunnable, with an error that names the interpreter and not the real cause.
+*.sh            text eol=lf
