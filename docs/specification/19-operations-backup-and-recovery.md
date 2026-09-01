@@ -19,7 +19,7 @@ flowchart TD
 
 ## Observability
 
-Every request and background operation carries a correlation identifier. Logs and measures identify environment, service, operation, safe outcome, duration, and organisation by a protected internal identifier where necessary. They do not contain secrets, private file addresses, complete request bodies, sensitive field values, or assistant prompts by default.
+Every request and background operation carries a correlation identifier. Logs and measures identify environment, service, operation, safe outcome, duration, and organisation by a protected internal identifier where necessary. They do not contain secrets, private file addresses, complete request bodies, or sensitive field values by default.
 
 Required measures include:
 
@@ -67,11 +67,11 @@ sequenceDiagram
     Operator->>Isolated: Approve for declared recovery use or destroy test copy
 ```
 
-Recovery objectives for maximum data loss and restoration time are business choices in [Decision D21](appendices/decisions.md#d21-recovery-objectives).
+The production recovery-point objective is at most one hour of accepted data loss. The recovery-time objective is at most eight hours from declaring a recoverable disaster to restoring the agreed minimum service. Backup schedules, independent copies, alerting, runbooks, and restore drills must demonstrate both objectives; a backup job reporting success is not proof of recovery.
 
 ## Secret management
 
-[Doppler](https://docs.doppler.com/docs) provides environment-scoped secrets. Secrets are never committed, copied into fixtures, printed by builds, placed in browser bundles, or included in definition exports. Rotation procedures cover application, database, storage, [Kestra](https://kestra.io/docs), [Stripe](https://docs.stripe.com/), model providers, connection encryption keys, identity-authority signing keys, and cluster federation signing keys. Federation rotation publishes the next public key before use, overlaps verification for in-flight messages, then removes the retired key after the replay and reconciliation windows close.
+[Doppler](https://docs.doppler.com/docs) provides environment-scoped secrets. Secrets are never committed, copied into fixtures, printed by builds, placed in browser bundles, or included in definition exports. Rotation procedures cover application, database, storage, [Kestra](https://kestra.io/docs), [Stripe](https://docs.stripe.com/), connection encryption keys, identity-authority signing keys, and cluster federation signing keys. Federation rotation publishes the next public key before use, overlaps verification for in-flight messages, then removes the retired key after the replay and reconciliation windows close.
 
 ## Support access
 
@@ -84,6 +84,7 @@ At minimum, runbooks cover deployment failure, database migration failure, organ
 ## Acceptance examples
 
 - A restore drill proves records, files, definitions, workflow state, and removal receipts together.
+- The measured restore point is no more than one hour before the declared incident, and the agreed minimum service is restored within eight hours.
 - A backup stored only on the [Kestra](https://kestra.io/docs) host is refused as incomplete protection.
 - A log scan finds no credentials or sensitive values in successful and failing paths.
 - Support access expires automatically and appears in the organisation's activity.

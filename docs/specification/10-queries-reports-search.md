@@ -48,11 +48,11 @@ The term **saved view** replaces the outdated terms “prepared list,” “prep
 
 - A table presents rows and columns.
 - A board groups records by a filterable choice field with no more than twelve options.
-- A calendar places records by a date or date-time field and uses the duration rule in [Decision D05](appendices/decisions.md#d05-calendar-duration).
+- A calendar uses the page's explicit start/end or start-plus-duration mapping from [modules and fields](05-modules-fields-and-relationships.md#field-types).
 - A summary groups and totals compatible fields.
 - A dashboard composes several bounded query blocks.
 
-Every chart or report states its measure, grouping, filter, time zone, and treatment of missing values. Money results follow [Decision D08](appendices/decisions.md#d08-multi-currency-totals).
+Every chart or report states its measure, grouping, filter, time zone, and treatment of missing values. A money total is refused unless the filtered group contains at most one currency; no implicit conversion or split result is produced.
 
 ## Shared-record reads
 
@@ -82,7 +82,7 @@ Application search may include a **Shared** result group. The search coordinator
 
 A saved report or dashboard block may use one source organisation, record type, and grant. Its definition may be stored by the recipient because it contains identifiers, fields, filters, grouping, and presentation settings rather than source record values. Rows, counts, groups, and totals are calculated by the source on each run and are not materialised in recipient storage. A report cannot mix source-owned and recipient-owned values or combine several source organisations into one total.
 
-Approved export uses the same source-executed query and field projection. It is described in [record export](16-copying-sharing-import-export.md#record-export). Workflows, assistant context, connection messages, bulk changes, cross-source relationships, and offline use of live shared records remain outside the first release.
+Approved export uses the same source-executed query and field projection. It is described in [record export](16-copying-sharing-import-export.md#record-export). Workflows, connection messages, bulk changes, cross-source relationships, and offline use of live shared records remain outside the first release.
 
 Shared queries bypass the cross-request business-data cache under [runtime and caching](17-runtime-storage-and-caching.md#grant-cache-invalidation). Pagination, counts, and fields are calculated in the source cluster using one independently sufficient active grant; a query cannot combine scope from one grant with fields or actions from another. A source or network outage fails closed and shows that the source organisation is temporarily unavailable; the recipient does not display an older persisted result.
 
@@ -108,7 +108,7 @@ sequenceDiagram
 - Results are scoped by organisation, application discoverability, record visibility, and field access.
 - A recipient organisation's index never receives another organisation's shared record content. Shared search is executed by the source and merged only into the current response.
 - Candidate results are rechecked against current access before display.
-- Deleted or newly hidden records are removed or made unavailable within the limit recorded in [Decision D18](appendices/decisions.md#d18-search-and-cache-freshness).
+- Access removal affects the next search request because results are access-checked at read time. Ordinary record creates and changes appear in search within 10 seconds under normal operation. A delayed index shows a freshness warning and triggers recovery; it never bypasses the current access check.
 - Search priority `first`, `normal`, and `last` affects ranking without overriding access.
 
 ## Live updates
@@ -126,5 +126,5 @@ The client re-runs a permitted query or reloads the permitted record. Subscripti
 - Removing access prevents live updates and makes subsequent refreshes refuse the record.
 - Shared records can use ordinary list, detail, search-result, report, dashboard-block, and approved-export components while retaining a visible source marker and source-authoritative checks.
 - Shared search, report, and dashboard results leave no recipient search document, materialised report result, or cross-request business-data cache entry.
-- Shared records do not enter workflow selections, assistant context, connection messages, bulk changes, cross-source relationships, or offline storage in the first release.
+- Shared records do not enter workflow selections, connection messages, bulk changes, cross-source relationships, or offline storage in the first release.
 - Same-cluster and cross-cluster shared lists return the same fields and refusal meanings for the same grant; only measured latency and source-availability states may differ.

@@ -2,96 +2,84 @@
 
 [Previous: Forms, actions, rules and events](08-forms-actions-rules-and-events.md) · [Specification index](README.md) · Next: [Queries, reports, search and live updates](10-queries-reports-search.md)
 
-## Workflow purpose
+## Purpose and authority
 
-A **workflow** performs background work that may wait, retry, contact another system, ask a person, or continue for months. A **process pipeline** describes the business stages through which a record moves.
+A **workflow** performs durable background work that may branch, wait, retry, contact another system, ask a person, or continue for months. A **process pipeline** describes the business stages through which a record moves.
+
+[Kestra](https://kestra.io/docs) is authoritative for whether a workflow run or step is queued, running, waiting, completed, cancelled, or failed. Vortex asks Kestra for the current state whenever a person views a run. Vortex may keep a clearly labelled last-known snapshot for correlation, search, activity, and outage diagnosis, but never presents that snapshot as current when Kestra is unavailable.
+
+Vortex remains authoritative for identities, tenant and organisation context, permissions, definitions, records, files, human-task records, connections, and every business side effect. Kestra receives no organisation database credential and cannot grant access or write organisation tables directly.
 
 ```mermaid
-flowchart TD
-    T[Event, schedule, incoming message, button or interface] --> R[Create workflow run]
-    R --> S[Run next step]
-    S --> P[Platform callback checks access and performs operation]
-    P --> O{Outcome}
-    O -- Completed --> N[Choose next step]
-    O -- Retryable failure --> RETRY[Wait and retry]
-    O -- Waiting --> WAIT[Timer or person response]
-    O -- Permanent failure --> FAIL[Record failure and notify operator]
-    RETRY --> S
-    WAIT --> S
-    N --> S
-    N --> END[Complete run]
+sequenceDiagram
+    participant V as Vortex
+    participant K as Kestra
+    participant P as Protected platform operation
+    participant U as Person
+    V->>K: Start published workflow with correlation and security reference
+    K->>P: Signed, versioned step request
+    P->>P: Recheck current access and duplicate key
+    P-->>K: Completed, waiting, retryable, or refused
+    U->>V: View workflow run
+    V->>K: Read current execution state
+    K-->>V: Authoritative state and step position
+    V-->>U: Current state plus Vortex activity links
 ```
 
-## Workflow ownership and execution
+## Ownership and versioning
 
-Workflows are contained by an [application definition](03-composition-and-publication.md#definition-ownership). [Kestra](https://kestra.io/docs) executes the durable step plan, while [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex) remains the authority for organisation data, permissions, definitions, step results, and business activity.
+Workflows are contained in an [application version](03-composition-and-publication.md#definition-ownership-and-versions). Publishing an application produces the immutable workflow definition and generated Kestra flow used by new runs. A run remains pinned to the application and workflow version from which it started unless an authorised, tested migration moves it.
 
-[Kestra](https://kestra.io/docs) does not receive organisation database credentials. Every step calls a private, versioned platform operation. The platform verifies the callback, organisation, workflow run, step, attempt, definition version, permission grant, and duplicate-protection key before doing work.
+Vortex stores the Kestra execution identifier, workflow and application versions, tenant and organisation references, trigger, start actor, duplicate-protection key, human-task links, safe activity links, and a non-authoritative last-known state snapshot. Kestra stores the executable state, current step, retries, waits, and final execution outcome.
 
-The final state-authority choice is recorded in [Decision D12](appendices/decisions.md#d12-workflow-state-authority).
+## Triggers
 
-## Workflow triggers
+A workflow may start from a committed [event](08-forms-actions-rules-and-events.md), published schedule, verified incoming [connection](12-connections-and-interfaces.md) message, authorised button, versioned interface operation, or another workflow. Every trigger declares typed inputs, a condition, duplicate-protection rule, and the person or system authority whose permissions apply.
 
-A workflow may start from:
+## Safe workflow node catalogue
 
-- A committed [event](08-forms-actions-rules-and-events.md).
-- A published schedule.
-- A verified incoming message from a [connection](12-connections-and-interfaces.md).
-- A person pressing an authorised button.
-- A versioned operation on an [interface](12-connections-and-interfaces.md).
-- Another workflow.
+The initial catalogue draws on the attached legacy workflow inventory while replacing product-specific and unsafe nodes with small, governed operations:
 
-Each trigger declares its inputs, condition, duplicate-protection rule, and the identity whose permissions apply.
+| Group | Supported nodes |
+|---|---|
+| Flow | Start, condition, multi-way decision table, bounded loop, delay or wait-until, start child workflow, stop with reason |
+| Records | Create record, change approved fields, run named action, soft-delete record, duplicate record, convert through a named mapping, add or copy approved relationships, add comment, change tags |
+| People | Request values through a form, request approval, create task or calendar event, send in-app notification, send email through an approved connection |
+| Data | Run a published query, set typed values, apply a registered formatter or regular expression, generate a bounded export |
+| Files and documents | Attach or move an approved file, generate a document from a registered template, request a source-owned export |
+| Connections | Call a named connection operation, send to an approved calendar or communication service, receive and acknowledge a verified message |
 
-## Workflow steps
+Each node has a typed input and output contract, named permission, timeout, retry rule, duplicate-protection rule, activity meaning, and redaction policy. Product-specific behaviour such as reversing an invoice is implemented as a named application action, not a privileged workflow node.
 
-The base step kinds are:
-
-1. Create a record.
-2. Change a record.
-3. Run an action.
-4. Wait until a duration or date.
-5. Ask a person through a form or approval.
-6. Send a notification.
-7. Send email through an organisation connection.
-8. Call a named connection operation.
-9. Choose one of two branches.
-10. Repeat steps for a bounded query of records.
-11. Start another workflow without waiting for it.
-12. Stop with a recorded reason.
-13. Request a model-assisted result under [assistant policy](13-assistant.md).
-
-The thirteenth step resolves the earlier build-plan/specification mismatch. Its inclusion and safety choices remain [Decision D13](appendices/decisions.md#d13-model-assisted-workflow-step).
+The initial catalogue excludes arbitrary SQL, JavaScript, shell commands, database credentials, unrestricted expressions, arbitrary network addresses, unrestricted file-system operations, and vendor-specific direct table manipulation. New node kinds require a platform release, security review, contracts, tests, and documentation; builders cannot upload executable code.
 
 ## Limits and safeguards
 
-- A workflow contains at most 100 steps across a nesting depth of five.
-- A repeating step handles at most 1,000 records in one run and uses pagination.
-- One wait lasts at most 90 days; a longer process continues through a renewed wait or schedule.
+- A workflow contains at most 100 nodes across a nesting depth of five.
+- A loop handles at most 1,000 records in one run and uses stable pagination.
+- One wait lasts at most 90 days; a longer process renews the wait or uses a schedule.
 - Every external side effect has a stable duplicate-protection key.
-- Retries use bounded exponential delay and a maximum attempt count declared by step type.
-- Cancelling a run stops future steps but does not pretend completed external effects were undone.
-- A compensation path is explicit where the business needs one.
-- A workflow is pinned to the published application version from which the run began unless an authorised migration moves it.
-- Run history is retained for six months by default, subject to [privacy and retention](14-activity-privacy-and-retention.md).
+- Retries use bounded delay and a step-specific maximum attempt count.
+- Cancelling stops future work but does not pretend that completed external effects were undone.
+- Compensation is a separate, explicit path.
+- Access is checked when the run starts and again immediately before every protected read or side effect. Removing access therefore affects the next step request.
+- A recipient workflow cannot select, persist, export, or send live records shared from another organisation. A grant-approved action executes synchronously at the source.
 
-## Callback contract
+## Protected operation contract
 
-Each callback includes the run, step, attempt, organisation, definition version, operation, inputs, issued time, expiry, and duplicate-protection key. It is authenticated with a short-lived signed credential. Responses distinguish completed, already completed, retryable failure, permanent refusal, and waiting.
+Each Kestra request carries the execution, node, attempt, tenant, organisation, application and workflow versions, named operation, typed input, issue and expiry times, and duplicate-protection key in a signed envelope. Vortex verifies the caller, current account or system authority, access version, definition version, and operation before acting.
 
-The platform records the accepted step outcome before acknowledging it. Repeating an identical callback returns the stored outcome without repeating the side effect.
+Vortex records a business side effect and its duplicate key before acknowledging it. Repeating the same request returns the existing result without applying the side effect again. The response is completed, already completed, waiting, retryable failure, or permanent refusal. Kestra uses that response to advance its authoritative execution state.
 
 ## Asking a person
 
-An ask step creates one task with assignee rules, form, due time, and timeout path. Only an authorised assignee can complete it. Reassignment, completion, expiry, and cancellation appear in [activity history](14-activity-privacy-and-retention.md).
+An ask or approval node creates one Vortex task with assignee rules, form, due time, and timeout path. Only an authorised assignee can complete it. Kestra waits for the protected completion signal and remains authoritative for the overall run state.
 
-An ordinary builder-created approval step cannot grant permissions or activate a cross-organisation sharing grant. The platform-owned `vortex.approvals` capability may use the same task experience, but the owning service verifies the immutable approval decisions and exact payload before performing a protected action under the [approval contract](appendices/data-contracts.md#approval-request-contract).
-
-Builder-created workflows cannot select, store, change, export, or send live shared records in the first release. An action explicitly allowed by a sharing grant runs synchronously in the source organisation; any source-owned event or later workflow also remains in that source organisation. This prevents a recipient workflow from becoming an undeclared copy or re-sharing path.
+An ordinary workflow approval cannot grant permissions or activate cross-organisation sharing. The platform-owned `vortex.approvals` capability may use the same task experience, but the owning service verifies immutable decisions over the exact payload before performing the protected action.
 
 ## Process pipelines
 
-A pipeline belongs to an application and one record type. It defines ordered stages, allowed transitions, stage-entry and stage-exit work, optional time targets, and escalation events.
+A pipeline belongs to an application and one record type. It defines ordered stages, named transitions, transition permissions, gates, entry and exit work, optional time targets, and escalation events.
 
 ```mermaid
 stateDiagram-v2
@@ -104,16 +92,20 @@ stateDiagram-v2
     Qualified --> TimedOut: stage target passes
 ```
 
-- Stage movement is a named [action](08-forms-actions-rules-and-events.md), including movement from a board page.
-- A gate is checked inside the save and can refuse the transition.
-- Entry and exit actions occur within the transition save when immediate; workflows start only after commit.
-- A stage-time target announces an event once for that stage entry. An escalation workflow subscribes to it.
-- The page displays current stage and allowed transitions, but the server remains authoritative.
+The record's current stage is Vortex business data. Stage movement is a named [action](08-forms-actions-rules-and-events.md) checked inside the record transaction. Immediate entry and exit effects occur in that transaction; durable work starts only after commit. Kestra is authoritative for any workflow launched by the transition or time target.
+
+## Failure and display behaviour
+
+- If Kestra is unavailable, Vortex shows “workflow status temporarily unavailable,” the last successful refresh time, and any safe local activity. It does not infer completion.
+- A permanent refusal stops that path with a stable reason; it never broadens permissions to finish the run.
+- Operators can correlate one Kestra execution with Vortex activity and side effects without treating the duplicate local snapshot as authority.
+- Reconciliation reports missing executions, mismatched identifiers, and callbacks with no matching published definition; it does not silently rewrite business data.
 
 ## Acceptance examples
 
-- Repeated delivery of a workflow callback performs an external side effect once.
-- A workflow cannot use a connection the application or organisation has not granted.
-- A run started under one published application version remains explainable after a newer version is published.
-- Moving a pipeline stage without its transition permission or gate is refused.
-- Platform and [Kestra](https://kestra.io/docs) histories can be reconciled by run, step, and attempt identifiers.
+- Repeated delivery of a node request performs a record change or external side effect once.
+- Removing a role before the next node runs causes that protected operation to be refused.
+- A workflow cannot call an unapproved connection, arbitrary address, SQL statement, or uploaded script.
+- A run started under one application version remains explainable after a newer version is published.
+- Vortex displays Kestra's current completed, waiting, cancelled, or failed state and labels status unavailable during a Kestra outage.
+- Moving a pipeline stage without its transition permission or gate is refused even if a workflow tries to request it.

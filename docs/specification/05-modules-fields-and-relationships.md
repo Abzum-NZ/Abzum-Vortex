@@ -66,7 +66,7 @@ Every field carries the following properties. Properties marked “optional” h
 | `sortable` | Optional; defaults to false. |
 | `search` | Optional search priority: `first`, `normal`, or `last`. |
 | `personal_data` | Required: `none`, `personal`, or `sensitive`. |
-| `public_display` | Required: `refused` or `allowed`; subject to [Decision D04](appendices/decisions.md#d04-public-field-approval). |
+| `public_display` | Required: `refused` or `allowed`; defaults to `refused`, and a public operation must separately allowlist the field. |
 | `settings` | The settings allowed for the selected field type. |
 
 Unknown properties are refused. Type-specific properties belong inside `settings`.
@@ -100,7 +100,7 @@ The platform supports these twenty-two types:
 | `total` | Aggregate across a relationship | Relationship, operation, field, filter |
 | `attachment` | One or more files | The canonical settings in [files and attachments](11-files-and-attachments.md) |
 
-There is no separate duration type in this release. Calendar durations use either a whole number with an explicit unit or the difference between start and end date-time fields, as selected in [Decision D05](appendices/decisions.md#d05-calendar-duration).
+There is no separate duration type in this release. Each calendar page explicitly selects either start and end date-time fields, or a start date-time plus a whole-number duration field and unit. Missing or invalid inputs are shown as invalid data; the platform never guesses an end time or unit.
 
 ## Calculations and totals
 
@@ -108,7 +108,7 @@ There is no separate duration type in this release. Calendar durations use eithe
 - Calculation dependencies are known at publication and cycles are refused.
 - A total names one relationship, operation, optional source field, and optional safe filter.
 - Supported operations are count, sum, minimum, maximum, and average where the source type permits them.
-- A money total never silently combine currencies. The result policy is selected in [Decision D08](appendices/decisions.md#d08-multi-currency-totals).
+- A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable error that identifies the currency codes present. Vortex never silently converts or splits the total.
 
 ## Relationships
 
@@ -129,7 +129,7 @@ Allowed parent-deletion behaviour is:
 - Empty an optional link.
 - Soft-delete dependent children.
 
-Emptying a required link is invalid. How builders migrate an existing required relationship is covered by [Decision D07](appendices/decisions.md#d07-required-links-and-deletion).
+Emptying a required link is invalid. Deleting a referenced parent is refused while required links remain. A relationship may explicitly declare dependent ownership; only then may deleting the parent soft-delete its dependent children in the same protected operation.
 
 Many-to-many relationships use an explicit joining record type so ownership, permissions, activity, fields, and deletion behaviour remain visible.
 
@@ -173,7 +173,7 @@ When several allowed sources provide presentation defaults, the resolution order
 
 Compatible changes include labels, help text, and adding an optional field. Widening a text length or a permitted numeric range is compatible when storage and dependants remain valid.
 
-Changing stored meaning is not performed as an arbitrary in-place retype. For an incompatible change, the builder adds a new field, migrates values through an explicit [database change](18-delivery-and-testing.md), updates dependants, and later retires the old field. [Decision D09](appendices/decisions.md#d09-field-type-changes) records the permitted exception choices.
+Changing stored meaning is never an arbitrary in-place retype. Only a proven widening change may update a field in place. Every other type change uses add, migrate, switch, and retire: add a new field, migrate values through an explicit [database change](18-delivery-and-testing.md), switch every dependant after validation, and retire the old field only when no published dependency or retained workflow run uses it.
 
 ## Acceptance examples
 

@@ -6,8 +6,8 @@ These contracts name the information that must exist. They do not prescribe a da
 
 ```mermaid
 flowchart TD
-    DEF[Published root definitions] --> RUNTIME[Runtime services]
-    ID[Identity and organisation-account records] --> ACCESS[Access decision]
+    DEF[Published modules and applications] --> RUNTIME[Runtime services]
+    ID[Tenant, identity and organisation-account records] --> ACCESS[Access decision]
     ACCESS --> RECORD[Organisation records]
     DEF --> RECORD
     RECORD --> EVENT[Event envelopes]
@@ -22,19 +22,19 @@ flowchart TD
 
 - A platform-issued identifier is globally unique, permanent, and never reused.
 - A builder key is lowercase words and digits separated by underscores, begins with a letter, and is 1–40 characters unless a narrower contract applies.
-- A root definition key is unique within its owner and at most 120 characters including namespace segments.
+- A module or application key is unique within its owner and kind and is at most 120 characters including namespace segments.
 - A label is user-facing text and may change; it is never used as identity.
 - External identifiers are stored with their provider and organisation scope.
 
 ## Published definition envelope
 
-Every [root definition](../03-composition-and-publication.md#definition-ownership) has:
+Every publishable [module or application](../03-composition-and-publication.md#definition-ownership-and-versions) has:
 
 | Name | Requirement |
 |---|---|
 | `root_id` | Permanent platform-issued identifier. |
 | `organisation_id` | Owning organisation, or an explicit platform publisher identifier for platform definitions. |
-| `kind` | `module`, `application`, `theme`, `connection_type`, `interface`, or `organisation_role`. |
+| `kind` | `module` or `application`. |
 | `key` | Permanent builder key within owner and kind. |
 | `draft_revision` | Increasing number used for edit conflicts. |
 | `draft_content` | Complete validated-shape candidate content. |
@@ -46,13 +46,19 @@ Each immutable published revision has `root_id`, `revision`, complete `content`,
 
 It also has a human-readable release version following the package's version policy. The increasing `revision` is the storage identity; the release version communicates compatibility. Two different revisions cannot reuse one release version in the same root.
 
-Contained components have a permanent identifier unique inside the root, a builder key, and their typed content. They do not carry a separate live pointer under [Decision D02](decisions.md#d02-publication-boundaries) option A.
+Contained components have a permanent identifier unique inside the module or application, a builder key, and their typed content. They do not carry a separate live pointer. Platform connection types and themes are identified by platform release and catalogue version; organisation roles and connection instances are live administrative data rather than published definitions.
 
-## Identity and organisation-account records
+## Tenant, identity and organisation-account records
+
+### Tenant
+
+`tenant_id`, permanent `short_name`, `display_name`, state, selected plan-version reference, billing-customer reference, creation and state-change times. Tenant states are active, suspended, archived, and removal pending.
+
+A tenant-administrator assignment has tenant, global identity, state, permissions, creator, start, expiry, revocation, and activity references. It grants no organisation record permission.
 
 ### Organisation
 
-`organisation_id`, permanent `short_name`, `display_name`, `state`, `state_changed_at`, `owner_organisation_account_id`, `created_at`, and `created_by`.
+`organisation_id`, required `tenant_id`, optional `parent_organisation_id`, permanent `short_name`, `display_name`, `state`, `state_changed_at`, `created_at`, and `created_by`. The parent must belong to the same tenant and cannot produce a cycle. A protected path/depth representation may accelerate checks but is derived from this relationship and must be transactionally consistent.
 
 Organisation states are active, suspended, archived, and removal pending. Exact archive/grace durations are set through [privacy and billing decisions](decisions.md).
 
@@ -66,7 +72,11 @@ Each environment has one Vortex Identity Authority shared by its clusters. Its p
 
 ### Organisation account
 
-`organisation_account_id`, `organisation_id`, `identity_id`, organisation-specific display name, state, optional language and time-zone preferences, invitation details, activation/suspension/closure times, and access-version contribution. The pair `organisation_id` and `identity_id` is unique, so one identity cannot have two accounts in the same organisation. Group/team assignment shape follows [Decision D23](decisions.md#d23-groups-and-teams).
+`organisation_account_id`, `organisation_id`, `identity_id`, organisation-specific display name, state, optional language and time-zone preferences, invitation details, activation/suspension/closure times, and access-version contribution. The pair `organisation_id` and `identity_id` is unique, so one identity cannot have two accounts in the same organisation.
+
+### Team and membership
+
+A team has `team_id`, organisation, key, label, state, creator, and creation/change times. A membership has organisation, team, organisation account, state, start, optional expiry, grantor, and activity reference. The pair of team and organisation account is unique while active; one account may have several memberships. Cross-organisation membership is invalid.
 
 ### Invitation
 
@@ -74,7 +84,7 @@ Each environment has one Vortex Identity Authority shared by its clusters. Its p
 
 ### Session context
 
-Global identity or system actor, organisation, application where present, organisation account, caller kind, session and issue times, expiry, authentication strength, access version, correlation identifier, and delegated/support context where present.
+Global identity or system actor, tenant, organisation, application where present, organisation account, caller kind, session and issue times, expiry, authentication strength, access version, correlation identifier, and delegated/support context where present.
 
 ### Organisation profile and preferences
 
@@ -84,9 +94,9 @@ The Identity service owns only organisation identity and state. Organisation pro
 
 A permission has `permission_id`, permanent `key`, label, description, owner kind and owner identifier, optional record type, action kind, optional named action, and `administrative` flag.
 
-A role root has key, label, description, role kind, and permission entries. Wildcard shape is unavailable until [Decision D03](decisions.md#d03-permission-wildcards) is decided.
+A role has key, label, description, role kind, live revision, and permission entries. A permission entry is either one exact permission or a controlled trailing wildcard scoped to one named module or application. Wildcards exclude all administrative permissions and store the permission-catalogue fingerprint plus the expanded permission identifiers accepted at that role revision.
 
-A role assignment has organisation, role, assignee kind, assignee identifier, optional application, start and expiry times, state, grantor organisation account, and activity link. A direct person assignment names an organisation account, never a global identity. Assignment to a team uses the team model selected in [Decision D23](decisions.md#d23-groups-and-teams).
+A role assignment has organisation, role, assignee kind (`organisation_account` or `team`), assignee identifier, optional application, start and expiry times, state, grantor organisation account, and activity link. A direct person assignment names an organisation account, never a global identity.
 
 The Access service owns an `access_version` per organisation. Every organisation-account, role, assignment, team, sharing, public-policy, or application-role publication change increases it in the same transaction.
 
@@ -98,13 +108,15 @@ A record type contains key, labels, title-field reference, storage scope, owners
 
 Installing a definition package also records a lineage entry with source publisher, source root and component identifiers, source release version and content fingerprint, local root and component identifiers, local published revision, compatibility state, and mapping fingerprint. A federation-compatible application binding names that lineage entry and the source contract range it can display. Visual similarity or matching builder keys without proven lineage are insufficient.
 
-Storage scope is `organisation_shared` or `application_contained`. Ownership mode and within-organisation individual sharing depend on [D24](decisions.md#d24-individual-record-sharing). Cross-organisation access always uses the governed grant contract below.
+Storage scope is `organisation_shared` or `application_contained`. Ownership mode may be none, organisation account, or team. Within-organisation direct record sharing uses the contract below; cross-organisation access always uses the governed access-grant contract.
 
 ## Field contract
 
-Every field has `field_id`, `key`, `type`, `label`, optional `help_text`, `required`, optional `default`, `unique`, `filterable`, `sortable`, optional search priority, required personal-data class, required public-display choice, and type-specific `settings`.
+Every field has `field_id`, `key`, `type`, `label`, optional `help_text`, `required`, optional `default`, `unique`, `filterable`, `sortable`, optional search priority, required personal-data class, required `public_display` choice (`refused` by default or `allowed`), and type-specific `settings`. A public operation separately allowlists every accepted or returned field.
 
 The twenty-two type keys and their settings are defined in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#field-types). Attachment settings are defined only in [Files and attachments](../11-files-and-attachments.md#canonical-attachment-settings). Unsupported common properties and unknown type settings are refused.
+
+A calendar mapping is either `start_field_id` plus `end_field_id`, or `start_field_id` plus whole-number `duration_field_id` and explicit `duration_unit`. A money aggregate carries one currency code and refuses inputs containing a second currency code.
 
 ## Record storage contract
 
@@ -128,6 +140,26 @@ Every organisation-owned business record provides:
 Business fields are stored according to the published record-type contract. Relationship storage repeats the organisation identifier on both endpoints and enforces matching organisation scope.
 
 The Record service owns a `data_version` for each organisation and record type. A committed create, change, delete, restore, relationship change, or access-relevant ownership change increases it.
+
+Unique values remain reserved while `lifecycle_state` is `soft_deleted` or `removal_pending` and are released only by permanent removal.
+
+## Direct record-share contract
+
+A direct share applies to one record and one recipient inside the record's organisation:
+
+| Name | Requirement |
+|---|---|
+| `direct_share_id` | Permanent identifier. |
+| `organisation_id`, `record_type_id`, `record_id` | Required source record in the current organisation. |
+| `recipient_kind`, `recipient_id` | `organisation_account` or `team`, belonging to the same organisation. |
+| `readable_field_ids` | Explicit non-empty allowlist that the grantor can read. |
+| `changeable_field_ids` | Explicit subset of readable fields that the grantor can change. |
+| `starts_at`, `expires_at` | Required start and optional expiry. |
+| `status` | `active`, `revoked`, or `expired`. |
+| `granted_by`, `granted_at`, `reason` | Required grant evidence. |
+| `revoked_by`, `revoked_at`, `revocation_reason` | Present after revocation. |
+
+The grantor must currently hold `record.share`; the operation refuses fields or authority the grantor cannot delegate. The contract never grants delete, restore, export, re-share, ownership, or administration. Direct-share and team changes increase the organisation access version.
 
 ## Access grant contract
 
@@ -253,7 +285,7 @@ A saved sharing condition belongs to one source record type and contains permane
 
 ## Application, page and block contracts
 
-An application contains root identity, module/version bindings, options, application permissions and roles, navigation, pages, actions, rules, events, workflows, process pipelines, theme binding, assistant policy, connections, interfaces, public addresses, and default states.
+An application contains root identity and its own release version, exact resolved module/version bindings, options, application permissions and roles, navigation, pages, actions, rules, events, workflows, process pipelines, theme settings or platform-theme binding, connections, interfaces, public addresses, and default states.
 
 A page has a stable contained identifier, name, one of the six page types, subject where required, page-level access, block tree or guided-form steps, commit action where required, optional standard-page replacement, and desktop/phone layout.
 
@@ -267,13 +299,13 @@ A block registration has permanent identifier, palette name/icon/group, zero to 
 
 Dispatch state is stored separately: status, available time, claim owner and expiry, attempts, last safe error code, delivered time, and failed-sequence resolution. Personal or sensitive field values cannot be carried.
 
-## Workflow run and callback
+## Workflow execution reference and protected operation
 
-A workflow run has `run_id`, organisation, application, workflow identifier and published revision, trigger and source identifier, start actor, duplicate-protection key, state, current step, start/update/end times, cancellation record, and retained activity link.
+A Vortex workflow reference has `run_id`, tenant, organisation, application and application version, workflow identifier and contained version, Kestra execution identifier and namespace, trigger and source identifier, start actor, duplicate-protection key, human-task links, safe activity links, last refresh time, and a clearly non-authoritative last-known state snapshot.
 
-A step attempt has run, step, attempt number, step kind, duplicate-protection key, issued/started/completed times, safe input fingerprint, state, safe result or error reference, and resulting record/action/event identifiers.
+A business side-effect receipt has run, node, attempt, duplicate-protection key, accepted time, safe input fingerprint, outcome, and resulting record/action/event identifiers. It proves duplicate safety but does not become the workflow-state authority.
 
-A [Kestra callback](../09-workflows-and-pipelines.md#callback-contract) carries:
+A [Kestra protected-operation request](../09-workflows-and-pipelines.md#protected-operation-contract) carries:
 
 - Contract version.
 - Run, step, and attempt.
@@ -284,7 +316,7 @@ A [Kestra callback](../09-workflows-and-pipelines.md#callback-contract) carries:
 - Duplicate-protection key.
 - Signed caller proof.
 
-The response is `completed`, `already_completed`, `waiting`, `retryable_failure`, or `permanent_refusal`, with a stable safe code and optional next poll time.
+The response is `completed`, `already_completed`, `waiting`, `retryable_failure`, or `permanent_refusal`, with a stable safe code and optional next poll time. Kestra's execution API is authoritative for queued, running, waiting, completed, cancelled, and failed workflow status.
 
 ## Query limits
 
@@ -304,7 +336,7 @@ The response is `completed`, `already_completed`, `waiting`, `retryable_failure`
 | Interface page | 100 records by default; maximum 500 when published |
 | Export page | 1,000 records per background batch |
 
-Values not inherited from the earlier specification are draft limits and must be confirmed with [performance budgets](decisions.md#d22-performance-budgets) before publication.
+These are safety and product-shape limits, not performance release gates. Changing one requires contract review, compatibility evidence, and updated tests.
 
 ## File contract
 
@@ -328,10 +360,20 @@ A retention policy has organisation, data category, selection rule, active perio
 
 A permanent-removal receipt has non-content identifiers or protected fingerprints, category, scope, completion time, policy, job, outcome, and any lawful exception. It is sufficient to reapply removal after backup restore without retaining the removed content.
 
+## Plan, subscription and usage contracts
+
+A plan version has plan identifier, immutable version, price and currency, billing interval, entitlement catalogue, measured-category limits, warning thresholds, grace duration, trial and cancellation retention, overage rules, effective time, and publisher. A tenant subscription has tenant, selected plan version, Stripe customer/subscription references, state, period dates, grace-end time, entitlement fingerprint, and last reconciled provider event.
+
+A usage entry has tenant, organisation, category, quantity, unit, time window, source event, duplicate-protection key, correlation identifier, accepted time, and optional correction link. A seat snapshot counts active human organisation accounts only and retains the contributing organisation-account identifiers for reconciliation.
+
+## Announcement contract
+
+An announcement has identifier, publisher kind and identifier, audience scope (`platform`, `tenant`, `organisation`, or `application`), audience identifier where required, type (`information`, `warning`, or `critical`), plain-language message, optional approved link, start and end times, dismissibility, state, creator, publisher, and activity reference. A dismissal has announcement, organisation account, and time. A condition-owned mandatory announcement may clear when its billing, security, or operational condition clears.
+
 ## Error response
 
 Every refused or failed operation returns a stable code, plain-language message, correlation identifier, and safe field/component path where useful. Validation may return several independent errors. Responses never include a stack trace, SQL text, secret, hidden identifier, private record value, or other organisation's existence.
 
-## Performance budgets
+## Performance measurements
 
-Numeric budgets remain `TBD-D22` until [Decision D22](decisions.md#d22-performance-budgets) is decided and baseline measurements exist. Each published budget must name operation, dataset, cache state, region, device, network, percentile, and maximum server/database time.
+Each measurement names operation, dataset, cache state, region, device, network, percentile, measured client/server/database time, code revision, and comparison baseline. Targets and regression thresholds create observations, alerts, and owned improvement work; performance results never automatically block a pull request or release. Safety, access, correctness, privacy, and accessibility gates remain independent.

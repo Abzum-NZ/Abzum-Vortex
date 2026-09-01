@@ -100,7 +100,7 @@ Every event envelope includes:
 - Events for the same record are handed to consumers in sequence order.
 - A later event cannot cause an earlier undelivered event to be discarded. The dispatcher waits, retries, or moves the blocked sequence to an operator-visible failure state.
 - A permanently failed event remains available for authorised retry and investigation.
-- The delivery target and fallback timing are selected in [Decision D11](appendices/decisions.md#d11-event-dispatch-runtime).
+- The committed outbox writes to a durable [Supabase Queue](https://supabase.com/docs/guides/queues). A database webhook wakes the platform dispatcher for normal low-latency delivery, and a scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the protected dispatcher endpoint to reclaim missed or stalled work. Kestra never reads the database directly.
 
 ```mermaid
 sequenceDiagram

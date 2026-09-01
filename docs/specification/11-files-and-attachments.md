@@ -30,7 +30,7 @@ The field contract uses these names only:
 - `multiple`: whether the field accepts more than one file.
 - `max_files`: required when `multiple` is true.
 
-If both kind and extension restrictions exist, a file must satisfy both. The naming and option policy remain [Decision D06](appendices/decisions.md#d06-attachment-type-policy) until approved.
+Builders choose broad allowed kinds and may add an extension allowlist. When both are present, the detected content kind and extension must satisfy both. A filename or browser-supplied type never overrides detected content, and an unknown or mismatched type is refused or quarantined for review.
 
 Attachment fields are not directly filterable, sortable, or searchable. File name and approved extracted text may be searched through the separate file-search policy if added to [search](10-queries-reports-search.md), but that does not make the attachment field a scalar query value.
 

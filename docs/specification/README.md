@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Review draft 2.0  
+**Status:** Approved specification 2.0
 **Date:** 1 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)  
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)  
@@ -8,7 +8,7 @@
 
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
 
-This document is a **review draft**, not a settled contract. Business behaviour that still needs agreement appears in the [open decision register](appendices/decisions.md). Resolved choices are written into the permanent specification, plan, tests, and GitHub tasks and then removed from that register.
+This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) is clear; a future material uncertainty must be recorded there before implementation assumes an answer.
 
 ## How to read this specification
 
@@ -30,7 +30,7 @@ Each section contains:
 1. A plain-language explanation of the outcome.
 2. A diagram showing composition or working behaviour.
 3. Testable requirements.
-4. Links to related sections and unresolved choices.
+4. Links to related sections and any future unresolved choices.
 
 Words such as “organisation,” “module,” “application,” and “published version” have one meaning throughout. Those meanings are maintained in the [glossary](appendices/glossary.md).
 
@@ -39,7 +39,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 ### Product foundation
 
 1. [Purpose, scope and product boundaries](01-purpose-and-scope.md)
-2. [People, organisations and sign-in](02-people-organisations-and-sign-in.md)
+2. [Tenants, organisations, people and sign-in](02-people-organisations-and-sign-in.md)
 3. [Platform composition and publication](03-composition-and-publication.md)
 4. [Access and permissions](04-access-and-permissions.md)
 
@@ -56,9 +56,9 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 11. [Files and attachments](11-files-and-attachments.md)
 12. [Connections and programmable interfaces](12-connections-and-interfaces.md)
-13. [Assistant and model-assisted work](13-assistant.md)
+13. Artificial-intelligence functionality is deliberately outside this release; see [Product boundaries](01-purpose-and-scope.md#product-boundaries).
 14. [Activity history, privacy and retention](14-activity-privacy-and-retention.md)
-15. [Plans, billing and usage limits](15-plans-billing-and-usage.md)
+15. [Plans, billing, usage and announcements](15-plans-billing-and-usage.md)
 16. [Copying, sharing, import and export](16-copying-sharing-import-export.md)
 
 ### Platform safety and delivery
@@ -89,6 +89,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.0 | Approved | 1 September 2026 | Incorporated all remaining business choices: separate module and application versions, tenant hierarchy and tenant administrators without implicit data access, controlled permission wildcards, multi-team membership and direct record sharing, safe record/field/file rules, Kestra-authoritative workflow status and governed nodes, no AI scope, organisation-scoped erasure, tenant billing and announcements, Testing-only database checks, one-hour RPO/eight-hour RTO, and non-blocking performance measurement. The decision register is clear. |
 | 2.0-draft.5 | Review draft | 1 September 2026 | Final sharing policy written through the specification and plan: approval by both organisations, published saved conditions, no live re-sharing, named application roles, explicit action/field/export rights, and source-executed search, reports, and approved export through ordinary record components. Resolved choices were removed from the open register. |
 | 2.0-draft.4 | Review draft | 1 September 2026 | Approved exact sharing-code or signed-link recipient discovery and separate source/recipient usage allocation because source-pays-all would not materially reduce complexity. |
 | 2.0-draft.3 | Review draft | 1 September 2026 | Approved one sharing experience using a local adapter inside a cluster and a signed, source-authoritative Vortex Federation API across clusters, with no persistent recipient-cluster record copy. |

@@ -19,7 +19,7 @@ flowchart LR
     VERCEL --> SUPA[Supabase data, accounts, files, live updates and queue]
     SUPA -->|event wake-up| VERCEL
     VERCEL -->|start or advance run| KESTRA[Kestra workflow execution]
-    KESTRA -->|signed step callback| VERCEL
+    KESTRA -->|signed protected operation| VERCEL
     DOPPLER[Doppler secrets] --> VERCEL
     DOPPLER --> KESTRA
 ```
@@ -30,22 +30,22 @@ The codebase is divided into sixteen named services. These are package and owner
 
 | Service | Owns |
 |---|---|
-| Definition | Drafts, validation, immutable published revisions, dependency graph, restore |
-| Identity | Global identities, organisations, organisation accounts, invitations, sessions, sign-in |
+| Definition | Module and application drafts, validation, immutable published revisions, dependency graph, restore |
+| Identity | Tenants, tenant-administrator assignments, organisation hierarchy, global identities, organisation accounts, invitations, sessions, sign-in |
 | Access | Permissions, roles, assignments, sharing grants, access versions, allow/refuse decision, protected grant activation |
 | Module | Module installation, dependencies, generated storage changes |
 | Record | Record validation, storage, calculations, totals, concurrency, data versions |
 | Query | Tables, boards, calendars, summaries and saved views |
 | Rule | Typed conditions and immediate rule effects |
 | Event | Transactional event outbox, queue dispatch, retries and failed sequences |
-| Workflow | Run contracts, schedules, human approval tasks, notifications and the [Kestra](https://kestra.io/docs) boundary |
+| Workflow | Execution references, schedules, human approval tasks, notifications and the [Kestra](https://kestra.io/docs) boundary; Kestra owns execution status |
 | App | Application assembly, module bindings, navigation, options and application roles |
 | Page | Block registration, page resolution, form drafts, page states and rendering contract |
-| Theme | Published theme values, inheritance and legibility validation |
+| Theme | Application-contained and platform-catalogue theme values, inheritance and legibility validation |
 | Search | Search-document maintenance, ranking and access recheck |
 | File | Upload admission, metadata, lifecycle, storage allowance and download grants |
 | Connection | Connection types, secret grants, outgoing calls, incoming messages and health |
-| Interface | Versioned operation catalogue, public interface boundary, assistant tools, cluster directory and federation transport |
+| Interface | Versioned operation catalogue, public interface boundary, cluster directory and federation transport |
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
@@ -56,7 +56,7 @@ Each service owns its tables and public contract. Another service calls that con
 - Only business-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, billing, secrets, connections, activity, approval decisions, access-control rows, and other administrative tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
 - The table-owner role is limited to migration and controlled verification work.
-- Every database transaction establishes global identity or system actor, organisation account, organisation, application, and correlation context before reading organisation data.
+- Every database transaction establishes global identity or system actor, tenant, organisation account, organisation, application, and correlation context before reading organisation data. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
 
@@ -142,7 +142,7 @@ Matching schemas make contract validation and query translation easier, but they
 
 The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry and a durable [Supabase Queue](https://supabase.com/docs/guides/queues) message in the same database transaction. An asynchronous [database webhook](https://supabase.com/docs/guides/database/webhooks) wakes a protected Vercel dispatcher route. The dispatcher claims a bounded batch, honours per-record sequence, and starts [Kestra executions](https://kestra.io/docs/workflow-components/execution) for matched workflows.
 
-A scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the platform dispatcher endpoint; it does not read the database. This recovers messages after a failed webhook or web deployment. The delivery-time choice is [Decision D11](appendices/decisions.md#d11-event-dispatch-runtime).
+A scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the platform dispatcher endpoint; it does not read the database. This recovers messages after a failed webhook or web deployment, while the database webhook provides the normal wake-up path.
 
 ## Cache model
 

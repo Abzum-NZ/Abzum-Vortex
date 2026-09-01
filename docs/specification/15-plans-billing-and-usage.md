@@ -1,81 +1,86 @@
-# 15. Plans, billing and usage limits
+# 15. Plans, billing, usage and announcements
 
 [Previous: Activity history, privacy and retention](14-activity-privacy-and-retention.md) · [Specification index](README.md) · Next: [Copying, sharing, import and export](16-copying-sharing-import-export.md)
 
-## Separation of concerns
+## Ownership
 
-A **plan** defines included capabilities and limits. **Usage** records measured consumption. **Billing** records the commercial relationship with [Stripe](https://docs.stripe.com/).
+The commercial plan, subscription, payment state, billing contacts, and invoices belong to the [tenant](02-people-organisations-and-sign-in.md#tenant-and-organisation-hierarchy). Each organisation records the usage it causes; the tenant ledger rolls those entries up without losing organisation attribution.
+
+[Stripe](https://docs.stripe.com/) is authoritative for payment collection and subscription payment status. Vortex is authoritative for tenants, selected plan versions, derived entitlements, usage, and product access decisions. Payment-card details remain in Stripe-hosted interfaces.
 
 ```mermaid
 flowchart LR
-    PLAN[Published plan] --> ENTITLE[Organisation entitlements]
-    USE[Measured usage] --> LIMIT[Limit decision]
-    ENTITLE --> LIMIT
-    LIMIT --> PRODUCT[Allow, warn, or refuse new consumption]
-    STRIPE[Stripe events] --> BILL[Billing state]
-    BILL --> ENTITLE
-    PRODUCT --> USE
+    O1[Organisation A usage] --> L[Tenant usage ledger]
+    O2[Organisation B usage] --> L
+    PLAN[Versioned tenant plan] --> E[Entitlement decision]
+    STRIPE[Stripe payment state] --> E
+    L --> E
+    E --> WARN[Warnings and announcements]
+    E --> NEW[Allow or refuse new consumption]
+    E --> KEEP[Preserve authorised read and export]
 ```
 
 ## Plan definition
 
-A published plan names:
+A published plan version names price and currency, billing interval, included entitlements, measured categories, limits, overage rules where offered, trial and cancellation retention, warning thresholds, and grace-period length. A subscription pins a plan version until an explicit plan change. Editing a plan never rewrites earlier invoices or usage.
 
-- Included platform capabilities.
-- Included active organisation accounts and applications.
-- Record, file-storage, workflow, connection, interface, assistant, and export limits.
-- Usage period and overage policy.
-- Support and retention options.
-- Price identifiers managed in [Stripe](https://docs.stripe.com/), without embedding prices in application code.
+Measured categories may include active human seats, records, file bytes, workflow runs, connection operations, interface calls, exports, and other clearly named platform consumption. Limits and charging rules use the same units.
 
-Historical subscriptions remain explainable against the plan version accepted at the time.
+## Seats
 
-## Usage measurement
+Every active human organisation account counts as a seat in its tenant, including an active external human account. An invited, suspended, closed, or service account does not count. If one identity has active accounts in two organisations, those are two seats because each is a separately governed account. Changing this rule requires a new plan version and an impact preview.
 
-Usage events have a unique identifier, organisation, category, quantity, unit, occurrence time, source, and correction link. Aggregation is repeatable and duplicate-safe.
+## Usage ledger
 
-Usage used for enforcement is available quickly enough to prevent unbounded excess, while invoicing totals are reconciled before billing. Corrections create offsetting records rather than rewriting history.
+Every usage entry records tenant, organisation, category, quantity, unit, time window, source event, duplicate-protection key, and correlation identifier. Corrections append reversing and replacement entries; they never edit accepted history. Current totals are reproducible from immutable entries and reconciled to source systems.
 
-## Billing state
+Shared-record work creates linked source and recipient entries. Recipient requests and seats count to the recipient organisation and tenant. Source queries, reports, actions, temporary exports, file work, and network delivery count to the source organisation and tenant. One operation is not counted twice in the same category.
 
-[Stripe](https://docs.stripe.com/) is authoritative for payment collection and subscription payment status. Vortex is authoritative for the organisation, selected plan, entitlements derived from the subscription, and product access decisions.
+## Billing state and enforcement
 
-Incoming billing events are signature checked, stored by provider event identifier, and safe to process repeatedly. Events received out of order are reconciled against the provider's current subscription state before entitlements change.
+Supported tenant states include trial, active, past due, grace period, cancelled at period end, cancelled, and administratively suspended. Signed provider events are stored once by provider identifier and reconciled against the current Stripe subscription when they arrive out of order.
 
-The supported organisation states include trial, active, past due, grace period, cancelled at period end, cancelled, and administratively suspended. Exact grace and enforcement behaviour is [Decision D16](appendices/decisions.md#d16-billing-and-limit-enforcement).
+For ordinary plan, payment, or usage limits:
 
-## Limit behaviour
+1. Vortex shows warnings before enforcement where measurement permits.
+2. A past-due or exceeded tenant enters the grace period defined by its plan version.
+3. At the end of grace, new consumption is refused: no additional seats, records, bytes, workflow runs, or external calls that increase the exceeded category.
+4. Existing authorised read and export access remains available so the customer can resolve or retrieve its data.
+5. Vortex never silently deletes data or upgrades the plan. A downgrade shows an impact preview and resolution period.
 
-Limits distinguish existing access from new consumption:
+A separately recorded security or legal suspension may restrict more broadly. Billing state never grants access, and a limit refusal uses a stable reason that identifies the affected tenant and category without exposing another organisation's private details.
 
-- Reaching a limit normally refuses creating additional organisation accounts, records, bytes, runs, or calls while preserving authorised read and export access.
-- A security or legal suspension may restrict more broadly through a separately recorded decision.
-- Downgrading produces an impact preview and a resolution period; it does not silently delete data.
-- Overage billing occurs only when the accepted plan explicitly allows it.
-- Usage warnings are sent before a hard limit where measurement permits.
+## Announcement banners
 
-## Seats and organisation accounts
+The platform provides a generic announcement banner for operational, security, policy, billing, and product notices. An announcement has an audience scope (`platform`, `tenant`, `organisation`, or `application`), type (`information`, `warning`, or `critical`), plain-language message, optional approved link, start and end times, and dismissibility.
 
-The plan must define whether invited, active, suspended, service, and external organisation accounts count as seats. A change in counting rules creates a new plan version. The unresolved business choices appear in [Decision D16](appendices/decisions.md#d16-billing-and-limit-enforcement).
+```mermaid
+flowchart TD
+    A[Published announcement] --> TIME{Active now?}
+    TIME -- No --> HIDE[Do not show]
+    TIME -- Yes --> AUD{Person is in audience?}
+    AUD -- No --> HIDE
+    AUD -- Yes --> SHOW[Show accessible banner]
+    SHOW --> D{Dismissible?}
+    D -- Yes --> SAVE[Save per-account dismissal]
+    D -- No --> STATE[Remain until end time or underlying state clears]
+```
 
-## Shared-record usage
-
-Shared-record work records separate source and recipient usage events tied by one correlation identifier. Recipient seats and gateway requests count to the recipient organisation. Source queries, searches, reports, actions, temporary export or file storage, and any network delivery count to the source organisation. The rule is the same for local and remote routes, and the same operation is not counted twice in one usage category.
-
-If either organisation has reached a hard limit for the required work, the request refuses with a stable outcome that states whether the source or recipient limit prevented it. Billing state never turns a refused grant into an allowed one, causes a persistent recipient copy, or reveals a source record's existence.
+- Platform operators publish platform notices; tenant administrators publish tenant notices; authorised organisation or application administrators publish narrower notices.
+- A banner is communication, not access enforcement. The underlying billing, security, or operational rule is checked independently.
+- Mandatory billing or security notices may be non-dismissible until their condition clears.
+- Messages contain no record values, secrets, or private information about another organisation and meet the same accessibility requirements as application pages.
+- Publication, change, withdrawal, display scope, and dismissal are auditable.
 
 ## Administrative safety
 
-- Billing administration requires a dedicated permission and recent sign-in confirmation.
-- Payment-card details are handled by [Stripe-hosted interfaces](https://docs.stripe.com/payments/checkout) and are not stored by Vortex.
-- Billing events, plan changes, entitlement changes, invoice links, refunds, and suspensions appear in [activity history](14-activity-privacy-and-retention.md).
-- A billing failure cannot accidentally grant a higher plan.
+Billing administration requires a tenant permission and recent sign-in confirmation. Tenant administration does not grant organisation record access. Plan, entitlement, invoice-link, refund, suspension, and announcement changes appear in [activity history](14-activity-privacy-and-retention.md).
 
 ## Acceptance examples
 
-- Replaying a [Stripe](https://docs.stripe.com/) event does not duplicate a usage correction or entitlement change.
-- An out-of-order cancellation event cannot override a later active subscription without reconciliation.
-- Downgrading below current storage does not delete files; it prevents additional storage according to the chosen policy.
-- An organisation can export its data during a normal billing grace period.
-- Plan and usage decisions are explainable from versioned inputs.
-- One federated request produces linked source and recipient usage entries without double-counting one category.
+- Replayed or out-of-order Stripe events produce one correct tenant state.
+- Usage from two child organisations rolls up to one tenant while retaining separate organisation totals.
+- A past-due tenant receives a warning and plan-defined grace period; after grace, new consumption stops while authorised read and export continue.
+- Invited, suspended, and service accounts do not count as seats; active human accounts do.
+- A tenant-wide critical notice appears in all its organisations without revealing any organisation's business data.
+- One federated request produces linked source and recipient usage without duplicate category charging.

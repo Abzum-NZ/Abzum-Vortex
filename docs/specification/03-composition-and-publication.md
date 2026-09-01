@@ -28,26 +28,24 @@ An [application](07-applications-pages-and-themes.md) selects modules and adds t
 
 ### Organisation-data layer
 
-[Records](06-records-and-lifecycle.md), files, organisation accounts, saved views, activity entries, workflow runs, usage, and billing belong to one organisation. They are not part of a reusable definition.
+[Records](06-records-and-lifecycle.md), files, organisation accounts, saved views, activity entries, workflow references, and attributed usage belong to one organisation. Tenant plans and billing belong to the tenant. None is part of a reusable definition.
 
-## Definition ownership
+## Definition ownership and versions
 
-Every independently reusable item has one **root definition**. Components that have meaning only inside that root are contained by it.
+There are exactly two customer-managed publishable definitions. Each has its own independent version:
 
-| Root definition | Components contained by it |
+| Publishable definition | Components contained by it |
 |---|---|
-| Module | Record types, fields, relationships, module actions, extension points |
-| Application | Module bindings, navigation, pages, forms, application roles, rules, events, workflows, pipelines, application actions, theme binding |
-| Theme | Design tokens and approved assets |
-| Connection type | Connection settings, secret fields, allowed operations, retry and safety policy |
-| Interface | Operations, input and output shapes, authentication policy, served versions |
-| Organisation role | Organisation-wide permissions |
+| Module | Record types, fields, relationships, module actions, business events, and extension points |
+| Application | Module/version bindings, navigation, pages, forms, application roles, rules, events, workflows, pipelines, application actions, theme settings, connection bindings, and interfaces |
 
-This table is the canonical resolution of the earlier envelope disagreement. A contained component has a stable identifier inside its root but does not have an independent publication lifecycle. See [Decision D02](appendices/decisions.md#d02-publication-boundaries) before treating this resolution as final.
+A module can be reused by several applications and therefore must evolve independently. An application pins a compatible module version or version range, and publishing the application records the exact module versions that passed validation.
+
+Themes, pages, workflows, rules, interfaces, and application roles do not publish independently: they are versioned as part of their application. Connection **types** and platform themes are platform catalogue items shipped with a platform release. Organisation roles, teams, connection instances, and tenant settings are live administrative data with activity history and access-version invalidation; they are not definition packages. Every contained component still has a stable identifier inside its owner so references survive label changes.
 
 ## Draft and published versions
 
-Each root definition has one editable draft and zero or more immutable published versions.
+Each module or application has one editable draft and zero or more immutable published versions.
 
 ```mermaid
 stateDiagram-v2
@@ -61,17 +59,17 @@ stateDiagram-v2
 ```
 
 - Editing changes only the draft.
-- Publishing creates a numbered, immutable snapshot of the whole root definition and its contained components.
+- Publishing creates a numbered, immutable snapshot of the whole module or application and its contained components.
 - A published snapshot records its author, time, source draft revision, validation result, and content fingerprint.
 - Restoring an older version creates a new draft. It never rewrites publication history.
-- A live request resolves one published root version and uses it for the full request.
-- References to other roots use a stable identifier plus an allowed version range or an explicitly pinned version.
+- A live request resolves one published module/application version set and uses it for the full request.
+- An application-to-module reference uses a stable module identifier plus an allowed version range or an explicitly pinned version. Publication records the exact resolved module version.
 
 ## Validation before publication
 
 Publication is refused unless:
 
-1. Every referenced root and contained component exists.
+1. Every referenced module, application component, and platform catalogue item exists.
 2. Cross-definition version requirements are compatible.
 3. Every field, page, filter, rule, action, workflow step, permission, cache tag, and connection setting matches its [data contract](appendices/data-contracts.md).
 4. No circular dependency would prevent loading or publication.
@@ -83,15 +81,15 @@ Publication is refused unless:
 
 ## Dependency graph
 
-Before publication, the platform builds a dependency graph from root definitions and contained-component references.
+Before publication, the platform builds a dependency graph from module/application versions and contained-component references.
 
 ```mermaid
 flowchart LR
     APP[Application draft] --> MOD[Required module version]
-    APP --> THEME[Required theme version]
-    APP --> CONN[Required connection types]
-    APP --> API[Required interfaces]
-    APP --> ROLE[Required organisation roles]
+    APP --> THEME[Contained theme settings or platform theme]
+    APP --> CONN[Required platform connection types]
+    APP --> API[Contained interface operations]
+    APP --> ROLE[Required live organisation permissions]
     MOD --> MOD2[Related module versions]
     GRAPH[Dependency validation] --> APP
     GRAPH --> MOD
@@ -125,6 +123,7 @@ The source and recipient application bindings must use a compatible published re
 - Removing a field referenced by a report, rule, page, or interface is refused with links to every dependant.
 - Restoring a prior published version creates a reviewable draft and does not erase later history.
 - Installing or copying an application does not grant access to the publisher's records.
+- A module and an application each retain their own release history; changing one never silently republishes the other.
 - A target application without a compatible module binding cannot use a record grant.
 - A cross-organisation grant does not copy records into the target organisation's storage.
 - Revoking a sharing grant immediately removes the target's ability to query shared records.

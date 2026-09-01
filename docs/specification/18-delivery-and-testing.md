@@ -4,13 +4,13 @@
 
 ## Environments
 
-The platform uses separate Local, Testing, and Production environments. Each has separate [Supabase](https://supabase.com/docs), [Vercel](https://vercel.com/docs), [Kestra](https://kestra.io/docs), [Doppler](https://docs.doppler.com/docs), addresses, secrets, files, queues, connections, billing mode, and model-provider credentials. An environment may contain several Vortex clusters, but it has one shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) and no identity, trust, or federation route crosses into another environment.
+The platform uses separate Local, Testing, and Production environments. Each has separate [Supabase](https://supabase.com/docs), [Vercel](https://vercel.com/docs), [Kestra](https://kestra.io/docs), [Doppler](https://docs.doppler.com/docs), addresses, secrets, files, queues, connections, and billing mode. An environment may contain several Vortex clusters, but it has one shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) and no identity, trust, or federation route crosses into another environment.
 
 No environment reads another environment's database, file store, queue, workflow state, cache, or secrets.
 
 ```mermaid
 flowchart LR
-    FEATURE[Feature branch] --> CHECKS[Types, lint, unit, contract and database access checks]
+    FEATURE[Feature branch] --> CHECKS[Formatting, types, unit, contract and build checks]
     CHECKS --> PREVIEW[Vercel preview]
     PREVIEW --> REVIEW[Human and automated review]
     REVIEW --> TESTING[Merge to testing]
@@ -22,7 +22,9 @@ flowchart LR
     PAPP --> VERIFY[Smoke, separation and monitoring checks]
 ```
 
-The precise pre-merge database environment is [Decision D20](appendices/decisions.md#d20-pre-merge-database-testing). The following outcomes are required regardless of the selected option:
+Pull requests do not start a database and do not run migrations or database access tests. Their required checks cover formatting, types, unit and contract tests, build, and preview. After merge to the shared `testing` branch, Kestra applies the ordered Testing migrations once and runs database constraints, row restrictions, service integration, and organisation-separation checks. A successful identified Testing revision is required before promotion to `main`.
+
+The following outcomes are required:
 
 - Database shape and access-rule tests run before production.
 - A failed migration or access test prevents promotion.
@@ -36,7 +38,7 @@ Feature branches merge into `testing`. The verified `testing` revision is promot
 
 - Every feature branch gets a [Vercel preview](https://vercel.com/docs/deployments/preview-deployments).
 - Preview data is test data only and cannot use production credentials.
-- The branch check mechanism must be stated in the repository and match the selected [pre-merge decision](appendices/decisions.md#d20-pre-merge-database-testing).
+- The repository states which checks run on pull requests and which run only after merge to Testing.
 - A pull request records the specification sections, decisions, migrations, tests, screenshots, privacy effect, and rollback or forward-fix plan it affects.
 
 ## Database changes
@@ -60,7 +62,7 @@ The build separates tests by what they prove:
 - Contract tests validate every definition and stable error code without a database.
 - Unit tests validate pure business functions.
 - Database tests validate migrations, constraints, transactions, row restrictions, and service database functions.
-- Service tests validate boundaries such as file storage, queues, caches, connections, and workflow callbacks.
+- Service tests validate boundaries such as file storage, queues, caches, connections, Kestra status reads, and protected workflow operations.
 - Browser tests validate complete application behaviour on desktop and phone.
 - Operational tests validate backup, restoration, alerting, and secret scanning.
 
@@ -84,7 +86,7 @@ Before promotion, Testing runs a two-cluster matrix with the new release against
 
 - The documented branch flow and actual required checks agree.
 - A migration that works only when the new web version deploys first is refused.
-- An access-rule test failure prevents production promotion.
+- An access-rule test failure after merge to Testing prevents promotion to `main`; it does not retroactively fail the already merged feature pull request.
 - Testing cannot send a live customer email, charge a live payment method, or call a production connection.
 - A released revision can be traced from Git commit through migration, test, deployment, and verification records.
 - A rolling deployment keeps cross-cluster sharing safe between adjacent supported releases and fails closed outside the declared compatibility range.

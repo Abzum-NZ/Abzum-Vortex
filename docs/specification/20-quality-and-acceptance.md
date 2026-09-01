@@ -41,7 +41,7 @@ Run through the non-owning application database role and expect refusal or no ro
 3. Read as a suspended organisation-account context.
 4. Read without required request context.
 5. Reuse one database connection alternately for two organisations and prove context does not leak.
-6. Use service, background, assistant, and public caller contexts across organisations.
+6. Use service, background, tenant-administrator, and public caller contexts across organisations.
 7. Read a source organisation's shareable rows from a recipient context with no grant, an inactive grant, and an expired grant.
 8. With one active grant, read only its records and fields; refuse every administrative or non-shareable table.
 9. Prove two incomplete grants cannot be combined to create one complete permission.
@@ -59,9 +59,9 @@ Run through ordinary product surfaces:
 12. List, upload, replace, download, and delete another organisation's files are refused.
 13. A live subscription receives no other-organisation change or source values in a shared-record invalidation.
 14. Organisation-owned cache entries primed in one organisation miss in another; content-hashed application assets are tested separately as the documented safe shared exception.
-15. A field the caller cannot read is absent from records, search, reports, exports, assistant tools, workflow inputs, and interfaces.
+15. A field the caller cannot read is absent from records, search, reports, exports, workflow inputs, and interfaces.
 16. Search reveals no title, count, filter value, suggestion, or highlight from another organisation.
-17. Connection, workflow, interface, and assistant calls cannot cross organisation boundaries.
+17. Connection, workflow, and interface calls cannot cross organisation boundaries.
 18. Organisation switching clears organisation-specific browser and server state.
 19. Public and private file addresses cannot be exchanged to gain access.
 20. One global identity with accounts in source and recipient organisations cannot combine their roles in one request.
@@ -84,6 +84,9 @@ Run through ordinary product surfaces:
 37. Run the same shared list, record detail, search, report, dashboard block, named action, and approved export through local and remote adapters; ordinary components show the same permitted content, source marker, and refusal meaning.
 38. Search and report on shared records, then inspect recipient storage, indexes, caches, logs, and grant mirrors; no source value or materialised result remains after the response.
 39. Leave export refused and prove no export starts; approve it on both sides and prove the source-generated file contains only grant-readable non-sensitive fields, expires, leaves no recipient-cluster copy, and records the non-recallable transfer warning.
+40. Put one organisation account in several teams; add, remove, suspend, and restore memberships and prove direct shares and team roles change on the next request.
+41. Give a tenant administrator no account in a child organisation and prove hierarchy, plan, and announcement administration works while every record, file, search, workflow, and connection read is refused.
+42. Create direct record shares to an account and a team; prove only allowlisted fields can be read or changed and that delete, restore, export, re-share, and administration remain refused.
 
 Every applicable case runs in both directions between two populated organisations in one cluster and in a two-cluster topology. Tests use recognisably different canary values so accidental mixing is visible.
 
@@ -93,11 +96,11 @@ Visible functionality meets [Web Content Accessibility Guidelines 2.2](https://w
 
 Every visible issue includes evidence at supported desktop and phone widths. Evidence covers normal, empty, loading, validation, refused, conflict, failure, and recovery states that apply—not only the successful path.
 
-## Performance acceptance
+## Performance measurement
 
-Performance tests state hardware class, network profile, dataset size, cache state, region, percentile, and measured action. “Fast on a mid-range phone” without those values is not an acceptance test.
+Performance tests state hardware class, network profile, dataset size, cache state, region, percentile, and measured action. “Fast on a mid-range phone” without those values is not a useful measurement.
 
-Budgets are maintained in the [data contracts](appendices/data-contracts.md#performance-budgets) after [Decision D22](appendices/decisions.md#d22-performance-budgets) is approved. Safety and correctness are not weakened to meet a latency target.
+Performance targets are operational goals, never pull-request or release-blocking budgets. Baselines and regressions are recorded in the [data contracts](appendices/data-contracts.md#performance-measurements); a sustained regression creates an owned issue and may trigger an alert. Performance pressure never weakens safety, correctness, privacy, or accessibility, and performance alone never prevents a release.
 
 ## Evidence and issue closure
 

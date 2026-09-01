@@ -45,7 +45,7 @@ The CRM module contains:
 - **Deal:** an opportunity with account, owner, stage, amount, probability, expected close date, and controlled state changes.
 - **Activity:** a dated business interaction linked to relevant CRM records.
 
-Relationships are explicit. Required parent links use the deletion decision in [D07](decisions.md#d07-required-links-and-deletion). Money totals use [D08](decisions.md#d08-multi-currency-totals). Unique email and reference values use [D10](decisions.md#d10-uniqueness-and-restoration).
+Relationships are explicit. A required parent prevents deletion unless its relationship declares dependent-child soft-delete. Money totals refuse a group containing more than one currency. Soft-deleted unique email and reference values remain reserved until permanent removal.
 
 The module must declare every action and business event that the Sales Hub application references. At minimum this includes the lead-conversion and public-enquiry creation actions that are currently referenced but absent. A permission without an executable action is valid only when it protects a field option or ordinary record operation under an explicit contract.
 
@@ -62,7 +62,7 @@ The Sales Hub application composes the four modules and includes:
 - Application roles for sales representatives and sales managers.
 - A sales pipeline with gated stage movement and escalation.
 - Qualification and deal-won workflows.
-- Optional assistant, public-form, and discount-approval capabilities.
+- Public-form and discount-approval capabilities.
 - Email and Slack connection grants.
 - A versioned Sales Hub programmable interface.
 
@@ -86,7 +86,7 @@ sequenceDiagram
     Event->>Workflow: Continue or start conversion work
 ```
 
-Every step uses [access and permissions](../04-access-and-permissions.md), [record saving](../06-records-and-lifecycle.md), [events](../08-forms-actions-rules-and-events.md), and [workflow callbacks](../09-workflows-and-pipelines.md). The public submission cannot set owner, stage, permissions, connection, workflow, or any field not explicitly listed by the public operation.
+Every step uses [access and permissions](../04-access-and-permissions.md), [record saving](../06-records-and-lifecycle.md), [events](../08-forms-actions-rules-and-events.md), and [protected workflow operations](../09-workflows-and-pipelines.md#protected-operation-contract). The public submission cannot set owner, stage, permissions, connection, workflow, or any field not explicitly listed by the public operation.
 
 ## Fixture acceptance
 
@@ -94,10 +94,10 @@ The complete fixture suite must prove:
 
 - Every root, contained component, field, relationship, action, permission, role, option, page, block, query, event, workflow step, pipeline transition, connection operation, and interface operation resolves.
 - Every field uses one of the twenty-two types and its exact allowed settings.
-- Every public field has both field approval and operation allowlisting if [D04](decisions.md#d04-public-field-approval) option A is selected.
+- Every public field has both `public_display: allowed` and operation allowlisting.
 - Every visible screen has desktop and phone layouts and normal, empty, refused, validation, failure, and recovery states where applicable.
 - Every referenced module and service definition is present; the validator never relaxes reference checks merely to accept a partial example.
-- The fixtures use draft and published root envelopes chosen in [D02](decisions.md#d02-publication-boundaries).
+- The CRM module and Sales Hub application have separate release versions; the published application records the exact compatible module versions it resolved.
 - The fixture assertion count is generated from the current contract catalogue rather than maintained as a fixed marketing number.
 
 ## Sharing examples
@@ -143,7 +143,7 @@ The proposed grant:
 
 An authorised administrator in Organisation A approves this exact proposal. An authorised administrator in Organisation B separately accepts the Partner Portal, Partner Manager role, responsibility for an approved export, region, start, and expiry over the same fingerprint. The grant remains inactive until both decisions exist.
 
-Organisation B's Partner Managers can use the ordinary deal list and detail components, search a Shared result group, run a report or dashboard block over Organisation A alone, add comments, update `partner_status`, and request the approved export. Each surface shows Organisation A as the source. They cannot see unnamed or sensitive fields, change the amount, re-share, use the data in a workflow or assistant, or access deals that no longer match. Search and reports run in Organisation A and leave no source values in Organisation B's index, report storage, or cross-request cache.
+Organisation B's Partner Managers can use the ordinary deal list and detail components, search a Shared result group, run a report or dashboard block over Organisation A alone, add comments, update `partner_status`, and request the approved export. Each surface shows Organisation A as the source. They cannot see unnamed or sensitive fields, change the amount, re-share, use the data in a workflow, or access deals that no longer match. Search and reports run in Organisation A and leave no source values in Organisation B's index, report storage, or cross-request cache.
 
 The `partner_deals` condition revision and Organisation B parameter are pinned in the proposal. Publishing another revision or changing the parameter does not widen the grant. A new proposal and both approvals are required.
 
@@ -188,3 +188,20 @@ Before the cross-organisation grant above becomes active:
 8. Changing any fingerprinted value creates a new proposal and requires both decisions again.
 9. A later authorised revocation ends the source grant and records a separate event; it does not rewrite either original decision. Delayed recipient notification cannot keep access alive.
 10. Directly editing an approval display record never creates, activates, or revokes a grant.
+
+## Tenant hierarchy and direct record sharing
+
+Tenant Acme owns a parent organisation, New Zealand, with Auckland and Wellington child organisations. A tenant administrator can create Wellington, move it beneath New Zealand, view the tenant's combined usage, and publish a tenant-wide maintenance banner. That administrator cannot open Auckland's deals until Auckland creates a local organisation account and assigns the required Sales Hub role.
+
+Inside Auckland, account Morgan belongs to both the Enterprise Sales and Deal Review teams. A deal owner directly shares one deal with Deal Review, allowing deal name, stage, and review note to be read and only review note to be changed. Morgan sees the deal in an ordinary list because of Deal Review membership. Morgan cannot change amount, delete, restore, export, or re-share it. Removing Morgan from Deal Review removes access on the next request even though Enterprise Sales membership remains.
+
+```mermaid
+flowchart TD
+    T[Acme tenant] --> NZ[New Zealand organisation]
+    NZ --> AKL[Auckland organisation]
+    NZ --> WLG[Wellington organisation]
+    TA[Tenant administrator] -->|structure, usage, banner| T
+    TA -. no automatic record access .-> DEAL[Auckland deal]
+    TEAM[Deal Review team] -->|field-limited direct share| DEAL
+    MORGAN[Morgan organisation account] --> TEAM
+```

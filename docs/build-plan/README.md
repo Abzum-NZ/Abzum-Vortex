@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Review draft 2.0
+**Status:** Approved build plan 2.0
 
 **Date:** 1 September 2026
 
@@ -10,7 +10,7 @@
 
 This plan replaces the sequencing of the earlier [Build Plan](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef). It keeps the useful ownership boundaries while correcting missing dependencies, an impossible background-worker assumption, incomplete fixtures, and an oversized final phase.
 
-No phase may treat an open blocking choice in the [decision register](../specification/appendices/decisions.md) as settled.
+The [decision register](../specification/appendices/decisions.md) is currently clear. A new unresolved business choice must be recorded before implementation assumes an answer.
 
 ## Planning rules
 
@@ -35,7 +35,7 @@ flowchart TD
     P6 --> P7[Phase 7<br/>Workflow and pipeline execution]
     P6 --> P8U[Phase 8 experience<br/>File blocks and phone install]
     P8C --> P8U
-    P6 --> P9[Phase 9<br/>Connections, Interfaces and Assistant]
+    P6 --> P9[Phase 9<br/>Connections and Interfaces]
     P7 --> P9
     P8U --> P9
     P6 --> P10[Phase 10<br/>Copy, gallery, sharing, import and export]
@@ -53,12 +53,11 @@ Operations, accessibility, security, documentation, and automated checks are con
 
 ## Gate 0 — Decisions and platform readiness
 
-**Outcome:** The project has one authoritative review draft, permanent requirements for settled choices, a clear register of only open choices, complete source fixtures, and a delivery path that can safely begin contracts.
+**Outcome:** The project has one authoritative approved specification, permanent requirements for settled choices, a clear register, complete source fixtures, and a delivery path that can safely begin contracts.
 
 Required work:
 
-- Decide remaining foundation choices [D02–D10](../specification/appendices/decisions.md#foundation-decisions--decide-before-phase-1); the global identity and organisation-account model is already part of the specification.
-- Decide the pre-merge database check in [D20](../specification/appendices/decisions.md#d20-pre-merge-database-testing).
+- Verify the settled tenant, definition-version, access, field, workflow, privacy, billing, delivery, recovery, and performance requirements against the [data contracts](../specification/appendices/data-contracts.md).
 - Keep cluster location out of the product-level sharing choices: one shared-record gateway uses a local adapter or the signed Vortex Federation API.
 - Publish Specification 2.0 and update its version history.
 - Rewrite the [CRM and Sales Hub fixtures](../specification/appendices/worked-examples.md), including the three missing platform modules, actions, connection types, interface, theme, roles, workflows, and pipeline.
@@ -83,8 +82,8 @@ Exit proof:
 Build:
 
 - Shared identifier, error, actor, organisation context, revision, dependency and version-range contracts.
-- Root and contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
-- All [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow callbacks, files, connections, interfaces, federation envelopes, privacy, billing and cache versions.
+- Independently versioned module and application contracts plus their contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
+- All [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, privacy, billing and cache versions.
 - Contract validator with stable error codes and exact component paths.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
 - Types, lint, unit tests, contract tests and build checks that run without a database.
@@ -101,13 +100,13 @@ Exit proof:
 
 **Needs:** Phase 1.
 
-**Outcome:** A person can sign in, choose an organisation, and authorised builders can draft, validate, publish and restore root definitions.
+**Outcome:** A person can sign in, choose an organisation, tenant administrators can manage a safe organisation hierarchy, and authorised builders can draft, validate, publish and restore modules and applications independently.
 
 Build:
 
-- One environment-wide [Vortex Identity Authority](../specification/02-people-organisations-and-sign-in.md#identity-across-clusters), plus cluster-local organisation-account records, invitations, sessions and organisation launcher.
+- One environment-wide [Vortex Identity Authority](../specification/02-people-organisations-and-sign-in.md#identity-across-clusters), plus tenants, tenant-administrator assignments, acyclic organisation hierarchy, cluster-local organisation accounts, invitations, sessions and organisation launcher.
 - Neutral bootstrap sign-in with one global identity and a separate account in every organisation the person belongs to.
-- Definition draft concurrency, validation, immutable revision publication, dependency graph and restore.
+- Independent module and application draft concurrency, release versions, validation, immutable revision publication, dependency graph and restore. Themes, pages, workflows, interfaces and application roles remain contained in the application; organisation roles remain live access data.
 - Platform bootstrap definitions required before the Page service exists.
 - Organisation and environment context established at the start of every database transaction.
 
@@ -118,12 +117,13 @@ Exit proof:
 - A stale draft cannot overwrite a later edit.
 - Publishing is atomic and a restored version becomes a new draft.
 - Definition and identity tables pass their database separation tests.
+- Tenant administrators can create and move organisations without gaining record access, and cross-tenant or cyclic hierarchy moves are refused.
 
 ## Phase 3 — Access
 
 **Current project epic:** [#31](https://github.com/Abzum-NZ/Abzum-Vortex/issues/31)
 
-**Needs:** Phase 2 and decisions [D03](../specification/appendices/decisions.md#d03-permission-wildcards), [D17](../specification/appendices/decisions.md#d17-access-change-speed), [D23](../specification/appendices/decisions.md#d23-groups-and-teams) and [D24](../specification/appendices/decisions.md#d24-individual-record-sharing).
+**Needs:** Phase 2.
 
 **Outcome:** One permission vocabulary and test catalogue protects database rows and every server surface.
 
@@ -131,7 +131,9 @@ Build:
 
 - Permission, role, assignment, team/group and application-access contracts.
 - Canonical PostgreSQL allow/refuse function for row operations.
-- Server Access library for files, caches, search, connections, workflows, interfaces and assistant tools.
+- Server Access library for files, caches, search, connections, workflows and interfaces.
+- Controlled non-administrative trailing wildcards expanded and fingerprinted at role publication.
+- Multiple team memberships per organisation account and within-organisation direct record sharing to an account or team with field allowlists.
 - Access-version ownership and revocation path.
 - Field-level response filtering where specified.
 - Source-authoritative grant evaluation that can be called through the same local or federated shared-record gateway contract.
@@ -141,13 +143,13 @@ Exit proof:
 
 - Every database case fails through the request role and succeeds through the matching owner control operation.
 - File, cache, subscription and server tests run through real product boundaries, not a table-owner fiction.
-- Removing access has the selected measured effect time.
+- Removing a role, membership, share, or account changes access on the next request.
 
 ## Phase 4 — Module and Record
 
 **Current project epic:** [#42](https://github.com/Abzum-NZ/Abzum-Vortex/issues/42)
 
-**Needs:** Phase 3 and decisions [D06–D10](../specification/appendices/decisions.md#d06-attachment-type-policy).
+**Needs:** Phase 3.
 
 **Outcome:** Builders can install modules and people can safely create, change, delete and restore records with all field and relationship rules enforced.
 
@@ -163,14 +165,14 @@ Build:
 Exit proof:
 
 - CRM records pass create/change/conflict/delete/restore tests.
-- Required-link, cascade, uniqueness and multi-currency choices behave exactly as decided.
+- Parent deletion is refused for unresolved required links except explicit dependent-child soft-delete; soft-deleted unique values remain reserved; mixed-currency totals refuse; and incompatible field changes follow add/migrate/switch/retire.
 - A failed save produces no record change, activity entry or event.
 
 ## Phase 5 — Query, Rule and Event
 
 **Current project epic:** [#53](https://github.com/Abzum-NZ/Abzum-Vortex/issues/53)
 
-**Needs:** Phase 4 and [D11](../specification/appendices/decisions.md#d11-event-dispatch-runtime).
+**Needs:** Phase 4.
 
 **Outcome:** Every surface can use one safe query contract; immediate rules run during saves; committed events reach consumers in record order.
 
@@ -187,24 +189,24 @@ Exit proof:
 - Lists, summaries and exports agree on access and filter meaning.
 - Unsafe filters refuse rather than broaden.
 - Duplicate delivery is safe and a later record event never discards or overtakes an earlier blocked event.
-- Normal event handoff and recovery timing meet [D11](../specification/appendices/decisions.md#d11-event-dispatch-runtime).
+- Database-webhook wake-up and scheduled Kestra recovery both deliver from the durable queue without duplication.
 
 ## Phase 6 — Application, Theme and Page
 
 **Current project epic:** [#63](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63)
 
-**Needs:** Phase 5 and decisions [D02](../specification/appendices/decisions.md#d02-publication-boundaries), [D04](../specification/appendices/decisions.md#d04-public-field-approval) and [D05](../specification/appendices/decisions.md#d05-calendar-duration).
+**Needs:** Phase 5.
 
 **Outcome:** Builders can compose and publish complete applications that people can use on desktop and phone.
 
 Build:
 
 - Module bindings, application roles, options, navigation and application resolution.
-- Theme definition, inheritance and legibility checking.
+- Application-contained theme settings, platform-theme binding, inheritance and legibility checking.
 - Six page types, four list arrangements, registered blocks, twelve-column responsive layout and page states.
 - Forms, guided-form drafts, action buttons and public pages.
 - Complete process-pipeline definition, transition gates and visible stage controls. Timed execution comes in Phase 7.
-- Platform Sign-in and Organisation Portal application definitions.
+- Platform Sign-in, Tenant Portal, and Organisation Portal application definitions.
 
 Exit proof:
 
@@ -216,22 +218,22 @@ Exit proof:
 
 **Current project epic:** [#75](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75)
 
-**Needs:** Phases 5 and 6, plus decisions [D11–D13](../specification/appendices/decisions.md#d11-event-dispatch-runtime).
+**Needs:** Phases 5 and 6.
 
-**Outcome:** Durable workflows and pipeline time targets execute through [Kestra](https://kestra.io/docs) while Vortex remains authoritative for business data and access.
+**Outcome:** Durable workflows and pipeline time targets execute with [Kestra](https://kestra.io/docs) authoritative for execution status while Vortex remains authoritative for business data and access.
 
 Build:
 
-- Workflow triggers, base steps, branching, bounded repeats, waits, asks, notifications, schedules, cancellation and run history.
-- Versioned signed callback contract and duplicate-safe step results.
-- [Kestra](https://kestra.io/docs) flow generation, execution start, callback, state reconciliation and operator visibility.
+- Workflow triggers and the governed node catalogue: flow control, bounded queries/loops, record actions, asks/approvals, notifications, email, documents/files, and named connection operations.
+- Refusal of arbitrary SQL, JavaScript, shell, unrestricted expressions, arbitrary network/file operations, and builder-supplied executable nodes.
+- Versioned signed protected-operation contract and duplicate-safe business side effects.
+- [Kestra](https://kestra.io/docs) flow generation, execution start, authoritative status reads, outage display, and operator correlation.
 - Pipeline stage-time targets, events and escalation workflows.
-- Model-assisted step only if [D13](../specification/appendices/decisions.md#d13-model-assisted-workflow-step) selects it; provider execution waits for Phase 9.
 
 Exit proof:
 
 - The qualification and deal-won workflows survive retry, callback duplication, web deployment and [Kestra](https://kestra.io/docs) restart.
-- Every completed, waiting, cancelled and failed run is explainable from Vortex and reconciles to [Kestra](https://kestra.io/docs).
+- Every completed, waiting, cancelled and failed run displays Kestra's current state; Vortex's last-known snapshot is labelled unavailable rather than presented as current during an outage.
 - Phase 7 uses the Phase 6 action, form, page and pipeline contracts rather than inventing replacements.
 
 ## Phase 8 — Search and File
@@ -254,26 +256,24 @@ Exit proof:
 - Attachment configuration uses one decided contract.
 - Deletion, retention, legal hold and restore paths are integrated, not deferred.
 
-## Phase 9 — Connections, Interfaces and Assistant
+## Phase 9 — Connections and Interfaces
 
 **Current project epic:** [#98](https://github.com/Abzum-NZ/Abzum-Vortex/issues/98)
 
-**Needs:** Phases 6–8 and decisions [D13](../specification/appendices/decisions.md#d13-model-assisted-workflow-step) and [D14](../specification/appendices/decisions.md#d14-assistant-provider-and-data-policy).
+**Needs:** Phases 6–8.
 
-**Outcome:** Approved systems, model providers, and registered Vortex clusters can interact through narrow, versioned, monitored operations.
+**Outcome:** Approved systems and registered Vortex clusters can interact through narrow, versioned, monitored operations.
 
 Build:
 
 - Connection types and instances, OAuth lifecycle, secret rotation, outgoing operations, incoming verification, network-address safety, shared retry budgets and health.
 - Versioned interface operations, authentication, duplicate protection, rate limits, compatibility ranges and deprecation.
 - [Federation transport and cluster trust issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157): Vortex cluster directory, signed manifests, request-signing and verification library, replay protection, and version negotiation used by the [federation runtime](../specification/17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
-- Assistant policy, tools, context access, prompt-injection boundaries, structured output, confirmations, transcripts, usage and model-assisted workflow execution if selected.
 
 Exit proof:
 
 - Connection addresses cannot reach unapproved private infrastructure.
 - Incoming and interface writes are safe under replay.
-- Assistant tools cannot exceed the person's direct access or obey instructions found in records.
 - Deprecated interface versions cannot be removed while a protected dependency remains.
 - [Issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157) proves signed two-cluster transport, replay refusal, compatible rolling versions, key rotation, route shutdown, and bounded outage before record-sharing operations use it.
 
@@ -281,7 +281,7 @@ Exit proof:
 
 **Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
-**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy). The sharing architecture and business policy are settled in the specification.
+**Needs:** Phases 6, 8 and 9. The sharing and copy policies are settled in the specification.
 
 **Outcome:** Definitions move without source records, record files move through explicit import/export formats, and approved recipients can use narrowly shared live records without copying them, with the same product behaviour inside one cluster and across clusters.
 
@@ -320,7 +320,7 @@ Exit proof:
 
 **Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
-**Needs:** Every service that stores personal or derived content, plus [D15](../specification/appendices/decisions.md#d15-personal-data-erasure-scope).
+**Needs:** Every service that stores personal or derived content.
 
 **Outcome:** The platform can inventory, find, export, restrict, retain, hold and erase personal data across every active and restored copy.
 
@@ -329,7 +329,7 @@ Build:
 - Data inventory and personal-data discovery.
 - Retention policy preview, scheduling, resumable removal and non-content receipts.
 - Legal holds and approvals.
-- Person-data export and erasure across records, files, search, events, workflows, assistant, activity details, exports, caches and configured connected systems.
+- Organisation-scoped person-data export and erasure across records, files, search, events, workflows, activity details, exports, caches and configured connected systems; global identity closure coordinates every organisation account.
 - Removal-receipt replay during restore.
 
 Exit proof:
@@ -342,17 +342,18 @@ Exit proof:
 
 **Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
-**Needs:** Identity plus usage-producing services and [D16](../specification/appendices/decisions.md#d16-billing-and-limit-enforcement).
+**Needs:** Identity plus usage-producing services.
 
-**Outcome:** Plans, usage, entitlements and [Stripe](https://docs.stripe.com/) billing agree under retries, out-of-order events, payment failure, plan change and limit crossing.
+**Outcome:** Tenant plans, organisation-attributed usage, entitlements, announcements, and [Stripe](https://docs.stripe.com/) billing agree under retries, out-of-order events, payment failure, plan change and limit crossing.
 
 Build:
 
-- Versioned plans and entitlements.
+- Tenant-owned versioned plans and entitlements with organisation usage roll-up.
 - Duplicate-safe usage ledger and reconciliation.
 - [Stripe](https://docs.stripe.com/) checkout/customer portal boundary and signed event processing.
 - Trial, active, past-due, grace, cancellation and suspension behaviour.
-- Warnings, limit decisions, downgrade preview, seat counting and export preservation.
+- Warnings, plan-defined grace, refusal of new consumption after grace, downgrade preview, active-human seat counting, and authorised read/export preservation.
+- Accessible platform, tenant, organisation, and application announcement banners with audience, schedule, severity and dismissibility.
 
 Exit proof:
 
@@ -364,7 +365,7 @@ Exit proof:
 
 **Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
-**Needs:** Phases 1–12 and decisions [D21](../specification/appendices/decisions.md#d21-recovery-objectives) and [D22](../specification/appendices/decisions.md#d22-performance-budgets).
+**Needs:** Phases 1–12.
 
 **Outcome:** The complete platform can be deployed, observed, supported, recovered and released against measured promises.
 
@@ -373,12 +374,12 @@ Build and prove:
 - Measures, alerts, incident records and tested runbooks from [operations](../specification/19-operations-backup-and-recovery.md).
 - Independent encrypted backup, scheduled restore, workflow reconciliation, file integrity and privacy-removal replay.
 - Secret inventory and rotation drills.
-- Full separation, accessibility, performance, load, failure and recovery acceptance.
+- Full separation, accessibility, measured performance, load, failure and recovery acceptance. Performance findings create work but never block a release by themselves.
 - Production release checklist, change record, support boundary and customer communication path.
 
 Exit proof:
 
-- Recovery meets the decided objectives.
+- Restore evidence meets the one-hour recovery-point and eight-hour recovery-time objectives.
 - No blocking decision, unresolved reference, critical alert, untested migration or failed acceptance case remains.
 - The release candidate is traceable from specification and decision through issue, code, migration, evidence, deployment and runbook.
 
@@ -395,4 +396,4 @@ The current [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1
 7. Assign the existing Priority values before relying on the Prioritized backlog view; filter the Bugs view; populate roadmap dates only after scheduling; use Iteration only when work is actually planned.
 8. Update or supersede outdated [bootstrap issue #1](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1), clarify [continuous-integration issue #17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17), close or rescope [#132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132), and update [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) from its recorded decisions.
 
-Project mutations should follow the approved [foundation decisions](../specification/appendices/decisions.md#foundation-decisions--decide-before-phase-1) so issue wording does not get rewritten twice.
+Project mutations should follow the current specification and keep the decision register limited to genuinely open business choices.

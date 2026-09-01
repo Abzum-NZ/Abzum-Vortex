@@ -40,7 +40,7 @@ The database function, permission vocabulary, and shared test cases are canonica
 
 ### Organisation roles
 
-An organisation role grants permissions that apply across the organisation, such as managing members, billing, definitions, connections, privacy work, or all records of a named module.
+An organisation role grants permissions that apply across one organisation, such as managing members, definitions, connections, privacy work, or all records of a named module. Tenant structure and billing use separate tenant permissions and never arrive through an organisation role.
 
 ### Application roles
 
@@ -61,7 +61,9 @@ Permissions use permanent names, not display labels. A name identifies the area,
 - `application.sales-hub.open`
 - `application.sales-hub.action.convert-lead`
 
-Unknown names are refused at publication and at runtime. Whether controlled wildcard grants are allowed remains [Decision D03](appendices/decisions.md#d03-permission-wildcards).
+Unknown names are refused at publication and at runtime. A role may use a controlled trailing wildcard only for a named module or application's non-administrative permissions, for example `module.crm.contact.*`. A global `*` is invalid. Wildcards cannot cover tenant administration, organisation administration, security, billing, privacy, export, or sharing administration.
+
+Publishing a role resolves each wildcard against the current permission catalogue and records the catalogue fingerprint and expanded permission identifiers. A permission added later is not silently granted; the role must be reviewed and published again.
 
 ## Record visibility
 
@@ -72,11 +74,17 @@ A record scope may include:
 - All records the role can access.
 - Records owned by the person.
 - Records owned by a named team to which the person belongs.
-- Records explicitly shared with the organisation account or one of its teams only if [D24](appendices/decisions.md#d24-individual-record-sharing) includes direct record sharing.
+- Records explicitly shared with the organisation account or any of its teams.
 - Records reachable through an approved relationship from another visible record.
 - A saved, validated condition defined by the application.
 
 The scope is translated into database conditions. Records outside it must not be fetched and then hidden afterward.
+
+### Direct record sharing inside one organisation
+
+An authorised person may share one record directly with one organisation account or one team in the same organisation. The share has explicit readable and changeable field allowlists, optional expiry, grantor, recipient, reason, state, and activity history. A changeable field must also be readable.
+
+The grantor must hold `record.share`, must be able to read every shared field, and must be able to change every changeable field. A direct share cannot grant delete, restore, export, re-share, ownership, role administration, or any permission the grantor does not hold. Team membership is evaluated on every request. Revocation, expiry, suspension, or team removal takes effect on the next request. Directly shared records appear in ordinary lists and search only where the receiving account also has application access and the page supports that record type.
 
 ## Field access
 
@@ -150,24 +158,26 @@ Public access is not a role shortcut. A [public page or interface](12-connection
 - Public create and update operations accept only explicitly listed fields and run validation, rules, rate limits, file checks, and abuse protection.
 - Public operations do not reveal whether a private record exists unless the published operation requires that result.
 
-The final business policy for public fields is [Decision D04](appendices/decisions.md#d04-public-field-approval).
+Public create and update field lists are checked against the same `public_display` choice; an operation cannot make a field public by naming it alone.
 
 ## Access-change speed
 
 Role, organisation-account, team, sharing, and public-policy changes increase an organisation access version. Every cached access answer includes that version. A request with an old version is recalculated.
 
-The platform must define and test the maximum time before a removal takes effect. The options are in [Decision D17](appendices/decisions.md#d17-access-change-speed).
+Access removal takes effect on the next request. Long-running work rechecks access before every protected side effect, and subscriptions close or re-authorise when their access version changes.
 
 ## Administration safeguards
 
 - A person cannot grant a permission they do not hold unless a separately authorised owner-recovery process is used.
-- The last active organisation owner cannot remove or demote themselves until another owner is active.
+- The last active tenant administrator and the last active organisation administrator cannot remove or demote themselves until a replacement is active.
 - High-impact changes require recent sign-in confirmation.
-- Role, organisation-account, public-access, connection-secret, export, retention, and billing changes are written to [activity history](14-activity-privacy-and-retention.md).
+- Tenant-administrator, hierarchy, role, organisation-account, team, direct-share, public-access, connection-secret, export, retention, billing, and announcement changes are written to [activity history](14-activity-privacy-and-retention.md).
 
 ## Acceptance examples
 
 - A person who can open a list but lacks record visibility never receives the hidden rows from the database.
+- A direct share to any one of an account's teams grants only the named fields, and removing the account from that team removes access on the next request.
+- A tenant administrator without a local organisation account and local role cannot read that organisation's records.
 - Removing a role makes previously cached permission answers unusable.
 - A page hidden in navigation remains protected when its address is entered directly.
 - A public page cannot display a field merely because the field is not classified as personal data.

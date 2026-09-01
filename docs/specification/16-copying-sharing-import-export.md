@@ -20,9 +20,9 @@ flowchart TD
 
 ## Definition packages
 
-A package contains published [root definitions](03-composition-and-publication.md#definition-ownership), a manifest, dependency ranges, stable identifiers, source version, publisher, content fingerprint, required capabilities, and installation notes.
+A package contains published [modules or applications](03-composition-and-publication.md#definition-ownership-and-versions), a manifest, dependency ranges, stable identifiers, source version, publisher, content fingerprint, required capabilities, and installation notes.
 
-A package never contains organisation records, organisation accounts, secrets, access tokens, private files, billing identifiers, assistant conversations, activity history, or live connection instances.
+A package never contains organisation records, organisation accounts, secrets, access tokens, private files, billing identifiers, activity history, or live connection instances.
 
 ## Copying between organisations
 
@@ -34,7 +34,7 @@ Copying creates drafts with new organisation ownership. Before creation, the pla
 - Identifier collisions and proposed remapping.
 - Connection instances, secrets, public addresses, organisation-specific recipients, and file references that will be cleared.
 
-The copy does not publish automatically. Missing dependencies must be installed, mapped, replaced, or explicitly removed before validation. The default policy and handling of missing optional features is [Decision D19](appendices/decisions.md#d19-cross-organisation-copy-policy).
+The copy is always an incomplete draft and never publishes automatically. Every missing dependency must be installed, mapped to a compatible local dependency, or explicitly removed with its affected components. Validation and publication remain blocked until the dependency report is empty.
 
 ## Gallery
 
@@ -117,7 +117,7 @@ When a source record changes, the database evaluates whether it still matches th
 
 Cross-organisation grants use explicit action, readable-field, and changeable-field allowlists: anything not named is refused. Changeable fields are a subset of readable fields, and only actions published as shareable by the source definition may be selected. Sensitive fields are unavailable in the first release. Export is separately allowed or refused, defaults to refused, and is part of both organisations' approval fingerprint. Broad `collaborative` or `full_edit` levels are not grant data.
 
-A recipient cannot grant the source record, its reference, a shared query, or a live result to a third organisation. A new live recipient requires a new direct grant from the original source. Vortex refuses a grant whose proposed source does not own the record and prevents shared records from entering public pages, interfaces, connections, workflows, assistant context, or recipient-owned bulk work.
+A recipient cannot grant the source record, its reference, a shared query, or a live result to a third organisation. A new live recipient requires a new direct grant from the original source. Vortex refuses a grant whose proposed source does not own the record and prevents shared records from entering public pages, interfaces, connections, workflows, or recipient-owned bulk work.
 
 An approved export is intentionally different from live re-sharing: it creates a downloaded copy outside Vortex control. The approval screen must state that revoking the grant cannot recall a file already downloaded and that the recipient becomes responsible for its permitted use, storage, onward disclosure, and deletion. If that transfer is unacceptable, export must remain refused.
 

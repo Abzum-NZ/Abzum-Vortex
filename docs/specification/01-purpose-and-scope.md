@@ -4,7 +4,7 @@
 
 ## Purpose
 
-[Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex) lets an organisation describe its business data, build working applications around that data, and automate work without creating a separate software product for every application.
+[Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex) lets a tenant operate one or more organisations, describe their business data, build working applications around that data, and automate work without creating a separate software product for every application.
 
 The platform separates three concerns:
 
@@ -41,11 +41,11 @@ An organisation can:
 The first complete release includes:
 
 - A shared platform serving multiple organisations while keeping each organisation's information separate.
+- Tenant administration for one or more organisations arranged in a hierarchy, without automatic access to their business data.
 - A builder for modules, applications, pages, forms, rules, workflows, reports, connections, and access roles.
 - Published versions so people use a known, validated configuration.
 - Web experiences that work on desktop and phone.
 - Public pages and programmable interfaces where an organisation explicitly enables them.
-- An optional assistant that follows the same access rules as the person using it.
 - Plans, usage measurement, billing, export, retention, activity history, and recovery.
 - Governed cross-organisation record sharing with the same product behaviour whether the organisations are in one cluster or different clusters.
 
@@ -57,6 +57,7 @@ The first complete release does not include:
 - Automatic sharing of records, definitions, files, or learned information between organisations.
 - Replicating shared records into recipient-cluster storage or directly connecting customer databases. Cross-cluster access uses the approved [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 - A marketplace in which unreviewed packages become automatically trusted.
+- Artificial-intelligence assistants, model-generated work, autonomous agents, and model-assisted workflow steps.
 
 ## Product principles
 

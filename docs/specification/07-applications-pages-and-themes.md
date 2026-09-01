@@ -18,7 +18,7 @@ flowchart TD
     APP --> ASSISTANT[Assistant settings]
 ```
 
-All these application components are published together under the [application root definition](03-composition-and-publication.md#definition-ownership). A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
+All these application components are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
 
 ## Application definition
 
@@ -57,7 +57,7 @@ The application supports six page types:
 | Guided form | Collect one submission through two to twenty short steps. |
 | Public | Show approved public content or submit one narrowly defined public form. |
 
-A list can use table, board, calendar, or summary arrangement. Board movement calls a named action and rechecks its permission. Calendar placement uses date or date-time fields and follows [Decision D05](appendices/decisions.md#d05-calendar-duration).
+A list can use table, board, calendar, or summary arrangement. Board movement calls a named action and rechecks its permission. Each calendar page explicitly selects start/end fields or a start field plus a whole-number duration field and unit; it never guesses missing duration meaning.
 
 The ordinary list, detail, search-result, report, dashboard-block, and action components can display a [shared record](10-queries-reports-search.md#shared-record-reads). They show its source organisation and only capabilities returned by the shared-record gateway. A shared dashboard block names one source organisation and grant; it cannot combine source-owned and recipient-owned values into one result. Create forms, offline pages, and recipient-owned bulk work do not accept live shared records in the first release.
 
@@ -101,7 +101,7 @@ Public pages use a deliberately smaller block list and may submit only one publi
 
 ## Themes
 
-A theme is a separately published root definition containing approved design values rather than arbitrary style code.
+A theme is either design values contained in an application version or a platform theme selected from the platform release catalogue. It is never a separate customer-managed publication.
 
 It covers:
 
@@ -112,7 +112,7 @@ It covers:
 - Light and dark appearances where supported.
 - Default density and phone behaviour.
 
-An organisation may bind an approved theme to an application and change only the values the theme exposes. Themes cannot hide focus, lower required contrast, insert scripts, fetch remote code, or override field and permission meaning.
+An organisation may choose a platform theme or edit the theme settings exposed by its application draft. The resulting values publish with the application. Themes cannot hide focus, lower required contrast, insert scripts, fetch remote code, or override field and permission meaning.
 
 ## Accessibility and responsive behaviour
 

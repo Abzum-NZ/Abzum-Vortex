@@ -1,6 +1,6 @@
 # 12. Connections and programmable interfaces
 
-[Previous: Files and attachments](11-files-and-attachments.md) · [Specification index](README.md) · Next: [Assistant and model-assisted work](13-assistant.md)
+[Previous: Files and attachments](11-files-and-attachments.md) · [Specification index](README.md) · Next: [Activity history, privacy and retention](14-activity-privacy-and-retention.md)
 
 ## Two integration surfaces
 
@@ -20,7 +20,7 @@ flowchart LR
 
 ## Connection types and connection instances
 
-A published **connection type** defines:
+A platform-catalogue **connection type** defines:
 
 - Human-readable purpose and provider.
 - Authentication method and secret fields.
@@ -38,7 +38,7 @@ Password-like keys and [OAuth 2.0](https://oauth.net/2/) grants are created thro
 ## Outgoing call safety
 
 - A workflow can call only a named operation from a granted connection instance.
-- The destination host comes from the published allowlist, not from record or model output.
+- The destination host comes from the platform-catalogue allowlist, not from record output.
 - Addresses are revalidated after redirects and name resolution to prevent access to loopback, link-local, private infrastructure, metadata services, and unapproved ports.
 - Requests have bounded time, size, redirects, attempts, and response parsing.
 - The connection retry and workflow retry share one total attempt budget so they do not multiply unexpectedly.
@@ -49,11 +49,11 @@ Password-like keys and [OAuth 2.0](https://oauth.net/2/) grants are created thro
 - The boundary verifies signature, timestamp, content type, size, and source policy before parsing business content.
 - A provider message identifier or deterministic checksum prevents duplicate workflow starts for the selected retention period.
 - Verification failure returns a neutral response and does not reveal organisation configuration.
-- Incoming content is untrusted input and cannot select an arbitrary workflow, connection, destination, permission, or model tool.
+- Incoming content is untrusted input and cannot select an arbitrary workflow, connection, destination, or permission.
 
 ## Programmable interfaces
 
-A published **interface** contains named operations. Each operation declares:
+An application-contained **interface** contains named operations and publishes with its application. Each operation declares:
 
 - Stable operation identifier and description.
 - Input and output shapes.
@@ -85,7 +85,7 @@ stateDiagram-v2
     Supported --> Supported: compatible addition
 ```
 
-- An interface version has a permanent public identifier.
+- An interface version has a permanent public identifier and is served by a specific published application version.
 - Compatible changes may add optional input or output fields without changing existing meaning.
 - Removing, renaming, requiring, narrowing, or changing meaning creates a new major version.
 - Applications and external clients record the version range they accept.

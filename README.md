@@ -12,8 +12,8 @@ apart from every other organisation's.
 
 | Document | Where |
 |---|---|
-| Platform Specification 2.0 review draft | [docs/specification/README.md](docs/specification/README.md) |
-| Revised Build Plan 2.0 review draft | [docs/build-plan/README.md](docs/build-plan/README.md) |
+| Platform Specification 2.0 | [docs/specification/README.md](docs/specification/README.md) |
+| Build Plan 2.0 | [docs/build-plan/README.md](docs/build-plan/README.md) |
 | Open business decisions | [docs/specification/appendices/decisions.md](docs/specification/appendices/decisions.md) |
 | Coverage of the earlier specification and plan | [docs/specification/appendices/traceability.md](docs/specification/appendices/traceability.md) |
 | Project board | [Vortex GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2) |
@@ -127,9 +127,9 @@ as applying migrations. One is product. The other is plumbing.
 
 ## How a change reaches production
 
-> **Under review:** The flow below describes the current repository setup. The required pre-merge
-> database check is not yet settled; see [Decision D20](docs/specification/appendices/decisions.md#d20-pre-merge-database-testing)
-> and [Delivery environments, database changes and testing](docs/specification/18-delivery-and-testing.md).
+This flow is the approved delivery policy. Pull requests do not start a database; database migrations
+and access tests run after merge to `testing` and must pass before that revision can be promoted to
+`main`. See [Delivery environments, database changes and testing](docs/specification/18-delivery-and-testing.md).
 
 ```text
 feature branch ──PR──▶ testing ──PR──▶ main
@@ -140,8 +140,8 @@ feature branch ──PR──▶ testing ──PR──▶ main
 
 - Vercel builds, deploys, and gates. Its Git integration builds every pull request and every branch.
   Branch protection on `testing` and `main` requires one check before a merge: `Vercel`.
-- The build runs the checks before it builds: types, linting, the package boundary rules and unit
-  tests. A failing check fails the build, so the change cannot merge and gets no preview until
+- The build runs formatting, types, linting, package-boundary, unit, contract and build checks without
+  a database. A failing check fails the build, so the change cannot merge and gets no preview until
   someone fixes it. We accept that cost deliberately, to run one system rather than two.
 - **Nothing runs on GitHub Actions, and nothing stores a credential there.** Cut a release with
   `gh release create --generate-notes`, which needs no workflow.

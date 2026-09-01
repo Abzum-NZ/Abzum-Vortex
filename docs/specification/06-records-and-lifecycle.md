@@ -65,7 +65,7 @@ Reference numbers are issued inside the save transaction from an organisation-an
 
 Uniqueness applies within the record type's storage scope. Normalised comparison rules are defined by field type. A database constraint or equivalent transaction-safe mechanism is required; a pre-save query alone is insufficient.
 
-The treatment of soft-deleted values and restoration conflicts is [Decision D10](appendices/decisions.md#d10-uniqueness-and-restoration).
+A soft-deleted record continues to reserve every unique value so it can be restored without stealing a value from a newer record. The reservation is released only after permanent removal. A new create or change that tries to use a reserved value is refused with a safe explanation that an archived record holds it; the response does not reveal hidden record content.
 
 ## Deletion and restoration
 
@@ -87,7 +87,7 @@ stateDiagram-v2
 - Soft-deleted records are excluded from ordinary reads, search, totals, choices, and relationship navigation.
 - A deleted record and its directly owned files remain recoverable for the configured recovery period.
 - Relationship deletion behaviour from [modules, fields and relationships](05-modules-fields-and-relationships.md) is applied in a deterministic order.
-- Restore revalidates uniqueness, required relationships, access, and the current published record definition.
+- Restore revalidates required relationships, access, and the current published record definition. Its unique values remain reserved throughout recovery, so restoration cannot conflict with a value accepted during the recovery window.
 - Permanent removal follows [privacy and retention](14-activity-privacy-and-retention.md) and records an irreversible-removal receipt without retaining the removed business content.
 
 ## Bulk changes
@@ -119,7 +119,7 @@ Soft-deleting a shared record removes it from recipient queries through the norm
 - Two people changing the same version cannot silently overwrite one another.
 - A failed save produces neither a changed record nor a committed event.
 - A record outside the person's visibility scope is never fetched for display or export.
-- Restoring a record that conflicts with a current unique value follows the selected [restoration policy](appendices/decisions.md#d10-uniqueness-and-restoration).
+- A soft-deleted record's unique value cannot be reused until permanent removal releases it.
 - A bulk operation reports allowed, refused, invalid, conflict, and completed results separately.
 - Approving a sharing grant does not create a copy of the shared records in the target organisation.
 - A soft-deleted record is not visible through a cross-organisation grant.
