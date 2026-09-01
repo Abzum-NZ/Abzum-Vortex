@@ -60,7 +60,7 @@ The plan must define whether invited, active, suspended, service, and external o
 
 ## Shared-record usage
 
-Shared-record work records separate source and recipient usage events tied by one correlation identifier. The draft follows [D36 option A](appendices/decisions.md#d36-shared-record-usage-allocation): recipient seats and gateway requests count to the recipient organisation, while the source query, action, stored file, and any network delivery count to the source organisation. The rule is the same for local and remote routes, and the same operation is not counted twice in one usage category.
+Shared-record work records separate source and recipient usage events tied by one correlation identifier. Approved [D36 option A](appendices/decisions.md#d36-shared-record-usage-allocation) applies: recipient seats and gateway requests count to the recipient organisation, while the source query, action, stored file, and any network delivery count to the source organisation. The rule is the same for local and remote routes, and the same operation is not counted twice in one usage category.
 
 If either organisation has reached a hard limit for the required work, the request refuses with a stable outcome that states whether the source or recipient limit prevented it. Billing state never turns a refused grant into an allowed one, causes a persistent recipient copy, or reveals a source record's existence.
 

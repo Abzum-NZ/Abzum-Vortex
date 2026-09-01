@@ -102,7 +102,7 @@ The complete fixture suite must prove:
 
 ## Sharing examples
 
-These examples extend the CRM and Sales Hub fixtures to demonstrate the approved local-and-cross-cluster [shared-record access](../04-access-and-permissions.md#shared-record-access) architecture. Implementation remains blocked by open business-policy decisions [D26–D28](decisions.md#d26-cross-organisation-sharing-approval) and [D32–D36](decisions.md#d32-recipient-audience).
+These examples extend the CRM and Sales Hub fixtures to demonstrate the approved local-and-cross-cluster [shared-record access](../04-access-and-permissions.md#shared-record-access) architecture. Recipient discovery and usage allocation are approved in [D35](decisions.md#d35-finding-a-recipient-organisation) and [D36](decisions.md#d36-shared-record-usage-allocation). Implementation remains blocked by open business-policy decisions [D26–D28](decisions.md#d26-cross-organisation-sharing-approval) and [D32–D34](decisions.md#d32-recipient-audience).
 
 ### Inter-application sharing
 
@@ -124,6 +124,8 @@ The grant does not let Executive Review use any Service Desk record type, field,
 ### Cross-organisation sharing with filter
 
 Organisation A operates a Sales Hub application. Organisation B is a partner. Organisation A shares deals that are tagged for partner collaboration.
+
+An administrator in Organisation B copies its organisation sharing code from the Organisation Portal or sends a signed invitation link. Organisation A uses that exact code or link and confirms Organisation B's approved name and current region before proposing the grant. The lookup reveals no people, roles, applications, records, plan, or billing details.
 
 The proposed grant:
 
@@ -163,6 +165,8 @@ sequenceDiagram
 ```
 
 If both organisations later move into one cluster, the gateway uses its local adapter and the visible result is the same. If Cluster North is unavailable, Organisation B sees “Source organisation temporarily unavailable” and no stored deal list. Revoking the source grant refuses the next request even if Cluster South has not yet received the revocation notice.
+
+Each request creates linked usage entries under approved [D36](decisions.md#d36-shared-record-usage-allocation): Organisation B receives the gateway-request usage, while Organisation A receives the source query, action, file, and any network-delivery usage. The same category is never counted on both entries.
 
 ### Approval workflow for cross-organisation sharing
 

@@ -213,7 +213,7 @@ Federation transports the existing grant, query, action, file, and refusal contr
 
 ### Recipient discovery entry
 
-The draft [D35](decisions.md#d35-finding-a-recipient-organisation) contract stores a one-way fingerprint of the organisation sharing code, permanent organisation identifier, current cluster identifier, approved organisation display name, service region, state, issue and rotation times, and directory signature. A successful exact lookup returns only the approved name, region, and a short-lived proposal address. It returns no people, account, role, application, record, file, plan, or billing information. Rotating the sharing code does not change existing grants because they use the permanent organisation identifier.
+Approved [D35](decisions.md#d35-finding-a-recipient-organisation) stores a one-way fingerprint of the organisation sharing code, permanent organisation identifier, current cluster identifier, approved organisation display name, service region, state, issue and rotation times, and directory signature. A successful exact-code or signed-link lookup returns only the approved name, region, and a short-lived proposal address. It returns no people, account, role, application, record, file, plan, or billing information. Rotating the sharing code does not change existing grants because they use the permanent organisation identifier.
 
 ### Recipient assertion
 

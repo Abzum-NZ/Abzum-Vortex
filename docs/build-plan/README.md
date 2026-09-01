@@ -281,7 +281,7 @@ Exit proof:
 
 **Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
-**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy) and open sharing-policy decisions [D26–D28](../specification/appendices/decisions.md#d26-cross-organisation-sharing-approval) and [D32–D36](../specification/appendices/decisions.md#d32-recipient-audience). The transport and release-scope choices [D29–D31](../specification/appendices/decisions.md#d29-cross-cluster-federation-approach) are approved.
+**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy) and open sharing-policy decisions [D26–D28](../specification/appendices/decisions.md#d26-cross-organisation-sharing-approval) and [D32–D34](../specification/appendices/decisions.md#d32-recipient-audience). The architecture choices [D29–D31](../specification/appendices/decisions.md#d29-cross-cluster-federation-approach), recipient discovery [D35](../specification/appendices/decisions.md#d35-finding-a-recipient-organisation), and usage allocation [D36](../specification/appendices/decisions.md#d36-shared-record-usage-allocation) are approved.
 
 **Outcome:** Definitions move without source records, record files move through explicit import/export formats, and approved recipients can use narrowly shared live records without copying them, with the same product behaviour inside one cluster and across clusters.
 
@@ -292,7 +292,7 @@ Build:
 - Access-owned sharing grants with one explicit scope, recipient application and roles, action/field allowlists, expiry, revocation, and protected approvals selected by [D26](../specification/appendices/decisions.md#d26-cross-organisation-sharing-approval).
 - [Cross-cluster execution issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156): one shared-record gateway with a local adapter and signed remote adapter; source-authoritative query, action, file, revocation, and audit behaviour.
 - Signed duplicate-safe cross-cluster proposal, acceptance, activation receipt, revocation notice, and status reconciliation.
-- Protected recipient discovery and shared-record usage allocation chosen in [D35](../specification/appendices/decisions.md#d35-finding-a-recipient-organisation) and [D36](../specification/appendices/decisions.md#d36-shared-record-usage-allocation).
+- Protected sharing-code or invitation-link recipient discovery from approved [D35](../specification/appendices/decisions.md#d35-finding-a-recipient-organisation), and linked source/recipient usage allocation from approved [D36](../specification/appendices/decisions.md#d36-shared-record-usage-allocation).
 - Dedicated shared lists and record detail, plus source-owned file access, activity, privacy, same-cluster tests, and two-cluster tests.
 - Record import mapping, dry run, duplicate policy, bounded background execution and result report.
 - Access-checked expiring record export.
@@ -305,6 +305,7 @@ Exit proof:
 - Direct approval-record edits cannot activate grants; source revocation takes effect on the next request; sensitive fields, re-sharing, recipient indexing, persistent remote copies, and unapproved export are refused.
 - The same fixture grant passes through both local and remote adapters with the same fields, actions, activity meaning, and stable refusal codes.
 - A lost cross-cluster message reconciles safely; an altered, replayed, expired, incorrectly addressed, or version-incompatible request fails closed.
+- Exact sharing-code or signed-link discovery reveals only the approved organisation name and region; one shared request creates linked source/recipient usage without charging one category twice.
 - Import dry run matches execution.
 - Complete archive restore proves definitions, roles, records, files, workflow state and privacy-removal replay.
 

@@ -75,6 +75,8 @@ Run through ordinary product surfaces:
 28. Stop the source cluster or network and prove the recipient shows temporary unavailability without a stale persisted record or unbounded retry.
 29. Run adjacent supported cluster releases in both source directions, then prove an unsupported version fails with a safe stable error.
 30. Prove cross-cluster record values do not enter recipient database tables, files, search, reports, workflow state, cross-request cache, logs, traces, or grant mirrors.
+31. Probe invalid, rotated, and valid organisation sharing codes and signed links; only an exact active lookup returns the approved organisation name and region, with no directory enumeration or private metadata.
+32. Run the same grant locally and remotely; each request creates linked source and recipient usage entries under [D36](appendices/decisions.md#d36-shared-record-usage-allocation) without counting one category twice.
 
 Every applicable case runs in both directions between two populated organisations in one cluster and in a two-cluster topology. Tests use recognisably different canary values so accidental mixing is visible.
 

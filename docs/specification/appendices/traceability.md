@@ -124,7 +124,7 @@ flowchart LR
 | Dynamic filter executed inside every row rule | Replaced with a choice between published saved conditions or narrower scopes in [D27](decisions.md#d27-filter-grant-condition-complexity). |
 | Cross-organisation sharing as settled first-release scope | Approved as one local-and-cross-cluster product capability in [D31](decisions.md#d31-cross-organisation-sharing-release-scope), while its remaining business policies stay explicit in D26–D28 and D32–D36. |
 | Cross-cluster native protocol selected now | Approved as a signed, versioned, source-authoritative [Vortex Federation API](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters) in [D29](decisions.md#d29-cross-cluster-federation-approach), with no persistent recipient copy under [D30](decisions.md#d30-data-residency-for-shared-records), Phase 9 transport in [issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157), and Phase 10 record execution in [issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156). |
-| Sharing coverage | Added query, cache, file, privacy, activity, identity, recipient-discovery, usage-allocation, and boundary-test requirements through [D36](decisions.md#d36-shared-record-usage-allocation). |
+| Sharing coverage | Added query, cache, file, privacy, activity, identity, recipient-discovery, usage-allocation, and boundary-test requirements through [D36](decisions.md#d36-shared-record-usage-allocation); [D35](decisions.md#d35-finding-a-recipient-organisation) and D36 are now approved. |
 
 ## Completion check
 

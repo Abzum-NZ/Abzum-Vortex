@@ -280,7 +280,7 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 
 ## Sharing and federation decisions
 
-[D29](#d29-cross-cluster-federation-approach), [D30](#d30-data-residency-for-shared-records), and [D31](#d31-cross-organisation-sharing-release-scope) are decided together: the first release provides one sharing experience across clusters, keeps the source cluster authoritative, and stores no persistent record copy in the recipient cluster. [D26–D28](#d26-cross-organisation-sharing-approval) and [D32–D36](#d32-recipient-audience) still block sharing implementation because they decide the business policy inside that architecture.
+[D29](#d29-cross-cluster-federation-approach), [D30](#d30-data-residency-for-shared-records), and [D31](#d31-cross-organisation-sharing-release-scope) are decided together: the first release provides one sharing experience across clusters, keeps the source cluster authoritative, and stores no persistent record copy in the recipient cluster. [D35](#d35-finding-a-recipient-organisation) and [D36](#d36-shared-record-usage-allocation) are also decided. [D26–D28](#d26-cross-organisation-sharing-approval) and [D32–D34](#d32-recipient-audience) still block sharing implementation because they decide the remaining business policy inside that architecture.
 
 ### D26 Cross-organisation sharing approval
 
@@ -411,7 +411,17 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 - **B — Searchable Vortex organisation directory.** Easier discovery, but organisations need listing, visibility, impersonation, and name-collision policies.
 - **C — Operator-mediated setup.** An Abzum operator links the organisations before a grant can be proposed; lowest customer flexibility.
 
-**Draft effect:** [Record sharing](../16-copying-sharing-import-export.md#creating-a-grant) and the [cluster directory](../17-runtime-storage-and-caching.md#cluster-identity-and-discovery) follow A. The sharing code is an identifier, not a secret or permission; recipient approval is still required according to [D26](#d26-cross-organisation-sharing-approval).
+**Status:** Decided.
+
+**Chosen option:** A — Copyable organisation sharing code or signed invitation link.
+
+**Decision owner:** Vijay Tilak.
+
+**Date:** 1 September 2026.
+
+**Reason:** Exact code or link lookup identifies the intended organisation without publishing a searchable customer directory or requiring operator setup. The sharing code is an identifier, not a secret or permission; recipient approval is still required according to [D26](#d26-cross-organisation-sharing-approval).
+
+**Affected links:** [Organisation Portal](../02-people-organisations-and-sign-in.md#organisation-portal), [record sharing](../16-copying-sharing-import-export.md#creating-a-grant), [cluster directory](../17-runtime-storage-and-caching.md#cluster-identity-and-discovery), [recipient discovery contract](data-contracts.md#recipient-discovery-entry), and [experience issue #155](https://github.com/Abzum-NZ/Abzum-Vortex/issues/155).
 
 ### D36 Shared-record usage allocation
 
@@ -421,7 +431,17 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 - **B — Recipient pays all shared-request and delivery usage.** Useful if access is treated as a recipient service, but requires transferring source infrastructure cost.
 - **C — Source pays all sharing usage.** Simple for recipients, but a source can incur unpredictable cost from recipient activity.
 
-**Draft effect:** [Plans, billing and usage](../15-plans-billing-and-usage.md#shared-record-usage) follows A. Limits refuse new remote work with a stable source- or recipient-limit outcome and never broaden access or fall back to copied data.
+**Status:** Decided.
+
+**Chosen option:** A — Each organisation pays for its own work.
+
+**Decision owner:** Vijay Tilak.
+
+**Date:** 1 September 2026.
+
+**Reason:** Option C would remove only the allocation of chargeable work. The recipient must still count and limit its gateway requests for capacity, abuse control, diagnostics, and support, so making the source pay everything does not significantly reduce implementation complexity. Option A also avoids exposing the source to unpredictable recipient-generated cost and applies the same rule to local and remote routes.
+
+**Affected links:** [Plans, billing and usage](../15-plans-billing-and-usage.md#shared-record-usage), [federation efficiency](../17-runtime-storage-and-caching.md#versions-failures-and-efficiency), [Phase 10](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export), and [billing issue #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118).
 
 ## Decision record template
 

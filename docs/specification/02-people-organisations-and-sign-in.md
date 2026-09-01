@@ -82,7 +82,7 @@ Every organisation receives one protected platform application called the **Orga
 - Billing: selected plan, seat use, payment state, invoices, and current [usage](15-plans-billing-and-usage.md).
 - Preferences: approved logo and icon, language, time zone, currency, financial-year start, and date and number formats.
 - Business calendar: working days, working hours, and public or organisation holidays used by [workflows and pipeline targets](09-workflows-and-pipelines.md).
-- Sharing identity: the organisation's protected recipient-discovery setting selected in [D35](appendices/decisions.md#d35-finding-a-recipient-organisation); it reveals no people, applications, roles, records, or billing state.
+- Sharing identity: the copyable organisation sharing code and signed invitation links approved in [D35](appendices/decisions.md#d35-finding-a-recipient-organisation); lookup reveals only the approved organisation name and region, never people, applications, roles, records, or billing state.
 
 An organisation account's language and time-zone preference overrides the organisation default for that person's display in that organisation. An application does not silently override language, time zone, currency, financial year, or business calendar; where an application needs a deliberate alternative, that setting is explicit in its definition and states which calculations it changes.
 
