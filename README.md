@@ -16,13 +16,13 @@ apart from every other organisation's.
 | Build Plan 2.0 | [docs/build-plan/README.md](docs/build-plan/README.md) |
 | Open business decisions | [docs/specification/appendices/decisions.md](docs/specification/appendices/decisions.md) |
 | Coverage of the earlier specification and plan | [docs/specification/appendices/traceability.md](docs/specification/appendices/traceability.md) |
+| Specification-to-GitHub task coverage | [docs/specification/appendices/github-delivery-map.md](docs/specification/appendices/github-delivery-map.md) |
 | Project board | [Vortex GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2) |
-| Earlier Platform Specification (source under review) | [33 chapters and 5 appendices](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4) |
-| Earlier Build Plan (source under review) | [Prerequisites, dependency map and ten phases](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef) |
+| Earlier Platform Specification (superseded source) | [33 chapters and 5 appendices](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4) |
+| Earlier Build Plan (superseded source) | [Prerequisites, dependency map and ten phases](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef) |
 
-The 2.0 specification becomes authoritative when its blocking decisions are approved. Until then,
-conflicting requirements are review items rather than instructions to build. Change the specification
-before changing behaviour, never after.
+Platform Specification 2.0 and Build Plan 2.0 are authoritative. Change the specification before
+changing behaviour, never after.
 
 ## What runs
 
@@ -31,7 +31,7 @@ Three services, and nothing else (Specification, Chapter 24).
 | Service | What it is |
 |---|---|
 | The web application | One Next.js project on Vercel. It serves every organisation, application and page. |
-| The database | One Supabase project. It provides PostgreSQL, sign-in, file storage and live updates. |
+| The database | One Supabase project. It provides PostgreSQL, sign-in, private file storage, content-free live invalidation and a durable queue. |
 | Kestra | A self-hosted Kestra server on a Coolify-managed machine, with its own database. It runs background work. |
 
 **Kestra is not one of the sixteen engines, and nobody using Vortex ever sees it.** Specification

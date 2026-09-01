@@ -48,7 +48,7 @@ flowchart LR
 | 27. Module and record-type definitions | [Modules](../05-modules-fields-and-relationships.md), [Data contracts](data-contracts.md#module-and-record-type-contracts) | Preserved in consolidated contract. |
 | 28. Field and relationship definitions | [Modules](../05-modules-fields-and-relationships.md), [Files](../11-files-and-attachments.md), [Data contracts](data-contracts.md#field-contract) | All types retained; attachment and loaded-option conflicts corrected. |
 | 29. Application, navigation and page definitions | [Applications](../07-applications-pages-and-themes.md), [Data contracts](data-contracts.md) | Components publish with application; six page types retained. |
-| 30. Behaviour definitions | [Forms, actions, rules and events](../08-forms-actions-rules-and-events.md), [Workflows](../09-workflows-and-pipelines.md) | Model step added as an explicit decision; event ordering fixed. |
+| 30. Behaviour definitions | [Forms, actions, rules and events](../08-forms-actions-rules-and-events.md), [Workflows](../09-workflows-and-pipelines.md) | Safe workflow-node catalogue and event ordering retained; model-assisted steps are outside the release. |
 | 31. Access and identity definitions | [People](../02-people-organisations-and-sign-in.md), [Access](../04-access-and-permissions.md), [Data contracts](data-contracts.md#tenant-identity-and-organisation-account-records) | Tenant hierarchy, global identity, separate organisation accounts, application access, access-version ownership, and SQL/server split clarified. |
 | 32. Service definitions | [Themes](../07-applications-pages-and-themes.md#themes), [Files](../11-files-and-attachments.md), [Connections](../12-connections-and-interfaces.md) | Split by service, conflicting attachment contract removed, and AI scope removed. |
 | 33. Caching and request speed | [Runtime services, storage and caching](../17-runtime-storage-and-caching.md#cache-model) | Distributed-cache feasibility corrected; shared static asset exception made explicit. |
@@ -99,6 +99,7 @@ flowchart LR
 | Multi-currency result shape | [Calculations and totals](../05-modules-fields-and-relationships.md#calculations-and-totals) |
 | Soft-delete, uniqueness and restore | [Uniqueness](../06-records-and-lifecycle.md#uniqueness) |
 | Missing concurrency contract | [Record storage contract](data-contracts.md#record-storage-contract) |
+| Per-organisation or name-derived record tables would collide and multiply migrations | [Storage identity and application use](../05-modules-fields-and-relationships.md#storage-identity-and-application-use), [record-table allocation](../17-runtime-storage-and-caching.md#record-table-allocation), and the [storage fixture](../../../testing/fixtures/storage/record-storage-layout.json) |
 | Incomplete fixtures | [Worked examples](worked-examples.md#required-fixture-set) |
 | Model step absent from closed list | [AI excluded from product boundaries](../01-purpose-and-scope.md#product-boundaries) |
 | Assistant safety and retention gaps | Resolved by removing AI functionality from the release in [Product boundaries](../01-purpose-and-scope.md#product-boundaries). |
@@ -111,6 +112,7 @@ flowchart LR
 | Arbitrary field retype conflict | [Field changes after publication](../05-modules-fields-and-relationships.md#field-changes-after-publication) |
 | Unreproducible performance target | [Performance measurements](../20-quality-and-acceptance.md#performance-measurement) |
 | Original Phase 10 too large | [Revised phases 10–13](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export) |
+| Supabase capabilities underused or ambiguously owned | [Supabase capability policy](../17-runtime-storage-and-caching.md#supabase-capability-policy), [local and Testing verification](../18-delivery-and-testing.md#supabase-development-and-verification), and [database platform safeguards](../19-operations-backup-and-recovery.md#database-platform-safeguards) assign Auth, row rules, Queue, Webhooks, Realtime, Storage, tests, advisers and recovery without creating duplicate workflow, server or secret systems. |
 
 ## Contributed sharing-change review
 

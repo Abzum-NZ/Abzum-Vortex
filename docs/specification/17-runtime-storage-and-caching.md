@@ -24,6 +24,38 @@ flowchart LR
     DOPPLER --> KESTRA
 ```
 
+## Supabase capability policy
+
+Vortex uses Supabase as an integrated platform, but each capability has one narrow job. This avoids building replacements for managed database features while keeping deployments, secrets, and business scheduling under their already approved owners.
+
+| Supabase capability | Vortex use | Boundary |
+|---|---|---|
+| [Auth](https://supabase.com/docs/guides/auth) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority and locally verifiable short-lived identity tokens | Organisation roles, teams, application access and grants remain live Vortex data, not token claims. |
+| PostgreSQL and [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) | Authoritative data, transactions, constraints and organisation separation | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. |
+| [Queues](https://supabase.com/docs/guides/queues) | Logged, durable event delivery after a committed save | Queue client functions are server-only and the `pgmq_public` interface is not exposed to browsers. |
+| [Database Webhooks](https://supabase.com/docs/guides/database/webhooks) | Asynchronous low-latency wake-up after durable work exists | A webhook is a hint, not delivery proof; the queue and scheduled Kestra recovery remain authoritative. |
+| [Realtime Broadcast](https://supabase.com/docs/guides/realtime/authorization) | Private, content-free invalidation for open components | Clients reload through the authorised query path; business values are never broadcast. |
+| [Storage](https://supabase.com/docs/guides/storage) | Private objects, resumable uploads and short-lived signed transfers | Business files are never public; Storage row policies and File-service checks both apply. |
+| [CLI, database tests and linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) | Reproducible local database, migration checks, pgTAP tests and database lint | The shared Testing project remains the authoritative platform and separation test. Kestra alone migrates Testing and Production. |
+| [Managed backups](https://supabase.com/docs/guides/platform/backups) and database advisers | Provider recovery layer and reviewed security/performance findings | Independent encrypted backups, restore drills and reviewed migrations remain required. Adviser suggestions never change production automatically. |
+
+Supabase Cron is not a second workflow system: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
+
+```mermaid
+flowchart LR
+    AUTH[Supabase Auth] --> WEB[Vercel server]
+    WEB --> DB[PostgreSQL plus row rules]
+    WEB --> STORE[Private Storage]
+    DB --> Q[Logged Supabase Queue]
+    DB -->|wake-up hint| HOOK[Database Webhook]
+    HOOK --> WEB
+    Q --> WEB
+    DB -->|content-free| LIVE[Private Realtime Broadcast]
+    LIVE --> BROWSER[Open component]
+    BROWSER -->|authorised reload| WEB
+    K[Kestra schedules and migrations] --> WEB
+```
+
 ## Platform services inside the codebase
 
 The codebase is divided into sixteen named services. These are package and ownership boundaries, not sixteen separately deployed servers.
@@ -59,6 +91,31 @@ Each service owns its tables and public contract. Another service calls that con
 - Every database transaction establishes global identity or system actor, tenant, organisation account, organisation, application, and correlation context before reading organisation data. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
+
+### Record-table allocation
+
+The Record service maintains a protected storage catalog. One `storage_contract_id` maps to one physical business-record table in a cluster. Application bindings and organisation installations reuse that mapping; they do not create tables.
+
+```mermaid
+flowchart LR
+    DEF[Record-type definition] -->|storage_contract_id| CATALOG[Record storage catalog]
+    CATALOG --> TABLE[record_data.rt_storage_token]
+    TABLE --> SCOPE{Declared storage scope}
+    SCOPE -->|organisation_shared| ORG[Keyed by organisation_id]
+    SCOPE -->|application_contained| APP[Keyed by organisation_id and application_root_id]
+    FIELD[Permanent field_id] --> COLUMN[f_storage_token column]
+    COLUMN --> TABLE
+```
+
+- The table is allocated for a record-type storage lineage, not for each organisation or application. A shared definition package therefore requires one table migration per cluster rather than one migration for every installation.
+- A table has fixed system columns from the [record storage contract](appendices/data-contracts.md#record-storage-contract) and one typed business column for each field in the active compatible lineage. Optional fields added by a compatible release are nullable for records still governed by an earlier revision.
+- Physical names use immutable, collision-checked storage tokens recorded in the catalog. Human names and builder keys may appear in database comments and operational tools but never determine table or column identity.
+- An independently created or structurally forked record type receives a new storage-contract identity and table. A package install may preserve a source storage identity only when the signed package lineage and fingerprint validate.
+- Organisation-shared rows use `organisation_id` as their data boundary. Application-contained rows additionally require `application_root_id`. Unique constraints and lookup indexes include the complete applicable scope before a business value.
+- A relationship always repeats and enforces `organisation_id`. Two application-contained endpoints must also have the same `application_root_id`. An application-contained record may link to an organisation-shared record in the same organisation. A sharing grant never creates a stored cross-organisation or cross-application relationship.
+- Database migrations resolve tables and fields through the catalog. Runtime requests provide stable definition identifiers and never accept a physical table or column name from a browser, definition author, workflow, interface caller, or federation peer.
+
+Creating a separate schema or table set for every organisation or application is refused because it would multiply migrations, indexes, row restrictions, backups, and operational checks without improving isolation. Organisation separation is enforced by row restrictions and the complete scope keys, while structurally different definitions remain physically separate through their storage-contract identities.
 
 ## Vortex federation between clusters
 
@@ -140,7 +197,7 @@ Matching schemas make contract validation and query translation easier, but they
 
 ## Event dispatch without a permanent web worker
 
-The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry and a durable [Supabase Queue](https://supabase.com/docs/guides/queues) message in the same database transaction. An asynchronous [database webhook](https://supabase.com/docs/guides/database/webhooks) wakes a protected Vercel dispatcher route. The dispatcher claims a bounded batch, honours per-record sequence, and starts [Kestra executions](https://kestra.io/docs/workflow-components/execution) for matched workflows.
+The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry and a message to a logged durable [Supabase Queue](https://supabase.com/docs/guides/queues) in the same database transaction. Queue access is server-only and is not added to an exposed Data API schema. An asynchronous [database webhook](https://supabase.com/docs/guides/database/webhooks) wakes a protected Vercel dispatcher route. The dispatcher claims a bounded batch, honours per-record sequence, and starts [Kestra executions](https://kestra.io/docs/workflow-components/execution) for matched workflows.
 
 A scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the platform dispatcher endpoint; it does not read the database. This recovers messages after a failed webhook or web deployment, while the database webhook provides the normal wake-up path.
 

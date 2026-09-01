@@ -55,6 +55,14 @@ Every change follows an expand-and-contract sequence:
 
 Generated module storage changes use the same mechanism. No web request performs schema changes.
 
+### Supabase development and verification
+
+- Developers use the [Supabase CLI local stack and migrations](https://supabase.com/docs/guides/local-development/cli-workflows) for reproducible database work. The repository seed contains only synthetic test data.
+- Each database change includes [pgTAP database tests](https://supabase.com/docs/guides/database/testing) for its constraints, functions and row rules, and runs [database linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) before review.
+- Local tests prove fast database behaviour; they do not replace the linked Testing Supabase project. After merge to `testing`, Kestra applies the migration and runs the authoritative request-role, platform-service, and organisation-separation suite there.
+- The Testing environment may use the [Index Advisor](https://supabase.com/docs/guides/database/extensions/index_advisor) against representative queries. A person reviews each suggestion and records an ordinary migration; no adviser creates a Production index directly.
+- Preview builds remain database-free. They validate migration files and contracts without receiving Testing or Production database credentials.
+
 ## Test layers
 
 The build separates tests by what they prove:
@@ -86,6 +94,7 @@ Before promotion, Testing runs a two-cluster matrix with the new release against
 
 - The documented branch flow and actual required checks agree.
 - A migration that works only when the new web version deploys first is refused.
+- A migration passes local pgTAP and database lint before the same tests run through Kestra against the shared Testing project.
 - An access-rule test failure after merge to Testing prevents promotion to `main`; it does not retroactively fail the already merged feature pull request.
 - Testing cannot send a live customer email, charge a live payment method, or call a production connection.
 - A released revision can be traced from Git commit through migration, test, deployment, and verification records.

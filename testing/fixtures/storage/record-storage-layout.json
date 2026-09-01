@@ -1,0 +1,86 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "storage_layout",
+  "root_id": "storage_layout_complete_examples",
+  "key": "vortex.storage.complete_examples",
+  "version": "1.0.0",
+  "body": {
+    "owning_service": "record",
+    "physical_schema": "record_data",
+    "allocation_unit": "storage_contract_id",
+    "table_name_rule": "rt_<immutable_storage_token>",
+    "field_name_rule": "f_<immutable_field_token>",
+    "uses_display_names": false,
+    "system_columns": [
+      "organisation_id",
+      "module_root_id",
+      "record_type_id",
+      "storage_contract_id",
+      "record_id",
+      "application_root_id",
+      "definition_revision",
+      "owner_organisation_account_id",
+      "lifecycle_state",
+      "concurrency_number",
+      "created_at",
+      "created_by",
+      "updated_at",
+      "updated_by",
+      "deleted_at",
+      "deleted_by",
+      "removal_due_at"
+    ],
+    "scope_keys": {
+      "organisation_shared": ["organisation_id"],
+      "application_contained": ["organisation_id", "application_root_id"]
+    },
+    "tables": [
+      {"record_type":"vortex.crm.organisations:company","storage_contract_id":"srt_00000001","table":"record_data.rt_srt_00000001","storage_scope":"organisation_shared"},
+      {"record_type":"vortex.crm.people:contact","storage_contract_id":"srt_00000002","table":"record_data.rt_srt_00000002","storage_scope":"organisation_shared"},
+      {"record_type":"vortex.crm.people:lead","storage_contract_id":"srt_00000003","table":"record_data.rt_srt_00000003","storage_scope":"application_contained"},
+      {"record_type":"vortex.crm.opportunities:opportunity","storage_contract_id":"srt_00000004","table":"record_data.rt_srt_00000004","storage_scope":"application_contained"},
+      {"record_type":"vortex.crm.opportunities:opportunity_contact","storage_contract_id":"srt_00000005","table":"record_data.rt_srt_00000005","storage_scope":"application_contained"},
+      {"record_type":"vortex.crm.activities:activity","storage_contract_id":"srt_00000006","table":"record_data.rt_srt_00000006","storage_scope":"application_contained"},
+      {"record_type":"vortex.crm.tags:tag","storage_contract_id":"srt_00000007","table":"record_data.rt_srt_00000007","storage_scope":"organisation_shared"},
+      {"record_type":"vortex.crm.tags:record_tag","storage_contract_id":"srt_00000008","table":"record_data.rt_srt_00000008","storage_scope":"organisation_shared"},
+      {"record_type":"vortex.service_desk.sla:business_calendar","storage_contract_id":"srt_00000009","table":"record_data.rt_srt_00000009","storage_scope":"organisation_shared"},
+      {"record_type":"vortex.service_desk.sla:service_level","storage_contract_id":"srt_00000010","table":"record_data.rt_srt_00000010","storage_scope":"organisation_shared"},
+      {"record_type":"vortex.service_desk.cases:case","storage_contract_id":"srt_00000011","table":"record_data.rt_srt_00000011","storage_scope":"application_contained"},
+      {"record_type":"vortex.service_desk.cases:case_comment","storage_contract_id":"srt_00000012","table":"record_data.rt_srt_00000012","storage_scope":"application_contained"},
+      {"record_type":"vortex.service_desk.knowledge:article","storage_contract_id":"srt_00000013","table":"record_data.rt_srt_00000013","storage_scope":"application_contained"},
+      {"record_type":"vortex.service_desk.knowledge:article_case","storage_contract_id":"srt_00000014","table":"record_data.rt_srt_00000014","storage_scope":"application_contained"}
+    ],
+    "application_roots": [
+      {"organisation_id":"org_fixture_alpha","application_definition":"vortex.app.crm","application_root_id":"app_root_alpha_crm","display_name":"CRM"},
+      {"organisation_id":"org_fixture_alpha","application_definition":"vortex.app.service_desk","application_root_id":"app_root_alpha_service_desk","display_name":"Service Desk"},
+      {"organisation_id":"org_fixture_beta","application_definition":"vortex.app.crm","application_root_id":"app_root_beta_crm","display_name":"CRM"}
+    ],
+    "row_examples": [
+      {"record_type":"vortex.crm.organisations:company","record_id":"company_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":null,"physical_table":"record_data.rt_srt_00000001"},
+      {"record_type":"vortex.crm.organisations:company","record_id":"company_fixture_beta","organisation_id":"org_fixture_beta","application_root_id":null,"physical_table":"record_data.rt_srt_00000001"},
+      {"record_type":"vortex.crm.people:contact","record_id":"contact_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":null,"physical_table":"record_data.rt_srt_00000002"},
+      {"record_type":"vortex.crm.opportunities:opportunity","record_id":"opportunity_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":"app_root_alpha_crm","physical_table":"record_data.rt_srt_00000004"},
+      {"record_type":"vortex.service_desk.cases:case","record_id":"case_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":"app_root_alpha_service_desk","physical_table":"record_data.rt_srt_00000011"}
+    ],
+    "fork_example": {
+      "display_application_name": "CRM",
+      "display_module_name": "CRM Organisations",
+      "display_record_type_name": "Company",
+      "source_storage_contract_id": "srt_00000001",
+      "forked_storage_contract_id": "srt_90000001",
+      "source_table": "record_data.rt_srt_00000001",
+      "forked_table": "record_data.rt_srt_90000001"
+    },
+    "assertions": [
+      "every_record_type_has_exactly_one_table",
+      "every_field_has_one_stable_column_within_its_table",
+      "same_package_in_two_organisations_reuses_the_table",
+      "organisation_id_separates_same_named_application_data",
+      "organisation_shared_records_have_no_application_root",
+      "application_contained_records_require_an_application_root",
+      "crm_and_service_desk_use_the_same_company_and_contact_rows_in_one_organisation",
+      "an_independent_structural_fork_uses_a_different_table",
+      "display_names_never_determine_physical_names"
+    ]
+  }
+}

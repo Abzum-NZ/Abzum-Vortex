@@ -45,6 +45,7 @@ Incident records contain timeline, scope, affected organisations, containment, r
 
 Backups cover the production [PostgreSQL](https://www.postgresql.org/docs/) database, file manifests and bytes, published definitions, [Kestra](https://kestra.io/docs) workflow definitions and required state, configuration needed to rebuild services, and privacy-removal receipts.
 
+- Production enables the [Supabase managed backup and point-in-time recovery option](https://supabase.com/docs/guides/platform/backups) whose observed recovery points meet the one-hour objective. This is the first recovery layer, not the only copy.
 - Copies are encrypted and sent to an independently controlled location.
 - Access is limited, logged, and tested.
 - Backup retention is documented and does not silently exceed the approved privacy policy.
@@ -69,6 +70,16 @@ sequenceDiagram
 
 The production recovery-point objective is at most one hour of accepted data loss. The recovery-time objective is at most eight hours from declaring a recoverable disaster to restoring the agreed minimum service. Backup schedules, independent copies, alerting, runbooks, and restore drills must demonstrate both objectives; a backup job reporting success is not proof of recovery.
 
+Supabase managed backups do not replace the independent copy because deleting or losing the provider project can also remove access to its managed recovery points. Restore drills test both the provider recovery path and the independent encrypted backup path.
+
+## Database platform safeguards
+
+- [SSL enforcement](https://supabase.com/docs/guides/platform/ssl-enforcement) is enabled for every remote database connection.
+- Internal schemas are excluded from the Data API, and anonymous and signed-in browser roles have no grants on business or administrative tables. The browser uses Supabase directly only for approved Auth, private Realtime, and signed Storage flows.
+- Network restrictions are enabled for a route only when every authorised caller has stable outbound addresses. The direct Kestra route is restricted when its address is fixed; a Vercel database route is restricted only after fixed egress or an equivalent private connection is configured. Security must not rely on an allowlist that the actual caller cannot use.
+- Supabase security and performance advisers and representative [Index Advisor](https://supabase.com/docs/guides/database/extensions/index_advisor) results are reviewed in Testing and again before release. Findings become tracked work; changes are reviewed migrations, never automatic Production edits.
+- Read replicas remain a measured scaling option rather than a release dependency. Adding one requires explicit read routing, consistency expectations, cost approval, monitoring, and failure tests.
+
 ## Secret management
 
 [Doppler](https://docs.doppler.com/docs) provides environment-scoped secrets. Secrets are never committed, copied into fixtures, printed by builds, placed in browser bundles, or included in definition exports. Rotation procedures cover application, database, storage, [Kestra](https://kestra.io/docs), [Stripe](https://docs.stripe.com/), connection encryption keys, identity-authority signing keys, and cluster federation signing keys. Federation rotation publishes the next public key before use, overlaps verification for in-flight messages, then removes the retired key after the replay and reconciliation windows close.
@@ -86,6 +97,7 @@ At minimum, runbooks cover deployment failure, database migration failure, organ
 - A restore drill proves records, files, definitions, workflow state, and removal receipts together.
 - The measured restore point is no more than one hour before the declared incident, and the agreed minimum service is restored within eight hours.
 - A backup stored only on the [Kestra](https://kestra.io/docs) host is refused as incomplete protection.
+- Recovery succeeds from an independent copy even when the original Supabase project is unavailable.
 - A log scan finds no credentials or sensitive values in successful and failing paths.
 - Support access expires automatically and appears in the organisation's activity.
 - Every production alert links to a tested runbook and an accountable owner.
