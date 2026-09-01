@@ -58,8 +58,8 @@ Permissions use permanent names, not display labels. A name identifies the area,
 - `organisation.members.manage`
 - `module.crm.contact.read`
 - `module.crm.contact.update`
-- `application.sales-hub.open`
-- `application.sales-hub.action.convert-lead`
+- `application.crm.open`
+- `application.crm.action.convert-lead`
 
 Unknown names are refused at publication and at runtime. A role may use a controlled trailing wildcard only for a named module or application's non-administrative permissions, for example `module.crm.contact.*`. A global `*` is invalid. Wildcards cannot cover tenant administration, organisation administration, security, billing, privacy, export, or sharing administration.
 
@@ -115,6 +115,8 @@ flowchart TD
 
 For `organisation_shared` storage, each application must bind the module and grant its own roles the required permissions; a separate sharing grant is unnecessary. For `application_contained` storage, another application also needs an active inter-application grant. The recipient application must bind a compatible version of the module so it can validate and display the records.
 
+An inter-application grant may provide collaborative access when the use case requires it. The grant names the readable fields, the smaller or equal set of changeable fields, and any published shareable actions. The recipient uses ordinary record components, but those components expose only the granted capabilities. The record remains owned and saved by its source application; collaboration does not create a recipient copy or permit ownership, deletion, restoration, permission administration, or re-sharing.
+
 ### Between organisations
 
 A source organisation may grant limited access to a recipient organisation. The business checks and screens do not change when the organisations are in different clusters. The shared-record gateway chooses a local adapter inside one cluster or a signed request to the source cluster through the [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
@@ -166,6 +168,8 @@ Role, organisation-account, team, sharing, and public-policy changes increase an
 
 Access removal takes effect on the next request. Long-running work rechecks access before every protected side effect, and subscriptions close or re-authorise when their access version changes.
 
+The recipient interface must remove previously displayed shared values when that next check is refused. It may retain non-content routing and activity references, but it cannot keep a visible snapshot, stale search result, component cache, or offline copy after the grant ends. A completed, separately approved export is the only exception because a downloaded file cannot be recalled.
+
 ## Administration safeguards
 
 - A person cannot grant a permission they do not hold unless a separately authorised owner-recovery process is used.
@@ -185,6 +189,8 @@ Access removal takes effect on the next request. Long-running work rechecks acce
 - A read-only cross-organisation grant does not allow creating, changing, deleting, exporting, commenting on, or attaching files to records.
 - A sensitive field is never included in cross-organisation query results even when the grant does not specify a field mask.
 - Revoking a cross-organisation grant makes previously cached permission answers for that grant unusable.
+- Revoking an inter-application grant removes the shared values from the recipient component on its next access check; navigating back or using a client cache cannot reveal them.
+- A collaborative inter-application grant changes only its named fields and runs only its named shareable actions against the source record.
 - A person with accounts in both organisations cannot use roles from the source account while acting through the recipient account.
 - Directly changing an approval record cannot activate a sharing grant.
 - A cross-organisation grant with only source approval or only recipient acceptance remains inactive.

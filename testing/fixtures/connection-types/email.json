@@ -1,0 +1,4 @@
+{
+  "schema_version":"2.0.0","kind":"connection_type","root_id":"connection_email","key":"vortex.connection.email","version":"1.0.0","revision":1,"state":"published","content_fingerprint":"fixture:vortex.connection.email:1.0.0",
+  "body":{"name":"Email","authentication":{"kind":"oauth2","secret_fields":["client_id","client_secret","refresh_token"]},"allowed_hosts":["api.mail.example"],"operations":[{"key":"send_message","method":"POST","path":"/v1/messages","input":"email_message","output":"delivery_receipt","timeout_seconds":20,"max_attempts":3},{"key":"send_template","method":"POST","path":"/v1/templates/send","input":"template_message","output":"delivery_receipt","timeout_seconds":20,"max_attempts":3}],"incoming_messages":[{"key":"delivery_status","signature":"hmac_sha256","replay_window_seconds":300,"input":"delivery_status"}]}
+}

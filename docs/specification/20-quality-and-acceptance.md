@@ -27,6 +27,7 @@ flowchart LR
 - Bounded response time and resource use under stated test data.
 - Safe logs, traces, diagnostics, fixtures, screenshots, and exports.
 - Backward-compatible delivery and tested recovery.
+- Continuous navigation, component-scoped loading and refresh, restrained motion, and equivalent reduced-motion behaviour under [core UI continuity](07-applications-pages-and-themes.md#core-ui-continuity-and-motion).
 
 ## Organisation separation suite
 
@@ -87,6 +88,8 @@ Run through ordinary product surfaces:
 40. Put one organisation account in several teams; add, remove, suspend, and restore memberships and prove direct shares and team roles change on the next request.
 41. Give a tenant administrator no account in a child organisation and prove hierarchy, plan, and announcement administration works while every record, file, search, workflow, and connection read is refused.
 42. Create direct record shares to an account and a team; prove only allowlisted fields can be read or changed and that delete, restore, export, re-share, and administration remain refused.
+43. Grant CRM limited collaborative access to a Service Desk case; prove CRM reads only the summary fields, changes only `status` and `priority`, adds only a public comment, and never receives internal notes, attachments, service-level calculations, or ownership controls.
+44. Revoke that grant while the case is visible; the next access check removes the values from the component, closes or re-authorises live updates, and browser back navigation or client cache cannot reveal the case.
 
 Every applicable case runs in both directions between two populated organisations in one cluster and in a two-cluster topology. Tests use recognisably different canary values so accidental mixing is visible.
 
@@ -95,6 +98,8 @@ Every applicable case runs in both directions between two populated organisation
 Visible functionality meets [Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) Level AA unless a documented platform limitation has an approved remediation plan.
 
 Every visible issue includes evidence at supported desktop and phone widths. Evidence covers normal, empty, loading, validation, refused, conflict, failure, and recovery states that apply—not only the successful path.
+
+Visible page work also includes evidence that internal navigation keeps the application shell mounted, a slow route or block receives immediate local loading feedback, a data refresh changes only affected components and dependent totals, unsaved unrelated state remains intact, and reduced-motion mode communicates the same result without animation. Automated browser checks refuse routine internal navigation that causes a full document reload.
 
 ## Performance measurement
 
