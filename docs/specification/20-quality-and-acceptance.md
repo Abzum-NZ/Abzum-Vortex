@@ -74,9 +74,16 @@ Run through ordinary product surfaces:
 27. Delay or drop proposal, acceptance, activation, revocation-notice, and reconciliation messages; source status remains authoritative and both mirrors converge without a distributed transaction.
 28. Stop the source cluster or network and prove the recipient shows temporary unavailability without a stale persisted record or unbounded retry.
 29. Run adjacent supported cluster releases in both source directions, then prove an unsupported version fails with a safe stable error.
-30. Prove cross-cluster record values do not enter recipient database tables, files, search, reports, workflow state, cross-request cache, logs, traces, or grant mirrors.
+30. Prove cross-cluster record values do not enter recipient database tables, files, search indexes, materialised report results, workflow state, cross-request cache, logs, traces, or grant mirrors.
 31. Probe invalid, rotated, and valid organisation sharing codes and signed links; only an exact active lookup returns the approved organisation name and region, with no directory enumeration or private metadata.
-32. Run the same grant locally and remotely; each request creates linked source and recipient usage entries under [D36](appendices/decisions.md#d36-shared-record-usage-allocation) without counting one category twice.
+32. Run the same grant locally and remotely; each request creates linked source and recipient usage entries without counting one category twice.
+33. Refuse activation with only source approval, only recipient acceptance, or approvals over different fingerprints; activate once after both authorised sides approve the same complete fingerprint.
+34. Add, remove, suspend, and restore a named recipient application role; the next request follows the account's current application access and role membership without using a role from another organisation account.
+35. Change a published saved sharing condition or its grant parameters; the active grant remains pinned and unchanged until a new proposal receives both approvals.
+36. Attempt an inline filter and a re-share from recipient to third organisation; both are refused through local and remote routes.
+37. Run the same shared list, record detail, search, report, dashboard block, named action, and approved export through local and remote adapters; ordinary components show the same permitted content, source marker, and refusal meaning.
+38. Search and report on shared records, then inspect recipient storage, indexes, caches, logs, and grant mirrors; no source value or materialised result remains after the response.
+39. Leave export refused and prove no export starts; approve it on both sides and prove the source-generated file contains only grant-readable non-sensitive fields, expires, leaves no recipient-cluster copy, and records the non-recallable transfer warning.
 
 Every applicable case runs in both directions between two populated organisations in one cluster and in a two-cluster topology. Tests use recognisably different canary values so accidental mixing is visible.
 

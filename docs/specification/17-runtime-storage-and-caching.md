@@ -103,6 +103,8 @@ The remote request uses HTTPS and an asymmetric [HTTP Message Signature](https:/
 The first release exposes only bounded protected operations:
 
 - Shared-record query with source-side filters, sorts, field projection, cursor pagination, and page limits.
+- Source-executed shared search and report queries using the same bounded query contract, with no recipient index or materialised report result.
+- Source-owned approved export job and short-lived download instruction, with no recipient-cluster file copy.
 - Named record action with the expected concurrency number and a duplicate-protection key.
 - Grant proposal, acceptance, activation receipt, revocation notice, and authoritative status reconciliation.
 - Source-owned file upload admission, upload completion, preview, or download through a short-lived grant or bounded stream.
@@ -122,7 +124,11 @@ Source revocation and expiry take effect on the next source request even if the 
 
 Every request names the federation protocol version, shared-contract version and fingerprint, relevant published module revision, and validated source-to-recipient definition mapping. A cluster accepts a documented compatible range during rolling deployment and refuses an unsupported version with a safe, stable error. Matching database structures do not allow this check to be skipped because migrations and application deployments may temporarily differ.
 
-Remote queries are efficient by contract: filters, sorting, field selection, counts, and cursor pagination run at the source; records are returned in bounded batches; transport connections may be reused; and timeouts and failure isolation prevent one unavailable cluster consuming the recipient's request capacity. Both clusters apply their selected [shared-record usage policy](appendices/decisions.md#d36-shared-record-usage-allocation), and the source rate-limits by recipient cluster, organisation, grant, and operation. The recipient may cache signed cluster metadata, public keys, definition fingerprints, grant mirrors, and content-free invalidations. Under approved [D30](appendices/decisions.md#d30-data-residency-for-shared-records), it does not persist business-record responses, files, search documents, report results, workflow payloads, or cross-request shared-data cache entries.
+Remote queries are efficient by contract: filters, search, sorting, field selection, grouping, totals, counts, and cursor pagination run at the source; records and aggregates are returned in bounded batches; transport connections may be reused; and timeouts and failure isolation prevent one unavailable cluster consuming the recipient's request capacity. Application search fans out only across a bounded set of active grant mirrors, isolates each unavailable source, and groups merged remote results as shared rather than pretending that incomparable source ranks form one local index.
+
+Recipient seats and gateway requests count to the recipient organisation. Source queries, searches, reports, actions, temporary export or file storage, and any network delivery count to the source organisation. Linked usage entries share one correlation identifier, the same category is not counted twice, and the allocation does not change between local and remote routes. The source rate-limits by recipient cluster, organisation, grant, and operation.
+
+The recipient may cache signed cluster metadata, public keys, definition fingerprints, grant mirrors, saved non-content report definitions, and content-free invalidations. It does not persist business-record responses, files, search documents, report results, workflow payloads, or cross-request shared-data cache entries.
 
 A timeout, unreachable source, invalid signature, replay, version mismatch, disabled route, rate or plan refusal, unapproved recipient region, or uncertain grant status fails closed. The screen shows that the source organisation is temporarily unavailable when retry is safe; it never displays a stored stale record as if it were current. Shared-record responses use private no-store browser and intermediary caching instructions.
 
@@ -130,7 +136,7 @@ A timeout, unreachable source, invalid signature, replay, version mismatch, disa
 
 Matching schemas make contract validation and query translation easier, but they do not make database-level federation the simpler customer-sharing boundary. [PostgreSQL foreign data wrappers](https://www.postgresql.org/docs/current/postgres-fdw.html) require foreign servers, user mappings, remote credentials, matching column definitions, and coupled remote connections and transactions. That is useful for controlled operator analytics, not for carrying a different recipient account and grant through every customer request.
 
-[PostgreSQL logical replication](https://www.postgresql.org/docs/current/logical-replication-restrictions.html) copies data and does not replicate schema changes, so subscriber schemas must still be coordinated. It would also add recipient storage, conflict, deletion, retention, search, recovery, and residency obligations that approved [D30](appendices/decisions.md#d30-data-residency-for-shared-records) deliberately avoids.
+[PostgreSQL logical replication](https://www.postgresql.org/docs/current/logical-replication-restrictions.html) copies data and does not replicate schema changes, so subscriber schemas must still be coordinated. It would also add recipient storage, conflict, deletion, retention, search, recovery, and residency obligations that the source-authoritative, no-recipient-copy design deliberately avoids.
 
 ## Event dispatch without a permanent web worker
 

@@ -82,7 +82,7 @@ flowchart LR
 | Permission wildcard contradiction | [D03](decisions.md#d03-permission-wildcards) |
 | Attachment contract contradiction | [D06](decisions.md#d06-attachment-type-policy) and [Files](../11-files-and-attachments.md) |
 | Missing public-safe field | [D04](decisions.md#d04-public-field-approval) |
-| Sign-in tenant contradiction | [D01](decisions.md#d01-account-and-sign-in-model) |
+| Sign-in tenant contradiction | [One global identity with organisation-local accounts](../02-people-organisations-and-sign-in.md#identity-across-clusters) |
 | Workflow-loaded module options | [Application bindings](../05-modules-fields-and-relationships.md#application-level-bindings) |
 | Distributed cache feasibility and ownership | [Cache model](../17-runtime-storage-and-caching.md#cache-model) |
 | One TypeScript/SQL access function | [Where access is enforced](../04-access-and-permissions.md#where-access-is-enforced) |
@@ -116,15 +116,15 @@ flowchart LR
 
 | Proposed addition | Review outcome and governing link |
 |---|---|
-| Global identity with organisation-local accounts | Approved as [D01](decisions.md#d01-account-and-sign-in-model); contracts now separate global identity from each [organisation account](data-contracts.md#identity-and-organisation-account-records). |
+| Global identity with organisation-local accounts | Contracts separate the global identity from each [organisation account](data-contracts.md#identity-and-organisation-account-records). |
 | Definition sharing versus record sharing | Retained and clarified in [composition](../03-composition-and-publication.md#definition-distribution-is-not-record-access) and [record sharing](../16-copying-sharing-import-export.md#record-sharing). |
 | Cross-module relationships | Retained with stable dependency resolution and the same-organisation relationship boundary in [modules and relationships](../05-modules-fields-and-relationships.md#cross-module-relationships). |
-| Hierarchical access grants | Revised to one explicit scope per grant, explicit actions and field allowlists, and decision gates in the [grant contract](data-contracts.md#access-grant-contract). |
+| Hierarchical access grants | Revised to one explicit scope per grant, one named recipient application and role set, explicit actions and field allowlists, and protected approvals in the [grant contract](data-contracts.md#access-grant-contract). |
 | Editable `vortex.approvals` module activates grants | Corrected: the UI may display requests, but only the protected owning service can record decisions and activate a grant under the [approval contract](data-contracts.md#approval-request-contract). |
-| Dynamic filter executed inside every row rule | Replaced with a choice between published saved conditions or narrower scopes in [D27](decisions.md#d27-filter-grant-condition-complexity). |
-| Cross-organisation sharing as settled first-release scope | Approved as one local-and-cross-cluster product capability in [D31](decisions.md#d31-cross-organisation-sharing-release-scope), while its remaining business policies stay explicit in D26–D28 and D32–D36. |
-| Cross-cluster native protocol selected now | Approved as a signed, versioned, source-authoritative [Vortex Federation API](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters) in [D29](decisions.md#d29-cross-cluster-federation-approach), with no persistent recipient copy under [D30](decisions.md#d30-data-residency-for-shared-records), Phase 9 transport in [issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157), and Phase 10 record execution in [issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156). |
-| Sharing coverage | Added query, cache, file, privacy, activity, identity, recipient-discovery, usage-allocation, and boundary-test requirements through [D36](decisions.md#d36-shared-record-usage-allocation); [D35](decisions.md#d35-finding-a-recipient-organisation) and D36 are now approved. |
+| Dynamic filter executed inside every row rule | Replaced with version-pinned published saved sharing conditions or narrower scopes in the [grant contract](data-contracts.md#access-grant-contract). |
+| Cross-organisation sharing as settled first-release scope | Defined as one local-and-cross-cluster product capability with both-side approval, a named application and roles, explicit actions and fields, no live re-sharing, and source-executed search, reports, and approved export in [record sharing](../16-copying-sharing-import-export.md#record-sharing). |
+| Cross-cluster native protocol selected now | Uses a signed, versioned, source-authoritative [Vortex Federation API](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters), with no persistent recipient copy, Phase 9 transport in [issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157), and Phase 10 record execution in [issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156). |
+| Sharing coverage | Covers query, search, report, export, cache, file, privacy, activity, identity, recipient discovery, usage allocation, approvals, audience, condition versioning, action/field allowlists, non-re-sharing, and boundary tests through the [shared-record specification](../04-access-and-permissions.md#shared-record-access) and [acceptance suite](../20-quality-and-acceptance.md#organisation-separation-suite). |
 
 ## Completion check
 

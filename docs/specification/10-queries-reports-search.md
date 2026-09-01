@@ -56,11 +56,33 @@ Every chart or report states its measure, grouping, filter, time zone, and treat
 
 ## Shared-record reads
 
-A shared-record query uses the same validated query contract whether the source is local or in another cluster under approved [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope). It names the source cluster, source organisation, and grant context. Every returned row retains those source identities. A query cannot join, group, or total source-owned records with recipient-owned records as though they had one owner, and one query cannot join records from several source clusters.
+A shared-record query uses the same validated query contract whether the source is local or in another cluster. It names the source cluster, source organisation, grant, recipient application, and requested surface. Every returned row retains its source identities and displays a plain source-organisation marker. A query cannot join, group, or total source-owned records with recipient-owned records as though they had one owner, and one query cannot join records from several source clusters.
 
 For a cross-cluster read, the complete filter, sort, field projection, page size, and continuation token are sent once to the source through the [federation query contract](appendices/data-contracts.md#federated-query-and-action). The source validates and executes the query, applies the grant and database row restrictions, and returns only the approved fields. The recipient never fetches a broad remote set and filters it locally, and it never makes one remote call per returned record.
 
-The first-release draft exposes shared records through dedicated shared lists and record detail only. It does not place them in the recipient's global search index, ordinary dashboards, workflow selections, assistant context, or bulk operations. The product boundary remains [Decision D34](appendices/decisions.md#d34-shared-record-product-surfaces).
+The recipient uses the ordinary list, record-detail, search-result, report, and export components for shared records, so supported work behaves consistently with recipient-owned records. The component obtains an operation-capability description with the result and shows only the fields and actions permitted by the complete grant. Source ownership, temporary unavailability, and any measured remote delay remain visible rather than being disguised as local ownership.
+
+```mermaid
+flowchart LR
+    UI[Ordinary record component] --> GW[Shared-record gateway]
+    GW --> SOURCE[Source Query service]
+    SOURCE --> CHECK[Grant, application, role, condition and field checks]
+    CHECK --> MODE{Approved request}
+    MODE --> VIEW[List or record detail]
+    MODE --> SEARCH[Search result]
+    MODE --> REPORT[Report or dashboard block]
+    MODE --> EXPORT[Source-generated export]
+    VIEW --> EPHEMERAL[Request-only result with source marker]
+    SEARCH --> EPHEMERAL
+    REPORT --> EPHEMERAL
+    EXPORT --> FILE[Short-lived approved download]
+```
+
+Application search may include a **Shared** result group. The search coordinator asks only the bounded set of active grants known from non-content grant mirrors, runs each search at its source, and merges only the returned approved projections for the current response. Shared content is never written into the recipient search index. An unavailable source produces an unavailable source group; it does not make the whole local search fail or return stale results.
+
+A saved report or dashboard block may use one source organisation, record type, and grant. Its definition may be stored by the recipient because it contains identifiers, fields, filters, grouping, and presentation settings rather than source record values. Rows, counts, groups, and totals are calculated by the source on each run and are not materialised in recipient storage. A report cannot mix source-owned and recipient-owned values or combine several source organisations into one total.
+
+Approved export uses the same source-executed query and field projection. It is described in [record export](16-copying-sharing-import-export.md#record-export). Workflows, assistant context, connection messages, bulk changes, cross-source relationships, and offline use of live shared records remain outside the first release.
 
 Shared queries bypass the cross-request business-data cache under [runtime and caching](17-runtime-storage-and-caching.md#grant-cache-invalidation). Pagination, counts, and fields are calculated in the source cluster using one independently sufficient active grant; a query cannot combine scope from one grant with fields or actions from another. A source or network outage fails closed and shows that the source organisation is temporarily unavailable; the recipient does not display an older persisted result.
 
@@ -84,7 +106,7 @@ sequenceDiagram
 - Sensitive fields are never copied into the search index.
 - Personal fields are indexed only if explicitly marked searchable and permitted by the organisation privacy policy.
 - Results are scoped by organisation, application discoverability, record visibility, and field access.
-- A recipient organisation's index never receives another organisation's shared record content in the first release.
+- A recipient organisation's index never receives another organisation's shared record content. Shared search is executed by the source and merged only into the current response.
 - Candidate results are rechecked against current access before display.
 - Deleted or newly hidden records are removed or made unavailable within the limit recorded in [Decision D18](appendices/decisions.md#d18-search-and-cache-freshness).
 - Search priority `first`, `normal`, and `last` affects ranking without overriding access.
@@ -102,5 +124,7 @@ The client re-runs a permitted query or reloads the permitted record. Subscripti
 - Count, chart, export, and list results agree for the same access scope and filter.
 - Pagination neither duplicates nor skips records when several records share the visible sort value.
 - Removing access prevents live updates and makes subsequent refreshes refuse the record.
-- Shared records do not appear in recipient search, ordinary dashboards, workflows, assistant context, or bulk operations unless [D34](appendices/decisions.md#d34-shared-record-product-surfaces) deliberately expands the first release.
+- Shared records can use ordinary list, detail, search-result, report, dashboard-block, and approved-export components while retaining a visible source marker and source-authoritative checks.
+- Shared search, report, and dashboard results leave no recipient search document, materialised report result, or cross-request business-data cache entry.
+- Shared records do not enter workflow selections, assistant context, connection messages, bulk changes, cross-source relationships, or offline storage in the first release.
 - Same-cluster and cross-cluster shared lists return the same fields and refusal meanings for the same grant; only measured latency and source-availability states may differ.

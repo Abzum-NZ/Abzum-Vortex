@@ -59,6 +59,8 @@ The application supports six page types:
 
 A list can use table, board, calendar, or summary arrangement. Board movement calls a named action and rechecks its permission. Calendar placement uses date or date-time fields and follows [Decision D05](appendices/decisions.md#d05-calendar-duration).
 
+The ordinary list, detail, search-result, report, dashboard-block, and action components can display a [shared record](10-queries-reports-search.md#shared-record-reads). They show its source organisation and only capabilities returned by the shared-record gateway. A shared dashboard block names one source organisation and grant; it cannot combine source-owned and recipient-owned values into one result. Create forms, offline pages, and recipient-owned bulk work do not accept live shared records in the first release.
+
 ## Page composition
 
 ```mermaid

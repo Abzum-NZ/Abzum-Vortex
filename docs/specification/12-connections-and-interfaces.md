@@ -72,6 +72,8 @@ The [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-
 
 It reuses the published query, action, grant, file, error, and activity contracts rather than inventing remote versions of business behaviour. The Interface service owns transport, signatures, replay checks, request limits, and version negotiation; the Identity service proves the person; the recipient Access service proves its local account and roles; and the source Access, Query, Record, and File services remain authoritative for the requested work.
 
+This internal federation interface is the only interface that carries live shared-record requests between organisations in the first release. Customer programmable interfaces, outgoing connections, and incoming connection operations cannot expose, store, or act on a recipient's live shared records. Approved export remains the explicit transfer path.
+
 ## Interface versions
 
 ```mermaid

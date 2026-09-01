@@ -87,6 +87,8 @@ An ask step creates one task with assignee rules, form, due time, and timeout pa
 
 An ordinary builder-created approval step cannot grant permissions or activate a cross-organisation sharing grant. The platform-owned `vortex.approvals` capability may use the same task experience, but the owning service verifies the immutable approval decisions and exact payload before performing a protected action under the [approval contract](appendices/data-contracts.md#approval-request-contract).
 
+Builder-created workflows cannot select, store, change, export, or send live shared records in the first release. An action explicitly allowed by a sharing grant runs synchronously in the source organisation; any source-owned event or later workflow also remains in that source organisation. This prevents a recipient workflow from becoming an undeclared copy or re-sharing path.
+
 ## Process pipelines
 
 A pipeline belongs to an application and one record type. It defines ordered stages, allowed transitions, stage-entry and stage-exit work, optional time targets, and escalation events.

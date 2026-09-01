@@ -102,7 +102,7 @@ The complete fixture suite must prove:
 
 ## Sharing examples
 
-These examples extend the CRM and Sales Hub fixtures to demonstrate the approved local-and-cross-cluster [shared-record access](../04-access-and-permissions.md#shared-record-access) architecture. Recipient discovery and usage allocation are approved in [D35](decisions.md#d35-finding-a-recipient-organisation) and [D36](decisions.md#d36-shared-record-usage-allocation). Implementation remains blocked by open business-policy decisions [D26–D28](decisions.md#d26-cross-organisation-sharing-approval) and [D32–D34](decisions.md#d32-recipient-audience).
+These examples extend the CRM and Sales Hub fixtures to demonstrate the approved local-and-cross-cluster [shared-record access](../04-access-and-permissions.md#shared-record-access) architecture and its final audience, approval, condition, action, field, export, re-sharing, search, report, and usage rules.
 
 ### Inter-application sharing
 
@@ -117,7 +117,7 @@ That grant names:
 - Scope kind: record type.
 - Allowed action: read only.
 - Readable fields: subject, safe response text, status, and owner.
-- Export: refused.
+- Export: refused by default.
 
 The grant does not let Executive Review use any Service Desk record type, field, or action that is not named. It also does not create a second copy of a draft response.
 
@@ -138,10 +138,14 @@ The proposed grant:
 - Allowed actions: read, add a comment, and change `partner_status`.
 - Readable fields: deal name, stage, close date, amount, and `partner_status`.
 - Changeable field: `partner_status` only.
-- Export: refused.
+- Export: allowed for the named readable fields after both organisations review the non-recallable-download warning.
 - Expiry: required by the approved sharing policy.
 
-Organisation B's Partner Managers can use a dedicated shared-deals list, view matching deals, add comments, and update `partner_status`. They cannot see unnamed or sensitive fields, change the amount, export, re-share, or access deals that no longer match. The records do not enter Organisation B's global search index.
+An authorised administrator in Organisation A approves this exact proposal. An authorised administrator in Organisation B separately accepts the Partner Portal, Partner Manager role, responsibility for an approved export, region, start, and expiry over the same fingerprint. The grant remains inactive until both decisions exist.
+
+Organisation B's Partner Managers can use the ordinary deal list and detail components, search a Shared result group, run a report or dashboard block over Organisation A alone, add comments, update `partner_status`, and request the approved export. Each surface shows Organisation A as the source. They cannot see unnamed or sensitive fields, change the amount, re-share, use the data in a workflow or assistant, or access deals that no longer match. Search and reports run in Organisation A and leave no source values in Organisation B's index, report storage, or cross-request cache.
+
+The `partner_deals` condition revision and Organisation B parameter are pinned in the proposal. Publishing another revision or changing the parameter does not widen the grant. A new proposal and both approvals are required.
 
 ### The same grant across two clusters
 
@@ -166,18 +170,21 @@ sequenceDiagram
 
 If both organisations later move into one cluster, the gateway uses its local adapter and the visible result is the same. If Cluster North is unavailable, Organisation B sees “Source organisation temporarily unavailable” and no stored deal list. Revoking the source grant refuses the next request even if Cluster South has not yet received the revocation notice.
 
-Each request creates linked usage entries under approved [D36](decisions.md#d36-shared-record-usage-allocation): Organisation B receives the gateway-request usage, while Organisation A receives the source query, action, file, and any network-delivery usage. The same category is never counted on both entries.
+Each request creates linked usage entries: Organisation B receives the gateway-request usage, while Organisation A receives the source query, search, report, action, export/file, and any network-delivery usage. The same category is never counted on both entries.
+
+When a Partner Manager requests the approved export, Cluster North generates a bounded temporary file from the current matching deals and approved fields. Cluster South stores no copy. Before download, the screen repeats that later revocation cannot recall the downloaded file and Organisation B accepts responsibility for its permitted storage, onward disclosure, retention, and deletion.
 
 ### Approval workflow for cross-organisation sharing
 
 Before the cross-organisation grant above becomes active:
 
 1. An administrator in Organisation A proposes the exact grant through the platform-owned `vortex.approvals` experience.
-2. The protected request fingerprints its source, recipient, application, roles, saved condition and parameters, actions, fields, export choice, start, and expiry.
-3. An authorised source approver records an immutable decision.
-4. Whether Organisation B must also accept depends on [D26](decisions.md#d26-cross-organisation-sharing-approval).
-5. Organisation B's cluster returns a signed acceptance for the unchanged fingerprint.
-6. Organisation A's Access service verifies the required decisions and acceptance, activates the authoritative grant, changes its local access version, and returns a signed activation receipt.
+2. The protected request fingerprints its source, recipient, application, roles, saved condition revision and parameters, actions, fields, export choice, region, start, and expiry.
+3. An authorised source approver records an immutable approval for that fingerprint.
+4. Organisation B verifies the application binding, roles, destination, responsibility, and export warning; an authorised recipient approver accepts or refuses the unchanged fingerprint.
+5. Organisation B's cluster returns the signed recipient decision.
+6. Organisation A's Access service verifies both authorised decisions over the same fingerprint, activates the authoritative grant once, changes its local access version, and returns a signed activation receipt.
 7. Organisation B stores the receipt in a non-content grant mirror and changes its local access version. A missed message is repaired by asking Organisation A for authoritative status.
-8. A later authorised revocation ends the source grant and records a separate event; it does not rewrite the original approval. Delayed recipient notification cannot keep access alive.
-9. Directly editing an approval display record never creates, activates, or revokes a grant.
+8. Changing any fingerprinted value creates a new proposal and requires both decisions again.
+9. A later authorised revocation ends the source grant and records a separate event; it does not rewrite either original decision. Delayed recipient notification cannot keep access alive.
+10. Directly editing an approval display record never creates, activates, or revokes a grant.

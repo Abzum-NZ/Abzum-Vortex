@@ -15,7 +15,7 @@ No phase may treat an open blocking choice in the [decision register](../specifi
 ## Planning rules
 
 1. A phase starts only when its required earlier outcomes are working, not merely when their issues exist.
-2. Every work item links its governing [specification section](../specification/README.md), [data contract](../specification/appendices/data-contracts.md), and decided business choices.
+2. Every work item links its governing [specification section](../specification/README.md), [data contract](../specification/appendices/data-contracts.md), and any still-open business choice that can change its outcome.
 3. Visible work includes desktop and phone evidence under [quality and acceptance](../specification/20-quality-and-acceptance.md).
 4. Organisation separation, privacy, migrations, recovery, and observability are part of the feature—not later cleanup.
 5. A phase exit is a tested user or platform outcome, not a count of merged files.
@@ -53,13 +53,13 @@ Operations, accessibility, security, documentation, and automated checks are con
 
 ## Gate 0 — Decisions and platform readiness
 
-**Outcome:** The project has one authoritative review draft, explicit business decisions, complete source fixtures, and a delivery path that can safely begin contracts.
+**Outcome:** The project has one authoritative review draft, permanent requirements for settled choices, a clear register of only open choices, complete source fixtures, and a delivery path that can safely begin contracts.
 
 Required work:
 
-- Decide foundation choices [D01–D10](../specification/appendices/decisions.md#foundation-decisions--decide-before-phase-1).
+- Decide remaining foundation choices [D02–D10](../specification/appendices/decisions.md#foundation-decisions--decide-before-phase-1); the global identity and organisation-account model is already part of the specification.
 - Decide the pre-merge database check in [D20](../specification/appendices/decisions.md#d20-pre-merge-database-testing).
-- Record approved [D29–D31](../specification/appendices/decisions.md#d29-cross-cluster-federation-approach) and update the sharing plan so cluster location is not a product choice.
+- Keep cluster location out of the product-level sharing choices: one shared-record gateway uses a local adapter or the signed Vortex Federation API.
 - Publish Specification 2.0 and update its version history.
 - Rewrite the [CRM and Sales Hub fixtures](../specification/appendices/worked-examples.md), including the three missing platform modules, actions, connection types, interface, theme, roles, workflows, and pipeline.
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
@@ -106,7 +106,7 @@ Exit proof:
 Build:
 
 - One environment-wide [Vortex Identity Authority](../specification/02-people-organisations-and-sign-in.md#identity-across-clusters), plus cluster-local organisation-account records, invitations, sessions and organisation launcher.
-- Neutral bootstrap sign-in selected in [D01](../specification/appendices/decisions.md#d01-account-and-sign-in-model).
+- Neutral bootstrap sign-in with one global identity and a separate account in every organisation the person belongs to.
 - Definition draft concurrency, validation, immutable revision publication, dependency graph and restore.
 - Platform bootstrap definitions required before the Page service exists.
 - Organisation and environment context established at the start of every database transaction.
@@ -281,7 +281,7 @@ Exit proof:
 
 **Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
-**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy) and open sharing-policy decisions [D26–D28](../specification/appendices/decisions.md#d26-cross-organisation-sharing-approval) and [D32–D34](../specification/appendices/decisions.md#d32-recipient-audience). The architecture choices [D29–D31](../specification/appendices/decisions.md#d29-cross-cluster-federation-approach), recipient discovery [D35](../specification/appendices/decisions.md#d35-finding-a-recipient-organisation), and usage allocation [D36](../specification/appendices/decisions.md#d36-shared-record-usage-allocation) are approved.
+**Needs:** Phases 6, 8 and 9, plus [D19](../specification/appendices/decisions.md#d19-cross-organisation-copy-policy). The sharing architecture and business policy are settled in the specification.
 
 **Outcome:** Definitions move without source records, record files move through explicit import/export formats, and approved recipients can use narrowly shared live records without copying them, with the same product behaviour inside one cluster and across clusters.
 
@@ -289,11 +289,15 @@ Build:
 
 - Signed definition package manifest, dependency preview, identifier remapping, incomplete-draft handling and reviewed gallery.
 - Clear Organisation Portal separation between installing definitions and sharing live records.
-- Access-owned sharing grants with one explicit scope, recipient application and roles, action/field allowlists, expiry, revocation, and protected approvals selected by [D26](../specification/appendices/decisions.md#d26-cross-organisation-sharing-approval).
+- Access-owned sharing grants with one explicit scope, one recipient application, one or more recipient application roles, action/field allowlists, export defaulting off, required expiry, and source-authoritative revocation.
+- Published, version-pinned saved sharing conditions with declared parameters; no inline grant filters and no silent widening after publication.
+- Protected source approval and recipient acceptance over the same complete proposal fingerprint for every cross-organisation grant.
 - [Cross-cluster execution issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156): one shared-record gateway with a local adapter and signed remote adapter; source-authoritative query, action, file, revocation, and audit behaviour.
 - Signed duplicate-safe cross-cluster proposal, acceptance, activation receipt, revocation notice, and status reconciliation.
-- Protected sharing-code or invitation-link recipient discovery from approved [D35](../specification/appendices/decisions.md#d35-finding-a-recipient-organisation), and linked source/recipient usage allocation from approved [D36](../specification/appendices/decisions.md#d36-shared-record-usage-allocation).
-- Dedicated shared lists and record detail, plus source-owned file access, activity, privacy, same-cluster tests, and two-cluster tests.
+- Protected exact sharing-code or invitation-link recipient discovery, and linked source/recipient usage allocation without double counting.
+- Ordinary list, detail, search-result, report, dashboard-block, action, and approved-export components backed by the shared-record gateway, with visible source ownership and source-unavailable states.
+- Source-executed shared search, reports, and exports with no recipient index, materialised report result, persistent record/file copy, workflow payload, or cross-request shared-data cache.
+- Source-owned file access, activity, privacy, same-cluster tests, and two-cluster tests.
 - Record import mapping, dry run, duplicate policy, bounded background execution and result report.
 - Access-checked expiring record export.
 - Complete encrypted organisation archive and controlled restore as a separate operator operation.
@@ -302,10 +306,13 @@ Exit proof:
 
 - Cross-organisation copy removes or remaps organisation-specific state.
 - Installing a definition never grants record access, and a record grant never copies or installs a definition.
-- Direct approval-record edits cannot activate grants; source revocation takes effect on the next request; sensitive fields, re-sharing, recipient indexing, persistent remote copies, and unapproved export are refused.
+- Direct approval-record edits cannot activate grants; every grant proves source approval and recipient acceptance over one fingerprint; a changed condition, role, field, action, export choice, region, or expiry requires both approvals again.
+- Source revocation takes effect on the next request; sensitive fields, inline conditions, live re-sharing, recipient indexing, materialised shared reports, persistent remote copies, and unapproved export are refused.
+- Shared lists, details, search, reports, dashboard blocks, actions, files, and approved exports have the same permission and result meaning through local and remote adapters while clearly showing source ownership.
 - The same fixture grant passes through both local and remote adapters with the same fields, actions, activity meaning, and stable refusal codes.
 - A lost cross-cluster message reconciles safely; an altered, replayed, expired, incorrectly addressed, or version-incompatible request fails closed.
 - Exact sharing-code or signed-link discovery reveals only the approved organisation name and region; one shared request creates linked source/recipient usage without charging one category twice.
+- An approved export is generated at the source, leaves no recipient-cluster copy, includes only approved fields, and presents the non-recallable-download responsibility before transfer.
 - Import dry run matches execution.
 - Complete archive restore proves definitions, roles, records, files, workflow state and privacy-removal replay.
 

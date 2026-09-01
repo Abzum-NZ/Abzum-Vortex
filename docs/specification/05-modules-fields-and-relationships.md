@@ -14,6 +14,7 @@ flowchart TD
     RT1 --> A[Standard actions]
     RT1 --> X[Extension points]
     RT1 --> REL[Relationships]
+    RT1 --> SHARE[Saved sharing conditions]
     REL --> RT2
     APP[Application binding] --> M
     APP --> OV[Labels, option loaders and page use]
@@ -44,6 +45,7 @@ Each record type has:
 - An ownership mode.
 - Supported standard actions such as create, read, update, soft-delete, restore, and export.
 - Optional custom actions declared by the module.
+- Optional saved sharing conditions with permanent identifiers, typed parameter contracts, closed condition trees, and publication tests. Grants pin one published revision and cannot supply their own condition.
 - Relationships and reverse relationships.
 - An organisation-shared or application-contained storage scope.
 

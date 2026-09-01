@@ -1,8 +1,8 @@
-# Decision register
+# Open decision register
 
 [Specification index](../README.md) · [Revised build plan](../../build-plan/README.md)
 
-This register contains product or operating choices that must not be hidden as implementation assumptions. “Recommended” means the current draft is written in that direction; it does not mean the choice has been made.
+This register contains only unresolved product or operating choices that must not be hidden as implementation assumptions. “Recommended” means the current draft is written in that direction; it does not mean the choice has been made. After a choice is approved and its effects are written into the specification, contracts, tests, build plan, and GitHub tasks, its entry is removed from this register.
 
 ```mermaid
 flowchart LR
@@ -15,24 +15,9 @@ flowchart LR
 
 ## How to answer
 
-Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. Add conditions or a different option where none fits. Decisions are grouped so they can be handled in several short conversations.
+Reply with the decision number and option, for example: `D02 A, D03 B`. Add conditions or a different option where none fits. Decisions are grouped so they can be handled in several short conversations.
 
 ## Foundation decisions — decide before Phase 1
-
-### D01 Account and sign-in model
-
-**Question:** How should one person enter several organisations?
-
-- **A — One global identity with a separate account in each organisation (chosen).** After neutral sign-in, active organisation accounts determine which organisations are available. Each organisation account has separate roles, profile, settings, and application access. Organisation-specific addresses may add branding but never determine access.
-- **B — Separate account per organisation.** The same email may represent unrelated accounts and the person signs in separately for each organisation.
-- **C — Global account, organisation address required.** Identity is shared, but every sign-in starts from a named organisation.
-
-- **Status:** Decided.
-- **Chosen option:** A, clarified as one global identity plus one separate organisation account per organisation.
-- **Decision owner:** Vijay Tilak.
-- **Date:** 1 September 2026.
-- **Reason:** One person should sign in once and move between organisations, while every organisation retains a separate account, profile, role set, application access, and lifecycle for that person.
-- **Affected links:** [People, organisations and sign-in](../02-people-organisations-and-sign-in.md), [access and permissions](../04-access-and-permissions.md), [identity contracts](data-contracts.md#identity-and-organisation-account-records), [glossary](glossary.md), [Phase 2](../../build-plan/README.md#phase-2--definition-and-identity), and [Gate 0 issue #151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151).
 
 ### D02 Publication boundaries
 
@@ -268,7 +253,7 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 - **B — Yes, read-only individual sharing.** Requires share lifecycle, search, export and activity support.
 - **C — Yes, configurable read/change sharing.** Largest permission and audit surface.
 
-**Boundary:** This decides direct sharing with an organisation account or team inside one organisation. A cross-organisation grant to recipient roles is separately governed by [D31](#d31-cross-organisation-sharing-release-scope) and [D32](#d32-recipient-audience).
+**Boundary:** This decides direct sharing with an organisation account or team inside one organisation. Cross-organisation grants separately require one named recipient application and one or more recipient application roles under the permanent [grant contract](data-contracts.md#access-grant-contract).
 
 ### D25 Organisation creation
 
@@ -278,178 +263,12 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 - **B — Invited partner administrators.** Controlled delegated creation.
 - **C — Public self-service with trial and billing setup.** Requires abuse, verification and automated lifecycle controls.
 
-## Sharing and federation decisions
-
-[D29](#d29-cross-cluster-federation-approach), [D30](#d30-data-residency-for-shared-records), and [D31](#d31-cross-organisation-sharing-release-scope) are decided together: the first release provides one sharing experience across clusters, keeps the source cluster authoritative, and stores no persistent record copy in the recipient cluster. [D35](#d35-finding-a-recipient-organisation) and [D36](#d36-shared-record-usage-allocation) are also decided. [D26–D28](#d26-cross-organisation-sharing-approval) and [D32–D34](#d32-recipient-audience) still block sharing implementation because they decide the remaining business policy inside that architecture.
-
-### D26 Cross-organisation sharing approval
-
-**Question:** What approval is required before one organisation can expose records to another?
-
-- **A — Approve on both sides for every grant (recommended).** A source administrator approves the exact data, actions, fields, and expiry; a recipient administrator accepts the exact audience and responsibility before activation.
-- **B — Source approval only.** The source may push access to the recipient without recipient acceptance.
-- **C — Standing trust agreement.** Both organisations first approve a limited relationship; later source grants inside those limits do not need separate recipient approval.
-
-**Draft effect:** [Shared-record access](../04-access-and-permissions.md#shared-record-access), [record sharing](../16-copying-sharing-import-export.md#record-sharing), and the [approval contract](data-contracts.md#approval-request-contract) are written toward A but do not treat it as decided.
-
-### D27 Filter grant condition complexity
-
-**Question:** How may a grant describe a changing set of records?
-
-- **A — Inline simple comparisons.** Each grant stores field comparisons that are validated when the grant is proposed.
-- **B — Published saved sharing conditions only (recommended).** A source definition publishes and tests a named condition; a grant may supply only its declared parameters.
-- **C — No changing-set filter in the first release.** Grants may cover a module, record type, or specific record only.
-
-**Draft effect:** [Record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions), [queries](../10-queries-reports-search.md#shared-record-reads), and the [grant contract](data-contracts.md#access-grant-contract) follow B.
-
-### D28 Cross-organisation sharing chains
-
-**Question:** May a target organisation re-share records it received from another organisation?
-
-- **A — No re-sharing in the first release (recommended).** A grant from Org A to Org B does not allow Org B to create a further grant to Org C.
-- **B — Controlled re-sharing with source consent.** The original grant includes a re-sharing flag and audit trail.
-- **C — Unrestricted re-sharing.** Any granted record may be shared further.
-
-**Draft effect:** [Record sharing](../16-copying-sharing-import-export.md#actions-fields-export-and-re-sharing) follows A.
-
-### D29 Cross-cluster federation approach
-
-**Question:** What should the current specification commit to for sharing between different Vortex clusters?
-
-- **A — Defer architecture and delivery.** The first release supports no cross-cluster grant.
-- **B — Signed Vortex Federation API (chosen).** The recipient cluster sends a bounded, signed Vortex request to the source cluster. The source remains authoritative and applies the same grant, query, record, file, and activity rules used for a local request.
-- **C — Direct database federation.** Connect clusters with database credentials and foreign tables.
-- **D — Replicate shared records.** Copy selected source data into recipient-cluster storage and reconcile later changes and removals.
-
-**Status:** Decided.
-
-**Chosen option:** B — Signed Vortex Federation API.
-
-**Decision owner:** Vijay Tilak.
-
-**Date:** 1 September 2026.
-
-**Reason:** One product contract can use a local adapter when both organisations share a cluster and a remote adapter otherwise. The remote adapter uses HTTPS, signed requests, bounded versioned contracts, source-side filtering, and source-side access enforcement. This avoids sharing database credentials, coupling database transactions, copying records, or making database migrations move in lockstep. Matching database structures simplify the shared contracts but do not remove identity, authentication, deployment-version, outage, residency, or audit boundaries.
-
-**Affected links:** [Record sharing](../16-copying-sharing-import-export.md#record-sharing), [federation runtime](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters), [federation contracts](data-contracts.md#federation-contracts), [Phase 9 transport issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157), [Phase 10](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export), and [sharing execution issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156).
-
-### D30 Data residency for shared records
-
-**Question:** Where may a cross-cluster shared-record response be processed or stored?
-
-- **A — Source policy per data class and destination.** The source organisation chooses approved recipient regions and whether transient response, cache, or replication is allowed.
-- **B — No persistent recipient-cluster storage (chosen for the first release).** Authorised values may travel through the recipient service and browser for display or an approved action, but the recipient cluster keeps no business-record copy, derived search document, report materialisation, workflow payload, or cross-request result cache.
-- **C — Platform-wide replication policy.** Approved clusters may retain shared projections under one global retention and deletion policy.
-
-**Status:** Decided.
-
-**Chosen option:** B — No persistent recipient-cluster storage.
-
-**Decision owner:** Vijay Tilak.
-
-**Date:** 1 September 2026.
-
-**Reason:** Keeping the only persistent business record in the source cluster makes revocation, expiry, correction, retention, deletion, legal hold, and recovery authoritative in one place. This is not a promise that the values never cross a regional boundary: they necessarily travel to the authorised recipient for display or an approved action. The source cluster's sharing policy must allow that destination before activation.
-
-**Affected links:** [Shared-record reads](../10-queries-reports-search.md#shared-record-reads), [files](../11-files-and-attachments.md#attachments-on-shared-records), [privacy](../14-activity-privacy-and-retention.md#shared-record-accountability), [record sharing](../16-copying-sharing-import-export.md#record-sharing), and [federation runtime](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
-
-### D31 Cross-organisation sharing release scope
-
-**Question:** Is cross-organisation record sharing part of the first release?
-
-- **A — One sharing experience across same-cluster and cross-cluster recipients (chosen).** Product behaviour, grants, approvals, fields, actions, and screens are the same. The runtime uses a local path inside one cluster and the signed [Vortex Federation API](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters) between clusters.
-- **B — Defer all cross-organisation record sharing.** Keep application-definition distribution and within-organisation application sharing only.
-- **C — Exclude cross-organisation record sharing from Vortex.** Use explicit exports and external integrations instead.
-
-**Status:** Decided.
-
-**Chosen option:** A — One sharing experience across same-cluster and cross-cluster recipients.
-
-**Decision owner:** Vijay Tilak.
-
-**Date:** 1 September 2026.
-
-**Reason:** A user should choose the source, recipient, scope, audience, fields, actions, and expiry—not a database topology. The shared-record gateway selects the local or remote path after resolving the two organisations' clusters. Cross-cluster latency or source outage is shown clearly, but it does not create a second business model.
-
-**Affected links:** [Shared-record access](../04-access-and-permissions.md#shared-record-access), [record sharing](../16-copying-sharing-import-export.md#record-sharing), [grant issue #153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153), [approval issue #154](https://github.com/Abzum-NZ/Abzum-Vortex/issues/154), [experience issue #155](https://github.com/Abzum-NZ/Abzum-Vortex/issues/155), and [federation issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156).
-
-### D32 Recipient audience
-
-**Question:** Which accounts inside the recipient organisation may use a grant?
-
-- **A — Named recipient application and roles (recommended).** The recipient administrator selects an application and one or more roles; only accounts holding those roles in that application may use the grant.
-- **B — Everyone with access to the recipient application.** Simpler, but a later application assignment may silently widen access.
-- **C — Individually named organisation accounts.** Most precise, with more administration and account-lifecycle work.
-
-**Draft effect:** [Shared-record access](../04-access-and-permissions.md#between-organisations) and the [grant contract](data-contracts.md#access-grant-contract) follow A.
-
-### D33 Shared actions, fields, and export
-
-**Question:** How should a grant describe what recipients can do?
-
-- **A — Read only in the first release.** Allow named readable fields; refuse every change and export.
-- **B — Explicit action and field allowlists (recommended).** Name readable fields, changeable fields, and allowed actions; exclude sensitive fields; make export a separate approval that defaults to off.
-- **C — Broad levels such as read, collaborative, and full edit.** Easier to configure but leaves delete, restore, export, files, ownership, and future actions ambiguous.
-
-**Draft effect:** [Access and permissions](../04-access-and-permissions.md#shared-actions-fields-and-export), [record sharing](../16-copying-sharing-import-export.md#actions-fields-export-and-re-sharing), and the [grant contract](data-contracts.md#access-grant-contract) follow B.
-
-### D34 Shared-record product surfaces
-
-**Question:** Where may shared records appear in the first release?
-
-- **A — Dedicated shared lists and record detail only (recommended).** No recipient search copy, ordinary dashboard total, bulk action, workflow, assistant context, or connection message.
-- **B — Also search, reports, and approved export.** Requires recipient indexing or remote search, derived-data deletion, total semantics, and broader caching tests.
-- **C — Full product parity.** Also allow workflows, bulk work, assistant tools, and connections; largest privacy and operational scope.
-
-**Draft effect:** [Queries, reports, search and live updates](../10-queries-reports-search.md#shared-record-reads) and [privacy and retention](../14-activity-privacy-and-retention.md#shared-record-accountability) follow A.
-
-### D35 Finding a recipient organisation
-
-**Question:** How does a source administrator select the correct recipient organisation without exposing a global customer directory?
-
-- **A — Copyable organisation sharing code or signed invitation link (recommended).** The recipient provides a code or the source sends a link; the protected directory resolves it to the exact organisation and shows only its approved name and region before approval.
-- **B — Searchable Vortex organisation directory.** Easier discovery, but organisations need listing, visibility, impersonation, and name-collision policies.
-- **C — Operator-mediated setup.** An Abzum operator links the organisations before a grant can be proposed; lowest customer flexibility.
-
-**Status:** Decided.
-
-**Chosen option:** A — Copyable organisation sharing code or signed invitation link.
-
-**Decision owner:** Vijay Tilak.
-
-**Date:** 1 September 2026.
-
-**Reason:** Exact code or link lookup identifies the intended organisation without publishing a searchable customer directory or requiring operator setup. The sharing code is an identifier, not a secret or permission; recipient approval is still required according to [D26](#d26-cross-organisation-sharing-approval).
-
-**Affected links:** [Organisation Portal](../02-people-organisations-and-sign-in.md#organisation-portal), [record sharing](../16-copying-sharing-import-export.md#creating-a-grant), [cluster directory](../17-runtime-storage-and-caching.md#cluster-identity-and-discovery), [recipient discovery contract](data-contracts.md#recipient-discovery-entry), and [experience issue #155](https://github.com/Abzum-NZ/Abzum-Vortex/issues/155).
-
-### D36 Shared-record usage allocation
-
-**Question:** Which organisation's plan and usage record pays for a shared-record request?
-
-- **A — Each organisation pays for its own work (recommended).** Recipient seats and gateway requests count to the recipient; source queries, actions, stored files, and any network delivery count to the source. One unit of work is not charged twice to the same category, and the rule is the same for local and remote routes.
-- **B — Recipient pays all shared-request and delivery usage.** Useful if access is treated as a recipient service, but requires transferring source infrastructure cost.
-- **C — Source pays all sharing usage.** Simple for recipients, but a source can incur unpredictable cost from recipient activity.
-
-**Status:** Decided.
-
-**Chosen option:** A — Each organisation pays for its own work.
-
-**Decision owner:** Vijay Tilak.
-
-**Date:** 1 September 2026.
-
-**Reason:** Option C would remove only the allocation of chargeable work. The recipient must still count and limit its gateway requests for capacity, abuse control, diagnostics, and support, so making the source pay everything does not significantly reduce implementation complexity. Option A also avoids exposing the source to unpredictable recipient-generated cost and applies the same rule to local and remote routes.
-
-**Affected links:** [Plans, billing and usage](../15-plans-billing-and-usage.md#shared-record-usage), [federation efficiency](../17-runtime-storage-and-caching.md#versions-failures-and-efficiency), [Phase 10](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export), and [billing issue #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118).
-
-## Decision record template
-
-When a choice is made, add:
-
-- **Status:** Decided.
-- **Chosen option:** Letter and final wording.
-- **Decision owner:** Named business owner.
-- **Date:** Decision date.
-- **Reason:** Plain-language reason and rejected trade-offs.
-- **Affected links:** Specification sections, data contracts, fixtures, build phases, and GitHub issues updated.
+## Clearing a resolved entry
+
+Before removing an approved entry from this register:
+
+1. Write the final behaviour and its boundaries into the relevant specification sections.
+2. Update data contracts, diagrams, worked examples, acceptance tests, and build dependencies.
+3. Update the affected GitHub issues and record the owner, date, choice, reason, and rejected trade-offs in the review pull request or issue history.
+4. Run the document, link, diagram, and repository checks.
+5. Remove the resolved entry and every obsolete link to it. The repository and GitHub history retain the decision evidence.

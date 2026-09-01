@@ -41,6 +41,7 @@ Provider and residency choices are [Decision D14](appendices/decisions.md#d14-as
 - Tools apply the current person's organisation, application, record, and field access.
 - Sensitive fields are excluded unless the policy and an explicit tool grant allow the exact field and purpose.
 - Retrieved content is treated as untrusted data, never as instructions that can grant tools, reveal secrets, or change policy.
+- Live records received from another organisation are excluded from assistant retrieval, conversation context, and tools in the first release, even when the person can view them through an approved record component.
 - Connection secrets, signed file addresses, internal prompts, security rules, and hidden fields are never model context.
 
 ## Prompt-injection and data-loss safeguards

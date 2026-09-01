@@ -46,9 +46,9 @@ Removing a gallery listing does not remove installed definitions. A security wit
 
 Record sharing makes records owned by one organisation or application available to an approved recipient without copying or transferring ownership. It is distinct from definition copying, gallery distribution, record import/export, and whole-organisation restore.
 
-Approved [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) gives the user one sharing experience whether the recipient is in the source cluster or another Vortex cluster. The product never asks the user to choose a transport. The shared-record gateway resolves the organisations and selects either the local adapter or the signed [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
+The user has one sharing experience whether the recipient is in the source cluster or another Vortex cluster. The product never asks the user to choose a transport. The shared-record gateway resolves the organisations and selects either the local adapter or the signed [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 
-The source cluster remains authoritative in both cases. Under approved [D30](appendices/decisions.md#d30-data-residency-for-shared-records), a cross-cluster response may travel through the recipient service and browser for display or an approved action, but no persistent business-record copy is stored in the recipient cluster.
+The source cluster remains authoritative in both cases. A cross-cluster response may travel through the recipient service and browser for display, search, reporting, or an approved action, but no persistent business-record copy, search document, or report result is stored in the recipient cluster.
 
 ### App-definition sharing versus record sharing
 
@@ -72,10 +72,12 @@ sequenceDiagram
     participant RecipientAccess as Recipient Access service
     participant Gateway as Shared-record gateway
     participant Record as Source Record service
-    Source->>SourceAccess: Propose scope, audience, actions, fields, and expiry
+    Source->>SourceAccess: Propose scope, audience, actions, fields, export, and expiry
     SourceAccess->>SourceAccess: Validate source definitions and policy
+    SourceAccess->>Source: Request source approval
+    Source-->>SourceAccess: Approve or refuse exact fingerprint
     SourceAccess->>RecipientAccess: Send signed proposal
-    RecipientAccess->>Recipient: Request approval when required
+    RecipientAccess->>Recipient: Request recipient acceptance
     Recipient-->>RecipientAccess: Approve or refuse exact fingerprint
     RecipientAccess-->>SourceAccess: Send signed decision
     SourceAccess->>SourceAccess: Activate authoritative grant
@@ -87,14 +89,16 @@ sequenceDiagram
     Record-->>Gateway: Return approved projection or refusal
 ```
 
-A proposed grant names one source organisation, one recipient organisation or application, one scope, its audience, allowed actions, readable and changeable fields, export choice, approved recipient region, start, and optional expiry. It also names the source record-contract lineage and the recipient application's proven compatibility mapping. Under approved [D35](appendices/decisions.md#d35-finding-a-recipient-organisation), the source enters the recipient's copyable organisation sharing code or follows its signed invitation link, then confirms the returned approved name and region; discovering it grants no access. The proposal cannot become active until all required approvals are recorded. The approval choice is [D26](appendices/decisions.md#d26-cross-organisation-sharing-approval), and the recipient audience is [D32](appendices/decisions.md#d32-recipient-audience).
+A proposed cross-organisation grant names one source organisation, one recipient organisation, one recipient application, one or more recipient application roles, one scope, allowed actions, readable and changeable fields, export choice, approved recipient region, start, and required expiry. It also names the source record-contract lineage and the recipient application's proven compatibility mapping. The source enters the recipient's copyable organisation sharing code or follows its signed invitation link, then confirms the returned approved name and region; discovering it grants no access.
+
+Every grant requires an authorised source administrator to approve the exact records, condition parameters, actions, fields, export choice, region, start, and expiry, and an authorised recipient administrator to accept the exact application, roles, responsibility, region, start, and expiry. Both decisions cover one complete proposal fingerprint. Changing any fingerprinted value makes the earlier decisions unusable and returns the proposal to approval.
 
 The platform-owned `vortex.approvals` capability supplies the Organisation Portal screens and protected approval path. The Access service remains authoritative for activation. Approval decisions are immutable; later revocation is a separate recorded action.
 
 For a same-cluster grant, the source and recipient protected records can be changed in one database transaction. For a cross-cluster grant, activation uses signed, duplicate-safe messages rather than pretending two databases share a transaction:
 
 1. The source creates and signs an immutable proposal fingerprint.
-2. The recipient verifies the source cluster, application binding, roles, destination policy, and required approval; it returns a signed acceptance or refusal for that exact fingerprint.
+2. The source records its authorised approval, then the recipient verifies the source cluster, application binding, roles, destination policy, and proposal; it returns a signed acceptance or refusal for that exact fingerprint.
 3. The source verifies the response and activates the authoritative grant.
 4. The source returns a signed activation receipt, and the recipient marks its non-content grant mirror active.
 5. Either side can ask the source for the current status and safely repair a missed message through [reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation).
@@ -105,15 +109,17 @@ The recipient mirror contains routing, audience, status, identifiers, fingerprin
 
 A grant chooses exactly one scope kind: a module, a record type, a published saved sharing condition, or one record. It does not populate several optional scope fields and ask the runtime to guess which takes precedence.
 
-A saved sharing condition belongs to the source definition, uses a narrow validated condition vocabulary, and is tested at publication. A grant may supply only declared parameters. Free-form conditions are never stored on a grant. The final condition policy is [D27](appendices/decisions.md#d27-filter-grant-condition-complexity).
+A saved sharing condition belongs to a published source definition, uses a narrow validated condition vocabulary, and is tested at publication. A grant pins the condition's permanent identifier, published revision, contract fingerprint, and declared parameter values. Free-form and inline grant conditions are never stored or executed. Publishing a changed condition does not alter an active grant; using the new revision requires a changed proposal and fresh approval by both organisations.
 
 When a source record changes, the database evaluates whether it still matches the published condition. No background copy is maintained. Query and cache restrictions are defined in [queries, reports, search and live updates](10-queries-reports-search.md#shared-record-reads).
 
 ### Actions, fields, export, and re-sharing
 
-Cross-organisation grants use allowlists: anything not named is refused. Sensitive fields are unavailable in the first release. Export is separately allowed or refused and defaults to refused. These choices remain [D33](appendices/decisions.md#d33-shared-actions-fields-and-export).
+Cross-organisation grants use explicit action, readable-field, and changeable-field allowlists: anything not named is refused. Changeable fields are a subset of readable fields, and only actions published as shareable by the source definition may be selected. Sensitive fields are unavailable in the first release. Export is separately allowed or refused, defaults to refused, and is part of both organisations' approval fingerprint. Broad `collaborative` or `full_edit` levels are not grant data.
 
-A recipient cannot grant the source record to a third organisation. The original source must create a new direct grant, subject to [D28](appendices/decisions.md#d28-cross-organisation-sharing-chains).
+A recipient cannot grant the source record, its reference, a shared query, or a live result to a third organisation. A new live recipient requires a new direct grant from the original source. Vortex refuses a grant whose proposed source does not own the record and prevents shared records from entering public pages, interfaces, connections, workflows, assistant context, or recipient-owned bulk work.
+
+An approved export is intentionally different from live re-sharing: it creates a downloaded copy outside Vortex control. The approval screen must state that revoking the grant cannot recall a file already downloaded and that the recipient becomes responsible for its permitted use, storage, onward disclosure, and deletion. If that transfer is unacceptable, export must remain refused.
 
 ## Record import
 
@@ -128,9 +134,13 @@ Record import accepts a documented tabular or structured record format. It inclu
 
 The caller chooses a declared duplicate policy: create only, update by permanent identifier, or update by an approved unique field. The platform never guesses a match from a display name.
 
+Importing values previously downloaded through an approved shared export creates new recipient-owned records; it does not preserve live access, source ownership, or the source grant. Vortex cannot reliably recognise or control every transformed external file. The source therefore permits this possibility only by approving export, and the recipient accepts responsibility before download. With export refused, the platform provides no record-copy path from a live grant.
+
 ## Record export
 
 Export uses one [query](10-queries-reports-search.md), current [access](04-access-and-permissions.md), selected fields, declared format, row limit, and expiry. Large exports run in the background and create a short-lived private [file](11-files-and-attachments.md). Sensitive-field export requires explicit permission and is recorded.
+
+For shared records, the complete query runs at the source against one active grant. Export must be approved by that grant, contains only its readable non-sensitive fields, and rechecks the saved sharing condition throughout bounded generation. The source owns the temporary export job and file; the recipient cluster stores neither. The recipient downloads the result through a short-lived checked instruction. Source and recipient activity entries share one correlation identifier and record the grant, query fingerprint, field identifiers, row count, expiry, and outcome without recording exported values.
 
 ## Complete organisation archive and restore
 
@@ -150,6 +160,10 @@ Restore is an operator-controlled disaster-recovery or migration process with co
 - A source-cluster or network outage displays a temporary-unavailability state and never falls back to an older recipient-stored record.
 - Changing an approval display record directly cannot activate a grant.
 - A recipient cannot re-share a source record to a third organisation.
+- A proposal cannot activate until authorised administrators in both organisations approve the same fingerprint.
+- A saved-condition revision or parameter change requires a new proposal and both approvals; it never widens an active grant silently.
+- Shared search and reports execute at the source and leave no recipient index or materialised result.
+- A shared export is refused by default, contains only approved fields when enabled, and warns that a completed download cannot be recalled by revocation.
 - Import dry-run and confirmed execution use the same mapping and validation rules.
 - Record export cannot include a field the caller cannot read.
 - A complete archive can restore a test organisation without pretending that spreadsheet record import restores definitions, roles, files, or history.

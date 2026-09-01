@@ -63,7 +63,7 @@ The launcher shows only active organisation accounts. For each organisation it m
 
 The platform has one neutral entry address for initial sign-in and account recovery. An organisation may also have a recognised address that starts an organisation-branded sign-in journey. Branding affects presentation only; it never determines access.
 
-After identity is proven, the selected organisation comes from an active organisation account, not from the address alone. This implements approved [Decision D01](appendices/decisions.md#d01-account-and-sign-in-model).
+After identity is proven, the selected organisation comes from an active organisation account, not from the address alone. One global identity may have one separate account in each organisation it belongs to.
 
 ## Application access
 
@@ -76,13 +76,13 @@ This distinction also defines “must have application access” for a [person-l
 Every organisation receives one protected platform application called the **Organisation Portal**. It cannot be removed. Its areas are:
 
 - Company profile: legal and trading names, registration details, industry, addresses, and contact details.
-- People and access: invitations, organisation accounts, teams/groups, organisation roles, application access, sign-in policy, and protected sharing approvals included by [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope) and governed by [D26](appendices/decisions.md#d26-cross-organisation-sharing-approval).
+- People and access: invitations, organisation accounts, teams/groups, organisation roles, application access, sign-in policy, and protected sharing approvals requiring one authorised source approval and one authorised recipient acceptance for every cross-organisation grant.
 - Applications: installed applications, available updates, publication state, and gallery access.
 - Connected services: organisation-owned [connections](12-connections-and-interfaces.md).
 - Billing: selected plan, seat use, payment state, invoices, and current [usage](15-plans-billing-and-usage.md).
 - Preferences: approved logo and icon, language, time zone, currency, financial-year start, and date and number formats.
 - Business calendar: working days, working hours, and public or organisation holidays used by [workflows and pipeline targets](09-workflows-and-pipelines.md).
-- Sharing identity: the copyable organisation sharing code and signed invitation links approved in [D35](appendices/decisions.md#d35-finding-a-recipient-organisation); lookup reveals only the approved organisation name and region, never people, applications, roles, records, or billing state.
+- Sharing identity: a copyable organisation sharing code and signed invitation links; exact lookup reveals only the approved organisation name and region, never people, applications, roles, records, or billing state.
 
 An organisation account's language and time-zone preference overrides the organisation default for that person's display in that organisation. An application does not silently override language, time zone, currency, financial year, or business calendar; where an application needs a deliberate alternative, that setting is explicit in its definition and states which calculations it changes.
 

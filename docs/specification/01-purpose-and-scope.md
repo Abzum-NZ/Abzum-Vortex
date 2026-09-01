@@ -47,7 +47,7 @@ The first complete release includes:
 - Public pages and programmable interfaces where an organisation explicitly enables them.
 - An optional assistant that follows the same access rules as the person using it.
 - Plans, usage measurement, billing, export, retention, activity history, and recovery.
-- Governed cross-organisation record sharing with the same product behaviour whether the organisations are in one cluster or different clusters, as approved in [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope).
+- Governed cross-organisation record sharing with the same product behaviour whether the organisations are in one cluster or different clusters.
 
 The first complete release does not include:
 
@@ -71,4 +71,4 @@ The first complete release does not include:
 
 - A builder can explain whether a requirement belongs to a [module](05-modules-fields-and-relationships.md), an [application](07-applications-pages-and-themes.md), or organisation data in [records](06-records-and-lifecycle.md).
 - A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [acceptance test](20-quality-and-acceptance.md), and [build phase](../build-plan/README.md).
-- No core feature automatically shares one organisation's private state with another. Every cross-organisation grant is explicit, limited, revocable, independently testable, and enforced by the source organisation's cluster under [D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope).
+- No core feature automatically shares one organisation's private state with another. Every cross-organisation grant is explicit, limited, approved by both organisations, revocable, independently testable, and enforced by the source organisation's cluster.

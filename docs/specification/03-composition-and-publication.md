@@ -114,7 +114,7 @@ Copying or installing a published definition never grants access to the publishe
 
 A record-sharing grant is live access state owned by the [Access service](04-access-and-permissions.md#shared-record-access). It is not a definition, does not publish with an application, and does not change the definition dependency graph. A target application can use shared records only when it has a compatible binding to the source module; a grant never substitutes for the record-type definition needed to validate and display those records.
 
-Cross-organisation sharing is included with the same product behaviour for same-cluster and cross-cluster recipients under approved [Decision D31](appendices/decisions.md#d31-cross-organisation-sharing-release-scope). The detailed product behaviour is specified in [record sharing](16-copying-sharing-import-export.md#record-sharing).
+Cross-organisation sharing uses the same product behaviour for same-cluster and cross-cluster recipients. The detailed product behaviour is specified in [record sharing](16-copying-sharing-import-export.md#record-sharing).
 
 The source and recipient application bindings must use a compatible published record contract. Installing a definition package records its source lineage, content fingerprint, and stable source-to-local component mapping. A recipient binding created from that lineage can prove how source record types and fields map to the local display definition. A separately authored module is not treated as compatible merely because its labels or database columns happen to look the same.
 

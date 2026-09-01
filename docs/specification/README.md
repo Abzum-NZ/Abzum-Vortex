@@ -8,7 +8,7 @@
 
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
 
-This document is a **review draft**, not a settled contract. Business behaviour that still needs agreement appears in the [decision register](appendices/decisions.md). No choice is treated as decided merely because it is convenient to build.
+This document is a **review draft**, not a settled contract. Business behaviour that still needs agreement appears in the [open decision register](appendices/decisions.md). Resolved choices are written into the permanent specification, plan, tests, and GitHub tasks and then removed from that register.
 
 ## How to read this specification
 
@@ -79,7 +79,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 ## Authority and change rules
 
-- A published numbered version of this document is authoritative only when every blocking entry in the [decision register](appendices/decisions.md) is marked **Decided**.
+- A published numbered version of this document is authoritative only when the [open decision register](appendices/decisions.md) contains no blocking entry.
 - A change to required behaviour updates this specification before the related [GitHub issue](https://github.com/orgs/Abzum-NZ/projects/2/views/1) is built.
 - A change must update the affected diagram, requirement, acceptance example, [data contract](appendices/data-contracts.md), [coverage map](appendices/traceability.md), and [build-plan dependency](../build-plan/README.md).
 - The repository history is the revision record. Each published specification version also records a short human-readable summary in this file.
@@ -89,7 +89,8 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
-| 2.0-draft.4 | Review draft | 1 September 2026 | D35 approved copyable sharing-code or signed-link recipient discovery; D36 approved separate source/recipient usage allocation because source-pays-all would not materially reduce complexity. |
-| 2.0-draft.3 | Review draft | 1 September 2026 | D29–D31 approved: one sharing experience uses a local adapter inside a cluster and a signed, source-authoritative Vortex Federation API across clusters, with no persistent recipient-cluster record copy. |
-| 2.0-draft.2 | Review draft | 1 September 2026 | D01 approved as one global identity with separate organisation accounts; contributed record-sharing proposal reviewed, corrected, and placed behind explicit D26–D34 choices. |
+| 2.0-draft.5 | Review draft | 1 September 2026 | Final sharing policy written through the specification and plan: approval by both organisations, published saved conditions, no live re-sharing, named application roles, explicit action/field/export rights, and source-executed search, reports, and approved export through ordinary record components. Resolved choices were removed from the open register. |
+| 2.0-draft.4 | Review draft | 1 September 2026 | Approved exact sharing-code or signed-link recipient discovery and separate source/recipient usage allocation because source-pays-all would not materially reduce complexity. |
+| 2.0-draft.3 | Review draft | 1 September 2026 | Approved one sharing experience using a local adapter inside a cluster and a signed, source-authoritative Vortex Federation API across clusters, with no persistent recipient-cluster record copy. |
+| 2.0-draft.2 | Review draft | 1 September 2026 | Approved one global identity with separate organisation accounts; reviewed and corrected the contributed record-sharing proposal and exposed its remaining business choices. |
 | 2.0-draft.1 | Review draft | 31 August 2026 | New structure, contradictions exposed as choices, delivery plan reconciled with the repository. |

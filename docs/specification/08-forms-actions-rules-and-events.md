@@ -27,6 +27,7 @@ An action belongs to a module when it expresses reusable business meaning, or to
 - A precondition.
 - One to ten ordered effects.
 - The events it may announce.
+- A sharing setting of `refused` by default or `allowed`. Only an action explicitly published as shareable may be named by a cross-organisation grant.
 
 Allowed immediate action effects are:
 
@@ -34,7 +35,7 @@ Allowed immediate action effects are:
 2. Create a related record through a declared relationship.
 3. Announce a declared business event when the save commits.
 
-An action cannot wait, call an external system, send email, send notifications, invoke a model, or read arbitrary records. Those operations belong to a [workflow](09-workflows-and-pipelines.md).
+An action cannot wait, call an external system, send email, send notifications, invoke a model, or read arbitrary records. Those operations belong to a [workflow](09-workflows-and-pipelines.md). A shared action runs wholly in the source organisation and cannot create or link recipient-owned records.
 
 ## Rules
 

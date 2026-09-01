@@ -98,7 +98,7 @@ A record type contains key, labels, title-field reference, storage scope, owners
 
 Installing a definition package also records a lineage entry with source publisher, source root and component identifiers, source release version and content fingerprint, local root and component identifiers, local published revision, compatibility state, and mapping fingerprint. A federation-compatible application binding names that lineage entry and the source contract range it can display. Visual similarity or matching builder keys without proven lineage are insufficient.
 
-Storage scope is `organisation_shared` or `application_contained`. Ownership mode and within-organisation individual sharing depend on [D24](decisions.md#d24-individual-record-sharing); cross-organisation sharing depends on [D31](decisions.md#d31-cross-organisation-sharing-release-scope).
+Storage scope is `organisation_shared` or `application_contained`. Ownership mode and within-organisation individual sharing depend on [D24](decisions.md#d24-individual-record-sharing). Cross-organisation access always uses the governed grant contract below.
 
 ## Field contract
 
@@ -144,18 +144,18 @@ Every access grant provides:
 | `recipient_cluster_id` | Required cluster that stores the recipient organisation account, application, roles, and non-content grant mirror. May equal the source cluster. |
 | `recipient_organisation_id` | Required for cross-organisation grants; equal to the source for inter-application grants. |
 | `recipient_application_id` | Required application from which the records may be requested. It must have a compatible module binding. |
-| `recipient_role_ids` | Recipient roles allowed to use the grant if [D32](decisions.md#d32-recipient-audience) chooses role-scoped access. |
+| `recipient_role_ids` | Required non-empty set of roles in the named recipient application. An account must currently hold at least one of them. |
 | `scope_kind` | Exactly one of `module`, `record_type`, `saved_condition`, or `record`. |
 | `module_root_id` | Required stable module identity. |
 | `record_type_id` | Required for record-type, saved-condition, and record scope. |
-| `saved_condition_id` and `parameters` | Required only for saved-condition scope; the condition is published and parameters must match its contract. |
+| `saved_condition_id`, `saved_condition_revision`, `saved_condition_fingerprint`, and `parameters` | Required only for saved-condition scope. The condition is published, the revision remains pinned for the grant, and parameter values must match its declared contract. |
 | `record_id` | Required only for record scope. |
-| `allowed_action_keys` | Required explicit action allowlist. Empty means no mutation. |
+| `allowed_action_keys` | Required explicit action allowlist. Empty means no mutation. Every named action must be published as shareable by the source definition. |
 | `readable_field_ids` | Required explicit field allowlist. Sensitive fields are refused in the first release. |
 | `changeable_field_ids` | Required subset of readable fields; empty for read-only grants. |
 | `export_allowed` | Required boolean; defaults to false in the creation experience and requires separate approval when true. |
 | `approved_recipient_region` | Required source-approved service region for a cross-cluster grant. A different current recipient region suspends access until a newly approved payload activates. |
-| `starts_at`, `expires_at` | Required start and optional expiry. No indefinite default is inferred. |
+| `starts_at`, `expires_at` | Required start and expiry for a cross-organisation grant. No indefinite access is inferred. |
 | `status` | `draft`, `pending_approval`, `active`, `suspended`, `revoked`, or `expired`. |
 | `created_by_organisation_account_id` | Required source organisation account that proposed the grant. |
 | `approval_request_id` | Required for a cross-organisation grant and links the exact approved payload fingerprint. |
@@ -165,9 +165,9 @@ Every access grant provides:
 | `revoked_at` | Present after revocation. |
 | `revoked_by_organisation_account_id`, `revocation_reason` | Present after an authorised revocation. |
 
-Only fields belonging to the chosen `scope_kind` may be populated. Grant validation and activation refuse an incompatible module binding, missing reference, sensitive field, unknown action, invalid condition parameter, source/recipient reversal, or recipient equal to a forbidden audience.
+Only fields belonging to the chosen `scope_kind` may be populated. Grant validation and activation refuse an incompatible module binding, missing or empty recipient audience, sensitive field, unknown or non-shareable action, invalid condition parameter, unpinned condition revision, source/recipient reversal, or recipient equal to a forbidden audience.
 
-One grant must independently cover record, action, and field. The runtime cannot take scope from one grant and fields or actions from another. When more than one complete grant allows the same request, the activity entry records every grant relied upon. Grants never permit re-sharing under [D28](decisions.md#d28-cross-organisation-sharing-chains).
+One grant must independently cover record, action, and field. The runtime cannot take scope from one grant and fields or actions from another. When more than one complete grant allows the same request, the activity entry records every grant relied upon. A recipient cannot use a received record or result as the source of another live grant.
 
 ## Approval request contract
 
@@ -186,11 +186,11 @@ An approval request records a protected governance decision for cross-organisati
 | `requested_at` | Required creation timestamp. |
 | `recipient_organisation_id` | Required for cross-organisation requests. |
 | `recipient_cluster_id` | Required for cross-organisation requests and may equal the source cluster. |
-| `required_decisions` | Required source and recipient approver sides and role identifiers under [D26](decisions.md#d26-cross-organisation-sharing-approval). |
+| `required_decisions` | For `cross_org_share`, exactly one source-approval side and one recipient-acceptance side, each with its authorised role identifiers. |
 | `expires_at` | Required deadline after which undecided requests expire. |
 | `result_resource_id` | Present after the owning service executes the approved action. |
 
-Each approval decision is an immutable child entry with request, payload fingerprint, approver organisation, approver organisation account, decision (`approved` or `refused`), time, optional safe note, authentication strength, and correlation identifier. A later revocation of the resulting grant creates a separate grant event; it does not rewrite the approval history.
+Each approval decision is an immutable child entry with request, decision side (`source_approval` or `recipient_acceptance`), payload fingerprint, approver organisation, approver organisation account, decision (`approved` or `refused`), time, optional safe note, authentication strength, and correlation identifier. A cross-organisation request requires one approved entry for each side over the same fingerprint. A later revocation of the resulting grant creates a separate grant event; it does not rewrite the approval history.
 
 ## Federation contracts
 
@@ -213,7 +213,7 @@ Federation transports the existing grant, query, action, file, and refusal contr
 
 ### Recipient discovery entry
 
-Approved [D35](decisions.md#d35-finding-a-recipient-organisation) stores a one-way fingerprint of the organisation sharing code, permanent organisation identifier, current cluster identifier, approved organisation display name, service region, state, issue and rotation times, and directory signature. A successful exact-code or signed-link lookup returns only the approved name, region, and a short-lived proposal address. It returns no people, account, role, application, record, file, plan, or billing information. Rotating the sharing code does not change existing grants because they use the permanent organisation identifier.
+The recipient directory stores a one-way fingerprint of the organisation sharing code, permanent organisation identifier, current cluster identifier, approved organisation display name, service region, state, issue and rotation times, and directory signature. A successful exact-code or signed-link lookup returns only the approved name, region, and a short-lived proposal address. It returns no people, account, role, application, record, file, plan, or billing information. Rotating the sharing code does not change existing grants because they use the permanent organisation identifier.
 
 ### Recipient assertion
 
@@ -227,7 +227,11 @@ The response provides the same correlation identifier, source cluster, operation
 
 ### Federated query and action
 
-A federated query provides `grant_id`, source organisation, module, record type, published module revision, readable field projection, validated filter, stable sort, bounded page size, optional continuation token, and optional permitted count request. The source performs every filter, sort, grant, field, row-restriction, and pagination check before returning records. Each record reference contains source cluster, source organisation, record type, record identifier, and concurrency number.
+A federated query provides request kind (`list`, `record`, `search`, or `report`), `grant_id`, source organisation, module, record type, published module revision, readable field projection, validated filter or search term, optional grouping and totals, stable sort, bounded page size, optional continuation token, and optional permitted count request. The source performs every filter, search, sort, grouping, total, grant, field, row-restriction, and pagination check before returning records or aggregates. Each record reference contains source cluster, source organisation, record type, record identifier, and concurrency number.
+
+A recipient application search may run several independent federated `search` queries for a bounded set of active grant mirrors. Each result remains tied to one source and grant. The recipient merges them into a request-only Shared result group and does not create a shared search document. A saved report names exactly one source organisation, record type, grant, definition revision, selected readable fields, filter, grouping, totals, sort, and presentation. The recipient may store that non-content definition but never its source rows or calculated results.
+
+A federated export request provides `grant_id`, source query fingerprint, declared format, approved readable field projection, maximum rows, duplicate-protection key, and download expiry. The source owns the bounded job and temporary file, rechecks the grant and saved condition during generation, and returns only a short-lived download instruction. The recipient cluster does not store the file. The source and recipient record linked usage and activity entries without including exported values.
 
 A federated action provides `grant_id`, one source record reference, named action, validated action input, expected concurrency number, and duplicate-protection key. The source returns the ordinary action outcome and new concurrency number. A remote action cannot create a recipient-owned relationship or span a transaction in both clusters.
 
@@ -239,11 +243,13 @@ The recipient stores one non-content mirror with `grant_id`, source and recipien
 
 ## Action, rule and condition contracts
 
-An action contains identifier, key, label, subject record type, permission, inputs, precondition, and ordered effects. Effects are `set_field`, `create_linked_record`, or `announce_event`.
+An action contains identifier, key, label, subject record type, permission, sharing setting (`refused` by default or `allowed`), inputs, precondition, and ordered effects. Effects are `set_field`, `create_linked_record`, or `announce_event`. A shared action executes wholly in the source organisation and cannot create a relationship to recipient-owned data.
 
 A rule contains identifier, trigger, condition, priority, and one effect. Effects are `refuse`, `set_value`, `require`, `show_or_hide`, `warn`, or `start_background_work`.
 
 A condition node has an operator and typed operands. Boolean groups use `all`, `any`, or `not`. Publication sets maximum nesting, operand count, and relationship hops. It refuses an operator/type mismatch or unknown operand source.
+
+A saved sharing condition belongs to one source record type and contains permanent identifier, key, published revision, contract fingerprint, typed parameter declarations, closed condition tree, declared field and relationship dependencies, and publication-test cases. It cannot read recipient data, execute code, call a connection, or accept an undeclared parameter. A grant pins its revision and values; later publication does not change an active grant.
 
 ## Application, page and block contracts
 
