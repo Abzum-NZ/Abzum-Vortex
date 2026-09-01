@@ -55,7 +55,9 @@ flowchart LR
 
 ## Identity across clusters
 
-Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It proves the global identity and issues a short-lived, asymmetrically signed identity token. Every cluster verifies the token from published public keys, then loads only the tenant assignment and organisation account stored in its own cluster. [Supabase supports verifying third-party and custom JWTs from published keys](https://supabase.com/docs/guides/auth/jwts).
+Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It is implemented with [Supabase Auth](https://supabase.com/docs/guides/auth) and issues short-lived identity tokens using an [asymmetric signing key and published key set](https://supabase.com/docs/guides/auth/signing-keys). Every cluster verifies the token locally from the published keys, then loads only the tenant assignment and organisation account stored in its own cluster.
+
+The token contains only stable global sign-in facts: identity, issuer, audience, session, issue and expiry times, and authentication strength. It does not carry tenant-administrator assignments, organisation roles, teams, application access, sharing grants, or an access decision. Those values are live Vortex records and are checked on every request. A [custom access-token hook](https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook) may add or remove only these approved global claims; it must not turn organisation permissions into long-lived token claims.
 
 The identity token proves the person; it does not grant tenant administration, organisation membership, or data access. A [cross-cluster shared-record request](17-runtime-storage-and-caching.md#cross-cluster-request) carries a short-lived assertion signed by the recipient cluster and is still evaluated by the source organisation.
 
@@ -93,3 +95,4 @@ The platform stores the tenant, tenant-administrator assignment, organisation an
 - A hierarchy move across tenants and a move that creates a cycle are both refused.
 - Suspending one organisation account removes its access on the next request without affecting the identity's other accounts.
 - Two clusters verify the same identity token while keeping their organisation accounts and access decisions local.
+- Rotating the Supabase signing key keeps the current and next public keys available through the overlap window, and neither key contains organisation authority.

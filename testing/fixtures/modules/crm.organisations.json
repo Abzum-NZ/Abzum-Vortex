@@ -15,6 +15,7 @@
     "record_types": [
       {
         "id": "rt_crm_company",
+        "storage_contract_id": "srt_00000001",
         "key": "company",
         "name": "Company",
         "plural_name": "Companies",

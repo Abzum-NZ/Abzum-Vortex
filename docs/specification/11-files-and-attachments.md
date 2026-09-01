@@ -37,8 +37,8 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 ## Upload sequence
 
 1. The server checks create/update permission for the target record and field.
-2. The server creates a short-lived pending-file record and a restricted upload instruction.
-3. The client uploads directly to organisation-scoped storage.
+2. The server creates a short-lived pending-file record and a restricted [signed upload instruction](https://supabase.com/docs/guides/storage/uploads).
+3. The client uploads directly to organisation-scoped [Supabase Storage](https://supabase.com/docs/guides/storage). Large or interruption-prone files use its resumable upload path rather than restarting the complete transfer.
 4. The platform verifies actual size, detected content type, extension, checksum, and safety result. Browser-supplied metadata is not trusted.
 5. The record save attaches the active file by identifier.
 6. Unattached pending uploads expire and are removed.
@@ -54,10 +54,12 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 ## Storage and isolation
 
 - Storage keys begin with the organisation identifier and use unguessable file identifiers.
+- Business files live only in private buckets. Public buckets are limited to deliberately published public assets.
 - The original file name is metadata, not part of an executable storage path.
 - Checksums support duplicate detection and integrity checks but do not grant cross-organisation access or shared storage identity.
 - File metadata, previews, extracted text, and deletion jobs carry the same organisation identifier as the original.
-- Storage policies and application checks both enforce organisation separation.
+- [Storage row policies](https://supabase.com/docs/guides/storage/security/access-control) on `storage.objects` and application checks both enforce organisation separation.
+- Downloads use short-lived signed addresses. Image transformation and content delivery acceleration may be used only for approved public assets or a currently authorised short-lived private response; neither changes the file's access rules.
 
 ## Attachments on shared records
 

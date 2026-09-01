@@ -58,11 +58,13 @@ const modules = new Map([...definitions].filter(([, value]) => value.kind === "m
 const applications = new Map([...definitions].filter(([, value]) => value.kind === "application"));
 const connections = new Map([...definitions].filter(([, value]) => value.kind === "connection_type"));
 const scenarios = new Map([...definitions].filter(([, value]) => value.kind === "acceptance_scenario"));
+const storageLayouts = new Map([...definitions].filter(([, value]) => value.kind === "storage_layout"));
 
 check(applications.size === 2, "fixture set contains two applications");
 check(modules.size === 8, "fixture set contains eight modules");
 check(connections.size === 3, "fixture set contains three connection types");
 check(scenarios.size === 1, "fixture set contains the cross-application scenario");
+check(storageLayouts.size === 1, "fixture set contains one complete storage layout");
 check(manifest.applications.every((key) => applications.has(key)), "manifest application keys resolve");
 
 const recordTypes = new Map();
@@ -71,6 +73,8 @@ const permissions = new Set();
 const actions = new Set();
 const events = new Set();
 const fieldTypes = new Set();
+const fieldIdentities = new Set();
+const storageContracts = new Map();
 const fieldKeys = ["id", "key", "type", "label", "required", "unique", "filterable", "sortable", "search_priority", "personal_data", "public_display", "settings"];
 
 for (const [moduleKey, module] of modules) {
@@ -84,6 +88,9 @@ for (const [moduleKey, module] of modules) {
     const full = `${moduleKey}:${recordType.key}`;
     check(!recordTypes.has(full), `${full} is unique`);
     recordTypes.set(full, { moduleKey, recordType });
+    check(typeof recordType.storage_contract_id === "string" && /^srt_[a-z0-9_]+$/.test(recordType.storage_contract_id), `${full} has a stable storage contract identity`);
+    check(!storageContracts.has(recordType.storage_contract_id), `${full} storage contract identity is unique`);
+    storageContracts.set(recordType.storage_contract_id, full);
     check(["organisation_shared", "application_contained"].includes(recordType.storage_scope), `${full} has a valid storage scope`);
     check((recordType.standard_actions ?? []).includes("read"), `${full} supports read`);
     for (const standardAction of recordType.standard_actions ?? []) {
@@ -95,6 +102,9 @@ for (const [moduleKey, module] of modules) {
       const fullField = `${full}.${field.key}`;
       check(fieldKeys.every((key) => Object.hasOwn(field, key)), `${fullField} declares every field contract property`);
       check(!fields.has(fullField), `${fullField} is unique`);
+      check(typeof field.id === "string" && /^[a-z][a-z0-9_]*$/.test(field.id), `${fullField} has a stable SQL-safe field identity`);
+      check(!fieldIdentities.has(field.id), `${fullField} field identity is globally unique in the fixture set`);
+      fieldIdentities.add(field.id);
       fields.set(fullField, field);
       fieldTypes.add(field.type);
     }
@@ -284,6 +294,89 @@ if (scenario) {
   check(grant.expected_physical_records === 1, "fixture case remains one source record");
 }
 
+const storageLayout = storageLayouts.get("vortex.storage.complete_examples");
+check(Boolean(storageLayout), "complete storage layout key resolves");
+if (storageLayout) {
+  const body = storageLayout.body;
+  check(body.owning_service === "record", "storage layout is owned by the Record service");
+  check(body.physical_schema === "record_data", "storage layout uses the protected record schema");
+  check(body.allocation_unit === "storage_contract_id", "tables are allocated by storage lineage rather than app or organisation");
+  check(body.uses_display_names === false, "physical names never use display names");
+  check(JSON.stringify(body.scope_keys?.organisation_shared) === JSON.stringify(["organisation_id"]), "organisation-shared scope key is exact");
+  check(JSON.stringify(body.scope_keys?.application_contained) === JSON.stringify(["organisation_id", "application_root_id"]), "application-contained scope key is exact");
+
+  const requiredSystemColumns = [
+    "organisation_id", "module_root_id", "record_type_id", "storage_contract_id", "record_id",
+    "application_root_id", "definition_revision", "owner_organisation_account_id", "lifecycle_state",
+    "concurrency_number", "created_at", "created_by", "updated_at", "updated_by", "deleted_at",
+    "deleted_by", "removal_due_at"
+  ];
+  check(JSON.stringify(body.system_columns) === JSON.stringify(requiredSystemColumns), "storage layout declares the complete system-column contract");
+
+  const tablesByRecordType = new Map();
+  const physicalTables = new Set();
+  for (const mapping of body.tables ?? []) {
+    const entry = recordTypes.get(mapping.record_type);
+    check(Boolean(entry), `storage table ${mapping.record_type} resolves`);
+    check(!tablesByRecordType.has(mapping.record_type), `${mapping.record_type} has only one physical-table mapping`);
+    check(/^record_data\.rt_srt_[a-z0-9_]+$/.test(mapping.table) && mapping.table.length <= 63, `${mapping.record_type} physical table token is valid`);
+    check(!physicalTables.has(mapping.table), `${mapping.record_type} physical table is collision-free`);
+    tablesByRecordType.set(mapping.record_type, mapping);
+    physicalTables.add(mapping.table);
+    if (entry) {
+      check(mapping.storage_contract_id === entry.recordType.storage_contract_id, `${mapping.record_type} storage identity matches its definition`);
+      check(mapping.storage_scope === entry.recordType.storage_scope, `${mapping.record_type} storage scope matches its definition`);
+      const physicalColumns = new Set();
+      for (const field of entry.recordType.fields) {
+        const column = `f_${field.id}`;
+        check(/^[a-z][a-z0-9_]*$/.test(column) && column.length <= 63, `${mapping.record_type}.${field.key} physical column token is valid`);
+        check(!physicalColumns.has(column), `${mapping.record_type}.${field.key} physical column is collision-free`);
+        physicalColumns.add(column);
+      }
+    }
+  }
+  for (const full of recordTypes.keys()) check(tablesByRecordType.has(full), `${full} resolves to exactly one physical table`);
+  check(tablesByRecordType.size === recordTypes.size, "storage layout contains every and only fixture record type");
+
+  const applicationRoots = new Map();
+  for (const root of body.application_roots ?? []) {
+    check(applications.has(root.application_definition), `application root ${root.application_root_id} definition resolves`);
+    check(!applicationRoots.has(root.application_root_id), `application root ${root.application_root_id} is unique`);
+    applicationRoots.set(root.application_root_id, root);
+  }
+  const crmRoots = [...applicationRoots.values()].filter((root) => root.application_definition === "vortex.app.crm");
+  check(crmRoots.length === 2 && crmRoots[0].display_name === crmRoots[1].display_name && crmRoots[0].organisation_id !== crmRoots[1].organisation_id, "two same-named CRM roots exist in different organisations");
+
+  const rows = body.row_examples ?? [];
+  for (const row of rows) {
+    const entry = recordTypes.get(row.record_type);
+    const mapping = tablesByRecordType.get(row.record_type);
+    check(Boolean(entry) && Boolean(mapping), `storage row ${row.record_id} record type resolves`);
+    if (!entry || !mapping) continue;
+    check(row.physical_table === mapping.table, `storage row ${row.record_id} uses its lineage table`);
+    if (entry.recordType.storage_scope === "organisation_shared") {
+      check(row.application_root_id === null, `organisation-shared row ${row.record_id} has no application root`);
+    } else {
+      check(typeof row.application_root_id === "string" && applicationRoots.has(row.application_root_id), `application-contained row ${row.record_id} has a valid application root`);
+      if (applicationRoots.has(row.application_root_id)) check(applicationRoots.get(row.application_root_id).organisation_id === row.organisation_id, `application-contained row ${row.record_id} application belongs to its organisation`);
+    }
+  }
+
+  const companyRows = rows.filter((row) => row.record_type === "vortex.crm.organisations:company");
+  check(companyRows.length === 2 && new Set(companyRows.map((row) => row.organisation_id)).size === 2 && new Set(companyRows.map((row) => row.physical_table)).size === 1, "same package in two organisations reuses one Company table with separate organisation rows");
+  const companyMapping = tablesByRecordType.get("vortex.crm.organisations:company");
+  const contactMapping = tablesByRecordType.get("vortex.crm.people:contact");
+  check(companyMapping?.storage_scope === "organisation_shared" && contactMapping?.storage_scope === "organisation_shared", "CRM and Service Desk shared Company and Contact mappings are organisation-scoped");
+  const applicationContainedRows = rows.filter((row) => recordTypes.get(row.record_type)?.recordType.storage_scope === "application_contained");
+  check(applicationContainedRows.every((row) => row.application_root_id), "every application-contained example is scoped to an application root");
+
+  const fork = body.fork_example;
+  check(fork.source_storage_contract_id !== fork.forked_storage_contract_id, "structural fork has a new storage identity");
+  check(fork.source_table !== fork.forked_table, "structural fork has a different physical table");
+  check(fork.source_table === companyMapping?.table, "structural fork example starts from the Company lineage");
+  check((body.assertions ?? []).length === 9, "storage fixture declares all nine scope and collision assertions");
+}
+
 const prohibited = new RegExp("sales" + "[ _-]" + "hub", "i");
 for (const path of ["fixture-set.json", ...manifest.files]) {
   const content = await readFile(join(root, path), "utf8");
@@ -296,4 +389,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Fixture validation passed: ${checks.length} assertions, ${modules.size} modules, ${applications.size} applications, ${connections.size} connection types, ${fields.size} fields, ${workflowTypes.size} workflow node types, and 0 unresolved references.`);
+console.log(`Fixture validation passed: ${checks.length} assertions, ${modules.size} modules, ${applications.size} applications, ${connections.size} connection types, ${recordTypes.size} record types, ${fields.size} fields, ${workflowTypes.size} workflow node types, one complete storage layout, and 0 unresolved references.`);

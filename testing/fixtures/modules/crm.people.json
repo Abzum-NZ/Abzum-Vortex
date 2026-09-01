@@ -14,7 +14,7 @@
     "dependencies": [{"module":"vortex.crm.organisations","version":"1.0.0"}],
     "record_types": [
       {
-        "id":"rt_crm_contact","key":"contact","name":"Contact","plural_name":"Contacts","description":"A person associated with a company.","storage_scope":"organisation_shared","ownership_mode":"team","title_field":"full_name","standard_actions":["create","read","update","soft_delete","restore","export"],
+        "id":"rt_crm_contact","storage_contract_id":"srt_00000002","key":"contact","name":"Contact","plural_name":"Contacts","description":"A person associated with a company.","storage_scope":"organisation_shared","ownership_mode":"team","title_field":"full_name","standard_actions":["create","read","update","soft_delete","restore","export"],
         "fields":[
           {"id":"fld_contact_number","key":"contact_number","type":"reference_number","label":"Contact number","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"prefix":"CON-","digits":7}},
           {"id":"fld_contact_first","key":"first_name","type":"text","label":"First name","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"personal","public_display":true,"settings":{"max_length":80}},
@@ -29,7 +29,7 @@
         ]
       },
       {
-        "id":"rt_crm_lead","key":"lead","name":"Lead","plural_name":"Leads","description":"An enquiry that has not yet been qualified.","storage_scope":"application_contained","ownership_mode":"individual","title_field":"display_name","standard_actions":["create","read","update","soft_delete","restore","export"],
+        "id":"rt_crm_lead","storage_contract_id":"srt_00000003","key":"lead","name":"Lead","plural_name":"Leads","description":"An enquiry that has not yet been qualified.","storage_scope":"application_contained","ownership_mode":"individual","title_field":"display_name","standard_actions":["create","read","update","soft_delete","restore","export"],
         "fields":[
           {"id":"fld_lead_number","key":"lead_number","type":"reference_number","label":"Lead number","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"prefix":"LEA-","digits":7}},
           {"id":"fld_lead_name","key":"display_name","type":"text","label":"Name","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"personal","public_display":false,"settings":{"max_length":160}},

@@ -104,7 +104,7 @@ The Access service owns an `access_version` per organisation. Every organisation
 
 A module contains identity and publication metadata, dependencies, record types, module actions, business events, and extension points.
 
-A record type contains key, labels, title-field reference, storage scope, ownership mode, fields, relationships, standard actions, and custom action references.
+A record type contains key, labels, title-field reference, permanent `storage_contract_id`, storage scope, ownership mode, fields, relationships, standard actions, and custom action references. A signed package install preserves the storage-contract identity only while its stored meaning and lineage fingerprint remain compatible. An independent definition or structural fork receives a new identity even when its names match another definition.
 
 Installing a definition package also records a lineage entry with source publisher, source root and component identifiers, source release version and content fingerprint, local root and component identifiers, local published revision, compatibility state, and mapping fingerprint. A federation-compatible application binding names that lineage entry and the source contract range it can display. Visual similarity or matching builder keys without proven lineage are insufficient.
 
@@ -125,9 +125,11 @@ Every organisation-owned business record provides:
 | Name | Requirement |
 |---|---|
 | `organisation_id` | Required organisation owner. |
+| `module_root_id` | Required permanent module definition identity. |
 | `record_type_id` | Required stable record-type identity. |
+| `storage_contract_id` | Required permanent compatible storage-lineage identity. It resolves through the protected Record service catalog to exactly one physical table in the cluster. |
 | `record_id` | Required permanent record identity. |
-| `application_id` | Required only for application-contained storage. |
+| `application_root_id` | Required only for application-contained storage and absent for organisation-shared storage. It is the receiving organisation's application root, not a display name or package key. |
 | `definition_revision` | Published module revision used for validation. |
 | `owner_organisation_account_id` | Present when ownership is enabled; it must belong to the record's organisation. |
 | `lifecycle_state` | `active`, `soft_deleted`, or `removal_pending`. |
@@ -137,9 +139,11 @@ Every organisation-owned business record provides:
 | `deleted_at`, `deleted_by` | Present after soft deletion. |
 | `removal_due_at` | Present when permanent removal is scheduled. |
 
-Business fields are stored according to the published record-type contract. Relationship storage repeats the organisation identifier on both endpoints and enforces matching organisation scope.
+Every storage-catalog entry contains `storage_contract_id`, owning service, physical schema and table token, module and record-type lineage, active compatible revision range, state, creation migration, and content fingerprint. Every field mapping contains `storage_contract_id`, permanent `field_id`, physical column token, database value type, introduction migration, optional retirement migration, and state. Physical tokens are allocated once, contain no mutable business name, fit PostgreSQL identifier limits, and are collision-checked before migration.
 
-The Record service owns a `data_version` for each organisation and record type. A committed create, change, delete, restore, relationship change, or access-relevant ownership change increases it.
+Business fields are stored according to the published record-type contract. Organisation-shared uniqueness and indexes begin with `organisation_id`. Application-contained uniqueness and indexes begin with `organisation_id, application_root_id`. Relationship storage repeats the organisation identifier on both endpoints and enforces matching organisation scope; when both endpoints are application-contained it also enforces the same application root.
+
+The Record service owns a `data_version` for each organisation, storage contract, and applicable application root. A committed create, change, delete, restore, relationship change, or access-relevant ownership change increases it.
 
 Unique values remain reserved while `lifecycle_state` is `soft_deleted` or `removal_pending` and are released only by permanent removal.
 
@@ -298,6 +302,12 @@ A block registration has permanent identifier, palette name/icon/group, zero to 
 `event_id`, organisation, optional application, module, record type, record identifier, event name, occurrence time, actor, correlation identifier, causation identifier, published definition revisions, per-record sequence, and declared carried values.
 
 Dispatch state is stored separately: status, available time, claim owner and expiry, attempts, last safe error code, delivered time, and failed-sequence resolution. Personal or sensitive field values cannot be carried.
+
+## Live invalidation envelope
+
+A live invalidation contains contract version, organisation, application, record type, optional record identifier, change kind, record-type data version, optional record version, sequence, occurrence time, and correlation identifier. It contains no business field, file address, display label, permission result, or shared-record value.
+
+The message is sent only through a private, authorised channel and is not proof that its recipient may read the record. A client that receives it must use the ordinary authorised query or record path. Duplicate, delayed, and out-of-order messages are safe because the fresh read and current data/access versions determine the displayed result.
 
 ## Workflow execution reference and protected operation
 

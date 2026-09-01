@@ -17,7 +17,8 @@
     "modules/service-desk.knowledge.json",
     "applications/crm.json",
     "applications/service-desk.json",
-    "scenarios/cross-application-sharing.json"
+    "scenarios/cross-application-sharing.json",
+    "storage/record-storage-layout.json"
   ],
   "applications": ["vortex.app.crm", "vortex.app.service_desk"],
   "shared_modules": ["vortex.crm.organisations", "vortex.crm.people"],

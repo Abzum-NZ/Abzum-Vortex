@@ -9,15 +9,17 @@ A **record** is one organisation-owned instance of a [record type](05-modules-fi
 Every record stores or exposes through one joined system record:
 
 - Organisation identifier.
-- Record-type identifier and published module version used for validation.
+- Module-root, record-type, and storage-contract identifiers plus the published module version used for validation.
 - Permanent record identifier.
-- Storage scope when the record type is application-contained.
+- Application-root identifier when the record type is application-contained; it is absent for organisation-shared records.
 - Created time and creator.
 - Last-changed time, changer, and concurrency number.
 - Owner where ownership is enabled.
 - Lifecycle state: active, deleted, or pending permanent removal.
 
 Exact columns are defined in the [data contracts](appendices/data-contracts.md#record-storage-contract).
+
+The record's physical table follows its storage contract, not the name of the organisation, application, module, or record type. Consequently, two organisations can each own an application named CRM without colliding, and CRM and Service Desk can use one organisation-owned Company record without copying it. The complete allocation rule is in [runtime storage](17-runtime-storage-and-caching.md#record-table-allocation).
 
 ## Save sequence
 
