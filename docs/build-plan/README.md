@@ -204,7 +204,7 @@ Build:
 - Module bindings, application roles, options, navigation and application resolution.
 - Application-contained theme settings, platform-theme binding, inheritance and legibility checking.
 - Six page types, four list arrangements, registered blocks, twelve-column responsive layout and page states.
-- [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, shared motion tokens and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.
+- [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, the six central semantic tokens, interruptible state-driven motion, and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.
 - Forms, guided-form drafts, action buttons and public pages.
 - Complete process-pipeline definition, transition gates and visible stage controls. Timed execution comes in Phase 7.
 - Platform Sign-in, Tenant Portal, and Organisation Portal application definitions.
@@ -214,6 +214,7 @@ Exit proof:
 - Complete CRM and Service Desk applications each publish as one root revision with exact module-version bindings.
 - Every fixture page passes desktop, phone, keyboard, validation, empty, refused, conflict and failure checks that apply.
 - Internal navigation never performs a routine full document reload; slow routes and blocks show immediate local feedback, and refreshing data updates only affected components and dependent totals without losing unrelated state.
+- A delayed response or unfinished animation for an obsolete record, page, or access state never flashes or replaces the current authorised state; no feature defines its own motion timing or spring.
 - Direct addresses cannot bypass page and action permissions.
 
 ## Phase 7 — Workflow and pipeline execution

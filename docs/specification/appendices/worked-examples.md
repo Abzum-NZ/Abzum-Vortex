@@ -164,6 +164,7 @@ The fixture applications demonstrate [core UI continuity and motion](../07-appli
 5. Motion for React animates coordinated entry, exit, and layout changes; simple control feedback uses CSS transitions.
 6. Reduced-motion mode presents the same states without spatial movement.
 7. Revoked case data disappears without waiting for an exit animation.
+8. If a person opens Company A, immediately selects Company B, and then opens a drawer, a delayed Company A response and its unfinished motion are discarded; the current Company B state remains authoritative.
 
 ## Workflow example
 

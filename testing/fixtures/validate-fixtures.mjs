@@ -152,6 +152,8 @@ for (const [applicationKey, application] of applications) {
   check(appPages.has(application.body.home_page), `${path} home page resolves`);
   check(application.body.motion?.library === "motion/react", `${path} uses the approved coordinated-motion library`);
   check(application.body.motion?.simple_feedback === "css", `${path} reserves CSS for simple feedback`);
+  check(JSON.stringify(application.body.motion?.semantic_tokens) === JSON.stringify(["feedback", "enter_exit", "refresh", "panel", "page", "layout_spring"]), `${path} uses only the six semantic motion tokens`);
+  check(application.body.motion?.current_state_wins === true, `${path} makes motion interruptible by current state`);
   check(application.body.motion?.reduced_motion === "required", `${path} requires reduced-motion behaviour`);
   check(application.body.motion?.experimental_view_transitions === false, `${path} excludes experimental view transitions`);
 
