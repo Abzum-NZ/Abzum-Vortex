@@ -2,8 +2,9 @@
 
 **Status:** Approved specification 2.0
 **Date:** 1 September 2026
-**Owner:** [Abzum NZ](https://github.com/Abzum-NZ)  
-**Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)  
+**Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
+
+**Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
 **Delivery board:** [Vortex GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1)
 
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
