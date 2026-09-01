@@ -53,6 +53,8 @@ Operations, accessibility, security, documentation, and automated checks are con
 
 ## Gate 0 — Decisions and platform readiness
 
+**Status:** Complete in [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151) on 2 September 2026.
+
 **Outcome:** The project has one authoritative approved specification, permanent requirements for settled choices, a clear register, complete source fixtures, and a delivery path that can safely begin contracts.
 
 Required work:
@@ -398,7 +400,7 @@ Exit proof:
 
 The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follows these implemented rules:
 
-1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151) is the final blocker for [Phase 1 #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9). Billing and database-migration operations do not block the database-free contracts phase.
+1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151) is complete. [Phase 1 #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), and identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11) are Ready. Billing and database-migration operations do not block the database-free contracts phase.
 2. Native GitHub blocked-by relationships govern sequencing; body text explains but does not replace them.
 3. Every phase epic has an outcome and completion evidence.
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/privacy/retention, plans/billing, and operations issues belong to those epics rather than Phase 10.
