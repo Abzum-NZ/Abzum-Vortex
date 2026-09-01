@@ -113,9 +113,23 @@ sequenceDiagram
 
 ## Live updates
 
-Live updates tell an open page that relevant data may have changed. They carry organisation, application, record type, record identifier, change kind, and sequence—not private field values.
+Live updates use [private Supabase Realtime Broadcast channels](https://supabase.com/docs/guides/realtime/authorization) to tell an open page that relevant data may have changed. They carry organisation, application, record type, record identifier, change kind, data version, and sequence—not private field values. Channel access is protected by row rules on `realtime.messages` and is recalculated when the connection or identity token changes.
 
-The client re-runs a permitted query or reloads the permitted record. Subscription channels are organisation-scoped and authorised on connection and renewal. A shared-record screen may receive a content-free invalidation tied to an active grant, then re-run its authorised query. A live message never carries source record values or makes an unreadable record visible.
+The client treats every message as an invalidation only: it re-runs a permitted query or reloads the permitted record through the ordinary server path. Subscription channels are organisation-scoped and narrowly split by application and surface so a connection does not subscribe to an organisation-wide firehose. A shared-record screen may receive a content-free invalidation tied to an active grant, then re-run its authorised source query. A live message never carries source record values, acts as evidence of access, or makes an unreadable record visible.
+
+Business-record changes use Broadcast rather than exposing direct table-change subscriptions to browsers. This keeps payloads deliberate and permits the same content-free message for derived changes, source-owned shared records, and access-version changes. Complicated business access remains in the normal server and database read path rather than in the channel policy.
+
+```mermaid
+sequenceDiagram
+    participant Save as Authorised record save
+    participant RT as Private Realtime channel
+    participant UI as Open component
+    participant Query as Authorised query path
+    Save->>RT: Content-free invalidation
+    RT-->>UI: Record type, identifier and versions
+    UI->>Query: Re-run current query
+    Query-->>UI: Currently readable result or refusal
+```
 
 ## Acceptance examples
 
@@ -124,6 +138,7 @@ The client re-runs a permitted query or reloads the permitted record. Subscripti
 - Count, chart, export, and list results agree for the same access scope and filter.
 - Pagination neither duplicates nor skips records when several records share the visible sort value.
 - Removing access prevents live updates and makes subsequent refreshes refuse the record.
+- A captured live message contains no field value and cannot be used to fetch data after access is removed.
 - Shared records can use ordinary list, detail, search-result, report, dashboard-block, and approved-export components while retaining a visible source marker and source-authoritative checks.
 - Shared search, report, and dashboard results leave no recipient search document, materialised report result, or cross-request business-data cache entry.
 - Shared records do not enter workflow selections, connection messages, bulk changes, cross-source relationships, or offline storage in the first release.

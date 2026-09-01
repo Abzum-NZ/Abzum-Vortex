@@ -1,0 +1,74 @@
+# GitHub delivery coverage
+
+[Specification index](../README.md) · [Build plan](../../build-plan/README.md) · [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1)
+
+This map connects every current specification section to the work that delivers and proves it. The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) is the operational task board; this file makes omissions and misplaced tasks reviewable from the repository.
+
+## Specification-to-task map
+
+| Specification section | Governing GitHub work |
+|---|---|
+| [1. Purpose and product boundaries](../01-purpose-and-scope.md) | Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), contract epic [#9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9), operational acceptance [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166); excluded AI tasks [#105](https://github.com/Abzum-NZ/Abzum-Vortex/issues/105) and [#106](https://github.com/Abzum-NZ/Abzum-Vortex/issues/106) remain closed. |
+| [2. People, organisations and sign-in](../02-people-organisations-and-sign-in.md) | Definition/Identity epic [#18](https://github.com/Abzum-NZ/Abzum-Vortex/issues/18), hierarchy and identity [#23–#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23), Supabase Auth authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25), federation identity/transport [#157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157). |
+| [3. Composition and publication](../03-composition-and-publication.md) | Identity/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), definition lifecycle [#19–#22](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19), module lifecycle [#43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43), distribution [#112](https://github.com/Abzum-NZ/Abzum-Vortex/issues/112), installation-versus-record boundary [#155](https://github.com/Abzum-NZ/Abzum-Vortex/issues/155). |
+| [4. Access and permissions](../04-access-and-permissions.md) | Access epic and workstreams [#31–#41](https://github.com/Abzum-NZ/Abzum-Vortex/issues/31), grants [#153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153), protected approvals [#154](https://github.com/Abzum-NZ/Abzum-Vortex/issues/154). |
+| [5. Modules, fields and relationships](../05-modules-fields-and-relationships.md) | Contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), Module/Record work [#43–#52](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43), extension use [#110](https://github.com/Abzum-NZ/Abzum-Vortex/issues/110). |
+| [6. Records and lifecycle](../06-records-and-lifecycle.md) | Storage generation [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45), save/lifecycle work [#47–#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), grants and remote source execution [#153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153) and [#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156). |
+| [7. Applications, pages and themes](../07-applications-pages-and-themes.md) | Application/Page epic [#63](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63), workstreams [#64–#74](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), replacement [#111](https://github.com/Abzum-NZ/Abzum-Vortex/issues/111), announcements [#169](https://github.com/Abzum-NZ/Abzum-Vortex/issues/169), final interface evidence [#172](https://github.com/Abzum-NZ/Abzum-Vortex/issues/172). |
+| [8. Forms, actions, rules and events](../08-forms-actions-rules-and-events.md) | Shared contracts [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), save pipeline [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), rules/events [#57–#61](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57). |
+| [9. Workflows and pipelines](../09-workflows-and-pipelines.md) | Shared contracts [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), Workflow epic and tasks [#75–#86](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75), protected approvals [#154](https://github.com/Abzum-NZ/Abzum-Vortex/issues/154). |
+| [10. Queries, reports, search and live updates](../10-queries-reports-search.md) | Shared contracts [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), query work [#54–#55](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54), private Realtime invalidation [#56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56), search work [#88–#91](https://github.com/Abzum-NZ/Abzum-Vortex/issues/88), remote source execution [#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156). |
+| [11. Files and attachments](../11-files-and-attachments.md) | Shared contracts [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), file work [#92–#96](https://github.com/Abzum-NZ/Abzum-Vortex/issues/92), remote file execution [#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156), restore proof [#170](https://github.com/Abzum-NZ/Abzum-Vortex/issues/170). |
+| [12. Connections and interfaces](../12-connections-and-interfaces.md) | Shared contracts [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), Connection/Interface work [#99–#108](https://github.com/Abzum-NZ/Abzum-Vortex/issues/99), federation transport [#157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157). |
+| [13. AI excluded](../01-purpose-and-scope.md#product-boundaries) | Removed work remains visibly closed in [#105](https://github.com/Abzum-NZ/Abzum-Vortex/issues/105) and [#106](https://github.com/Abzum-NZ/Abzum-Vortex/issues/106); no open implementation issue may reintroduce it. |
+| [14. Activity, privacy and retention](../14-activity-privacy-and-retention.md) | Privacy epic [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), activity/privacy/retention [#115–#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115), privacy-safe restore [#170](https://github.com/Abzum-NZ/Abzum-Vortex/issues/170). |
+| [15. Plans, usage, billing and announcements](../15-plans-billing-and-usage.md) | Plans/Billing epic [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), plans/seats [#118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118), usage [#167](https://github.com/Abzum-NZ/Abzum-Vortex/issues/167), lifecycle [#168](https://github.com/Abzum-NZ/Abzum-Vortex/issues/168), Stripe [#5](https://github.com/Abzum-NZ/Abzum-Vortex/issues/5), announcements [#169](https://github.com/Abzum-NZ/Abzum-Vortex/issues/169). |
+| [16. Copying, sharing, import and export](../16-copying-sharing-import-export.md) | Distribution epic [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109), copy/import/export/bulk [#112–#114](https://github.com/Abzum-NZ/Abzum-Vortex/issues/112), sharing [#153–#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153). |
+| [17. Runtime, storage and caching](../17-runtime-storage-and-caching.md) | Repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), Supabase/database guarantees [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) and [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), row rules/cache/storage/events [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35), [#39](https://github.com/Abzum-NZ/Abzum-Vortex/issues/39), [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45), [#55](https://github.com/Abzum-NZ/Abzum-Vortex/issues/55), Queue/Webhook dispatch [#60–#61](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60), migrations [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), federation [#157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157). |
+| [18. Delivery and testing](../18-delivery-and-testing.md) | Repository/Vercel gate [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10) and [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17), Supabase CLI/pgTAP/lint and Testing migrations [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), release rehearsal [#173](https://github.com/Abzum-NZ/Abzum-Vortex/issues/173). |
+| [19. Operations, backup and recovery](../19-operations-backup-and-recovery.md) | Completed Kestra backup [#132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132), readiness epic [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166), observability [#119](https://github.com/Abzum-NZ/Abzum-Vortex/issues/119), restore [#170](https://github.com/Abzum-NZ/Abzum-Vortex/issues/170), security [#171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), release [#173](https://github.com/Abzum-NZ/Abzum-Vortex/issues/173). |
+| [20. Quality and acceptance](../20-quality-and-acceptance.md) | Isolation [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29), worked applications [#74](https://github.com/Abzum-NZ/Abzum-Vortex/issues/74), experience/interface evidence [#96](https://github.com/Abzum-NZ/Abzum-Vortex/issues/96), [#97](https://github.com/Abzum-NZ/Abzum-Vortex/issues/97), [#108](https://github.com/Abzum-NZ/Abzum-Vortex/issues/108), operational evidence [#119](https://github.com/Abzum-NZ/Abzum-Vortex/issues/119), [#172](https://github.com/Abzum-NZ/Abzum-Vortex/issues/172), [#173](https://github.com/Abzum-NZ/Abzum-Vortex/issues/173). |
+
+## Phase epics
+
+| Delivery stage | Epic |
+|---|---|
+| Gate 0 | [#151 · Reconcile and approve Platform Specification 2.0](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151) |
+| Phase 1 | [#9 · Contracts](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9) |
+| Phase 2 | [#18 · Definition and Identity](https://github.com/Abzum-NZ/Abzum-Vortex/issues/18) |
+| Phase 3 | [#31 · Access](https://github.com/Abzum-NZ/Abzum-Vortex/issues/31) |
+| Phase 4 | [#42 · Module and Record](https://github.com/Abzum-NZ/Abzum-Vortex/issues/42) |
+| Phase 5 | [#53 · Query, Rule and Event](https://github.com/Abzum-NZ/Abzum-Vortex/issues/53) |
+| Phase 6 | [#63 · Application, Theme and Page](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63) |
+| Phase 7 | [#75 · Workflow and pipeline execution](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75) |
+| Phase 8 | [#87 · Search and File](https://github.com/Abzum-NZ/Abzum-Vortex/issues/87) |
+| Phase 9 | [#98 · Connections and Interfaces](https://github.com/Abzum-NZ/Abzum-Vortex/issues/98) |
+| Phase 10 | [#109 · Copy, gallery, sharing, import and export](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109) |
+| Phase 11 | [#164 · Privacy and retention](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164) |
+| Phase 12 | [#165 · Plans, usage and billing](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165) |
+| Phase 13 | [#166 · Operational readiness and release](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166) |
+
+## Board integrity rules
+
+The project is considered consistent only when:
+
+- Every open non-epic issue belongs to one phase epic, except an explicit Gate 0 prerequisite.
+- The phase label and milestone agree with the parent epic.
+- Every project issue has Status, Size, Priority and Milestone values appropriate to its state.
+- A workstream with no earlier task inside its phase has a native blocker from the required prior phase; parenthood does not substitute for a blocker.
+- Every issue links its current governing specification section and build-plan phase. Superseded source links may remain only as history.
+- Closed exclusions stay closed. No open task adds AI functionality in this release.
+- CRM and Service Desk names, record types and storage use permanent identifiers; mutable display names never define database identity.
+- A specification change updates this map and the affected GitHub issue in the same change.
+
+## Audit changes completed on 2 September 2026
+
+- Closed completed backup [#132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132).
+- Moved Stripe setup [#5](https://github.com/Abzum-NZ/Abzum-Vortex/issues/5) from Gate 0 to Phase 12 and migration/access operations [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) to the start of Phase 2.
+- Added Phase 11–13 milestones and epics and rehomed their work.
+- Moved extension use [#110](https://github.com/Abzum-NZ/Abzum-Vortex/issues/110) to Phase 4 and standard-page replacement [#111](https://github.com/Abzum-NZ/Abzum-Vortex/issues/111) to Phase 6.
+- Split usage/billing and operational readiness into independently testable tasks [#167–#173](https://github.com/Abzum-NZ/Abzum-Vortex/issues/167).
+- Rewrote every phase epic from the approved build plan and added missing native blockers to phase-root workstreams.
+- Created real Priority options and assigned a Priority to every project issue.
+- Added the storage-lineage contract and updated [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11) and [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
+- Assigned Supabase Auth, row rules, private Realtime Broadcast, logged Queue, asynchronous Webhook wake-up, private Storage, local/Testing database verification, managed recovery, advisers and network safeguards to [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25), [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), [#56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56), [#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60), [#61](https://github.com/Abzum-NZ/Abzum-Vortex/issues/61), [#92](https://github.com/Abzum-NZ/Abzum-Vortex/issues/92), [#93](https://github.com/Abzum-NZ/Abzum-Vortex/issues/93), [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), [#170](https://github.com/Abzum-NZ/Abzum-Vortex/issues/170), and [#171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171).

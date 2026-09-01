@@ -21,6 +21,7 @@ The fixture set contains two independently versioned applications, eight indepen
 11. Email, calendar, and webhook connection types.
 12. Application-contained workflows, pipelines, roles, navigation, pages, themes, queries, actions, and interfaces.
 13. Organisation scenarios for shared company/contact records and a limited collaborative case grant.
+14. A complete storage layout and scope scenario for all record types and fields.
 
 The complete set is written and validated before Phase 1 engine implementation. A partial example cannot pass by weakening reference checks.
 
@@ -78,6 +79,37 @@ flowchart TB
 Companies and contacts have `organisation_shared` storage. CRM and Service Desk bind the same module versions and use the same live records; neither application receives a copy.
 
 Leads, opportunities, activities, cases, comments, and knowledge articles use `application_contained` storage. Another application needs a compatible module binding and an active inter-application grant before it can use such records.
+
+## Storage composition and collision safety
+
+Every fixture record type has a permanent storage-contract identity. The storage fixture maps each identity to one physical table and derives every business-field column from its permanent field identity. Names such as CRM, Company, and Name are presentation only.
+
+```mermaid
+flowchart TB
+    subgraph A[Organisation Alpha]
+        ACRM[CRM application root alpha-crm]
+        ASD[Service Desk application root alpha-service]
+        ACOMP[Company COM-0000001]
+        ACASE[Case CAS-0000001]
+    end
+    subgraph B[Organisation Beta]
+        BCRM[CRM application root beta-crm]
+        BCOMP[Company COM-0000001]
+    end
+    COMPANY_TABLE[One Company storage-lineage table]
+    CASE_TABLE[One Case storage-lineage table]
+    ACRM --> COMPANY_TABLE
+    ASD --> COMPANY_TABLE
+    BCRM --> COMPANY_TABLE
+    COMPANY_TABLE -->|organisation_id alpha| ACOMP
+    COMPANY_TABLE -->|organisation_id beta| BCOMP
+    ASD --> CASE_TABLE
+    CASE_TABLE -->|organisation_id alpha plus application_root_id alpha-service| ACASE
+```
+
+The two organisations may use the same application, module, record-type, field, and reference-number labels without collision because every row is scoped by `organisation_id`. Application-contained rows add `application_root_id`. CRM and Service Desk in Organisation Alpha see the same Company and Contact records because those record types are organisation-shared. Their unrelated app-contained record types remain separate because they resolve to distinct storage-contract tables and application roots.
+
+An independently created module that happens to call a record type Company does not join this table. Without the same validated package lineage it receives a new `storage_contract_id` and a different physical table.
 
 ## CRM application
 
@@ -232,5 +264,6 @@ The validator and later engine tests prove:
 - Both applications have independent versions and bind exact module versions.
 - Shared company/contact tests prove one source record and separate application permissions.
 - Limited case collaboration proves source ownership, field/action limits, immediate revocation, and no copied summary record.
+- The storage-layout scenario proves one physical mapping per record-type lineage, stable field mappings, two same-named CRM applications isolated by organisation, application-contained row isolation, and a different table for an unrelated same-named definition.
 - Every visible screen has desktop and phone layouts and applicable normal, empty, loading, validation, refused, conflict, failure, recovery, and reduced-motion states.
 - The assertion count is generated from the current contract catalogue rather than maintained as a fixed marketing number.

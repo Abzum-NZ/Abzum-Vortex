@@ -49,6 +49,35 @@ Each record type has:
 - Relationships and reverse relationships.
 - An organisation-shared or application-contained storage scope.
 
+## Storage identity and application use
+
+Applications do not own database table shapes. Modules own record types, and each record type names one permanent `storage_contract_id`. That identifier represents the compatible physical-storage lineage of the record type independently of its display name, builder key, owning organisation, application, or published version.
+
+```mermaid
+flowchart TD
+    PACKAGE[Published record-type package] --> STORAGE[Stable storage contract]
+    STORAGE --> TABLE[One physical table in the cluster]
+    CRM_A[CRM in Organisation A] -->|binds| STORAGE
+    SD_A[Service Desk in Organisation A] -->|binds| STORAGE
+    CRM_B[CRM in Organisation B] -->|binds| STORAGE
+    TABLE --> AROWS[Organisation A rows]
+    TABLE --> BROWS[Organisation B rows]
+    FORK[Independent or structurally forked record type] --> NEW[New storage contract]
+    NEW --> NEWTABLE[Different physical table]
+```
+
+The rules are:
+
+- Installing the same signed definition package in several organisations preserves its storage-contract identities. The installations use the same physical tables, while `organisation_id` separates their rows.
+- Binding the same record type into several applications does not create another table. For `organisation_shared` storage, authorised applications in the same organisation can use the same record. For `application_contained` storage, `application_root_id` separates each application's records inside the table.
+- Two independently created definitions never share storage merely because their application, module, record type, or field names match. They have different root and storage-contract identities and therefore different tables.
+- Copying or editing presentation, pages, roles, workflows, and application bindings does not fork storage. A definition change that creates independently evolving stored meaning creates a new storage-contract lineage before publication.
+- Compatible releases in one storage lineage use the same table and an explicit migration. Incompatible stored meaning uses add, migrate, switch, and retire or a new lineage; it never silently reuses a similar-looking table.
+- A physical table name is allocated from the permanent storage-contract identity and a business-field column name from the permanent field identity. Mutable labels, keys, organisation names, application names, and module names never form SQL identifiers.
+- The Record service catalog is the authoritative mapping from definition identities to physical tables and columns. It refuses duplicate physical names, missing mappings, a field mapped twice in one table, or a mapping to a table owned by another service.
+
+This keeps the number of tables proportional to genuinely different record-type structures rather than organisations multiplied by applications multiplied by record types. Exact row keys and physical-name requirements are defined in the [record storage contract](appendices/data-contracts.md#record-storage-contract), and the cluster rules are defined in [runtime storage](17-runtime-storage-and-caching.md#record-table-allocation).
+
 ## Common field properties
 
 Every field carries the following properties. Properties marked “optional” have the listed default.

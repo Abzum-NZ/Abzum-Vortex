@@ -61,8 +61,9 @@ Required work:
 - Keep cluster location out of the product-level sharing choices: one shared-record gateway uses a local adapter or the signed Vortex Federation API.
 - Publish Specification 2.0 and update its version history.
 - Write and validate the complete [CRM and Service Desk fixture set](../specification/appendices/worked-examples.md), including every module, action, connection type, interface, theme, role, workflow, pipeline, page, query, and cross-application scenario before Phase 1 engine code.
+- Define and validate the [record-table allocation](../specification/17-runtime-storage-and-caching.md#record-table-allocation): one table per compatible record-type storage lineage, explicit organisation/application row scope, stable physical tokens, and collision cases covering same-named applications in different organisations.
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
-- Complete or explicitly rescope [M0 issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and [M0 issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139).
+- Close the completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and move migration/access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) to the start of Phase 2, before the first database migration.
 - Update [Phase 1 epic #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9) so every active M0 gate is a native dependency.
 - Assign the existing Priority values to active work, add a real Bugs filter, add roadmap dates when scheduling begins, use native blocked-by links, and add epic completion criteria on the [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1).
 
@@ -85,12 +86,14 @@ Build:
 - Independently versioned module and application contracts plus their contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
 - All [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, privacy, billing and cache versions.
 - Contract validator with stable error codes and exact component paths.
+- Storage-catalog and scope contracts that distinguish definition identity, storage lineage, organisation ownership, and application-contained ownership without creating per-installation tables.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
 - Types, lint, unit tests, contract tests and build checks that run without a database.
 
 Exit proof:
 
 - Both complete examples validate with no unresolved reference.
+- Every record type resolves to exactly one collision-free storage mapping; two same-named CRM applications in different organisations remain isolated, while CRM and Service Desk can read the same organisation-shared Company and Contact records.
 - Invalid examples cover every closed list, missing required value, unknown value, incompatible reference and cross-root version failure.
 - No service-specific package invents a second form of a shared contract.
 
@@ -105,6 +108,7 @@ Exit proof:
 Build:
 
 - One environment-wide [Vortex Identity Authority](../specification/02-people-organisations-and-sign-in.md#identity-across-clusters), plus tenants, tenant-administrator assignments, acyclic organisation hierarchy, cluster-local organisation accounts, invitations, sessions and organisation launcher.
+- Supabase Auth with asymmetric signing keys and locally verifiable short-lived identity tokens; organisation authority remains live cluster data rather than token claims.
 - Neutral bootstrap sign-in with one global identity and a separate account in every organisation the person belongs to.
 - Independent module and application draft concurrency, release versions, validation, immutable revision publication, dependency graph and restore. Themes, pages, workflows, interfaces and application roles remain contained in the application; organisation roles remain live access data.
 - Platform bootstrap definitions required before the Page service exists.
@@ -182,6 +186,7 @@ Build:
 - Safe database query compilation with no dropped predicates.
 - Client and server rule evaluation with server authority.
 - Transactional event outbox, [Supabase Queue](https://supabase.com/docs/guides/queues), webhook wake-up, sequence barrier, retry, failed-event handling and recovery call.
+- Private Supabase Realtime Broadcast channels that send content-free invalidations and force an authorised reload.
 - Search/file data-version hooks needed by later phases.
 
 Exit proof:
@@ -249,7 +254,7 @@ Exit proof:
 
 Build in two streams:
 
-- **Core after Phase 4:** search documents, ranking, access recheck, file metadata, private storage, upload/download grants, detection, scanning, quarantine and lifecycle.
+- **Core after Phase 4:** search documents, ranking, access recheck, file metadata, private Supabase Storage buckets, signed and resumable transfers, upload/download grants, detection, scanning, quarantine and lifecycle.
 - **Experience after Phases 5–7:** page blocks, attachment controls, previews, live search freshness, phone installation, usage notices, scheduled purge and recovery.
 
 Exit proof:
@@ -282,7 +287,7 @@ Exit proof:
 
 ## Phase 10 — Copy, gallery, sharing, import and export
 
-**Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
+**Current project epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
 
 **Needs:** Phases 6, 8 and 9. The sharing and copy policies are settled in the specification.
 
@@ -323,7 +328,7 @@ Exit proof:
 
 ## Phase 11 — Privacy and retention
 
-**Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
+**Project epic:** [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164)
 
 **Needs:** Every service that stores personal or derived content.
 
@@ -345,7 +350,7 @@ Exit proof:
 
 ## Phase 12 — Plans, usage and billing
 
-**Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
+**Project epic:** [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165)
 
 **Needs:** Identity plus usage-producing services.
 
@@ -368,7 +373,7 @@ Exit proof:
 
 ## Phase 13 — Operational readiness and release
 
-**Rehomes part of current epic:** [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109)
+**Project epic:** [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166)
 
 **Needs:** Phases 1–12.
 
@@ -378,6 +383,7 @@ Build and prove:
 
 - Measures, alerts, incident records and tested runbooks from [operations](../specification/19-operations-backup-and-recovery.md).
 - Independent encrypted backup, scheduled restore, workflow reconciliation, file integrity and privacy-removal replay.
+- Supabase managed point-in-time recovery, SSL enforcement, exposed-schema review, platform adviser review, and conditional network restrictions, proven alongside the independent backup path.
 - Secret inventory and rotation drills.
 - Full separation, accessibility, measured performance, load, failure and recovery acceptance. Performance findings create work but never block a release by themselves.
 - Production release checklist, change record, support boundary and customer communication path.
@@ -388,17 +394,15 @@ Exit proof:
 - No blocking decision, unresolved reference, critical alert, untested migration or failed acceptance case remains.
 - The release candidate is traceable from specification and decision through issue, code, migration, evidence, deployment and runbook.
 
-## Project-board changes required
+## Project-board operating structure
 
-The current [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) should be updated as follows:
+The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follows these implemented rules:
 
-1. Add a Gate 0 specification-reconciliation epic and make [Phase 1 #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9) depend on it and every unfinished M0 prerequisite.
-2. Use native GitHub blocked-by relationships; body text may explain but not replace them.
-3. Add completion criteria to every phase epic.
-4. Split current Phase 10 into Phases 10–13 above and rehome its child issues.
-5. Make [Phase 7 #75](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75) depend on [Phase 6 #63](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63).
-6. Give [Phase 8 #87](https://github.com/Abzum-NZ/Abzum-Vortex/issues/87) separate core and experience dependencies.
-7. Assign the existing Priority values before relying on the Prioritized backlog view; filter the Bugs view; populate roadmap dates only after scheduling; use Iteration only when work is actually planned.
-8. Update or supersede outdated [bootstrap issue #1](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1), clarify [continuous-integration issue #17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17), close or rescope [#132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132), and update [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) from its recorded decisions.
-
-Project mutations should follow the current specification and keep the decision register limited to genuinely open business choices.
+1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151) is the final blocker for [Phase 1 #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9). Billing and database-migration operations do not block the database-free contracts phase.
+2. Native GitHub blocked-by relationships govern sequencing; body text explains but does not replace them.
+3. Every phase epic has an outcome and completion evidence.
+4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/privacy/retention, plans/billing, and operations issues belong to those epics rather than Phase 10.
+5. Extension-point use belongs to Phase 4 and standard-page replacement belongs to Phase 6; they are no longer deferred to distribution work.
+6. Priority is explicit on every project issue: `P0 — Critical`, `P1 — Next`, `P2 — Planned`, or `P3 — Later`. The Bugs view filters `label:bug`; roadmap dates and Iteration remain empty until work is genuinely scheduled.
+7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) is closed. Migration and access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) is a Phase 2 prerequisite blocked by Phase 1.
+8. Every later board change follows the current specification and keeps the decision register limited to genuinely open business choices.
