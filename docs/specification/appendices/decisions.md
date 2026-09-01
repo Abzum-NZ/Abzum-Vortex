@@ -280,6 +280,8 @@ Reply with the decision number and option, for example: `D01 A, D02 A, D03 B`. A
 
 ## Sharing and federation decisions
 
+Decision order matters: decide [D31](#d31-cross-organisation-sharing-release-scope) and [D29](#d29-cross-cluster-federation-approach) first. If D31 includes same-cluster sharing, D26–D28 and D32–D34 block its implementation. If D29 defers federation, D30 remains recorded future work and does not block the first release.
+
 ### D26 Cross-organisation sharing approval
 
 **Question:** What approval is required before one organisation can expose records to another?
