@@ -24,7 +24,7 @@ A [module](05-modules-fields-and-relationships.md) owns reusable business meanin
 
 ### Application layer
 
-An [application](07-applications-pages-and-themes.md) selects modules and adds the user experience: navigation, pages, forms, application roles, application actions, rules, events, workflows, pipelines, themes, and application-level field bindings.
+An [application](07-applications-pages-and-themes.md) selects exact compatible module versions and adds the user experience: navigation, pages, forms, application roles, application actions, rules, events, workflows, pipelines, and themes.
 
 ### Organisation-data layer
 
@@ -66,6 +66,8 @@ stateDiagram-v2
 - An application-to-module reference uses a stable module identifier plus an allowed version range or an explicitly pinned version. Publication records the exact resolved module version.
 
 The platform calculates whether a proposed revision is patch, minor, or major from its stable identifiers and contract changes. Vortex assigns the minimum valid next release version. The builder reviews every reason for that calculated impact and either confirms publication or cancels it; the builder does not enter or override the release number. This keeps module and application histories consistent and prevents an accidental compatibility claim.
+
+The complete classification, identity, ordering, history-integrity, and stale-confirmation rules are normative in the [module and application version-impact policy](appendices/version-impact-policy.md). First publication is `1.0.0`; semantically unchanged content cannot create a new release.
 
 ## Validation before publication
 

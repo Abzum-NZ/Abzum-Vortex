@@ -23,7 +23,7 @@ An **action** is a named operation that participates in a save. A **rule** is im
 An action belongs to a module when it expresses reusable business meaning, or to an application when it exists only for that application. It records:
 
 - Permanent identifier, label, subject record type, and required permission.
-- Inputs with names, labels, types, required flags, and validation that is valid for that type. Text accepts length and pattern constraints; numbers accept numeric bounds; dates and date-times accept their own bounds; a record reference names its target record type; a Boolean accepts none of those unrelated settings.
+- Inputs with names, labels, types, required flags, and validation that is valid for that type. Plain text accepts length and pattern constraints; formatted text accepts a closed block allowlist and maximum length; numbers accept numeric bounds; dates and date-times accept their own bounds; a record reference names one or more allowed record types; an organisation-account reference selects an account in the current organisation; a Boolean accepts none of those unrelated settings.
 - A precondition.
 - One to ten ordered effects.
 - The events it may announce.

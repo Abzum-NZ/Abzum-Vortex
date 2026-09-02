@@ -10,6 +10,8 @@ export * from "./integration-contracts";
 export * from "./lineage";
 export * from "./module-contracts";
 export * from "./operation-contracts";
+export * from "./permissions";
 export * from "./records";
 export * from "./storage";
 export * from "./validation-errors";
+export * from "./version-impact";
