@@ -392,6 +392,31 @@ An announcement has identifier, publisher kind and identifier, audience scope (`
 
 Every refused or failed operation returns a stable code, plain-language message, correlation identifier, and safe field/component path where useful. Validation may return several independent errors. Responses never include a stack trace, SQL text, secret, hidden identifier, private record value, or other organisation's existence.
 
+### Definition validation errors
+
+Definition validation uses a separate versioned public catalogue implemented by [`contracts/src/validation-errors.ts`](../../../contracts/src/validation-errors.ts) and explained in the [author guide](../../../contracts/VALIDATION_ERRORS.md). The catalogue is generic: it has no installed application, module, record-type, field, workflow, connection, or example-fixture name and never changes its behaviour for one definition.
+
+Each public definition error has the catalogue version, stable code, catalogue-owned plain message and guidance, correlation identifier, and optional safe location. A safe location contains only the definition kind, the definition's builder-visible key, and an ordered set of typed builder-visible keys explicitly supplied by the caller. It contains no raw object path or protected identifier.
+
+The closed first catalogue covers a missing value, invalid value or format, unsupported choice, unknown property, too few or too many items, duplicate key, broken or unresolved reference, invalid scope, incompatible version, dependency cycle, unsafe public content, incompatible definition change, and a safe fallback. Public text comes only from the catalogue and cannot be supplied by a validator or caller.
+
+Strict schema failures and published validation-rule failures converge on the same public result:
+
+```mermaid
+flowchart TD
+    INPUT[Definition input] --> SHAPE[Strict contract schema]
+    INPUT --> RULES[Validation rules]
+    SHAPE --> SAFE[Generic safe translator]
+    RULES -->|rule code + closed family + safe location| SAFE
+    SAFE --> CATALOGUE[Versioned public catalogue]
+    SAFE -. raw detail under same correlation identifier .-> DIAGNOSTIC[Protected diagnostic destination]
+    CATALOGUE --> RESPONSE[Deterministic de-duplicated public errors]
+```
+
+Schema messages, submitted values, display labels, raw paths, internal identifiers and diagnostics are never copied into public output. A raw schema path is translated only through an explicit safe path map and otherwise points to the definition root. Required paths are declared explicitly rather than inferred from changeable library wording. Unknown schema issue kinds and malformed rule handoffs use the safe fallback. A protected diagnostic destination may receive raw details under the same correlation identifier, but its failure cannot change the public response.
+
+Errors sort deterministically by safe location and catalogue order. Duplicate public code-and-location pairs collapse to one error. [Issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns the validation stages and rule catalogue; its rules emit only the structured rule-failure handoff and do not own public codes or wording.
+
 ## Performance measurements
 
 Each measurement names operation, dataset, cache state, region, device, network, percentile, measured client/server/database time, code revision, and comparison baseline. Targets and regression thresholds create observations, alerts, and owned improvement work; performance results never automatically block a pull request or release. Safety, access, correctness, privacy, and accessibility gates remain independent.
