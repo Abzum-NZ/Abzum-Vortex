@@ -12,6 +12,10 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": []
+    },
+    "@vortex/web#build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   }
 }
