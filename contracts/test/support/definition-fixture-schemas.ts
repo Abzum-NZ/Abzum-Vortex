@@ -7,27 +7,34 @@ import {
   publicDisplaySchema,
   searchPrioritySchema,
   workflowNodeTypeKeys,
-} from "./catalogues";
+} from "../../src/catalogues";
 import {
   builderKeySchema,
   namespacedKeySchema,
   revisionSchema,
   semanticVersionSchema,
-} from "./identifiers";
-import { jsonValueSchema } from "./common";
+} from "../../src/identifiers";
+import { jsonValueSchema } from "../../src/common";
 
-/** Portable aliases exist only in authored examples. #15 resolves them to platform identifiers. */
-export const fixtureAliasSchema = z
+/** Portable aliases exist only in authored definitions. #15 resolves them to platform identifiers. */
+export const sourceAliasSchema = z
   .string()
   .min(1)
   .max(160)
   .regex(/^[a-z][a-z0-9_]*$/);
-export const fixtureQualifiedRecordTypeSchema = z
+const fixtureAliasSchema = sourceAliasSchema;
+export const sourceQualifiedRecordTypeSchema = z
   .string()
   .min(3)
   .max(200)
   .regex(/^[a-z][a-z0-9_.]*:[a-z][a-z0-9_]*$/);
-const fixtureFingerprintSchema = z.string().min(8).max(250).startsWith("fixture:");
+const fixtureQualifiedRecordTypeSchema = sourceQualifiedRecordTypeSchema;
+export const sourceQualifiedFieldSchema = z
+  .string()
+  .min(5)
+  .max(250)
+  .regex(/^[a-z][a-z0-9_.]*:[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/);
+const sourceFingerprintSchema = z.string().min(8).max(250).regex(/^\S+$/);
 const sourceOptionSchema = z
   .object({ value: z.string().min(1).max(120), label: z.string().min(1).max(60) })
   .strict();
@@ -258,7 +265,8 @@ const sourceFieldMembers = [
   ),
   sourceField("attachment", sourceAttachmentSettingsSchema),
 ] as const;
-export const moduleFixtureFieldSchema = z.discriminatedUnion("type", sourceFieldMembers);
+export const moduleSourceFieldSchema = z.discriminatedUnion("type", sourceFieldMembers);
+const moduleFixtureFieldSchema = moduleSourceFieldSchema;
 
 const moduleFixtureRecordTypeSchema = z
   .object({
@@ -366,6 +374,55 @@ const sourceConditionSchema: z.ZodType<SourceCondition> = z.lazy(() =>
     z.object({ not: sourceConditionSchema }).strict(),
   ]),
 );
+const sourceActionValueSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
+  z.object({ source: z.literal("input"), input: builderKeySchema }).strict(),
+  z.object({ source: z.literal("subject_field"), field: builderKeySchema }).strict(),
+  z.object({ source: z.literal("subject_record") }).strict(),
+  z.object({ source: z.literal("current_actor") }).strict(),
+  z.object({ source: z.literal("current_time") }).strict(),
+]);
+const sourceActionEffectSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("set_field"),
+      field: builderKeySchema,
+      value: sourceActionValueSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("create_record"),
+      record_type: fixtureQualifiedRecordTypeSchema,
+      values: z.record(builderKeySchema, sourceActionValueSchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("copy_relationships"),
+      relationships: z.array(builderKeySchema).min(1),
+      target_input: builderKeySchema,
+    })
+    .strict(),
+  z.object({ kind: z.literal("soft_delete_subject") }).strict(),
+  z.object({ kind: z.literal("announce_event"), event: namespacedKeySchema }).strict(),
+]);
+const sourceRuleEffectSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("refuse"), reason_code: builderKeySchema }).strict(),
+  z
+    .object({ kind: z.literal("set_value"), field: builderKeySchema, value: jsonValueSchema })
+    .strict(),
+  z.object({ kind: z.literal("require"), field: builderKeySchema }).strict(),
+  z
+    .object({
+      kind: z.literal("show_or_hide"),
+      component: fixtureAliasSchema,
+      visibility: z.enum(["show", "hide"]),
+    })
+    .strict(),
+  z.object({ kind: z.literal("warn"), message: builderKeySchema }).strict(),
+  z.object({ kind: z.literal("start_background_work"), workflow: builderKeySchema }).strict(),
+]);
 const moduleFixtureBodySchema = z
   .object({
     name: z.string().min(1).max(120),
@@ -389,31 +446,13 @@ const moduleFixtureBodySchema = z
         .object({
           id: fixtureAliasSchema,
           key: namespacedKeySchema,
+          label: z.string().min(1).max(120),
           record_type: builderKeySchema,
           permission: namespacedKeySchema,
           shareable: z.boolean(),
           inputs: z.array(actionInputSchema),
-          effects: z
-            .array(
-              z.enum([
-                "change_stage",
-                "change_status",
-                "create_comment",
-                "create_company_if_needed",
-                "create_contact",
-                "create_customer_visible_comment",
-                "create_record",
-                "emit_event",
-                "move_relationships",
-                "record_approval",
-                "set_completed",
-                "set_inactive",
-                "set_owner",
-                "set_resolved",
-                "soft_delete_source",
-              ]),
-            )
-            .min(1),
+          precondition: sourceConditionSchema.optional(),
+          effects: z.array(sourceActionEffectSchema).min(1).max(10),
         })
         .strict(),
     ),
@@ -433,11 +472,10 @@ const moduleFixtureBodySchema = z
           id: fixtureAliasSchema,
           key: builderKeySchema,
           record_type: builderKeySchema,
-          moment: z.literal("saving"),
+          trigger: z.enum(["create", "change", "delete", "form_change", "action"]),
+          priority: z.number().int().min(0).max(10_000),
           condition: sourceConditionSchema,
-          effect: z.enum(["refuse", "require_permission"]),
-          permission: namespacedKeySchema.optional(),
-          message: z.string().min(1).max(500),
+          effect: sourceRuleEffectSchema,
         })
         .strict(),
     ),
@@ -461,9 +499,9 @@ const publishedSourceBase = {
   version: semanticVersionSchema,
   revision: revisionSchema,
   state: z.literal("published"),
-  content_fingerprint: fixtureFingerprintSchema,
+  content_fingerprint: sourceFingerprintSchema,
 };
-export const moduleFixtureDocumentSchema = z
+export const moduleSourceDocumentSchema = z
   .object({ ...publishedSourceBase, kind: z.literal("module"), body: moduleFixtureBodySchema })
   .strict();
 
@@ -595,50 +633,121 @@ const sourcePageSchema = z.discriminatedUnion("type", [
     })
     .strict(),
 ]);
+const sourceWorkflowValueSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
+  z.object({ source: z.literal("trigger_field"), field: sourceQualifiedFieldSchema }).strict(),
+  z
+    .object({
+      source: z.literal("node_output"),
+      node: fixtureAliasSchema,
+      output: builderKeySchema,
+    })
+    .strict(),
+  z.object({ source: z.literal("current_record") }).strict(),
+  z.object({ source: z.literal("current_actor") }).strict(),
+  z.object({ source: z.literal("current_time") }).strict(),
+]);
 const sourceWorkflowConfigByType = {
   start: z.object({}).strict(),
   condition: sourceComparisonSchema,
-  decision_table: z.object({ table: builderKeySchema }).strict(),
-  bounded_loop: z.object({ maximum: z.number().int().min(1).max(1_000) }).strict(),
-  delay: z.object({ minutes: z.number().int().min(1).max(129_600) }).strict(),
-  wait_until: z.object({ field: builderKeySchema }).strict(),
+  decision_table: z
+    .object({
+      decisions: z
+        .array(z.object({ when: sourceConditionSchema, output: builderKeySchema }).strict())
+        .min(2),
+    })
+    .strict(),
+  bounded_loop: z
+    .object({ query: builderKeySchema, maximum_records: z.number().int().min(1).max(1_000) })
+    .strict(),
+  delay: z.object({ seconds: z.number().int().min(1).max(7_776_000) }).strict(),
+  wait_until: z.object({ field: sourceQualifiedFieldSchema }).strict(),
   start_workflow: z.object({ workflow: builderKeySchema }).strict(),
-  stop: z.object({}).strict(),
-  create_record: z.object({ record_type: fixtureQualifiedRecordTypeSchema }).strict(),
-  change_record: z.object({ record_type: fixtureQualifiedRecordTypeSchema }).strict(),
-  run_action: z.object({ action: namespacedKeySchema }).strict(),
+  stop: z.object({ reason_code: builderKeySchema }).strict(),
+  create_record: z
+    .object({
+      record_type: fixtureQualifiedRecordTypeSchema,
+      values: z.record(builderKeySchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
+  change_record: z
+    .object({
+      record_type: fixtureQualifiedRecordTypeSchema,
+      record: sourceWorkflowValueSchema,
+      values: z.record(builderKeySchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
+  run_action: z
+    .object({
+      action: namespacedKeySchema,
+      subject: sourceWorkflowValueSchema,
+      inputs: z.record(builderKeySchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
   soft_delete_record: z
-    .object({ record_type: fixtureQualifiedRecordTypeSchema, scope: builderKeySchema.optional() })
+    .object({ record_type: fixtureQualifiedRecordTypeSchema, record: sourceWorkflowValueSchema })
     .strict(),
-  duplicate_record: z.object({ record_type: fixtureQualifiedRecordTypeSchema }).strict(),
-  convert_record: z
-    .object({ from: fixtureQualifiedRecordTypeSchema, to: fixtureQualifiedRecordTypeSchema })
+  duplicate_record: z
+    .object({ record_type: fixtureQualifiedRecordTypeSchema, record: sourceWorkflowValueSchema })
     .strict(),
-  add_relationship: z.object({ target: fixtureQualifiedRecordTypeSchema }).strict(),
-  copy_relationships: z.object({}).strict(),
-  add_comment: z
-    .object({ visibility: z.enum(["internal", "public"]), text: z.string().min(1).max(10_000) })
+  add_relationship: z
+    .object({
+      relationship: sourceQualifiedFieldSchema,
+      subject: sourceWorkflowValueSchema,
+      target: sourceWorkflowValueSchema,
+    })
     .strict(),
-  change_tags: z.object({ action: namespacedKeySchema }).strict(),
-  request_form: z.object({ page: builderKeySchema }).strict(),
-  request_approval: z.object({ reason: builderKeySchema }).strict(),
-  create_task: z.object({ title: z.string().min(1).max(200) }).strict(),
-  create_calendar_event: z
-    .object({ connection: fixtureAliasSchema, operation: builderKeySchema })
+  copy_relationships: z
+    .object({
+      relationships: z.array(sourceQualifiedFieldSchema).min(1),
+      source_record: sourceWorkflowValueSchema,
+      target_record: sourceWorkflowValueSchema,
+    })
     .strict(),
-  notification: z.object({ audience: builderKeySchema }).strict(),
-  send_email: z.object({ connection: fixtureAliasSchema, operation: builderKeySchema }).strict(),
+  request_form: z
+    .object({
+      page: builderKeySchema,
+      responder_permission: namespacedKeySchema,
+      due_in_seconds: z.number().int().min(1).max(7_776_000),
+      timeout_outcome: builderKeySchema,
+      outputs: z.array(builderKeySchema).min(1),
+    })
+    .strict(),
   query_records: z.object({ query: builderKeySchema }).strict(),
-  set_values: z.object({ values: z.record(builderKeySchema, jsonValueSchema) }).strict(),
-  format_value: z.object({ format: builderKeySchema }).strict(),
-  generate_export: z.object({ query: builderKeySchema }).strict(),
-  attach_file: z.object({ record_type: fixtureQualifiedRecordTypeSchema }).strict(),
-  move_file: z.object({ destination: builderKeySchema }).strict(),
-  generate_document: z.object({ template: builderKeySchema }).strict(),
-  call_connection: z
-    .object({ connection: fixtureAliasSchema, operation: builderKeySchema })
+  set_values: z
+    .object({
+      record: sourceWorkflowValueSchema,
+      values: z.record(sourceQualifiedFieldSchema, sourceWorkflowValueSchema),
+    })
     .strict(),
-  acknowledge_message: z.object({}).strict(),
+  format_value: z
+    .object({ formatter: builderKeySchema, input: sourceWorkflowValueSchema })
+    .strict(),
+  generate_export: z
+    .object({ query: builderKeySchema, maximum_rows: z.number().int().min(1).max(100_000) })
+    .strict(),
+  attach_file: z
+    .object({
+      record: sourceWorkflowValueSchema,
+      field: sourceQualifiedFieldSchema,
+      file: sourceWorkflowValueSchema,
+    })
+    .strict(),
+  move_file: z
+    .object({
+      record: sourceWorkflowValueSchema,
+      field: sourceQualifiedFieldSchema,
+      file: sourceWorkflowValueSchema,
+    })
+    .strict(),
+  call_connection: z
+    .object({
+      connection: fixtureAliasSchema,
+      operation: builderKeySchema,
+      inputs: z.record(builderKeySchema, sourceWorkflowValueSchema),
+    })
+    .strict(),
+  acknowledge_message: z.object({ message: builderKeySchema }).strict(),
 } satisfies Record<(typeof workflowNodeTypeKeys)[number], z.ZodType>;
 const sourceWorkflowNodeMembers = workflowNodeTypeKeys.map((type) =>
   z
@@ -646,6 +755,47 @@ const sourceWorkflowNodeMembers = workflowNodeTypeKeys.map((type) =>
       id: fixtureAliasSchema,
       type: z.literal(type),
       config: sourceWorkflowConfigByType[type],
+      permission: namespacedKeySchema.optional(),
+      timeout_seconds: z.number().int().min(1).max(7_776_000).default(300),
+      retry: z
+        .object({
+          maximum_attempts: z.number().int().min(1).max(20),
+          initial_delay_seconds: z.number().int().min(0).max(86_400),
+          maximum_delay_seconds: z.number().int().min(0).max(86_400),
+          backoff: z.enum(["fixed", "exponential"]),
+        })
+        .strict()
+        .default({
+          maximum_attempts: 3,
+          initial_delay_seconds: 1,
+          maximum_delay_seconds: 30,
+          backoff: "exponential",
+        }),
+      duplicate_protection: z
+        .enum(["not_applicable", "required"])
+        .default(
+          [
+            "create_record",
+            "change_record",
+            "run_action",
+            "soft_delete_record",
+            "duplicate_record",
+            "add_relationship",
+            "copy_relationships",
+            "request_form",
+            "set_values",
+            "start_workflow",
+            "generate_export",
+            "attach_file",
+            "move_file",
+            "call_connection",
+            "acknowledge_message",
+          ].includes(type)
+            ? "required"
+            : "not_applicable",
+        ),
+      activity: builderKeySchema.default(type),
+      redaction: z.enum(["identifiers_only", "safe_fields", "no_payload"]).default("no_payload"),
     })
     .strict(),
 );
@@ -690,25 +840,6 @@ const sourceApplicationBodySchema = z
             focus: z.literal("high_contrast"),
           })
           .strict(),
-      })
-      .strict(),
-    motion: z
-      .object({
-        library: z.literal("motion/react"),
-        simple_feedback: z.literal("css"),
-        feature_loading: z.literal("lazy"),
-        tokens: z.literal("platform_default"),
-        semantic_tokens: z.tuple([
-          z.literal("feedback"),
-          z.literal("enter_exit"),
-          z.literal("refresh"),
-          z.literal("panel"),
-          z.literal("page"),
-          z.literal("layout_spring"),
-        ]),
-        current_state_wins: z.literal(true),
-        reduced_motion: z.literal("required"),
-        experimental_view_transitions: z.literal(false),
       })
       .strict(),
     permissions: z.array(
@@ -759,8 +890,11 @@ const sourceApplicationBodySchema = z
             z.object({ schedule: z.string().min(1).max(120) }).strict(),
           ]),
           run_as: z.enum(["triggering_account", "system_with_source_authority"]),
+          maximum_nesting_depth: z.number().int().min(1).max(5),
           nodes: z.array(sourceWorkflowNodeSchema).min(1),
-          edges: z.array(z.tuple([fixtureAliasSchema, fixtureAliasSchema])),
+          edges: z.array(
+            z.tuple([fixtureAliasSchema, fixtureAliasSchema, builderKeySchema.optional()]),
+          ),
         })
         .strict(),
     ),
@@ -772,7 +906,20 @@ const sourceApplicationBodySchema = z
           name: z.string().min(1).max(120),
           record_type: fixtureQualifiedRecordTypeSchema,
           stage_field: builderKeySchema,
-          stages: z.array(builderKeySchema).min(1),
+          stages: z
+            .array(
+              z
+                .object({
+                  key: builderKeySchema,
+                  label: z.string().min(1).max(120),
+                  entry_actions: z.array(namespacedKeySchema).default([]),
+                  exit_actions: z.array(namespacedKeySchema).default([]),
+                  entry_workflows: z.array(builderKeySchema).default([]),
+                  exit_workflows: z.array(builderKeySchema).default([]),
+                })
+                .strict(),
+            )
+            .min(1),
           transitions: z
             .array(
               z
@@ -781,13 +928,22 @@ const sourceApplicationBodySchema = z
                   to: builderKeySchema,
                   permission: namespacedKeySchema.optional(),
                   action: namespacedKeySchema.optional(),
+                  gate: sourceConditionSchema.optional(),
                 })
                 .strict(),
             )
             .min(1),
           time_targets: z
-            .array(z.object({ stage: builderKeySchema, field: builderKeySchema }).strict())
-            .optional(),
+            .array(
+              z
+                .object({
+                  stage: builderKeySchema,
+                  field: builderKeySchema,
+                  escalation_event: namespacedKeySchema,
+                })
+                .strict(),
+            )
+            .default([]),
         })
         .strict(),
     ),
@@ -824,7 +980,7 @@ const sourceApplicationBodySchema = z
     ),
   })
   .strict();
-export const applicationFixtureDocumentSchema = z
+export const applicationSourceDocumentSchema = z
   .object({
     ...publishedSourceBase,
     kind: z.literal("application"),
@@ -832,19 +988,38 @@ export const applicationFixtureDocumentSchema = z
   })
   .strict();
 
-export const connectionTypeFixtureDocumentSchema = z
+export const connectionTypeSourceDocumentSchema = z
   .object({
     ...publishedSourceBase,
     kind: z.literal("connection_type"),
     body: z
       .object({
         name: z.string().min(1).max(120),
-        authentication: z
-          .object({
-            kind: z.enum(["oauth2", "signed_secret"]),
-            secret_fields: z.array(builderKeySchema).min(1),
-          })
-          .strict(),
+        purpose: z.string().min(1).max(1_000),
+        provider: z.string().min(1).max(120),
+        authentication: z.discriminatedUnion("kind", [
+          z
+            .object({
+              kind: z.literal("oauth2"),
+              secret_fields: z.array(builderKeySchema).min(1),
+              scopes: z.array(z.string().min(1).max(200)),
+            })
+            .strict(),
+          z
+            .object({
+              kind: z.literal("signed_secret"),
+              secret_fields: z.array(builderKeySchema).min(1),
+              algorithm: z.enum(["hmac_sha256", "ed25519"]),
+            })
+            .strict(),
+          z
+            .object({
+              kind: z.literal("api_key"),
+              secret_fields: z.array(builderKeySchema).min(1),
+              placement: z.enum(["header", "query"]),
+            })
+            .strict(),
+        ]),
         allowed_hosts: z
           .array(
             z
@@ -852,6 +1027,35 @@ export const connectionTypeFixtureDocumentSchema = z
               .min(1)
               .max(253)
               .regex(/^[a-z0-9.-]+$/),
+          )
+          .min(1),
+        allow_redirects: z.boolean(),
+        shapes: z
+          .array(
+            z
+              .object({
+                key: builderKeySchema,
+                fields: z
+                  .array(
+                    z
+                      .object({
+                        key: builderKeySchema,
+                        type: z.enum([
+                          "text",
+                          "number",
+                          "boolean",
+                          "date",
+                          "date_time",
+                          "record_reference",
+                          "json",
+                        ]),
+                        required: z.boolean(),
+                      })
+                      .strict(),
+                  )
+                  .max(100),
+              })
+              .strict(),
           )
           .min(1),
         operations: z
@@ -865,6 +1069,7 @@ export const connectionTypeFixtureDocumentSchema = z
                 output: builderKeySchema,
                 timeout_seconds: z.number().int().min(1).max(120),
                 max_attempts: z.number().int().min(1).max(10),
+                maximum_response_bytes: z.number().int().min(1).max(100_000_000),
               })
               .strict(),
           )
@@ -873,169 +1078,27 @@ export const connectionTypeFixtureDocumentSchema = z
           z
             .object({
               key: builderKeySchema,
-              signature: z.literal("hmac_sha256"),
+              signature: z.enum(["hmac_sha256", "ed25519"]),
               replay_window_seconds: z.number().int().min(1).max(86_400),
               input: builderKeySchema,
+              workflow_trigger: builderKeySchema,
             })
             .strict(),
         ),
+        health_operation: builderKeySchema.optional(),
+        revocation_operation: builderKeySchema.optional(),
       })
       .strict(),
   })
   .strict();
 
-const unversionedSourceBase = {
-  schema_version: semanticVersionSchema,
-  root_id: fixtureAliasSchema,
-  key: namespacedKeySchema,
-  version: semanticVersionSchema,
-};
-const sameRecordCaseSchema = z
-  .object({
-    record_type: fixtureQualifiedRecordTypeSchema,
-    record_id: fixtureAliasSchema,
-    created_in: namespacedKeySchema,
-    read_in: z.array(namespacedKeySchema).min(2),
-    expected_physical_records: z.literal(1),
-    grant_required: z.boolean(),
-  })
-  .strict();
-const fixtureGrantSchema = z
-  .object({
-    id: fixtureAliasSchema,
-    source_application: namespacedKeySchema,
-    recipient_application: namespacedKeySchema,
-    recipient_roles: z.array(builderKeySchema).min(1),
-    module: namespacedKeySchema,
-    record_type: builderKeySchema,
-    scope: z.object({ kind: z.literal("record"), record_id: fixtureAliasSchema }).strict(),
-    readable_fields: z.array(builderKeySchema).min(1),
-    changeable_fields: z.array(builderKeySchema),
-    allowed_actions: z.array(namespacedKeySchema),
-    export_allowed: z.boolean(),
-    state: z.literal("active"),
-    expected_physical_records: z.literal(1),
-  })
-  .strict()
-  .refine(
-    (value) => value.changeable_fields.every((field) => value.readable_fields.includes(field)),
-    { path: ["changeable_fields"], message: "Changeable fields must also be readable" },
-  );
-const scenarioAssertionSchema = z
-  .object({
-    id: fixtureAliasSchema,
-    when: z.string().min(1).max(500),
-    expect: z.string().min(1).max(500).optional(),
-    expect_fields: z.array(builderKeySchema).min(1).optional(),
-    refuse_fields: z.array(builderKeySchema).min(1).optional(),
-  })
-  .strict()
-  .refine((value) => value.expect !== undefined || value.expect_fields !== undefined, {
-    message: "An assertion requires an expected result",
-  });
-export const acceptanceScenarioFixtureDocumentSchema = z
-  .object({
-    ...unversionedSourceBase,
-    kind: z.literal("acceptance_scenario"),
-    body: z
-      .object({
-        organisation: fixtureAliasSchema,
-        applications: z.array(namespacedKeySchema).min(2),
-        same_record_cases: z.array(sameRecordCaseSchema).min(1),
-        inter_application_grant: fixtureGrantSchema,
-        assertions: z.array(scenarioAssertionSchema).min(1),
-      })
-      .strict(),
-  })
-  .strict();
-
-const storageTableSchema = z
-  .object({
-    record_type: fixtureQualifiedRecordTypeSchema,
-    storage_contract_id: fixtureAliasSchema,
-    table: z.string().regex(/^record_data\.rt_[a-z0-9_]+$/),
-    storage_scope: z.enum(["organisation_shared", "application_contained"]),
-  })
-  .strict();
-const applicationRootFixtureSchema = z
-  .object({
-    organisation_id: fixtureAliasSchema,
-    application_definition: namespacedKeySchema,
-    application_root_id: fixtureAliasSchema,
-    display_name: z.string().min(1).max(120),
-  })
-  .strict();
-const rowExampleSchema = z
-  .object({
-    record_type: fixtureQualifiedRecordTypeSchema,
-    record_id: fixtureAliasSchema,
-    organisation_id: fixtureAliasSchema,
-    application_root_id: fixtureAliasSchema.nullable(),
-    physical_table: z.string().regex(/^record_data\.rt_[a-z0-9_]+$/),
-  })
-  .strict();
-export const storageLayoutFixtureDocumentSchema = z
-  .object({
-    ...unversionedSourceBase,
-    kind: z.literal("storage_layout"),
-    body: z
-      .object({
-        owning_service: z.literal("record"),
-        physical_schema: z.literal("record_data"),
-        allocation_unit: z.literal("storage_contract_id"),
-        table_name_rule: z.literal("rt_<immutable_storage_token>"),
-        field_name_rule: z.literal("f_<immutable_field_token>"),
-        uses_display_names: z.literal(false),
-        system_columns: z.array(builderKeySchema).min(1),
-        scope_keys: z
-          .object({
-            organisation_shared: z.tuple([z.literal("organisation_id")]),
-            application_contained: z.tuple([
-              z.literal("organisation_id"),
-              z.literal("application_root_id"),
-            ]),
-          })
-          .strict(),
-        tables: z.array(storageTableSchema).min(1),
-        application_roots: z.array(applicationRootFixtureSchema).min(1),
-        row_examples: z.array(rowExampleSchema).min(1),
-        fork_example: z
-          .object({
-            display_application_name: z.string().min(1),
-            display_module_name: z.string().min(1),
-            display_record_type_name: z.string().min(1),
-            source_storage_contract_id: fixtureAliasSchema,
-            forked_storage_contract_id: fixtureAliasSchema,
-            source_table: z.string().regex(/^record_data\.rt_[a-z0-9_]+$/),
-            forked_table: z.string().regex(/^record_data\.rt_[a-z0-9_]+$/),
-          })
-          .strict(),
-        assertions: z
-          .array(
-            z
-              .string()
-              .min(1)
-              .max(160)
-              .regex(/^[a-z][a-z0-9_]*$/),
-          )
-          .min(1),
-      })
-      .strict(),
-  })
-  .strict();
-export const fixtureDocumentSchema = z.discriminatedUnion("kind", [
-  moduleFixtureDocumentSchema,
-  applicationFixtureDocumentSchema,
-  connectionTypeFixtureDocumentSchema,
-  acceptanceScenarioFixtureDocumentSchema,
-  storageLayoutFixtureDocumentSchema,
+export const definitionSourceDocumentSchema = z.discriminatedUnion("kind", [
+  moduleSourceDocumentSchema,
+  applicationSourceDocumentSchema,
+  connectionTypeSourceDocumentSchema,
 ]);
 
-export type ModuleFixtureDocument = z.infer<typeof moduleFixtureDocumentSchema>;
-export type ApplicationFixtureDocument = z.infer<typeof applicationFixtureDocumentSchema>;
-export type ConnectionTypeFixtureDocument = z.infer<typeof connectionTypeFixtureDocumentSchema>;
-export type AcceptanceScenarioFixtureDocument = z.infer<
-  typeof acceptanceScenarioFixtureDocumentSchema
->;
-export type StorageLayoutFixtureDocument = z.infer<typeof storageLayoutFixtureDocumentSchema>;
-export type FixtureDocument = z.infer<typeof fixtureDocumentSchema>;
+export type ModuleSourceDocument = z.infer<typeof moduleSourceDocumentSchema>;
+export type ApplicationSourceDocument = z.infer<typeof applicationSourceDocumentSchema>;
+export type ConnectionTypeSourceDocument = z.infer<typeof connectionTypeSourceDocumentSchema>;
+export type DefinitionSourceDocument = z.infer<typeof definitionSourceDocumentSchema>;

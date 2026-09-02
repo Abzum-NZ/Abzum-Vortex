@@ -1,34 +1,40 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   accessGrantSchema,
-  announcementSchema,
+  actionInputDefinitionSchema,
   blockPaletteGroupSchema,
   blockPaletteGroupKeys,
   blockSettingControlSchema,
   blockSettingControlKeys,
   businessRecordSchema,
+  connectionTypeSchema,
   fieldDefinitionSchema,
   fieldTypeKeys,
-  fixtureDocumentSchema,
+  entitlementDecisionSchema,
   federatedFileOperationSchema,
   federatedRequestSchema,
+  federatedResponseSchema,
+  grantConsentRequestSchema,
   listArrangementKeys,
   listArrangementSchema,
-  motionDefinitionSchema,
   organizationAccountSetSchema,
   pageTypeKeys,
   pageTypeSchema,
   pageDefinitionSchema,
+  pipelineSchema,
   publishedApplicationDefinitionSchema,
   publishedModuleDefinitionSchema,
   roleSchema,
+  safeErrorResponseSchema,
   secretReferenceSchema,
+  sessionContextSchema,
   workflowNodeSchema,
   workflowNodeTypeKeys,
   workflowNodeTypeSchema,
 } from "../src";
+import { definitionSourceDocumentSchema } from "./support/definition-fixture-schemas";
 import type {
   PublishedApplicationDefinition,
   PublishedModuleDefinition,
@@ -128,37 +134,53 @@ const workflowConfigs: Record<(typeof workflowNodeTypeKeys)[number], unknown> = 
   start_workflow: { workflowId: id(5) },
   stop: { reasonCode: "complete" },
   create_record: { recordTypeId: id(41), values: {} },
-  change_record: { recordTypeId: id(41), values: { [id(42)]: "Changed" } },
-  run_action: { actionKey: "crm.company.update", inputs: {} },
-  soft_delete_record: { recordTypeId: id(41) },
-  duplicate_record: { recordTypeId: id(41) },
-  convert_record: {
-    fromRecordTypeId: id(41),
-    toRecordTypeId: id(43),
-    mappingId: id(44),
+  change_record: {
+    recordTypeId: id(41),
+    record: { source: "current_record" },
+    values: { [id(42)]: { source: "literal", value: "Changed" } },
   },
-  add_relationship: { relationshipId: id(45) },
-  copy_relationships: { relationshipIds: [id(45)] },
-  add_comment: { visibility: "public", text: "Update" },
-  change_tags: { add: ["priority"], remove: [] },
-  request_form: { pageId: id(46) },
-  request_approval: { reasonCode: "sensitive_change" },
-  create_task: { subject: "Follow up" },
-  create_calendar_event: { connectionBindingId: id(47), operationKey: "create_event" },
-  notification: { audienceKey: "owner", messageKey: "record_changed" },
-  send_email: {
-    connectionBindingId: id(48),
-    operationKey: "send_template",
-    templateKey: "case_update",
+  run_action: {
+    actionKey: "crm.company.update",
+    subject: { source: "current_record" },
+    inputs: {},
+  },
+  soft_delete_record: { recordTypeId: id(41), record: { source: "current_record" } },
+  duplicate_record: { recordTypeId: id(41), record: { source: "current_record" } },
+  add_relationship: {
+    relationshipId: id(45),
+    subject: { source: "current_record" },
+    target: { source: "node_output", nodeId: id(44), outputKey: "record" },
+  },
+  copy_relationships: {
+    relationshipIds: [id(45)],
+    sourceRecord: { source: "current_record" },
+    targetRecord: { source: "node_output", nodeId: id(44), outputKey: "record" },
+  },
+  request_form: {
+    pageId: id(46),
+    responderPermissionKey: "vortex.record.respond",
+    dueInSeconds: 86_400,
+    timeoutOutcome: "expired",
+    outputKeys: ["response"],
   },
   query_records: { queryId: id(49) },
-  set_values: { values: { [id(50)]: "open" } },
-  format_value: { formatterKey: "currency", input: 10 },
+  set_values: {
+    record: { source: "current_record" },
+    values: { [id(50)]: { source: "literal", value: "open" } },
+  },
+  format_value: { formatterKey: "currency", input: { source: "literal", value: 10 } },
   generate_export: { queryId: id(49), maximumRows: 10_000 },
-  attach_file: { fieldId: id(6) },
-  move_file: { fieldId: id(6) },
-  generate_document: { templateKey: "case_summary" },
-  call_connection: { connectionBindingId: id(51), operationKey: "post_json" },
+  attach_file: {
+    record: { source: "current_record" },
+    fieldId: id(6),
+    file: { source: "node_output", nodeId: id(7), outputKey: "file" },
+  },
+  move_file: {
+    record: { source: "current_record" },
+    fieldId: id(6),
+    file: { source: "node_output", nodeId: id(7), outputKey: "file" },
+  },
+  call_connection: { connectionBindingId: id(51), operationKey: "post_json", inputs: {} },
   acknowledge_message: { messageKey: "provider_event" },
 };
 
@@ -169,7 +191,7 @@ describe("closed catalogues and discriminated contracts", () => {
     expect(new Set(listArrangementKeys).size).toBe(4);
     expect(new Set(blockPaletteGroupKeys).size).toBe(7);
     expect(new Set(blockSettingControlKeys).size).toBe(17);
-    expect(new Set(workflowNodeTypeKeys).size).toBe(33);
+    expect(new Set(workflowNodeTypeKeys).size).toBe(24);
     expect(pageTypeSchema.safeParse("unknown").success).toBe(false);
     expect(listArrangementSchema.safeParse("unknown").success).toBe(false);
     expect(blockPaletteGroupSchema.safeParse("unknown").success).toBe(false);
@@ -238,6 +260,126 @@ describe("closed catalogues and discriminated contracts", () => {
         config: { ...(workflowConfigs[type] as object), unexpected: true },
       }).success,
     ).toBe(false);
+  });
+
+  test("keeps action-input validation compatible with its declared type", () => {
+    expect(
+      actionInputDefinitionSchema.safeParse({
+        key: "subject",
+        label: "Subject",
+        type: "text",
+        required: true,
+        validation: { minimumLength: 1, maximumLength: 120 },
+      }).success,
+    ).toBe(true);
+    expect(
+      actionInputDefinitionSchema.safeParse({
+        key: "quantity",
+        label: "Quantity",
+        type: "number",
+        required: true,
+        validation: { pattern: "[0-9]+" },
+      }).success,
+    ).toBe(false);
+    expect(
+      actionInputDefinitionSchema.safeParse({
+        key: "target",
+        label: "Target",
+        type: "record_reference",
+        required: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  test("allows empty connection shapes and rejects dangling shape references", () => {
+    const connection = {
+      connectionTypeId: id(60),
+      key: "example.connection",
+      version: "1.0.0",
+      name: "Example connection",
+      purpose: "Exercise a typed operation without an input body.",
+      provider: "Example provider",
+      authentication: {
+        kind: "api_key",
+        secretFieldKeys: ["api_key"],
+        placement: "header",
+      },
+      allowedHosts: ["api.example.test"],
+      allowRedirects: false,
+      shapes: [
+        { key: "empty", fields: [] },
+        { key: "receipt", fields: [{ key: "accepted", type: "boolean", required: true }] },
+      ],
+      operations: [
+        {
+          key: "ping",
+          method: "POST",
+          pathTemplate: "/ping",
+          inputShapeKey: "empty",
+          outputShapeKey: "receipt",
+          timeoutSeconds: 10,
+          maximumAttempts: 2,
+          maximumResponseBytes: 1_000,
+        },
+      ],
+      incomingMessages: [],
+    } as const;
+    expect(connectionTypeSchema.safeParse(connection).success).toBe(true);
+    expect(
+      connectionTypeSchema.safeParse({
+        ...connection,
+        operations: [{ ...connection.operations[0], inputShapeKey: "missing" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  test("carries pipeline gates, stage work and escalation targets without semantic loss", () => {
+    const pipeline = {
+      pipelineId: id(61),
+      key: "review",
+      name: "Review",
+      recordType: unresolvedRecordType,
+      stageFieldId: id(62),
+      stages: [
+        {
+          key: "open",
+          label: "Open",
+          entryActionKeys: ["example.record.prepare"],
+          exitActionKeys: [],
+          entryWorkflowIds: [],
+          exitWorkflowIds: [id(63)],
+        },
+        {
+          key: "closed",
+          label: "Closed",
+          entryActionKeys: [],
+          exitActionKeys: [],
+          entryWorkflowIds: [],
+          exitWorkflowIds: [],
+        },
+      ],
+      transitions: [
+        {
+          from: "open",
+          to: "closed",
+          permissionKey: "example.record.close",
+          gate: {
+            kind: "comparison",
+            operator: "equals",
+            left: { source: "field", fieldId: id(64) },
+            right: { source: "value", value: true },
+          },
+        },
+      ],
+      timeTargets: [
+        {
+          stageKey: "open",
+          dateTimeFieldId: id(65),
+          escalationEventKey: "example.record.overdue",
+        },
+      ],
+    } as const;
+    expect(pipelineSchema.safeParse(pipeline).success).toBe(true);
   });
 });
 
@@ -308,6 +450,7 @@ describe("identity, sharing and secret invariants", () => {
       definitionMappingFingerprint: fingerprint,
     };
     expect(accessGrantSchema.safeParse(grant).success).toBe(true);
+    expect(accessGrantSchema.safeParse({ ...grant, consentRequestId: id(16) }).success).toBe(false);
     expect(accessGrantSchema.safeParse({ ...grant, changeableFieldIds: [id(14)] }).success).toBe(
       false,
     );
@@ -318,7 +461,7 @@ describe("identity, sharing and secret invariants", () => {
       accessGrantSchema.safeParse({
         ...grant,
         recipientOrganizationId: id(15),
-        approvalRequestId: id(16),
+        consentRequestId: id(16),
         expiresAt: "2026-09-03T01:00:00+00:00",
       }).success,
     ).toBe(true);
@@ -411,19 +554,116 @@ describe("identity, sharing and secret invariants", () => {
     ).toBe(true);
   });
 
-  test("locks the approved, intentionally small motion contract", () => {
-    const motion = {
-      library: "motion/react",
-      simpleFeedback: "css",
-      featureLoading: "lazy",
-      tokenSet: "platform_default",
-      semanticTokens: ["feedback", "enter_exit", "refresh", "panel", "page", "layout_spring"],
-      currentStateWins: true,
-      reducedMotion: "required",
-      experimentalViewTransitions: false,
+  test("accepts a genuinely anonymous public caller without inventing an actor", () => {
+    const publicContext = {
+      callerKind: "public",
+      tenantId: id(210),
+      organizationId: id(211),
+      applicationRootId: id(212),
+      sessionId: id(213),
+      issuedAt: "2026-09-02T01:00:00+00:00",
+      expiresAt: "2026-09-02T01:05:00+00:00",
+      authenticationStrength: "anonymous",
+      accessVersion: 1,
+      correlationId: id(214),
     };
-    expect(motionDefinitionSchema.safeParse(motion).success).toBe(true);
-    expect(motionDefinitionSchema.safeParse({ ...motion, durationMs: 250 }).success).toBe(false);
+    expect(sessionContextSchema.safeParse(publicContext).success).toBe(true);
+    expect(sessionContextSchema.safeParse({ ...publicContext, identityId: id(215) }).success).toBe(
+      false,
+    );
+  });
+
+  test("safe errors accept catalogue keys and refuse caller-authored messages or raw paths", () => {
+    const safeError = {
+      code: "operation_refused",
+      messageKey: "errors.operation_refused",
+      correlationId: id(216),
+    };
+    expect(safeErrorResponseSchema.safeParse(safeError).success).toBe(true);
+    expect(
+      safeErrorResponseSchema.safeParse({ ...safeError, message: "database password leaked" })
+        .success,
+    ).toBe(false);
+    expect(
+      safeErrorResponseSchema.safeParse({
+        ...safeError,
+        safeContext: { token: "secret_12345678" },
+      }).success,
+    ).toBe(false);
+    expect(
+      safeErrorResponseSchema.safeParse({ ...safeError, code: "secret_12345678" }).success,
+    ).toBe(false);
+    expect(
+      safeErrorResponseSchema.safeParse({ ...safeError, messageKey: "password_value" }).success,
+    ).toBe(false);
+    expect(
+      safeErrorResponseSchema.safeParse({
+        ...safeError,
+        messageKey: "errors.operation_failed",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("never authorises more entitlement quantity than the caller requested", () => {
+    const allowed = {
+      decisionId: id(226),
+      tenantId: id(227),
+      organizationId: id(228),
+      capabilityKey: "vortex.runtime.operation",
+      requestedQuantity: 10,
+      unit: "operation",
+      policyRevision: 1,
+      decidedAt: "2026-09-02T01:00:00+00:00",
+      correlationId: id(229),
+      outcome: "allowed",
+      acceptedQuantity: 4,
+      remainingQuantity: 6,
+    } as const;
+    expect(entitlementDecisionSchema.safeParse(allowed).success).toBe(true);
+    expect(entitlementDecisionSchema.safeParse({ ...allowed, acceptedQuantity: 11 }).success).toBe(
+      false,
+    );
+  });
+
+  test("requires two different organisations and both consent sides", () => {
+    const request = {
+      requestId: id(217),
+      sourceOrganizationId: id(218),
+      sourceClusterId: id(219),
+      recipientOrganizationId: id(220),
+      recipientClusterId: id(221),
+      proposedGrantFingerprint: fingerprint,
+      status: "pending",
+      requestedByOrganizationAccountId: id(222),
+      requestedAt: "2026-09-02T01:00:00+00:00",
+      requiredDecisions: [
+        { side: "source_authorization", authorizedRoleIds: [id(223)] },
+        { side: "recipient_acceptance", authorizedRoleIds: [id(224)] },
+      ],
+      expiresAt: "2026-09-03T01:00:00+00:00",
+    } as const;
+    expect(grantConsentRequestSchema.safeParse(request).success).toBe(true);
+    expect(
+      grantConsentRequestSchema.safeParse({ ...request, resultResourceId: id(225) }).success,
+    ).toBe(false);
+    expect(
+      grantConsentRequestSchema.safeParse({
+        ...request,
+        recipientOrganizationId: request.sourceOrganizationId,
+      }).success,
+    ).toBe(false);
+    expect(
+      grantConsentRequestSchema.safeParse({
+        ...request,
+        requiredDecisions: [request.requiredDecisions[0]],
+      }).success,
+    ).toBe(false);
+    expect(
+      grantConsentRequestSchema.safeParse({
+        ...request,
+        requiredDecisions: [request.requiredDecisions[0], request.requiredDecisions[0]],
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -609,16 +849,6 @@ describe("published, page and federation boundaries", () => {
             focus: "high_contrast",
           },
         },
-        motion: {
-          library: "motion/react",
-          simpleFeedback: "css",
-          featureLoading: "lazy",
-          tokenSet: "platform_default",
-          semanticTokens: ["feedback", "enter_exit", "refresh", "panel", "page", "layout_spring"],
-          currentStateWins: true,
-          reducedMotion: "required",
-          experimentalViewTransitions: false,
-        },
         homePageId: pageId,
       },
       dependencyManifest: [],
@@ -746,29 +976,6 @@ describe("published, page and federation boundaries", () => {
     expect(pageDefinitionSchema.safeParse({ ...page, unexpected: true }).success).toBe(false);
   });
 
-  test("accepts only HTTPS announcement links", () => {
-    const announcement = {
-      announcementId: id(610),
-      publisherKind: "platform",
-      publisherId: id(611),
-      audienceScope: "platform",
-      type: "information",
-      message: "Planned maintenance",
-      approvedLink: "https://status.example.com/maintenance",
-      startsAt: "2026-09-02T01:00:00+00:00",
-      endsAt: "2026-09-02T02:00:00+00:00",
-      dismissible: true,
-      state: "published",
-      createdBy: id(612),
-      publishedBy: id(612),
-      activityId: id(613),
-    };
-    expect(announcementSchema.safeParse(announcement).success).toBe(true);
-    expect(
-      announcementSchema.safeParse({ ...announcement, approvedLink: "http://example.com" }).success,
-    ).toBe(false);
-  });
-
   test("couples federation operations, assertions, payloads and duplicate protection", () => {
     const grantId = id(520);
     const duplicateProtectionKey = "federation-change-0001";
@@ -821,6 +1028,24 @@ describe("published, page and federation boundaries", () => {
     expect(federatedRequestSchema.safeParse(request).success).toBe(true);
     expect(
       federatedRequestSchema.safeParse({ ...request, recipientAssertion: undefined }).success,
+    ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...request,
+        recipientAssertion: { ...recipientAssertion, recipientClusterId: id(598) },
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...request,
+        recipientAssertion: { ...recipientAssertion, intendedSourceClusterId: id(598) },
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...request,
+        recipientAssertion: { ...recipientAssertion, correlationId: id(598) },
+      }).success,
     ).toBe(false);
     expect(
       federatedRequestSchema.safeParse({ ...request, operation: "action", duplicateProtectionKey })
@@ -892,19 +1117,17 @@ describe("published, page and federation boundaries", () => {
       approvedRecipientRegion: "nz-north",
       startsAt: "2026-09-02T01:00:00+00:00",
       expiresAt: "2026-09-03T01:00:00+00:00",
-      status: "pending_approval" as const,
+      status: "pending_consent" as const,
       createdByOrganizationAccountId: id(538),
-      approvalRequestId: id(539),
+      consentRequestId: id(539),
       contractVersion: "1.0.0",
       contractFingerprint: fingerprint,
       recipientBindingId: id(540),
       definitionMappingFingerprint: fingerprint,
     };
-    const controlBase = {
+    const controlCommon = {
       protocolVersion: "1.0.0",
       operation: "grant_control" as const,
-      senderClusterId: id(522),
-      receiverClusterId: id(528),
       issuedAt: "2026-09-02T01:00:00+00:00",
       expiresAt: "2026-09-02T01:05:00+00:00",
       nonce: "grant-control-nonce-0001",
@@ -913,8 +1136,20 @@ describe("published, page and federation boundaries", () => {
       sharedContractVersion: "1.0.0",
       sharedContractFingerprint: fingerprint,
     };
+    const sourceToRecipientControl = {
+      ...controlCommon,
+      senderClusterId: id(528),
+      receiverClusterId: id(522),
+    };
+    const recipientToSourceControl = {
+      ...controlCommon,
+      senderClusterId: id(522),
+      receiverClusterId: id(528),
+    };
     const evidenceBase = {
       grantId,
+      sourceClusterId: id(528),
+      recipientClusterId: id(522),
       evidenceFingerprint: fingerprint,
       evidenceSignature: "s".repeat(64),
       issuedAt: "2026-09-02T01:00:00+00:00",
@@ -927,13 +1162,24 @@ describe("published, page and federation boundaries", () => {
         decisionId: id(541),
         requestId: id(539),
         side: "recipient_acceptance",
-        payloadFingerprint: fingerprint,
+        proposedGrantFingerprint: fingerprint,
         approverOrganizationId: id(523),
         approverOrganizationAccountId: id(524),
-        decision: "approved",
+        decision: "consented",
         decidedAt: "2026-09-02T01:01:00+00:00",
         authenticationStrength: "multi_factor",
         correlationId: id(529),
+      },
+    };
+    const sourceAuthorizationDecision = {
+      ...evidenceBase,
+      kind: "decision",
+      decision: {
+        ...decision.decision,
+        decisionId: id(542),
+        side: "source_authorization",
+        approverOrganizationId: id(530),
+        approverOrganizationAccountId: id(538),
       },
     };
     const activeGrant = {
@@ -945,7 +1191,7 @@ describe("published, page and federation boundaries", () => {
       ...evidenceBase,
       kind: "activation_receipt",
       activeGrant,
-      recipientDecisionId: id(541),
+      recipientConsentDecisionId: id(541),
       signedActivationReceipt: "a".repeat(64),
     };
     const revokedGrant = {
@@ -962,16 +1208,120 @@ describe("published, page and federation boundaries", () => {
       sourceAccessVersion: 2,
       signedRevocationEvidence: "r".repeat(64),
     };
-    for (const controlPayload of [proposal, decision, activation, revocation])
+    for (const controlPayload of [proposal, activation, revocation])
       expect(
-        federatedRequestSchema.safeParse({ ...controlBase, payload: controlPayload }).success,
+        federatedRequestSchema.safeParse({
+          ...sourceToRecipientControl,
+          payload: controlPayload,
+        }).success,
       ).toBe(true);
     expect(
-      federatedRequestSchema.safeParse({ ...controlBase, payload: pendingGrant }).success,
+      federatedRequestSchema.safeParse({ ...recipientToSourceControl, payload: decision }).success,
+    ).toBe(true);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...sourceToRecipientControl,
+        payload: sourceAuthorizationDecision,
+      }).success,
+    ).toBe(true);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...sourceToRecipientControl,
+        payload: pendingGrant,
+      }).success,
     ).toBe(false);
     expect(
       federatedRequestSchema.safeParse({
-        ...controlBase,
+        ...recipientToSourceControl,
+        payload: { ...decision, evidenceFingerprint: `sha256:${"b".repeat(64)}` },
+      }).success,
+    ).toBe(false);
+    for (const controlPayload of [proposal, activation, revocation])
+      expect(
+        federatedRequestSchema.safeParse({
+          ...sourceToRecipientControl,
+          payload: { ...controlPayload, evidenceFingerprint: `sha256:${"b".repeat(64)}` },
+        }).success,
+      ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...recipientToSourceControl,
+        payload: proposal,
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...sourceToRecipientControl,
+        payload: decision,
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...recipientToSourceControl,
+        payload: sourceAuthorizationDecision,
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...sourceToRecipientControl,
+        senderClusterId: id(597),
+        receiverClusterId: id(596),
+        payload: proposal,
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...sourceToRecipientControl,
+        payload: { ...proposal, sourceClusterId: id(595) },
+      }).success,
+    ).toBe(false);
+
+    const responseBase = {
+      correlationId: id(529),
+      sourceClusterId: id(528),
+      sharedContractVersion: "1.0.0",
+      issuedAt: "2026-09-02T01:03:00+00:00",
+    };
+    expect(
+      federatedResponseSchema.safeParse({
+        ...responseBase,
+        outcome: "completed",
+        result: { value: "allowed" },
+      }).success,
+    ).toBe(true);
+    expect(
+      federatedResponseSchema.safeParse({
+        ...responseBase,
+        outcome: "refused",
+        safeErrorCode: "access_refused",
+      }).success,
+    ).toBe(true);
+    expect(
+      federatedResponseSchema.safeParse({
+        ...responseBase,
+        outcome: "refused",
+        safeErrorCode: "access_refused",
+        result: { shared: "must-not-leak" },
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedResponseSchema.safeParse({
+        ...responseBase,
+        outcome: "unavailable",
+        safeErrorCode: "source_unavailable",
+        continuationToken: "must-not-survive",
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedResponseSchema.safeParse({
+        ...responseBase,
+        outcome: "retryable_failure",
+        safeErrorCode: "secret_12345678",
+      }).success,
+    ).toBe(false);
+    expect(
+      federatedRequestSchema.safeParse({
+        ...sourceToRecipientControl,
         payload: { ...activation, activeGrant: pendingGrant },
       }).success,
     ).toBe(false);
@@ -979,19 +1329,34 @@ describe("published, page and federation boundaries", () => {
 });
 
 describe("complete definition-source fixture set", () => {
-  test("parses every manifest-listed document through its strict source schema", async () => {
+  test("parses every authored definition through its strict source schema", async () => {
     const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
     const manifest = JSON.parse(
       await readFile(resolve(fixtureRoot, "fixture-set.json"), "utf8"),
     ) as { files: string[] };
-    expect(manifest.files).toHaveLength(15);
-    for (const file of manifest.files) {
+    const definitionFiles = manifest.files.filter((file) =>
+      /^(applications|connection-types|modules)\//.test(file),
+    );
+    expect(definitionFiles).toHaveLength(13);
+    for (const file of definitionFiles) {
       const document = JSON.parse(await readFile(resolve(fixtureRoot, file), "utf8"));
-      const result = fixtureDocumentSchema.safeParse(document);
+      const result = definitionSourceDocumentSchema.safeParse(document);
       expect(
         result.success,
         result.success ? undefined : `${file}: ${JSON.stringify(result.error.issues)}`,
       ).toBe(true);
+      if (result.success && result.data.kind === "application") {
+        for (const workflow of result.data.body.workflows) {
+          expect(workflow.maximum_nesting_depth).toBeGreaterThanOrEqual(1);
+          for (const node of workflow.nodes) {
+            expect(node.timeout_seconds).toBeGreaterThan(0);
+            expect(node.retry.maximum_attempts).toBeGreaterThan(0);
+            expect(node.activity).toBe(node.type);
+            expect(["not_applicable", "required"]).toContain(node.duplicate_protection);
+            expect(["identifiers_only", "safe_fields", "no_payload"]).toContain(node.redaction);
+          }
+        }
+      }
     }
   });
 
@@ -1007,6 +1372,112 @@ describe("complete definition-source fixture set", () => {
       .find((node) => node.type === "condition");
     expect(condition).toBeDefined();
     if (condition) condition.config.operator = "execute_anything";
-    expect(fixtureDocumentSchema.safeParse(application).success).toBe(false);
+    expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
+  });
+
+  test("keeps fixture identities and removed business-domain semantics out of all shipping source", async () => {
+    const readSourceTree = async (directory: string): Promise<string[]> => {
+      const entries = await readdir(directory, { withFileTypes: true });
+      const contents: string[] = [];
+      for (const entry of entries) {
+        const path = resolve(directory, entry.name);
+        if (entry.isDirectory()) contents.push(...(await readSourceTree(path)));
+        else if (/\.(?:ts|tsx|js|mjs)$/.test(entry.name))
+          contents.push(await readFile(path, "utf8"));
+      }
+      return contents;
+    };
+    const shippingRoots = [
+      "apps/web/app",
+      "apps/web/src",
+      "contracts/src",
+      "db/src",
+      "modules/src",
+      "runtime",
+      "studio/src",
+      "testing/src",
+      "tooling/boundaries",
+      "ui/src",
+    ];
+    const source = (
+      await Promise.all(shippingRoots.map((root) => readSourceTree(resolve(process.cwd(), root))))
+    )
+      .flat()
+      .join("\n");
+
+    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
+    const manifest = JSON.parse(
+      await readFile(resolve(fixtureRoot, "fixture-set.json"), "utf8"),
+    ) as { files: string[] };
+    const fixtureIdentifiers = new Set<string>();
+    for (const file of manifest.files.filter((path) =>
+      /^(applications|connection-types|modules)\//.test(path),
+    )) {
+      const document = JSON.parse(await readFile(resolve(fixtureRoot, file), "utf8")) as {
+        key: string;
+        body: {
+          record_types?: { key: string; fields?: { key: string }[] }[];
+          permissions?: { key: string }[];
+          actions?: { key: string }[];
+          events?: { key: string }[];
+          rules?: { key: string }[];
+          pages?: { key: string }[];
+          queries?: { key: string }[];
+          workflows?: { key: string }[];
+          pipelines?: { key: string }[];
+          interfaces?: { key: string; operations?: { key: string }[] }[];
+          operations?: { key: string }[];
+        };
+      };
+      fixtureIdentifiers.add(document.key);
+      for (const recordType of document.body.record_types ?? []) {
+        fixtureIdentifiers.add(recordType.key);
+        fixtureIdentifiers.add(`${document.key}:${recordType.key}`);
+        for (const field of recordType.fields ?? []) fixtureIdentifiers.add(field.key);
+      }
+      for (const collection of [
+        document.body.permissions,
+        document.body.actions,
+        document.body.events,
+        document.body.rules,
+        document.body.pages,
+        document.body.queries,
+        document.body.workflows,
+        document.body.pipelines,
+        document.body.operations,
+      ]) {
+        for (const item of collection ?? []) fixtureIdentifiers.add(item.key);
+      }
+      for (const interfaceDefinition of document.body.interfaces ?? []) {
+        fixtureIdentifiers.add(interfaceDefinition.key);
+        for (const operation of interfaceDefinition.operations ?? []) {
+          fixtureIdentifiers.add(operation.key);
+        }
+      }
+    }
+    const escapeRegularExpression = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const genericPlatformVocabulary = new Set([
+      "active",
+      "calendar",
+      "completed",
+      "public",
+      "record",
+      "role",
+      "source",
+      "status",
+      "value",
+    ]);
+    for (const identifier of fixtureIdentifiers) {
+      if (identifier.length < 4 || genericPlatformVocabulary.has(identifier)) continue;
+      expect(source, `shipping source hardcodes fixture identity ${identifier}`).not.toMatch(
+        new RegExp(`(["'\\x60])${escapeRegularExpression(identifier)}\\1`, "i"),
+      );
+    }
+
+    expect(source).not.toMatch(/vortex\.(?:crm|service_desk)/i);
+    expect(source).not.toMatch(/\bCRM\b|Service Desk/i);
+    expect(source).not.toMatch(
+      /(?:planVersion|tenantSubscription|seatSnapshot|announcementSchema|privacyRequestSchema|approvalRequestSchema|request_approval|create_task|send_email|generate_document)/,
+    );
   });
 });

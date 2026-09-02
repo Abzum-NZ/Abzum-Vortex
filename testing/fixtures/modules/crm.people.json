@@ -454,9 +454,12 @@
       {
         "id": "act_lead_convert",
         "key": "vortex.crm.people.lead.convert",
+        "label": "Convert lead",
         "record_type": "lead",
         "permission": "vortex.crm.people.lead.convert",
         "inputs": [
+          {"key":"first_name","type":"text","required":true},
+          {"key":"last_name","type":"text","required":true},
           {
             "key": "company",
             "type": "link",
@@ -467,10 +470,9 @@
           }
         ],
         "effects": [
-          "create_company_if_needed",
-          "create_contact",
-          "emit_event",
-          "change_status"
+          {"kind":"create_record","record_type":"vortex.crm.people:contact","values":{"first_name":{"source":"input","input":"first_name"},"last_name":{"source":"input","input":"last_name"},"email":{"source":"subject_field","field":"email"},"company":{"source":"input","input":"company"}}},
+          {"kind":"set_field","field":"status","value":{"source":"literal","value":"converted"}},
+          {"kind":"announce_event","event":"vortex.crm.people.lead.converted"}
         ],
         "shareable": false
       }
@@ -510,7 +512,8 @@
         "id": "rule_lead_reason",
         "key": "unqualified_reason_required",
         "record_type": "lead",
-        "moment": "saving",
+        "trigger": "change",
+        "priority": 100,
         "condition": {
           "all": [
             {
@@ -524,8 +527,7 @@
             }
           ]
         },
-        "effect": "refuse",
-        "message": "Explain why the lead is unqualified."
+        "effect": {"kind":"refuse","reason_code":"unqualified_reason_required"}
       }
     ],
     "extension_points": [

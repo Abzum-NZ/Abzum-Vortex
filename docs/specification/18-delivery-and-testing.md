@@ -4,7 +4,7 @@
 
 ## Environments
 
-The platform uses separate Local, Testing, and Production environments. Each has separate [Supabase](https://supabase.com/docs), [Vercel](https://vercel.com/docs), [Kestra](https://kestra.io/docs), [Doppler](https://docs.doppler.com/docs), addresses, secrets, files, queues, connections, and billing mode. An environment may contain several Vortex clusters, but it has one shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) and no identity, trust, or federation route crosses into another environment.
+The platform uses separate Local, Testing, and Production environments. Each has separate [Supabase](https://supabase.com/docs), [Vercel](https://vercel.com/docs), [Kestra](https://kestra.io/docs), [Doppler](https://docs.doppler.com/docs), addresses, secrets, files, queues and connections. An ordinary commercial application may also use provider test modes in Local or Testing, but that is not a platform environment invariant. An environment may contain several Vortex clusters, but it has one shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) and no identity, trust, or federation route crosses into another environment.
 
 No environment reads another environment's database, file store, queue, workflow state, cache, or secrets.
 
@@ -83,7 +83,7 @@ The [organisation separation suite](20-quality-and-acceptance.md#organisation-se
 ## Release and recovery behaviour
 
 - A production change has a defined forward fix. Database rollbacks are used only when the reverse operation is known safe and does not lose accepted data.
-- Feature flags cannot bypass access, privacy, retention, or billing checks.
+- Feature flags cannot bypass access, protected data handling, retention, or entitlement checks.
 - A failed post-deployment verification stops further promotion and alerts the operator.
 - The previous web deployment remains available for rollback only while it is compatible with the current database shape.
 - A deployment records code revision, migration set, definition-contract version, fixture version, operator, approvals, and verification outcome.
@@ -100,6 +100,6 @@ Before promotion, Testing runs a two-cluster matrix with the new release against
 - A migration that works only when the new web version deploys first is refused.
 - A migration passes local pgTAP and database lint before the same tests run through Kestra against the shared Testing project.
 - An access-rule test failure after merge to Testing prevents promotion to `main`; it does not retroactively fail the already merged feature pull request.
-- Testing cannot send a live customer email, charge a live payment method, or call a production connection.
+- Testing cannot send a live customer message, submit a real external transaction, or call a production connection.
 - A released revision can be traced from Git commit through migration, test, deployment, and verification records.
 - A rolling deployment keeps cross-cluster sharing safe between adjacent supported releases and fails closed outside the declared compatibility range.

@@ -2,6 +2,8 @@ import { z } from "zod";
 import { workflowNodeTypeKeys } from "./catalogues";
 import { duplicateProtectionKeySchema, jsonValueSchema, retryPolicySchema } from "./common";
 import {
+  activityIdSchema,
+  actorIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
   fieldIdSchema,
@@ -21,6 +23,21 @@ import {
   workflowRunIdSchema,
 } from "./identifiers";
 import { conditionNodeSchema } from "./module-contracts";
+
+export const workflowValueSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
+  z.object({ source: z.literal("trigger_field"), fieldId: fieldIdSchema }).strict(),
+  z
+    .object({
+      source: z.literal("node_output"),
+      nodeId: workflowNodeIdSchema,
+      outputKey: builderKeySchema,
+    })
+    .strict(),
+  z.object({ source: z.literal("current_record") }).strict(),
+  z.object({ source: z.literal("current_actor") }).strict(),
+  z.object({ source: z.literal("current_time") }).strict(),
+]);
 
 const nodeConfigByType = {
   start: z.object({}).strict(),
@@ -42,62 +59,72 @@ const nodeConfigByType = {
   create_record: z
     .object({
       recordTypeId: recordTypeIdSchema,
-      values: z.record(fieldIdSchema, jsonValueSchema),
+      values: z.record(fieldIdSchema, workflowValueSchema),
     })
     .strict(),
   change_record: z
     .object({
       recordTypeId: recordTypeIdSchema,
-      values: z.record(fieldIdSchema, jsonValueSchema),
+      record: workflowValueSchema,
+      values: z.record(fieldIdSchema, workflowValueSchema),
     })
     .strict(),
   run_action: z
-    .object({ actionKey: namespacedKeySchema, inputs: z.record(builderKeySchema, jsonValueSchema) })
-    .strict(),
-  soft_delete_record: z.object({ recordTypeId: recordTypeIdSchema }).strict(),
-  duplicate_record: z.object({ recordTypeId: recordTypeIdSchema }).strict(),
-  convert_record: z
     .object({
-      fromRecordTypeId: recordTypeIdSchema,
-      toRecordTypeId: recordTypeIdSchema,
-      mappingId: containedComponentIdSchema,
+      actionKey: namespacedKeySchema,
+      subject: workflowValueSchema,
+      inputs: z.record(builderKeySchema, workflowValueSchema),
     })
     .strict(),
-  add_relationship: z.object({ relationshipId: containedComponentIdSchema }).strict(),
-  copy_relationships: z
-    .object({ relationshipIds: z.array(containedComponentIdSchema).min(1) })
+  soft_delete_record: z
+    .object({ recordTypeId: recordTypeIdSchema, record: workflowValueSchema })
     .strict(),
-  add_comment: z
-    .object({ visibility: z.enum(["internal", "public"]), text: z.string().min(1).max(10_000) })
+  duplicate_record: z
+    .object({ recordTypeId: recordTypeIdSchema, record: workflowValueSchema })
     .strict(),
-  change_tags: z
-    .object({ add: z.array(builderKeySchema), remove: z.array(builderKeySchema) })
-    .strict(),
-  request_form: z.object({ pageId: pageIdSchema }).strict(),
-  request_approval: z.object({ reasonCode: builderKeySchema }).strict(),
-  create_task: z.object({ subject: z.string().min(1).max(200) }).strict(),
-  create_calendar_event: z
-    .object({ connectionBindingId: containedComponentIdSchema, operationKey: builderKeySchema })
-    .strict(),
-  notification: z.object({ audienceKey: builderKeySchema, messageKey: builderKeySchema }).strict(),
-  send_email: z
+  add_relationship: z
     .object({
-      connectionBindingId: containedComponentIdSchema,
-      operationKey: builderKeySchema,
-      templateKey: builderKeySchema.optional(),
+      relationshipId: containedComponentIdSchema,
+      subject: workflowValueSchema,
+      target: workflowValueSchema,
+    })
+    .strict(),
+  copy_relationships: z
+    .object({
+      relationshipIds: z.array(containedComponentIdSchema).min(1),
+      sourceRecord: workflowValueSchema,
+      targetRecord: workflowValueSchema,
+    })
+    .strict(),
+  request_form: z
+    .object({
+      pageId: pageIdSchema,
+      responderPermissionKey: namespacedKeySchema,
+      dueInSeconds: z.number().int().min(1).max(7_776_000),
+      timeoutOutcome: builderKeySchema,
+      outputKeys: z.array(builderKeySchema).min(1),
     })
     .strict(),
   query_records: z.object({ queryId: queryIdSchema }).strict(),
-  set_values: z.object({ values: z.record(fieldIdSchema, jsonValueSchema) }).strict(),
-  format_value: z.object({ formatterKey: builderKeySchema, input: jsonValueSchema }).strict(),
+  set_values: z
+    .object({ record: workflowValueSchema, values: z.record(fieldIdSchema, workflowValueSchema) })
+    .strict(),
+  format_value: z.object({ formatterKey: builderKeySchema, input: workflowValueSchema }).strict(),
   generate_export: z
     .object({ queryId: queryIdSchema, maximumRows: z.number().int().min(1).max(100_000) })
     .strict(),
-  attach_file: z.object({ fieldId: fieldIdSchema }).strict(),
-  move_file: z.object({ fieldId: fieldIdSchema }).strict(),
-  generate_document: z.object({ templateKey: builderKeySchema }).strict(),
+  attach_file: z
+    .object({ record: workflowValueSchema, fieldId: fieldIdSchema, file: workflowValueSchema })
+    .strict(),
+  move_file: z
+    .object({ record: workflowValueSchema, fieldId: fieldIdSchema, file: workflowValueSchema })
+    .strict(),
   call_connection: z
-    .object({ connectionBindingId: containedComponentIdSchema, operationKey: builderKeySchema })
+    .object({
+      connectionBindingId: containedComponentIdSchema,
+      operationKey: builderKeySchema,
+      inputs: z.record(builderKeySchema, workflowValueSchema),
+    })
     .strict(),
   acknowledge_message: z.object({ messageKey: builderKeySchema }).strict(),
 } satisfies Record<(typeof workflowNodeTypeKeys)[number], z.ZodType>;
@@ -160,14 +187,12 @@ export const workflowExecutionReferenceSchema = z
     applicationVersion: semanticVersionSchema,
     workflowId: workflowIdSchema,
     workflowRevision: revisionSchema,
-    kestraExecutionId: z.string().min(1).max(200),
-    kestraNamespace: z.string().min(1).max(200),
     triggerKind: builderKeySchema,
     sourceId: platformIdSchema,
-    startedBy: platformIdSchema,
+    startedBy: actorIdSchema,
     duplicateProtectionKey: duplicateProtectionKeySchema,
-    humanTaskIds: z.array(platformIdSchema),
-    activityIds: z.array(platformIdSchema),
+    humanInputIds: z.array(platformIdSchema),
+    activityIds: z.array(activityIdSchema),
     lastRefreshedAt: timestampSchema,
     lastKnownState: z.enum(["queued", "running", "waiting", "completed", "cancelled", "failed"]),
   })
@@ -207,6 +232,7 @@ export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
 export type WorkflowEdge = z.infer<typeof workflowEdgeSchema>;
 export type WorkflowTrigger = z.infer<typeof workflowTriggerSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
+export type WorkflowValue = z.infer<typeof workflowValueSchema>;
 export type WorkflowExecutionReference = z.infer<typeof workflowExecutionReferenceSchema>;
 export type ProtectedOperationRequest = z.infer<typeof protectedOperationRequestSchema>;
 export type ProtectedOperationResponse = z.infer<typeof protectedOperationResponseSchema>;

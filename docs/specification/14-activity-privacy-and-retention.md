@@ -1,6 +1,6 @@
 # 14. Activity history, privacy and retention
 
-[Previous: Connections and programmable interfaces](12-connections-and-interfaces.md) · [Specification index](README.md) · Next: [Plans, billing and usage limits](15-plans-billing-and-usage.md)
+[Previous: Connections and programmable interfaces](12-connections-and-interfaces.md) · [Specification index](README.md) · Next: [Entitlements and metering](15-entitlements-and-metering.md)
 
 ## Data inventory
 
@@ -18,7 +18,7 @@ flowchart TD
     REMOVE --> RECEIPT[Keep non-content removal receipt]
 ```
 
-The inventory covers tenants, tenant-administrator assignments, global identities, organisation accounts, definitions, records, relationships, files and previews, search documents, saved views, guided-form drafts, activity, events, workflow inputs and references, connection messages, notifications, announcements, usage, billing, exports, backups, caches, logs, and support records.
+The inventory covers tenants, tenant-administrator assignments, global identities, organisation accounts, definitions, records, relationships, files and previews, search documents, saved views, guided-form drafts, activity, events, workflow inputs and references, connection messages, metering events, exports, backups, caches, logs, and protected support-access evidence. Business-domain records remain discoverable through their module field classifications rather than a privileged list of business applications.
 
 ## Activity history
 
@@ -40,7 +40,7 @@ The classification controls search, exports, activity detail, masking in diagnos
 
 ## Retention policies
 
-An organisation can choose approved retention periods within plan and legal bounds. A policy names the data category, selection condition, active retention period, recovery period, removal schedule, and exception process.
+An organisation can choose approved retention periods within legal and platform safety bounds. A policy names the data category, optional version-pinned saved condition, active retention period, recovery period, removal schedule, and applicable legal-constraint keys. Commercial status never weakens privacy or retention correctness.
 
 - Shortening a period shows an impact preview and requires confirmation.
 - Retention jobs are resumable, duplicate-safe, bounded, and auditable.
@@ -48,13 +48,15 @@ An organisation can choose approved retention periods within plan and legal boun
 - Backups expire through their own protected schedule; ordinary deletion does not rewrite immutable historical backups.
 - Restoring a backup must reapply removal records created after that backup before the restored system is opened for ordinary use.
 
-## Personal-data requests
+## Protected personal-data operations
 
-The platform supports discovery, export, correction through ordinary permissions, restriction where required, and erasure. A request records requester, verified identity, organisations in scope, search criteria, findings, approvals, work performed, exceptions, and completion receipt.
+The platform supplies protected discovery, export and removal operations because they must consistently cover arbitrary application records, files, search, caches and derived data. A removal command names its tenant, organisations, data categories, optional version-pinned saved condition or protected subject fingerprint, requesting and authorising actors, issue time and correlation identifier. It does not contain a business request lifecycle, findings queue or approval case.
+
+Privacy request intake, identity verification, findings, correspondence, decisions and case progress are ordinary records in a locked Privacy Operations application. That application invokes the protected operations after its own authorised workflow has reached the required outcome.
 
 An **organisation-scoped request** covers one organisation account and the personal data that organisation controls. It must not delete the global identity or affect accounts in other organisations. A **global identity closure** verifies the person, coordinates an organisation-scoped request for every account, closes tenant-administrator assignments, and removes the identity only after required organisation work and lawful exceptions are complete. A tenant-wide request is a tracked batch of organisation-scoped requests, not a shortcut around each organisation's responsibility.
 
-The workflow must cover:
+Protected discovery and execution must cover:
 
 - Global identity and organisation accounts.
 - Record fields and linked records.
@@ -67,11 +69,11 @@ The workflow must cover:
 
 ## Legal holds
 
-A legal hold is an organisation-owned record with scope, reason, authorised creator, start time, review date, and release approval. It prevents permanent removal of matching data but does not make that data more visible. Creating, changing, or releasing a hold requires a dedicated permission and recent sign-in confirmation.
+A legal hold is an organisation-owned record with a versioned matching scope, reason, authorised creator, start time, review date, and release decision. It prevents permanent removal only for data that matches that scope; it never skips an entire organisation unless the authorised scope explicitly and lawfully matches all of its data. A hold does not make data more visible. Creating, changing, or releasing a hold requires a dedicated permission and recent sign-in confirmation.
 
 ## Shared-record accountability
 
-Creating, approving, refusing, activating, using, changing, expiring, or revoking a cross-organisation grant is material activity. The source history records the source and recipient clusters, source and recipient organisations, acting global identity, acting organisation account, grant, approved scope, action, outcome, and correlation identifier. One federated query produces one safe request-level activity entry rather than one entry for every returned row. The recipient history records its local request, remote outcome, and correlation identifier without copying source record values.
+Creating, consenting to, refusing, activating, using, changing, expiring, or revoking a cross-organisation grant is material activity. The source history records the source and recipient clusters, source and recipient organisations, acting global identity, acting organisation account, grant, consented scope, action, outcome, and correlation identifier. One federated query produces one safe request-level activity entry rather than one entry for every returned row. The recipient history records its local request, remote outcome, and correlation identifier without copying source record values.
 
 The source organisation remains responsible for record retention, legal hold, correction, and erasure. A recipient cannot extend retention or prevent source deletion merely because it can read the record. When an erasure, field removal, or legal restriction changes what may be shared, the next list, detail, search, report, dashboard, or export request applies the new result. The recipient holds no search document, materialised report result, or shared-record cache to remove.
 

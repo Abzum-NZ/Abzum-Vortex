@@ -212,6 +212,7 @@
       {
         "id": "act_tag_assign",
         "key": "vortex.crm.tags.record_tag.assign",
+        "label": "Assign tag",
         "record_type": "record_tag",
         "permission": "vortex.crm.tags.record_tag.manage",
         "inputs": [
@@ -238,8 +239,8 @@
           }
         ],
         "effects": [
-          "create_record",
-          "emit_event"
+          {"kind":"create_record","record_type":"vortex.crm.tags:record_tag","values":{"tag":{"source":"input","input":"tag"},"record":{"source":"input","input":"record"},"assigned_at":{"source":"current_time"},"assigned_by":{"source":"current_actor"}}},
+          {"kind":"announce_event","event":"vortex.crm.tags.record_tag.assigned"}
         ],
         "shareable": false
       }

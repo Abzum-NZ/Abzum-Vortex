@@ -2,7 +2,7 @@
 
 [Contract index](README.md) · [Data-contract specification](../docs/specification/appendices/data-contracts.md#definition-validation-errors) · [Issue #13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13)
 
-This guide explains how a definition validator returns useful errors without exposing raw definition content or protected diagnostics. The catalogue and translator are generic platform contracts. They do not know which applications, modules, record types, fields, workflows, connections, or example fixtures are installed.
+This guide explains how a definition validator returns useful errors without exposing raw definition content or protected diagnostics. The catalogue and translator are generic platform contracts. They do not know which applications, modules, record types, fields, workflows, connections, or example fixtures are installed. The snake-case documents below are exercised through the test-only fixture schema; [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns the complete production authored-source schema and conversion into canonical contracts.
 
 ## Public flow
 
@@ -55,10 +55,18 @@ This complete source document has one deliberate error: it omits the required `a
   "content_fingerprint": "fixture:example.connection:1.0.0",
   "body": {
     "name": "Example connection",
+    "purpose": "Submit a typed request to an approved example provider.",
+    "provider": "Example provider",
     "authentication": {
       "kind": "signed_secret",
-      "secret_fields": ["signing_secret"]
+      "secret_fields": ["signing_secret"],
+      "algorithm": "hmac_sha256"
     },
+    "allow_redirects": false,
+    "shapes": [
+      { "key": "request", "fields": [{ "key": "value", "type": "text", "required": true }] },
+      { "key": "receipt", "fields": [{ "key": "accepted", "type": "boolean", "required": true }] }
+    ],
     "operations": [
       {
         "key": "submit",
@@ -67,7 +75,8 @@ This complete source document has one deliberate error: it omits the required `a
         "input": "request",
         "output": "receipt",
         "timeout_seconds": 10,
-        "max_attempts": 2
+        "max_attempts": 2,
+        "maximum_response_bytes": 1000000
       }
     ],
     "incoming_messages": []
@@ -98,7 +107,7 @@ After the caller maps the schema location to an authorised builder-visible locat
 }
 ```
 
-The corrected document adds the required value and passes the strict source schema:
+The corrected document adds the required value and passes the strict test-only fixture-source schema:
 
 ```json
 {
@@ -112,11 +121,19 @@ The corrected document adds the required value and passes the strict source sche
   "content_fingerprint": "fixture:example.connection:1.0.0",
   "body": {
     "name": "Example connection",
+    "purpose": "Submit a typed request to an approved example provider.",
+    "provider": "Example provider",
     "authentication": {
       "kind": "signed_secret",
-      "secret_fields": ["signing_secret"]
+      "secret_fields": ["signing_secret"],
+      "algorithm": "hmac_sha256"
     },
     "allowed_hosts": ["api.example.test"],
+    "allow_redirects": false,
+    "shapes": [
+      { "key": "request", "fields": [{ "key": "value", "type": "text", "required": true }] },
+      { "key": "receipt", "fields": [{ "key": "accepted", "type": "boolean", "required": true }] }
+    ],
     "operations": [
       {
         "key": "submit",
@@ -125,7 +142,8 @@ The corrected document adds the required value and passes the strict source sche
         "input": "request",
         "output": "receipt",
         "timeout_seconds": 10,
-        "max_attempts": 2
+        "max_attempts": 2,
+        "maximum_response_bytes": 1000000
       }
     ],
     "incoming_messages": []

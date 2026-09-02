@@ -73,7 +73,7 @@ A file follows the lifecycle of the record attachment that owns it unless it has
 
 ## Limits and usage
 
-Uploads enforce per-file, per-field, per-request, and organisation storage limits before accepting bytes where possible. Accepted bytes, retained bytes, preview work, and failed uploads contribute to usage according to [plans, billing and usage](15-plans-billing-and-usage.md).
+Uploads enforce per-file, per-field, per-request, and organisation storage limits before accepting bytes where possible. Accepted bytes, retained bytes, preview work, and failed uploads produce generic [metering events](15-entitlements-and-metering.md#metering-events).
 
 ## Acceptance examples
 

@@ -70,7 +70,7 @@ The codebase is divided into sixteen named services. These are package and owner
 | Query | Tables, boards, calendars, summaries and saved views |
 | Rule | Typed conditions and immediate rule effects |
 | Event | Transactional event outbox, queue dispatch, retries and failed sequences |
-| Workflow | Execution references, schedules, human approval tasks, notifications and the [Kestra](https://kestra.io/docs) boundary; Kestra owns execution status |
+| Workflow | Execution references, schedules, generic human-input waits and the [Kestra](https://kestra.io/docs) boundary; Kestra owns execution status |
 | App | Application assembly, module bindings, navigation, options and application roles |
 | Page | Block registration, page resolution, form drafts, page states and rendering contract |
 | Theme | Application-contained and platform-catalogue theme values, inheritance and legibility validation |
@@ -85,7 +85,7 @@ Each service owns its tables and public contract. Another service calls that con
 
 - Every organisation-owned row carries its organisation identifier and is indexed with that identifier first where the access path requires it.
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
-- Only business-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, billing, secrets, connections, activity, approval decisions, access-control rows, and other administrative tables never become visible through a record grant.
+- Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
 - The table-owner role is limited to migration and controlled verification work.
 - Every database transaction establishes global identity or system actor, tenant, organisation account, organisation, application, and correlation context before reading organisation data. Tenant-administrator context alone never satisfies an organisation record policy.
@@ -183,11 +183,11 @@ Every request names the federation protocol version, shared-contract version and
 
 Remote queries are efficient by contract: filters, search, sorting, field selection, grouping, totals, counts, and cursor pagination run at the source; records and aggregates are returned in bounded batches; transport connections may be reused; and timeouts and failure isolation prevent one unavailable cluster consuming the recipient's request capacity. Application search fans out only across a bounded set of active grant mirrors, isolates each unavailable source, and groups merged remote results as shared rather than pretending that incomparable source ranks form one local index.
 
-Recipient seats and gateway requests count to the recipient organisation. Source queries, searches, reports, actions, temporary export or file storage, and any network delivery count to the source organisation. Linked usage entries share one correlation identifier, the same category is not counted twice, and the allocation does not change between local and remote routes. The source rate-limits by recipient cluster, organisation, grant, and operation.
+Recipient-side gateway consumption is measured for the recipient organisation. Source queries, searches, reports, actions, temporary export or file storage, and any network delivery are measured for the source organisation. Linked metering entries share one correlation identifier, the same category is not counted twice, and the allocation does not change between local and remote routes. The source rate-limits by recipient cluster, organisation, grant, and operation.
 
 The recipient may cache signed cluster metadata, public keys, definition fingerprints, grant mirrors, saved non-content report definitions, and content-free invalidations. It does not persist business-record responses, files, search documents, report results, workflow payloads, or cross-request shared-data cache entries.
 
-A timeout, unreachable source, invalid signature, replay, version mismatch, disabled route, rate or plan refusal, unapproved recipient region, or uncertain grant status fails closed. The screen shows that the source organisation is temporarily unavailable when retry is safe; it never displays a stored stale record as if it were current. Shared-record responses use private no-store browser and intermediary caching instructions.
+A timeout, unreachable source, invalid signature, replay, version mismatch, disabled route, entitlement or rate-limit refusal, unapproved recipient region, or uncertain grant status fails closed. The screen shows that the source organisation is temporarily unavailable when retry is safe; it never displays a stored stale record as if it were current. Shared-record responses use private no-store browser and intermediary caching instructions.
 
 ### Why database federation and replication are excluded
 
@@ -256,7 +256,7 @@ The first release does not place cross-organisation shared-record results in the
 - Publishing a definition makes the next request read the new live pointer without waiting five minutes.
 - Changing a record makes a cached data result under the old record-type data version unreachable.
 - A cross-organisation shared-record query bypasses the cross-request data-result cache.
-- A grant cannot expose an identity, billing, connection, activity, approval, or access-control row.
+- A grant cannot expose an identity, connection, activity, grant-consent, entitlement-policy, or access-control row.
 - A same-cluster request and its cross-cluster equivalent produce the same allowed fields, action outcome, and stable refusal code.
 - A remote request with an altered body, reused nonce, expired signature, unregistered cluster, or incompatible contract version is refused before record access.
 - Source revocation refuses a cross-cluster request even while the recipient mirror still says active.

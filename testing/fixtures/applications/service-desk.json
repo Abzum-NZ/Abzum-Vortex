@@ -1,48 +1,536 @@
 {
-  "schema_version":"2.0.0","kind":"application","root_id":"app_service_desk","key":"vortex.app.service_desk","version":"1.0.0","revision":1,"state":"published","content_fingerprint":"fixture:vortex.app.service_desk:1.0.0",
-  "body":{
-    "name":"Service Desk","description":"Customer support cases, service targets and reviewed knowledge.","icon":"life-buoy","home_page":"service_desk_overview",
-    "module_bindings":[{"module":"vortex.crm.organisations","version":"1.0.0","purpose":"shared_customer_context"},{"module":"vortex.crm.people","version":"1.0.0","purpose":"shared_requester_context"},{"module":"vortex.service_desk.sla","version":"1.0.0","purpose":"primary"},{"module":"vortex.service_desk.cases","version":"1.0.0","purpose":"primary"},{"module":"vortex.service_desk.knowledge","version":"1.0.0","purpose":"primary"}],
-    "theme":{"mode":"application","light_and_dark":true,"tokens":{"brand":"teal","density":"comfortable","corners":"medium","focus":"high_contrast"}},
-    "motion":{"library":"motion/react","simple_feedback":"css","feature_loading":"lazy","tokens":"platform_default","semantic_tokens":["feedback","enter_exit","refresh","panel","page","layout_spring"],"current_state_wins":true,"reduced_motion":"required","experimental_view_transitions":false},
-    "permissions":[{"key":"application.service_desk.open","label":"Open Service Desk"},{"key":"application.service_desk.manage","label":"Manage Service Desk"},{"key":"application.service_desk.knowledge.manage","label":"Manage knowledge"}],
-    "roles":[
-      {"id":"role_sd_agent","key":"service_agent","name":"Service agent","home_page":"service_desk_overview","permissions":["application.service_desk.open","vortex.crm.organisations.company.read","vortex.crm.people.contact.read","vortex.service_desk.cases.case.*","vortex.service_desk.cases.case_comment.*","vortex.service_desk.cases.case.assign","vortex.service_desk.cases.case.resolve","vortex.service_desk.cases.case.add_public_comment","vortex.service_desk.sla.service_level.read","vortex.service_desk.knowledge.article.read"]},
-      {"id":"role_sd_manager","key":"service_manager","name":"Service manager","home_page":"service_desk_overview","permissions":["application.service_desk.*","vortex.crm.organisations.company.read","vortex.crm.people.contact.read","vortex.service_desk.cases.*","vortex.service_desk.sla.*","vortex.service_desk.knowledge.*"]},
-      {"id":"role_sd_knowledge","key":"knowledge_editor","name":"Knowledge editor","home_page":"service_desk_knowledge","permissions":["application.service_desk.open","application.service_desk.knowledge.manage","vortex.service_desk.knowledge.article.*","vortex.service_desk.knowledge.article.publish","vortex.service_desk.knowledge.article_case.*"]}
+  "schema_version": "2.0.0",
+  "kind": "application",
+  "root_id": "app_service_desk",
+  "key": "vortex.app.service_desk",
+  "version": "1.0.0",
+  "revision": 1,
+  "state": "published",
+  "content_fingerprint": "fixture:vortex.app.service_desk:1.0.0",
+  "body": {
+    "name": "Service Desk",
+    "description": "Customer support cases, service targets and reviewed knowledge.",
+    "icon": "life-buoy",
+    "home_page": "service_desk_overview",
+    "module_bindings": [
+      {
+        "module": "vortex.crm.organisations",
+        "version": "1.0.0",
+        "purpose": "shared_customer_context"
+      },
+      { "module": "vortex.crm.people", "version": "1.0.0", "purpose": "shared_requester_context" },
+      { "module": "vortex.service_desk.sla", "version": "1.0.0", "purpose": "primary" },
+      { "module": "vortex.service_desk.cases", "version": "1.0.0", "purpose": "primary" },
+      { "module": "vortex.service_desk.knowledge", "version": "1.0.0", "purpose": "primary" }
     ],
-    "navigation":[
-      {"id":"nav_sd_home","type":"page","label":"Overview","page":"service_desk_overview","permission":"application.service_desk.open"},
-      {"id":"nav_sd_cases","type":"heading","label":"Cases","children":[{"id":"nav_sd_queue","type":"page","label":"Case queue","page":"service_desk_cases","permission":"vortex.service_desk.cases.case.read"},{"id":"nav_sd_new","type":"page","label":"New case","page":"service_desk_new_case","permission":"vortex.service_desk.cases.case.create"}]},
-      {"id":"nav_sd_knowledge","type":"page","label":"Knowledge","page":"service_desk_knowledge","permission":"vortex.service_desk.knowledge.article.read"},
-      {"id":"nav_sd_admin","type":"heading","label":"Settings","children":[{"id":"nav_sd_sla","type":"page","label":"Service levels","page":"service_desk_service_levels","permission":"vortex.service_desk.sla.service_level.read"}]}
+    "theme": {
+      "mode": "application",
+      "light_and_dark": true,
+      "tokens": {
+        "brand": "teal",
+        "density": "comfortable",
+        "corners": "medium",
+        "focus": "high_contrast"
+      }
+    },
+    "permissions": [
+      { "key": "application.service_desk.open", "label": "Open Service Desk" },
+      { "key": "application.service_desk.manage", "label": "Manage Service Desk" },
+      { "key": "application.service_desk.knowledge.manage", "label": "Manage knowledge" }
     ],
-    "queries":[
-      {"id":"qry_sd_open_cases","key":"service_desk_open_cases","record_type":"vortex.service_desk.cases:case","select":["case_number","subject","customer_company","requester","owner","status","priority","resolution_due_at","breached"],"filter":{"field":"status","operator":"not_in","value":["resolved","closed"]},"sort":[{"field":"priority","direction":"descending"},{"field":"resolution_due_at","direction":"ascending"}]},
-      {"id":"qry_sd_knowledge","key":"service_desk_knowledge","record_type":"vortex.service_desk.knowledge:article","select":["article_number","title","status","public","review_date","author"],"filter":null,"sort":[{"field":"review_date","direction":"ascending"}]},
-      {"id":"qry_sd_sla","key":"service_desk_service_levels","record_type":"vortex.service_desk.sla:service_level","select":["name","calendar","first_response_minutes","resolution_minutes","active"],"filter":null,"sort":[{"field":"name","direction":"ascending"}]},
-      {"id":"qry_sd_customers","key":"service_desk_customers","record_type":"vortex.crm.organisations:company","select":["company_number","name","phone","website"],"filter":{"field":"company_kind","operator":"contains","value":"customer"},"sort":[{"field":"name","direction":"ascending"}]}
+    "roles": [
+      {
+        "id": "role_sd_agent",
+        "key": "service_agent",
+        "name": "Service agent",
+        "home_page": "service_desk_overview",
+        "permissions": [
+          "application.service_desk.open",
+          "vortex.crm.organisations.company.read",
+          "vortex.crm.people.contact.read",
+          "vortex.service_desk.cases.case.*",
+          "vortex.service_desk.cases.case_comment.*",
+          "vortex.service_desk.cases.case.assign",
+          "vortex.service_desk.cases.case.resolve",
+          "vortex.service_desk.cases.case.add_public_comment",
+          "vortex.service_desk.sla.service_level.read",
+          "vortex.service_desk.knowledge.article.read"
+        ]
+      },
+      {
+        "id": "role_sd_manager",
+        "key": "service_manager",
+        "name": "Service manager",
+        "home_page": "service_desk_overview",
+        "permissions": [
+          "application.service_desk.*",
+          "vortex.crm.organisations.company.read",
+          "vortex.crm.people.contact.read",
+          "vortex.service_desk.cases.*",
+          "vortex.service_desk.sla.*",
+          "vortex.service_desk.knowledge.*"
+        ]
+      },
+      {
+        "id": "role_sd_knowledge",
+        "key": "knowledge_editor",
+        "name": "Knowledge editor",
+        "home_page": "service_desk_knowledge",
+        "permissions": [
+          "application.service_desk.open",
+          "application.service_desk.knowledge.manage",
+          "vortex.service_desk.knowledge.article.*",
+          "vortex.service_desk.knowledge.article.publish",
+          "vortex.service_desk.knowledge.article_case.*"
+        ]
+      }
     ],
-    "pages":[
-      {"id":"page_sd_overview","key":"service_desk_overview","name":"Service overview","type":"dashboard","permission":"application.service_desk.open","layout":{"desktop":[{"block":"case_summary","span":8,"query":"service_desk_open_cases"},{"block":"service_level_status","span":4,"query":"service_desk_open_cases"}],"phone":["case_summary","service_level_status"]},"states":["normal","loading","empty","refused","failure","recovery"]},
-      {"id":"page_sd_cases","key":"service_desk_cases","name":"Case queue","type":"list","record_type":"vortex.service_desk.cases:case","permission":"vortex.service_desk.cases.case.read","query":"service_desk_open_cases","arrangements":["table","board","calendar","summary"],"calendar_mapping":{"start":"resolution_due_at","end":"resolution_due_at"},"states":["normal","loading","empty","refused","failure","recovery"]},
-      {"id":"page_sd_case_detail","key":"service_desk_case_detail","name":"Case detail","type":"detail","record_type":"vortex.service_desk.cases:case","permission":"vortex.service_desk.cases.case.read","sections":["summary","description","comments","attachments","service_level"],"states":["normal","loading","refused","conflict","failure","recovery"]},
-      {"id":"page_sd_new_case","key":"service_desk_new_case","name":"New case","type":"form","record_type":"vortex.service_desk.cases:case","permission":"vortex.service_desk.cases.case.create","commit_action":"vortex.service_desk.cases.case.create","states":["normal","loading","validation","refused","conflict","failure","recovery"]},
-      {"id":"page_sd_knowledge","key":"service_desk_knowledge","name":"Knowledge","type":"list","record_type":"vortex.service_desk.knowledge:article","permission":"vortex.service_desk.knowledge.article.read","query":"service_desk_knowledge","arrangements":["table","summary"],"states":["normal","loading","empty","refused","failure","recovery"]},
-      {"id":"page_sd_article","key":"service_desk_article","name":"Knowledge article","type":"detail","record_type":"vortex.service_desk.knowledge:article","permission":"vortex.service_desk.knowledge.article.read","sections":["article","case_links","review"],"states":["normal","loading","refused","conflict","failure","recovery"]},
-      {"id":"page_sd_public_article","key":"service_desk_public_article","name":"Public knowledge article","type":"public","record_type":"vortex.service_desk.knowledge:article","public_fields":["article_number","title","body","review_date","author"],"filter":{"all":[{"field":"status","operator":"equals","value":"published"},{"field":"public","operator":"equals","value":true}]},"states":["normal","loading","not_found","failure","recovery"]},
-      {"id":"page_sd_sla","key":"service_desk_service_levels","name":"Service levels","type":"list","record_type":"vortex.service_desk.sla:service_level","permission":"vortex.service_desk.sla.service_level.read","query":"service_desk_service_levels","arrangements":["table"],"states":["normal","loading","empty","refused","failure","recovery"]}
+    "navigation": [
+      {
+        "id": "nav_sd_home",
+        "type": "page",
+        "label": "Overview",
+        "page": "service_desk_overview",
+        "permission": "application.service_desk.open"
+      },
+      {
+        "id": "nav_sd_cases",
+        "type": "heading",
+        "label": "Cases",
+        "children": [
+          {
+            "id": "nav_sd_queue",
+            "type": "page",
+            "label": "Case queue",
+            "page": "service_desk_cases",
+            "permission": "vortex.service_desk.cases.case.read"
+          },
+          {
+            "id": "nav_sd_new",
+            "type": "page",
+            "label": "New case",
+            "page": "service_desk_new_case",
+            "permission": "vortex.service_desk.cases.case.create"
+          }
+        ]
+      },
+      {
+        "id": "nav_sd_knowledge",
+        "type": "page",
+        "label": "Knowledge",
+        "page": "service_desk_knowledge",
+        "permission": "vortex.service_desk.knowledge.article.read"
+      },
+      {
+        "id": "nav_sd_admin",
+        "type": "heading",
+        "label": "Settings",
+        "children": [
+          {
+            "id": "nav_sd_sla",
+            "type": "page",
+            "label": "Service levels",
+            "page": "service_desk_service_levels",
+            "permission": "vortex.service_desk.sla.service_level.read"
+          }
+        ]
+      }
     ],
-    "workflows":[
-      {"id":"wf_sd_intake","key":"service_desk_case_intake","name":"Triage a new case","trigger":{"event":"vortex.service_desk.cases.case.created"},"run_as":"system_with_source_authority","nodes":[
-        {"id":"i1","type":"start","config":{}},{"id":"i2","type":"set_values","config":{"values":{"status":"triage"}}},{"id":"i3","type":"change_record","config":{"record_type":"vortex.service_desk.cases:case"}},{"id":"i4","type":"add_comment","config":{"visibility":"internal","text":"Automatic triage started"}},{"id":"i5","type":"request_approval","config":{"reason":"critical_case"}},{"id":"i6","type":"start_workflow","config":{"workflow":"service_desk_escalation"}},{"id":"i7","type":"notification","config":{"audience":"service_manager"}},{"id":"i8","type":"stop","config":{}}],"edges":[["i1","i2"],["i2","i3"],["i3","i4"],["i4","i5"],["i5","i6"],["i6","i7"],["i7","i8"]]},
-      {"id":"wf_sd_escalation","key":"service_desk_escalation","name":"Escalate an overdue case","trigger":{"event":"vortex.service_desk.cases.case.assigned"},"run_as":"system_with_source_authority","nodes":[
-        {"id":"e1","type":"start","config":{}},{"id":"e2","type":"wait_until","config":{"field":"resolution_due_at"}},{"id":"e3","type":"condition","config":{"field":"status","operator":"not_in","value":["resolved","closed"]}},{"id":"e4","type":"delay","config":{"minutes":15}},{"id":"e5","type":"call_connection","config":{"connection":"service_desk_webhook","operation":"post_json"}},{"id":"e6","type":"send_email","config":{"connection":"service_desk_email","operation":"send_template"}},{"id":"e7","type":"stop","config":{}}],"edges":[["e1","e2"],["e2","e3"],["e3","e4"],["e4","e5"],["e5","e6"],["e6","e7"]]},
-      {"id":"wf_sd_resolution","key":"service_desk_resolution_cleanup","name":"Complete resolution work","trigger":{"event":"vortex.service_desk.cases.case.resolved"},"run_as":"system_with_source_authority","nodes":[
-        {"id":"r1","type":"start","config":{}},{"id":"r2","type":"convert_record","config":{"from":"vortex.service_desk.cases:case_comment","to":"vortex.service_desk.knowledge:article"}},{"id":"r3","type":"copy_relationships","config":{}},{"id":"r4","type":"soft_delete_record","config":{"record_type":"vortex.service_desk.cases:case_comment","scope":"temporary_drafts"}},{"id":"r5","type":"acknowledge_message","config":{}},{"id":"r6","type":"stop","config":{}}],"edges":[["r1","r2"],["r2","r3"],["r3","r4"],["r4","r5"],["r5","r6"]]}
+    "queries": [
+      {
+        "id": "qry_sd_open_cases",
+        "key": "service_desk_open_cases",
+        "record_type": "vortex.service_desk.cases:case",
+        "select": [
+          "case_number",
+          "subject",
+          "customer_company",
+          "requester",
+          "owner",
+          "status",
+          "priority",
+          "resolution_due_at",
+          "breached"
+        ],
+        "filter": { "field": "status", "operator": "not_in", "value": ["resolved", "closed"] },
+        "sort": [
+          { "field": "priority", "direction": "descending" },
+          { "field": "resolution_due_at", "direction": "ascending" }
+        ]
+      },
+      {
+        "id": "qry_sd_knowledge",
+        "key": "service_desk_knowledge",
+        "record_type": "vortex.service_desk.knowledge:article",
+        "select": ["article_number", "title", "status", "public", "review_date", "author"],
+        "filter": null,
+        "sort": [{ "field": "review_date", "direction": "ascending" }]
+      },
+      {
+        "id": "qry_sd_sla",
+        "key": "service_desk_service_levels",
+        "record_type": "vortex.service_desk.sla:service_level",
+        "select": ["name", "calendar", "first_response_minutes", "resolution_minutes", "active"],
+        "filter": null,
+        "sort": [{ "field": "name", "direction": "ascending" }]
+      },
+      {
+        "id": "qry_sd_customers",
+        "key": "service_desk_customers",
+        "record_type": "vortex.crm.organisations:company",
+        "select": ["company_number", "name", "phone", "website"],
+        "filter": { "field": "company_kind", "operator": "contains", "value": "customer" },
+        "sort": [{ "field": "name", "direction": "ascending" }]
+      }
     ],
-    "pipelines":[{"id":"pipe_sd_case","key":"service_desk_case_pipeline","name":"Case lifecycle","record_type":"vortex.service_desk.cases:case","stage_field":"status","stages":["new","triage","in_progress","waiting_customer","resolved","closed"],"transitions":[{"from":"new","to":"triage","permission":"vortex.service_desk.cases.case.update"},{"from":"triage","to":"in_progress","action":"vortex.service_desk.cases.case.assign"},{"from":"in_progress","to":"waiting_customer","permission":"vortex.service_desk.cases.case.update"},{"from":"waiting_customer","to":"in_progress","permission":"vortex.service_desk.cases.case.update"},{"from":"in_progress","to":"resolved","action":"vortex.service_desk.cases.case.resolve"},{"from":"resolved","to":"closed","permission":"vortex.service_desk.cases.case.update"}],"time_targets":[{"stage":"triage","field":"first_response_due_at"},{"stage":"in_progress","field":"resolution_due_at"}]}],
-    "connection_bindings":[{"id":"service_desk_email","connection_type":"vortex.connection.email","required_operations":["send_message","send_template"]},{"id":"service_desk_webhook","connection_type":"vortex.connection.webhook","required_operations":["post_json"]}],
-    "interfaces":[{"id":"iface_sd_v1","key":"vortex.interface.service_desk","version":"1.0.0","operations":[{"key":"create_case","method":"POST","action":"vortex.service_desk.cases.case.create","permission":"vortex.service_desk.cases.case.create"},{"key":"list_cases","method":"GET","query":"service_desk_open_cases","permission":"vortex.service_desk.cases.case.read"},{"key":"add_public_comment","method":"POST","action":"vortex.service_desk.cases.case.add_public_comment","permission":"vortex.service_desk.cases.case.add_public_comment"}]}]
+    "pages": [
+      {
+        "id": "page_sd_overview",
+        "key": "service_desk_overview",
+        "name": "Service overview",
+        "type": "dashboard",
+        "permission": "application.service_desk.open",
+        "layout": {
+          "desktop": [
+            { "block": "case_summary", "span": 8, "query": "service_desk_open_cases" },
+            { "block": "service_level_status", "span": 4, "query": "service_desk_open_cases" }
+          ],
+          "phone": ["case_summary", "service_level_status"]
+        },
+        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+      },
+      {
+        "id": "page_sd_cases",
+        "key": "service_desk_cases",
+        "name": "Case queue",
+        "type": "list",
+        "record_type": "vortex.service_desk.cases:case",
+        "permission": "vortex.service_desk.cases.case.read",
+        "query": "service_desk_open_cases",
+        "arrangements": ["table", "board", "calendar", "summary"],
+        "calendar_mapping": { "start": "resolution_due_at", "end": "resolution_due_at" },
+        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+      },
+      {
+        "id": "page_sd_case_detail",
+        "key": "service_desk_case_detail",
+        "name": "Case detail",
+        "type": "detail",
+        "record_type": "vortex.service_desk.cases:case",
+        "permission": "vortex.service_desk.cases.case.read",
+        "sections": ["summary", "description", "comments", "attachments", "service_level"],
+        "states": ["normal", "loading", "refused", "conflict", "failure", "recovery"]
+      },
+      {
+        "id": "page_sd_new_case",
+        "key": "service_desk_new_case",
+        "name": "New case",
+        "type": "form",
+        "record_type": "vortex.service_desk.cases:case",
+        "permission": "vortex.service_desk.cases.case.create",
+        "commit_action": "vortex.service_desk.cases.case.create",
+        "states": ["normal", "loading", "validation", "refused", "conflict", "failure", "recovery"]
+      },
+      {
+        "id": "page_sd_knowledge",
+        "key": "service_desk_knowledge",
+        "name": "Knowledge",
+        "type": "list",
+        "record_type": "vortex.service_desk.knowledge:article",
+        "permission": "vortex.service_desk.knowledge.article.read",
+        "query": "service_desk_knowledge",
+        "arrangements": ["table", "summary"],
+        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+      },
+      {
+        "id": "page_sd_article",
+        "key": "service_desk_article",
+        "name": "Knowledge article",
+        "type": "detail",
+        "record_type": "vortex.service_desk.knowledge:article",
+        "permission": "vortex.service_desk.knowledge.article.read",
+        "sections": ["article", "case_links", "review"],
+        "states": ["normal", "loading", "refused", "conflict", "failure", "recovery"]
+      },
+      {
+        "id": "page_sd_public_article",
+        "key": "service_desk_public_article",
+        "name": "Public knowledge article",
+        "type": "public",
+        "record_type": "vortex.service_desk.knowledge:article",
+        "public_fields": ["article_number", "title", "body", "review_date", "author"],
+        "filter": {
+          "all": [
+            { "field": "status", "operator": "equals", "value": "published" },
+            { "field": "public", "operator": "equals", "value": true }
+          ]
+        },
+        "states": ["normal", "loading", "not_found", "failure", "recovery"]
+      },
+      {
+        "id": "page_sd_sla",
+        "key": "service_desk_service_levels",
+        "name": "Service levels",
+        "type": "list",
+        "record_type": "vortex.service_desk.sla:service_level",
+        "permission": "vortex.service_desk.sla.service_level.read",
+        "query": "service_desk_service_levels",
+        "arrangements": ["table"],
+        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+      }
+    ],
+    "workflows": [
+      {
+        "id": "wf_sd_intake",
+        "key": "service_desk_case_intake",
+        "name": "Triage a new case",
+        "trigger": { "event": "vortex.service_desk.cases.case.created" },
+        "run_as": "system_with_source_authority",
+        "maximum_nesting_depth": 5,
+        "nodes": [
+          { "id": "i1", "type": "start", "config": {} },
+          {
+            "id": "i2",
+            "type": "set_values",
+            "config": {
+              "record": { "source": "current_record" },
+              "values": {
+                "vortex.service_desk.cases:case.status": { "source": "literal", "value": "triage" }
+              }
+            }
+          },
+          {
+            "id": "i3",
+            "type": "change_record",
+            "config": {
+              "record_type": "vortex.service_desk.cases:case",
+              "record": { "source": "current_record" },
+              "values": { "status": { "source": "literal", "value": "triage" } }
+            }
+          },
+          {
+            "id": "i6",
+            "type": "start_workflow",
+            "config": { "workflow": "service_desk_escalation" }
+          },
+          { "id": "i8", "type": "stop", "config": { "reason_code": "completed" } }
+        ],
+        "edges": [
+          ["i1", "i2"],
+          ["i2", "i3"],
+          ["i3", "i6"],
+          ["i6", "i8"]
+        ]
+      },
+      {
+        "id": "wf_sd_escalation",
+        "key": "service_desk_escalation",
+        "name": "Escalate an overdue case",
+        "trigger": { "event": "vortex.service_desk.cases.case.assigned" },
+        "run_as": "system_with_source_authority",
+        "maximum_nesting_depth": 5,
+        "nodes": [
+          { "id": "e1", "type": "start", "config": {} },
+          {
+            "id": "e2",
+            "type": "wait_until",
+            "config": { "field": "vortex.service_desk.cases:case.resolution_due_at" }
+          },
+          {
+            "id": "e3",
+            "type": "condition",
+            "config": { "field": "status", "operator": "not_in", "value": ["resolved", "closed"] }
+          },
+          { "id": "e4", "type": "delay", "config": { "seconds": 900 } },
+          {
+            "id": "e5",
+            "type": "call_connection",
+            "config": {
+              "connection": "service_desk_webhook",
+              "operation": "post_json",
+              "inputs": {
+                "event_key": { "source": "literal", "value": "case_escalated" },
+                "payload": { "source": "literal", "value": {} }
+              }
+            }
+          },
+          {
+            "id": "e6",
+            "type": "call_connection",
+            "config": {
+              "connection": "service_desk_email",
+              "operation": "send_template",
+              "inputs": {
+                "recipient": { "source": "literal", "value": "owner@example.test" },
+                "template_key": { "source": "literal", "value": "case_escalated" },
+                "variables": { "source": "literal", "value": {} }
+              }
+            }
+          },
+          { "id": "e7", "type": "stop", "config": { "reason_code": "completed" } }
+        ],
+        "edges": [
+          ["e1", "e2"],
+          ["e2", "e3"],
+          ["e3", "e4", "matched"],
+          ["e3", "e7", "not_matched"],
+          ["e4", "e5"],
+          ["e5", "e6"],
+          ["e6", "e7"]
+        ]
+      },
+      {
+        "id": "wf_sd_resolution",
+        "key": "service_desk_resolution_cleanup",
+        "name": "Complete resolution work",
+        "trigger": { "event": "vortex.service_desk.cases.case.resolved" },
+        "run_as": "system_with_source_authority",
+        "maximum_nesting_depth": 5,
+        "nodes": [
+          { "id": "r1", "type": "start", "config": {} },
+          {
+            "id": "r2",
+            "type": "create_record",
+            "config": {
+              "record_type": "vortex.service_desk.knowledge:article",
+              "values": {
+                "title": {
+                  "source": "trigger_field",
+                  "field": "vortex.service_desk.cases:case.subject"
+                },
+                "body": {
+                  "source": "trigger_field",
+                  "field": "vortex.service_desk.cases:case.description"
+                },
+                "status": { "source": "literal", "value": "draft" },
+                "public": { "source": "literal", "value": false },
+                "review_date": { "source": "literal", "value": "2026-09-30" },
+                "author": { "source": "current_actor" }
+              }
+            }
+          },
+          {
+            "id": "r3",
+            "type": "create_record",
+            "config": {
+              "record_type": "vortex.service_desk.knowledge:article_case",
+              "values": {
+                "article": { "source": "node_output", "node": "r2", "output": "record" },
+                "case": { "source": "current_record" },
+                "linked_at": { "source": "current_time" }
+              }
+            }
+          },
+          {
+            "id": "r5",
+            "type": "acknowledge_message",
+            "config": { "message": "resolution_cleanup_completed" }
+          },
+          { "id": "r6", "type": "stop", "config": { "reason_code": "completed" } }
+        ],
+        "edges": [
+          ["r1", "r2"],
+          ["r2", "r3"],
+          ["r3", "r5"],
+          ["r5", "r6"]
+        ]
+      }
+    ],
+    "pipelines": [
+      {
+        "id": "pipe_sd_case",
+        "key": "service_desk_case_pipeline",
+        "name": "Case lifecycle",
+        "record_type": "vortex.service_desk.cases:case",
+        "stage_field": "status",
+        "stages": [
+          { "key": "new", "label": "New" },
+          { "key": "triage", "label": "Triage" },
+          { "key": "in_progress", "label": "In progress" },
+          { "key": "waiting_customer", "label": "Waiting for customer" },
+          { "key": "resolved", "label": "Resolved" },
+          { "key": "closed", "label": "Closed" }
+        ],
+        "transitions": [
+          { "from": "new", "to": "triage", "permission": "vortex.service_desk.cases.case.update" },
+          {
+            "from": "triage",
+            "to": "in_progress",
+            "action": "vortex.service_desk.cases.case.assign"
+          },
+          {
+            "from": "in_progress",
+            "to": "waiting_customer",
+            "permission": "vortex.service_desk.cases.case.update"
+          },
+          {
+            "from": "waiting_customer",
+            "to": "in_progress",
+            "permission": "vortex.service_desk.cases.case.update"
+          },
+          {
+            "from": "in_progress",
+            "to": "resolved",
+            "action": "vortex.service_desk.cases.case.resolve"
+          },
+          {
+            "from": "resolved",
+            "to": "closed",
+            "permission": "vortex.service_desk.cases.case.update"
+          }
+        ],
+        "time_targets": [
+          {
+            "stage": "triage",
+            "field": "first_response_due_at",
+            "escalation_event": "vortex.service_desk.cases.case.first_response_overdue"
+          },
+          {
+            "stage": "in_progress",
+            "field": "resolution_due_at",
+            "escalation_event": "vortex.service_desk.cases.case.resolution_overdue"
+          }
+        ]
+      }
+    ],
+    "connection_bindings": [
+      {
+        "id": "service_desk_email",
+        "connection_type": "vortex.connection.email",
+        "required_operations": ["send_message", "send_template"]
+      },
+      {
+        "id": "service_desk_webhook",
+        "connection_type": "vortex.connection.webhook",
+        "required_operations": ["post_json"]
+      }
+    ],
+    "interfaces": [
+      {
+        "id": "iface_sd_v1",
+        "key": "vortex.interface.service_desk",
+        "version": "1.0.0",
+        "operations": [
+          {
+            "key": "create_case",
+            "method": "POST",
+            "action": "vortex.service_desk.cases.case.create",
+            "permission": "vortex.service_desk.cases.case.create"
+          },
+          {
+            "key": "list_cases",
+            "method": "GET",
+            "query": "service_desk_open_cases",
+            "permission": "vortex.service_desk.cases.case.read"
+          },
+          {
+            "key": "add_public_comment",
+            "method": "POST",
+            "action": "vortex.service_desk.cases.case.add_public_comment",
+            "permission": "vortex.service_desk.cases.case.add_public_comment"
+          }
+        ]
+      }
+    ]
   }
 }

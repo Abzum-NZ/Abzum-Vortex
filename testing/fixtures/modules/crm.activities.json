@@ -209,12 +209,13 @@
       {
         "id": "act_activity_complete",
         "key": "vortex.crm.activities.activity.complete",
+        "label": "Complete activity",
         "record_type": "activity",
         "permission": "vortex.crm.activities.activity.complete",
         "inputs": [],
         "effects": [
-          "set_completed",
-          "emit_event"
+          {"kind":"set_field","field":"completed","value":{"source":"literal","value":true}},
+          {"kind":"announce_event","event":"vortex.crm.activities.activity.completed"}
         ],
         "shareable": false
       }

@@ -7,6 +7,6 @@
     { "path": "./studio" },
     { "path": "./modules" },
     { "path": "./testing" },
-    { "path": "./web" }
+    { "path": "./apps/web" }
   ]
 }
