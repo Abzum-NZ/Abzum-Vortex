@@ -59,4 +59,10 @@ export const contractIndex = [
     specification: "appendices/data-contracts.md#definition-validation-errors",
     owner: "#13",
   },
+  {
+    group: "module and application version-impact requests, results and confirmation",
+    layer: "canonical_runtime",
+    specification: "03-composition-and-publication.md#definition-ownership-and-versions",
+    owner: "#14",
+  },
 ] as const;
