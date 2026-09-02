@@ -1,0 +1,10 @@
+.next/
+coverage/
+dist/
+.turbo/
+node_modules/
+pnpm-lock.yaml
+docs/
+testing/fixtures/
+workflows/
+README.md

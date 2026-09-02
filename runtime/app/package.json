@@ -1,0 +1,27 @@
+{
+  "name": "@vortex/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vortex/access": "workspace:*",
+    "@vortex/contracts": "workspace:*",
+    "@vortex/module": "workspace:*",
+    "@vortex/theme": "workspace:*",
+    "server-only": "0.0.1"
+  },
+  "vortex": {
+    "tier": 8,
+    "environment": "server",
+    "ships": true,
+    "engine": true,
+    "service": "app"
+  }
+}

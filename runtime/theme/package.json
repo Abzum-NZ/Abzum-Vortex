@@ -1,0 +1,24 @@
+{
+  "name": "@vortex/theme",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vortex/contracts": "workspace:*",
+    "server-only": "0.0.1"
+  },
+  "vortex": {
+    "tier": 3,
+    "environment": "server",
+    "ships": true,
+    "engine": true,
+    "service": "theme"
+  }
+}
