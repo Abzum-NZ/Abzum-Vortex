@@ -79,15 +79,15 @@ Run through ordinary product surfaces:
 30. Prove cross-cluster record values do not enter recipient database tables, files, search indexes, materialised report results, workflow state, cross-request cache, logs, traces, or grant mirrors.
 31. Probe invalid, rotated, and valid organisation sharing codes and signed links; only an exact active lookup returns the approved organisation name and region, with no directory enumeration or private metadata.
 32. Run the same grant locally and remotely; each request creates linked source and recipient usage entries without counting one category twice.
-33. Refuse activation with only source approval, only recipient acceptance, or approvals over different fingerprints; activate once after both authorised sides approve the same complete fingerprint.
+33. Refuse activation with only one side's consent or consent over different fingerprints; activate once after both authorised sides consent to the same complete fingerprint.
 34. Add, remove, suspend, and restore a named recipient application role; the next request follows the account's current application access and role membership without using a role from another organisation account.
-35. Change a published saved sharing condition or its grant parameters; the active grant remains pinned and unchanged until a new proposal receives both approvals.
+35. Change a published saved sharing condition or its grant parameters; the active grant remains pinned and unchanged until a new proposal receives both consent decisions.
 36. Attempt an inline filter and a re-share from recipient to third organisation; both are refused through local and remote routes.
 37. Run the same shared list, record detail, search, report, dashboard block, named action, and approved export through local and remote adapters; ordinary components show the same permitted content, source marker, and refusal meaning.
 38. Search and report on shared records, then inspect recipient storage, indexes, caches, logs, and grant mirrors; no source value or materialised result remains after the response.
 39. Leave export refused and prove no export starts; approve it on both sides and prove the source-generated file contains only grant-readable non-sensitive fields, expires, leaves no recipient-cluster copy, and records the non-recallable transfer warning.
 40. Put one organisation account in several teams; add, remove, suspend, and restore memberships and prove direct shares and team roles change on the next request.
-41. Give a tenant administrator no account in a child organisation and prove hierarchy, plan, and announcement administration works while every record, file, search, workflow, and connection read is refused.
+41. Give a tenant administrator no account in a child organisation and prove hierarchy and explicitly granted tenant operations work while every record, file, search, workflow, and connection read is refused.
 42. Create direct record shares to an account and a team; prove only allowlisted fields can be read or changed and that delete, restore, export, re-share, and administration remain refused.
 43. Grant CRM limited collaborative access to a Service Desk case; prove CRM reads only the summary fields, changes only `status` and `priority`, adds only a public comment, and never receives internal notes, attachments, service-level calculations, or ownership controls.
 44. Revoke that grant while the case is visible; the next access check removes the values from the component, closes or re-authorises live updates, and browser back navigation or client cache cannot reveal the case.
@@ -118,7 +118,7 @@ Every implementation issue links:
 - Any decided decision-register entries.
 - Tests added or changed.
 - Migration and compatibility notes.
-- Privacy, access, billing, and operational effects.
+- Protected data handling, access, entitlement, and operational effects.
 - Visible desktop and phone evidence where applicable.
 - Follow-up issues for deliberately deferred work.
 

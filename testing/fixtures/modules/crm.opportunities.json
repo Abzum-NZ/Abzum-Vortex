@@ -409,32 +409,15 @@
     ],
     "actions": [
       {
-        "id": "act_opp_approve_discount",
-        "key": "vortex.crm.opportunities.opportunity.approve_discount",
-        "record_type": "opportunity",
-        "permission": "vortex.crm.opportunities.opportunity.approve_discount",
-        "inputs": [],
-        "effects": [
-          "record_approval",
-          "emit_event"
-        ],
-        "shareable": false
-      },
-      {
         "id": "act_opp_mark_won",
         "key": "vortex.crm.opportunities.opportunity.mark_won",
+        "label": "Mark opportunity won",
         "record_type": "opportunity",
         "permission": "vortex.crm.opportunities.opportunity.mark_won",
-        "inputs": [
-          {
-            "key": "won_at",
-            "type": "date_time",
-            "required": true
-          }
-        ],
+        "inputs": [],
         "effects": [
-          "change_stage",
-          "emit_event"
+          {"kind":"set_field","field":"stage","value":{"source":"literal","value":"won"}},
+          {"kind":"announce_event","event":"vortex.crm.opportunities.opportunity.won"}
         ],
         "shareable": false
       }
@@ -475,17 +458,16 @@
     "rules": [
       {
         "id": "rule_opp_discount",
-        "key": "large_discount_requires_approval",
+        "key": "large_discount_warning",
         "record_type": "opportunity",
-        "moment": "saving",
+        "trigger": "change",
+        "priority": 100,
         "condition": {
           "field": "discount_percent",
           "operator": "greater_than",
           "value": 15
         },
-        "effect": "require_permission",
-        "permission": "vortex.crm.opportunities.opportunity.approve_discount",
-        "message": "A discount above 15 percent needs approval."
+        "effect": {"kind":"warn","message":"large_discount_review"}
       }
     ],
     "extension_points": [

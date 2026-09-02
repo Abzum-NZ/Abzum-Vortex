@@ -1,15 +1,18 @@
 import { z } from "zod";
 import {
   boundedPageSchema,
+  correlationIdSchema,
   duplicateProtectionKeySchema,
   jsonValueSchema,
   safeHttpsUrlSchema,
   secretReferenceSchema,
 } from "./common";
-import { accessGrantSchema, approvalDecisionSchema } from "./identity-access";
+import { accessGrantSchema, grantConsentDecisionSchema } from "./identity-access";
 import { conditionNodeSchema } from "./module-contracts";
 import { recordScopeSchema } from "./records";
 import {
+  activityIdSchema,
+  applicationRootIdSchema,
   builderKeySchema,
   clusterIdSchema,
   connectionInstanceIdSchema,
@@ -18,8 +21,10 @@ import {
   fileIdSchema,
   fingerprintSchema,
   grantIdSchema,
+  grantConsentDecisionIdSchema,
   identityIdSchema,
   interfaceIdSchema,
+  moduleRootIdSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
   organizationIdSchema,
@@ -30,6 +35,7 @@ import {
   roleIdSchema,
   semanticVersionSchema,
   timestampSchema,
+  workflowRunIdSchema,
 } from "./identifiers";
 
 export const connectionAuthenticationSchema = z.discriminatedUnion("kind", [
@@ -55,6 +61,19 @@ export const connectionAuthenticationSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+export const connectionShapeFieldSchema = z
+  .object({
+    key: builderKeySchema,
+    type: z.enum(["text", "number", "boolean", "date", "date_time", "record_reference", "json"]),
+    required: z.boolean(),
+  })
+  .strict();
+export const connectionShapeSchema = z
+  .object({
+    key: builderKeySchema,
+    fields: z.array(connectionShapeFieldSchema).max(100),
+  })
+  .strict();
 export const connectionOperationSchema = z
   .object({
     key: builderKeySchema,
@@ -95,12 +114,67 @@ export const connectionTypeSchema = z
       )
       .min(1),
     allowRedirects: z.boolean(),
+    shapes: z.array(connectionShapeSchema).min(1),
     operations: z.array(connectionOperationSchema).min(1),
     incomingMessages: z.array(incomingMessageTypeSchema),
     healthOperationKey: builderKeySchema.optional(),
     revocationOperationKey: builderKeySchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const shapeKeys = new Set(value.shapes.map((shape) => shape.key));
+    const operationKeys = new Set(value.operations.map((operation) => operation.key));
+    if (shapeKeys.size !== value.shapes.length)
+      context.addIssue({
+        code: "custom",
+        path: ["shapes"],
+        message: "Connection shape keys must be unique",
+      });
+    for (const [index, shape] of value.shapes.entries())
+      if (new Set(shape.fields.map((field) => field.key)).size !== shape.fields.length)
+        context.addIssue({
+          code: "custom",
+          path: ["shapes", index, "fields"],
+          message: "Connection shape field keys must be unique",
+        });
+    if (operationKeys.size !== value.operations.length)
+      context.addIssue({
+        code: "custom",
+        path: ["operations"],
+        message: "Connection operation keys must be unique",
+      });
+    for (const [index, operation] of value.operations.entries()) {
+      if (!shapeKeys.has(operation.inputShapeKey))
+        context.addIssue({
+          code: "custom",
+          path: ["operations", index, "inputShapeKey"],
+          message: "Input shape must resolve inside this connection type",
+        });
+      if (!shapeKeys.has(operation.outputShapeKey))
+        context.addIssue({
+          code: "custom",
+          path: ["operations", index, "outputShapeKey"],
+          message: "Output shape must resolve inside this connection type",
+        });
+    }
+    for (const [index, message] of value.incomingMessages.entries())
+      if (!shapeKeys.has(message.inputShapeKey))
+        context.addIssue({
+          code: "custom",
+          path: ["incomingMessages", index, "inputShapeKey"],
+          message: "Incoming-message shape must resolve inside this connection type",
+        });
+    for (const [property, key] of [
+      ["healthOperationKey", value.healthOperationKey],
+      ["revocationOperationKey", value.revocationOperationKey],
+    ] as const)
+      if (key !== undefined && !operationKeys.has(key))
+        context.addIssue({
+          code: "custom",
+          path: [property],
+          message: "Named lifecycle operation must resolve inside this connection type",
+        });
+  });
 export const connectionInstanceSchema = z
   .object({
     connectionInstanceId: connectionInstanceIdSchema,
@@ -108,12 +182,12 @@ export const connectionInstanceSchema = z
     connectionTypeId: connectionTypeIdSchema,
     connectionTypeVersion: semanticVersionSchema,
     secretReference: secretReferenceSchema,
-    authorizedApplicationIds: z.array(platformIdSchema).min(1),
+    authorizedApplicationIds: z.array(applicationRootIdSchema).min(1),
     state: z.enum(["pending", "active", "unhealthy", "revoked"]),
     grantedScopes: z.array(z.string().min(1).max(200)),
     tokenExpiresAt: timestampSchema.optional(),
     lastHealthOutcome: z.enum(["healthy", "unhealthy", "unknown"]),
-    administratorActivityId: platformIdSchema,
+    administratorActivityId: activityIdSchema,
   })
   .strict();
 export const incomingMessageSchema = z
@@ -126,7 +200,7 @@ export const incomingMessageSchema = z
     verifiedAt: timestampSchema,
     safePayloadReference: secretReferenceSchema,
     duplicateState: z.enum(["new", "duplicate"]),
-    workflowRunId: platformIdSchema.optional(),
+    workflowRunId: workflowRunIdSchema.optional(),
     retentionDueAt: timestampSchema,
   })
   .strict();
@@ -224,7 +298,7 @@ export const recipientAssertionSchema = z
     recipientOrganizationId: organizationIdSchema,
     recipientOrganizationAccountId: organizationAccountIdSchema,
     identityId: identityIdSchema,
-    recipientApplicationId: platformIdSchema,
+    recipientApplicationId: applicationRootIdSchema,
     recipientRoleIds: z.array(roleIdSchema).min(1),
     recipientAccessVersion: revisionSchema,
     grantId: grantIdSchema,
@@ -233,17 +307,17 @@ export const recipientAssertionSchema = z
     issuedAt: timestampSchema,
     expiresAt: timestampSchema,
     nonce: z.string().min(16).max(500),
-    correlationId: platformIdSchema,
+    correlationId: correlationIdSchema,
   })
   .strict();
 const recipientGrantMirrorBase = {
   grantId: grantIdSchema,
   sourceClusterId: clusterIdSchema,
   sourceOrganizationId: organizationIdSchema,
-  sourceApplicationId: platformIdSchema.optional(),
+  sourceApplicationId: applicationRootIdSchema.optional(),
   recipientClusterId: clusterIdSchema,
   recipientOrganizationId: organizationIdSchema,
-  recipientApplicationId: platformIdSchema,
+  recipientApplicationId: applicationRootIdSchema,
   approvedRecipientRegion: z.string().min(2).max(100),
   recipientRoleIds: z.array(roleIdSchema).min(1),
   contractVersion: semanticVersionSchema,
@@ -256,14 +330,14 @@ const recipientGrantMirrorBase = {
   lastSafeOutcome: builderKeySchema,
 };
 const activationEvidence = {
-  recipientDecisionId: platformIdSchema,
+  recipientConsentDecisionId: grantConsentDecisionIdSchema,
   signedActivationReceipt: z.string().min(32).max(10_000),
 };
 const pendingRecipientGrantMirrorSchema = z
   .object({
     ...recipientGrantMirrorBase,
     state: z.literal("pending"),
-    recipientDecisionId: platformIdSchema.optional(),
+    recipientConsentDecisionId: grantConsentDecisionIdSchema.optional(),
   })
   .strict();
 const activeRecipientGrantMirrorSchema = z
@@ -281,7 +355,7 @@ const revokedRecipientGrantMirrorSchema = z
   .object({
     ...recipientGrantMirrorBase,
     state: z.literal("revoked"),
-    recipientDecisionId: platformIdSchema.optional(),
+    recipientConsentDecisionId: grantConsentDecisionIdSchema.optional(),
     signedActivationReceipt: z.string().min(32).max(10_000).optional(),
     revokedAt: timestampSchema,
     signedRevocationEvidence: z.string().min(32).max(10_000),
@@ -289,7 +363,8 @@ const revokedRecipientGrantMirrorSchema = z
   .strict()
   .refine(
     (value) =>
-      (value.recipientDecisionId === undefined) === (value.signedActivationReceipt === undefined),
+      (value.recipientConsentDecisionId === undefined) ===
+      (value.signedActivationReceipt === undefined),
     {
       path: ["signedActivationReceipt"],
       message: "A revoked mirror carries either both activation fields or neither",
@@ -299,7 +374,7 @@ const expiredRecipientGrantMirrorSchema = z
   .object({
     ...recipientGrantMirrorBase,
     state: z.literal("expired"),
-    recipientDecisionId: platformIdSchema.optional(),
+    recipientConsentDecisionId: grantConsentDecisionIdSchema.optional(),
     signedActivationReceipt: z.string().min(32).max(10_000).optional(),
     expiredAt: timestampSchema,
     signedExpiryEvidence: z.string().min(32).max(10_000),
@@ -307,7 +382,8 @@ const expiredRecipientGrantMirrorSchema = z
   .strict()
   .refine(
     (value) =>
-      (value.recipientDecisionId === undefined) === (value.signedActivationReceipt === undefined),
+      (value.recipientConsentDecisionId === undefined) ===
+      (value.signedActivationReceipt === undefined),
     {
       path: ["signedActivationReceipt"],
       message: "An expired mirror carries either both activation fields or neither",
@@ -326,7 +402,7 @@ export const federatedQuerySchema = z
     kind: z.enum(["list", "record", "search", "report"]),
     grantId: grantIdSchema,
     sourceOrganizationId: organizationIdSchema,
-    moduleRootId: platformIdSchema,
+    moduleRootId: moduleRootIdSchema,
     recordTypeId: recordTypeIdSchema,
     publishedModuleRevision: revisionSchema,
     readableFieldIds: z.array(fieldIdSchema).min(1),
@@ -430,7 +506,7 @@ const federatedRequestBase = {
   issuedAt: timestampSchema,
   expiresAt: timestampSchema,
   nonce: z.string().min(16).max(500),
-  correlationId: platformIdSchema,
+  correlationId: correlationIdSchema,
   sharedContractVersion: semanticVersionSchema,
   sharedContractFingerprint: fingerprintSchema,
 };
@@ -471,6 +547,8 @@ const federatedFileRequestSchema = z
   .strict();
 const grantControlEvidenceBase = {
   grantId: grantIdSchema,
+  sourceClusterId: clusterIdSchema,
+  recipientClusterId: clusterIdSchema,
   evidenceFingerprint: fingerprintSchema,
   evidenceSignature: z.string().min(32).max(10_000),
   issuedAt: timestampSchema,
@@ -486,23 +564,40 @@ const grantProposalSchema = z
     path: ["grantId"],
     message: "Proposal evidence must name its proposed grant",
   })
-  .refine((value) => value.proposedGrant.status === "pending_approval", {
+  .refine((value) => value.evidenceFingerprint === value.proposedGrant.contractFingerprint, {
+    path: ["evidenceFingerprint"],
+    message: "Proposal evidence must bind the proposed grant fingerprint",
+  })
+  .refine(
+    (value) =>
+      value.sourceClusterId === value.proposedGrant.sourceClusterId &&
+      value.recipientClusterId === value.proposedGrant.recipientClusterId,
+    {
+      path: ["sourceClusterId"],
+      message: "Proposal evidence must bind the grant cluster pair",
+    },
+  )
+  .refine((value) => value.proposedGrant.status === "pending_consent", {
     path: ["proposedGrant", "status"],
-    message: "A cross-cluster proposal is pending approval",
+    message: "A cross-cluster proposal is pending consent",
   });
 const grantDecisionSchema = z
   .object({
     ...grantControlEvidenceBase,
     kind: z.literal("decision"),
-    decision: approvalDecisionSchema,
+    decision: grantConsentDecisionSchema,
   })
-  .strict();
+  .strict()
+  .refine((value) => value.evidenceFingerprint === value.decision.proposedGrantFingerprint, {
+    path: ["evidenceFingerprint"],
+    message: "Decision evidence must bind the proposed grant fingerprint",
+  });
 const grantActivationReceiptSchema = z
   .object({
     ...grantControlEvidenceBase,
     kind: z.literal("activation_receipt"),
     activeGrant: accessGrantSchema,
-    recipientDecisionId: platformIdSchema,
+    recipientConsentDecisionId: grantConsentDecisionIdSchema,
     signedActivationReceipt: z.string().min(32).max(10_000),
   })
   .strict()
@@ -511,6 +606,19 @@ const grantActivationReceiptSchema = z
     {
       path: ["activeGrant"],
       message: "Activation evidence must contain the matching active grant",
+    },
+  )
+  .refine((value) => value.evidenceFingerprint === value.activeGrant.contractFingerprint, {
+    path: ["evidenceFingerprint"],
+    message: "Activation evidence must bind the active grant fingerprint",
+  })
+  .refine(
+    (value) =>
+      value.sourceClusterId === value.activeGrant.sourceClusterId &&
+      value.recipientClusterId === value.activeGrant.recipientClusterId,
+    {
+      path: ["sourceClusterId"],
+      message: "Activation evidence must bind the grant cluster pair",
     },
   );
 const grantRevocationEvidenceSchema = z
@@ -528,6 +636,19 @@ const grantRevocationEvidenceSchema = z
     {
       path: ["revokedGrant"],
       message: "Revocation evidence must contain the matching revoked grant",
+    },
+  )
+  .refine((value) => value.evidenceFingerprint === value.revokedGrant.contractFingerprint, {
+    path: ["evidenceFingerprint"],
+    message: "Revocation evidence must bind the revoked grant fingerprint",
+  })
+  .refine(
+    (value) =>
+      value.sourceClusterId === value.revokedGrant.sourceClusterId &&
+      value.recipientClusterId === value.revokedGrant.recipientClusterId,
+    {
+      path: ["sourceClusterId"],
+      message: "Revocation evidence must bind the grant cluster pair",
     },
   );
 export const federatedGrantControlSchema = z.discriminatedUnion("kind", [
@@ -587,19 +708,90 @@ export const federatedRequestSchema = z
         path: ["recipientAssertion", "grantId"],
         message: "The recipient assertion must name the requested grant",
       });
+    if (value.operation !== "grant_control") {
+      if (value.recipientAssertion.recipientClusterId !== value.senderClusterId)
+        context.addIssue({
+          code: "custom",
+          path: ["recipientAssertion", "recipientClusterId"],
+          message: "The recipient assertion must identify the sending cluster",
+        });
+      if (value.recipientAssertion.intendedSourceClusterId !== value.receiverClusterId)
+        context.addIssue({
+          code: "custom",
+          path: ["recipientAssertion", "intendedSourceClusterId"],
+          message: "The recipient assertion must identify the receiving source cluster",
+        });
+      if (value.recipientAssertion.correlationId !== value.correlationId)
+        context.addIssue({
+          code: "custom",
+          path: ["recipientAssertion", "correlationId"],
+          message: "The recipient assertion and envelope correlation identifiers must match",
+        });
+    } else {
+      const sentBySource =
+        value.payload.kind !== "decision" || value.payload.decision.side === "source_authorization";
+      const expectedSender = sentBySource
+        ? value.payload.sourceClusterId
+        : value.payload.recipientClusterId;
+      const expectedReceiver = sentBySource
+        ? value.payload.recipientClusterId
+        : value.payload.sourceClusterId;
+      if (value.senderClusterId !== expectedSender)
+        context.addIssue({
+          code: "custom",
+          path: ["senderClusterId"],
+          message: "Grant-control sender must match the evidence direction",
+        });
+      if (value.receiverClusterId !== expectedReceiver)
+        context.addIssue({
+          code: "custom",
+          path: ["receiverClusterId"],
+          message: "Grant-control receiver must match the evidence direction",
+        });
+    }
   });
-export const federatedResponseSchema = z
-  .object({
-    correlationId: platformIdSchema,
-    sourceClusterId: clusterIdSchema,
-    outcome: z.enum(["completed", "refused", "unavailable", "retryable_failure"]),
-    sharedContractVersion: semanticVersionSchema,
-    issuedAt: timestampSchema,
-    continuationToken: z.string().min(1).max(2_000).optional(),
-    result: jsonValueSchema.optional(),
-    safeErrorCode: builderKeySchema.optional(),
-  })
-  .strict();
+const federatedResponseCommon = {
+  correlationId: correlationIdSchema,
+  sourceClusterId: clusterIdSchema,
+  sharedContractVersion: semanticVersionSchema,
+  issuedAt: timestampSchema,
+};
+export const federatedRefusalCodeSchema = z.enum([
+  "access_refused",
+  "grant_inactive",
+  "request_invalid",
+]);
+export const federatedResponseSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      ...federatedResponseCommon,
+      outcome: z.literal("completed"),
+      continuationToken: z.string().min(1).max(2_000).optional(),
+      result: jsonValueSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...federatedResponseCommon,
+      outcome: z.literal("refused"),
+      safeErrorCode: federatedRefusalCodeSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...federatedResponseCommon,
+      outcome: z.literal("unavailable"),
+      safeErrorCode: z.literal("source_unavailable"),
+    })
+    .strict(),
+  z
+    .object({
+      ...federatedResponseCommon,
+      outcome: z.literal("retryable_failure"),
+      safeErrorCode: z.literal("retry_later"),
+    })
+    .strict(),
+]);
 
 export type ConnectionType = z.infer<typeof connectionTypeSchema>;
 export type ConnectionAuthentication = z.infer<typeof connectionAuthenticationSchema>;

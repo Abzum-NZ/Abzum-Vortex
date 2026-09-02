@@ -287,6 +287,7 @@
       {
         "id": "act_company_merge",
         "key": "vortex.crm.organisations.company.merge",
+        "label": "Merge company",
         "record_type": "company",
         "permission": "vortex.crm.organisations.company.merge",
         "inputs": [
@@ -300,9 +301,9 @@
           }
         ],
         "effects": [
-          "move_relationships",
-          "soft_delete_source",
-          "emit_event"
+          {"kind":"copy_relationships","relationships":["parent_company"],"target_input":"duplicate_company"},
+          {"kind":"soft_delete_subject"},
+          {"kind":"announce_event","event":"vortex.crm.organisations.company.merged"}
         ],
         "shareable": false
       }
@@ -332,13 +333,13 @@
         "id": "rule_company_name",
         "key": "company_name_required",
         "record_type": "company",
-        "moment": "saving",
+        "trigger": "change",
+        "priority": 100,
         "condition": {
           "field": "name",
           "operator": "is_empty"
         },
-        "effect": "refuse",
-        "message": "Enter a company name."
+        "effect": {"kind":"refuse","reason_code":"company_name_required"}
       }
     ],
     "extension_points": [

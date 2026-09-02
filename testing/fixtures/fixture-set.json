@@ -31,11 +31,10 @@
   "required_workflow_nodes": [
     "start", "condition", "decision_table", "bounded_loop", "delay", "wait_until",
     "start_workflow", "stop", "create_record", "change_record", "run_action",
-    "soft_delete_record", "duplicate_record", "convert_record", "add_relationship",
-    "copy_relationships", "add_comment", "change_tags", "request_form",
-    "request_approval", "create_task", "create_calendar_event", "notification",
-    "send_email", "query_records", "set_values", "format_value", "generate_export",
-    "attach_file", "move_file", "generate_document", "call_connection",
+    "soft_delete_record", "duplicate_record", "add_relationship",
+    "copy_relationships", "request_form",
+    "query_records", "set_values", "format_value", "generate_export",
+    "attach_file", "move_file", "call_connection",
     "acknowledge_message"
   ],
   "required_cross_application_cases": [

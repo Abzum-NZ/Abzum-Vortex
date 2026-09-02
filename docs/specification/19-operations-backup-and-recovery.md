@@ -32,7 +32,7 @@ Required measures include:
 - Cache hit, miss, unsafe-write refusal and version mismatch.
 - Connection failure, rate limiting, secret refresh and incoming verification failure.
 - Federation request rate, source latency, timeout, signature refusal, replay refusal, incompatible version, grant-reconciliation age, and recipient-mirror difference by source and recipient cluster.
-- Billing event age, usage reconciliation and entitlement mismatch.
+- Metering event age, reconciliation lag and entitlement-policy mismatch.
 - Backup age, size, off-site copy, restore result and privacy-removal replay result.
 
 ## Alerts and incident handling
@@ -87,7 +87,7 @@ Supabase managed backups do not replace the independent copy because deleting or
 
 ## Secret management
 
-[Doppler](https://docs.doppler.com/docs) provides environment-scoped secrets. Secrets are never committed, copied into fixtures, printed by builds, placed in browser bundles, or included in definition exports. Rotation procedures cover application, database, storage, [Kestra](https://kestra.io/docs), [Stripe](https://docs.stripe.com/), connection encryption keys, identity-authority signing keys, and cluster federation signing keys. Federation rotation publishes the next public key before use, overlaps verification for in-flight messages, then removes the retired key after the replay and reconciliation windows close.
+[Doppler](https://docs.doppler.com/docs) provides environment-scoped secrets. Secrets are never committed, copied into fixtures, printed by builds, placed in browser bundles, or included in definition exports. Rotation procedures cover application, database, storage, [Kestra](https://kestra.io/docs), connection encryption keys, identity-authority signing keys, and cluster federation signing keys. Federation rotation publishes the next public key before use, overlaps verification for in-flight messages, then removes the retired key after the replay and reconciliation windows close.
 
 ## Support access
 
@@ -95,7 +95,7 @@ Support access requires a named operator role, strong sign-in, a ticket, purpose
 
 ## Runbooks
 
-At minimum, runbooks cover deployment failure, database migration failure, organisation-separation incident, lost or exposed secret, stalled event sequence, workflow outage, file-scan outage, connection-provider outage, billing mismatch, search delay, backup failure, complete restore, privacy-removal failure, provider-region failure, federation signing-key exposure, one-cluster outage, incompatible federation release, cluster-directory error, and grant-mirror reconciliation backlog.
+At minimum, runbooks cover deployment failure, database migration failure, organisation-separation incident, lost or exposed secret, stalled event sequence, workflow outage, file-scan outage, connection-provider outage, entitlement or metering mismatch, search delay, backup failure, complete restore, protected-removal failure, provider-region failure, federation signing-key exposure, one-cluster outage, incompatible federation release, cluster-directory error, and grant-mirror reconciliation backlog.
 
 ## Acceptance examples
 

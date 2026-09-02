@@ -40,7 +40,7 @@ The database function, permission vocabulary, and shared test cases are canonica
 
 ### Organisation roles
 
-An organisation role grants permissions that apply across one organisation, such as managing members, definitions, connections, privacy work, or all records of a named module. Tenant structure and billing use separate tenant permissions and never arrive through an organisation role.
+An organisation role grants permissions that apply across one organisation, such as managing members, definitions, connections, protected data handling, or all records of a named module. Tenant structure and entitlement administration use separate tenant permissions and never arrive through an organisation role.
 
 ### Application roles
 
@@ -56,12 +56,12 @@ Permissions use permanent names, not display labels. A name identifies the area,
 
 - `organisation.members.read`
 - `organisation.members.manage`
-- `module.crm.contact.read`
-- `module.crm.contact.update`
-- `application.crm.open`
-- `application.crm.action.convert-lead`
+- `module.example.record.read`
+- `module.example.record.update`
+- `application.example.open`
+- `application.example.action.complete`
 
-Unknown names are refused at publication and at runtime. A role may use a controlled trailing wildcard only for a named module or application's non-administrative permissions, for example `module.crm.contact.*`. A global `*` is invalid. Wildcards cannot cover tenant administration, organisation administration, security, billing, privacy, export, or sharing administration.
+Unknown names are refused at publication and at runtime. A role may use a controlled trailing wildcard only for a named module or application's non-administrative permissions, for example `module.example.record.*`. A global `*` is invalid. Wildcards cannot cover tenant administration, organisation administration, security, entitlements, protected data handling, export, or sharing administration.
 
 Publishing a role resolves each wildcard against the current permission catalogue and records the catalogue fingerprint and expanded permission identifiers. A permission added later is not silently granted; the role must be reviewed and published again.
 
@@ -140,15 +140,15 @@ Cross-organisation grants use explicit readable-field, changeable-field, and all
 
 Export is an independent boolean approval, defaults to refused, and is included in the exact proposal approved by both organisations. When allowed, the source produces only the grant's readable fields from records that still match the grant. Ownership changes, deletion, restoration, permission administration, and re-sharing are never implied by a field or action allowlist.
 
-### Protected approvals
+### Protected grant consent
 
-The platform-owned `vortex.approvals` capability presents approval requests in the Organisation Portal, but an editable record or workflow cannot activate a grant. Every cross-organisation grant requires one authorised source approval and one authorised recipient acceptance for the same complete proposal fingerprint. The source approver confirms the records, condition and parameters, actions, fields, export choice, recipient region, start, and expiry. The recipient approver confirms the named application, roles, responsibility, region, start, and expiry.
+An editable record or ordinary workflow cannot activate a cross-organisation grant. Every cross-organisation grant requires one authorised source consent and one authorised recipient consent for the same complete proposal fingerprint. The source side confirms the records, condition and parameters, actions, fields, export choice, recipient region, start, and expiry. The recipient side confirms the named application, roles, responsibility, region, start, and expiry.
 
-Changing any fingerprinted value withdraws the earlier decisions and requires both sides to review the new proposal. The Access service owns the grant and activates it only after verifying both immutable decisions. Changing a displayed approval record directly has no security effect.
+Changing any fingerprinted value withdraws the earlier decisions and requires both sides to review the new proposal. The Access service owns the grant and activates it only after verifying both immutable consent decisions. An ordinary business approval record has no security effect on a grant.
 
-An approval decision is not later rewritten as revoked. Ending access revokes the grant through a new authorised source action, preserving both original decisions and recording the revocation separately.
+A consent decision is not later rewritten as revoked. Ending access revokes the grant through a new authorised source action, preserving both original decisions and recording the revocation separately.
 
-For a cross-cluster grant, each cluster stores its own protected approval evidence. The source grant is authoritative. The recipient stores only a routing and user-interface mirror plus the source's signed activation receipt. A missed receipt is repaired through [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation), not by a distributed database transaction.
+For a cross-cluster grant, each cluster stores its own protected consent evidence. The source grant is authoritative. The recipient stores only a routing and user-interface mirror plus the source's signed activation receipt. A missed receipt is repaired through [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation), not by a distributed database transaction.
 
 ## Public access
 
@@ -175,7 +175,7 @@ The recipient interface must remove previously displayed shared values when that
 - A person cannot grant a permission they do not hold unless a separately authorised owner-recovery process is used.
 - The last active tenant administrator and the last active organisation administrator cannot remove or demote themselves until a replacement is active.
 - High-impact changes require recent sign-in confirmation.
-- Tenant-administrator, hierarchy, role, organisation-account, team, direct-share, public-access, connection-secret, export, retention, billing, and announcement changes are written to [activity history](14-activity-privacy-and-retention.md).
+- Tenant-administrator, hierarchy, role, organisation-account, team, direct-share, public-access, connection-secret, export, retention, entitlement and grant-consent changes are written to [activity history](14-activity-privacy-and-retention.md).
 
 ## Acceptance examples
 
@@ -192,8 +192,8 @@ The recipient interface must remove previously displayed shared values when that
 - Revoking an inter-application grant removes the shared values from the recipient component on its next access check; navigating back or using a client cache cannot reveal them.
 - A collaborative inter-application grant changes only its named fields and runs only its named shareable actions against the source record.
 - A person with accounts in both organisations cannot use roles from the source account while acting through the recipient account.
-- Directly changing an approval record cannot activate a sharing grant.
-- A cross-organisation grant with only source approval or only recipient acceptance remains inactive.
+- Directly changing an ordinary approval record cannot activate a sharing grant.
+- A cross-organisation grant with only one side's consent remains inactive.
 - Adding an action, field, role, application, condition parameter, region, or later expiry invalidates both earlier approvals.
 - Assigning a named role to another active account deliberately adds that account to the approved audience; removing the role removes access on the next request.
 - Moving either organisation to another cluster in an already approved region does not change the grant's business meaning; the gateway changes route after the protected directory and grant routing state are updated and verified. Moving the recipient to a different region suspends the grant until the source approves that destination.

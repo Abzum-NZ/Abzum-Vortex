@@ -1,8 +1,8 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.0
+**Status:** Approved build plan 2.1
 
-**Date:** 1 September 2026
+**Date:** 2 September 2026
 
 **Governing specification:** [Abzum Vortex platform specification](../specification/README.md)
 
@@ -21,6 +21,7 @@ The [decision register](../specification/appendices/decisions.md) is clear. Vort
 5. A phase exit is a tested user or platform outcome, not a count of merged files.
 6. Work may run in parallel only where the dependency diagram permits it.
 7. Before an issue closes, review the specification, data contracts, build plan, traceability and delivery maps, dependent GitHub issues, and native project dependencies. Update every affected source in the same change, or record explicitly that it was reviewed and needed no change.
+8. Every core contract and engine feature must pass the [platform-primitives-only admission test](../specification/appendices/core-contract-boundary.md#admission-test). Business domains and Abzum operations are built as ordinary Vortex applications.
 
 ## Dependency map
 
@@ -44,7 +45,7 @@ flowchart TD
     P9 --> P10
     P9 --> P11[Phase 11<br/>Privacy and retention]
     P10 --> P11
-    P6 --> P12[Phase 12<br/>Plans, usage and billing]
+    P6 --> P12[Phase 12<br/>Entitlements and metering]
     P7 --> P12
     P11 --> P13[Phase 13<br/>Operational readiness and release]
     P12 --> P13
@@ -56,14 +57,14 @@ Operations, accessibility, security, documentation, and automated checks are con
 
 **Status:** Complete in [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151) on 2 September 2026.
 
-**Outcome:** The project has one authoritative approved specification, permanent requirements for settled choices, a clear register, complete source fixtures, and a delivery path that can safely begin contracts.
+**Outcome:** The project has one authoritative approved specification, permanent requirements for settled choices, a clear register, a dependency-complete fixture baseline, and a delivery path that can safely begin contracts.
 
 Required work:
 
-- Verify the settled tenant, definition-version, access, field, workflow, privacy, billing, delivery, recovery, and performance requirements against the [data contracts](../specification/appendices/data-contracts.md).
+- Verify the settled tenant, definition-version, access, field, workflow, protected data-handling, entitlement, delivery, recovery, and performance requirements against the [data contracts](../specification/appendices/data-contracts.md).
 - Keep cluster location out of the product-level sharing choices: one shared-record gateway uses a local adapter or the signed Vortex Federation API.
 - Publish Specification 2.0 and update its version history.
-- Write and validate the complete [CRM and Service Desk fixture set](../specification/appendices/worked-examples.md), including every module, action, connection type, interface, theme, role, workflow, pipeline, page, query, and cross-application scenario before Phase 1 engine code.
+- Write and validate the dependency-complete [CRM and Service Desk fixture baseline](../specification/appendices/worked-examples.md), including every module, action, connection type, interface, theme, role, workflow, pipeline, page, query, and cross-application scenario. Before Phase 1 engine code, [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) must make every non-defaultable author choice explicit and prove lossless conversion to the canonical contracts.
 - Define and validate the [record-table allocation](../specification/17-runtime-storage-and-caching.md#record-table-allocation): one table per compatible record-type storage lineage, explicit organisation/application row scope, stable physical tokens, and collision cases covering same-named applications in different organisations.
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
 - Close the completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and move migration/access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) to the start of Phase 2, before the first database migration.
@@ -88,20 +89,23 @@ Build:
 - Keep the one deployable Next.js composition root at `apps/web`, following the official Turborepo deployable-application convention; shared packages remain separate workspace members.
 - Shared identifier, error, actor, organisation context, revision, dependency and version-range contracts.
 - Independently versioned module and application contracts plus their contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
-- All [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, privacy, billing and cache versions.
+- All core [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, protected removal, entitlements, metering and cache versions.
+- The formal [core contract boundary](../specification/appendices/core-contract-boundary.md), a documented platform invariant for every privileged contract, and source guards that reject example-specific semantics in core code.
 - Generic contract validator with the versioned safe-error catalogue from [the data contracts](../specification/appendices/data-contracts.md#definition-validation-errors), stable codes, caller-mapped builder-visible locations, deterministic ordering, and protected diagnostics. Runtime validation contains no installed definition or fixture name.
 - Module/application version-impact comparison, including Vortex assignment of the minimum valid next release version and builder confirmation or cancellation.
 - Storage-catalog and scope contracts that distinguish definition identity, storage lineage, organisation ownership, and application-contained ownership without creating per-installation tables.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
+- A capability-complete production authored-source schema and lossless conversion for all 13 example definition documents; no compiler-invented label, permission, layout, public exposure, data shape or business behaviour.
 - Types, lint, unit tests, contract tests and build checks that run without a database.
 
 Exit proof:
 
 - Both complete examples validate with no unresolved reference.
+- Every non-defaultable authored choice is explicit, and semantic coverage proves source-to-canonical conversion loses or invents nothing.
 - Every record type resolves to exactly one collision-free storage mapping; two same-named CRM applications in different organisations remain isolated, while CRM and Service Desk can read the same organisation-shared Company and Contact records.
 - Invalid examples cover every closed list, missing required value, unknown value, incompatible reference and cross-root version failure.
 - Schema failures and validation-rule failures produce the same safe public result; adversarial diagnostics never enter that result and no example-specific name appears in the translator or catalogue.
-- No service-specific package invents a second form of a shared contract.
+- No service-specific package invents a second form of a shared contract, and no core package recognises an example application or ordinary business domain by name.
 
 ## Phase 2 — Definition and Identity
 
@@ -218,7 +222,7 @@ Build:
 - [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, the six central semantic tokens, interruptible state-driven motion, and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.
 - Forms, guided-form drafts, action buttons and public pages.
 - Complete process-pipeline definition, transition gates and visible stage controls. Timed execution comes in Phase 7.
-- Platform Sign-in, Tenant Portal, and Organisation Portal application definitions.
+- The protected sign-in and recovery shell, plus locked Tenant Administration and Organisation Administration application definitions built with the same application/page primitives as customer applications.
 
 Exit proof:
 
@@ -234,13 +238,14 @@ Exit proof:
 
 **Needs:** Phases 5 and 6.
 
-**Outcome:** Durable workflows and pipeline time targets execute with [Kestra](https://kestra.io/docs) authoritative for execution status while Vortex remains authoritative for business data and access.
+**Outcome:** Durable workflows and pipeline time targets execute with [Kestra](https://kestra.io/docs) authoritative for execution status while Vortex remains authoritative for application records and access.
 
 Build:
 
-- Workflow triggers and the governed node catalogue: flow control, bounded queries/loops, record actions, asks/approvals, notifications, email, documents/files, and named connection operations.
+- Workflow triggers and the governed 24-node catalogue: flow control, bounded queries and loops, record actions, generic human-input waits, files, and named connection operations.
+- Comments, tags, tasks, calendar entries, notifications, documents and ordinary approvals remain application records and actions. External delivery uses named connection operations instead of privileged business nodes.
 - Refusal of arbitrary SQL, JavaScript, shell, unrestricted expressions, arbitrary network/file operations, and builder-supplied executable nodes.
-- Versioned signed protected-operation contract and duplicate-safe business side effects.
+- Versioned signed protected-operation contract and duplicate-safe application side effects.
 - [Kestra](https://kestra.io/docs) flow generation, execution start, authoritative status reads, outage display, and operator correlation.
 - Pipeline stage-time targets, events and escalation workflows.
 
@@ -254,14 +259,14 @@ Exit proof:
 
 **Current project epic:** [#87](https://github.com/Abzum-NZ/Abzum-Vortex/issues/87)
 
-**Needs:** Phase 4 for core storage; Phase 5 for derived updates and purge queues; Phase 6 for blocks, pages, theme and install experience; Phase 7 for scheduled removal and notification work.
+**Needs:** Phase 4 for core storage; Phase 5 for derived updates and purge queues; Phase 6 for blocks, pages, theme and install experience; Phase 7 for scheduled removal and application-defined message delivery.
 
 **Outcome:** People can find permitted records and safely upload, preview, download, restore and remove files.
 
 Build in two streams:
 
 - **Core after Phase 4:** search documents, ranking, access recheck, file metadata, private Supabase Storage buckets, signed and resumable transfers, upload/download grants, detection, scanning, quarantine and lifecycle.
-- **Experience after Phases 5–7:** page blocks, attachment controls, previews, live search freshness, phone installation, usage notices, scheduled purge and recovery.
+- **Experience after Phases 5–7:** page blocks, attachment controls, previews, live search freshness, phone installation, generic capacity notices, scheduled purge and recovery.
 
 Exit proof:
 
@@ -302,17 +307,17 @@ Exit proof:
 Build:
 
 - Signed definition package manifest, dependency preview, identifier remapping, incomplete-draft handling and reviewed gallery.
-- Clear Organisation Portal separation between installing definitions and sharing live records.
+- Clear Organisation Administration application separation between installing definitions and sharing live records.
 - Access-owned sharing grants with one explicit scope, one recipient application, one or more recipient application roles, action/field allowlists, export defaulting off, required expiry, and source-authoritative revocation.
 - Inter-application collaborative grants that keep the source record authoritative while allowing only named fields and published shareable actions; the CRM and Service Desk fixture proves a limited case presentation with controlled changes and no copied summary record.
 - Published, version-pinned saved sharing conditions with declared parameters; no inline grant filters and no silent widening after publication.
-- Protected source approval and recipient acceptance over the same complete proposal fingerprint for every cross-organisation grant.
+- Protected source consent and recipient consent over the same complete proposal fingerprint for every cross-organisation grant.
 - [Cross-cluster execution issue #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156): one shared-record gateway with a local adapter and signed remote adapter; source-authoritative query, action, file, revocation, and audit behaviour.
-- Signed duplicate-safe cross-cluster proposal, acceptance, activation receipt, revocation notice, and status reconciliation.
-- Protected exact sharing-code or invitation-link recipient discovery, and linked source/recipient usage allocation without double counting.
+- Signed duplicate-safe cross-cluster proposal, consent, activation receipt, revocation notice, and status reconciliation.
+- Protected exact sharing-code or invitation-link recipient discovery, and linked source/recipient metering allocation without double counting.
 - Ordinary list, detail, search-result, report, dashboard-block, action, and approved-export components backed by the shared-record gateway, with visible source ownership and source-unavailable states.
 - Source-executed shared search, reports, and exports with no recipient index, materialised report result, persistent record/file copy, workflow payload, or cross-request shared-data cache.
-- Source-owned file access, activity, privacy, same-cluster tests, and two-cluster tests.
+- Source-owned file access, activity, protected data handling, same-cluster tests, and two-cluster tests.
 - Record import mapping, dry run, duplicate policy, bounded background execution and result report.
 - Access-checked expiring record export.
 - Complete encrypted organisation archive and controlled restore as a separate operator operation.
@@ -321,13 +326,13 @@ Exit proof:
 
 - Cross-organisation copy removes or remaps organisation-specific state.
 - Installing a definition never grants record access, and a record grant never copies or installs a definition.
-- Direct approval-record edits cannot activate grants; every grant proves source approval and recipient acceptance over one fingerprint; a changed condition, role, field, action, export choice, region, or expiry requires both approvals again.
+- Ordinary record edits cannot activate grants; every grant proves source and recipient consent over one fingerprint; a changed condition, role, field, action, export choice, region, or expiry requires both consents again.
 - Source revocation takes effect on the next request; sensitive fields, inline conditions, live re-sharing, recipient indexing, materialised shared reports, persistent remote copies, and unapproved export are refused.
 - Revoking the fixture's case grant removes already rendered values on the next access check and prevents browser history, client cache, subscriptions, or offline state from retaining access.
 - Shared lists, details, search, reports, dashboard blocks, actions, files, and approved exports have the same permission and result meaning through local and remote adapters while clearly showing source ownership.
 - The same fixture grant passes through both local and remote adapters with the same fields, actions, activity meaning, and stable refusal codes.
 - A lost cross-cluster message reconciles safely; an altered, replayed, expired, incorrectly addressed, or version-incompatible request fails closed.
-- Exact sharing-code or signed-link discovery reveals only the approved organisation name and region; one shared request creates linked source/recipient usage without charging one category twice.
+- Exact sharing-code or signed-link discovery reveals only the approved organisation name and region; one shared request creates linked source/recipient metering without counting one category twice.
 - An approved export is generated at the source, leaves no recipient-cluster copy, includes only approved fields, and presents the non-recallable-download responsibility before transfer.
 - Import dry run matches execution.
 - Complete archive restore proves definitions, roles, records, files, workflow state and privacy-removal replay.
@@ -344,7 +349,7 @@ Build:
 
 - Data inventory and personal-data discovery.
 - Retention policy preview, scheduling, resumable removal and non-content receipts.
-- Legal holds and approvals.
+- Legal holds and protected operation authorisation.
 - Organisation-scoped person-data export and erasure across records, files, search, events, workflows, activity details, exports, caches and configured connected systems; global identity closure coordinates every organisation account.
 - Removal-receipt replay during restore.
 
@@ -354,28 +359,28 @@ Exit proof:
 - A legal hold prevents removal without increasing read access.
 - A restore test does not resurrect permanently removed content.
 
-## Phase 12 — Plans, usage and billing
+## Phase 12 — Entitlements and metering
 
 **Project epic:** [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165)
 
-**Needs:** Identity plus usage-producing services.
+**Needs:** Identity plus the first resource-consuming services.
 
-**Outcome:** Tenant plans, organisation-attributed usage, entitlements, announcements, and [Stripe](https://docs.stripe.com/) billing agree under retries, out-of-order events, payment failure, plan change and limit crossing.
+**Outcome:** Arbitrary platform services make one versioned allow/refuse entitlement decision and record duplicate-safe, tenant-scoped metering without understanding commercial products or payment state.
 
 Build:
 
-- Tenant-owned versioned plans and entitlements with organisation usage roll-up.
-- Duplicate-safe usage ledger and reconciliation.
-- [Stripe](https://docs.stripe.com/) checkout/customer portal boundary and signed event processing.
-- Trial, active, past-due, grace, cancellation and suspension behaviour.
-- Warnings, plan-defined grace, refusal of new consumption after grace, downgrade preview, active-human seat counting, and authorised read/export preservation.
-- Accessible platform, tenant, organisation, and application announcement banners with audience, schedule, severity and dismissibility.
+- Versioned entitlement policy assignments and protected administration operations.
+- One generic check/decision boundary with tenant scope, optional organisation attribution, capability key, quantity, unit, policy revision and safe refusal code.
+- Reservation, commit and release behaviour for scarce concurrent resources where a simple decision would race.
+- Duplicate-safe immutable metering events, read models and reconciliation.
+- Generic accessible banner presentation in the Phase 6 design system; application-authored notices remain ordinary application records.
 
 Exit proof:
 
-- Replayed and out-of-order billing events produce one correct state.
-- Plan downgrade does not silently remove customer data.
-- Every usage number can be reconciled to immutable events and corrections.
+- Replayed entitlement or metering requests do not double-reserve or double-count.
+- Removing an entitlement refuses new consumption without deleting existing application data or granting record access.
+- Every reported quantity can be reconciled to immutable metering events and explicit corrections.
+- No core schema, table, service or task contains product, price, subscription, invoice, payment-provider or active-person charging semantics.
 
 ## Phase 13 — Operational readiness and release
 
@@ -405,10 +410,10 @@ Exit proof:
 
 The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follows these implemented rules:
 
-1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), complete domain contracts [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), safe validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), and complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16) are complete. Version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14) and validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) remain the next Ready items and may run in parallel; final Vercel gate evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17) follows both.
+1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), the original contract delivery [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), safe validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), and complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16) are complete. The P0 boundary correction [#186](https://github.com/Abzum-NZ/Abzum-Vortex/issues/186) supersedes business-domain parts of #12 and blocks version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14), validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) and final Vercel evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17).
 2. Native GitHub blocked-by relationships govern sequencing; body text explains but does not replace them.
 3. Every phase epic has an outcome and completion evidence.
-4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/privacy/retention, plans/billing, and operations issues belong to those epics rather than Phase 10.
+4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/protected data handling/retention, entitlements/metering, and operations issues belong to those epics rather than Phase 10. Commercial applications do not block the generic platform roadmap.
 5. Extension-point use belongs to Phase 4 and standard-page replacement belongs to Phase 6; they are no longer deferred to distribution work.
 6. Priority is explicit on every project issue: `P0 — Critical`, `P1 — Next`, `P2 — Planned`, or `P3 — Later`. The Bugs view filters `label:bug`; roadmap dates and Iteration remain empty until work is genuinely scheduled.
 7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) is closed. Migration and access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) is a Phase 2 prerequisite blocked by Phase 1.

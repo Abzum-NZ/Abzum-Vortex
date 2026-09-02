@@ -8,7 +8,7 @@ A **workflow** performs durable background work that may branch, wait, retry, co
 
 [Kestra](https://kestra.io/docs) is authoritative for whether a workflow run or step is queued, running, waiting, completed, cancelled, or failed. Vortex asks Kestra for the current state whenever a person views a run. Vortex may keep a clearly labelled last-known snapshot for correlation, search, activity, and outage diagnosis, but never presents that snapshot as current when Kestra is unavailable.
 
-Vortex remains authoritative for identities, tenant and organisation context, permissions, definitions, records, files, human-task records, connections, and every business side effect. Kestra receives no organisation database credential and cannot grant access or write organisation tables directly.
+Vortex remains authoritative for identities, tenant and organisation context, permissions, definitions, records, files, human-input references, connections, and every application side effect. Kestra receives no organisation database credential and cannot grant access or write organisation tables directly.
 
 ```mermaid
 sequenceDiagram
@@ -30,7 +30,7 @@ sequenceDiagram
 
 Workflows are contained in an [application version](03-composition-and-publication.md#definition-ownership-and-versions). Publishing an application produces the immutable workflow definition and generated Kestra flow used by new runs. A run remains pinned to the application and workflow version from which it started unless an authorised, tested migration moves it.
 
-Vortex stores the Kestra execution identifier, workflow and application versions, tenant and organisation references, trigger, start actor, duplicate-protection key, human-task links, safe activity links, and a non-authoritative last-known state snapshot. Kestra stores the executable state, current step, retries, waits, and final execution outcome.
+The public Vortex execution reference stores the Vortex run identifier, workflow and application versions, tenant and organisation references, trigger, start actor, duplicate-protection key, human-input links, safe activity links, and a non-authoritative last-known state snapshot. The workflow adapter privately maps that run to Kestra's execution identifier and namespace; provider-specific fields are not part of the core application contract. Kestra stores the executable state, current step, retries, waits, and final execution outcome.
 
 ## Triggers
 
@@ -43,13 +43,19 @@ The initial catalogue draws on the attached legacy workflow inventory while repl
 | Group | Supported nodes |
 |---|---|
 | Flow | Start, condition, multi-way decision table, bounded loop, delay or wait-until, start child workflow, stop with reason |
-| Records | Create record, change approved fields, run named action, soft-delete record, duplicate record, convert through a named mapping, add or copy approved relationships, add comment, change tags |
-| People | Request values through a form, request approval, create task or calendar event, send in-app notification, send email through an approved connection |
+| Records | Create record, change approved fields, run a named action, soft-delete record, duplicate record, add or copy approved relationships |
+| Human input | Request values through a published form and wait for an authorised response |
 | Data | Run a published query, set typed values, apply a registered formatter or regular expression, generate a bounded export |
-| Files and documents | Attach or move an approved file, generate a document from a registered template, request a source-owned export |
-| Connections | Call a named connection operation, send to an approved calendar or communication service, receive and acknowledge a verified message |
+| Files | Attach or move an approved file |
+| Connections | Call a named connection operation and acknowledge a verified incoming message |
 
-Each node has a typed input and output contract, named permission, timeout, retry rule, duplicate-protection rule, activity meaning, and redaction policy. Product-specific behaviour such as reversing an invoice is implemented as a named application action, not a privileged workflow node.
+These 24 nodes are the complete first-release catalogue. Each node has a typed input and output contract, named permission, timeout, retry rule, duplicate-protection rule, activity meaning, and redaction policy. Comments, tags, tasks, calendar entries, notifications, messages, documents and business approvals are records or named application actions. Delivery to an external service uses the generic connection-call node.
+
+Values passed between nodes are explicit. A value is a literal, a field from the triggering record, a named output of a named earlier node, the current record, the current actor, or the current time. The closed node catalogue declares each fixed output key; a form-request node additionally exposes only fields from its published form. A connection-call node supplies an explicit field-to-value input map that must satisfy the selected operation's named input shape. Publication resolves readable node and field keys to permanent identifiers, rejects trigger fields outside the trigger record type, rejects missing or incompatible outputs, and rejects a reference to a node that cannot precede the consumer. A plain JSON object is a literal and is never interpreted as a hidden node reference.
+
+In the first release, a child-workflow node inherits the current trigger and execution context and accepts no separate caller-authored input map. Adding independently typed child inputs requires a versioned contract change rather than an implicit payload convention.
+
+Authored definitions may omit repetitive execution policy. The versioned source contract then supplies the documented conservative defaults before publication: a five-minute timeout, three exponential retry attempts from one to thirty seconds, the node type as its activity key, and no payload in activity. Nodes that create or change records, relationships, files, external calls, child runs, or human-input requests default to required duplicate protection; read, wait, branch, format and stop nodes default to not applicable. Canonical published nodes always contain the resolved policy explicitly, and publication refuses a policy that is unsafe for the node type.
 
 The initial catalogue excludes arbitrary SQL, JavaScript, shell commands, database credentials, unrestricted expressions, arbitrary network addresses, unrestricted file-system operations, and vendor-specific direct table manipulation. New node kinds require a platform release, security review, contracts, tests, and documentation; builders cannot upload executable code.
 
@@ -69,17 +75,17 @@ The initial catalogue excludes arbitrary SQL, JavaScript, shell commands, databa
 
 Each Kestra request carries the execution, node, attempt, tenant, organisation, application and workflow versions, named operation, typed input, issue and expiry times, and duplicate-protection key in a signed envelope. Vortex verifies the caller, current account or system authority, access version, definition version, and operation before acting.
 
-Vortex records a business side effect and its duplicate key before acknowledging it. Repeating the same request returns the existing result without applying the side effect again. The response is completed, already completed, waiting, retryable failure, or permanent refusal. Kestra uses that response to advance its authoritative execution state.
+Vortex records an application side effect and its duplicate key before acknowledging it. Repeating the same request returns the existing result without applying the side effect again. The response is completed, already completed, waiting, retryable failure, or permanent refusal. Kestra uses that response to advance its authoritative execution state.
 
 ## Asking a person
 
-An ask or approval node creates one Vortex task with assignee rules, form, due time, and timeout path. Only an authorised assignee can complete it. Kestra waits for the protected completion signal and remains authoritative for the overall run state.
+The generic form-request node pauses for one published form response with assignee rules, due time and timeout path. Only an authorised responder can submit it. Kestra waits for the protected completion signal and remains authoritative for the overall run state.
 
-An ordinary workflow approval cannot grant permissions or activate cross-organisation sharing. The platform-owned `vortex.approvals` capability may use the same task experience, but the owning service verifies immutable decisions over the exact payload before performing the protected action.
+An application that needs a task list or approval queue defines ordinary task, request and decision record types and the pages that display them. Those records can trigger or complete the generic human-input step, but they cannot grant permissions or activate cross-organisation sharing. Grant activation uses the protected [grant-consent boundary](04-access-and-permissions.md#protected-grant-consent).
 
 ## Process pipelines
 
-A pipeline belongs to an application and one record type. It defines ordered stages, named transitions, transition permissions, gates, entry and exit work, optional time targets, and escalation events.
+A pipeline belongs to an application and one record type. Each stage has a stable key, user-facing label, and explicit entry/exit action and workflow lists. Each transition names source and target stages, optional permission and action, and an optional typed gate. A time target names its stage, date-time field, and escalation event. Publication resolves every reference and refuses duplicate or missing stages.
 
 ```mermaid
 stateDiagram-v2

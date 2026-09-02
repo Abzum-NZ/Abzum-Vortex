@@ -1,19 +1,22 @@
 import { z } from "zod";
-import { jsonValueSchema, safeHttpsUrlSchema, secretReferenceSchema } from "./common";
+import { correlationIdSchema, jsonValueSchema, secretReferenceSchema } from "./common";
 import { lifecycleStateSchema } from "./catalogues";
 import {
+  actionIdSchema,
   activityIdSchema,
-  announcementIdSchema,
+  actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
+  containedComponentIdSchema,
   eventIdSchema,
   fieldIdSchema,
   fileIdSchema,
   fingerprintSchema,
+  meteringEventIdSchema,
   moduleRootIdSchema,
+  namespacedKeySchema,
   organizationAccountIdSchema,
   organizationIdSchema,
-  planIdSchema,
   platformIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
@@ -22,11 +25,9 @@ import {
   revisionSchema,
   semanticVersionSchema,
   storageContractIdSchema,
-  subscriptionIdSchema,
   teamIdSchema,
   tenantIdSchema,
   timestampSchema,
-  usageEntryIdSchema,
   workflowNodeIdSchema,
   workflowRunIdSchema,
 } from "./identifiers";
@@ -53,11 +54,11 @@ const businessRecordFields = {
   concurrencyNumber: z.number().int().positive(),
   values: z.record(fieldIdSchema, jsonValueSchema),
   createdAt: timestampSchema,
-  createdBy: platformIdSchema,
+  createdBy: actorIdSchema,
   updatedAt: timestampSchema,
-  updatedBy: platformIdSchema,
+  updatedBy: actorIdSchema,
   deletedAt: timestampSchema.optional(),
-  deletedBy: platformIdSchema.optional(),
+  deletedBy: actorIdSchema.optional(),
   removalDueAt: timestampSchema.optional(),
 };
 const organizationSharedBusinessRecordSchema = z
@@ -94,14 +95,14 @@ export const eventEnvelopeSchema = z
   .object({
     eventId: eventIdSchema,
     organizationId: organizationIdSchema,
-    applicationRootId: platformIdSchema.optional(),
-    moduleRootId: platformIdSchema,
+    applicationRootId: applicationRootIdSchema.optional(),
+    moduleRootId: moduleRootIdSchema,
     recordTypeId: recordTypeIdSchema,
     recordId: recordIdSchema,
     eventName: builderKeySchema,
     occurredAt: timestampSchema,
-    actorId: platformIdSchema,
-    correlationId: platformIdSchema,
+    actorId: actorIdSchema,
+    correlationId: correlationIdSchema,
     causationId: platformIdSchema.optional(),
     definitionRevisions: z.record(z.string(), revisionSchema),
     recordSequence: revisionSchema,
@@ -125,7 +126,7 @@ export const liveInvalidationSchema = z
   .object({
     contractVersion: semanticVersionSchema,
     organizationId: organizationIdSchema,
-    applicationRootId: platformIdSchema,
+    applicationRootId: applicationRootIdSchema,
     recordTypeId: recordTypeIdSchema,
     recordId: recordIdSchema.optional(),
     changeKind: z.enum(["created", "changed", "deleted", "restored", "access_changed"]),
@@ -133,7 +134,7 @@ export const liveInvalidationSchema = z
     recordVersion: revisionSchema.optional(),
     sequence: revisionSchema,
     occurredAt: timestampSchema,
-    correlationId: platformIdSchema,
+    correlationId: correlationIdSchema,
   })
   .strict();
 export const cacheInvalidationSchema = z
@@ -144,7 +145,7 @@ export const cacheInvalidationSchema = z
     subjectId: platformIdSchema,
     version: revisionSchema,
     occurredAt: timestampSchema,
-    correlationId: platformIdSchema,
+    correlationId: correlationIdSchema,
   })
   .strict();
 export const operationalStatusSchema = z
@@ -154,10 +155,10 @@ export const operationalStatusSchema = z
     state: z.enum(["healthy", "degraded", "unavailable", "maintenance"]),
     observedAt: timestampSchema,
     safeCode: builderKeySchema,
-    correlationId: platformIdSchema.optional(),
+    correlationId: correlationIdSchema.optional(),
   })
   .strict();
-export const businessSideEffectReceiptSchema = z
+export const applicationSideEffectReceiptSchema = z
   .object({
     runId: workflowRunIdSchema,
     nodeId: workflowNodeIdSchema,
@@ -167,7 +168,7 @@ export const businessSideEffectReceiptSchema = z
     safeInputFingerprint: fingerprintSchema,
     outcome: z.enum(["completed", "already_completed", "refused", "failed"]),
     resultingRecordIds: z.array(recordIdSchema),
-    resultingActionIds: z.array(platformIdSchema),
+    resultingActionIds: z.array(actionIdSchema),
     resultingEventIds: z.array(eventIdSchema),
   })
   .strict();
@@ -227,12 +228,12 @@ export const activityEntrySchema = z
     organizationId: organizationIdSchema,
     activityId: activityIdSchema,
     occurredAt: timestampSchema,
-    actorId: platformIdSchema,
+    actorId: actorIdSchema,
     action: builderKeySchema,
     subjectIds: z.array(platformIdSchema).min(1),
     changedFieldIds: z.array(fieldIdSchema),
     source: z.enum(["web", "workflow", "interface", "connection", "federation", "system"]),
-    correlationId: platformIdSchema,
+    correlationId: correlationIdSchema,
     outcome: z.enum(["completed", "refused", "failed"]),
     retainedDetailReference: secretReferenceSchema.optional(),
   })
@@ -242,24 +243,40 @@ export const retentionPolicySchema = z
     retentionPolicyId: retentionPolicyIdSchema,
     organizationId: organizationIdSchema,
     dataCategory: builderKeySchema,
-    selectionRule: z.record(z.string(), jsonValueSchema),
+    savedConditionId: containedComponentIdSchema.optional(),
+    savedConditionRevision: revisionSchema.optional(),
+    savedConditionFingerprint: fingerprintSchema.optional(),
     activeDays: z.number().int().min(0).max(36_500),
     recoveryDays: z.number().int().min(0).max(3_650),
     removalSchedule: z.string().min(1).max(200),
-    legalBounds: z.string().min(1).max(1_000),
+    legalConstraintKeys: z.array(builderKeySchema),
     state: z.enum(["draft", "active", "retired"]),
     createdBy: organizationAccountIdSchema,
     approvedBy: organizationAccountIdSchema,
     version: revisionSchema,
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => {
+      const suppliedReferenceParts = [
+        value.savedConditionId,
+        value.savedConditionRevision,
+        value.savedConditionFingerprint,
+      ].filter((item) => item !== undefined).length;
+      return suppliedReferenceParts === 0 || suppliedReferenceParts === 3;
+    },
+    {
+      path: ["savedConditionId"],
+      message: "A saved condition identifier, revision and fingerprint are supplied together",
+    },
+  );
 export const permanentRemovalReceiptSchema = z
   .object({
     removalReceiptId: removalReceiptIdSchema,
     organizationId: organizationIdSchema,
     protectedFingerprint: fingerprintSchema,
     category: builderKeySchema,
-    scope: z.record(z.string(), jsonValueSchema),
+    selectionFingerprint: fingerprintSchema,
     completedAt: timestampSchema,
     retentionPolicyId: retentionPolicyIdSchema,
     jobId: platformIdSchema,
@@ -267,146 +284,115 @@ export const permanentRemovalReceiptSchema = z
     lawfulExceptionCode: builderKeySchema.optional(),
   })
   .strict();
-export const privacyRequestSchema = z
+export const protectedRemovalCommandSchema = z
   .object({
-    requestId: platformIdSchema,
-    kind: z.enum(["organization_scoped", "global_identity_closure", "tenant_batch"]),
-    requesterIdentityId: platformIdSchema,
+    commandId: platformIdSchema,
+    tenantId: tenantIdSchema,
     organizationIds: z.array(organizationIdSchema).min(1),
-    criteria: z.record(z.string(), jsonValueSchema),
-    status: z.enum([
-      "received",
-      "verified",
-      "working",
-      "completed",
-      "partially_completed",
-      "refused",
-    ]),
-    findingReferences: z.array(secretReferenceSchema),
-    approvalIds: z.array(platformIdSchema),
-    completedAt: timestampSchema.optional(),
-    removalReceiptIds: z.array(removalReceiptIdSchema),
-  })
-  .strict();
-
-export const planVersionSchema = z
-  .object({
-    planId: planIdSchema,
-    version: semanticVersionSchema,
-    price: z.number().nonnegative(),
-    currency: z.string().length(3),
-    billingInterval: z.enum(["month", "year"]),
-    entitlements: z.record(builderKeySchema, z.boolean()),
-    measuredLimits: z.record(builderKeySchema, z.number().nonnegative()),
-    warningThresholds: z.array(z.number().min(0).max(1)),
-    overageRules: z.record(builderKeySchema, z.enum(["warn", "measure", "contact_tenant_admin"])),
-    graceDays: z.number().int().min(0).max(365),
-    trialRetentionDays: z.number().int().min(0).max(3_650),
-    cancellationRetentionDays: z.number().int().min(0).max(3_650),
-    effectiveAt: timestampSchema,
-    publishedBy: platformIdSchema,
-  })
-  .strict();
-export const tenantSubscriptionSchema = z
-  .object({
-    subscriptionId: subscriptionIdSchema,
-    tenantId: tenantIdSchema,
-    planId: planIdSchema,
-    planVersion: semanticVersionSchema,
-    stripeCustomerReference: z.string().min(1).max(200),
-    stripeSubscriptionReference: z.string().min(1).max(200),
-    state: z.enum([
-      "trial",
-      "active",
-      "past_due",
-      "grace_period",
-      "cancelled_at_period_end",
-      "cancelled",
-      "administratively_suspended",
-    ]),
-    periodStartsAt: timestampSchema,
-    periodEndsAt: timestampSchema,
-    graceEndsAt: timestampSchema.optional(),
-    entitlementFingerprint: fingerprintSchema,
-    lastReconciledProviderEvent: z.string().min(1).max(200),
-  })
-  .strict();
-export const usageEntrySchema = z
-  .object({
-    usageEntryId: usageEntryIdSchema,
-    tenantId: tenantIdSchema,
-    organizationId: organizationIdSchema,
-    category: builderKeySchema,
-    quantity: z.number().finite(),
-    unit: builderKeySchema,
-    windowStartsAt: timestampSchema,
-    windowEndsAt: timestampSchema,
-    sourceEventId: eventIdSchema,
-    duplicateProtectionKey: z.string().min(16).max(200),
-    correlationId: platformIdSchema,
-    acceptedAt: timestampSchema,
-    correctionOfUsageEntryId: usageEntryIdSchema.optional(),
-  })
-  .strict();
-export const seatSnapshotSchema = z
-  .object({
-    tenantId: tenantIdSchema,
-    capturedAt: timestampSchema,
-    activeSeatCount: z.number().int().nonnegative(),
-    contributingOrganizationAccountIds: z.array(organizationAccountIdSchema),
-    sourceFingerprint: fingerprintSchema,
+    dataCategories: z.array(builderKeySchema).min(1),
+    savedConditionId: containedComponentIdSchema.optional(),
+    savedConditionRevision: revisionSchema.optional(),
+    subjectFingerprint: fingerprintSchema.optional(),
+    requestedBy: platformIdSchema,
+    authorizedBy: platformIdSchema,
+    issuedAt: timestampSchema,
+    correlationId: correlationIdSchema,
   })
   .strict()
   .refine(
-    (value) => value.activeSeatCount === new Set(value.contributingOrganizationAccountIds).size,
+    (value) =>
+      (value.savedConditionId === undefined) === (value.savedConditionRevision === undefined),
     {
-      path: ["activeSeatCount"],
-      message: "Seat count must equal the unique contributing accounts",
+      path: ["savedConditionRevision"],
+      message: "A saved condition identifier and revision are supplied together",
     },
   );
 
-export const announcementSchema = z
+export const entitlementCheckRequestSchema = z
   .object({
-    announcementId: announcementIdSchema,
-    publisherKind: z.enum(["platform", "tenant", "organization", "application"]),
-    publisherId: platformIdSchema,
-    audienceScope: z.enum(["platform", "tenant", "organization", "application"]),
-    audienceId: platformIdSchema.optional(),
-    type: z.enum(["information", "warning", "critical"]),
-    message: z.string().min(1).max(1_000),
-    approvedLink: safeHttpsUrlSchema.optional(),
-    startsAt: timestampSchema,
-    endsAt: timestampSchema,
-    dismissible: z.boolean(),
-    state: z.enum(["draft", "published", "withdrawn", "ended"]),
-    createdBy: platformIdSchema,
-    publishedBy: platformIdSchema.optional(),
-    activityId: activityIdSchema,
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.audienceScope === "platform") === (value.audienceId !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["audienceId"],
-        message: "Only a non-platform audience has an audience identifier",
-      });
-  });
-export const announcementDismissalSchema = z
-  .object({
-    announcementId: announcementIdSchema,
-    organizationAccountId: organizationAccountIdSchema,
-    dismissedAt: timestampSchema,
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema.optional(),
+    capabilityKey: namespacedKeySchema,
+    requestedQuantity: z.number().positive().finite(),
+    unit: builderKeySchema,
+    correlationId: correlationIdSchema,
   })
   .strict();
-export const safeErrorResponseSchema = z
+const entitlementDecisionCommon = {
+  decisionId: platformIdSchema,
+  tenantId: tenantIdSchema,
+  organizationId: organizationIdSchema.optional(),
+  capabilityKey: namespacedKeySchema,
+  requestedQuantity: z.number().positive().finite(),
+  unit: builderKeySchema,
+  policyRevision: revisionSchema,
+  decidedAt: timestampSchema,
+  correlationId: correlationIdSchema,
+};
+export const entitlementDecisionSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      ...entitlementDecisionCommon,
+      outcome: z.literal("allowed"),
+      acceptedQuantity: z.number().positive().finite(),
+      remainingQuantity: z.number().nonnegative().finite().optional(),
+    })
+    .strict()
+    .refine((value) => value.acceptedQuantity <= value.requestedQuantity, {
+      path: ["acceptedQuantity"],
+      message: "An entitlement decision cannot accept more than was requested",
+    }),
+  z
+    .object({
+      ...entitlementDecisionCommon,
+      outcome: z.literal("refused"),
+      reasonCode: builderKeySchema,
+    })
+    .strict(),
+]);
+export const meteringEventSchema = z
   .object({
-    code: builderKeySchema,
-    message: z.string().min(1).max(1_000),
-    correlationId: platformIdSchema,
-    path: z.array(z.union([z.string(), z.number().int().nonnegative()])).optional(),
+    meteringEventId: meteringEventIdSchema,
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema.optional(),
+    capabilityKey: namespacedKeySchema,
+    quantity: z.number().positive().finite(),
+    unit: builderKeySchema,
+    occurredAt: timestampSchema,
+    sourceEventId: eventIdSchema.optional(),
+    duplicateProtectionKey: z.string().min(16).max(200),
+    correlationId: correlationIdSchema,
+    acceptedAt: timestampSchema,
   })
   .strict();
+export const safeOperationErrorCatalogue = Object.freeze({
+  invalid_request: "errors.invalid_request",
+  not_found: "errors.not_found",
+  operation_refused: "errors.operation_refused",
+  conflict: "errors.conflict",
+  rate_limited: "errors.rate_limited",
+  temporarily_unavailable: "errors.temporarily_unavailable",
+  operation_failed: "errors.operation_failed",
+} as const);
+
+const safeErrorVariant = <Code extends keyof typeof safeOperationErrorCatalogue>(code: Code) =>
+  z
+    .object({
+      code: z.literal(code),
+      messageKey: z.literal(safeOperationErrorCatalogue[code]),
+      correlationId: correlationIdSchema,
+    })
+    .strict();
+
+export const safeErrorResponseSchema = z.discriminatedUnion("code", [
+  safeErrorVariant("invalid_request"),
+  safeErrorVariant("not_found"),
+  safeErrorVariant("operation_refused"),
+  safeErrorVariant("conflict"),
+  safeErrorVariant("rate_limited"),
+  safeErrorVariant("temporarily_unavailable"),
+  safeErrorVariant("operation_failed"),
+]);
 export const performanceMeasurementSchema = z
   .object({
     operation: builderKeySchema,
@@ -430,19 +416,16 @@ export type EventDispatch = z.infer<typeof eventDispatchSchema>;
 export type LiveInvalidation = z.infer<typeof liveInvalidationSchema>;
 export type CacheInvalidation = z.infer<typeof cacheInvalidationSchema>;
 export type OperationalStatus = z.infer<typeof operationalStatusSchema>;
-export type BusinessSideEffectReceipt = z.infer<typeof businessSideEffectReceiptSchema>;
+export type ApplicationSideEffectReceipt = z.infer<typeof applicationSideEffectReceiptSchema>;
 export type FileRecord = z.infer<typeof fileRecordSchema>;
 export type UploadGrant = z.infer<typeof uploadGrantSchema>;
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;
 export type ActivityEntry = z.infer<typeof activityEntrySchema>;
 export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
 export type PermanentRemovalReceipt = z.infer<typeof permanentRemovalReceiptSchema>;
-export type PrivacyRequest = z.infer<typeof privacyRequestSchema>;
-export type PlanVersion = z.infer<typeof planVersionSchema>;
-export type TenantSubscription = z.infer<typeof tenantSubscriptionSchema>;
-export type UsageEntry = z.infer<typeof usageEntrySchema>;
-export type SeatSnapshot = z.infer<typeof seatSnapshotSchema>;
-export type Announcement = z.infer<typeof announcementSchema>;
-export type AnnouncementDismissal = z.infer<typeof announcementDismissalSchema>;
+export type ProtectedRemovalCommand = z.infer<typeof protectedRemovalCommandSchema>;
+export type EntitlementCheckRequest = z.infer<typeof entitlementCheckRequestSchema>;
+export type EntitlementDecision = z.infer<typeof entitlementDecisionSchema>;
+export type MeteringEvent = z.infer<typeof meteringEventSchema>;
 export type SafeErrorResponse = z.infer<typeof safeErrorResponseSchema>;
 export type PerformanceMeasurement = z.infer<typeof performanceMeasurementSchema>;

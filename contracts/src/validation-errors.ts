@@ -4,13 +4,7 @@ import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 
 export const definitionValidationCatalogueVersion = "1.0.0" as const;
 
-export const definitionDocumentKindSchema = z.enum([
-  "module",
-  "application",
-  "connection_type",
-  "acceptance_scenario",
-  "storage_layout",
-]);
+export const definitionDocumentKindSchema = z.enum(["module", "application", "connection_type"]);
 
 export const definitionLocationSegmentKindSchema = z.enum([
   "document",
@@ -32,8 +26,6 @@ export const definitionLocationSegmentKindSchema = z.enum([
   "connection",
   "interface",
   "setting",
-  "storage",
-  "scenario",
 ]);
 
 const displayableDefinitionKeySchema = z.union([builderKeySchema, namespacedKeySchema]);

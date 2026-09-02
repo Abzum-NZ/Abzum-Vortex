@@ -81,7 +81,7 @@ The first release has six semantic tokens and no customer-adjustable motion mode
 | `page` | The changing page region while the application shell remains stable | 300–450 ms |
 | `layout_spring` | Reordering, resizing, dragging, and board-card movement | One responsive platform spring, calibrated with the real UI |
 
-These bands guide the first CRM and Service Desk implementation; they are not values stored in application definitions. The first complete desktop and phone UI fixes one platform value, easing curve, distance, and spring configuration for each token. Those central values are then versioned with the design system. Application definitions, modules, blocks, and features consume the semantic token names and cannot supply arbitrary Motion parameters.
+These bands guide the platform design system; they are not values stored in application definitions. The first complete desktop and phone UI fixes one platform value, easing curve, distance, and spring configuration for each token. Those central values are then versioned with the design system. Platform components select the suitable semantic token; application definitions, modules and blocks cannot select a library or supply arbitrary Motion parameters.
 
 Motion is interruptible and state-driven. A newer navigation, user action, server result, or access decision cancels or replaces obsolete visual work. A late response for an earlier selection cannot flash old content, move focus backward, or overwrite the current screen. The current authorised application state always wins; animation only explains the transition to that state.
 

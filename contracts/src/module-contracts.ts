@@ -407,19 +407,135 @@ export const conditionNodeSchema: z.ZodType<ConditionNode> = z.lazy(() =>
   ]),
 );
 
+const actionValueSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
+  z.object({ source: z.literal("input"), inputKey: builderKeySchema }).strict(),
+  z.object({ source: z.literal("subject_field"), fieldId: fieldIdSchema }).strict(),
+  z.object({ source: z.literal("subject_record") }).strict(),
+  z.object({ source: z.literal("current_actor") }).strict(),
+  z.object({ source: z.literal("current_time") }).strict(),
+]);
 const actionEffectSchema = z.discriminatedUnion("kind", [
   z
-    .object({ kind: z.literal("set_field"), fieldId: fieldIdSchema, value: jsonValueSchema })
+    .object({ kind: z.literal("set_field"), fieldId: fieldIdSchema, value: actionValueSchema })
     .strict(),
   z
     .object({
-      kind: z.literal("create_linked_record"),
+      kind: z.literal("create_record"),
       recordType: recordTypeReferenceSchema,
-      values: z.record(builderKeySchema, jsonValueSchema),
+      values: z.record(fieldIdSchema, actionValueSchema),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("copy_relationships"),
+      relationshipIds: z.array(containedComponentIdSchema).min(1),
+      targetInputKey: builderKeySchema,
+    })
+    .strict(),
+  z.object({ kind: z.literal("soft_delete_subject") }).strict(),
   z.object({ kind: z.literal("announce_event"), eventKey: namespacedKeySchema }).strict(),
 ]);
+const actionInputBase = {
+  key: builderKeySchema,
+  label: labelSchema,
+  required: z.boolean(),
+};
+const textActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal("text"),
+    validation: z
+      .object({
+        minimumLength: z.number().int().min(0).optional(),
+        maximumLength: z.number().int().positive().optional(),
+        pattern: z.string().min(1).max(500).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const numberActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal("number"),
+    validation: z
+      .object({ minimum: z.number().finite().optional(), maximum: z.number().finite().optional() })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const dateActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal("date"),
+    validation: z
+      .object({
+        earliest: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        latest: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const dateTimeActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal("date_time"),
+    validation: z
+      .object({
+        earliest: z.string().datetime({ offset: true }).optional(),
+        latest: z.string().datetime({ offset: true }).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export const actionInputDefinitionSchema = z
+  .discriminatedUnion("type", [
+    textActionInputSchema,
+    numberActionInputSchema,
+    z.object({ ...actionInputBase, type: z.literal("boolean") }).strict(),
+    dateActionInputSchema,
+    dateTimeActionInputSchema,
+    z
+      .object({
+        ...actionInputBase,
+        type: z.literal("record_reference"),
+        recordType: recordTypeReferenceSchema,
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    if (
+      value.type === "text" &&
+      value.validation?.minimumLength !== undefined &&
+      value.validation.maximumLength !== undefined &&
+      value.validation.minimumLength > value.validation.maximumLength
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["validation", "maximumLength"],
+        message: "Maximum length cannot be below minimum length",
+      });
+    if (
+      value.type === "number" &&
+      value.validation?.minimum !== undefined &&
+      value.validation.maximum !== undefined &&
+      value.validation.minimum > value.validation.maximum
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["validation", "maximum"],
+        message: "Maximum cannot be below minimum",
+      });
+  });
 export const actionDefinitionSchema = z
   .object({
     actionId: actionIdSchema,
@@ -428,14 +544,19 @@ export const actionDefinitionSchema = z
     subjectRecordTypeId: recordTypeIdSchema,
     permissionKey: namespacedKeySchema,
     sharing: z.enum(["refused", "allowed"]),
-    inputs: z.record(
-      builderKeySchema,
-      z.enum(["text", "number", "boolean", "date", "date_time", "record_reference"]),
-    ),
+    inputs: z.array(actionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
-    effects: z.array(actionEffectSchema).min(1).max(20),
+    effects: z.array(actionEffectSchema).min(1).max(10),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.inputs.map((input) => input.key)).size !== value.inputs.length)
+      context.addIssue({
+        code: "custom",
+        path: ["inputs"],
+        message: "Action input keys must be unique",
+      });
+  });
 
 const ruleEffectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("refuse"), reasonCode: builderKeySchema }).strict(),
@@ -457,6 +578,7 @@ export const ruleDefinitionSchema = z
   .object({
     ruleId: ruleIdSchema,
     key: builderKeySchema,
+    subjectRecordTypeId: recordTypeIdSchema,
     trigger: z.enum(["create", "change", "delete", "form_change", "action"]),
     condition: conditionNodeSchema,
     priority: z.number().int().min(0).max(10_000),

@@ -3,10 +3,11 @@ import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import {
-  connectionTypeFixtureDocumentSchema,
   correlationIdSchema,
   definitionValidationCatalogueSchema,
   definitionValidationCatalogueVersion,
+  definitionDocumentKindSchema,
+  definitionLocationSegmentKindSchema,
   definitionRuleFailureFamilySchema,
   definitionValidationErrorCatalogue,
   definitionValidationErrorCodes,
@@ -15,6 +16,7 @@ import {
   translateDefinitionRuleFailures,
   translateDefinitionSchemaError,
 } from "../src";
+import { connectionTypeSourceDocumentSchema } from "./support/definition-fixture-schemas";
 
 const correlationId = correlationIdSchema.parse("00000000-0000-4000-8000-000000000013");
 const rootLocation = {
@@ -43,8 +45,19 @@ const validSourceDefinition = {
   content_fingerprint: "fixture:example.connection:1.0.0",
   body: {
     name: "Example connection",
-    authentication: { kind: "signed_secret" as const, secret_fields: ["signing_secret"] },
+    purpose: "Submit a typed request to an approved example provider.",
+    provider: "Example provider",
+    authentication: {
+      kind: "signed_secret" as const,
+      secret_fields: ["signing_secret"],
+      algorithm: "hmac_sha256" as const,
+    },
     allowed_hosts: ["api.example.test"],
+    allow_redirects: false,
+    shapes: [
+      { key: "request", fields: [{ key: "value", type: "text" as const, required: true }] },
+      { key: "receipt", fields: [{ key: "accepted", type: "boolean" as const, required: true }] },
+    ],
     operations: [
       {
         key: "submit",
@@ -54,6 +67,7 @@ const validSourceDefinition = {
         output: "receipt",
         timeout_seconds: 10,
         max_attempts: 2,
+        maximum_response_bytes: 1_000_000,
       },
     ],
     incoming_messages: [],
@@ -115,9 +129,9 @@ const brokenSourceDefinitionCases: BrokenSourceDefinitionCase[] = [
     expectedCode: "definition_invalid_value",
   },
   {
-    name: "unsupported authentication choice",
+    name: "unsupported authentication algorithm",
     mutate: (value) => {
-      authenticationOf(value).kind = "unsupported";
+      authenticationOf(value).algorithm = "unsupported";
     },
     expectedCode: "definition_unsupported_choice",
   },
@@ -179,6 +193,15 @@ function schemaError(schema: z.ZodType, value: unknown) {
 }
 
 describe("safe definition validation errors", () => {
+  test("keeps test-only scenarios and storage evidence out of the public location contract", () => {
+    expect(definitionDocumentKindSchema.safeParse("module").success).toBe(true);
+    expect(definitionDocumentKindSchema.safeParse("acceptance_scenario").success).toBe(false);
+    expect(definitionDocumentKindSchema.safeParse("storage_layout").success).toBe(false);
+    expect(definitionLocationSegmentKindSchema.safeParse("record_type").success).toBe(true);
+    expect(definitionLocationSegmentKindSchema.safeParse("scenario").success).toBe(false);
+    expect(definitionLocationSegmentKindSchema.safeParse("storage").success).toBe(false);
+  });
+
   test("publishes one immutable catalogue entry for every approved code", () => {
     expect(Object.keys(definitionValidationErrorCatalogue)).toEqual([
       ...definitionValidationErrorCodes,
@@ -327,7 +350,7 @@ describe("safe definition validation errors", () => {
       const definition = structuredClone(validSourceDefinition) as Record<string, unknown>;
       mutate(definition);
       const result = translateDefinitionSchemaError(
-        schemaError(connectionTypeFixtureDocumentSchema, definition),
+        schemaError(connectionTypeSourceDocumentSchema, definition),
         {
           ...context,
           requiredPaths,
@@ -514,9 +537,9 @@ describe("safe definition validation errors", () => {
       JSON.parse(match[1] as string),
     );
     expect(jsonBlocks).toHaveLength(3);
-    expect(connectionTypeFixtureDocumentSchema.safeParse(jsonBlocks[0]).success).toBe(false);
+    expect(connectionTypeSourceDocumentSchema.safeParse(jsonBlocks[0]).success).toBe(false);
     expect(definitionValidationResultSchema.safeParse(jsonBlocks[1]).success).toBe(true);
-    expect(connectionTypeFixtureDocumentSchema.safeParse(jsonBlocks[2]).success).toBe(true);
+    expect(connectionTypeSourceDocumentSchema.safeParse(jsonBlocks[2]).success).toBe(true);
   });
 
   test("keeps every runtime translator and public default independent of shipped examples", async () => {

@@ -24,16 +24,25 @@ import { workflowDefinitionSchema } from "./automation-contracts";
 import { interfaceDefinitionSchema } from "./integration-contracts";
 import {
   builderKeySchema,
+  blockIdSchema,
+  clusterIdSchema,
   connectionTypeIdSchema,
   containedComponentIdSchema,
   fieldIdSchema,
+  grantIdSchema,
+  lineageIdSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
+  organizationIdSchema,
   pageIdSchema,
+  pipelineIdSchema,
   platformIdSchema,
+  queryIdSchema,
   recordIdSchema,
+  recordTypeIdSchema,
   roleIdSchema,
   semanticVersionSchema,
+  workflowIdSchema,
 } from "./identifiers";
 import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
 
@@ -43,7 +52,7 @@ export const moduleBindingSchema = z
     version: versionRequirementSchema,
     resolvedVersion: semanticVersionSchema,
     purpose: builderKeySchema,
-    lineageId: platformIdSchema.optional(),
+    lineageId: lineageIdSchema.optional(),
   })
   .strict();
 
@@ -59,7 +68,7 @@ export const aggregateSchema = z
   .strict();
 export const queryDefinitionSchema = z
   .object({
-    queryId: platformIdSchema,
+    queryId: queryIdSchema,
     key: builderKeySchema,
     recordType: recordTypeReferenceSchema,
     selectedFieldIds: z.array(fieldIdSchema).min(1).max(200),
@@ -144,7 +153,7 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
 
 export const blockRegistrationSchema = z
   .object({
-    blockId: platformIdSchema,
+    blockId: blockIdSchema,
     releaseVersion: semanticVersionSchema,
     name: labelSchema,
     icon: builderKeySchema,
@@ -160,7 +169,7 @@ export const blockRegistrationSchema = z
           .strict(),
       )
       .max(40),
-    allowedChildBlockIds: z.array(platformIdSchema),
+    allowedChildBlockIds: z.array(blockIdSchema),
     phoneBehaviour: z.enum(["stack", "hide", "full_width"]),
     resizableHeight: z.boolean(),
     liveUpdate: z.boolean(),
@@ -171,7 +180,7 @@ export const blockRegistrationSchema = z
 export const blockPlacementSchema = z
   .object({
     placementId: containedComponentIdSchema,
-    blockId: platformIdSchema,
+    blockId: blockIdSchema,
     blockReleaseVersion: semanticVersionSchema,
     settings: z.record(builderKeySchema, jsonValueSchema),
     desktop: z
@@ -190,7 +199,7 @@ export const blockPlacementSchema = z
     visibilityCondition: conditionNodeSchema.optional(),
     viewPermissionKey: namespacedKeySchema,
     usePermissionKey: namespacedKeySchema.optional(),
-    queryId: platformIdSchema.optional(),
+    queryId: queryIdSchema.optional(),
   })
   .strict()
   .refine((value) => value.desktop.startColumn + value.desktop.span <= 13, {
@@ -230,7 +239,7 @@ const listPageSchema = z
     ...pageBase,
     type: z.literal("list"),
     recordType: recordTypeReferenceSchema,
-    queryId: platformIdSchema,
+    queryId: queryIdSchema,
     arrangements: z.array(listArrangementSchema).min(1),
     calendarMapping: calendarMappingSchema.optional(),
   })
@@ -356,26 +365,6 @@ export const themeSchema = z.discriminatedUnion("mode", [
     })
     .strict(),
 ]);
-export const motionDefinitionSchema = z
-  .object({
-    library: z.literal("motion/react"),
-    simpleFeedback: z.literal("css"),
-    featureLoading: z.literal("lazy"),
-    tokenSet: z.literal("platform_default"),
-    semanticTokens: z.tuple([
-      z.literal("feedback"),
-      z.literal("enter_exit"),
-      z.literal("refresh"),
-      z.literal("panel"),
-      z.literal("page"),
-      z.literal("layout_spring"),
-    ]),
-    currentStateWins: z.literal(true),
-    reducedMotion: z.literal("required"),
-    experimentalViewTransitions: z.literal(false),
-  })
-  .strict();
-
 export const applicationConnectionBindingSchema = z
   .object({
     bindingId: containedComponentIdSchema,
@@ -396,12 +385,25 @@ export const publicAddressSchema = z
 
 export const pipelineSchema = z
   .object({
-    pipelineId: platformIdSchema,
+    pipelineId: pipelineIdSchema,
     key: builderKeySchema,
     name: labelSchema,
     recordType: recordTypeReferenceSchema,
     stageFieldId: fieldIdSchema,
-    stages: z.array(z.object({ key: builderKeySchema, label: labelSchema }).strict()).min(1),
+    stages: z
+      .array(
+        z
+          .object({
+            key: builderKeySchema,
+            label: labelSchema,
+            entryActionKeys: z.array(namespacedKeySchema).max(10),
+            exitActionKeys: z.array(namespacedKeySchema).max(10),
+            entryWorkflowIds: z.array(workflowIdSchema).max(10),
+            exitWorkflowIds: z.array(workflowIdSchema).max(10),
+          })
+          .strict(),
+      )
+      .min(1),
     transitions: z
       .array(
         z
@@ -410,12 +412,48 @@ export const pipelineSchema = z
             to: builderKeySchema,
             permissionKey: namespacedKeySchema.optional(),
             actionKey: namespacedKeySchema.optional(),
+            gate: conditionNodeSchema.optional(),
           })
           .strict(),
       )
       .min(1),
+    timeTargets: z.array(
+      z
+        .object({
+          stageKey: builderKeySchema,
+          dateTimeFieldId: fieldIdSchema,
+          escalationEventKey: namespacedKeySchema,
+        })
+        .strict(),
+    ),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const stageKeys = new Set(value.stages.map((stage) => stage.key));
+    if (stageKeys.size !== value.stages.length)
+      context.addIssue({ code: "custom", path: ["stages"], message: "Stage keys must be unique" });
+    for (const [index, transition] of value.transitions.entries()) {
+      if (!stageKeys.has(transition.from))
+        context.addIssue({
+          code: "custom",
+          path: ["transitions", index, "from"],
+          message: "Transition source stage must resolve inside this pipeline",
+        });
+      if (!stageKeys.has(transition.to))
+        context.addIssue({
+          code: "custom",
+          path: ["transitions", index, "to"],
+          message: "Transition target stage must resolve inside this pipeline",
+        });
+    }
+    for (const [index, target] of value.timeTargets.entries())
+      if (!stageKeys.has(target.stageKey))
+        context.addIssue({
+          code: "custom",
+          path: ["timeTargets", index, "stageKey"],
+          message: "Time-target stage must resolve inside this pipeline",
+        });
+  });
 
 export const applicationContentSchema = z
   .object({
@@ -438,7 +476,6 @@ export const applicationContentSchema = z
     interfaces: z.array(interfaceDefinitionSchema),
     publicAddresses: z.array(publicAddressSchema),
     theme: themeSchema,
-    motion: motionDefinitionSchema,
     homePageId: pageIdSchema,
   })
   .strict();
@@ -469,10 +506,10 @@ export const publishedApplicationDefinitionSchema = z
 
 export const sharedRecordProjectionSchema = z
   .object({
-    sourceClusterId: platformIdSchema,
-    sourceOrganizationId: platformIdSchema,
-    grantId: platformIdSchema,
-    recordTypeId: platformIdSchema,
+    sourceClusterId: clusterIdSchema,
+    sourceOrganizationId: organizationIdSchema,
+    grantId: grantIdSchema,
+    recordTypeId: recordTypeIdSchema,
     recordId: recordIdSchema,
     concurrencyNumber: z.number().int().positive(),
     fields: z.record(fieldIdSchema, jsonValueSchema),
@@ -496,7 +533,6 @@ export type ResponsivePageLayout = z.infer<typeof responsivePageLayoutSchema>;
 export type StandardPageReplacement = z.infer<typeof standardPageReplacementSchema>;
 export type ApplicationRole = z.infer<typeof applicationRoleSchema>;
 export type Theme = z.infer<typeof themeSchema>;
-export type MotionDefinition = z.infer<typeof motionDefinitionSchema>;
 export type Pipeline = z.infer<typeof pipelineSchema>;
 export type ApplicationConnectionBinding = z.infer<typeof applicationConnectionBindingSchema>;
 export type PublicAddress = z.infer<typeof publicAddressSchema>;

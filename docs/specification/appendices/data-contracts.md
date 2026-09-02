@@ -8,7 +8,7 @@ These contracts name the information that must exist. They do not prescribe a da
 
 Canonical runtime contracts use camel-case properties and immutable platform-issued identifiers. They never identify a tenant, organisation, application, module, record type, field, role, person, or record by a display name or fixture alias.
 
-Authored module, application, connection, acceptance-scenario, and storage-layout JSON use a separate strict snake-case definition-source contract. Readable local aliases may exist only in that source layer. Publication resolves them to immutable identifiers, checks every dependency, and produces canonical runtime values; unresolved source values cannot cross a service boundary. The maintained implementation index is [`contracts/README.md`](../../../contracts/README.md).
+The production authored-source boundary for module, application and connection-type JSON must be strict, complete and separate from the canonical runtime layer. Readable local aliases may exist only in that source layer. Publication resolves them to immutable identifiers, checks every dependency, and produces canonical runtime values; unresolved source values cannot cross a service boundary. [Issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns that production boundary and conversion. Until it is implemented, the snake-case schemas beside the example tests are test-only fixture/compiler evidence and are not exported by `@vortex/contracts`. Acceptance scenarios and storage demonstrations are likewise test-only data validated by the non-shipping [testing package](../../../testing). The maintained canonical implementation index is [`contracts/README.md`](../../../contracts/README.md).
 
 ```mermaid
 flowchart TD
@@ -58,7 +58,7 @@ Contained components have a permanent identifier unique inside the module or app
 
 ### Tenant
 
-`tenant_id`, permanent `short_name`, `display_name`, state, selected plan-version reference, billing-customer reference, creation and state-change times. Tenant states are active, suspended, archived, and removal pending.
+`tenant_id`, permanent `short_name`, `display_name`, state, creation time, and state-change time. Tenant states are active, suspended, archived, and removal pending. Commercial customer or subscription references are ordinary application records and never part of this core identity contract.
 
 A tenant-administrator assignment has tenant, global identity, state, permissions, creator, start, expiry, revocation, and activity references. It grants no organisation record permission.
 
@@ -66,7 +66,7 @@ A tenant-administrator assignment has tenant, global identity, state, permission
 
 `organisation_id`, required `tenant_id`, optional `parent_organisation_id`, permanent `short_name`, `display_name`, `state`, `state_changed_at`, `created_at`, and `created_by`. The parent must belong to the same tenant and cannot produce a cycle. A protected path/depth representation may accelerate checks but is derived from this relationship and must be transactionally consistent.
 
-Organisation states are active, suspended, archived, and removal pending. Data recovery and removal timing comes from the versioned [retention policy](../14-activity-privacy-and-retention.md#retention), while payment grace and cancellation retention come from the tenant's immutable [plan version](../15-plans-billing-and-usage.md#plans-and-entitlements).
+Organisation states are active, suspended, archived, and removal pending. Data recovery and removal timing comes only from versioned [retention policy](../14-activity-privacy-and-retention.md#retention-policies), legal constraints and platform safety rules; commercial state cannot weaken them.
 
 ### Global identity
 
@@ -90,11 +90,11 @@ A team has `team_id`, organisation, key, label, state, creator, and creation/cha
 
 ### Session context
 
-Global identity or system actor, tenant, organisation, application where present, organisation account, caller kind, session and issue times, expiry, authentication strength, access version, correlation identifier, and delegated/support context where present.
+The session context is a closed union by caller kind. A human or federated caller has a global identity and organisation account; a system caller has a system actor; an unauthenticated public caller has neither and uses `anonymous` authentication strength. Every variant carries tenant, organisation, optional application, session and issue times, expiry, access version and correlation identifier. Only the permitted variants may carry delegated or support context.
 
-### Organisation profile and preferences
+### Organisation runtime settings
 
-The Identity service owns only organisation identity and state. Organisation profile and preferences are organisation records owned by the App service: legal/trading names, registration details, contact details, approved brand assets, language, time zone, currency, financial-year start, date and number formats. The Workflow service owns business-calendar entries and exposes working-time calculations; the App service owns their Organisation Portal editing contract.
+The Identity boundary owns only the language, time zone, default currency, date format, number format and revision required to render arbitrary application data before an administration application loads. Legal/trading names, registration details, contact details, brand assets, financial-year choices and business-calendar entries are ordinary records owned by administration applications under the [core contract boundary](core-contract-boundary.md).
 
 ## Permission and role contracts
 
@@ -200,9 +200,9 @@ Every access grant provides:
 | `export_allowed` | Required boolean; defaults to false in the creation experience and requires separate approval when true. |
 | `approved_recipient_region` | Required source-approved service region for a cross-cluster grant. A different current recipient region suspends access until a newly approved payload activates. |
 | `starts_at`, `expires_at` | Required start and expiry for a cross-organisation grant. No indefinite access is inferred. |
-| `status` | `draft`, `pending_approval`, `active`, `suspended`, `revoked`, or `expired`. |
+| `status` | `draft`, `pending_consent`, `active`, `suspended`, `revoked`, or `expired`. |
 | `created_by_organisation_account_id` | Required source organisation account that proposed the grant. |
-| `approval_request_id` | Required for a cross-organisation grant and links the exact approved payload fingerprint. |
+| `consent_request_id` | Required for a cross-organisation grant and links the exact consented proposal fingerprint. |
 | `contract_version`, `contract_fingerprint` | Required published source record contract understood by source and recipient applications. |
 | `recipient_binding_id`, `definition_mapping_fingerprint` | Required recipient application binding and validated source-to-local component mapping. |
 | `activated_at` | Present only after the Access service verifies the required decisions and activates the grant. |
@@ -213,28 +213,24 @@ Only fields belonging to the chosen `scope_kind` may be populated. Grant validat
 
 One grant must independently cover record, action, and field. The runtime cannot take scope from one grant and fields or actions from another. When more than one complete grant allows the same request, the activity entry records every grant relied upon. A recipient cannot use a received record or result as the source of another live grant.
 
-## Approval request contract
+## Grant-consent contract
 
-An approval request records a protected governance decision for cross-organisation sharing, access changes, or sensitive record actions. The platform-owned `vortex.approvals` capability supplies its screens and workflow, but ordinary module writes are not authoritative. Only the owning platform service can accept a decision and execute the approved action.
+Grant consent records only the protected evidence required to activate a cross-organisation sharing grant. It is not a general approval, task or sensitive-record-action facility. Ordinary business approvals are application records and cannot activate a grant.
 
 | Name | Requirement |
 |---|---|
 | `request_id` | Required permanent request identity. |
 | `source_organisation_id` | Required organisation proposing the protected action. |
 | `source_cluster_id` | Required cluster that owns the protected action. |
-| `request_type` | Required: `cross_app_grant`, `cross_org_share`, or `record_action`. |
-| `title` | Required human-readable description, 1–200 characters. |
-| `payload_fingerprint` | Required fingerprint of the complete proposed action; changing the payload invalidates earlier decisions. |
-| `status` | Required: `draft`, `pending`, `approved`, `refused`, `withdrawn`, `expired`, or `executed`. |
+| `recipient_organisation_id`, `recipient_cluster_id` | Required recipient of the proposed cross-organisation grant. |
+| `proposed_grant_fingerprint` | Required fingerprint of the complete proposed grant; changing the proposal invalidates earlier decisions. |
+| `status` | Required: `draft`, `pending`, `consented`, `refused`, `withdrawn`, `expired`, or `activated`. |
 | `requested_by_organisation_account_id` | Required organisation account that created the request. |
 | `requested_at` | Required creation timestamp. |
-| `recipient_organisation_id` | Required for cross-organisation requests. |
-| `recipient_cluster_id` | Required for cross-organisation requests and may equal the source cluster. |
-| `required_decisions` | For `cross_org_share`, exactly one source-approval side and one recipient-acceptance side, each with its authorised role identifiers. |
+| `required_decisions` | Exactly one `source_authorization` side and one `recipient_acceptance` side, each with its authorised role identifiers. |
 | `expires_at` | Required deadline after which undecided requests expire. |
-| `result_resource_id` | Present after the owning service executes the approved action. |
 
-Each approval decision is an immutable child entry with request, decision side (`source_approval` or `recipient_acceptance`), payload fingerprint, approver organisation, approver organisation account, decision (`approved` or `refused`), time, optional safe note, authentication strength, and correlation identifier. A cross-organisation request requires one approved entry for each side over the same fingerprint. A later revocation of the resulting grant creates a separate grant event; it does not rewrite the approval history.
+Each consent decision is an immutable child entry with request, decision side, proposed-grant fingerprint, approver organisation, approver organisation account, decision (`consented` or `refused`), time, optional safe note, authentication strength, and correlation identifier. The source and recipient must be different organisations. Activation requires one consented entry for each side over the same fingerprint. A later revocation creates a separate grant event; it does not rewrite the consent history.
 
 ## Federation contracts
 
@@ -267,7 +263,7 @@ A recipient assertion is short lived and signed by the recipient cluster. It con
 
 Every cross-cluster request provides federation protocol version, operation name, sender and intended receiver cluster, issue and expiry times, one-use nonce, correlation identifier, duplicate-protection key where the operation can change state, shared-contract version and fingerprint, and a typed operation payload. A shared-record query, action, or file request also requires the recipient assertion; grant-control messages instead carry their exact signed proposal, decision, receipt, or revocation evidence. HTTPS protects transport. The [HTTP Message Signature](https://www.rfc-editor.org/rfc/rfc9421.html) and [Content-Digest](https://www.rfc-editor.org/rfc/rfc9530.html) protect the signed request components and body.
 
-The response provides the same correlation identifier, source cluster, operation outcome, shared-contract version, source issue time, optional continuation token or result, and a stable safe error. A response never reveals whether an unapproved record exists.
+The response provides the same correlation identifier, source cluster, operation outcome, shared-contract version and source issue time. Only a `completed` response may carry a result or continuation token. A `refused`, `unavailable`, or `retryable_failure` response forbids both and requires a closed catalogue code for that outcome. A response never reveals whether an unapproved record exists.
 
 ### Federated query and action
 
@@ -287,9 +283,9 @@ The recipient stores one non-content mirror with `grant_id`, source and recipien
 
 ## Action, rule and condition contracts
 
-An action contains identifier, key, label, subject record type, permission, sharing setting (`refused` by default or `allowed`), inputs, precondition, and ordered effects. Effects are `set_field`, `create_linked_record`, or `announce_event`. A shared action executes wholly in the source organisation and cannot create a relationship to recipient-owned data.
+An action contains identifier, key, label, subject record type, permission, sharing setting (`refused` by default or `allowed`), uniquely keyed typed inputs, precondition, and one to ten ordered effects. Each input has a label and required flag. Its validation contract is discriminated by type so text, number, Boolean, date, date-time, and record-reference inputs cannot accept one another's settings. Effects are `set_field`, `create_record`, `copy_relationships`, `soft_delete_subject`, or `announce_event`. A relationship-copy effect names every source relationship and its target-record input; it never means “all relationships.” A shared action executes wholly in the source organisation and cannot create a relationship to recipient-owned data.
 
-A rule contains identifier, trigger, condition, priority, and one effect. Effects are `refuse`, `set_value`, `require`, `show_or_hide`, `warn`, or `start_background_work`.
+A rule contains identifier, subject record type, trigger, condition, priority, and one effect. Effects are `refuse`, `set_value`, `require`, `show_or_hide`, `warn`, or `start_background_work`. Source rules use the same typed effect vocabulary; there is no separate permission-approval rule.
 
 A condition node has an operator and typed operands. Boolean groups use `all`, `any`, or `not`. Publication sets maximum nesting, operand count, and relationship hops. It refuses an operator/type mismatch or unknown operand source.
 
@@ -298,6 +294,8 @@ A saved sharing condition belongs to one source record type and contains permane
 ## Application, page and block contracts
 
 An application contains root identity and its own release version, exact resolved module/version bindings, options, application permissions and roles, navigation, pages, actions, rules, events, workflows, process pipelines, theme settings or platform-theme binding, connections, interfaces, public addresses, and default states.
+
+A process pipeline contains one record type and stage field, uniquely keyed stages with labels and explicit entry/exit actions or workflows, named transitions with optional permission/action and typed gate, and time targets with a stage, date-time field and escalation event. Every stage, field, action, workflow, permission and event reference resolves before publication.
 
 A page has a stable contained identifier, name, one of the six page types, subject where required, page-level access, block tree or guided-form steps, commit action where required, optional standard-page replacement, and desktop/phone layout.
 
@@ -319,9 +317,9 @@ The message is sent only through a private, authorised channel and is not proof 
 
 ## Workflow execution reference and protected operation
 
-A Vortex workflow reference has `run_id`, tenant, organisation, application and application version, workflow identifier and contained version, Kestra execution identifier and namespace, trigger and source identifier, start actor, duplicate-protection key, human-task links, safe activity links, last refresh time, and a clearly non-authoritative last-known state snapshot.
+A Vortex workflow reference has `run_id`, tenant, organisation, application and application version, workflow identifier and contained version, trigger and source identifier, start actor, duplicate-protection key, human-input links, safe activity links, last refresh time, and a clearly non-authoritative last-known state snapshot. The workflow adapter stores its Kestra execution mapping privately; provider-specific identifiers are not part of the canonical application contract.
 
-A business side-effect receipt has run, node, attempt, duplicate-protection key, accepted time, safe input fingerprint, outcome, and resulting record/action/event identifiers. It proves duplicate safety but does not become the workflow-state authority.
+An application side-effect receipt has run, node, attempt, duplicate-protection key, accepted time, safe input fingerprint, outcome, and resulting record/action/event identifiers. It proves duplicate safety but does not become the workflow-state authority.
 
 A [Kestra protected-operation request](../09-workflows-and-pipelines.md#protected-operation-contract) carries:
 
@@ -374,23 +372,23 @@ An interface operation has interface and major version, operation key, input/out
 
 An activity entry has organisation, activity identifier, time, actor, action, subject identifiers, safe changed-field names, source, correlation, outcome, and optional retained-detail reference protected by a stronger permission.
 
-A retention policy has organisation, data category, selection rule, active period, recovery period, removal schedule, legal bounds, state, creator, approver, and version.
+A retention policy has organisation, data category, an optional saved-condition identifier/revision/fingerprint supplied together, active period, recovery period, removal schedule, legal-constraint keys, state, creator, approver, and version.
 
-A permanent-removal receipt has non-content identifiers or protected fingerprints, category, scope, completion time, policy, job, outcome, and any lawful exception. It is sufficient to reapply removal after backup restore without retaining the removed content.
+A permanent-removal receipt has non-content identifiers or protected fingerprints, category, selection fingerprint, completion time, policy, job, outcome, and any lawful exception. It is sufficient to reapply removal after backup restore without retaining the removed content.
 
-## Plan, subscription and usage contracts
+## Protected removal contract
 
-A plan version has plan identifier, immutable version, price and currency, billing interval, entitlement catalogue, measured-category limits, warning thresholds, grace duration, trial and cancellation retention, overage rules, effective time, and publisher. A tenant subscription has tenant, selected plan version, Stripe customer/subscription references, state, period dates, grace-end time, entitlement fingerprint, and last reconciled provider event.
+A protected removal command has command identifier, tenant, one or more organisations, data categories, optional saved-condition identifier and revision, optional protected subject fingerprint, requesting actor, authorising actor, issue time and correlation identifier. It describes one authorised platform operation, not the workflow or case used to reach that authorisation.
 
-A usage entry has tenant, organisation, category, quantity, unit, time window, source event, duplicate-protection key, correlation identifier, accepted time, and optional correction link. A seat snapshot counts active human organisation accounts only and retains the contributing organisation-account identifiers for reconciliation.
+## Entitlement and metering contracts
 
-## Announcement contract
+An entitlement-check request has tenant, optional organisation attribution, namespaced capability key, positive requested quantity, unit and correlation identifier. A decision is `allowed` with an accepted quantity no greater than the requested quantity and an optional remaining quantity, or `refused` with a stable safe reason. Both outcomes identify the policy revision used.
 
-An announcement has identifier, publisher kind and identifier, audience scope (`platform`, `tenant`, `organisation`, or `application`), audience identifier where required, type (`information`, `warning`, or `critical`), plain-language message, optional approved link, start and end times, dismissibility, state, creator, publisher, and activity reference. A dismissal has announcement, organisation account, and time. A condition-owned mandatory announcement may clear when its billing, security, or operational condition clears.
+A metering event has event identifier, tenant, optional organisation, capability key, positive quantity, unit, occurrence time, optional source event, duplicate-protection key, correlation identifier and acceptance time. It contains no price, payment, subscription, invoice, plan, chargeable flag or active-person charging rule. See [Entitlements and metering](../15-entitlements-and-metering.md).
 
 ## Error response
 
-Every refused or failed operation returns a stable code, plain-language message, correlation identifier, and safe field/component path where useful. Validation may return several independent errors. Responses never include a stack trace, SQL text, secret, hidden identifier, private record value, or other organisation's existence.
+Every refused or failed operation returns only a stable code, its fixed catalogue-owned message key and a correlation identifier. The first closed catalogue maps `invalid_request`, `not_found`, `operation_refused`, `conflict`, `rate_limited`, `temporarily_unavailable`, and `operation_failed` to their matching `errors.*` message keys. A caller cannot invent a code, pair a code with a different message key, supply public wording, add interpolation values, or expose a raw object path. Validation may return several independent errors through its more specific catalogue. Responses never include a stack trace, SQL text, secret, hidden identifier, private record value, or other organisation's existence.
 
 ### Definition validation errors
 

@@ -8,11 +8,13 @@ import {
   timestampSchema,
 } from "./identifiers";
 import {
+  activityIdSchema,
   actorIdSchema,
   applicationRootIdSchema,
-  approvalDecisionIdSchema,
-  approvalRequestIdSchema,
+  grantConsentDecisionIdSchema,
+  grantConsentRequestIdSchema,
   clusterIdSchema,
+  containedComponentIdSchema,
   directShareIdSchema,
   fieldIdSchema,
   grantIdSchema,
@@ -32,7 +34,13 @@ import {
   teamIdSchema,
   tenantIdSchema,
 } from "./identifiers";
-import { descriptionSchema, jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
+import {
+  correlationIdSchema,
+  descriptionSchema,
+  jsonValueSchema,
+  labelSchema,
+  safeHttpsUrlSchema,
+} from "./common";
 
 const administrativeStateSchema = z.enum(["active", "suspended", "archived", "removal_pending"]);
 const accountStateSchema = z.enum(["invited", "active", "suspended", "closed"]);
@@ -43,8 +51,6 @@ export const tenantSchema = z
     shortName: builderKeySchema,
     displayName: z.string().min(1).max(120),
     state: administrativeStateSchema,
-    selectedPlanVersion: semanticVersionSchema,
-    billingCustomerReference: z.string().min(1).max(200).optional(),
     createdAt: timestampSchema,
     stateChangedAt: timestampSchema,
   })
@@ -62,7 +68,7 @@ export const tenantAdministratorAssignmentSchema = z
     expiresAt: timestampSchema.optional(),
     revokedAt: timestampSchema.optional(),
     revokedByIdentityId: identityIdSchema.optional(),
-    activityId: platformIdSchema,
+    activityId: activityIdSchema,
   })
   .strict();
 
@@ -168,24 +174,12 @@ export const organizationAccountSetSchema = z
     }
   });
 
-export const organizationProfileSchema = z
+export const organizationRuntimeSettingsSchema = z
   .object({
     organizationId: organizationIdSchema,
-    legalName: z.string().min(1).max(200),
-    tradingName: z.string().min(1).max(200).optional(),
-    registrationDetails: z.record(builderKeySchema, z.string().min(1).max(200)),
-    contactDetails: z
-      .object({
-        email: z.email().optional(),
-        phone: z.string().min(1).max(50).optional(),
-        address: z.string().min(1).max(500).optional(),
-      })
-      .strict(),
-    approvedBrandAssetIds: z.array(platformIdSchema),
     language: z.string().min(2).max(35),
     timeZone: z.string().min(1).max(100),
     currency: z.string().length(3),
-    financialYearStartMonth: z.number().int().min(1).max(12),
     dateFormat: z.string().min(1).max(50),
     numberFormat: z.string().min(1).max(50),
     revision: revisionSchema,
@@ -214,7 +208,7 @@ export const teamMembershipSchema = z
     startsAt: timestampSchema,
     expiresAt: timestampSchema.optional(),
     grantedBy: organizationAccountIdSchema,
-    activityId: platformIdSchema,
+    activityId: activityIdSchema,
   })
   .strict();
 
@@ -235,54 +229,70 @@ export const invitationSchema = z
   })
   .strict();
 
-export const sessionContextSchema = z
+const sessionContextCommon = {
+  tenantId: tenantIdSchema,
+  organizationId: organizationIdSchema,
+  applicationRootId: applicationRootIdSchema.optional(),
+  sessionId: sessionIdSchema,
+  issuedAt: timestampSchema,
+  expiresAt: timestampSchema,
+  accessVersion: revisionSchema,
+  correlationId: correlationIdSchema,
+};
+const delegatedContextSchema = z
   .object({
-    identityId: identityIdSchema.optional(),
-    systemActorId: actorIdSchema.optional(),
-    tenantId: tenantIdSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema.optional(),
-    organizationAccountId: organizationAccountIdSchema.optional(),
-    callerKind: z.enum(["human", "system", "public", "federated"]),
-    sessionId: sessionIdSchema,
-    issuedAt: timestampSchema,
+    delegatedByOrganizationAccountId: organizationAccountIdSchema,
+    reason: z.string().min(1).max(500),
     expiresAt: timestampSchema,
-    authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
-    accessVersion: revisionSchema,
-    correlationId: platformIdSchema,
-    delegatedContext: z
-      .object({
-        delegatedByOrganizationAccountId: organizationAccountIdSchema,
-        reason: z.string().min(1).max(500),
-        expiresAt: timestampSchema,
-      })
-      .strict()
-      .optional(),
-    supportContext: z
-      .object({
-        supportActorId: actorIdSchema,
-        approvedByOrganizationAccountId: organizationAccountIdSchema,
-        reason: z.string().min(1).max(500),
-        expiresAt: timestampSchema,
-      })
-      .strict()
-      .optional(),
   })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.identityId === undefined) === (value.systemActorId === undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["identityId"],
-        message: "Exactly one human identity or system actor is required",
-      });
-    if (value.callerKind === "human" && value.organizationAccountId === undefined)
-      context.addIssue({
-        code: "custom",
-        path: ["organizationAccountId"],
-        message: "A human caller requires an organisation account",
-      });
-  });
+  .strict();
+const supportContextSchema = z
+  .object({
+    supportActorId: actorIdSchema,
+    approvedByOrganizationAccountId: organizationAccountIdSchema,
+    reason: z.string().min(1).max(500),
+    expiresAt: timestampSchema,
+  })
+  .strict();
+const authenticatedHumanContext = {
+  identityId: identityIdSchema,
+  organizationAccountId: organizationAccountIdSchema,
+  authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
+};
+export const sessionContextSchema = z.discriminatedUnion("callerKind", [
+  z
+    .object({
+      ...sessionContextCommon,
+      ...authenticatedHumanContext,
+      callerKind: z.literal("human"),
+      delegatedContext: delegatedContextSchema.optional(),
+      supportContext: supportContextSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...sessionContextCommon,
+      callerKind: z.literal("system"),
+      systemActorId: actorIdSchema,
+      authenticationStrength: z.literal("service"),
+      supportContext: supportContextSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...sessionContextCommon,
+      callerKind: z.literal("public"),
+      authenticationStrength: z.literal("anonymous"),
+    })
+    .strict(),
+  z
+    .object({
+      ...sessionContextCommon,
+      ...authenticatedHumanContext,
+      callerKind: z.literal("federated"),
+    })
+    .strict(),
+]);
 
 export const permissionSchema = z
   .object({
@@ -376,7 +386,7 @@ export const roleAssignmentSchema = z
     expiresAt: timestampSchema.optional(),
     state: z.enum(["active", "revoked", "expired"]),
     grantedBy: organizationAccountIdSchema,
-    activityId: platformIdSchema,
+    activityId: activityIdSchema,
   })
   .strict();
 
@@ -393,7 +403,7 @@ export const accessRequestSchema = z
     requestedFieldIds: z.array(fieldIdSchema),
     candidateGrantIds: z.array(grantIdSchema),
     accessVersion: revisionSchema,
-    correlationId: platformIdSchema,
+    correlationId: correlationIdSchema,
   })
   .strict()
   .superRefine((value, context) => {
@@ -514,12 +524,12 @@ const grantCommon = {
   approvedRecipientRegion: z.string().min(2).max(100),
   startsAt: timestampSchema,
   expiresAt: timestampSchema.optional(),
-  status: z.enum(["draft", "pending_approval", "active", "suspended", "revoked", "expired"]),
+  status: z.enum(["draft", "pending_consent", "active", "suspended", "revoked", "expired"]),
   createdByOrganizationAccountId: organizationAccountIdSchema,
-  approvalRequestId: approvalRequestIdSchema.optional(),
+  consentRequestId: grantConsentRequestIdSchema.optional(),
   contractVersion: semanticVersionSchema,
   contractFingerprint: fingerprintSchema,
-  recipientBindingId: platformIdSchema,
+  recipientBindingId: containedComponentIdSchema,
   definitionMappingFingerprint: fingerprintSchema,
   activatedAt: timestampSchema.optional(),
   revokedAt: timestampSchema.optional(),
@@ -535,7 +545,7 @@ const savedConditionGrantSchema = z
     scopeKind: z.literal("saved_condition"),
     ...grantCommon,
     recordTypeId: recordTypeIdSchema,
-    savedConditionId: platformIdSchema,
+    savedConditionId: containedComponentIdSchema,
     savedConditionRevision: revisionSchema,
     savedConditionFingerprint: fingerprintSchema,
     parameters: z.record(builderKeySchema, jsonValueSchema),
@@ -564,16 +574,22 @@ export const accessGrantSchema = z
         message: "Changeable fields must also be readable",
       });
     const crossOrganization = value.sourceOrganizationId !== value.recipientOrganizationId;
+    if (!crossOrganization && value.consentRequestId !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["consentRequestId"],
+        message: "A grant inside one organisation does not use cross-organisation consent",
+      });
     if (
       crossOrganization &&
-      (value.approvalRequestId === undefined || value.expiresAt === undefined)
+      (value.consentRequestId === undefined || value.expiresAt === undefined)
     )
       context.addIssue({
         code: "custom",
-        path: ["approvalRequestId"],
-        message: "Cross-organisation grants require approval and expiry",
+        path: ["consentRequestId"],
+        message: "Cross-organisation grants require consent and expiry",
       });
-    const beforeActivation = value.status === "draft" || value.status === "pending_approval";
+    const beforeActivation = value.status === "draft" || value.status === "pending_consent";
     if (
       (value.status === "active" && value.activatedAt === undefined) ||
       (beforeActivation && value.activatedAt !== undefined)
@@ -598,61 +614,69 @@ export const accessGrantSchema = z
       });
   });
 
-export const approvalRequestSchema = z
+export const grantConsentRequestSchema = z
   .object({
-    requestId: approvalRequestIdSchema,
+    requestId: grantConsentRequestIdSchema,
     sourceOrganizationId: organizationIdSchema,
     sourceClusterId: clusterIdSchema,
-    requestType: z.enum(["cross_app_grant", "cross_org_share", "record_action"]),
-    title: z.string().min(1).max(200),
-    payloadFingerprint: fingerprintSchema,
-    status: z.enum(["draft", "pending", "approved", "refused", "withdrawn", "expired", "executed"]),
+    recipientOrganizationId: organizationIdSchema,
+    recipientClusterId: clusterIdSchema,
+    proposedGrantFingerprint: fingerprintSchema,
+    status: z.enum([
+      "draft",
+      "pending",
+      "consented",
+      "refused",
+      "withdrawn",
+      "expired",
+      "activated",
+    ]),
     requestedByOrganizationAccountId: organizationAccountIdSchema,
     requestedAt: timestampSchema,
-    recipientOrganizationId: organizationIdSchema.optional(),
-    recipientClusterId: clusterIdSchema.optional(),
     requiredDecisions: z
       .array(
         z
           .object({
-            side: z.enum(["source_approval", "recipient_acceptance"]),
+            side: z.enum(["source_authorization", "recipient_acceptance"]),
             authorizedRoleIds: z.array(roleIdSchema).min(1),
           })
           .strict(),
       )
       .min(1),
     expiresAt: timestampSchema,
-    resultResourceId: platformIdSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    if (
-      value.requestType === "cross_org_share" &&
-      (value.recipientOrganizationId === undefined ||
-        value.recipientClusterId === undefined ||
-        value.requiredDecisions.length !== 2 ||
-        new Set(value.requiredDecisions.map((decision) => decision.side)).size !== 2)
-    )
+    if (value.sourceOrganizationId === value.recipientOrganizationId)
       context.addIssue({
         code: "custom",
         path: ["recipientOrganizationId"],
-        message: "Cross-organisation requests require both recipient scope and both decision sides",
+        message: "Grant consent is only used between different organisations",
+      });
+    if (
+      value.requiredDecisions.length !== 2 ||
+      new Set(value.requiredDecisions.map((decision) => decision.side)).size !== 2
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["requiredDecisions"],
+        message: "Grant consent requires source authorization and recipient acceptance",
       });
   });
 
-export const approvalDecisionSchema = z
+export const grantConsentDecisionSchema = z
   .object({
-    decisionId: approvalDecisionIdSchema,
-    requestId: approvalRequestIdSchema,
-    side: z.enum(["source_approval", "recipient_acceptance"]),
-    payloadFingerprint: fingerprintSchema,
+    decisionId: grantConsentDecisionIdSchema,
+    requestId: grantConsentRequestIdSchema,
+    side: z.enum(["source_authorization", "recipient_acceptance"]),
+    proposedGrantFingerprint: fingerprintSchema,
     approverOrganizationId: organizationIdSchema,
     approverOrganizationAccountId: organizationAccountIdSchema,
-    decision: z.enum(["approved", "refused"]),
+    decision: z.enum(["consented", "refused"]),
     decidedAt: timestampSchema,
     note: z.string().max(500).optional(),
     authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
-    correlationId: platformIdSchema,
+    correlationId: correlationIdSchema,
   })
   .strict();
 
@@ -664,7 +688,7 @@ export type GlobalIdentity = z.infer<typeof globalIdentitySchema>;
 export type IdentityTokenClaim = z.infer<typeof identityTokenClaimSchema>;
 export type OrganizationAccount = z.infer<typeof organizationAccountSchema>;
 export type OrganizationAccountSet = z.infer<typeof organizationAccountSetSchema>;
-export type OrganizationProfile = z.infer<typeof organizationProfileSchema>;
+export type OrganizationRuntimeSettings = z.infer<typeof organizationRuntimeSettingsSchema>;
 export type Team = z.infer<typeof teamSchema>;
 export type TeamMembership = z.infer<typeof teamMembershipSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
@@ -678,5 +702,5 @@ export type AccessDecision = z.infer<typeof accessDecisionSchema>;
 export type FieldRestriction = z.infer<typeof fieldRestrictionSchema>;
 export type DirectRecordShare = z.infer<typeof directRecordShareSchema>;
 export type AccessGrant = z.infer<typeof accessGrantSchema>;
-export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
-export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
+export type GrantConsentRequest = z.infer<typeof grantConsentRequestSchema>;
+export type GrantConsentDecision = z.infer<typeof grantConsentDecisionSchema>;

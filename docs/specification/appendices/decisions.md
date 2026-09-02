@@ -8,7 +8,7 @@ The choices formerly numbered D01–D37 have been incorporated into the permanen
 
 ## Adding an open decision
 
-Add an entry only when different reasonable answers would materially change product behaviour, data ownership, security, privacy, billing, delivery, or build order. Each entry must state:
+Add an entry only when different reasonable answers would materially change product behaviour, data ownership, security, protected data handling, entitlements, delivery, or build order. Each entry must state:
 
 - The plain-language question.
 - The viable options and their consequences.

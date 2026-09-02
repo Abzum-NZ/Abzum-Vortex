@@ -23,7 +23,7 @@ flowchart TD
 | Application | A published user experience composed from modules, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md). |
 | Application binding | Application-specific settings attached to a reusable module field or record type, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#application-level-bindings). |
 | Application role | A collection of permissions inside one [application](../04-access-and-permissions.md#application-roles). |
-| Approval request | A protected request whose immutable decisions allow an owning platform service to perform one exact governed action under the [approval contract](data-contracts.md#approval-request-contract). |
+| Grant consent | Immutable source authorisation and recipient acceptance over one exact cross-organisation grant proposal under the [grant-consent contract](data-contracts.md#grant-consent-contract). It is not a general business approval. |
 | Attachment | A record field linking one or more files under [Files and attachments](../11-files-and-attachments.md). |
 | Block | A platform-supplied page component with a validated setting contract, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#page-composition). |
 | Builder | A person authorised to edit definitions. |
@@ -67,8 +67,8 @@ flowchart TD
 | Saved sharing condition | A published and tested condition that defines which changing source records a grant may cover under [Record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions). |
 | Sensitive field | A field carrying higher-risk personal or confidential data under [Activity history, privacy and retention](../14-activity-privacy-and-retention.md#personal-data-classification). |
 | Soft deletion | Recoverable deletion before permanent removal under [Records and their lifecycle](../06-records-and-lifecycle.md#deletion-and-restoration). |
-| Tenant | The customer-level administration and billing boundary that owns one or more hierarchical organisations under [Tenants, organisations, people and sign-in](../02-people-organisations-and-sign-in.md). |
-| Tenant administrator | A tenant-level administrator who can manage organisation structure, plan, billing and announcements but receives no organisation record access from that role. |
+| Tenant | The customer-level governance and security boundary that owns one or more hierarchical organisations under [Tenants, organisations, people and sign-in](../02-people-organisations-and-sign-in.md). |
+| Tenant administrator | A tenant-level administrator who can manage organisation structure and explicitly granted protected tenant operations but receives no organisation record access from that role. |
 | Theme | Validated design values contained by an application or supplied by the platform catalogue under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#themes). |
 | Vortex Identity Authority | The environment-wide sign-in authority that gives one person a stable global identity across clusters while each cluster keeps its own organisation accounts under [Identity across clusters](../02-people-organisations-and-sign-in.md#identity-across-clusters). |
 | Workflow | Durable background work executed with Kestra under [Workflows and process pipelines](../09-workflows-and-pipelines.md). |

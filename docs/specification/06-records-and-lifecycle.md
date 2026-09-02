@@ -102,7 +102,7 @@ A record may become visible to another application or organisation through an [a
 
 ### Grant activation
 
-A cross-organisation access grant becomes active only after the source Access service verifies one authorised source approval and one authorised recipient acceptance over the same complete proposal fingerprint. No editable approval record or ordinary workflow can activate it. Activation changes no record fields. In one cluster, both organisations' access versions change in the protected activation transaction. Across clusters, each cluster changes its local access version while exchanging signed acceptance and activation receipts through the retry-safe [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation) contract.
+A cross-organisation access grant becomes active only after the source Access service verifies authorised source and recipient consent over the same complete proposal fingerprint. No editable application record or ordinary workflow can activate it. Activation changes no record fields. In one cluster, both organisations' access versions change in the protected activation transaction. Across clusters, each cluster changes its local access version while exchanging signed consent and activation receipts through the retry-safe [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation) contract.
 
 ### Grant revocation and expiry
 
@@ -128,5 +128,5 @@ Soft-deleting a shared record removes it from recipient queries through the norm
 - Approving a sharing grant does not create a copy of the shared records in the target organisation.
 - A soft-deleted record is not visible through a cross-organisation grant.
 - Activity created by a cross-organisation collaborator records the global identity, recipient organisation account, recipient organisation, source organisation, and grant.
-- Revoking a grant preserves its earlier approval decisions and creates a separate revocation record.
+- Revoking a grant preserves its earlier consent decisions and creates a separate revocation record.
 - CRM collaboration changes only the fields and actions named by the active Service Desk grant, and the source case remains the single record.

@@ -10,6 +10,36 @@ const check = (condition, message) => {
   checks.push(message);
   if (!condition) fail(message);
 };
+const graphCanReach = (edges, from, to) => {
+  const outgoing = new Map();
+  for (const [edgeFrom, edgeTo] of edges) {
+    const targets = outgoing.get(edgeFrom) ?? [];
+    targets.push(edgeTo);
+    outgoing.set(edgeFrom, targets);
+  }
+  const pending = [...(outgoing.get(from) ?? [])];
+  const visited = new Set();
+  while (pending.length > 0) {
+    const candidate = pending.shift();
+    if (candidate === to) return true;
+    if (!candidate || visited.has(candidate)) continue;
+    visited.add(candidate);
+    pending.push(...(outgoing.get(candidate) ?? []));
+  }
+  return false;
+};
+
+check(
+  !graphCanReach(
+    [
+      ["start", "consumer"],
+      ["consumer", "future_producer"],
+    ],
+    "future_producer",
+    "consumer",
+  ),
+  "workflow graph validator rejects an output produced only after its consumer",
+);
 
 async function json(path) {
   try {
@@ -71,7 +101,9 @@ const recordTypes = new Map();
 const fields = new Map();
 const permissions = new Set();
 const actions = new Set();
+const actionDefinitions = new Map();
 const events = new Set();
+const eventDefinitions = new Map();
 const fieldTypes = new Set();
 const fieldIdentities = new Set();
 const storageContracts = new Map();
@@ -124,16 +156,88 @@ for (const [moduleKey, module] of modules) {
   for (const permission of module.body.permissions ?? []) permissions.add(permission.key);
   for (const action of module.body.actions ?? []) {
     actions.add(action.key);
+    actionDefinitions.set(action.key, action);
     permissions.add(action.permission);
     check(recordTypes.has(`${moduleKey}:${action.record_type}`), `${action.key} record type resolves`);
   }
   for (const event of module.body.events ?? []) {
     events.add(event.key);
     const entry = recordTypes.get(`${moduleKey}:${event.record_type}`);
+    eventDefinitions.set(event.key, entry);
     check(Boolean(entry), `${event.key} record type resolves`);
     if (entry) {
       const available = new Set(entry.recordType.fields.map((field) => field.key));
       check((event.carries ?? []).every((field) => available.has(field)), `${event.key} carried fields resolve`);
+    }
+  }
+  for (const rule of module.body.rules ?? []) {
+    const subject = recordTypes.get(`${moduleKey}:${rule.record_type}`);
+    check(Boolean(subject), `${path} rule ${rule.key} record type resolves`);
+    if (!subject) continue;
+    const available = new Set(subject.recordType.fields.map((field) => field.key));
+    const checkCondition = (condition) => {
+      if (condition.field) check(available.has(condition.field), `${path} rule ${rule.key} condition field ${condition.field} resolves`);
+      for (const child of condition.all ?? condition.any ?? []) checkCondition(child);
+      if (condition.not) checkCondition(condition.not);
+    };
+    checkCondition(rule.condition);
+    if (["set_value", "require"].includes(rule.effect.kind))
+      check(available.has(rule.effect.field), `${path} rule ${rule.key} effect field ${rule.effect.field} resolves`);
+  }
+}
+
+for (const [moduleKey, module] of modules) {
+  const path = sourceByKey.get(moduleKey);
+  const permittedModules = new Set([
+    moduleKey,
+    ...(module.body.dependencies ?? []).map((dependency) => dependency.module),
+  ]);
+  for (const action of module.body.actions ?? []) {
+    const subject = recordTypes.get(`${moduleKey}:${action.record_type}`);
+    if (!subject) continue;
+    const subjectFields = new Set(subject.recordType.fields.map((field) => field.key));
+    const subjectRelationships = new Set(
+      subject.recordType.fields
+        .filter((field) => ["link", "link_to_one_of_several"].includes(field.type))
+        .map((field) => field.key),
+    );
+    const inputTypes = new Map((action.inputs ?? []).map((input) => [input.key, input.type]));
+    const checkValue = (value, location) => {
+      if (value.source === "input") {
+        check(inputTypes.has(value.input), `${path} action ${action.key} ${location} input ${value.input} resolves`);
+      }
+      if (value.source === "subject_field") {
+        check(subjectFields.has(value.field), `${path} action ${action.key} ${location} subject field ${value.field} resolves`);
+      }
+    };
+
+    for (const effect of action.effects ?? []) {
+      if (effect.kind === "set_field") {
+        check(subjectFields.has(effect.field), `${path} action ${action.key} set-field target ${effect.field} resolves`);
+        checkValue(effect.value, `set-field ${effect.field}`);
+      }
+      if (effect.kind === "create_record") {
+        const target = recordTypes.get(effect.record_type);
+        check(Boolean(target), `${path} action ${action.key} create-record target ${effect.record_type} resolves`);
+        check(permittedModules.has(effect.record_type.split(":")[0]), `${path} action ${action.key} declares the module that owns ${effect.record_type}`);
+        if (target) {
+          const targetFields = new Set(target.recordType.fields.map((field) => field.key));
+          for (const [field, value] of Object.entries(effect.values ?? {})) {
+            check(targetFields.has(field), `${path} action ${action.key} create-record field ${field} resolves`);
+            checkValue(value, `create-record field ${field}`);
+          }
+        }
+      }
+      if (effect.kind === "copy_relationships") {
+        check(["link", "link_to_one_of_several"].includes(inputTypes.get(effect.target_input)), `${path} action ${action.key} relationship-copy target ${effect.target_input} is a link input`);
+        check(
+          effect.relationships.every((relationship) => subjectRelationships.has(relationship)),
+          `${path} action ${action.key} copied relationships resolve to link fields on its subject`,
+        );
+      }
+      if (effect.kind === "announce_event") {
+        check(events.has(effect.event), `${path} action ${action.key} event ${effect.event} resolves`);
+      }
     }
   }
 }
@@ -152,6 +256,29 @@ for (const [fullField, field] of fields) {
 
 for (const type of manifest.required_field_types) check(fieldTypes.has(type), `field type ${type} is covered`);
 check([...fieldTypes].every((type) => manifest.required_field_types.includes(type)), "fixtures use only registered field types");
+
+for (const [connectionKey, connection] of connections) {
+  const path = sourceByKey.get(connectionKey);
+  const shapes = new Map((connection.body.shapes ?? []).map((shape) => [shape.key, shape]));
+  check(shapes.size === connection.body.shapes.length, `${path} connection shape keys are unique`);
+  for (const shape of shapes.values()) {
+    const fieldKeys = new Set(shape.fields.map((field) => field.key));
+    check(fieldKeys.size === shape.fields.length, `${path} shape ${shape.key} field keys are unique`);
+  }
+  const operationKeys = new Set();
+  for (const operation of connection.body.operations ?? []) {
+    check(!operationKeys.has(operation.key), `${path} operation ${operation.key} is unique`);
+    operationKeys.add(operation.key);
+    check(shapes.has(operation.input), `${path} operation ${operation.key} input shape resolves`);
+    check(shapes.has(operation.output), `${path} operation ${operation.key} output shape resolves`);
+  }
+  for (const message of connection.body.incoming_messages ?? [])
+    check(shapes.has(message.input), `${path} incoming message ${message.key} input shape resolves`);
+  if (connection.body.health_operation)
+    check(operationKeys.has(connection.body.health_operation), `${path} health operation resolves`);
+  if (connection.body.revocation_operation)
+    check(operationKeys.has(connection.body.revocation_operation), `${path} revocation operation resolves`);
+}
 
 const workflowTypes = new Set();
 const pageTypes = new Set();
@@ -173,13 +300,6 @@ for (const [applicationKey, application] of applications) {
   const appConnections = new Map((application.body.connection_bindings ?? []).map((binding) => [binding.id, binding]));
 
   check(appPages.has(application.body.home_page), `${path} home page resolves`);
-  check(application.body.motion?.library === "motion/react", `${path} uses the approved coordinated-motion library`);
-  check(application.body.motion?.simple_feedback === "css", `${path} reserves CSS for simple feedback`);
-  check(JSON.stringify(application.body.motion?.semantic_tokens) === JSON.stringify(["feedback", "enter_exit", "refresh", "panel", "page", "layout_spring"]), `${path} uses only the six semantic motion tokens`);
-  check(application.body.motion?.current_state_wins === true, `${path} makes motion interruptible by current state`);
-  check(application.body.motion?.reduced_motion === "required", `${path} requires reduced-motion behaviour`);
-  check(application.body.motion?.experimental_view_transitions === false, `${path} excludes experimental view transitions`);
-
   for (const role of application.body.roles ?? []) {
     check(appPages.has(role.home_page), `${path} role ${role.key} home page resolves`);
     for (const permission of role.permissions ?? []) {
@@ -206,6 +326,13 @@ for (const [applicationKey, application] of applications) {
       check(bindingKeys.has(entry.moduleKey), `${path} query ${query.key} module is bound`);
       const available = new Set(entry.recordType.fields.map((field) => field.key));
       check(query.select.every((field) => available.has(field)), `${path} query ${query.key} selected fields resolve`);
+      const checkFilter = (condition) => {
+        if (!condition) return;
+        if (condition.field) check(available.has(condition.field), `${path} query ${query.key} filter field ${condition.field} resolves`);
+        for (const child of condition.all ?? condition.any ?? []) checkFilter(child);
+        if (condition.not) checkFilter(condition.not);
+      };
+      checkFilter(query.filter);
     }
   }
 
@@ -236,33 +363,196 @@ for (const [applicationKey, application] of applications) {
   }
 
   for (const workflow of appWorkflows.values()) {
-    if (workflow.trigger.event) check(events.has(workflow.trigger.event), `${path} workflow ${workflow.key} event resolves`);
+    const triggerRecordType = workflow.trigger.event
+      ? eventDefinitions.get(workflow.trigger.event)
+      : undefined;
+    if (workflow.trigger.event)
+      check(Boolean(triggerRecordType), `${path} workflow ${workflow.key} event resolves`);
+    const triggerFieldKeys = new Set(
+      triggerRecordType?.recordType.fields.map((field) => field.key) ?? [],
+    );
+    const triggerQualifiedFields = new Set(
+      triggerRecordType?.recordType.fields.map(
+        (field) => `${triggerRecordType.moduleKey}:${triggerRecordType.recordType.key}.${field.key}`,
+      ) ?? [],
+    );
     const nodeIds = new Set(workflow.nodes.map((node) => node.id));
+    const nodesById = new Map(workflow.nodes.map((node) => [node.id, node]));
+    const fixedOutputs = new Map([
+      ["create_record", new Set(["record"])],
+      ["change_record", new Set(["record"])],
+      ["duplicate_record", new Set(["record"])],
+      ["query_records", new Set(["records"])],
+      ["set_values", new Set(["record"])],
+      ["format_value", new Set(["value"])],
+      ["generate_export", new Set(["file"])],
+      ["call_connection", new Set(["response"])],
+    ]);
+    const checkWorkflowValue = (value, location, consumerNodeId) => {
+      if (value.source === "trigger_field")
+        check(
+          triggerQualifiedFields.has(value.field),
+          `${path} workflow ${workflow.key} ${location} trigger field ${value.field} belongs to its triggering record type`,
+        );
+      if (value.source === "current_record")
+        check(
+          Boolean(triggerRecordType),
+          `${path} workflow ${workflow.key} ${location} current record has a record-bearing event trigger`,
+        );
+      if (value.source === "node_output") {
+        const sourceNode = nodesById.get(value.node);
+        check(Boolean(sourceNode), `${path} workflow ${workflow.key} ${location} source node ${value.node} resolves`);
+        if (!sourceNode) return;
+        check(
+          graphCanReach(workflow.edges, sourceNode.id, consumerNodeId),
+          `${path} workflow ${workflow.key} ${location} source node ${value.node} can precede ${consumerNodeId}`,
+        );
+        if (sourceNode.type === "request_form") {
+          const page = appPages.get(sourceNode.config.page);
+          const recordType = page?.record_type ? recordTypes.get(page.record_type) : undefined;
+          const commitAction = page?.commit_action ? actionDefinitions.get(page.commit_action) : undefined;
+          check(
+            Boolean(
+              recordType?.recordType.fields.some((field) => field.key === value.output) ||
+                commitAction?.inputs.some((input) => input.key === value.output),
+            ),
+            `${path} workflow ${workflow.key} ${location} form output ${value.output} resolves`,
+          );
+        } else {
+          check(Boolean(fixedOutputs.get(sourceNode.type)?.has(value.output)), `${path} workflow ${workflow.key} ${location} output ${value.output} is declared by ${sourceNode.type}`);
+        }
+      }
+    };
     for (const node of workflow.nodes) {
       workflowTypes.add(node.type);
       check(manifest.required_workflow_nodes.includes(node.type), `${path} workflow ${workflow.key} node ${node.type} is registered`);
-      if (node.config.action) check(actions.has(node.config.action), `${path} workflow ${workflow.key} action ${node.config.action} resolves`);
+      if (node.config.action) {
+        check(actions.has(node.config.action), `${path} workflow ${workflow.key} action ${node.config.action} resolves`);
+        const action = actionDefinitions.get(node.config.action);
+        if (action) {
+          const supplied = new Set(Object.keys(node.config.inputs ?? {}));
+          check((action.inputs ?? []).filter((input) => input.required).every((input) => supplied.has(input.key)), `${path} workflow ${workflow.key} action ${node.config.action} supplies every required input`);
+          check([...supplied].every((key) => (action.inputs ?? []).some((input) => input.key === key)), `${path} workflow ${workflow.key} action ${node.config.action} input keys resolve`);
+        }
+        for (const [key, value] of Object.entries(node.config.inputs ?? {}))
+          checkWorkflowValue(value, `action input ${key}`, node.id);
+      }
       if (node.config.query) check(appQueries.has(node.config.query), `${path} workflow ${workflow.key} query ${node.config.query} resolves`);
       if (node.config.page) check(appPages.has(node.config.page), `${path} workflow ${workflow.key} page ${node.config.page} resolves`);
       if (node.config.workflow) check(appWorkflows.has(node.config.workflow), `${path} workflow ${workflow.key} child workflow ${node.config.workflow} resolves`);
-      if (node.config.record_type) check(recordTypes.has(node.config.record_type), `${path} workflow ${workflow.key} record type ${node.config.record_type} resolves`);
+      if (node.config.record_type) {
+        const target = recordTypes.get(node.config.record_type);
+        check(Boolean(target), `${path} workflow ${workflow.key} record type ${node.config.record_type} resolves`);
+        if (target && node.config.values) {
+          const available = new Set(target.recordType.fields.map((field) => field.key));
+          check(Object.keys(node.config.values).every((field) => available.has(field)), `${path} workflow ${workflow.key} ${node.type} value fields resolve`);
+          for (const [field, value] of Object.entries(node.config.values))
+            checkWorkflowValue(value, `${node.type} field ${field}`, node.id);
+        }
+      }
+      if (node.type === "set_values") {
+        for (const [field, value] of Object.entries(node.config.values)) {
+          check(fields.has(field), `${path} workflow ${workflow.key} set-value field ${field} resolves`);
+          checkWorkflowValue(value, `set-value field ${field}`, node.id);
+        }
+      }
+      if (node.type === "condition")
+        check(
+          triggerFieldKeys.has(node.config.field),
+          `${path} workflow ${workflow.key} condition ${node.id} field ${node.config.field} belongs to its triggering record type`,
+        );
+      if (node.type === "decision_table") {
+        const checkDecisionCondition = (condition) => {
+          if (condition.field)
+            check(
+              triggerFieldKeys.has(condition.field),
+              `${path} workflow ${workflow.key} decision ${node.id} field ${condition.field} belongs to its triggering record type`,
+            );
+          for (const child of condition.all ?? condition.any ?? []) checkDecisionCondition(child);
+          if (condition.not) checkDecisionCondition(condition.not);
+        };
+        for (const decision of node.config.decisions) checkDecisionCondition(decision.when);
+      }
+      if (node.type === "format_value")
+        checkWorkflowValue(node.config.input, "format input", node.id);
+      for (const key of ["record", "subject", "target", "source_record", "target_record"])
+        if (node.config[key])
+          checkWorkflowValue(node.config[key], `${node.type} ${key}`, node.id);
+      if (["add_relationship", "copy_relationships"].includes(node.type)) {
+        const relationships = node.type === "add_relationship" ? [node.config.relationship] : node.config.relationships;
+        check(relationships.every((field) => ["link", "link_to_one_of_several"].includes(fields.get(field)?.type)), `${path} workflow ${workflow.key} ${node.type} relationships resolve`);
+      }
+      if (["attach_file", "move_file"].includes(node.type)) {
+        check(fields.get(node.config.field)?.type === "attachment", `${path} workflow ${workflow.key} ${node.type} field resolves to an attachment`);
+        checkWorkflowValue(node.config.file, `${node.type} file`, node.id);
+      }
+      if (node.type === "wait_until")
+        check(["date", "date_time"].includes(fields.get(node.config.field)?.type), `${path} workflow ${workflow.key} wait field resolves to a date or date-time`);
       if (node.config.connection) {
         const binding = appConnections.get(node.config.connection);
         check(Boolean(binding), `${path} workflow ${workflow.key} connection ${node.config.connection} resolves`);
-        if (binding) check(binding.required_operations.includes(node.config.operation), `${path} workflow ${workflow.key} connection operation ${node.config.operation} is bound`);
+        if (binding) {
+          check(binding.required_operations.includes(node.config.operation), `${path} workflow ${workflow.key} connection operation ${node.config.operation} is bound`);
+          const connectionType = connections.get(binding.connection_type);
+          const operation = connectionType?.body.operations.find(
+            (candidate) => candidate.key === node.config.operation,
+          );
+          const inputShape = connectionType?.body.shapes.find(
+            (shape) => shape.key === operation?.input,
+          );
+          check(Boolean(operation), `${path} workflow ${workflow.key} connection operation ${node.config.operation} resolves`);
+          check(Boolean(inputShape), `${path} workflow ${workflow.key} connection input shape resolves`);
+          if (inputShape) {
+            const supplied = new Set(Object.keys(node.config.inputs));
+            check(
+              inputShape.fields
+                .filter((field) => field.required)
+                .every((field) => supplied.has(field.key)),
+              `${path} workflow ${workflow.key} connection call supplies every required input`,
+            );
+            check(
+              [...supplied].every((key) => inputShape.fields.some((field) => field.key === key)),
+              `${path} workflow ${workflow.key} connection call supplies only declared inputs`,
+            );
+            for (const [key, value] of Object.entries(node.config.inputs))
+              checkWorkflowValue(value, `connection input ${key}`, node.id);
+          }
+        }
       }
     }
     for (const [from, to] of workflow.edges) check(nodeIds.has(from) && nodeIds.has(to), `${path} workflow ${workflow.key} edge ${from}->${to} resolves`);
+    for (const node of workflow.nodes) {
+      const outcomes = new Set(workflow.edges.filter(([from]) => from === node.id).map(([, , outcome]) => outcome).filter(Boolean));
+      if (node.type === "condition") check(["matched", "not_matched"].every((outcome) => outcomes.has(outcome)), `${path} workflow ${workflow.key} condition ${node.id} routes matched and not_matched`);
+      if (node.type === "decision_table") check(node.config.decisions.every((decision) => outcomes.has(decision.output)), `${path} workflow ${workflow.key} decision ${node.id} routes every output`);
+      if (node.type === "bounded_loop") check(["record", "completed"].every((outcome) => outcomes.has(outcome)), `${path} workflow ${workflow.key} loop ${node.id} routes record and completed`);
+      if (node.type === "request_form") check(["submitted", node.config.timeout_outcome].every((outcome) => outcomes.has(outcome)), `${path} workflow ${workflow.key} form ${node.id} routes submitted and timeout`);
+    }
   }
 
   for (const pipeline of application.body.pipelines ?? []) {
     const entry = recordTypes.get(pipeline.record_type);
     check(Boolean(entry), `${path} pipeline ${pipeline.key} record type resolves`);
     if (entry) check(entry.recordType.fields.some((field) => field.key === pipeline.stage_field && field.type === "choice"), `${path} pipeline ${pipeline.key} stage field resolves to a choice`);
+    const stageKeys = new Set(pipeline.stages.map((stage) => stage.key));
+    for (const stage of pipeline.stages) {
+      for (const action of [...(stage.entry_actions ?? []), ...(stage.exit_actions ?? [])])
+        check(actions.has(action), `${path} pipeline ${pipeline.key} stage action ${action} resolves`);
+      for (const workflowKey of [
+        ...(stage.entry_workflows ?? []),
+        ...(stage.exit_workflows ?? []),
+      ])
+        check(appWorkflows.has(workflowKey), `${path} pipeline ${pipeline.key} stage workflow ${workflowKey} resolves`);
+    }
     for (const transition of pipeline.transitions) {
-      check(pipeline.stages.includes(transition.from) && pipeline.stages.includes(transition.to), `${path} pipeline ${pipeline.key} transition stages resolve`);
+      check(stageKeys.has(transition.from) && stageKeys.has(transition.to), `${path} pipeline ${pipeline.key} transition stages resolve`);
       if (transition.action) check(actions.has(transition.action), `${path} pipeline ${pipeline.key} action ${transition.action} resolves`);
       if (transition.permission) check(permissions.has(transition.permission), `${path} pipeline ${pipeline.key} permission ${transition.permission} resolves`);
+    }
+    for (const target of pipeline.time_targets) {
+      check(stageKeys.has(target.stage), `${path} pipeline ${pipeline.key} time-target stage resolves`);
+      check(entry?.recordType.fields.some((field) => field.key === target.field && field.type === "date_time"), `${path} pipeline ${pipeline.key} time-target field resolves to date-time`);
+      check(events.has(target.escalation_event), `${path} pipeline ${pipeline.key} escalation event resolves`);
     }
   }
 

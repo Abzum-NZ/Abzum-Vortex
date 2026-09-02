@@ -2,7 +2,7 @@
 
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Coverage map](traceability.md) · [Fixture README](../../../testing/fixtures/README.md)
 
-The worked examples are executable acceptance fixtures, not informal illustrations. They validate against the same contracts used for customer definitions and must contain no unresolved reference.
+The worked examples are executable acceptance fixtures, not informal illustrations. Their test-only readable input schema exercises the canonical capabilities, and [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) must convert it without semantic loss into the same complete contracts used by published definitions. No fixture may contain an unresolved reference.
 
 ## Complete fixture set
 
@@ -247,7 +247,7 @@ Revocation refuses the next source request even if recipient notification is del
 
 ## Tenant hierarchy and direct sharing example
 
-A tenant may contain a parent organisation and several child organisations. A tenant administrator can manage hierarchy, combined usage, plans, and announcements without receiving record access. Reading a child organisation's CRM or Service Desk records still requires a local organisation account and local role.
+A tenant may contain a parent organisation and several child organisations. A tenant administrator can manage hierarchy and explicitly granted tenant operations without receiving record access. Reading a child organisation's example application records still requires a local organisation account and local role.
 
 Inside an organisation, an owner may directly share one record with an organisation account or team using readable and changeable field lists. Removing team membership ends that access on the next request.
 
