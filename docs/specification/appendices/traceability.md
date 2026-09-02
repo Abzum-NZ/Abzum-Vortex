@@ -79,6 +79,7 @@ flowchart LR
 | Review finding | Resolution link |
 |---|---|
 | Definition ownership contradiction | [Module and application versions](../03-composition-and-publication.md#definition-ownership-and-versions) |
+| Missing deterministic version-impact policy | [Module and application version-impact policy](version-impact-policy.md) |
 | Permission wildcard contradiction | [Controlled permission names](../04-access-and-permissions.md#permission-names) |
 | Attachment contract contradiction | [Canonical attachment settings](../11-files-and-attachments.md#canonical-attachment-settings) |
 | Missing public-safe field | [Public access](../04-access-and-permissions.md#public-access) |

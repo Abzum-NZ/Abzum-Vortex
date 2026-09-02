@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
-  assignNextDefinitionVersion,
   definitionVersionConfirmationSchema,
   definitionVersionImpactResultSchema,
+  stableDefinitionReleaseVersionSchema,
   versionImpactReasonSchema,
 } from "../src/index";
 
@@ -11,21 +11,11 @@ const id = (suffix: number): string =>
 const fingerprint = `sha256:${"a".repeat(64)}`;
 
 describe("definition version-impact contracts", () => {
-  test.each([
-    ["patch", "1.2.4"],
-    ["minor", "1.3.0"],
-    ["major", "2.0.0"],
-  ] as const)("assigns the minimum %s version", (impact, expected) => {
-    expect(assignNextDefinitionVersion("1.2.3", impact)).toBe(expected);
-  });
-
-  test("increments from the stable core and removes prerelease/build metadata", () => {
-    expect(assignNextDefinitionVersion("1.2.3-preview.4+build.9", "patch")).toBe("1.2.4");
-  });
-
-  test("refuses invalid and unsupported version segments", () => {
-    expect(() => assignNextDefinitionVersion("1.2", "patch")).toThrow();
-    expect(() => assignNextDefinitionVersion(`${Number.MAX_SAFE_INTEGER}.0.0`, "major")).toThrow();
+  test("accepts only stable published definition versions", () => {
+    expect(stableDefinitionReleaseVersionSchema.safeParse("0.0.0").success).toBe(true);
+    expect(stableDefinitionReleaseVersionSchema.safeParse("1.2.3").success).toBe(true);
+    expect(stableDefinitionReleaseVersionSchema.safeParse("1.2.3-preview.4").success).toBe(false);
+    expect(stableDefinitionReleaseVersionSchema.safeParse("1.2.3+build.9").success).toBe(false);
   });
 
   test("keeps reasons closed and free of business names or arbitrary paths", () => {
@@ -53,7 +43,7 @@ describe("definition version-impact contracts", () => {
     expect(
       definitionVersionImpactResultSchema.safeParse({
         outcome: "no_change",
-        definitionKind: "module",
+        subject: { definitionKind: "module", rootId: id(2) },
         comparisonFingerprint: fingerprint,
         currentVersion: "1.2.3",
         reasons: [],
@@ -62,7 +52,7 @@ describe("definition version-impact contracts", () => {
     expect(
       definitionVersionImpactResultSchema.safeParse({
         outcome: "initial_release",
-        definitionKind: "application",
+        subject: { definitionKind: "application", rootId: id(3) },
         comparisonFingerprint: fingerprint,
         assignedVersion: "1.0.0",
         reasons: [],
@@ -71,7 +61,7 @@ describe("definition version-impact contracts", () => {
     expect(
       definitionVersionImpactResultSchema.safeParse({
         outcome: "release_required",
-        definitionKind: "module",
+        subject: { definitionKind: "module", rootId: id(4) },
         comparisonFingerprint: fingerprint,
         currentVersion: "1.2.3",
         impact: "minor",
@@ -81,10 +71,55 @@ describe("definition version-impact contracts", () => {
     ).toBe(false);
   });
 
+  test("enforces the assigned increment and governed reason order", () => {
+    const required = {
+      outcome: "release_required" as const,
+      subject: { definitionKind: "module" as const, rootId: id(4) },
+      comparisonFingerprint: fingerprint,
+      currentVersion: "1.2.3",
+      impact: "major" as const,
+      assignedVersion: "2.0.0",
+      reasons: [
+        {
+          impact: "major" as const,
+          code: "component_removed" as const,
+          location: {
+            componentKind: "field" as const,
+            componentId: id(5),
+            property: "identity" as const,
+          },
+        },
+        {
+          impact: "patch" as const,
+          code: "definition_text_changed" as const,
+          location: { componentKind: "module" as const, property: "description" as const },
+        },
+      ],
+    };
+    expect(definitionVersionImpactResultSchema.safeParse(required).success).toBe(true);
+    expect(
+      definitionVersionImpactResultSchema.safeParse({
+        ...required,
+        assignedVersion: "1.3.0",
+      }).success,
+    ).toBe(false);
+    expect(
+      definitionVersionImpactResultSchema.safeParse({
+        ...required,
+        reasons: [...required.reasons].reverse(),
+      }).success,
+    ).toBe(false);
+    expect(
+      definitionVersionImpactResultSchema.safeParse({
+        ...required,
+        reasons: [required.reasons[0], required.reasons[0]],
+      }).success,
+    ).toBe(false);
+  });
+
   test("confirmation names only the assigned result and comparison fingerprint", () => {
     const confirmation = {
-      definitionKind: "module",
-      rootId: id(2),
+      subject: { definitionKind: "module", rootId: id(2) },
       comparisonFingerprint: fingerprint,
       assignedVersion: "1.3.0",
     };

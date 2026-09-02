@@ -62,7 +62,7 @@ export const contractIndex = [
   {
     group: "module and application version-impact requests, results and confirmation",
     layer: "canonical_runtime",
-    specification: "03-composition-and-publication.md#definition-ownership-and-versions",
+    specification: "appendices/version-impact-policy.md",
     owner: "#14",
   },
 ] as const;

@@ -26,6 +26,7 @@ import {
   versionRequirementSchema,
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
+import { permissionDeclarationSchema } from "./permissions";
 
 const finiteNumberSchema = z.number().finite();
 const optionSchema = z.object({ value: builderKeySchema, label: labelSchema }).strict();
@@ -163,6 +164,48 @@ const personLinkSettingsSchema = z
     onPersonDeactivation: z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
   })
   .strict();
+const calculationNumberOperandSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("field"), fieldId: fieldIdSchema }).strict(),
+  z.object({ source: z.literal("literal"), value: finiteNumberSchema }).strict(),
+]);
+const calculationDateOffsetSchema = z
+  .object({
+    kind: z.literal("date_offset"),
+    dateFieldId: fieldIdSchema,
+    amount: calculationNumberOperandSchema,
+    unit: z.enum(["days", "weeks", "months", "years"]),
+  })
+  .strict();
+const calculationExpressionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("join_text"),
+      fieldIds: z.array(fieldIdSchema).min(1).max(20),
+      separator: z.string().max(20),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("numeric"),
+      operation: z.enum(["add", "subtract", "multiply", "divide"]),
+      operands: z.array(calculationNumberOperandSchema).min(2).max(20),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("subtract_percentage"),
+      amountFieldId: fieldIdSchema,
+      percentageFieldId: fieldIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("condition"),
+      condition: z.lazy(() => conditionNodeSchema),
+    })
+    .strict(),
+  calculationDateOffsetSchema,
+]);
 const calculationSettingsSchema = z
   .object({
     resultType: z.enum([
@@ -174,16 +217,33 @@ const calculationSettingsSchema = z
       "date",
       "date_time",
     ]),
-    expression: z.record(z.string(), jsonValueSchema),
+    expression: calculationExpressionSchema,
     dependencyFieldIds: z.array(fieldIdSchema).min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const valid =
+      (value.expression.kind === "join_text" && value.resultType === "text") ||
+      (value.expression.kind === "condition" && value.resultType === "yes_no") ||
+      (value.expression.kind === "date_offset" &&
+        (value.resultType === "date" || value.resultType === "date_time")) ||
+      ((value.expression.kind === "numeric" || value.expression.kind === "subtract_percentage") &&
+        (value.resultType === "whole_number" ||
+          value.resultType === "decimal_number" ||
+          value.resultType === "money"));
+    if (!valid)
+      context.addIssue({
+        code: "custom",
+        path: ["resultType"],
+        message: "Calculation result type must match its closed expression kind",
+      });
+  });
 const totalSettingsSchema = z
   .object({
     relationshipId: containedComponentIdSchema,
     operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
     fieldId: fieldIdSchema.optional(),
-    filter: z.record(z.string(), jsonValueSchema).optional(),
+    filter: z.lazy(() => conditionNodeSchema).optional(),
     currency: z.string().length(3).optional(),
   })
   .strict();
@@ -455,6 +515,21 @@ const textActionInputSchema = z
       .optional(),
   })
   .strict();
+const formattedTextActionInputSchema = z
+  .object({
+    ...actionInputBase,
+    type: z.literal("formatted_text"),
+    validation: z
+      .object({
+        allowedBlocks: z
+          .array(z.enum(["paragraph", "heading", "list", "link", "attachment"]))
+          .min(1),
+        maximumLength: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 const numberActionInputSchema = z
   .object({
     ...actionInputBase,
@@ -500,6 +575,7 @@ const dateTimeActionInputSchema = z
 export const actionInputDefinitionSchema = z
   .discriminatedUnion("type", [
     textActionInputSchema,
+    formattedTextActionInputSchema,
     numberActionInputSchema,
     z.object({ ...actionInputBase, type: z.literal("boolean") }).strict(),
     dateActionInputSchema,
@@ -508,7 +584,13 @@ export const actionInputDefinitionSchema = z
       .object({
         ...actionInputBase,
         type: z.literal("record_reference"),
-        recordType: recordTypeReferenceSchema,
+        recordTypes: z.array(recordTypeReferenceSchema).min(1).max(20),
+      })
+      .strict(),
+    z
+      .object({
+        ...actionInputBase,
+        type: z.literal("organization_account_reference"),
       })
       .strict(),
   ])
@@ -661,15 +743,49 @@ export const recordTypeDefinitionSchema = z
     }
   });
 
+export const savedSharingConditionSchema = z
+  .object({
+    conditionId: containedComponentIdSchema,
+    sourceRecordTypeId: recordTypeIdSchema,
+    key: builderKeySchema,
+    publishedRevision: revisionSchema,
+    contractFingerprint: fingerprintSchema,
+    parameters: z.array(
+      z
+        .object({
+          key: builderKeySchema,
+          type: z.enum(["text", "number", "boolean", "date", "date_time"]),
+        })
+        .strict(),
+    ),
+    condition: conditionNodeSchema,
+    declaredFieldIds: z.array(fieldIdSchema),
+    publicationTests: z
+      .array(
+        z
+          .object({
+            name: labelSchema,
+            parameters: z.record(builderKeySchema, jsonValueSchema),
+            fieldValues: z.record(fieldIdSchema, jsonValueSchema),
+            expected: z.boolean(),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
+
 export const moduleContentSchema = z
   .object({
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(1_000),
     dependencies: z.array(moduleDependencySchema),
     recordTypes: z.array(recordTypeDefinitionSchema).min(1).max(100),
+    permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
     events: z.array(eventDefinitionSchema),
     rules: z.array(ruleDefinitionSchema),
+    sharingConditions: z.array(savedSharingConditionSchema),
     extensionPoints: z.array(
       z
         .object({
@@ -707,37 +823,6 @@ export const publishedModuleDefinitionSchema = z
         content: ResolveRecordTypeReferences<typeof value.content>;
       },
   );
-export const savedSharingConditionSchema = z
-  .object({
-    conditionId: containedComponentIdSchema,
-    sourceRecordTypeId: recordTypeIdSchema,
-    key: builderKeySchema,
-    publishedRevision: revisionSchema,
-    contractFingerprint: fingerprintSchema,
-    parameters: z.array(
-      z
-        .object({
-          key: builderKeySchema,
-          type: z.enum(["text", "number", "boolean", "date", "date_time"]),
-        })
-        .strict(),
-    ),
-    condition: conditionNodeSchema,
-    declaredFieldIds: z.array(fieldIdSchema),
-    declaredRelationshipIds: z.array(containedComponentIdSchema),
-    publicationTests: z
-      .array(
-        z
-          .object({
-            name: labelSchema,
-            parameters: z.record(builderKeySchema, jsonValueSchema),
-            expected: z.boolean(),
-          })
-          .strict(),
-      )
-      .min(1),
-  })
-  .strict();
 
 export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
 export type ModuleDependency = z.infer<typeof moduleDependencySchema>;

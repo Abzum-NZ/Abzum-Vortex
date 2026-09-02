@@ -92,7 +92,7 @@ Build:
 - All core [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, protected removal, entitlements, metering and cache versions.
 - The formal [core contract boundary](../specification/appendices/core-contract-boundary.md), a documented platform invariant for every privileged contract, and source guards that reject example-specific semantics in core code.
 - Generic contract validator with the versioned safe-error catalogue from [the data contracts](../specification/appendices/data-contracts.md#definition-validation-errors), stable codes, caller-mapped builder-visible locations, deterministic ordering, and protected diagnostics. Runtime validation contains no installed definition or fixture name.
-- Module/application version-impact comparison, including Vortex assignment of the minimum valid next release version and builder confirmation or cancellation.
+- Pure [module/application version-impact comparison](../specification/appendices/version-impact-policy.md), including stable-identity matching, exact content fingerprints, a governed field-by-field policy, Vortex assignment of the minimum valid next release version, and stale-safe builder confirmation or cancellation.
 - Storage-catalog and scope contracts that distinguish definition identity, storage lineage, organisation ownership, and application-contained ownership without creating per-installation tables.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
 - A capability-complete production authored-source schema and lossless conversion for all 13 example definition documents; no compiler-invented label, permission, layout, public exposure, data shape or business behaviour.
@@ -105,6 +105,7 @@ Exit proof:
 - Every record type resolves to exactly one collision-free storage mapping; two same-named CRM applications in different organisations remain isolated, while CRM and Service Desk can read the same organisation-shared Company and Contact records.
 - Invalid examples cover every closed list, missing required value, unknown value, incompatible reference and cross-root version failure.
 - Schema failures and validation-rule failures produce the same safe public result; adversarial diagnostics never enter that result and no example-specific name appears in the translator or catalogue.
+- First publication is exactly `1.0.0`, unchanged content cannot publish, and patch/minor/major fixtures prove deterministic reasons, minimum version assignment, history integrity, and stale-confirmation refusal.
 - No service-specific package invents a second form of a shared contract, and no core package recognises an example application or ordinary business domain by name.
 
 ## Phase 2 — Definition and Identity
@@ -171,7 +172,7 @@ Build:
 
 - Module dependency, install, upgrade and removal planning.
 - Storage generation through ordered [database changes](../specification/18-delivery-and-testing.md#database-changes).
-- All 22 field types, relationships, calculations, totals and application bindings.
+- All 22 field types, relationships, closed calculations and typed totals through resolved module definitions.
 - Record save sequence, concurrency numbers, reference sequences, uniqueness, ownership and data versions.
 - Soft deletion, restoration, permanent-removal handoff and bounded bulk operations.
 - Migration workflow for incompatible field changes; no arbitrary in-place retype.
@@ -216,7 +217,7 @@ Exit proof:
 
 Build:
 
-- Module bindings, application roles, options, navigation and application resolution.
+- Version-pinned module and connection bindings, application roles, navigation and application resolution.
 - Application-contained theme settings, platform-theme binding, inheritance and legibility checking.
 - Six page types, four list arrangements, registered blocks, twelve-column responsive layout and page states.
 - [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, the six central semantic tokens, interruptible state-driven motion, and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.

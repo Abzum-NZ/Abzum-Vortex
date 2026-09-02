@@ -4,6 +4,7 @@ import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   accessGrantSchema,
   actionInputDefinitionSchema,
+  applicationConnectionBindingSchema,
   blockPaletteGroupSchema,
   blockPaletteGroupKeys,
   blockSettingControlSchema,
@@ -24,9 +25,11 @@ import {
   pageTypeSchema,
   pageDefinitionSchema,
   pipelineSchema,
+  permissionDeclarationSchema,
   publishedApplicationDefinitionSchema,
   publishedModuleDefinitionSchema,
   roleSchema,
+  savedSharingConditionSchema,
   safeErrorResponseSchema,
   secretReferenceSchema,
   sessionContextSchema,
@@ -89,7 +92,7 @@ const fieldSettings: Record<(typeof fieldTypeKeys)[number], unknown> = {
   },
   calculation: {
     resultType: "text",
-    expression: { operator: "concat" },
+    expression: { kind: "join_text", fieldIds: [id(2)], separator: " " },
     dependencyFieldIds: [id(2)],
   },
   total: { relationshipId: id(3), operation: "count" },
@@ -289,6 +292,91 @@ describe("closed catalogues and discriminated contracts", () => {
         required: true,
       }).success,
     ).toBe(false);
+    expect(
+      actionInputDefinitionSchema.safeParse({
+        key: "formatted_body",
+        label: "Formatted body",
+        type: "formatted_text",
+        required: true,
+        validation: { allowedBlocks: ["paragraph", "list"], maximumLength: 2_000 },
+      }).success,
+    ).toBe(true);
+    expect(
+      actionInputDefinitionSchema.safeParse({
+        key: "targets",
+        label: "Targets",
+        type: "record_reference",
+        required: true,
+        recordTypes: [unresolvedRecordType],
+      }).success,
+    ).toBe(true);
+    expect(
+      actionInputDefinitionSchema.safeParse({
+        key: "assignee",
+        label: "Assignee",
+        type: "organization_account_reference",
+        required: false,
+      }).success,
+    ).toBe(true);
+  });
+
+  test("keeps permission, sharing-test, calculation and connection choices explicit", () => {
+    expect(
+      permissionDeclarationSchema.safeParse({
+        permissionId: id(80),
+        key: "example.record.read",
+        label: "Read records",
+        description: "Allows reading records.",
+        actionKind: "read",
+        administrative: false,
+      }).success,
+    ).toBe(true);
+    expect(
+      savedSharingConditionSchema.safeParse({
+        conditionId: id(81),
+        sourceRecordTypeId: id(82),
+        key: "approved_records",
+        publishedRevision: 1,
+        contractFingerprint: fingerprint,
+        parameters: [{ key: "approved", type: "boolean" }],
+        condition: {
+          kind: "comparison",
+          operator: "equals",
+          left: { source: "field", fieldId: id(83) },
+          right: { source: "parameter", key: "approved" },
+        },
+        declaredFieldIds: [id(83)],
+        publicationTests: [
+          {
+            name: "Approved",
+            parameters: { approved: true },
+            fieldValues: { [id(83)]: true },
+            expected: true,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "calculation",
+        settings: {
+          resultType: "text",
+          expression: { kind: "execute", source: "untrusted" },
+          dependencyFieldIds: [id(2)],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationConnectionBindingSchema.safeParse({
+        bindingId: id(84),
+        key: "primary",
+        connectionTypeId: id(85),
+        version: { selection: "exact", version: "1.0.0" },
+        resolvedVersion: "1.0.0",
+        requiredOperationKeys: ["send"],
+      }).success,
+    ).toBe(true);
   });
 
   test("allows empty connection shapes and rejects dangling shape references", () => {
@@ -711,9 +799,11 @@ describe("published, page and federation boundaries", () => {
             customActionIds: [],
           },
         ],
+        permissions: [],
         actions: [],
         events: [],
         rules: [],
+        sharingConditions: [],
         extensionPoints: [],
       },
       dependencyManifest: [],
@@ -831,7 +921,16 @@ describe("published, page and federation boundaries", () => {
         queries: [],
         blockRegistrations: [],
         pipelines: [],
-        permissionKeys: ["example.public.open"],
+        permissions: [
+          {
+            permissionId: id(547),
+            key: "example.public.open",
+            label: "Open public page",
+            description: "Allows the public page to be opened.",
+            actionKind: "read",
+            administrative: false,
+          },
+        ],
         actions: [],
         rules: [],
         events: [],
@@ -1477,6 +1576,7 @@ describe("complete definition-source fixture set", () => {
       "order",
       "ownership",
       "permission",
+      "phone",
       "public",
       "query",
       "record",
