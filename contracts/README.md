@@ -1,8 +1,8 @@
 # Vortex contract index
 
-[Platform specification](../docs/specification/README.md) · [Data-contract appendix](../docs/specification/appendices/data-contracts.md) · [Phase 1 build plan](../docs/build-plan/README.md#phase-1--contracts-and-complete-fixtures) · [Issue #12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12)
+[Platform specification](../docs/specification/README.md) · [Data-contract appendix](../docs/specification/appendices/data-contracts.md) · [Phase 1 build plan](../docs/build-plan/README.md#phase-1--contracts-and-complete-fixtures) · [Validation-error author guide](VALIDATION_ERRORS.md)
 
-This package is the database-free language shared by the Vortex services. Runtime services accept the canonical camel-case contracts with platform-issued identifiers. The CRM and Service Desk JSON examples use a separate, strict snake-case source layer; [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns resolving its readable local aliases to canonical identifiers before publication.
+This package is the database-free language shared by the Vortex services. Runtime services accept the canonical camel-case contracts with platform-issued identifiers. Example JSON definitions use a separate, strict snake-case source layer; [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns resolving readable local aliases to canonical identifiers before publication. Runtime contracts and validators never contain installed definition names or behaviour.
 
 Every schema rejects unknown properties. A schema file can depend only on this package's lower-level files and Zod; it cannot import browser, server, database, Supabase, Kestra, or service code.
 
@@ -16,7 +16,8 @@ Every schema rejects unknown properties. A schema file can depend only on this p
 | All 33 workflow nodes, triggers, executions and protected operations | Canonical runtime | [Workflows and pipelines](../docs/specification/09-workflows-and-pipelines.md) | `automation-contracts.ts` |
 | Connections, interfaces and federation | Canonical runtime | [Connections and interfaces](../docs/specification/12-connections-and-interfaces.md), [federation](../docs/specification/17-runtime-storage-and-caching.md#vortex-federation-between-clusters) | `integration-contracts.ts` |
 | Records, events, invalidations, files, retention, privacy, billing, announcements, errors and measurements | Canonical runtime | [Data-contract appendix](../docs/specification/appendices/data-contracts.md) | `operation-contracts.ts` |
-| CRM, Service Desk, connection, sharing-scenario and storage-layout JSON documents | Definition source | [Worked examples](../docs/specification/appendices/worked-examples.md#required-fixture-set) | `fixture-contracts.ts` |
+| Safe definition-validation result, catalogue, rule handoff and translators | Canonical runtime | [Definition validation errors](../docs/specification/appendices/data-contracts.md#definition-validation-errors) | `validation-errors.ts` |
+| Application, module, connection, sharing-scenario and storage-layout JSON examples | Definition source | [Worked examples](../docs/specification/appendices/worked-examples.md#required-fixture-set) | `fixture-contracts.ts` |
 
 `contract-index.ts` exports the same grouping for tooling. `index.ts` is the only package entry point.
 

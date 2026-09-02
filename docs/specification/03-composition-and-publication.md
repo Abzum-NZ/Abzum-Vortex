@@ -69,6 +69,8 @@ The platform calculates whether a proposed revision is patch, minor, or major fr
 
 ## Validation before publication
 
+Shape and rule failures use one [generic, versioned safe validation-error contract](appendices/data-contracts.md#definition-validation-errors). Installed application, module, record-type, field, workflow, connection, and fixture names never appear in the catalogue or translator. A builder-visible key appears only when the authorised caller explicitly maps an internal path to that safe location; deeper evidence remains protected under the same correlation identifier.
+
 Publication is refused unless:
 
 1. Every referenced module, application component, and platform catalogue item exists.

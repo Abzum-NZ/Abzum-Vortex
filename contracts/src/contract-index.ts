@@ -54,7 +54,13 @@ export const contractIndex = [
     owner: "#12",
   },
   {
-    group: "CRM and Service Desk authored JSON",
+    group: "safe definition-validation catalogue and translators",
+    layer: "canonical_runtime",
+    specification: "appendices/data-contracts.md#definition-validation-errors",
+    owner: "#13",
+  },
+  {
+    group: "authored example JSON",
     layer: "definition_source",
     specification: "appendices/worked-examples.md",
     owner: "#12",

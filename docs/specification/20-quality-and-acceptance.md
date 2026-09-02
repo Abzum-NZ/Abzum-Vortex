@@ -23,6 +23,7 @@ flowchart LR
 - Organisation separation and [access](04-access-and-permissions.md).
 - Data integrity under concurrency, retry, partial failure, deletion, and restoration.
 - Plain-language validation and recovery guidance.
+- Stable definition-validation codes and catalogue-owned guidance that expose no raw input, internal path, protected identifier, diagnostic detail, or installed definition name; see the [definition validation error contract](appendices/data-contracts.md#definition-validation-errors).
 - Keyboard, screen-reader, contrast, zoom, reduced-motion, and phone use.
 - Bounded response time and resource use under stated test data.
 - Safe logs, traces, diagnostics, fixtures, screenshots, and exports.
