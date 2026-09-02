@@ -113,6 +113,7 @@ flowchart LR
 | Unreproducible performance target | [Performance measurements](../20-quality-and-acceptance.md#performance-measurement) |
 | Original Phase 10 too large | [Revised phases 10–13](../../build-plan/README.md#phase-10--copy-gallery-sharing-import-and-export) |
 | Supabase capabilities underused or ambiguously owned | [Supabase capability policy](../17-runtime-storage-and-caching.md#supabase-capability-policy), [local and Testing verification](../18-delivery-and-testing.md#supabase-development-and-verification), and [database platform safeguards](../19-operations-backup-and-recovery.md#database-platform-safeguards) assign Auth, row rules, Queue, Webhooks, Realtime, Storage, tests, advisers and recovery without creating duplicate workflow, server or secret systems. |
+| Production recovery retention and database allowlisting unclear | [Backup](../19-operations-backup-and-recovery.md#backup) fixes continuous seven-day Supabase PITR plus hourly encrypted R2 backups with 48-hour requested expiry; [database platform safeguards](../19-operations-backup-and-recovery.md#database-platform-safeguards) defer CIDR restrictions until both database callers have stable egress and exclude read replicas from the first release. |
 
 ## Contributed sharing-change review
 

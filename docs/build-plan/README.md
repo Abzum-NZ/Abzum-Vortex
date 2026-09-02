@@ -384,8 +384,9 @@ Exit proof:
 Build and prove:
 
 - Measures, alerts, incident records and tested runbooks from [operations](../specification/19-operations-backup-and-recovery.md).
-- Independent encrypted backup, scheduled restore, workflow reconciliation, file integrity and privacy-removal replay.
-- Supabase managed point-in-time recovery, SSL enforcement, exposed-schema review, platform adviser review, and conditional network restrictions, proven alongside the independent backup path.
+- Continuous seven-day Supabase point-in-time recovery plus hourly encrypted logical backups in the existing Cloudflare R2 backup account under a separate Vortex bucket or prefix, with a 48-hour requested expiry, hourly cleanup, lifecycle backstop, scheduled restore, workflow reconciliation, file integrity and privacy-removal replay.
+- SSL enforcement, exposed-schema review and platform adviser review. Supabase CIDR restrictions are deferred until both Kestra and Vercel have stable outbound IP ranges; DNS names cannot be allowlisted.
+- No read replica in the first release; measured demand must create and justify future work.
 - Secret inventory and rotation drills.
 - Full separation, accessibility, measured performance, load, failure and recovery acceptance. Performance findings create work but never block a release by themselves.
 - Production release checklist, change record, support boundary and customer communication path.

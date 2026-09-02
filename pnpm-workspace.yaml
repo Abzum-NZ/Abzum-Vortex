@@ -1,0 +1,13 @@
+packages:
+  - web
+  - contracts
+  - db
+  - runtime/*
+  - ui
+  - studio
+  - modules
+  - testing
+
+catalogMode: strict
+
+onlyBuiltDependencies: []

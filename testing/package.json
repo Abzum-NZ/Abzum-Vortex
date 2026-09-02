@@ -1,0 +1,22 @@
+{
+  "name": "@vortex/testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vortex/contracts": "workspace:*",
+    "@vortex/modules": "workspace:*"
+  },
+  "vortex": {
+    "tier": 13,
+    "environment": "test",
+    "ships": false
+  }
+}

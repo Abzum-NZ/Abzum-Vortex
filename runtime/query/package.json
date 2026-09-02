@@ -1,0 +1,26 @@
+{
+  "name": "@vortex/query",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vortex/access": "workspace:*",
+    "@vortex/contracts": "workspace:*",
+    "@vortex/record": "workspace:*",
+    "server-only": "0.0.1"
+  },
+  "vortex": {
+    "tier": 6,
+    "environment": "server",
+    "ships": true,
+    "engine": true,
+    "service": "query"
+  }
+}

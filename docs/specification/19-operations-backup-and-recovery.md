@@ -45,8 +45,11 @@ Incident records contain timeline, scope, affected organisations, containment, r
 
 Backups cover the production [PostgreSQL](https://www.postgresql.org/docs/) database, file manifests and bytes, published definitions, [Kestra](https://kestra.io/docs) workflow definitions and required state, configuration needed to rebuild services, and privacy-removal receipts.
 
-- Production enables the [Supabase managed backup and point-in-time recovery option](https://supabase.com/docs/guides/platform/backups) whose observed recovery points meet the one-hour objective. This is the first recovery layer, not the only copy.
-- Copies are encrypted and sent to an independently controlled location.
+- Before Production opens, Production enables [Supabase point-in-time recovery](https://supabase.com/docs/guides/platform/manage-your-usage/point-in-time-recovery) continuously with the provider's smallest available seven-day recovery window. PITR can restore to a chosen point with seconds-level granularity; it is not an hourly snapshot. The requested two-day PITR window is unavailable because Supabase currently offers seven, fourteen, or twenty-eight days.
+- Independently of PITR, Kestra creates an encrypted logical Vortex database backup every hour and sends it to the existing Cloudflare R2 backup account under a dedicated Vortex bucket or prefix and dedicated least-privilege credential. It does not mix Vortex objects with the Kestra database prefix.
+- The R2 logical-backup policy retains only the most recent 48 hours. An hourly Kestra cleanup removes older objects and an [R2 lifecycle rule](https://developers.cloudflare.com/r2/buckets/object-lifecycles/) provides a second expiry control. Cloudflare may complete lifecycle deletion up to 24 hours after expiry, so monitoring records the requested expiry and actual disappearance rather than claiming exact physical deletion at 48 hours.
+- Backup objects are encrypted before upload, carry a checksum, contain no plaintext secret, and are unreadable without the separately held recovery key.
+- Copies are sent to the independently controlled R2 location; no local Kestra-host copy is treated as a recovery copy.
 - Access is limited, logged, and tested.
 - Backup retention is documented and does not silently exceed the approved privacy policy.
 - A checksum and inventory prove completeness.
@@ -68,7 +71,7 @@ sequenceDiagram
     Operator->>Isolated: Approve for declared recovery use or destroy test copy
 ```
 
-The production recovery-point objective is at most one hour of accepted data loss. The recovery-time objective is at most eight hours from declaring a recoverable disaster to restoring the agreed minimum service. Backup schedules, independent copies, alerting, runbooks, and restore drills must demonstrate both objectives; a backup job reporting success is not proof of recovery.
+The production recovery-point objective is at most one hour of accepted data loss. The recovery-time objective is at most eight hours from declaring a recoverable disaster to restoring the agreed minimum service. Continuous PITR, hourly R2 backups, alerting, runbooks, and restore drills must demonstrate both objectives; a backup job reporting success is not proof of recovery.
 
 Supabase managed backups do not replace the independent copy because deleting or losing the provider project can also remove access to its managed recovery points. Restore drills test both the provider recovery path and the independent encrypted backup path.
 
@@ -76,9 +79,11 @@ Supabase managed backups do not replace the independent copy because deleting or
 
 - [SSL enforcement](https://supabase.com/docs/guides/platform/ssl-enforcement) is enabled for every remote database connection.
 - Internal schemas are excluded from the Data API, and anonymous and signed-in browser roles have no grants on business or administrative tables. The browser uses Supabase directly only for approved Auth, private Realtime, and signed Storage flows.
-- Network restrictions are enabled for a route only when every authorised caller has stable outbound addresses. The direct Kestra route is restricted when its address is fixed; a Vercel database route is restricted only after fixed egress or an equivalent private connection is configured. Security must not rely on an allowlist that the actual caller cannot use.
+- [Supabase database network restrictions](https://supabase.com/docs/guides/platform/network-restrictions) are configured in the Supabase dashboard or CLI and accept IPv4/IPv6 CIDR ranges only. They cannot allow a DNS name such as `kestra.abzum.com`, do not apply per database role, and apply to both direct Postgres and pooler routes.
+- Network restrictions are deferred until the Vercel server route has stable outbound IP ranges or an equivalent private route. At that point Production allowlists both the Kestra host's fixed outbound IP ranges and Vercel's fixed egress ranges. Allowlisting only Kestra while Vercel still connects to PostgreSQL would break the application and is refused.
+- Until that later hardening, remote connections require SSL, separate least-privilege database roles, strong rotated credentials, unexposed internal schemas, row-level rules, and monitoring. This deferment belongs to [Phase 13](../build-plan/README.md#phase-13--operational-readiness-and-release), not Phase 1.
 - Supabase security and performance advisers and representative [Index Advisor](https://supabase.com/docs/guides/database/extensions/index_advisor) results are reviewed in Testing and again before release. Findings become tracked work; changes are reviewed migrations, never automatic Production edits.
-- Read replicas remain a measured scaling option rather than a release dependency. Adding one requires explicit read routing, consistency expectations, cost approval, monitoring, and failure tests.
+- Read replicas are not part of the first release and have no implementation task. A future measured scaling review may propose one only with explicit read routing, consistency expectations, cost approval, monitoring, and failure tests.
 
 ## Secret management
 
@@ -98,6 +103,8 @@ At minimum, runbooks cover deployment failure, database migration failure, organ
 - The measured restore point is no more than one hour before the declared incident, and the agreed minimum service is restored within eight hours.
 - A backup stored only on the [Kestra](https://kestra.io/docs) host is refused as incomplete protection.
 - Recovery succeeds from an independent copy even when the original Supabase project is unavailable.
+- PITR can restore to a selected point inside its seven-day window, and the hourly R2 path can restore while treating Supabase-managed recovery as unavailable.
+- R2 backup inventory never contains a successful Vortex logical backup whose requested expiry is more than 48 hours old without an alert and cleanup retry.
 - A log scan finds no credentials or sensitive values in successful and failing paths.
 - Support access expires automatically and appears in the organisation's activity.
 - Every production alert links to a tested runbook and an accountable owner.
