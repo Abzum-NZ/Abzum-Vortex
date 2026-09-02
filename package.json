@@ -1,0 +1,43 @@
+{
+  "name": "@vortex/workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": "24"
+  },
+  "workspaces": [
+    "web",
+    "contracts",
+    "db",
+    "runtime/*",
+    "ui",
+    "studio",
+    "modules",
+    "testing"
+  ],
+  "scripts": {
+    "dev": "turbo run dev --filter=@vortex/web",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "turbo run typecheck",
+    "boundaries": "node tooling/boundaries/check.mjs",
+    "test": "vitest run",
+    "fixtures": "node testing/fixtures/validate-fixtures.mjs",
+    "build": "turbo run build",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm fixtures && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "24.13.3",
+    "eslint": "9.39.5",
+    "next": "16.3.3",
+    "prettier": "3.9.6",
+    "turbo": "2.10.12",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.69.0",
+    "vitest": "4.1.11"
+  }
+}

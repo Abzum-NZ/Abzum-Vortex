@@ -1,0 +1,12 @@
+.next/
+coverage/
+dist/
+.turbo/
+.pnpm-store/
+node_modules/
+pnpm-lock.yaml
+docs/
+testing/fixtures/
+workflows/
+README.md
+vercel.json

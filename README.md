@@ -36,10 +36,12 @@ Three services, and nothing else (Specification, Chapter 24).
 
 **Kestra is not one of the sixteen engines, and nobody using Vortex ever sees it.** Specification
 section 15.3 draws the line. Vortex owns the designer where someone draws a workflow, owns the
-definitions, and owns every touch of a record. Kestra keeps a run alive across restarts, retries a
-failed step on its own, and holds timers. Kestra holds no credentials for organisation data and never
-reaches the database directly. It calls back into Vortex for every step, so the same permission checks
-apply as when a person clicks a button.
+definitions, and owns every touch of a business record. A business workflow step calls back into
+Vortex, so the same permission checks apply as when a person clicks a button; Kestra never receives a
+broad runtime credential that lets a workflow read organisation data directly. Separate operational
+flows use narrowly scoped database roles for migrations, access-rule tests, and encrypted backups.
+Those roles cannot be used by customer-authored workflows and do not replace Vortex's service and
+permission boundaries.
 
 The **Workflow engine** is a different thing. It is one of the sixteen engines in Specification
 section 25.1, and it is our code — the code that drives Kestra. Where this file says *Kestra* it means
@@ -85,8 +87,9 @@ runtime/workflow     runtime/app        runtime/page        runtime/theme
 runtime/search       runtime/file       runtime/connection  runtime/interface
 ```
 
-Name every package after its directory, prefixed with `@vortex/`. So `contracts/` becomes
-`@vortex/contracts`, and `runtime/record` becomes `@vortex/runtime-record`.
+Name every package after its public responsibility, prefixed with `@vortex/`. So `contracts/`
+becomes `@vortex/contracts`, and `runtime/record` becomes `@vortex/record`. The `runtime/` directory
+groups engine packages in the repository; it is not part of their public import names.
 
 `migrations/` and `workflows/` sit outside the workspace. Nothing imports either one. Kestra applies
 the migrations. The application never does.
@@ -212,7 +215,7 @@ service-role key appears, treat it as a bug.
 | Caller | Route | Port | Why |
 |---|---|---|---|
 | The web application | Session pooler | 5432 | Vercel sends traffic over IPv4. The direct host answers only on IPv6, and the transaction pooler needs the paid IPv4 add-on |
-| Kestra, applying migrations and running the access-rule tests | Direct connection | 5432 | Both need a real PostgreSQL session. Migrations take a session-level lock, and the access-rule tests create roles and change row-level security. Kestra runs on our own machine, which has IPv6 |
+| Kestra operational flows | Direct connection | 5432 | Migrations and access-rule tests need a real PostgreSQL session; encrypted logical backup needs a dedicated read-only backup role. Each job uses its own narrow role. Kestra runs on our own machine, which has IPv6. Business workflow steps do not use these connections. |
 
 Session mode behaves like a direct connection, so the client needs no special configuration.
 

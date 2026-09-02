@@ -1,0 +1,48 @@
+{
+  "name": "@vortex/web",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/foundation.ts"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1",
+    "@vortex/contracts": "workspace:*",
+    "@vortex/modules": "workspace:*",
+    "@vortex/ui": "workspace:*",
+    "@vortex/access": "workspace:*",
+    "@vortex/app": "workspace:*",
+    "@vortex/connection": "workspace:*",
+    "@vortex/definition": "workspace:*",
+    "@vortex/event": "workspace:*",
+    "@vortex/file": "workspace:*",
+    "@vortex/identity": "workspace:*",
+    "@vortex/interface": "workspace:*",
+    "@vortex/module": "workspace:*",
+    "@vortex/page": "workspace:*",
+    "@vortex/query": "workspace:*",
+    "@vortex/record": "workspace:*",
+    "@vortex/rule": "workspace:*",
+    "@vortex/search": "workspace:*",
+    "@vortex/theme": "workspace:*",
+    "@vortex/workflow": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5"
+  },
+  "vortex": {
+    "tier": 12,
+    "environment": "app",
+    "ships": true,
+    "compositionRoot": true
+  }
+}

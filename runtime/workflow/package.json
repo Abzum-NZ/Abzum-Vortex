@@ -1,0 +1,27 @@
+{
+  "name": "@vortex/workflow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vortex/contracts": "workspace:*",
+    "@vortex/event": "workspace:*",
+    "@vortex/record": "workspace:*",
+    "@vortex/rule": "workspace:*",
+    "server-only": "0.0.1"
+  },
+  "vortex": {
+    "tier": 7,
+    "environment": "server",
+    "ships": true,
+    "engine": true,
+    "service": "workflow"
+  }
+}
