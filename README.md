@@ -58,7 +58,7 @@ every package shares.
 
 ```text
 package.json          The workspace root. It declares the members below.
-web/                  The Next.js application. The only thing Vercel deploys.
+apps/web/             The Next.js application. The only thing Vercel deploys.
 contracts/            The shapes of modules, pages, records and events. Depends on nothing.
 db/                   Database clients, the server data layer, the access rules, generated types.
 runtime/              Sixteen packages, one per engine. See below.
@@ -73,7 +73,7 @@ workflows/            Not a package. Kestra flow definitions.
 The workspace members are:
 
 ```json
-"workspaces": ["web", "contracts", "db", "runtime/*", "ui", "studio", "modules", "testing"]
+"workspaces": ["apps/*", "contracts", "db", "runtime/*", "ui", "studio", "modules", "testing"]
 ```
 
 `runtime/*` is the line that matters. Section 24.3 states that the runtime is one package per engine
@@ -155,6 +155,7 @@ feature branch ──PR──▶ testing ──PR──▶ main
 - Every schema change ships as a migration file, and carries its permission tests in the same change.
 - `testing` is the integration branch. Vercel serves it at the staging address.
 - `main` is production. It accepts pull requests from `testing` only, and releases are tagged from it.
+- Administrator bypass remains available only for break-glass recovery. Every use records an incident, exact commit, operator, time, reason normal review was impossible, and an immediate follow-up review; it cannot make a failed required check acceptable.
 - Rolling back a build never reverses a migration that has already run.
 
 ## Secrets and connections

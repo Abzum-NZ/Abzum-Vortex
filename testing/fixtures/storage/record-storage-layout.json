@@ -20,6 +20,7 @@
       "application_root_id",
       "definition_revision",
       "owner_organisation_account_id",
+      "owner_team_id",
       "lifecycle_state",
       "concurrency_number",
       "created_at",

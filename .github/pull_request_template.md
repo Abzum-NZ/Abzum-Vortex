@@ -10,3 +10,4 @@ Closes #
 - [ ] No package reaches inside another package's files; nothing depends upward.
 - [ ] Where a screen changed: a screenshot of the built functionality is attached to the issue.
 - [ ] The issue this closes has its acceptance criteria ticked, and the project item is updated.
+- [ ] Specification, data contracts, build plan, traceability, dependent issues, and project dependencies were reviewed and either updated here or recorded as unchanged.

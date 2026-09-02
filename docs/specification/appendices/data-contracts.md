@@ -4,6 +4,12 @@
 
 These contracts name the information that must exist. They do not prescribe a database library or generated code structure. A value described as an identifier is an opaque platform-issued value; callers must not derive meaning from its characters.
 
+## Runtime and definition-source layers
+
+Canonical runtime contracts use camel-case properties and immutable platform-issued identifiers. They never identify a tenant, organisation, application, module, record type, field, role, person, or record by a display name or fixture alias.
+
+Authored module, application, connection, acceptance-scenario, and storage-layout JSON use a separate strict snake-case definition-source contract. Readable local aliases may exist only in that source layer. Publication resolves them to immutable identifiers, checks every dependency, and produces canonical runtime values; unresolved source values cannot cross a service boundary. The maintained implementation index is [`contracts/README.md`](../../../contracts/README.md).
+
 ```mermaid
 flowchart TD
     DEF[Published modules and applications] --> RUNTIME[Runtime services]
@@ -44,7 +50,7 @@ Every publishable [module or application](../03-composition-and-publication.md#d
 
 Each immutable published revision has `root_id`, `revision`, complete `content`, `content_fingerprint`, `published_at`, `published_by`, validation-contract version, dependency manifest, and release note.
 
-It also has a human-readable release version following the package's version policy. The increasing `revision` is the storage identity; the release version communicates compatibility. Two different revisions cannot reuse one release version in the same root.
+It also has a human-readable release version following the package's version policy. Vortex assigns the minimum valid next patch, minor, or major version from the structural comparison; the builder confirms or cancels publication and cannot enter a different number. The increasing `revision` is the storage identity; the release version communicates compatibility. Two different revisions cannot reuse one release version in the same root.
 
 Contained components have a permanent identifier unique inside the module or application, a builder key, and their typed content. They do not carry a separate live pointer. Platform connection types and themes are identified by platform release and catalogue version; organisation roles and connection instances are live administrative data rather than published definitions.
 
@@ -60,7 +66,7 @@ A tenant-administrator assignment has tenant, global identity, state, permission
 
 `organisation_id`, required `tenant_id`, optional `parent_organisation_id`, permanent `short_name`, `display_name`, `state`, `state_changed_at`, `created_at`, and `created_by`. The parent must belong to the same tenant and cannot produce a cycle. A protected path/depth representation may accelerate checks but is derived from this relationship and must be transactionally consistent.
 
-Organisation states are active, suspended, archived, and removal pending. Exact archive/grace durations are set through [privacy and billing decisions](decisions.md).
+Organisation states are active, suspended, archived, and removal pending. Data recovery and removal timing comes from the versioned [retention policy](../14-activity-privacy-and-retention.md#retention), while payment grace and cancellation retention come from the tenant's immutable [plan version](../15-plans-billing-and-usage.md#plans-and-entitlements).
 
 ### Global identity
 
@@ -108,7 +114,7 @@ A record type contains key, labels, title-field reference, permanent `storage_co
 
 Installing a definition package also records a lineage entry with source publisher, source root and component identifiers, source release version and content fingerprint, local root and component identifiers, local published revision, compatibility state, and mapping fingerprint. A federation-compatible application binding names that lineage entry and the source contract range it can display. Visual similarity or matching builder keys without proven lineage are insufficient.
 
-Storage scope is `organisation_shared` or `application_contained`. Ownership mode may be none, organisation account, or team. Within-organisation direct record sharing uses the contract below; cross-organisation access always uses the governed access-grant contract.
+Storage scope is `organisation_shared` or `application_contained`. Ownership mode is none, organisation account, team, or inherited. Inherited ownership names exactly one relationship and derives access from that parent; it is intended for dependent and joining records that cannot be owned independently. The definition-source word `individual` resolves to canonical organisation-account ownership. Within-organisation direct record sharing uses the contract below; cross-organisation access always uses the governed access-grant contract.
 
 ## Field contract
 
@@ -131,7 +137,7 @@ Every organisation-owned business record provides:
 | `record_id` | Required permanent record identity. |
 | `application_root_id` | Required only for application-contained storage and absent for organisation-shared storage. It is the receiving organisation's application root, not a display name or package key. |
 | `definition_revision` | Published module revision used for validation. |
-| `owner_organisation_account_id` | Present when ownership is enabled; it must belong to the record's organisation. |
+| `owner` | Absent for none or inherited ownership. Otherwise exactly one organisation-account or team owner from the record's organisation, matching the published record-type ownership mode. |
 | `lifecycle_state` | `active`, `soft_deleted`, or `removal_pending`. |
 | `concurrency_number` | Starts at one and increases on every accepted change. |
 | `created_at`, `created_by` | Required creation record. |
@@ -140,6 +146,8 @@ Every organisation-owned business record provides:
 | `removal_due_at` | Present when permanent removal is scheduled. |
 
 Every storage-catalog entry contains `storage_contract_id`, owning service, physical schema and table token, module and record-type lineage, active compatible revision range, state, creation migration, and content fingerprint. Every field mapping contains `storage_contract_id`, permanent `field_id`, physical column token, database value type, introduction migration, optional retirement migration, and state. Physical tokens are allocated once, contain no mutable business name, fit PostgreSQL identifier limits, and are collision-checked before migration.
+
+The runtime record exposes ownership as the union above. Physical record tables provide nullable protected organisation-account and team owner identifiers plus a constraint derived from the published ownership mode: neither for none or inherited ownership, exactly the matching one for organisation-account or team ownership. An inherited record resolves its owner and access through its declared parent relationship rather than copying the parent owner.
 
 Business fields are stored according to the published record-type contract. Organisation-shared uniqueness and indexes begin with `organisation_id`. Application-contained uniqueness and indexes begin with `organisation_id, application_root_id`. Relationship storage repeats the organisation identifier on both endpoints and enforces matching organisation scope; when both endpoints are application-contained it also enforces the same application root.
 
@@ -275,7 +283,7 @@ A federated file operation provides `grant_id`, source record reference, attachm
 
 ### Recipient grant mirror
 
-The recipient stores one non-content mirror with `grant_id`, source and recipient cluster/organisation/application identifiers, approved recipient region, recipient role identifiers, contract version and fingerprint, definition-mapping fingerprint, source route, state, source proposal fingerprint, recipient decision reference, signed activation receipt, local access-version contribution, last reconciliation time, and safe last outcome. It stores no source record fields, files, query results, search documents, or workflow payloads. The source grant remains authoritative when the mirror disagrees or is stale.
+The recipient stores one non-content mirror with `grant_id`, source and recipient cluster/organisation/application identifiers, approved recipient region, recipient role identifiers, contract version and fingerprint, definition-mapping fingerprint, source route, state, source proposal fingerprint, local access-version contribution, last reconciliation time, and safe last outcome. Evidence depends on state: pending carries the proposal and may carry a recipient decision but no activation receipt; active requires the recipient decision and signed activation receipt; suspended adds signed suspension evidence; revoked or expired carries signed state evidence and carries the activation pair only when activation had occurred. It stores no source record fields, files, query results, search documents, or workflow payloads. The source grant remains authoritative when the mirror disagrees or is stale.
 
 ## Action, rule and condition contracts
 

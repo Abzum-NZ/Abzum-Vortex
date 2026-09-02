@@ -75,7 +75,7 @@ const events = new Set();
 const fieldTypes = new Set();
 const fieldIdentities = new Set();
 const storageContracts = new Map();
-const fieldKeys = ["id", "key", "type", "label", "required", "unique", "filterable", "sortable", "search_priority", "personal_data", "public_display", "settings"];
+const requiredFieldKeys = ["id", "key", "type", "label", "required", "unique", "filterable", "sortable", "personal_data", "public_display", "settings"];
 
 for (const [moduleKey, module] of modules) {
   const path = sourceByKey.get(moduleKey);
@@ -92,6 +92,8 @@ for (const [moduleKey, module] of modules) {
     check(!storageContracts.has(recordType.storage_contract_id), `${full} storage contract identity is unique`);
     storageContracts.set(recordType.storage_contract_id, full);
     check(["organisation_shared", "application_contained"].includes(recordType.storage_scope), `${full} has a valid storage scope`);
+    check((recordType.ownership_mode === "inherited") === (typeof recordType.ownership_relationship === "string"), `${full} declares an ownership relationship exactly for inherited ownership`);
+    if (recordType.ownership_relationship) check((recordType.fields ?? []).some((field) => field.key === recordType.ownership_relationship && ["link", "link_to_one_of_several"].includes(field.type)), `${full} inherited ownership relationship resolves to a link field`);
     check((recordType.standard_actions ?? []).includes("read"), `${full} supports read`);
     for (const standardAction of recordType.standard_actions ?? []) {
       const key = `${moduleKey}.${recordType.key}.${standardAction}`;
@@ -100,7 +102,16 @@ for (const [moduleKey, module] of modules) {
     }
     for (const field of recordType.fields ?? []) {
       const fullField = `${full}.${field.key}`;
-      check(fieldKeys.every((key) => Object.hasOwn(field, key)), `${fullField} declares every field contract property`);
+      check(requiredFieldKeys.every((key) => Object.hasOwn(field, key)), `${fullField} declares every required field contract property`);
+      check(field.search_priority === undefined || ["first", "normal", "last"].includes(field.search_priority), `${fullField} has a valid optional search priority`);
+      check(["none", "personal", "sensitive"].includes(field.personal_data), `${fullField} has a canonical personal-data class`);
+      check(["refused", "allowed"].includes(field.public_display), `${fullField} has a canonical public-display choice`);
+      if (field.type === "attachment") {
+        check(Array.isArray(field.settings.allowed_kinds) && field.settings.allowed_kinds.length > 0, `${fullField} declares canonical allowed file kinds`);
+        check(Number.isFinite(field.settings.max_file_size_mb) && field.settings.max_file_size_mb > 0, `${fullField} declares canonical maximum file size`);
+        check(typeof field.settings.multiple === "boolean", `${fullField} declares canonical attachment multiplicity`);
+        check(field.settings.multiple ? Number.isInteger(field.settings.max_files) && field.settings.max_files > 1 : field.settings.max_files === undefined, `${fullField} declares max_files only for multiple attachments`);
+      }
       check(!fields.has(fullField), `${fullField} is unique`);
       check(typeof field.id === "string" && /^[a-z][a-z0-9_]*$/.test(field.id), `${fullField} has a stable SQL-safe field identity`);
       check(!fieldIdentities.has(field.id), `${fullField} field identity is globally unique in the fixture set`);
@@ -143,6 +154,8 @@ for (const type of manifest.required_field_types) check(fieldTypes.has(type), `f
 check([...fieldTypes].every((type) => manifest.required_field_types.includes(type)), "fixtures use only registered field types");
 
 const workflowTypes = new Set();
+const pageTypes = new Set();
+const listArrangements = new Set();
 for (const [applicationKey, application] of applications) {
   const path = sourceByKey.get(applicationKey);
   const bindingKeys = new Set();
@@ -197,10 +210,24 @@ for (const [applicationKey, application] of applications) {
   }
 
   for (const page of appPages.values()) {
+    pageTypes.add(page.type);
+    for (const arrangement of page.arrangements ?? []) listArrangements.add(arrangement);
     if (page.record_type) {
       const entry = recordTypes.get(page.record_type);
       check(Boolean(entry), `${path} page ${page.key} record type resolves`);
       if (entry) check(bindingKeys.has(entry.moduleKey), `${path} page ${page.key} module is bound`);
+      if (entry && page.type === "list") {
+        const usesCalendar = (page.arrangements ?? []).includes("calendar");
+        check(usesCalendar === Boolean(page.calendar_mapping), `${path} page ${page.key} has a calendar mapping exactly when calendar is enabled`);
+        if (page.calendar_mapping) {
+          const availableFields = new Map(entry.recordType.fields.map((field) => [field.key, field]));
+          check(availableFields.has(page.calendar_mapping.start), `${path} page ${page.key} calendar start field resolves`);
+          if (page.calendar_mapping.end) check(availableFields.has(page.calendar_mapping.end), `${path} page ${page.key} calendar end field resolves`);
+          if (page.calendar_mapping.duration_field) check(availableFields.get(page.calendar_mapping.duration_field)?.type === "whole_number", `${path} page ${page.key} calendar duration resolves to a whole-number field`);
+          check(Boolean(page.calendar_mapping.end) !== Boolean(page.calendar_mapping.duration_field), `${path} page ${page.key} calendar uses exactly an end field or duration field`);
+          check(Boolean(page.calendar_mapping.duration_field) === Boolean(page.calendar_mapping.duration_unit), `${path} page ${page.key} calendar duration unit appears exactly with a duration field`);
+        }
+      }
     }
     if (page.query) check(appQueries.has(page.query), `${path} page ${page.key} query resolves`);
     if (page.permission) check(permissions.has(page.permission), `${path} page ${page.key} permission resolves`);
@@ -259,6 +286,8 @@ for (const [applicationKey, application] of applications) {
 }
 
 for (const type of manifest.required_workflow_nodes) check(workflowTypes.has(type), `workflow node type ${type} is covered`);
+for (const type of ["list", "detail", "dashboard", "form", "guided_form", "public"]) check(pageTypes.has(type), `page type ${type} is covered`);
+for (const arrangement of ["table", "board", "calendar", "summary"]) check(listArrangements.has(arrangement), `list arrangement ${arrangement} is covered`);
 
 for (const item of manifest.required_cross_application_cases) {
   const full = `${item.module}:${item.record_type}`;
@@ -292,6 +321,13 @@ if (scenario) {
   }), "scenario actions are published as shareable");
   check(grant.export_allowed === false, "fixture case export is refused");
   check(grant.expected_physical_records === 1, "fixture case remains one source record");
+  check(JSON.stringify(grant.readable_fields) === JSON.stringify(["case_number", "subject", "status", "priority", "customer_company", "resolved_at"]), "CRM receives exactly the approved limited Case Summary fields");
+  check(JSON.stringify(grant.changeable_fields) === JSON.stringify(["status", "priority"]), "CRM collaboration is limited to approved case fields");
+  check(JSON.stringify(grant.allowed_actions) === JSON.stringify(["vortex.service_desk.cases.case.add_public_comment"]), "CRM collaboration is limited to the approved public-comment action");
+  const assertionOutcomes = new Set((scenario.body.assertions ?? []).map((assertion) => assertion.expect));
+  check(assertionOutcomes.has("same_record_id_and_current_values"), "scenario proves Company and Contact remain the same source records");
+  check(assertionOutcomes.has("source_case_saved_once_and_visible_in_both_applications"), "scenario proves collaborative changes update the one source case");
+  check(assertionOutcomes.has("next_access_check_removes_rendered_values_and_cache_cannot_restore_them"), "scenario proves immediate grant revocation without a recipient copy");
 }
 
 const storageLayout = storageLayouts.get("vortex.storage.complete_examples");
@@ -307,7 +343,7 @@ if (storageLayout) {
 
   const requiredSystemColumns = [
     "organisation_id", "module_root_id", "record_type_id", "storage_contract_id", "record_id",
-    "application_root_id", "definition_revision", "owner_organisation_account_id", "lifecycle_state",
+    "application_root_id", "definition_revision", "owner_organisation_account_id", "owner_team_id", "lifecycle_state",
     "concurrency_number", "created_at", "created_by", "updated_at", "updated_by", "deleted_at",
     "deleted_by", "removal_due_at"
   ];

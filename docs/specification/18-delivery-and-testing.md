@@ -34,12 +34,16 @@ The following outcomes are required:
 
 ## Branch flow
 
-Feature branches merge into `testing`. The verified `testing` revision is promoted to `main`. Direct unreviewed production changes are refused.
+Feature branches merge into `testing`. The verified `testing` revision is promoted to `main`. Direct unreviewed changes to either protected branch are refused. An administrator bypass is retained only as a break-glass recovery control: its use requires an incident reference, the reason ordinary review could not be used, the exact commit, the operator, the time, and an immediate follow-up review. It is never the normal delivery path and cannot make a failed required check acceptable.
 
 - Every feature branch gets a [Vercel preview](https://vercel.com/docs/deployments/preview-deployments).
 - Preview data is test data only and cannot use production credentials.
 - The repository states which checks run on pull requests and which run only after merge to Testing.
 - A pull request records the specification sections, decisions, migrations, tests, screenshots, privacy effect, and rollback or forward-fix plan it affects.
+
+## Repository layout convention
+
+Deployable applications follow the official Turborepo convention and live under `apps/`; the single Next.js composition root is `apps/web`. Shared packages remain separate workspace members and cannot become additional deployment roots. A different layout requires an explicit architecture reason and updated boundary, build, deployment, and documentation checks in the same change.
 
 ## Database changes
 

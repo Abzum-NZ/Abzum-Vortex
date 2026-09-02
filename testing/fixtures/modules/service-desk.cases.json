@@ -1,40 +1,616 @@
 {
-  "schema_version":"2.0.0","kind":"module","root_id":"mod_service_desk_cases","key":"vortex.service_desk.cases","version":"1.0.0","revision":1,"state":"published","content_fingerprint":"fixture:vortex.service_desk.cases:1.0.0",
-  "body":{"name":"Service Desk Cases","description":"Customer cases, conversations and controlled case summaries.","category":"Service Desk","dependencies":[{"module":"vortex.crm.organisations","version":"1.0.0"},{"module":"vortex.crm.people","version":"1.0.0"},{"module":"vortex.service_desk.sla","version":"1.0.0"}],
-    "record_types":[
-      {"id":"rt_sd_case","storage_contract_id":"srt_00000011","key":"case","name":"Case","plural_name":"Cases","description":"A customer question, request or fault.","storage_scope":"application_contained","ownership_mode":"team","title_field":"subject","standard_actions":["create","read","update","soft_delete","restore","export"],"fields":[
-        {"id":"fld_case_number","key":"case_number","type":"reference_number","label":"Case number","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"none","public_display":true,"settings":{"prefix":"CAS-","digits":7}},
-        {"id":"fld_case_subject","key":"subject","type":"text","label":"Subject","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"none","public_display":true,"settings":{"max_length":255}},
-        {"id":"fld_case_description","key":"description","type":"formatted_text","label":"Description","required":true,"unique":false,"filterable":false,"sortable":false,"search_priority":"normal","personal_data":"personal","public_display":false,"settings":{"allowed_blocks":["paragraph","heading","list","link","attachment"]}},
-        {"id":"fld_case_company","key":"customer_company","type":"link","label":"Customer company","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"target":"vortex.crm.organisations:company","reverse_key":"service_cases","on_parent_delete":"refuse"}},
-        {"id":"fld_case_requester","key":"requester","type":"link","label":"Requester","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"normal","personal_data":"personal","public_display":true,"settings":{"target":"vortex.crm.people:contact","reverse_key":"requested_cases","on_parent_delete":"refuse"}},
-        {"id":"fld_case_owner","key":"owner","type":"link_to_person","label":"Owner","required":false,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"audience":"application_accounts","on_person_deactivation":"clear_reference"}},
-        {"id":"fld_case_status","key":"status","type":"choice","label":"Status","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"default":"new","options":[{"value":"new","label":"New"},{"value":"triage","label":"Triage"},{"value":"waiting_customer","label":"Waiting for customer"},{"value":"in_progress","label":"In progress"},{"value":"resolved","label":"Resolved"},{"value":"closed","label":"Closed"}]}},
-        {"id":"fld_case_priority","key":"priority","type":"choice","label":"Priority","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"default":"normal","options":[{"value":"low","label":"Low"},{"value":"normal","label":"Normal"},{"value":"high","label":"High"},{"value":"critical","label":"Critical"}]}},
-        {"id":"fld_case_sla","key":"service_level","type":"link","label":"Service level","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"target":"vortex.service_desk.sla:service_level","reverse_key":"cases","on_parent_delete":"refuse"}},
-        {"id":"fld_case_opened","key":"opened_at","type":"date_time","label":"Opened at","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":true,"settings":{"default":"now"}},
-        {"id":"fld_case_response_due","key":"first_response_due_at","type":"date_time","label":"First response due","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{}},
-        {"id":"fld_case_resolution_due","key":"resolution_due_at","type":"date_time","label":"Resolution due","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{}},
-        {"id":"fld_case_resolved","key":"resolved_at","type":"date_time","label":"Resolved at","required":false,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":true,"settings":{}},
-        {"id":"fld_case_breached","key":"breached","type":"calculation","label":"Service level breached","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"result_type":"yes_no","expression":{"operation":"after_due_date","status_field":"status","due_field":"resolution_due_at"}}},
-        {"id":"fld_case_files","key":"attachments","type":"attachment","label":"Attachments","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"none","personal_data":"personal_sensitive","public_display":false,"settings":{"maximum_files":30,"maximum_bytes_each":26214400}}
-      ]},
-      {"id":"rt_sd_comment","storage_contract_id":"srt_00000012","key":"case_comment","name":"Case comment","plural_name":"Case comments","description":"A public reply or an internal note on a case.","storage_scope":"application_contained","ownership_mode":"inherited","title_field":"created_at","standard_actions":["create","read","update","soft_delete","restore","export"],"fields":[
-        {"id":"fld_comment_case","key":"case","type":"link","label":"Case","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"target":"vortex.service_desk.cases:case","reverse_key":"comments","on_parent_delete":"soft_delete_dependent"}},
-        {"id":"fld_comment_body","key":"body","type":"formatted_text","label":"Comment","required":true,"unique":false,"filterable":false,"sortable":false,"search_priority":"first","personal_data":"personal","public_display":false,"settings":{"allowed_blocks":["paragraph","list","link","attachment"]}},
-        {"id":"fld_comment_public","key":"customer_visible","type":"yes_no","label":"Customer visible","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"default":false}},
-        {"id":"fld_comment_by","key":"created_by","type":"link_to_person","label":"Created by","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"personal","public_display":false,"settings":{"audience":"organisation_identities_and_external_requesters","on_person_deactivation":"retain_reference"}},
-        {"id":"fld_comment_at","key":"created_at","type":"date_time","label":"Created at","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"default":"now"}}
-      ]}
+  "schema_version": "2.0.0",
+  "kind": "module",
+  "root_id": "mod_service_desk_cases",
+  "key": "vortex.service_desk.cases",
+  "version": "1.0.0",
+  "revision": 1,
+  "state": "published",
+  "content_fingerprint": "fixture:vortex.service_desk.cases:1.0.0",
+  "body": {
+    "name": "Service Desk Cases",
+    "description": "Customer cases, conversations and controlled case summaries.",
+    "category": "Service Desk",
+    "dependencies": [
+      {
+        "module": "vortex.crm.organisations",
+        "version": "1.0.0"
+      },
+      {
+        "module": "vortex.crm.people",
+        "version": "1.0.0"
+      },
+      {
+        "module": "vortex.service_desk.sla",
+        "version": "1.0.0"
+      }
     ],
-    "permissions":[{"key":"vortex.service_desk.cases.case.assign","record_type":"case","label":"Assign a case"},{"key":"vortex.service_desk.cases.case.resolve","record_type":"case","label":"Resolve a case"},{"key":"vortex.service_desk.cases.case.add_public_comment","record_type":"case","label":"Add a public comment to a case"}],
-    "actions":[
-      {"id":"act_case_assign","key":"vortex.service_desk.cases.case.assign","record_type":"case","permission":"vortex.service_desk.cases.case.assign","inputs":[{"key":"owner","type":"link_to_person","required":true}],"effects":["set_owner","emit_event"],"shareable":false},
-      {"id":"act_case_resolve","key":"vortex.service_desk.cases.case.resolve","record_type":"case","permission":"vortex.service_desk.cases.case.resolve","inputs":[{"key":"resolution","type":"formatted_text","required":true}],"effects":["set_resolved","create_comment","emit_event"],"shareable":false},
-      {"id":"act_case_public_comment","key":"vortex.service_desk.cases.case.add_public_comment","record_type":"case","permission":"vortex.service_desk.cases.case.add_public_comment","inputs":[{"key":"body","type":"formatted_text","required":true}],"effects":["create_customer_visible_comment","emit_event"],"shareable":true}
+    "record_types": [
+      {
+        "id": "rt_sd_case",
+        "storage_contract_id": "srt_00000011",
+        "key": "case",
+        "name": "Case",
+        "plural_name": "Cases",
+        "description": "A customer question, request or fault.",
+        "storage_scope": "application_contained",
+        "ownership_mode": "team",
+        "title_field": "subject",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_case_number",
+            "key": "case_number",
+            "type": "reference_number",
+            "label": "Case number",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "prefix": "CAS-",
+              "digits": 7
+            }
+          },
+          {
+            "id": "fld_case_subject",
+            "key": "subject",
+            "type": "text",
+            "label": "Subject",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "max_length": 255
+            }
+          },
+          {
+            "id": "fld_case_description",
+            "key": "description",
+            "type": "formatted_text",
+            "label": "Description",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "heading",
+                "list",
+                "link",
+                "attachment"
+              ]
+            }
+          },
+          {
+            "id": "fld_case_company",
+            "key": "customer_company",
+            "type": "link",
+            "label": "Customer company",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "target": "vortex.crm.organisations:company",
+              "reverse_key": "service_cases",
+              "on_parent_delete": "refuse"
+            }
+          },
+          {
+            "id": "fld_case_requester",
+            "key": "requester",
+            "type": "link",
+            "label": "Requester",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "personal",
+            "public_display": "allowed",
+            "settings": {
+              "target": "vortex.crm.people:contact",
+              "reverse_key": "requested_cases",
+              "on_parent_delete": "refuse"
+            }
+          },
+          {
+            "id": "fld_case_owner",
+            "key": "owner",
+            "type": "link_to_person",
+            "label": "Owner",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "audience": "application_accounts",
+              "on_person_deactivation": "clear_reference"
+            }
+          },
+          {
+            "id": "fld_case_status",
+            "key": "status",
+            "type": "choice",
+            "label": "Status",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "default": "new",
+              "options": [
+                {
+                  "value": "new",
+                  "label": "New"
+                },
+                {
+                  "value": "triage",
+                  "label": "Triage"
+                },
+                {
+                  "value": "waiting_customer",
+                  "label": "Waiting for customer"
+                },
+                {
+                  "value": "in_progress",
+                  "label": "In progress"
+                },
+                {
+                  "value": "resolved",
+                  "label": "Resolved"
+                },
+                {
+                  "value": "closed",
+                  "label": "Closed"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_case_priority",
+            "key": "priority",
+            "type": "choice",
+            "label": "Priority",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "default": "normal",
+              "options": [
+                {
+                  "value": "low",
+                  "label": "Low"
+                },
+                {
+                  "value": "normal",
+                  "label": "Normal"
+                },
+                {
+                  "value": "high",
+                  "label": "High"
+                },
+                {
+                  "value": "critical",
+                  "label": "Critical"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_case_sla",
+            "key": "service_level",
+            "type": "link",
+            "label": "Service level",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "target": "vortex.service_desk.sla:service_level",
+              "reverse_key": "cases",
+              "on_parent_delete": "refuse"
+            }
+          },
+          {
+            "id": "fld_case_opened",
+            "key": "opened_at",
+            "type": "date_time",
+            "label": "Opened at",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "default": "now"
+            }
+          },
+          {
+            "id": "fld_case_response_due",
+            "key": "first_response_due_at",
+            "type": "date_time",
+            "label": "First response due",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {}
+          },
+          {
+            "id": "fld_case_resolution_due",
+            "key": "resolution_due_at",
+            "type": "date_time",
+            "label": "Resolution due",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {}
+          },
+          {
+            "id": "fld_case_resolved",
+            "key": "resolved_at",
+            "type": "date_time",
+            "label": "Resolved at",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {}
+          },
+          {
+            "id": "fld_case_breached",
+            "key": "breached",
+            "type": "calculation",
+            "label": "Service level breached",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "result_type": "yes_no",
+              "expression": {
+                "operation": "after_due_date",
+                "status_field": "status",
+                "due_field": "resolution_due_at"
+              }
+            }
+          },
+          {
+            "id": "fld_case_files",
+            "key": "attachments",
+            "type": "attachment",
+            "label": "Attachments",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "sensitive",
+            "public_display": "refused",
+            "settings": {
+              "allowed_kinds": [
+                "image",
+                "document",
+                "spreadsheet",
+                "presentation",
+                "audio",
+                "video",
+                "archive",
+                "text",
+                "other"
+              ],
+              "max_file_size_mb": 25,
+              "multiple": true,
+              "max_files": 30
+            }
+          }
+        ]
+      },
+      {
+        "id": "rt_sd_comment",
+        "storage_contract_id": "srt_00000012",
+        "key": "case_comment",
+        "name": "Case comment",
+        "plural_name": "Case comments",
+        "description": "A public reply or an internal note on a case.",
+        "storage_scope": "application_contained",
+        "ownership_mode": "inherited",
+        "ownership_relationship": "case",
+        "title_field": "created_at",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_comment_case",
+            "key": "case",
+            "type": "link",
+            "label": "Case",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "target": "vortex.service_desk.cases:case",
+              "reverse_key": "comments",
+              "on_parent_delete": "soft_delete_dependent"
+            }
+          },
+          {
+            "id": "fld_comment_body",
+            "key": "body",
+            "type": "formatted_text",
+            "label": "Comment",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "settings": {
+              "allowed_blocks": [
+                "paragraph",
+                "list",
+                "link",
+                "attachment"
+              ]
+            }
+          },
+          {
+            "id": "fld_comment_public",
+            "key": "customer_visible",
+            "type": "yes_no",
+            "label": "Customer visible",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "default": false
+            }
+          },
+          {
+            "id": "fld_comment_by",
+            "key": "created_by",
+            "type": "link_to_person",
+            "label": "Created by",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "settings": {
+              "audience": "organisation_identities_and_external_requesters",
+              "on_person_deactivation": "retain_reference"
+            }
+          },
+          {
+            "id": "fld_comment_at",
+            "key": "created_at",
+            "type": "date_time",
+            "label": "Created at",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "default": "now"
+            }
+          }
+        ]
+      }
     ],
-    "events":[{"id":"evt_case_created","key":"vortex.service_desk.cases.case.created","record_type":"case","carries":["case_number","subject","customer_company","requester","priority"]},{"id":"evt_case_assigned","key":"vortex.service_desk.cases.case.assigned","record_type":"case","carries":["case_number","owner"]},{"id":"evt_case_resolved","key":"vortex.service_desk.cases.case.resolved","record_type":"case","carries":["case_number","resolved_at"]},{"id":"evt_case_public_comment","key":"vortex.service_desk.cases.case.public_comment_added","record_type":"case","carries":["case_number"]}],
-    "rules":[{"id":"rule_case_resolution","key":"resolution_required","record_type":"case","moment":"saving","condition":{"all":[{"field":"status","operator":"equals","value":"resolved"},{"field":"resolved_at","operator":"is_empty"}]},"effect":"refuse","message":"Set a resolution time before resolving the case."}],
-    "extension_points":[{"id":"ext_case_fields","key":"case_fields","record_type":"case","accepts":["field"]},{"id":"ext_case_actions","key":"case_actions","record_type":"case","accepts":["action"]}]
+    "permissions": [
+      {
+        "key": "vortex.service_desk.cases.case.assign",
+        "record_type": "case",
+        "label": "Assign a case"
+      },
+      {
+        "key": "vortex.service_desk.cases.case.resolve",
+        "record_type": "case",
+        "label": "Resolve a case"
+      },
+      {
+        "key": "vortex.service_desk.cases.case.add_public_comment",
+        "record_type": "case",
+        "label": "Add a public comment to a case"
+      }
+    ],
+    "actions": [
+      {
+        "id": "act_case_assign",
+        "key": "vortex.service_desk.cases.case.assign",
+        "record_type": "case",
+        "permission": "vortex.service_desk.cases.case.assign",
+        "inputs": [
+          {
+            "key": "owner",
+            "type": "link_to_person",
+            "required": true
+          }
+        ],
+        "effects": [
+          "set_owner",
+          "emit_event"
+        ],
+        "shareable": false
+      },
+      {
+        "id": "act_case_resolve",
+        "key": "vortex.service_desk.cases.case.resolve",
+        "record_type": "case",
+        "permission": "vortex.service_desk.cases.case.resolve",
+        "inputs": [
+          {
+            "key": "resolution",
+            "type": "formatted_text",
+            "required": true
+          }
+        ],
+        "effects": [
+          "set_resolved",
+          "create_comment",
+          "emit_event"
+        ],
+        "shareable": false
+      },
+      {
+        "id": "act_case_public_comment",
+        "key": "vortex.service_desk.cases.case.add_public_comment",
+        "record_type": "case",
+        "permission": "vortex.service_desk.cases.case.add_public_comment",
+        "inputs": [
+          {
+            "key": "body",
+            "type": "formatted_text",
+            "required": true
+          }
+        ],
+        "effects": [
+          "create_customer_visible_comment",
+          "emit_event"
+        ],
+        "shareable": true
+      }
+    ],
+    "events": [
+      {
+        "id": "evt_case_created",
+        "key": "vortex.service_desk.cases.case.created",
+        "record_type": "case",
+        "carries": [
+          "case_number",
+          "subject",
+          "customer_company",
+          "requester",
+          "priority"
+        ]
+      },
+      {
+        "id": "evt_case_assigned",
+        "key": "vortex.service_desk.cases.case.assigned",
+        "record_type": "case",
+        "carries": [
+          "case_number",
+          "owner"
+        ]
+      },
+      {
+        "id": "evt_case_resolved",
+        "key": "vortex.service_desk.cases.case.resolved",
+        "record_type": "case",
+        "carries": [
+          "case_number",
+          "resolved_at"
+        ]
+      },
+      {
+        "id": "evt_case_public_comment",
+        "key": "vortex.service_desk.cases.case.public_comment_added",
+        "record_type": "case",
+        "carries": [
+          "case_number"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "id": "rule_case_resolution",
+        "key": "resolution_required",
+        "record_type": "case",
+        "moment": "saving",
+        "condition": {
+          "all": [
+            {
+              "field": "status",
+              "operator": "equals",
+              "value": "resolved"
+            },
+            {
+              "field": "resolved_at",
+              "operator": "is_empty"
+            }
+          ]
+        },
+        "effect": "refuse",
+        "message": "Set a resolution time before resolving the case."
+      }
+    ],
+    "extension_points": [
+      {
+        "id": "ext_case_fields",
+        "key": "case_fields",
+        "record_type": "case",
+        "accepts": [
+          "field"
+        ]
+      },
+      {
+        "id": "ext_case_actions",
+        "key": "case_actions",
+        "record_type": "case",
+        "accepts": [
+          "action"
+        ]
+      }
+    ]
   }
 }

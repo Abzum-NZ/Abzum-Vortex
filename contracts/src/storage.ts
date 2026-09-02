@@ -63,3 +63,4 @@ export const fieldStorageMappingSchema = z
 
 export type StorageCatalogEntry = z.infer<typeof storageCatalogEntrySchema>;
 export type FieldStorageMapping = z.infer<typeof fieldStorageMappingSchema>;
+export type CompatibleRevisionRange = z.infer<typeof compatibleRevisionRangeSchema>;

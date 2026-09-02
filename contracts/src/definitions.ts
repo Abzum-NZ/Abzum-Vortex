@@ -122,9 +122,50 @@ export const recordTypeReferenceSchema = z.discriminatedUnion("state", [
   resolvedRecordTypeReferenceSchema,
 ]);
 
+export const requireResolvedRecordTypeReferences = (
+  value: unknown,
+  context: z.RefinementCtx,
+  path: PropertyKey[] = [],
+): void => {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) =>
+      requireResolvedRecordTypeReferences(entry, context, [...path, index]),
+    );
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
+  const record = value as Record<PropertyKey, unknown>;
+  if (record.state === "unresolved" && typeof record.qualifiedKey === "string") {
+    context.addIssue({
+      code: "custom",
+      path,
+      message: "Published content cannot contain an unresolved record-type reference",
+    });
+    return;
+  }
+  for (const key of Reflect.ownKeys(record))
+    requireResolvedRecordTypeReferences(record[key], context, [...path, key]);
+};
+
 export type DefinitionKind = z.infer<typeof definitionKindSchema>;
+export type ModuleDefinitionEnvelope = z.infer<typeof moduleDefinitionEnvelopeSchema>;
+export type ApplicationDefinitionEnvelope = z.infer<typeof applicationDefinitionEnvelopeSchema>;
 export type DefinitionEnvelope = z.infer<typeof definitionEnvelopeSchema>;
+export type PublishedModuleReference = z.infer<typeof publishedModuleReferenceSchema>;
+export type PublishedApplicationReference = z.infer<typeof publishedApplicationReferenceSchema>;
 export type PublishedDefinitionReference = z.infer<typeof publishedDefinitionReferenceSchema>;
 export type ContainedComponentReference = z.infer<typeof containedComponentReferenceSchema>;
 export type VersionRequirement = z.infer<typeof versionRequirementSchema>;
+export type QualifiedRecordTypeKey = z.infer<typeof qualifiedRecordTypeKeySchema>;
+export type UnresolvedRecordTypeReference = z.infer<typeof unresolvedRecordTypeReferenceSchema>;
+export type ResolvedRecordTypeReference = z.infer<typeof resolvedRecordTypeReferenceSchema>;
 export type RecordTypeReference = z.infer<typeof recordTypeReferenceSchema>;
+export type ResolveRecordTypeReferences<T> = T extends UnresolvedRecordTypeReference
+  ? never
+  : T extends string | number | boolean | bigint | symbol | null | undefined
+    ? T
+    : T extends readonly (infer Item)[]
+      ? ResolveRecordTypeReferences<Item>[]
+      : T extends object
+        ? { [Key in keyof T]: ResolveRecordTypeReferences<T[Key]> }
+        : T;
