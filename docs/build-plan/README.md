@@ -10,7 +10,7 @@
 
 This plan replaces the sequencing of the earlier [Build Plan](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef). It keeps the useful ownership boundaries while correcting missing dependencies, an impossible background-worker assumption, incomplete fixtures, and an oversized final phase.
 
-The [decision register](../specification/appendices/decisions.md) is currently clear. A new unresolved business choice must be recorded before implementation assumes an answer.
+The [decision register](../specification/appendices/decisions.md) contains D37, which blocks only release-number ownership in [issue #14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14). A new unresolved business choice must be recorded before implementation assumes an answer.
 
 ## Planning rules
 
@@ -88,6 +88,7 @@ Build:
 - Independently versioned module and application contracts plus their contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
 - All [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, privacy, billing and cache versions.
 - Contract validator with stable error codes and exact component paths.
+- Module/application version-impact comparison; release-number ownership remains blocked by [D37](../specification/appendices/decisions.md#d37--who-sets-a-module-or-application-release-number).
 - Storage-catalog and scope contracts that distinguish definition identity, storage lineage, organisation ownership, and application-contained ownership without creating per-installation tables.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
 - Types, lint, unit tests, contract tests and build checks that run without a database.
@@ -401,7 +402,7 @@ Exit proof:
 
 The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follows these implemented rules:
 
-1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151) is complete. [Phase 1 #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), and identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11) are Ready. Billing and database-migration operations do not block the database-free contracts phase.
+1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), and complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16) are complete. [Complete domain contracts #12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12) is the next Ready item. Validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14), and validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) follow #12; final Vercel gate evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17) follows those three.
 2. Native GitHub blocked-by relationships govern sequencing; body text explains but does not replace them.
 3. Every phase epic has an outcome and completion evidence.
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/privacy/retention, plans/billing, and operations issues belong to those epics rather than Phase 10.
