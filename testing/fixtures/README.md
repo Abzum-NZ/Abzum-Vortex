@@ -4,6 +4,8 @@
 
 This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. It is a contract gate: the full set and its exhaustive validator must pass before Phase 1 engine code begins.
 
+These files are definition-source documents, not runtime API messages. Their readable snake-case aliases are local to this fixture set. The strict schemas in [`@vortex/contracts`](../../contracts/README.md) validate the complete closed shape; [publication validation #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) resolves each alias and builder reference to an immutable platform identifier before any runtime service may accept it.
+
 ## Contents
 
 | Path | Purpose |

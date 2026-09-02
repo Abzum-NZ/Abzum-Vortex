@@ -1,5 +1,5 @@
 {
-  "extends": "../tooling/typescript/browser.json",
+  "extends": "../../tooling/typescript/browser.json",
   "compilerOptions": {
     "plugins": [{ "name": "next" }],
     "allowJs": false,

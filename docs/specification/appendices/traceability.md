@@ -99,6 +99,7 @@ flowchart LR
 | Multi-currency result shape | [Calculations and totals](../05-modules-fields-and-relationships.md#calculations-and-totals) |
 | Soft-delete, uniqueness and restore | [Uniqueness](../06-records-and-lifecycle.md#uniqueness) |
 | Missing concurrency contract | [Record storage contract](data-contracts.md#record-storage-contract) |
+| Domain schemas could accept aliases, incomplete publications, ambiguous owners, or mismatched federation payloads | The [runtime and definition-source split](data-contracts.md#runtime-and-definition-source-layers), [published-definition envelope](data-contracts.md#published-definition-envelope), [record ownership contract](data-contracts.md#record-storage-contract), [calendar mapping](data-contracts.md#field-contract), and [federated request contract](data-contracts.md#federated-request-envelope) are strict, discriminated, and covered by the maintained [`@vortex/contracts` index](../../../contracts/README.md). |
 | Per-organisation or name-derived record tables would collide and multiply migrations | [Storage identity and application use](../05-modules-fields-and-relationships.md#storage-identity-and-application-use), [record-table allocation](../17-runtime-storage-and-caching.md#record-table-allocation), and the [storage fixture](../../../testing/fixtures/storage/record-storage-layout.json) |
 | Incomplete fixtures | [Worked examples](worked-examples.md#required-fixture-set) |
 | Model step absent from closed list | [AI excluded from product boundaries](../01-purpose-and-scope.md#product-boundaries) |
