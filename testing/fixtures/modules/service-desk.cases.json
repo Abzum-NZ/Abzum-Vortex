@@ -478,6 +478,7 @@
       {
         "id": "act_case_assign",
         "key": "vortex.service_desk.cases.case.assign",
+        "label": "Assign case",
         "record_type": "case",
         "permission": "vortex.service_desk.cases.case.assign",
         "inputs": [
@@ -488,14 +489,15 @@
           }
         ],
         "effects": [
-          "set_owner",
-          "emit_event"
+          {"kind":"set_field","field":"owner","value":{"source":"input","input":"owner"}},
+          {"kind":"announce_event","event":"vortex.service_desk.cases.case.assigned"}
         ],
         "shareable": false
       },
       {
         "id": "act_case_resolve",
         "key": "vortex.service_desk.cases.case.resolve",
+        "label": "Resolve case",
         "record_type": "case",
         "permission": "vortex.service_desk.cases.case.resolve",
         "inputs": [
@@ -506,15 +508,17 @@
           }
         ],
         "effects": [
-          "set_resolved",
-          "create_comment",
-          "emit_event"
+          {"kind":"set_field","field":"status","value":{"source":"literal","value":"resolved"}},
+          {"kind":"set_field","field":"resolved_at","value":{"source":"current_time"}},
+          {"kind":"create_record","record_type":"vortex.service_desk.cases:case_comment","values":{"case":{"source":"subject_record"},"body":{"source":"input","input":"resolution"},"customer_visible":{"source":"literal","value":false},"created_by":{"source":"current_actor"},"created_at":{"source":"current_time"}}},
+          {"kind":"announce_event","event":"vortex.service_desk.cases.case.resolved"}
         ],
         "shareable": false
       },
       {
         "id": "act_case_public_comment",
         "key": "vortex.service_desk.cases.case.add_public_comment",
+        "label": "Add public comment",
         "record_type": "case",
         "permission": "vortex.service_desk.cases.case.add_public_comment",
         "inputs": [
@@ -525,8 +529,8 @@
           }
         ],
         "effects": [
-          "create_customer_visible_comment",
-          "emit_event"
+          {"kind":"create_record","record_type":"vortex.service_desk.cases:case_comment","values":{"case":{"source":"subject_record"},"body":{"source":"input","input":"body"},"customer_visible":{"source":"literal","value":true},"created_by":{"source":"current_actor"},"created_at":{"source":"current_time"}}},
+          {"kind":"announce_event","event":"vortex.service_desk.cases.case.public_comment_added"}
         ],
         "shareable": true
       }
@@ -569,6 +573,24 @@
         "carries": [
           "case_number"
         ]
+      },
+      {
+        "id": "evt_case_first_response_overdue",
+        "key": "vortex.service_desk.cases.case.first_response_overdue",
+        "record_type": "case",
+        "carries": [
+          "case_number",
+          "first_response_due_at"
+        ]
+      },
+      {
+        "id": "evt_case_resolution_overdue",
+        "key": "vortex.service_desk.cases.case.resolution_overdue",
+        "record_type": "case",
+        "carries": [
+          "case_number",
+          "resolution_due_at"
+        ]
       }
     ],
     "rules": [
@@ -576,7 +598,8 @@
         "id": "rule_case_resolution",
         "key": "resolution_required",
         "record_type": "case",
-        "moment": "saving",
+        "trigger": "change",
+        "priority": 100,
         "condition": {
           "all": [
             {
@@ -590,8 +613,7 @@
             }
           ]
         },
-        "effect": "refuse",
-        "message": "Set a resolution time before resolving the case."
+        "effect": {"kind":"refuse","reason_code":"resolution_time_required"}
       }
     ],
     "extension_points": [

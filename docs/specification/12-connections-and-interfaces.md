@@ -24,8 +24,9 @@ A platform-catalogue **connection type** defines:
 
 - Human-readable purpose and provider.
 - Authentication method and secret fields.
-- Named outgoing operations with address templates, method, input shape, output shape, timeout, retry policy, and allowed response size.
-- Named incoming message types with signature verification, replay window, input shape, and workflow trigger mapping.
+- A reusable catalogue of named input and output shapes. Each shape contains uniquely named, typed fields and may be empty for a no-content operation.
+- Named outgoing operations with address templates, method, resolved input/output shape keys, timeout, retry policy, and allowed response size.
+- Named incoming message types with signature verification, replay window, resolved input shape, and workflow trigger mapping.
 - Allowed destination hosts and redirect policy.
 - Health-check and revocation behaviour.
 
@@ -38,6 +39,7 @@ Password-like keys and [OAuth 2.0](https://oauth.net/2/) grants are created thro
 ## Outgoing call safety
 
 - A workflow can call only a named operation from a granted connection instance.
+- The workflow supplies an explicit input map; every required shape field is present and no undeclared field is accepted.
 - The destination host comes from the platform-catalogue allowlist, not from record output.
 - Addresses are revalidated after redirects and name resolution to prevent access to loopback, link-local, private infrastructure, metadata services, and unapproved ports.
 - Requests have bounded time, size, redirects, attempts, and response parsing.
@@ -99,6 +101,7 @@ Public access uses explicitly published operations, approved fields from [public
 ## Acceptance examples
 
 - A record value cannot redirect a connection call to a private network address.
+- A connection definition with a missing shape, duplicate shape field, or undeclared workflow input is refused before publication.
 - Replaying a valid incoming message does not start duplicate work.
 - Revoking a connection prevents later workflow attempts from using cached credentials.
 - An interface write repeated with the same duplicate-protection key returns the original outcome.

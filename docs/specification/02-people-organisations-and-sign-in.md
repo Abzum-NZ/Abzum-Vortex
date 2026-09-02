@@ -4,7 +4,7 @@
 
 ## Concepts
 
-A **tenant** is the customer-level administration and billing boundary. One tenant owns one or more **organisations**. Organisations are private workspaces and may form a hierarchy inside their tenant. An **identity** is one human sign-in. An **organisation account** is that identity's separate account inside one organisation.
+A **tenant** is the customer-level governance and security boundary. One tenant owns one or more **organisations**. Organisations are private workspaces and may form a hierarchy inside their tenant. An **identity** is one human sign-in. An **organisation account** is that identity's separate account inside one organisation.
 
 One identity may have accounts in several organisations, including organisations in different tenants, but may have only one account in the same organisation. Each organisation account has its own state, profile, roles, teams, application access, preferences, and activity. No role or team membership carries from one organisation account to another.
 
@@ -29,17 +29,17 @@ flowchart TD
 - Moving an organisation moves its complete subtree and is refused if the destination is another tenant, the move would create a cycle, or an active policy prevents it.
 - Archiving or removing a parent is refused until every child is moved, archived through an explicit subtree operation, or otherwise resolved.
 - Records, files, connections, roles, teams, applications, search, workflow work, and activity remain owned by an organisation. A parent organisation does not inherit access to a child organisation's data.
-- The tenant owns the commercial plan, subscription, and customer-wide administrative settings. Usage is attributed to the organisation that caused it and then rolled up to its tenant.
+- The tenant owns customer-wide hierarchy, lifecycle and [entitlement](15-entitlements-and-metering.md) scope. Metering is attributed to the organisation that caused it where meaningful and can be rolled up to its tenant.
 
 ## Tenant administration
 
-A tenant can have several **tenant administrators**. They may create, move, suspend, restore, and view the administrative status of organisations in that tenant; manage the tenant plan and billing contacts; and publish tenant-wide announcements.
+A tenant can have several **tenant administrators**. They may create, move, suspend, restore, and view the administrative status of organisations in that tenant and invoke explicitly granted protected tenant operations.
 
 Tenant administration does not grant record access. A tenant administrator who needs to use an organisation's applications or data must also have an active organisation account with the required organisation and application roles. This separation prevents customer-wide administration from becoming silent access to every workspace.
 
 ```mermaid
 flowchart LR
-    TA[Tenant administrator] --> GOV[Tenant structure, plan and announcements]
+    TA[Tenant administrator] --> GOV[Tenant structure and protected tenant operations]
     TA -. no automatic data access .-> DATA[Organisation records]
     OA[Organisation account with local roles] --> DATA
 ```
@@ -71,7 +71,7 @@ The identity token proves the person; it does not grant tenant administration, o
 
 ## Organisation launcher and sign-in experience
 
-The neutral launcher shows only organisations the identity may enter. It may group them by tenant and organisation hierarchy, and show approved names, logos, and discoverable applications. It never reveals private data, other accounts, billing details, or the existence of organisations the identity cannot enter.
+The neutral launcher shows only organisations the identity may enter. It may group them by tenant and organisation hierarchy, and show approved names, logos, and discoverable applications. It never reveals private data, other accounts, commercial details, or the existence of organisations the identity cannot enter.
 
 An organisation-branded address may start a branded sign-in journey, but the address and branding never determine access. Switching organisations creates a new request context and clears organisation-specific browser and server state.
 
@@ -81,11 +81,13 @@ An organisation account does not automatically grant every [application](07-appl
 
 ## Administrative portals
 
-The protected **Tenant Portal** covers tenant administrators, organisation hierarchy, plan and billing, usage roll-up, and tenant announcements. The protected **Organisation Portal** covers local profile, people, invitations, teams, roles, applications, connections, preferences, business calendar, sharing approvals, and organisation announcements. Neither application can be removed.
+Tenant Administration and Organisation Administration are locked, system-installed Vortex applications. They use ordinary modules, records, pages, roles and workflows while calling narrowly protected identity, hierarchy, access, entitlement and data-handling operations. The engine does not contain special portal page logic.
+
+Legal details, contacts, branding, business calendars, notices and privacy request cases are ordinary records in administration applications. The identity service retains only the organisation's stable identity, hierarchy, lifecycle, display name and minimum [runtime localisation settings](appendices/data-contracts.md#tenant-identity-and-organisation-account-records) needed before an application loads.
 
 ## Required records
 
-The platform stores the tenant, tenant-administrator assignment, organisation and hierarchy, global identity, organisation account, team and membership, invitation, application access assignment, profiles and preferences, business calendar, and sign-in session described in the [data contracts](appendices/data-contracts.md#tenant-identity-and-organisation-account-records).
+The platform stores the tenant, tenant-administrator assignment, organisation and hierarchy, global identity, organisation account, team and membership, invitation, application access assignment, minimum runtime localisation settings, and sign-in session described in the [data contracts](appendices/data-contracts.md#tenant-identity-and-organisation-account-records). Other administrative data is stored as ordinary application records.
 
 ## Acceptance examples
 

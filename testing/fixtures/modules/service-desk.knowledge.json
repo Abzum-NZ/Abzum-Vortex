@@ -284,12 +284,13 @@
       {
         "id": "act_article_publish",
         "key": "vortex.service_desk.knowledge.article.publish",
+        "label": "Publish article",
         "record_type": "article",
         "permission": "vortex.service_desk.knowledge.article.publish",
         "inputs": [],
         "effects": [
-          "change_status",
-          "emit_event"
+          {"kind":"set_field","field":"status","value":{"source":"literal","value":"published"}},
+          {"kind":"announce_event","event":"vortex.service_desk.knowledge.article.published"}
         ],
         "shareable": false
       }
@@ -311,7 +312,8 @@
         "id": "rule_article_public",
         "key": "only_published_articles_are_public",
         "record_type": "article",
-        "moment": "saving",
+        "trigger": "change",
+        "priority": 100,
         "condition": {
           "all": [
             {
@@ -326,8 +328,7 @@
             }
           ]
         },
-        "effect": "refuse",
-        "message": "Publish the article before making it public."
+        "effect": {"kind":"refuse","reason_code":"published_state_required"}
       }
     ],
     "extension_points": [

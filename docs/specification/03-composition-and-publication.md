@@ -28,7 +28,7 @@ An [application](07-applications-pages-and-themes.md) selects modules and adds t
 
 ### Organisation-data layer
 
-[Records](06-records-and-lifecycle.md), files, organisation accounts, saved views, activity entries, workflow references, and attributed usage belong to one organisation. Tenant plans and billing belong to the tenant. None is part of a reusable definition.
+[Records](06-records-and-lifecycle.md), files, organisation accounts, saved views, activity entries, workflow references, and organisation-attributed metering events belong to one organisation. Tenant-level entitlements and metering events belong to the tenant. None is part of a reusable definition.
 
 ## Definition ownership and versions
 

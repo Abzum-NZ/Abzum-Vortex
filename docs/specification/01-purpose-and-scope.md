@@ -46,7 +46,7 @@ The first complete release includes:
 - Published versions so people use a known, validated configuration.
 - Web experiences that work on desktop and phone.
 - Public pages and programmable interfaces where an organisation explicitly enables them.
-- Plans, usage measurement, billing, export, retention, activity history, and recovery.
+- Generic entitlement decisions, resource metering, export, retention, activity history, and recovery.
 - Governed cross-organisation record sharing with the same product behaviour whether the organisations are in one cluster or different clusters.
 
 The first complete release does not include:
@@ -58,15 +58,17 @@ The first complete release does not include:
 - Replicating shared records into recipient-cluster storage or directly connecting customer databases. Cross-cluster access uses the approved [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 - A marketplace in which unreviewed packages become automatically trusted.
 - Artificial-intelligence assistants, model-generated work, autonomous agents, and model-assisted workflow steps.
+- Privileged business domains. Commercial billing, ordinary approvals, tasks, comments, notices, business calendars and operational case management are built as ordinary applications under the [core contract boundary](appendices/core-contract-boundary.md).
 
 ## Product principles
 
 1. **Organisation separation comes first.** Every storage and request path is tested for separation through [access tests](20-quality-and-acceptance.md).
 2. **Nothing hidden becomes live.** Builders work on a draft, validate it, and deliberately publish it through [publication](03-composition-and-publication.md).
-3. **One place owns each decision.** Identity, access, data, files, workflows, and billing each have one named owning service in [runtime services](17-runtime-storage-and-caching.md).
+3. **One place owns each decision.** Identity, access, data, files, workflows, and entitlements each have one named owning service in [runtime services](17-runtime-storage-and-caching.md).
 4. **The server rechecks every request.** Page visibility never substitutes for [access enforcement](04-access-and-permissions.md).
 5. **Unsafe requests fail closed.** When the platform cannot prove an operation is allowed, it refuses the operation and records why.
 6. **Business choices are visible.** An undecided policy is listed in the [decision register](appendices/decisions.md), not embedded as an implementation assumption.
+7. **Core knows primitives, not business domains.** Every privileged contract must pass the [core contract admission test](appendices/core-contract-boundary.md#admission-test).
 
 ## Acceptance examples
 

@@ -77,24 +77,15 @@ export const workflowNodeTypeKeys = [
   "run_action",
   "soft_delete_record",
   "duplicate_record",
-  "convert_record",
   "add_relationship",
   "copy_relationships",
-  "add_comment",
-  "change_tags",
   "request_form",
-  "request_approval",
-  "create_task",
-  "create_calendar_event",
-  "notification",
-  "send_email",
   "query_records",
   "set_values",
   "format_value",
   "generate_export",
   "attach_file",
   "move_file",
-  "generate_document",
   "call_connection",
   "acknowledge_message",
 ] as const;
@@ -105,6 +96,33 @@ export const listArrangementSchema = z.enum(listArrangementKeys);
 export const blockPaletteGroupSchema = z.enum(blockPaletteGroupKeys);
 export const blockSettingControlSchema = z.enum(blockSettingControlKeys);
 export const workflowNodeTypeSchema = z.enum(workflowNodeTypeKeys);
+
+export const workflowNodeOutputKeysByType = Object.freeze({
+  start: [],
+  condition: ["matched"],
+  decision_table: ["decision"],
+  bounded_loop: ["record"],
+  delay: [],
+  wait_until: [],
+  start_workflow: ["run"],
+  stop: [],
+  create_record: ["record"],
+  change_record: ["record"],
+  run_action: ["result"],
+  soft_delete_record: [],
+  duplicate_record: ["record"],
+  add_relationship: ["relationship"],
+  copy_relationships: ["relationships"],
+  request_form: ["response"],
+  query_records: ["records"],
+  set_values: ["record"],
+  format_value: ["value"],
+  generate_export: ["file"],
+  attach_file: ["attachment"],
+  move_file: ["file"],
+  call_connection: ["response"],
+  acknowledge_message: [],
+} as const satisfies Record<(typeof workflowNodeTypeKeys)[number], readonly string[]>);
 export const lifecycleStateSchema = z.enum(["active", "soft_deleted", "removal_pending"]);
 export const pageStateSchema = z.enum([
   "normal",

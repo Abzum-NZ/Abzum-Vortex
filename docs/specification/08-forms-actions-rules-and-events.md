@@ -23,7 +23,7 @@ An **action** is a named operation that participates in a save. A **rule** is im
 An action belongs to a module when it expresses reusable business meaning, or to an application when it exists only for that application. It records:
 
 - Permanent identifier, label, subject record type, and required permission.
-- Inputs with names, types, required flags, and validation.
+- Inputs with names, labels, types, required flags, and validation that is valid for that type. Text accepts length and pattern constraints; numbers accept numeric bounds; dates and date-times accept their own bounds; a record reference names its target record type; a Boolean accepts none of those unrelated settings.
 - A precondition.
 - One to ten ordered effects.
 - The events it may announce.
@@ -31,9 +31,13 @@ An action belongs to a module when it expresses reusable business meaning, or to
 
 Allowed immediate action effects are:
 
-1. Set a field to a fixed, submitted, or calculated value.
-2. Create a related record through a declared relationship.
-3. Announce a declared business event when the save commits.
+1. Set a field from a literal, action input, subject field, subject record, current actor, or current time.
+2. Create a record using an explicit field-to-value map.
+3. Copy an explicit non-empty list of the subject's published relationships to a record supplied through a declared link input.
+4. Soft-delete the subject record.
+5. Announce a declared business event when the save commits.
+
+Every field, record type, relationship, input and event named by an effect must resolve during publication. A copy effect never means “all relationships”; the authored definition lists the relationship keys and publication resolves them to permanent relationship identifiers.
 
 An action cannot wait, call an external system, send email, send notifications, invoke a model, or read arbitrary records. Those operations belong to a [workflow](09-workflows-and-pipelines.md). A shared action runs wholly in the source organisation and cannot create or link recipient-owned records.
 

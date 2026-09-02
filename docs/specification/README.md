@@ -1,7 +1,7 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.0
-**Date:** 1 September 2026
+**Status:** Approved specification 2.1
+**Date:** 2 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
@@ -59,7 +59,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 12. [Connections and programmable interfaces](12-connections-and-interfaces.md)
 13. Artificial-intelligence functionality is deliberately outside this release; see [Product boundaries](01-purpose-and-scope.md#product-boundaries).
 14. [Activity history, privacy and retention](14-activity-privacy-and-retention.md)
-15. [Plans, billing, usage and announcements](15-plans-billing-and-usage.md)
+15. [Entitlements and metering](15-entitlements-and-metering.md)
 16. [Copying, sharing, import and export](16-copying-sharing-import-export.md)
 
 ### Platform safety and delivery
@@ -74,6 +74,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 - [Decision register](appendices/decisions.md)
 - [Plain-language glossary](appendices/glossary.md)
 - [Data contracts](appendices/data-contracts.md)
+- [Core contract boundary](appendices/core-contract-boundary.md)
 - [Worked examples](appendices/worked-examples.md)
 - [Coverage and traceability map](appendices/traceability.md)
 - [GitHub delivery coverage](appendices/github-delivery-map.md)
@@ -86,11 +87,13 @@ Words such as “organisation,” “module,” “application,” and “publis
 - A change must update the affected diagram, requirement, acceptance example, [data contract](appendices/data-contracts.md), [coverage map](appendices/traceability.md), [GitHub delivery map](appendices/github-delivery-map.md), and [build-plan dependency](../build-plan/README.md).
 - The repository history is the revision record. Each published specification version also records a short human-readable summary in this file.
 - No issue, comment, fixture, or implementation detail overrides this specification. A conflict is recorded in the [decision register](appendices/decisions.md) and resolved before implementation continues.
+- Every privileged contract must pass the normative [core contract admission test](appendices/core-contract-boundary.md#admission-test). Business-domain functionality is built as an ordinary Vortex application unless a documented platform invariant makes that impossible.
 
 ## Version history
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.1 | Approved | 2 September 2026 | Established the platform-primitives-only boundary. Removed commercial billing, ordinary approvals, business announcements, organisation business profiles and privacy case management from core; retained only generic entitlements, metering, grant consent, protected data handling and operational status. Simplified the workflow catalogue, moved motion implementation to the platform UI system, and corrected public caller contexts and safe errors. |
 | 2.0 | Approved | 1 September 2026 | Incorporated all remaining business choices: separate module and application versions, tenant hierarchy and tenant administrators without implicit data access, controlled permission wildcards, multi-team membership and direct record sharing, safe record/field/file rules, Kestra-authoritative workflow status and governed nodes, no AI scope, organisation-scoped erasure, tenant billing and announcements, Testing-only database checks, one-hour RPO/eight-hour RTO, non-blocking performance measurement, storage-lineage table allocation, and explicit use of Supabase Auth, row rules, Queue, Webhooks, private Realtime invalidation, Storage, database verification, advisers and managed recovery. The decision register is clear. |
 | 2.0-draft.5 | Review draft | 1 September 2026 | Final sharing policy written through the specification and plan: approval by both organisations, published saved conditions, no live re-sharing, named application roles, explicit action/field/export rights, and source-executed search, reports, and approved export through ordinary record components. Resolved choices were removed from the open register. |
 | 2.0-draft.4 | Review draft | 1 September 2026 | Approved exact sharing-code or signed-link recipient discovery and separate source/recipient usage allocation because source-pays-all would not materially reduce complexity. |

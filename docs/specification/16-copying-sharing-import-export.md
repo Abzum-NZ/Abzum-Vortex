@@ -1,6 +1,6 @@
 # 16. Copying, sharing, import and export
 
-[Previous: Plans, billing and usage limits](15-plans-billing-and-usage.md) · [Specification index](README.md) · Next: [Runtime services, storage and caching](17-runtime-storage-and-caching.md)
+[Previous: Entitlements and metering](15-entitlements-and-metering.md) · [Specification index](README.md) · Next: [Runtime services, storage and caching](17-runtime-storage-and-caching.md)
 
 ## Five distinct operations
 
@@ -22,7 +22,7 @@ flowchart TD
 
 A package contains published [modules or applications](03-composition-and-publication.md#definition-ownership-and-versions), a manifest, dependency ranges, stable identifiers, source version, publisher, content fingerprint, required capabilities, and installation notes.
 
-A package never contains organisation records, organisation accounts, secrets, access tokens, private files, billing identifiers, activity history, or live connection instances.
+A package never contains organisation records, organisation accounts, secrets, access tokens, private files, commercial-system identifiers, activity history, or live connection instances.
 
 ## Copying between organisations
 
@@ -60,7 +60,7 @@ The source cluster remains authoritative in both cases. A cross-cluster response
 | Mechanism | [Definition packages](#definition-packages) and [gallery](#gallery) | [Access grants](04-access-and-permissions.md#shared-record-access) enforced by the Access and Record services and database row restrictions |
 | Updates | Source publishes new versions; target chooses when to update | Changes to shared records are visible immediately |
 
-The Organisation Portal presents “Install a definition” and “Share records” as separate actions. Neither action silently offers or enables the other.
+The Organisation Administration application presents “Install a definition” and “Share records” as separate actions. Neither action silently offers or enables the other.
 
 ### Creating a grant
 
@@ -74,10 +74,10 @@ sequenceDiagram
     participant Record as Source Record service
     Source->>SourceAccess: Propose scope, audience, actions, fields, export, and expiry
     SourceAccess->>SourceAccess: Validate source definitions and policy
-    SourceAccess->>Source: Request source approval
+    SourceAccess->>Source: Request source consent
     Source-->>SourceAccess: Approve or refuse exact fingerprint
     SourceAccess->>RecipientAccess: Send signed proposal
-    RecipientAccess->>Recipient: Request recipient acceptance
+    RecipientAccess->>Recipient: Request recipient consent
     Recipient-->>RecipientAccess: Approve or refuse exact fingerprint
     RecipientAccess-->>SourceAccess: Send signed decision
     SourceAccess->>SourceAccess: Activate authoritative grant
@@ -93,7 +93,7 @@ A proposed cross-organisation grant names one source organisation, one recipient
 
 Every grant requires an authorised source administrator to approve the exact records, condition parameters, actions, fields, export choice, region, start, and expiry, and an authorised recipient administrator to accept the exact application, roles, responsibility, region, start, and expiry. Both decisions cover one complete proposal fingerprint. Changing any fingerprinted value makes the earlier decisions unusable and returns the proposal to approval.
 
-The platform-owned `vortex.approvals` capability supplies the Organisation Portal screens and protected approval path. The Access service remains authoritative for activation. Approval decisions are immutable; later revocation is a separate recorded action.
+An ordinary administration application may present the proposal and collect authorised responses, but the Access service alone records protected [grant-consent evidence](04-access-and-permissions.md#protected-grant-consent) and activates the grant. Consent decisions are immutable; later revocation is a separate recorded action.
 
 For a same-cluster grant, the source and recipient protected records can be changed in one database transaction. For a cross-cluster grant, activation uses signed, duplicate-safe messages rather than pretending two databases share a transaction:
 
@@ -161,7 +161,7 @@ Restore is an operator-controlled disaster-recovery or migration process with co
 - Changing an approval display record directly cannot activate a grant.
 - A recipient cannot re-share a source record to a third organisation.
 - A proposal cannot activate until authorised administrators in both organisations approve the same fingerprint.
-- A saved-condition revision or parameter change requires a new proposal and both approvals; it never widens an active grant silently.
+- A saved-condition revision or parameter change requires a new proposal and both consent decisions; it never widens an active grant silently.
 - Shared search and reports execute at the source and leave no recipient index or materialised result.
 - A shared export is refused by default, contains only approved fields when enabled, and warns that a completed download cannot be recalled by revocation.
 - Import dry-run and confirmed execution use the same mapping and validation rules.

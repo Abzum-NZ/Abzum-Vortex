@@ -251,12 +251,13 @@
       {
         "id": "act_sla_pause",
         "key": "vortex.service_desk.sla.service_level.pause",
+        "label": "Pause service level",
         "record_type": "service_level",
         "permission": "vortex.service_desk.sla.service_level.manage",
         "inputs": [],
         "effects": [
-          "set_inactive",
-          "emit_event"
+          {"kind":"set_field","field":"active","value":{"source":"literal","value":false}},
+          {"kind":"announce_event","event":"vortex.service_desk.sla.service_level.changed"}
         ],
         "shareable": false
       }
