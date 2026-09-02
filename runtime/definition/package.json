@@ -8,11 +8,15 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root ../.. runtime/definition/test"
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
     "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "vitest": "4.1.11"
   },
   "vortex": {
     "tier": 2,

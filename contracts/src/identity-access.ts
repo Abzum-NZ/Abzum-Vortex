@@ -41,6 +41,7 @@ import {
   labelSchema,
   safeHttpsUrlSchema,
 } from "./common";
+import { permissionDeclarationSchema } from "./permissions";
 
 const administrativeStateSchema = z.enum(["active", "suspended", "archived", "removal_pending"]);
 const accountStateSchema = z.enum(["invited", "active", "suspended", "closed"]);
@@ -294,38 +295,10 @@ export const sessionContextSchema = z.discriminatedUnion("callerKind", [
     .strict(),
 ]);
 
-export const permissionSchema = z
-  .object({
-    permissionId: permissionIdSchema,
-    key: namespacedKeySchema,
-    label: labelSchema,
-    description: descriptionSchema,
-    ownerKind: z.enum(["platform", "tenant", "organization", "module", "application"]),
-    ownerId: platformIdSchema,
-    recordTypeId: recordTypeIdSchema.optional(),
-    actionKind: z.enum([
-      "create",
-      "read",
-      "update",
-      "delete",
-      "restore",
-      "export",
-      "share",
-      "manage",
-      "named",
-    ]),
-    namedAction: builderKeySchema.optional(),
-    administrative: z.boolean(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.actionKind === "named") !== (value.namedAction !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["namedAction"],
-        message: "Named actions are present only for the named action kind",
-      });
-  });
+export const permissionSchema = permissionDeclarationSchema.safeExtend({
+  ownerKind: z.enum(["platform", "tenant", "organization", "module", "application"]),
+  ownerId: platformIdSchema,
+});
 
 const exactPermissionEntrySchema = z
   .object({ kind: z.literal("exact"), permissionId: permissionIdSchema })

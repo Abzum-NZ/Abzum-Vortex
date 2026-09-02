@@ -45,6 +45,7 @@ import {
   workflowIdSchema,
 } from "./identifiers";
 import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
+import { permissionDeclarationSchema } from "./permissions";
 
 export const moduleBindingSchema = z
   .object({
@@ -370,6 +371,8 @@ export const applicationConnectionBindingSchema = z
     bindingId: containedComponentIdSchema,
     key: builderKeySchema,
     connectionTypeId: connectionTypeIdSchema,
+    version: versionRequirementSchema,
+    resolvedVersion: semanticVersionSchema,
     requiredOperationKeys: z.array(builderKeySchema).min(1),
   })
   .strict();
@@ -467,7 +470,7 @@ export const applicationContentSchema = z
     queries: z.array(queryDefinitionSchema),
     blockRegistrations: z.array(blockRegistrationSchema),
     pipelines: z.array(pipelineSchema),
-    permissionKeys: z.array(namespacedKeySchema),
+    permissions: z.array(permissionDeclarationSchema),
     actions: z.array(actionDefinitionSchema),
     rules: z.array(ruleDefinitionSchema),
     events: z.array(eventDefinitionSchema),

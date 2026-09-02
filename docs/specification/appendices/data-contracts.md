@@ -52,6 +52,8 @@ Each immutable published revision has `root_id`, `revision`, complete `content`,
 
 It also has a human-readable release version following the package's version policy. Vortex assigns the minimum valid next patch, minor, or major version from the structural comparison; the builder confirms or cancels publication and cannot enter a different number. The increasing `revision` is the storage identity; the release version communicates compatibility. Two different revisions cannot reuse one release version in the same root.
 
+The database-free [version-impact contract](version-impact-policy.md) accepts one canonical module or application draft and its immutable publication history. Its strict result is `no_change`, `initial_release`, or `release_required`; every result identifies the definition kind/root and carries a comparison fingerprint. Required releases contain the assigned stable version plus closed, deterministic reason codes and safe component locations. Confirmation recomputes the current result and refuses a stale fingerprint, different assigned version, different definition root, or unchanged content.
+
 Contained components have a permanent identifier unique inside the module or application, a builder key, and their typed content. They do not carry a separate live pointer. Platform connection types and themes are identified by platform release and catalogue version; organisation roles and connection instances are live administrative data rather than published definitions.
 
 ## Tenant, identity and organisation-account records
@@ -98,7 +100,7 @@ The Identity boundary owns only the language, time zone, default currency, date 
 
 ## Permission and role contracts
 
-A permission has `permission_id`, permanent `key`, label, description, owner kind and owner identifier, optional record type, action kind, optional named action, and `administrative` flag.
+A permission has `permission_id`, permanent `key`, label, description, owner kind and owner identifier, optional record type, action kind, optional named action, and `administrative` flag. A module or application definition owns a complete permission declaration containing every field except the owner kind and identifier, which are unambiguously supplied by the containing definition. The live permission catalogue adds that owner context; it does not invent or alter permission meaning.
 
 A role has key, label, description, role kind, live revision, and permission entries. A permission entry is either one exact permission or a controlled trailing wildcard scoped to one named module or application. Wildcards exclude all administrative permissions and store the permission-catalogue fingerprint plus the expanded permission identifiers accepted at that role revision.
 
@@ -108,7 +110,7 @@ The Access service owns an `access_version` per organisation. Every organisation
 
 ## Module and record-type contracts
 
-A module contains identity and publication metadata, dependencies, record types, module actions, business events, and extension points.
+A module contains identity and publication metadata, dependencies, record types, permission declarations, module actions, business events, saved sharing conditions, and extension points.
 
 A record type contains key, labels, title-field reference, permanent `storage_contract_id`, storage scope, ownership mode, fields, relationships, standard actions, and custom action references. A signed package install preserves the storage-contract identity only while its stored meaning and lineage fingerprint remain compatible. An independent definition or structural fork receives a new identity even when its names match another definition.
 
@@ -119,6 +121,8 @@ Storage scope is `organisation_shared` or `application_contained`. Ownership mod
 ## Field contract
 
 Every field has `field_id`, `key`, `type`, `label`, optional `help_text`, `required`, optional `default`, `unique`, `filterable`, `sortable`, optional search priority, required personal-data class, required `public_display` choice (`refused` by default or `allowed`), and type-specific `settings`. A public operation separately allowlists every accepted or returned field.
+
+A calculation field uses one closed expression kind: join text fields, apply a numeric operation to named field/literal operands, subtract a named percentage, evaluate a typed condition, or offset a date/date-time. Its declared result type must match the expression kind and its field dependencies are explicit. A total uses one relationship, one closed aggregate operation, an optional compatible field, and an optional typed condition. Neither contract accepts an arbitrary expression or filter object.
 
 The twenty-two type keys and their settings are defined in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#field-types). Attachment settings are defined only in [Files and attachments](../11-files-and-attachments.md#canonical-attachment-settings). Unsupported common properties and unknown type settings are refused.
 
@@ -283,17 +287,17 @@ The recipient stores one non-content mirror with `grant_id`, source and recipien
 
 ## Action, rule and condition contracts
 
-An action contains identifier, key, label, subject record type, permission, sharing setting (`refused` by default or `allowed`), uniquely keyed typed inputs, precondition, and one to ten ordered effects. Each input has a label and required flag. Its validation contract is discriminated by type so text, number, Boolean, date, date-time, and record-reference inputs cannot accept one another's settings. Effects are `set_field`, `create_record`, `copy_relationships`, `soft_delete_subject`, or `announce_event`. A relationship-copy effect names every source relationship and its target-record input; it never means “all relationships.” A shared action executes wholly in the source organisation and cannot create a relationship to recipient-owned data.
+An action contains identifier, key, label, subject record type, permission, sharing setting (`refused` by default or `allowed`), uniquely keyed typed inputs, precondition, and one to ten ordered effects. Each input has a label and required flag. Its validation contract is discriminated by type: plain/formatted text, number, Boolean, date, date-time, one-or-more record-type reference, or organisation-account reference. One input cannot accept another type's settings. Effects are `set_field`, `create_record`, `copy_relationships`, `soft_delete_subject`, or `announce_event`. A relationship-copy effect names every source relationship and its target-record input; it never means “all relationships.” A shared action executes wholly in the source organisation and cannot create a relationship to recipient-owned data.
 
 A rule contains identifier, subject record type, trigger, condition, priority, and one effect. Effects are `refuse`, `set_value`, `require`, `show_or_hide`, `warn`, or `start_background_work`. Source rules use the same typed effect vocabulary; there is no separate permission-approval rule.
 
 A condition node has an operator and typed operands. Boolean groups use `all`, `any`, or `not`. Publication sets maximum nesting, operand count, and relationship hops. It refuses an operator/type mismatch or unknown operand source.
 
-A saved sharing condition belongs to one source record type and contains permanent identifier, key, published revision, contract fingerprint, typed parameter declarations, closed condition tree, declared field and relationship dependencies, and publication-test cases. It cannot read recipient data, execute code, call a connection, or accept an undeclared parameter. A grant pins its revision and values; later publication does not change an active grant.
+A saved sharing condition belongs to one source record type and contains permanent identifier, key, system-derived published revision and contract fingerprint, typed parameter declarations, a closed condition tree, declared local field dependencies, and publication tests. Every test provides explicit source-field values, parameter values, and an expected result. It cannot traverse relationships in the first release, read recipient data, execute code, call a connection, or accept an undeclared parameter. A grant pins its revision and values; later publication does not change an active grant.
 
 ## Application, page and block contracts
 
-An application contains root identity and its own release version, exact resolved module/version bindings, options, application permissions and roles, navigation, pages, actions, rules, events, workflows, process pipelines, theme settings or platform-theme binding, connections, interfaces, public addresses, and default states.
+An application contains root identity and its own release version, exact resolved module/version bindings, application permission declarations and roles, navigation, pages, actions, rules, events, workflows, process pipelines, theme settings or platform-theme binding, version-pinned connection bindings, interfaces, public addresses, and default states.
 
 A process pipeline contains one record type and stage field, uniquely keyed stages with labels and explicit entry/exit actions or workflows, named transitions with optional permission/action and typed gate, and time targets with a stage, date-time field and escalation event. Every stage, field, action, workflow, permission and event reference resolves before publication.
 

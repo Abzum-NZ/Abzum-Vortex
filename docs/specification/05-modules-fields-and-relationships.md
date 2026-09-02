@@ -17,7 +17,7 @@ flowchart TD
     RT1 --> SHARE[Saved sharing conditions]
     REL --> RT2
     APP[Application binding] --> M
-    APP --> OV[Labels, option loaders and page use]
+    APP --> USE[Pages, roles and workflows use the bound module]
 ```
 
 Examples are provided in the [CRM and Service Desk worked examples](appendices/worked-examples.md).
@@ -134,8 +134,9 @@ There is no separate duration type in this release. Each calendar page explicitl
 ## Calculations and totals
 
 - A calculation is deterministic and cannot perform network calls, change records, or read data the current operation is not allowed to read.
+- The first release uses only five closed calculation forms: join named text fields, apply one of four numeric operations to named field/literal operands, subtract a named percentage field from a named amount field, evaluate a typed condition, or offset a named date/date-time field by a named/literal amount. The declared result type must match that form. Arbitrary objects, scripts, and user-defined expressions are refused.
 - Calculation dependencies are known at publication and cycles are refused.
-- A total names one relationship, operation, optional source field, and optional safe filter.
+- A total names one relationship, operation, optional source field, and optional filter expressed through the same closed typed condition tree used by rules. Arbitrary filter objects are refused.
 - Supported operations are count, sum, minimum, maximum, and average where the source type permits them.
 - A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable error that identifies the currency codes present. Vortex never silently converts or splits the total.
 
@@ -172,18 +173,6 @@ Removing a record type that is the target of a cross-module link is an incompati
 
 A relationship still joins records owned by the same organisation. Viewing a source organisation's record through a cross-organisation grant does not permit creating a stored relationship from a recipient-owned record to that source record. A separately designed federation-reference field would be required for that future behaviour.
 
-## Application-level bindings
-
-When reusable module meaning depends on an application, the application creates a binding rather than changing the module definition. Bindings may provide:
-
-- An application-specific label or help text.
-- A workflow-backed option loader.
-- A requirement that a linked person has access to the application.
-- Page-specific default values or display choices.
-- A narrower list of allowed actions or visible fields.
-
-A binding cannot weaken module validation, personal-data classification, or [access rules](04-access-and-permissions.md).
-
 ## Extension points
 
 A module may open named extension points on selected record types for additional fields and actions.
@@ -191,7 +180,7 @@ A module may open named extension points on selected record types for additional
 - A contributing module adds a field or action under its own namespace, so two contributors cannot collide.
 - An organisation may add its own field or action through the same declared extension point.
 - Contributions are additive. They cannot remove, retype, reorder, or weaken the target module's own fields, actions, relationships, or permissions.
-- Pages and choice options are not module contributions; pages belong to an [application](07-applications-pages-and-themes.md), and options belong to the field or an [application binding](#application-level-bindings).
+- Pages and choice options are not module contributions; pages belong to an [application](07-applications-pages-and-themes.md), and options belong to the field definition.
 - Removing an extension point is a breaking module change.
 - Uninstalling a contributor hides its fields and actions but preserves stored values through the ordinary [retention](14-activity-privacy-and-retention.md) policy so reinstall can restore them.
 - A target-module upgrade is refused when it would break an installed contribution, and the refusal links every affected organisation definition.

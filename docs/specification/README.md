@@ -74,6 +74,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 - [Decision register](appendices/decisions.md)
 - [Plain-language glossary](appendices/glossary.md)
 - [Data contracts](appendices/data-contracts.md)
+- [Module and application version-impact policy](appendices/version-impact-policy.md)
 - [Core contract boundary](appendices/core-contract-boundary.md)
 - [Worked examples](appendices/worked-examples.md)
 - [Coverage and traceability map](appendices/traceability.md)
