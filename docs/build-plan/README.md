@@ -89,7 +89,7 @@ Build:
 - Shared identifier, error, actor, organisation context, revision, dependency and version-range contracts.
 - Independently versioned module and application contracts plus their contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
 - All [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, privacy, billing and cache versions.
-- Contract validator with stable error codes and exact component paths.
+- Generic contract validator with the versioned safe-error catalogue from [the data contracts](../specification/appendices/data-contracts.md#definition-validation-errors), stable codes, caller-mapped builder-visible locations, deterministic ordering, and protected diagnostics. Runtime validation contains no installed definition or fixture name.
 - Module/application version-impact comparison, including Vortex assignment of the minimum valid next release version and builder confirmation or cancellation.
 - Storage-catalog and scope contracts that distinguish definition identity, storage lineage, organisation ownership, and application-contained ownership without creating per-installation tables.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
@@ -100,6 +100,7 @@ Exit proof:
 - Both complete examples validate with no unresolved reference.
 - Every record type resolves to exactly one collision-free storage mapping; two same-named CRM applications in different organisations remain isolated, while CRM and Service Desk can read the same organisation-shared Company and Contact records.
 - Invalid examples cover every closed list, missing required value, unknown value, incompatible reference and cross-root version failure.
+- Schema failures and validation-rule failures produce the same safe public result; adversarial diagnostics never enter that result and no example-specific name appears in the translator or catalogue.
 - No service-specific package invents a second form of a shared contract.
 
 ## Phase 2 — Definition and Identity
@@ -404,7 +405,7 @@ Exit proof:
 
 The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follows these implemented rules:
 
-1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), complete domain contracts [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), and complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16) are complete. Validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14), and validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) are the next Ready items and may run in parallel; final Vercel gate evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17) follows all three.
+1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), complete domain contracts [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), safe validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), and complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16) are complete. Version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14) and validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) remain the next Ready items and may run in parallel; final Vercel gate evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17) follows both.
 2. Native GitHub blocked-by relationships govern sequencing; body text explains but does not replace them.
 3. Every phase epic has an outcome and completion evidence.
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/privacy/retention, plans/billing, and operations issues belong to those epics rather than Phase 10.
