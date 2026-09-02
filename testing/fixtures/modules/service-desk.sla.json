@@ -1,23 +1,289 @@
 {
-  "schema_version":"2.0.0","kind":"module","root_id":"mod_service_desk_sla","key":"vortex.service_desk.sla","version":"1.0.0","revision":1,"state":"published","content_fingerprint":"fixture:vortex.service_desk.sla:1.0.0",
-  "body":{"name":"Service Desk Service Levels","description":"Business calendars and service-level targets used by cases.","category":"Service Desk","dependencies":[],
-    "record_types":[
-      {"id":"rt_sd_calendar","storage_contract_id":"srt_00000009","key":"business_calendar","name":"Business calendar","plural_name":"Business calendars","description":"Working hours and excluded dates for response calculations.","storage_scope":"organisation_shared","ownership_mode":"team","title_field":"name","standard_actions":["create","read","update","soft_delete","restore","export"],"fields":[
-        {"id":"fld_calendar_name","key":"name","type":"text","label":"Name","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"none","public_display":false,"settings":{"max_length":120}},
-        {"id":"fld_calendar_tz","key":"time_zone","type":"choice","label":"Time zone","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"options":[{"value":"Pacific/Auckland","label":"Auckland"},{"value":"Australia/Sydney","label":"Sydney"},{"value":"UTC","label":"UTC"}]}},
-        {"id":"fld_calendar_hours","key":"working_hours","type":"table","label":"Working hours","required":true,"unique":false,"filterable":false,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"minimum_rows":1,"maximum_rows":14,"columns":[{"key":"day","type":"choice","required":true},{"key":"starts_at","type":"text","required":true},{"key":"ends_at","type":"text","required":true}]}},
-        {"id":"fld_calendar_exclusions","key":"excluded_dates","type":"table","label":"Excluded dates","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"minimum_rows":0,"maximum_rows":100,"columns":[{"key":"date","type":"date","required":true},{"key":"reason","type":"text","required":true}]}}
-      ]},
-      {"id":"rt_sd_service_level","storage_contract_id":"srt_00000010","key":"service_level","name":"Service level","plural_name":"Service levels","description":"Response and resolution targets for cases.","storage_scope":"organisation_shared","ownership_mode":"team","title_field":"name","standard_actions":["create","read","update","soft_delete","restore","export"],"fields":[
-        {"id":"fld_sla_name","key":"name","type":"text","label":"Name","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"none","public_display":true,"settings":{"max_length":120}},
-        {"id":"fld_sla_calendar","key":"calendar","type":"link","label":"Business calendar","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"target":"vortex.service_desk.sla:business_calendar","reverse_key":"service_levels","on_parent_delete":"refuse"}},
-        {"id":"fld_sla_response","key":"first_response_minutes","type":"whole_number","label":"First response minutes","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":true,"settings":{"minimum":1}},
-        {"id":"fld_sla_resolution","key":"resolution_minutes","type":"whole_number","label":"Resolution minutes","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":true,"settings":{"minimum":1}},
-        {"id":"fld_sla_active","key":"active","type":"yes_no","label":"Active","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"default":true}}
-      ]}
+  "schema_version": "2.0.0",
+  "kind": "module",
+  "root_id": "mod_service_desk_sla",
+  "key": "vortex.service_desk.sla",
+  "version": "1.0.0",
+  "revision": 1,
+  "state": "published",
+  "content_fingerprint": "fixture:vortex.service_desk.sla:1.0.0",
+  "body": {
+    "name": "Service Desk Service Levels",
+    "description": "Business calendars and service-level targets used by cases.",
+    "category": "Service Desk",
+    "dependencies": [],
+    "record_types": [
+      {
+        "id": "rt_sd_calendar",
+        "storage_contract_id": "srt_00000009",
+        "key": "business_calendar",
+        "name": "Business calendar",
+        "plural_name": "Business calendars",
+        "description": "Working hours and excluded dates for response calculations.",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "team",
+        "title_field": "name",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_calendar_name",
+            "key": "name",
+            "type": "text",
+            "label": "Name",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_calendar_tz",
+            "key": "time_zone",
+            "type": "choice",
+            "label": "Time zone",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "options": [
+                {
+                  "value": "Pacific/Auckland",
+                  "label": "Auckland"
+                },
+                {
+                  "value": "Australia/Sydney",
+                  "label": "Sydney"
+                },
+                {
+                  "value": "UTC",
+                  "label": "UTC"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_calendar_hours",
+            "key": "working_hours",
+            "type": "table",
+            "label": "Working hours",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "minimum_rows": 1,
+              "maximum_rows": 14,
+              "columns": [
+                {
+                  "key": "day",
+                  "type": "choice",
+                  "required": true
+                },
+                {
+                  "key": "starts_at",
+                  "type": "text",
+                  "required": true
+                },
+                {
+                  "key": "ends_at",
+                  "type": "text",
+                  "required": true
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_calendar_exclusions",
+            "key": "excluded_dates",
+            "type": "table",
+            "label": "Excluded dates",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "minimum_rows": 0,
+              "maximum_rows": 100,
+              "columns": [
+                {
+                  "key": "date",
+                  "type": "date",
+                  "required": true
+                },
+                {
+                  "key": "reason",
+                  "type": "text",
+                  "required": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "rt_sd_service_level",
+        "storage_contract_id": "srt_00000010",
+        "key": "service_level",
+        "name": "Service level",
+        "plural_name": "Service levels",
+        "description": "Response and resolution targets for cases.",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "team",
+        "title_field": "name",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_sla_name",
+            "key": "name",
+            "type": "text",
+            "label": "Name",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_sla_calendar",
+            "key": "calendar",
+            "type": "link",
+            "label": "Business calendar",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "target": "vortex.service_desk.sla:business_calendar",
+              "reverse_key": "service_levels",
+              "on_parent_delete": "refuse"
+            }
+          },
+          {
+            "id": "fld_sla_response",
+            "key": "first_response_minutes",
+            "type": "whole_number",
+            "label": "First response minutes",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "minimum": 1
+            }
+          },
+          {
+            "id": "fld_sla_resolution",
+            "key": "resolution_minutes",
+            "type": "whole_number",
+            "label": "Resolution minutes",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "minimum": 1
+            }
+          },
+          {
+            "id": "fld_sla_active",
+            "key": "active",
+            "type": "yes_no",
+            "label": "Active",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "default": true
+            }
+          }
+        ]
+      }
     ],
-    "permissions":[{"key":"vortex.service_desk.sla.service_level.manage","record_type":"service_level","label":"Manage service levels"}],
-    "actions":[{"id":"act_sla_pause","key":"vortex.service_desk.sla.service_level.pause","record_type":"service_level","permission":"vortex.service_desk.sla.service_level.manage","inputs":[],"effects":["set_inactive","emit_event"],"shareable":false}],
-    "events":[{"id":"evt_sla_changed","key":"vortex.service_desk.sla.service_level.changed","record_type":"service_level","carries":["name","first_response_minutes","resolution_minutes","active"]}],"rules":[],"extension_points":[{"id":"ext_sla_fields","key":"service_level_fields","record_type":"service_level","accepts":["field"]}]
+    "permissions": [
+      {
+        "key": "vortex.service_desk.sla.service_level.manage",
+        "record_type": "service_level",
+        "label": "Manage service levels"
+      }
+    ],
+    "actions": [
+      {
+        "id": "act_sla_pause",
+        "key": "vortex.service_desk.sla.service_level.pause",
+        "record_type": "service_level",
+        "permission": "vortex.service_desk.sla.service_level.manage",
+        "inputs": [],
+        "effects": [
+          "set_inactive",
+          "emit_event"
+        ],
+        "shareable": false
+      }
+    ],
+    "events": [
+      {
+        "id": "evt_sla_changed",
+        "key": "vortex.service_desk.sla.service_level.changed",
+        "record_type": "service_level",
+        "carries": [
+          "name",
+          "first_response_minutes",
+          "resolution_minutes",
+          "active"
+        ]
+      }
+    ],
+    "rules": [],
+    "extension_points": [
+      {
+        "id": "ext_sla_fields",
+        "key": "service_level_fields",
+        "record_type": "service_level",
+        "accepts": [
+          "field"
+        ]
+      }
+    ]
   }
 }

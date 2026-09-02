@@ -11,57 +11,540 @@
     "name": "CRM People",
     "description": "Contacts and unqualified leads, shared by compatible applications in one organisation.",
     "category": "CRM",
-    "dependencies": [{"module":"vortex.crm.organisations","version":"1.0.0"}],
+    "dependencies": [
+      {
+        "module": "vortex.crm.organisations",
+        "version": "1.0.0"
+      }
+    ],
     "record_types": [
       {
-        "id":"rt_crm_contact","storage_contract_id":"srt_00000002","key":"contact","name":"Contact","plural_name":"Contacts","description":"A person associated with a company.","storage_scope":"organisation_shared","ownership_mode":"team","title_field":"full_name","standard_actions":["create","read","update","soft_delete","restore","export"],
-        "fields":[
-          {"id":"fld_contact_number","key":"contact_number","type":"reference_number","label":"Contact number","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"prefix":"CON-","digits":7}},
-          {"id":"fld_contact_first","key":"first_name","type":"text","label":"First name","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"personal","public_display":true,"settings":{"max_length":80}},
-          {"id":"fld_contact_last","key":"last_name","type":"text","label":"Last name","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"personal","public_display":true,"settings":{"max_length":80}},
-          {"id":"fld_contact_full","key":"full_name","type":"calculation","label":"Full name","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"personal","public_display":true,"settings":{"result_type":"text","expression":{"operation":"join_text","fields":["first_name","last_name"],"separator":" "}}},
-          {"id":"fld_contact_email","key":"email","type":"email_address","label":"Email","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"personal","public_display":true,"settings":{}},
-          {"id":"fld_contact_phone","key":"phone","type":"phone_number","label":"Phone","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"normal","personal_data":"personal","public_display":false,"settings":{"default_country":"NZ"}},
-          {"id":"fld_contact_company","key":"company","type":"link","label":"Company","required":false,"unique":false,"filterable":true,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":true,"settings":{"target":"vortex.crm.organisations:company","reverse_key":"contacts","on_parent_delete":"empty_optional"}},
-          {"id":"fld_contact_owner","key":"relationship_owner","type":"link_to_person","label":"Relationship owner","required":false,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"audience":"organisation_accounts","on_person_deactivation":"retain_reference"}},
-          {"id":"fld_contact_consent","key":"email_consent","type":"yes_no","label":"Email consent","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"personal","public_display":false,"settings":{"default":false}},
-          {"id":"fld_contact_notes","key":"notes","type":"long_text","label":"Notes","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"normal","personal_data":"personal_sensitive","public_display":false,"settings":{"max_length":5000}}
+        "id": "rt_crm_contact",
+        "storage_contract_id": "srt_00000002",
+        "key": "contact",
+        "name": "Contact",
+        "plural_name": "Contacts",
+        "description": "A person associated with a company.",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "team",
+        "title_field": "full_name",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_contact_number",
+            "key": "contact_number",
+            "type": "reference_number",
+            "label": "Contact number",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "prefix": "CON-",
+              "digits": 7
+            }
+          },
+          {
+            "id": "fld_contact_first",
+            "key": "first_name",
+            "type": "text",
+            "label": "First name",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "allowed",
+            "settings": {
+              "max_length": 80
+            }
+          },
+          {
+            "id": "fld_contact_last",
+            "key": "last_name",
+            "type": "text",
+            "label": "Last name",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "allowed",
+            "settings": {
+              "max_length": 80
+            }
+          },
+          {
+            "id": "fld_contact_full",
+            "key": "full_name",
+            "type": "calculation",
+            "label": "Full name",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "allowed",
+            "settings": {
+              "result_type": "text",
+              "expression": {
+                "operation": "join_text",
+                "fields": [
+                  "first_name",
+                  "last_name"
+                ],
+                "separator": " "
+              }
+            }
+          },
+          {
+            "id": "fld_contact_email",
+            "key": "email",
+            "type": "email_address",
+            "label": "Email",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "allowed",
+            "settings": {}
+          },
+          {
+            "id": "fld_contact_phone",
+            "key": "phone",
+            "type": "phone_number",
+            "label": "Phone",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "settings": {
+              "default_country": "NZ"
+            }
+          },
+          {
+            "id": "fld_contact_company",
+            "key": "company",
+            "type": "link",
+            "label": "Company",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "target": "vortex.crm.organisations:company",
+              "reverse_key": "contacts",
+              "on_parent_delete": "empty_optional"
+            }
+          },
+          {
+            "id": "fld_contact_owner",
+            "key": "relationship_owner",
+            "type": "link_to_person",
+            "label": "Relationship owner",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "audience": "organisation_accounts",
+              "on_person_deactivation": "retain_reference"
+            }
+          },
+          {
+            "id": "fld_contact_consent",
+            "key": "email_consent",
+            "type": "yes_no",
+            "label": "Email consent",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "settings": {
+              "default": false
+            }
+          },
+          {
+            "id": "fld_contact_notes",
+            "key": "notes",
+            "type": "long_text",
+            "label": "Notes",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "sensitive",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 5000
+            }
+          }
         ]
       },
       {
-        "id":"rt_crm_lead","storage_contract_id":"srt_00000003","key":"lead","name":"Lead","plural_name":"Leads","description":"An enquiry that has not yet been qualified.","storage_scope":"application_contained","ownership_mode":"individual","title_field":"display_name","standard_actions":["create","read","update","soft_delete","restore","export"],
-        "fields":[
-          {"id":"fld_lead_number","key":"lead_number","type":"reference_number","label":"Lead number","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"prefix":"LEA-","digits":7}},
-          {"id":"fld_lead_name","key":"display_name","type":"text","label":"Name","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"personal","public_display":false,"settings":{"max_length":160}},
-          {"id":"fld_lead_company","key":"company_name","type":"text","label":"Company name","required":false,"unique":false,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"max_length":255}},
-          {"id":"fld_lead_email","key":"email","type":"email_address","label":"Email","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"first","personal_data":"personal","public_display":false,"settings":{}},
-          {"id":"fld_lead_source","key":"source","type":"choice","label":"Source","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"options":[{"value":"web","label":"Web form"},{"value":"referral","label":"Referral"},{"value":"event","label":"Event"},{"value":"manual","label":"Manual"}]}},
-          {"id":"fld_lead_interests","key":"interests","type":"several_choices","label":"Interests","required":false,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"options":[{"value":"software","label":"Software"},{"value":"services","label":"Services"},{"value":"support","label":"Support"}]}},
-          {"id":"fld_lead_score","key":"score","type":"whole_number","label":"Score","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"minimum":0,"maximum":100,"default":0}},
-          {"id":"fld_lead_status","key":"status","type":"choice","label":"Status","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"default":"new","options":[{"value":"new","label":"New"},{"value":"working","label":"Working"},{"value":"qualified","label":"Qualified"},{"value":"unqualified","label":"Unqualified"},{"value":"converted","label":"Converted"}]}},
-          {"id":"fld_lead_reason","key":"unqualified_reason","type":"long_text","label":"Unqualified reason","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"max_length":1000}},
-          {"id":"fld_lead_received","key":"received_at","type":"date_time","label":"Received at","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"default":"now"}}
+        "id": "rt_crm_lead",
+        "storage_contract_id": "srt_00000003",
+        "key": "lead",
+        "name": "Lead",
+        "plural_name": "Leads",
+        "description": "An enquiry that has not yet been qualified.",
+        "storage_scope": "application_contained",
+        "ownership_mode": "individual",
+        "title_field": "display_name",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_lead_number",
+            "key": "lead_number",
+            "type": "reference_number",
+            "label": "Lead number",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "prefix": "LEA-",
+              "digits": 7
+            }
+          },
+          {
+            "id": "fld_lead_name",
+            "key": "display_name",
+            "type": "text",
+            "label": "Name",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 160
+            }
+          },
+          {
+            "id": "fld_lead_company",
+            "key": "company_name",
+            "type": "text",
+            "label": "Company name",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 255
+            }
+          },
+          {
+            "id": "fld_lead_email",
+            "key": "email",
+            "type": "email_address",
+            "label": "Email",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "first",
+            "personal_data": "personal",
+            "public_display": "refused",
+            "settings": {}
+          },
+          {
+            "id": "fld_lead_source",
+            "key": "source",
+            "type": "choice",
+            "label": "Source",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "options": [
+                {
+                  "value": "web",
+                  "label": "Web form"
+                },
+                {
+                  "value": "referral",
+                  "label": "Referral"
+                },
+                {
+                  "value": "event",
+                  "label": "Event"
+                },
+                {
+                  "value": "manual",
+                  "label": "Manual"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_lead_interests",
+            "key": "interests",
+            "type": "several_choices",
+            "label": "Interests",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "options": [
+                {
+                  "value": "software",
+                  "label": "Software"
+                },
+                {
+                  "value": "services",
+                  "label": "Services"
+                },
+                {
+                  "value": "support",
+                  "label": "Support"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_lead_score",
+            "key": "score",
+            "type": "whole_number",
+            "label": "Score",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "minimum": 0,
+              "maximum": 100,
+              "default": 0
+            }
+          },
+          {
+            "id": "fld_lead_status",
+            "key": "status",
+            "type": "choice",
+            "label": "Status",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "default": "new",
+              "options": [
+                {
+                  "value": "new",
+                  "label": "New"
+                },
+                {
+                  "value": "working",
+                  "label": "Working"
+                },
+                {
+                  "value": "qualified",
+                  "label": "Qualified"
+                },
+                {
+                  "value": "unqualified",
+                  "label": "Unqualified"
+                },
+                {
+                  "value": "converted",
+                  "label": "Converted"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_lead_reason",
+            "key": "unqualified_reason",
+            "type": "long_text",
+            "label": "Unqualified reason",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 1000
+            }
+          },
+          {
+            "id": "fld_lead_received",
+            "key": "received_at",
+            "type": "date_time",
+            "label": "Received at",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "default": "now"
+            }
+          }
         ]
       }
     ],
-    "permissions":[
-      {"key":"vortex.crm.people.lead.convert","record_type":"lead","label":"Convert a lead"},
-      {"key":"vortex.crm.people.contact.view_sensitive_notes","record_type":"contact","label":"View sensitive contact notes"}
+    "permissions": [
+      {
+        "key": "vortex.crm.people.lead.convert",
+        "record_type": "lead",
+        "label": "Convert a lead"
+      },
+      {
+        "key": "vortex.crm.people.contact.view_sensitive_notes",
+        "record_type": "contact",
+        "label": "View sensitive contact notes"
+      }
     ],
-    "actions":[
-      {"id":"act_lead_convert","key":"vortex.crm.people.lead.convert","record_type":"lead","permission":"vortex.crm.people.lead.convert","inputs":[{"key":"company","type":"link","required":false,"settings":{"target":"vortex.crm.organisations:company"}}],"effects":["create_company_if_needed","create_contact","emit_event","change_status"],"shareable":false}
+    "actions": [
+      {
+        "id": "act_lead_convert",
+        "key": "vortex.crm.people.lead.convert",
+        "record_type": "lead",
+        "permission": "vortex.crm.people.lead.convert",
+        "inputs": [
+          {
+            "key": "company",
+            "type": "link",
+            "required": false,
+            "settings": {
+              "target": "vortex.crm.organisations:company"
+            }
+          }
+        ],
+        "effects": [
+          "create_company_if_needed",
+          "create_contact",
+          "emit_event",
+          "change_status"
+        ],
+        "shareable": false
+      }
     ],
-    "events":[
-      {"id":"evt_contact_created","key":"vortex.crm.people.contact.created","record_type":"contact","carries":["contact_number","full_name","company"]},
-      {"id":"evt_lead_received","key":"vortex.crm.people.lead.received","record_type":"lead","carries":["lead_number","display_name","source"]},
-      {"id":"evt_lead_converted","key":"vortex.crm.people.lead.converted","record_type":"lead","carries":["lead_number"]}
+    "events": [
+      {
+        "id": "evt_contact_created",
+        "key": "vortex.crm.people.contact.created",
+        "record_type": "contact",
+        "carries": [
+          "contact_number",
+          "full_name",
+          "company"
+        ]
+      },
+      {
+        "id": "evt_lead_received",
+        "key": "vortex.crm.people.lead.received",
+        "record_type": "lead",
+        "carries": [
+          "lead_number",
+          "display_name",
+          "source"
+        ]
+      },
+      {
+        "id": "evt_lead_converted",
+        "key": "vortex.crm.people.lead.converted",
+        "record_type": "lead",
+        "carries": [
+          "lead_number"
+        ]
+      }
     ],
-    "rules":[
-      {"id":"rule_lead_reason","key":"unqualified_reason_required","record_type":"lead","moment":"saving","condition":{"all":[{"field":"status","operator":"equals","value":"unqualified"},{"field":"unqualified_reason","operator":"is_empty"}]},"effect":"refuse","message":"Explain why the lead is unqualified."}
+    "rules": [
+      {
+        "id": "rule_lead_reason",
+        "key": "unqualified_reason_required",
+        "record_type": "lead",
+        "moment": "saving",
+        "condition": {
+          "all": [
+            {
+              "field": "status",
+              "operator": "equals",
+              "value": "unqualified"
+            },
+            {
+              "field": "unqualified_reason",
+              "operator": "is_empty"
+            }
+          ]
+        },
+        "effect": "refuse",
+        "message": "Explain why the lead is unqualified."
+      }
     ],
-    "extension_points":[
-      {"id":"ext_contact_fields","key":"contact_fields","record_type":"contact","accepts":["field"]},
-      {"id":"ext_lead_actions","key":"lead_actions","record_type":"lead","accepts":["action"]}
+    "extension_points": [
+      {
+        "id": "ext_contact_fields",
+        "key": "contact_fields",
+        "record_type": "contact",
+        "accepts": [
+          "field"
+        ]
+      },
+      {
+        "id": "ext_lead_actions",
+        "key": "lead_actions",
+        "record_type": "lead",
+        "accepts": [
+          "action"
+        ]
+      }
     ]
   }
 }

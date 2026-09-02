@@ -65,7 +65,7 @@ stateDiagram-v2
 - A live request resolves one published module/application version set and uses it for the full request.
 - An application-to-module reference uses a stable module identifier plus an allowed version range or an explicitly pinned version. Publication records the exact resolved module version.
 
-The platform will calculate whether a proposed revision is patch, minor, or major from its stable identifiers and contract changes. Whether Vortex assigns that next release number or accepts a builder-proposed number remains the explicit [D37 business decision](appendices/decisions.md#d37--who-sets-a-module-or-application-release-number) and blocks only [the version-impact implementation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14).
+The platform calculates whether a proposed revision is patch, minor, or major from its stable identifiers and contract changes. Vortex assigns the minimum valid next release version. The builder reviews every reason for that calculated impact and either confirms publication or cancels it; the builder does not enter or override the release number. This keeps module and application histories consistent and prevents an accidental compatibility claim.
 
 ## Validation before publication
 

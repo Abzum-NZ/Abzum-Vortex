@@ -1,35 +1,510 @@
 {
-  "schema_version":"2.0.0","kind":"module","root_id":"mod_crm_opportunities","key":"vortex.crm.opportunities","version":"1.0.0","revision":1,"state":"published","content_fingerprint":"fixture:vortex.crm.opportunities:1.0.0",
-  "body":{
-    "name":"CRM Opportunities","description":"Sales opportunities, stakeholders and commercial values.","category":"CRM","dependencies":[{"module":"vortex.crm.organisations","version":"1.0.0"},{"module":"vortex.crm.people","version":"1.0.0"}],
-    "record_types":[
-      {"id":"rt_crm_opportunity","storage_contract_id":"srt_00000004","key":"opportunity","name":"Opportunity","plural_name":"Opportunities","description":"A potential sale being progressed.","storage_scope":"application_contained","ownership_mode":"team","title_field":"name","standard_actions":["create","read","update","soft_delete","restore","export"],"fields":[
-        {"id":"fld_opp_number","key":"opportunity_number","type":"reference_number","label":"Opportunity number","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"prefix":"OPP-","digits":7}},
-        {"id":"fld_opp_name","key":"name","type":"text","label":"Opportunity name","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"none","public_display":false,"settings":{"max_length":255}},
-        {"id":"fld_opp_company","key":"company","type":"link","label":"Company","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"target":"vortex.crm.organisations:company","reverse_key":"opportunities","on_parent_delete":"refuse"}},
-        {"id":"fld_opp_contact","key":"primary_contact","type":"link","label":"Primary contact","required":false,"unique":false,"filterable":true,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"target":"vortex.crm.people:contact","reverse_key":"primary_opportunities","on_parent_delete":"empty_optional"}},
-        {"id":"fld_opp_value","key":"value","type":"money","label":"Value","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"currency_mode":"organisation_default","minimum":0}},
-        {"id":"fld_opp_discount","key":"discount_percent","type":"decimal_number","label":"Discount percentage","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"minimum":0,"maximum":100,"decimal_places":2,"default":0}},
-        {"id":"fld_opp_net","key":"net_value","type":"calculation","label":"Net value","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"result_type":"money","expression":{"operation":"subtract_percentage","amount_field":"value","percentage_field":"discount_percent"}}},
-        {"id":"fld_opp_probability","key":"probability","type":"whole_number","label":"Probability","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"minimum":0,"maximum":100,"default":10}},
-        {"id":"fld_opp_stage","key":"stage","type":"choice","label":"Stage","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"default":"discovery","options":[{"value":"discovery","label":"Discovery"},{"value":"qualified","label":"Qualified"},{"value":"proposal","label":"Proposal"},{"value":"negotiation","label":"Negotiation"},{"value":"won","label":"Won"},{"value":"lost","label":"Lost"}]}},
-        {"id":"fld_opp_close","key":"expected_close_date","type":"date","label":"Expected close date","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{}},
-        {"id":"fld_opp_schedule","key":"payment_schedule","type":"table","label":"Payment schedule","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"minimum_rows":0,"maximum_rows":24,"columns":[{"key":"milestone","type":"text","required":true},{"key":"amount","type":"money","required":true},{"key":"due_date","type":"date","required":true},{"key":"paid","type":"yes_no","required":true}]}},
-        {"id":"fld_opp_docs","key":"documents","type":"attachment","label":"Documents","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"none","personal_data":"commercial_sensitive","public_display":false,"settings":{"maximum_files":20,"maximum_bytes_each":26214400}}
-      ]},
-      {"id":"rt_crm_opportunity_contact","storage_contract_id":"srt_00000005","key":"opportunity_contact","name":"Opportunity contact","plural_name":"Opportunity contacts","description":"A contact's role in an opportunity.","storage_scope":"application_contained","ownership_mode":"inherited","title_field":"role","standard_actions":["create","read","update","soft_delete","restore","export"],"fields":[
-        {"id":"fld_oc_opp","key":"opportunity","type":"link","label":"Opportunity","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"target":"vortex.crm.opportunities:opportunity","reverse_key":"stakeholders","on_parent_delete":"soft_delete_dependent"}},
-        {"id":"fld_oc_contact","key":"contact","type":"link","label":"Contact","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"target":"vortex.crm.people:contact","reverse_key":"opportunity_roles","on_parent_delete":"soft_delete_dependent"}},
-        {"id":"fld_oc_role","key":"role","type":"choice","label":"Role","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"options":[{"value":"decision_maker","label":"Decision maker"},{"value":"champion","label":"Champion"},{"value":"influencer","label":"Influencer"},{"value":"procurement","label":"Procurement"}]}}
-      ]}
+  "schema_version": "2.0.0",
+  "kind": "module",
+  "root_id": "mod_crm_opportunities",
+  "key": "vortex.crm.opportunities",
+  "version": "1.0.0",
+  "revision": 1,
+  "state": "published",
+  "content_fingerprint": "fixture:vortex.crm.opportunities:1.0.0",
+  "body": {
+    "name": "CRM Opportunities",
+    "description": "Sales opportunities, stakeholders and commercial values.",
+    "category": "CRM",
+    "dependencies": [
+      {
+        "module": "vortex.crm.organisations",
+        "version": "1.0.0"
+      },
+      {
+        "module": "vortex.crm.people",
+        "version": "1.0.0"
+      }
     ],
-    "permissions":[{"key":"vortex.crm.opportunities.opportunity.approve_discount","record_type":"opportunity","label":"Approve a discount above 15 percent"},{"key":"vortex.crm.opportunities.opportunity.mark_won","record_type":"opportunity","label":"Mark an opportunity as won"}],
-    "actions":[
-      {"id":"act_opp_approve_discount","key":"vortex.crm.opportunities.opportunity.approve_discount","record_type":"opportunity","permission":"vortex.crm.opportunities.opportunity.approve_discount","inputs":[],"effects":["record_approval","emit_event"],"shareable":false},
-      {"id":"act_opp_mark_won","key":"vortex.crm.opportunities.opportunity.mark_won","record_type":"opportunity","permission":"vortex.crm.opportunities.opportunity.mark_won","inputs":[{"key":"won_at","type":"date_time","required":true}],"effects":["change_stage","emit_event"],"shareable":false}
+    "record_types": [
+      {
+        "id": "rt_crm_opportunity",
+        "storage_contract_id": "srt_00000004",
+        "key": "opportunity",
+        "name": "Opportunity",
+        "plural_name": "Opportunities",
+        "description": "A potential sale being progressed.",
+        "storage_scope": "application_contained",
+        "ownership_mode": "team",
+        "title_field": "name",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_opp_number",
+            "key": "opportunity_number",
+            "type": "reference_number",
+            "label": "Opportunity number",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "prefix": "OPP-",
+              "digits": 7
+            }
+          },
+          {
+            "id": "fld_opp_name",
+            "key": "name",
+            "type": "text",
+            "label": "Opportunity name",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 255
+            }
+          },
+          {
+            "id": "fld_opp_company",
+            "key": "company",
+            "type": "link",
+            "label": "Company",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "target": "vortex.crm.organisations:company",
+              "reverse_key": "opportunities",
+              "on_parent_delete": "refuse"
+            }
+          },
+          {
+            "id": "fld_opp_contact",
+            "key": "primary_contact",
+            "type": "link",
+            "label": "Primary contact",
+            "required": false,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "target": "vortex.crm.people:contact",
+              "reverse_key": "primary_opportunities",
+              "on_parent_delete": "empty_optional"
+            }
+          },
+          {
+            "id": "fld_opp_value",
+            "key": "value",
+            "type": "money",
+            "label": "Value",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "currency_mode": "organisation_default",
+              "minimum": 0
+            }
+          },
+          {
+            "id": "fld_opp_discount",
+            "key": "discount_percent",
+            "type": "decimal_number",
+            "label": "Discount percentage",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "minimum": 0,
+              "maximum": 100,
+              "decimal_places": 2,
+              "default": 0
+            }
+          },
+          {
+            "id": "fld_opp_net",
+            "key": "net_value",
+            "type": "calculation",
+            "label": "Net value",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "result_type": "money",
+              "expression": {
+                "operation": "subtract_percentage",
+                "amount_field": "value",
+                "percentage_field": "discount_percent"
+              }
+            }
+          },
+          {
+            "id": "fld_opp_probability",
+            "key": "probability",
+            "type": "whole_number",
+            "label": "Probability",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "minimum": 0,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "id": "fld_opp_stage",
+            "key": "stage",
+            "type": "choice",
+            "label": "Stage",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "default": "discovery",
+              "options": [
+                {
+                  "value": "discovery",
+                  "label": "Discovery"
+                },
+                {
+                  "value": "qualified",
+                  "label": "Qualified"
+                },
+                {
+                  "value": "proposal",
+                  "label": "Proposal"
+                },
+                {
+                  "value": "negotiation",
+                  "label": "Negotiation"
+                },
+                {
+                  "value": "won",
+                  "label": "Won"
+                },
+                {
+                  "value": "lost",
+                  "label": "Lost"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_opp_close",
+            "key": "expected_close_date",
+            "type": "date",
+            "label": "Expected close date",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {}
+          },
+          {
+            "id": "fld_opp_schedule",
+            "key": "payment_schedule",
+            "type": "table",
+            "label": "Payment schedule",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "minimum_rows": 0,
+              "maximum_rows": 24,
+              "columns": [
+                {
+                  "key": "milestone",
+                  "type": "text",
+                  "required": true
+                },
+                {
+                  "key": "amount",
+                  "type": "money",
+                  "required": true
+                },
+                {
+                  "key": "due_date",
+                  "type": "date",
+                  "required": true
+                },
+                {
+                  "key": "paid",
+                  "type": "yes_no",
+                  "required": true
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_opp_docs",
+            "key": "documents",
+            "type": "attachment",
+            "label": "Documents",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "sensitive",
+            "public_display": "refused",
+            "settings": {
+              "allowed_kinds": [
+                "image",
+                "document",
+                "spreadsheet",
+                "presentation",
+                "audio",
+                "video",
+                "archive",
+                "text",
+                "other"
+              ],
+              "max_file_size_mb": 25,
+              "multiple": true,
+              "max_files": 20
+            }
+          }
+        ]
+      },
+      {
+        "id": "rt_crm_opportunity_contact",
+        "storage_contract_id": "srt_00000005",
+        "key": "opportunity_contact",
+        "name": "Opportunity contact",
+        "plural_name": "Opportunity contacts",
+        "description": "A contact's role in an opportunity.",
+        "storage_scope": "application_contained",
+        "ownership_mode": "inherited",
+        "ownership_relationship": "opportunity",
+        "title_field": "role",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_oc_opp",
+            "key": "opportunity",
+            "type": "link",
+            "label": "Opportunity",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "target": "vortex.crm.opportunities:opportunity",
+              "reverse_key": "stakeholders",
+              "on_parent_delete": "soft_delete_dependent"
+            }
+          },
+          {
+            "id": "fld_oc_contact",
+            "key": "contact",
+            "type": "link",
+            "label": "Contact",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "target": "vortex.crm.people:contact",
+              "reverse_key": "opportunity_roles",
+              "on_parent_delete": "soft_delete_dependent"
+            }
+          },
+          {
+            "id": "fld_oc_role",
+            "key": "role",
+            "type": "choice",
+            "label": "Role",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "options": [
+                {
+                  "value": "decision_maker",
+                  "label": "Decision maker"
+                },
+                {
+                  "value": "champion",
+                  "label": "Champion"
+                },
+                {
+                  "value": "influencer",
+                  "label": "Influencer"
+                },
+                {
+                  "value": "procurement",
+                  "label": "Procurement"
+                }
+              ]
+            }
+          }
+        ]
+      }
     ],
-    "events":[{"id":"evt_opp_created","key":"vortex.crm.opportunities.opportunity.created","record_type":"opportunity","carries":["opportunity_number","company","value","stage"]},{"id":"evt_opp_stage","key":"vortex.crm.opportunities.opportunity.stage_changed","record_type":"opportunity","carries":["opportunity_number","stage","value"]},{"id":"evt_opp_won","key":"vortex.crm.opportunities.opportunity.won","record_type":"opportunity","carries":["opportunity_number","company","net_value"]}],
-    "rules":[{"id":"rule_opp_discount","key":"large_discount_requires_approval","record_type":"opportunity","moment":"saving","condition":{"field":"discount_percent","operator":"greater_than","value":15},"effect":"require_permission","permission":"vortex.crm.opportunities.opportunity.approve_discount","message":"A discount above 15 percent needs approval."}],
-    "extension_points":[{"id":"ext_opp_fields","key":"opportunity_fields","record_type":"opportunity","accepts":["field"]},{"id":"ext_opp_actions","key":"opportunity_actions","record_type":"opportunity","accepts":["action"]}]
+    "permissions": [
+      {
+        "key": "vortex.crm.opportunities.opportunity.approve_discount",
+        "record_type": "opportunity",
+        "label": "Approve a discount above 15 percent"
+      },
+      {
+        "key": "vortex.crm.opportunities.opportunity.mark_won",
+        "record_type": "opportunity",
+        "label": "Mark an opportunity as won"
+      }
+    ],
+    "actions": [
+      {
+        "id": "act_opp_approve_discount",
+        "key": "vortex.crm.opportunities.opportunity.approve_discount",
+        "record_type": "opportunity",
+        "permission": "vortex.crm.opportunities.opportunity.approve_discount",
+        "inputs": [],
+        "effects": [
+          "record_approval",
+          "emit_event"
+        ],
+        "shareable": false
+      },
+      {
+        "id": "act_opp_mark_won",
+        "key": "vortex.crm.opportunities.opportunity.mark_won",
+        "record_type": "opportunity",
+        "permission": "vortex.crm.opportunities.opportunity.mark_won",
+        "inputs": [
+          {
+            "key": "won_at",
+            "type": "date_time",
+            "required": true
+          }
+        ],
+        "effects": [
+          "change_stage",
+          "emit_event"
+        ],
+        "shareable": false
+      }
+    ],
+    "events": [
+      {
+        "id": "evt_opp_created",
+        "key": "vortex.crm.opportunities.opportunity.created",
+        "record_type": "opportunity",
+        "carries": [
+          "opportunity_number",
+          "company",
+          "value",
+          "stage"
+        ]
+      },
+      {
+        "id": "evt_opp_stage",
+        "key": "vortex.crm.opportunities.opportunity.stage_changed",
+        "record_type": "opportunity",
+        "carries": [
+          "opportunity_number",
+          "stage",
+          "value"
+        ]
+      },
+      {
+        "id": "evt_opp_won",
+        "key": "vortex.crm.opportunities.opportunity.won",
+        "record_type": "opportunity",
+        "carries": [
+          "opportunity_number",
+          "company",
+          "net_value"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "id": "rule_opp_discount",
+        "key": "large_discount_requires_approval",
+        "record_type": "opportunity",
+        "moment": "saving",
+        "condition": {
+          "field": "discount_percent",
+          "operator": "greater_than",
+          "value": 15
+        },
+        "effect": "require_permission",
+        "permission": "vortex.crm.opportunities.opportunity.approve_discount",
+        "message": "A discount above 15 percent needs approval."
+      }
+    ],
+    "extension_points": [
+      {
+        "id": "ext_opp_fields",
+        "key": "opportunity_fields",
+        "record_type": "opportunity",
+        "accepts": [
+          "field"
+        ]
+      },
+      {
+        "id": "ext_opp_actions",
+        "key": "opportunity_actions",
+        "record_type": "opportunity",
+        "accepts": [
+          "action"
+        ]
+      }
+    ]
   }
 }

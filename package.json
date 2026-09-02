@@ -8,7 +8,7 @@
     "node": "24"
   },
   "workspaces": [
-    "web",
+    "apps/*",
     "contracts",
     "db",
     "runtime/*",

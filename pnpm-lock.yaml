@@ -36,6 +36,85 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
+  apps/web:
+    dependencies:
+      '@vortex/access':
+        specifier: workspace:*
+        version: link:../../runtime/access
+      '@vortex/app':
+        specifier: workspace:*
+        version: link:../../runtime/app
+      '@vortex/connection':
+        specifier: workspace:*
+        version: link:../../runtime/connection
+      '@vortex/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@vortex/definition':
+        specifier: workspace:*
+        version: link:../../runtime/definition
+      '@vortex/event':
+        specifier: workspace:*
+        version: link:../../runtime/event
+      '@vortex/file':
+        specifier: workspace:*
+        version: link:../../runtime/file
+      '@vortex/identity':
+        specifier: workspace:*
+        version: link:../../runtime/identity
+      '@vortex/interface':
+        specifier: workspace:*
+        version: link:../../runtime/interface
+      '@vortex/module':
+        specifier: workspace:*
+        version: link:../../runtime/module
+      '@vortex/modules':
+        specifier: workspace:*
+        version: link:../../modules
+      '@vortex/page':
+        specifier: workspace:*
+        version: link:../../runtime/page
+      '@vortex/query':
+        specifier: workspace:*
+        version: link:../../runtime/query
+      '@vortex/record':
+        specifier: workspace:*
+        version: link:../../runtime/record
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../../runtime/rule
+      '@vortex/search':
+        specifier: workspace:*
+        version: link:../../runtime/search
+      '@vortex/theme':
+        specifier: workspace:*
+        version: link:../../runtime/theme
+      '@vortex/ui':
+        specifier: workspace:*
+        version: link:../../ui
+      '@vortex/workflow':
+        specifier: workspace:*
+        version: link:../../runtime/workflow
+      next:
+        specifier: 16.3.3
+        version: 16.3.3(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      server-only:
+        specifier: 0.0.1
+        version: 0.0.1
+    devDependencies:
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 19.2.5
+        version: 19.2.5(@types/react@19.2.18)
+
   contracts:
     dependencies:
       zod:
@@ -294,85 +373,6 @@ importers:
       '@vortex/modules':
         specifier: workspace:*
         version: link:../modules
-
-  web:
-    dependencies:
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../runtime/access
-      '@vortex/app':
-        specifier: workspace:*
-        version: link:../runtime/app
-      '@vortex/connection':
-        specifier: workspace:*
-        version: link:../runtime/connection
-      '@vortex/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@vortex/definition':
-        specifier: workspace:*
-        version: link:../runtime/definition
-      '@vortex/event':
-        specifier: workspace:*
-        version: link:../runtime/event
-      '@vortex/file':
-        specifier: workspace:*
-        version: link:../runtime/file
-      '@vortex/identity':
-        specifier: workspace:*
-        version: link:../runtime/identity
-      '@vortex/interface':
-        specifier: workspace:*
-        version: link:../runtime/interface
-      '@vortex/module':
-        specifier: workspace:*
-        version: link:../runtime/module
-      '@vortex/modules':
-        specifier: workspace:*
-        version: link:../modules
-      '@vortex/page':
-        specifier: workspace:*
-        version: link:../runtime/page
-      '@vortex/query':
-        specifier: workspace:*
-        version: link:../runtime/query
-      '@vortex/record':
-        specifier: workspace:*
-        version: link:../runtime/record
-      '@vortex/rule':
-        specifier: workspace:*
-        version: link:../runtime/rule
-      '@vortex/search':
-        specifier: workspace:*
-        version: link:../runtime/search
-      '@vortex/theme':
-        specifier: workspace:*
-        version: link:../runtime/theme
-      '@vortex/ui':
-        specifier: workspace:*
-        version: link:../ui
-      '@vortex/workflow':
-        specifier: workspace:*
-        version: link:../runtime/workflow
-      next:
-        specifier: 16.3.3
-        version: 16.3.3(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      react:
-        specifier: 19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: 19.2.8
-        version: 19.2.8(react@19.2.8)
-      server-only:
-        specifier: 0.0.1
-        version: 0.0.1
-    devDependencies:
-      '@types/react':
-        specifier: 19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: 19.2.5
-        version: 19.2.5(@types/react@19.2.18)
 
 packages:
 

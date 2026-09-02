@@ -1,22 +1,271 @@
 {
-  "schema_version":"2.0.0","kind":"module","root_id":"mod_crm_tags","key":"vortex.crm.tags","version":"1.0.0","revision":1,"state":"published","content_fingerprint":"fixture:vortex.crm.tags:1.0.0",
-  "body":{"name":"CRM Tags","description":"Controlled labels that can be attached to CRM and Service Desk records.","category":"Shared utility","dependencies":[{"module":"vortex.crm.organisations","version":"1.0.0"},{"module":"vortex.crm.people","version":"1.0.0"},{"module":"vortex.crm.opportunities","version":"1.0.0"}],
-    "record_types":[
-      {"id":"rt_crm_tag","storage_contract_id":"srt_00000007","key":"tag","name":"Tag","plural_name":"Tags","description":"A reusable record label.","storage_scope":"organisation_shared","ownership_mode":"team","title_field":"name","standard_actions":["create","read","update","soft_delete","restore","export"],"fields":[
-        {"id":"fld_tag_name","key":"name","type":"text","label":"Name","required":true,"unique":true,"filterable":true,"sortable":true,"search_priority":"first","personal_data":"none","public_display":false,"settings":{"max_length":80}},
-        {"id":"fld_tag_description","key":"description","type":"long_text","label":"Description","required":false,"unique":false,"filterable":false,"sortable":false,"search_priority":"normal","personal_data":"none","public_display":false,"settings":{"max_length":500}},
-        {"id":"fld_tag_active","key":"active","type":"yes_no","label":"Active","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"default":true}},
-        {"id":"fld_tag_assignments","key":"assignment_count","type":"total","label":"Assignment count","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"relationship":"assignments","operation":"count"}}
-      ]},
-      {"id":"rt_crm_record_tag","storage_contract_id":"srt_00000008","key":"record_tag","name":"Record tag","plural_name":"Record tags","description":"A tag assignment to an allowed record.","storage_scope":"organisation_shared","ownership_mode":"inherited","title_field":"assigned_at","standard_actions":["create","read","soft_delete","restore","export"],"fields":[
-        {"id":"fld_record_tag_tag","key":"tag","type":"link","label":"Tag","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"target":"vortex.crm.tags:tag","reverse_key":"assignments","on_parent_delete":"soft_delete_dependent"}},
-        {"id":"fld_record_tag_target","key":"record","type":"link_to_one_of_several","label":"Record","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"targets":["vortex.crm.organisations:company","vortex.crm.people:contact","vortex.crm.people:lead","vortex.crm.opportunities:opportunity"],"on_parent_delete":"soft_delete_dependent"}},
-        {"id":"fld_record_tag_at","key":"assigned_at","type":"date_time","label":"Assigned at","required":true,"unique":false,"filterable":true,"sortable":true,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"default":"now"}},
-        {"id":"fld_record_tag_by","key":"assigned_by","type":"link_to_person","label":"Assigned by","required":true,"unique":false,"filterable":true,"sortable":false,"search_priority":"none","personal_data":"none","public_display":false,"settings":{"audience":"organisation_accounts","on_person_deactivation":"retain_reference"}}
-      ]}
+  "schema_version": "2.0.0",
+  "kind": "module",
+  "root_id": "mod_crm_tags",
+  "key": "vortex.crm.tags",
+  "version": "1.0.0",
+  "revision": 1,
+  "state": "published",
+  "content_fingerprint": "fixture:vortex.crm.tags:1.0.0",
+  "body": {
+    "name": "CRM Tags",
+    "description": "Controlled labels that can be attached to CRM and Service Desk records.",
+    "category": "Shared utility",
+    "dependencies": [
+      {
+        "module": "vortex.crm.organisations",
+        "version": "1.0.0"
+      },
+      {
+        "module": "vortex.crm.people",
+        "version": "1.0.0"
+      },
+      {
+        "module": "vortex.crm.opportunities",
+        "version": "1.0.0"
+      }
     ],
-    "permissions":[{"key":"vortex.crm.tags.record_tag.manage","record_type":"record_tag","label":"Assign and remove tags"}],
-    "actions":[{"id":"act_tag_assign","key":"vortex.crm.tags.record_tag.assign","record_type":"record_tag","permission":"vortex.crm.tags.record_tag.manage","inputs":[{"key":"tag","type":"link","required":true,"settings":{"target":"vortex.crm.tags:tag"}},{"key":"record","type":"link_to_one_of_several","required":true,"settings":{"targets":["vortex.crm.organisations:company","vortex.crm.people:contact","vortex.crm.people:lead","vortex.crm.opportunities:opportunity"]}}],"effects":["create_record","emit_event"],"shareable":false}],
-    "events":[{"id":"evt_tag_assigned","key":"vortex.crm.tags.record_tag.assigned","record_type":"record_tag","carries":["tag","record","assigned_by"]}],"rules":[],"extension_points":[{"id":"ext_tag_targets","key":"tag_targets","record_type":"record_tag","accepts":["link_target"]}]
+    "record_types": [
+      {
+        "id": "rt_crm_tag",
+        "storage_contract_id": "srt_00000007",
+        "key": "tag",
+        "name": "Tag",
+        "plural_name": "Tags",
+        "description": "A reusable record label.",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "team",
+        "title_field": "name",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_tag_name",
+            "key": "name",
+            "type": "text",
+            "label": "Name",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 80
+            }
+          },
+          {
+            "id": "fld_tag_description",
+            "key": "description",
+            "type": "long_text",
+            "label": "Description",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 500
+            }
+          },
+          {
+            "id": "fld_tag_active",
+            "key": "active",
+            "type": "yes_no",
+            "label": "Active",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "default": true
+            }
+          },
+          {
+            "id": "fld_tag_assignments",
+            "key": "assignment_count",
+            "type": "total",
+            "label": "Assignment count",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "relationship": "assignments",
+              "operation": "count"
+            }
+          }
+        ]
+      },
+      {
+        "id": "rt_crm_record_tag",
+        "storage_contract_id": "srt_00000008",
+        "key": "record_tag",
+        "name": "Record tag",
+        "plural_name": "Record tags",
+        "description": "A tag assignment to an allowed record.",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "inherited",
+        "ownership_relationship": "record",
+        "title_field": "assigned_at",
+        "standard_actions": [
+          "create",
+          "read",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_record_tag_tag",
+            "key": "tag",
+            "type": "link",
+            "label": "Tag",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "target": "vortex.crm.tags:tag",
+              "reverse_key": "assignments",
+              "on_parent_delete": "soft_delete_dependent"
+            }
+          },
+          {
+            "id": "fld_record_tag_target",
+            "key": "record",
+            "type": "link_to_one_of_several",
+            "label": "Record",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "targets": [
+                "vortex.crm.organisations:company",
+                "vortex.crm.people:contact",
+                "vortex.crm.people:lead",
+                "vortex.crm.opportunities:opportunity"
+              ],
+              "on_parent_delete": "soft_delete_dependent"
+            }
+          },
+          {
+            "id": "fld_record_tag_at",
+            "key": "assigned_at",
+            "type": "date_time",
+            "label": "Assigned at",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "default": "now"
+            }
+          },
+          {
+            "id": "fld_record_tag_by",
+            "key": "assigned_by",
+            "type": "link_to_person",
+            "label": "Assigned by",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "audience": "organisation_accounts",
+              "on_person_deactivation": "retain_reference"
+            }
+          }
+        ]
+      }
+    ],
+    "permissions": [
+      {
+        "key": "vortex.crm.tags.record_tag.manage",
+        "record_type": "record_tag",
+        "label": "Assign and remove tags"
+      }
+    ],
+    "actions": [
+      {
+        "id": "act_tag_assign",
+        "key": "vortex.crm.tags.record_tag.assign",
+        "record_type": "record_tag",
+        "permission": "vortex.crm.tags.record_tag.manage",
+        "inputs": [
+          {
+            "key": "tag",
+            "type": "link",
+            "required": true,
+            "settings": {
+              "target": "vortex.crm.tags:tag"
+            }
+          },
+          {
+            "key": "record",
+            "type": "link_to_one_of_several",
+            "required": true,
+            "settings": {
+              "targets": [
+                "vortex.crm.organisations:company",
+                "vortex.crm.people:contact",
+                "vortex.crm.people:lead",
+                "vortex.crm.opportunities:opportunity"
+              ]
+            }
+          }
+        ],
+        "effects": [
+          "create_record",
+          "emit_event"
+        ],
+        "shareable": false
+      }
+    ],
+    "events": [
+      {
+        "id": "evt_tag_assigned",
+        "key": "vortex.crm.tags.record_tag.assigned",
+        "record_type": "record_tag",
+        "carries": [
+          "tag",
+          "record",
+          "assigned_by"
+        ]
+      }
+    ],
+    "rules": [],
+    "extension_points": [
+      {
+        "id": "ext_tag_targets",
+        "key": "tag_targets",
+        "record_type": "record_tag",
+        "accepts": [
+          "link_target"
+        ]
+      }
+    ]
   }
 }
