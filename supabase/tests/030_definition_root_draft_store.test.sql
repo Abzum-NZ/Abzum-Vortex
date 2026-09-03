@@ -17,14 +17,20 @@ select has_table('vortex_definition', 'roots', 'Definition root storage exists')
 select has_table('vortex_definition', 'drafts', 'Definition draft storage exists');
 select tables_are(
   'vortex_definition',
-  array['drafts', 'roots', 'source_identities', 'source_identity_aliases'],
-  'Definition storage contains roots, drafts and permanent source identities'
+  array[
+    'drafts', 'release_dependencies', 'releases', 'roots',
+    'source_identities', 'source_identity_aliases'
+  ],
+  'Definition storage contains roots, drafts, identities and immutable releases'
 );
 select columns_are(
   'vortex_definition',
   'roots',
-  array['root_id', 'organization_id', 'kind', 'key', 'created_at', 'created_by'],
-  'root columns contain only permanent identity and creation evidence'
+  array[
+    'root_id', 'organization_id', 'kind', 'key', 'created_at', 'created_by',
+    'current_release_revision'
+  ],
+  'root columns contain permanent identity, creation evidence and the discovery pointer'
 );
 select columns_are(
   'vortex_definition',
@@ -253,7 +259,7 @@ select is(
     where function.pronamespace = 'vortex_definition'::regnamespace
       and function.proconfig @> array['search_path=""']
   ),
-  7,
+  9,
   'every Definition function fixes an empty search path'
 );
 select has_function(
