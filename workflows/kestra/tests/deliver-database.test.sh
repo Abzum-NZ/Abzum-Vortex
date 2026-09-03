@@ -122,6 +122,7 @@ openssl req \
 export VORTEX_TEST_SSL_ROOT_CERT="$(<"$test_root/test-root.crt")"
 export VORTEX_TEST_EXPECTED_DATABASE_URL='postgresql://postgres.abcdefghijklmnopqrst@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres?sslmode=verify-full'
 export VORTEX_DATABASE_URL='postgresql://attacker:password@attacker.invalid:5432/postgres?host=attacker.invalid&sslmode=disable'
+export VORTEX_TEST_CONCURRENCY_PROOF_MARKER="$test_root/concurrency-proof-called"
 export VORTEX_TEST_REMOTE_MIGRATION_MISMATCH=true
 if "$delivery_script" >"$test_root/history-mismatch.log" 2>&1; then
   echo "expected an unreviewed remote migration to be refused" >&2
@@ -135,6 +136,7 @@ unset VORTEX_TEST_REMOTE_MIGRATION_MISMATCH
 export VORTEX_TEST_PG_PROVE_MARKER="$test_root/pg-prove-called"
 "$delivery_script"
 test -f "$VORTEX_TEST_PG_PROVE_MARKER"
+test -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 jq --exit-status \
   '.status == "succeeded" and
    .environment == "production" and
