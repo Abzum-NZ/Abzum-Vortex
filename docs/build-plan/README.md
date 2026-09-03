@@ -86,7 +86,7 @@ Exit proof:
 
 Build:
 
-- Keep the one deployable Next.js composition root at `apps/web`, following the official Turborepo deployable-application convention; shared packages remain separate workspace members.
+- Keep the one deployable Next.js composition root and Vercel Root Directory at `apps/web`, following the official Turborepo deployable-application convention; include the workspace files it depends on, run the root `pnpm verify` gate, publish `.next`, and keep shared packages as separate workspace members.
 - Shared identifier, error, actor, organisation context, revision, dependency and version-range contracts.
 - Independently versioned module and application contracts plus their contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
 - All core [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, protected removal, entitlements, metering and cache versions.

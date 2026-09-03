@@ -143,6 +143,9 @@ feature branch ──PR──▶ testing ──PR──▶ main
 
 - Vercel builds, deploys, and gates. Its Git integration builds every pull request and every branch.
   Branch protection on `testing` and `main` requires one check before a merge: `Vercel`.
+- The Vercel project Root Directory is `apps/web`, with workspace files included. Its application-local
+  configuration returns to the repository root to run the same `pnpm verify` command used locally,
+  then deploys `apps/web/.next`.
 - The build runs formatting, types, linting, package-boundary, unit, contract and build checks without
   a database. A failing check fails the build, so the change cannot merge and gets no preview until
   someone fixes it. We accept that cost deliberately, to run one system rather than two.
