@@ -91,7 +91,13 @@ Organisation states are active, suspended, archived, and removal pending. Data r
 
 ### Identity authority
 
-Each environment has one Vortex Identity Authority shared by its clusters. Its public contract provides authority identifier, environment, token issuer, intended audience rules, current and next asymmetric public keys, key identifiers, activation and retirement times, and supported token-contract versions. An identity token provides `identity_id`, issue and expiry times, authentication strength, session identifier, and issuer; it does not contain authoritative organisation roles or substitute for an active [organisation account](../02-people-organisations-and-sign-in.md#concepts).
+Each environment has one Vortex Identity Authority shared by its clusters. Its public configuration provides the authority identifier, environment, token issuer, standard JWKS address, the ordinary `authenticated` audience, and the first-release `ES256` signing algorithm. Local may use an HTTP loopback issuer; Testing and Production require HTTPS. The JWKS address must be the issuer's `/.well-known/jwks.json` endpoint on the same origin. Vortex does not copy a managed public key into its own record or store a Supabase private signing key.
+
+The raw provider boundary accepts Supabase's required standard claims: `iss`, `aud`, `exp`, `iat`, `sub`, `role`, `aal`, `session_id`, `email`, `phone`, and `is_anonymous`, plus documented optional and future claims. Cryptographic verification and the configured issuer and audience checks happen before projection. The raw claim object is an external input, not a canonical Vortex identity or access contract. In particular, `role`, `phone`, `app_metadata`, `user_metadata`, and unknown claims are never copied into Vortex authority.
+
+The closed verified-identity result provides `identity_id`, `verified_primary_email`, issuer, the normalised `authenticated` audience, session identifier, issue and expiry times, authentication strength, and the verified JWT key identifier. `sub` becomes `identity_id`; the confirmed `email` becomes `verified_primary_email`; `session_id`, `aal`, `iat`, and `exp` are validated and converted without changing their meaning. Email confirmation is an authority configuration invariant: an unconfirmed email cannot produce this result. The email proves the person's verified primary address at token issue time but grants no tenant, organisation, application, role, team, record, or capability access.
+
+Ordinary identity tokens use no custom access-token hook because the standard claims are sufficient. Organisation accounts consume the verified identity identifier and email under their own lifecycle rules. Session handling consumes the same verified result and separately owns cookie persistence, refresh, sign-out, revocation, and global-identity state checks.
 
 ### Organisation account
 

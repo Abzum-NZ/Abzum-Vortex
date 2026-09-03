@@ -6,10 +6,10 @@ export const contractIndex = [
     owner: "#11",
   },
   {
-    group: "tenant, identity and organisation accounts",
-    layer: "canonical_runtime",
+    group: "identity authority input, verified identity, tenant and organisation accounts",
+    layer: "provider_input_and_canonical_runtime",
     specification: "02-people-organisations-and-sign-in.md",
-    owner: "#12, corrected by #186",
+    owner: "#12, corrected by #186 and #25",
   },
   {
     group: "permissions, roles, grants and protected grant consent",

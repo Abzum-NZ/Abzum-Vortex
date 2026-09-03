@@ -22,6 +22,16 @@ pnpm db:verify
 pnpm db:stop
 ```
 
+`pnpm db:start` first generates a Local-only P-256 `ES256` signing key through the pinned Supabase
+CLI. The private key stays under the ignored `supabase/.temp` directory; a clean checkout creates its
+own key and no hosted signing key is downloaded or committed. After changing signing-key settings,
+restart the Local stack with `pnpm db:stop` followed by `pnpm db:start`.
+
+With the Local stack running, `pnpm auth:local:proof` creates an isolated local address and proves
+Mailpit confirmation, password sign-in, local `getClaims()` verification against the published
+ES256 JWKS, and password-recovery delivery. It does not configure Testing or Production and does not
+exercise durable application sessions.
+
 `db:verify` rebuilds the local database from committed migrations and seed
 data, runs every pgTAP test, and fails database lint on errors. It is separate
 from `pnpm verify`: Vercel previews and ordinary pull-request checks remain

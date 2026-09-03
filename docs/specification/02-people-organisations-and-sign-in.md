@@ -55,17 +55,30 @@ flowchart LR
 
 ## Identity across clusters
 
-Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It is implemented with [Supabase Auth](https://supabase.com/docs/guides/auth) and issues short-lived identity tokens using an [asymmetric signing key and published key set](https://supabase.com/docs/guides/auth/signing-keys). Every cluster verifies the token locally from the published keys, then loads only the tenant assignment and organisation account stored in its own cluster.
+Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It is implemented with [Supabase Auth](https://supabase.com/docs/guides/auth) and issues short-lived identity tokens using the managed P-256 `ES256` [asymmetric signing key and published key set](https://supabase.com/docs/guides/auth/signing-keys). A cluster verifies a token through the authority's standard JWKS endpoint, then loads only the tenant assignment and organisation account stored in its own cluster. Testing proves this boundary with two independently configured verifier instances; it does not pretend that a second physical Testing cluster exists.
 
-An ordinary identity token contains only stable global sign-in facts: identity, issuer, audience, session, issue and expiry times, and authentication strength. A delegated [MCP OAuth token](12-connections-and-interfaces.md#identity-consent-and-access) may additionally identify its registered client and MCP-server audience. Neither token carries tenant-administrator assignments, organisation roles, teams, application access, sharing grants, MCP capability approvals, or an access decision. Those values are live Vortex records and are checked on every request. A [custom access-token hook](https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook) may set only the approved identity, client and audience claims; it must not turn organisation permissions into long-lived token claims.
+Supabase tokens retain the provider's [required standard claims](https://supabase.com/docs/guides/auth/jwt-fields). After signature verification, the Identity service validates the configured issuer and `authenticated` audience and converts only `sub`, confirmed `email`, `session_id`, `aal`, `iat`, `exp`, issuer, audience, and the verified JWT key identifier into a closed Vortex result. `sub` becomes the permanent global identity identifier and `email` becomes the verified primary email at token issue time. The result never contains the Supabase `role`, phone, application metadata, user-editable metadata, tenant-administrator assignments, organisation roles, teams, application access, sharing grants, MCP capability approvals, or an access decision.
+
+No custom access-token hook is used for ordinary identity tokens because Supabase's standard claims contain every fact this result requires. A later owning issue may introduce a hook only after demonstrating that the deployed standard cannot express a required platform invariant. A delegated [MCP OAuth token](12-connections-and-interfaces.md#identity-consent-and-access) may identify its registered client and MCP-server audience under the Phase 9 interface work, but those values still cannot carry organisation or application authority.
+
+```mermaid
+flowchart LR
+    TOKEN[Supabase signed token] --> VERIFY[Verify ES256 signature, issuer and audience]
+    VERIFY --> PROJECT[Project approved identity facts]
+    PROJECT --> RESULT[Closed verified identity result]
+    RESULT --> LOCAL[Load live cluster-local account and access data]
+    TOKEN -. ignored for Vortex authority .-> EXTRA[Provider role, phone and metadata]
+```
 
 The identity token proves the person; it does not grant tenant administration, organisation membership, or data access. A [cross-cluster shared-record request](17-runtime-storage-and-caching.md#cross-cluster-request) carries a short-lived assertion signed by the recipient cluster and is still evaluated by the source organisation.
 
 ### First-release sign-in methods
 
-The first release supports verified email address and password, email verification, and password recovery. Anonymous, SMS, social-provider, passkey, and passwordless sign-in are disabled. Adding a sign-in method later requires an explicit identity/security change; an application definition cannot change how the environment-wide Identity Authority proves a person.
+The first release supports verified email address and password, email verification, and password recovery. Anonymous, SMS, social-provider, passkey, and Web3 sign-in are disabled in the authority. Supabase's email provider also implements magic-link and email-code endpoints, so Vortex does not claim a provider switch that Supabase does not offer: the platform exposes no passwordless sign-in journey and does not call those endpoints. Adding an exposed sign-in method later requires an explicit identity/security change; an application definition cannot change how the environment-wide Identity Authority proves a person.
 
-Supabase's restricted development sender is Local-only. Testing and Production use an approved SMTP provider with credentials supplied through [Doppler](19-operations-backup-and-recovery.md#secrets), never through a definition, browser value, fixture, or committed file.
+Local captures verification and recovery messages in the Supabase CLI's [Mailpit service](https://supabase.com/docs/guides/local-development/cli/testing-and-linting). Testing proves the same journeys through an approved custom SMTP provider using dedicated non-customer addresses and credentials supplied through [Doppler](19-operations-backup-and-recovery.md#secrets). Production SMTP credentials, verified sender configuration, monitoring and delivery proof are provisioned before release under [Phase 13](../build-plan/README.md#phase-13--operational-readiness-and-release) and [issue #171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171); Phase 2 sends no Production email.
+
+The Identity Authority produces the verified identity result. The organisation-account work consumes its identity identifier and verified primary email; the session work consumes the same result and owns durable cookies, refresh, sign-out, revocation and session lifecycle. Neither consumer reimplements token verification.
 
 ## Invitations and teams
 
@@ -102,5 +115,5 @@ The platform stores the tenant, tenant-administrator assignment, organisation an
 - A tenant administrator creates a child organisation but cannot read its records without a local organisation account and local roles.
 - A hierarchy move across tenants and a move that creates a cycle are both refused.
 - Suspending one organisation account removes its access on the next request without affecting the identity's other accounts.
-- Two clusters verify the same identity token while keeping their organisation accounts and access decisions local.
+- Two independently configured verifier instances accept the same Testing identity token and produce the same closed identity result without requiring a second physical Testing cluster.
 - Rotating the Supabase signing key keeps the current and next public keys available through the overlap window, and neither key contains organisation authority.

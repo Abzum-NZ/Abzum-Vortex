@@ -24,6 +24,7 @@ import {
   federatedResponseSchema,
   grantConsentRequestSchema,
   interfaceOperationSchema,
+  identityAuthoritySchema,
   listArrangementKeys,
   listArrangementSchema,
   organizationAccountSetSchema,
@@ -47,6 +48,8 @@ import {
   sourceBlockSettingValueSchema,
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
+  supabaseIdentityClaimsSchema,
+  verifiedIdentitySchema,
 } from "../src";
 import type {
   PublishedApplicationDefinition,
@@ -635,6 +638,117 @@ describe("closed catalogues and discriminated contracts", () => {
 });
 
 describe("identity, sharing and secret invariants", () => {
+  const authority = {
+    authorityId: id(90),
+    environment: "testing",
+    issuer: "https://identity.example.test/auth/v1",
+    jwksUrl: "https://identity.example.test/auth/v1/.well-known/jwks.json",
+    audience: "authenticated",
+    signingAlgorithm: "ES256",
+  } as const;
+
+  const standardClaims = {
+    iss: authority.issuer,
+    aud: "authenticated",
+    exp: 1_800_000_000,
+    iat: 1_799_996_400,
+    sub: id(100),
+    role: "authenticated",
+    aal: "aal1",
+    session_id: id(101),
+    email: "person@example.test",
+    phone: "",
+    is_anonymous: false,
+    app_metadata: { provider: "email", organization_role: "administrator" },
+    user_metadata: { organization_id: id(102), permission: "all" },
+  } as const;
+
+  test("describes Supabase identity authority discovery without copying signing keys", () => {
+    expect(identityAuthoritySchema.safeParse(authority).success).toBe(true);
+    expect(
+      identityAuthoritySchema.safeParse({
+        ...authority,
+        environment: "local",
+        issuer: "http://127.0.0.1:54321/auth/v1",
+        jwksUrl: "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+      }).success,
+    ).toBe(true);
+    expect(
+      identityAuthoritySchema.safeParse({ ...authority, signingAlgorithm: "RS256" }).success,
+    ).toBe(false);
+    expect(
+      identityAuthoritySchema.safeParse({
+        ...authority,
+        issuer: "http://identity.example.test/auth/v1",
+        jwksUrl: "http://identity.example.test/auth/v1/.well-known/jwks.json",
+      }).success,
+    ).toBe(false);
+    expect(
+      identityAuthoritySchema.safeParse({
+        ...authority,
+        jwksUrl: "https://keys.example.test/auth/v1/.well-known/jwks.json",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("accepts standard Supabase identity claims but refuses an anonymous identity without email", () => {
+    expect(supabaseIdentityClaimsSchema.safeParse(standardClaims).success).toBe(true);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
+        aud: ["authenticated"],
+        amr: ["password"],
+        future_standard_claim: "accepted at the provider boundary",
+      }).success,
+    ).toBe(true);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
+        is_anonymous: true,
+        email: "",
+      }).success,
+    ).toBe(false);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({ ...standardClaims, exp: standardClaims.iat })
+        .success,
+    ).toBe(false);
+  });
+
+  test("keeps the verified identity result closed and free of organisation authority", () => {
+    const verifiedIdentity = {
+      identityId: standardClaims.sub,
+      verifiedPrimaryEmail: standardClaims.email,
+      issuer: standardClaims.iss,
+      audience: "authenticated",
+      sessionId: standardClaims.session_id,
+      issuedAt: "2027-01-15T07:00:00.000Z",
+      expiresAt: "2027-01-15T08:00:00.000Z",
+      authenticationStrength: "single_factor",
+      keyId: "testing-key",
+    } as const;
+
+    expect(verifiedIdentitySchema.safeParse(verifiedIdentity).success).toBe(true);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        organizationId: standardClaims.user_metadata.organization_id,
+        role: standardClaims.app_metadata.organization_role,
+      }).success,
+    ).toBe(false);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        verifiedPrimaryEmail: undefined,
+      }).success,
+    ).toBe(false);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        expiresAt: verifiedIdentity.issuedAt,
+      }).success,
+    ).toBe(false);
+  });
+
   const account = (accountId: number, organizationId: number) => ({
     organizationAccountId: id(accountId),
     organizationId: id(organizationId),
