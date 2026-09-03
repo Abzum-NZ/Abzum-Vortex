@@ -9,3 +9,6 @@ export * from "./canonical-json";
 export * from "./semantic-version";
 export * from "./version-impact";
 export * from "./version-impact-error";
+export * from "./compilation-error";
+export * from "./compiler";
+export * from "./validation";

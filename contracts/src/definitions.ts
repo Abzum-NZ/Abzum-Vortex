@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validRange } from "semver";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -92,7 +93,7 @@ export const versionRequirementSchema = z.discriminatedUnion("selection", [
         .string()
         .min(1)
         .max(120)
-        .regex(/^[0-9A-Za-z.*+<>=~^| -]+$/),
+        .refine((value) => validRange(value) !== null, "Use a valid npm semantic-version range"),
     })
     .strict(),
 ]);

@@ -32,7 +32,7 @@ A platform-catalogue **connection type** defines:
 
 An organisation-owned **connection instance** selects a connection type and stores its encrypted credentials, granted applications, status, last successful check, and authorised administrator. Secrets never appear in definitions, exports, activity content, workflow inputs, logs, or browser responses.
 
-An application connection binding records the permanent connection-type identifier, an accepted version requirement, the exact resolved catalogue version, and the operation keys the application requires. Publication refuses a binding that cannot resolve every operation in that exact version. This makes the application reproducible without embedding a connection instance or secret in its definition.
+An application connection binding records the permanent connection-type identifier, an accepted version requirement, the exact resolved catalogue version, and the operation keys the application requires. Publication requires the exact compiled connection artifact from the caller's immutable resolution snapshot, checks that the declared requirement accepts the resolved version, and compares the snapshot and compiled operation catalogues in both directions before resolving every required operation against both. Missing, foreign-snapshot, altered, or partial connection artifacts are refused. This makes the application reproducible without embedding a connection instance or secret in its definition.
 
 ## Authorisation lifecycle
 
@@ -60,13 +60,16 @@ Password-like keys and [OAuth 2.0](https://oauth.net/2/) grants are created thro
 An application-contained **interface** contains named operations and publishes with its application. Each operation declares:
 
 - Stable operation identifier and description.
-- Input and output shapes.
+- One explicit HTTP method and application-relative path; publication refuses duplicate paths and methods incompatible with the target operation.
+- Input and output shapes whose fields declare type, required status, and how each value binds to the selected target. A custom-action operation declares exactly one required subject plus every required action input it accepts; it cannot expose an action result because actions do not yet declare results. A query operation has no request shape and exposes at least one field selected by that query, with optional standard page information. A workflow operation has no request shape and returns exactly its run identifier. The first release does not invent query parameters or workflow inputs.
 - Authentication method and required permission.
 - Rate and size limits.
 - Whether it is organisation-private, partner-facing, or public.
-- The application action, query, or workflow it calls.
+- The declared custom action, query, or interface-triggered workflow it calls. Standard record actions cannot be exposed until their own explicit input and output contract exists; publication never derives an external write contract from a record form. A permission key alone is not an executable target.
 - Duplicate-protection requirements for writes.
 - Error codes that do not expose private implementation details.
+
+Every operation has a permission, including organisation-private and public operations. Publication resolves that permission and refuses a shape binding intended for a different target kind, an unknown action input or query output field, or an incompatible value type. The transport layer therefore never guesses how an external field maps into platform work. Adding query parameters or declared workflow inputs/outputs later requires an explicit owning-contract change first.
 
 Interfaces use the same [actions](08-forms-actions-rules-and-events.md), [queries](10-queries-reports-search.md), [access](04-access-and-permissions.md), and [activity history](14-activity-privacy-and-retention.md) as the web application.
 
@@ -98,7 +101,7 @@ stateDiagram-v2
 
 ## Public forms and operations
 
-Public access uses explicitly published operations, approved fields from [public access](04-access-and-permissions.md#public-access), abuse controls, and neutral responses. Public callers never receive a general organisation token or an interface-discovery catalogue.
+Public access uses explicitly published operations, approved fields from [public access](04-access-and-permissions.md#public-access), abuse controls, and neutral responses. A public operation and its target action must use non-administrative permissions. The action must be explicitly shareable, its subject must resolve, and every subject field read by its condition or values and every field it changes or creates must be approved for public display on the correct record type. Public relationship copying is refused in the first release because the public-surface contract has no relationship allowlist. Public callers never receive a general organisation token or an interface-discovery catalogue.
 
 ## Acceptance examples
 

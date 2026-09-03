@@ -64,7 +64,7 @@ Required work:
 - Verify the settled tenant, definition-version, access, field, workflow, protected data-handling, entitlement, delivery, recovery, and performance requirements against the [data contracts](../specification/appendices/data-contracts.md).
 - Keep cluster location out of the product-level sharing choices: one shared-record gateway uses a local adapter or the signed Vortex Federation API.
 - Publish Specification 2.0 and update its version history.
-- Write and validate the dependency-complete [CRM and Service Desk fixture baseline](../specification/appendices/worked-examples.md), including every module, action, connection type, interface, theme, role, workflow, pipeline, page, query, and cross-application scenario. Before Phase 1 engine code, [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) must make every non-defaultable author choice explicit and prove lossless conversion to the canonical contracts.
+- Maintain the dependency-complete [CRM and Service Desk fixture baseline](../specification/appendices/worked-examples.md), including every module, action, connection type, interface, theme, role, workflow, pipeline, page, query, and cross-application scenario. [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) makes every non-defaultable author choice explicit and proves deterministic, lossless conversion to the canonical contracts before Phase 2 begins.
 - Define and validate the [record-table allocation](../specification/17-runtime-storage-and-caching.md#record-table-allocation): one table per compatible record-type storage lineage, explicit organisation/application row scope, stable physical tokens, and collision cases covering same-named applications in different organisations.
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
 - Close the completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and move migration/access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) to the start of Phase 2, before the first database migration.
@@ -95,13 +95,18 @@ Build:
 - Pure [module/application version-impact comparison](../specification/appendices/version-impact-policy.md), including stable-identity matching, exact content fingerprints, a governed field-by-field policy, Vortex assignment of the minimum valid next release version, and stale-safe builder confirmation or cancellation.
 - Storage-catalog and scope contracts that distinguish definition identity, storage lineage, organisation ownership, and application-contained ownership without creating per-installation tables.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
-- A capability-complete production authored-source schema and lossless conversion for all 13 example definition documents; no compiler-invented label, permission, layout, public exposure, data shape or business behaviour.
+- A capability-complete production authored-source schema and lossless conversion for all 13 example definition documents; no compiler-invented label, permission, layout, public exposure, data shape or business behaviour. Publication consumes immutable prior history, fingerprint-bound active-dependant results and already-published dependencies, and binds every compiled artifact/dependency to its kind, key, root, exact version, canonical content and resolution snapshot.
 - Types, lint, unit tests, contract tests and build checks that run without a database.
 
 Exit proof:
 
 - Both complete examples validate with no unresolved reference.
 - Every non-defaultable authored choice is explicit, and semantic coverage proves source-to-canonical conversion loses or invents nothing.
+- Resolution identity is globally unique across roots and source-derived component owners; changing both a sibling identifier and its claimed owner still refuses compilation, while transformed names, labels, triggers, conditions and dynamic maps never claim a sibling's provenance.
+- Edit/save refuses incompatible module-local condition operands, action values, and locally resolvable totals. Publication checks application actions and workflows against their exact bound module versions; calculation, total, record-link and organisation-account result types remain distinct. Totals name an exact source relationship, resolve their field and filter in that relationship's source record, and require the relationship to target the total-owning record. Each aggregate validator has one honest registry owner and a closed emitted-code list.
+- Published versions equal the version-impact result, unchanged publication is refused, and every dependency matches its complete immutable kind/key/root/version/content/resolution evidence under the requesting definition's exact snapshot.
+- Record-scoped pages, blocks, queries, actions and replacements share one record target; public pages and interfaces prove their complete query, field, permission, action subject and action effect surface is public-safe.
+- Every workflow trigger matches its owning action, message, inline recurrence, interface or exact parent-workflow contract; trigger consumers, link assignments, file operations, and every fixed or form-declared node output are typed, duplicate-protected where required, record-targeted where applicable, and tested as producer/consumer pairs.
 - Every record type resolves to exactly one collision-free storage mapping; two same-named CRM applications in different organisations remain isolated, while CRM and Service Desk can read the same organisation-shared Company and Contact records.
 - Invalid examples cover every closed list, missing required value, unknown value, incompatible reference and cross-root version failure.
 - Schema failures and validation-rule failures produce the same safe public result; adversarial diagnostics never enter that result and no example-specific name appears in the translator or catalogue.
@@ -147,7 +152,7 @@ Build:
 - Permission, role, assignment, team/group and application-access contracts.
 - Canonical PostgreSQL allow/refuse function for row operations.
 - Server Access library for files, caches, search, connections, workflows and interfaces.
-- Controlled non-administrative trailing wildcards expanded and fingerprinted at role publication.
+- The sole application-role `*` entry expanded only against that exact application's non-administrative permission catalogue and fingerprinted at publication; organisation roles and module permissions remain exact-only.
 - Multiple team memberships per organisation account and within-organisation direct record sharing to an account or team with field allowlists.
 - Access-version ownership and revocation path.
 - Field-level response filtering where specified.
@@ -217,7 +222,7 @@ Exit proof:
 
 Build:
 
-- Version-pinned module and connection bindings, application roles, navigation and application resolution.
+- Version-pinned module and connection bindings, exact one-for-one resolved-dependency manifests, application roles, navigation and application resolution. Publication requires each declared version requirement to accept its resolved version and each connection binding to supply the exact caller-snapshot artifact and operation catalogue.
 - Application-contained theme settings, platform-theme binding, inheritance and legibility checking.
 - Six page types, four list arrangements, registered blocks, twelve-column responsive layout and page states.
 - [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, the six central semantic tokens, interruptible state-driven motion, and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.
@@ -411,7 +416,7 @@ Exit proof:
 
 The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follows these implemented rules:
 
-1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), the original contract delivery [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), safe validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16), and the P0 platform-primitives correction [#186](https://github.com/Abzum-NZ/Abzum-Vortex/issues/186) are complete. Version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14) is the active dependency before validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) and final Vercel evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17).
+1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), the original contract delivery [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), safe validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14), complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16), and the P0 platform-primitives correction [#186](https://github.com/Abzum-NZ/Abzum-Vortex/issues/186) are complete. Authored-definition compilation and validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) is the active final implementation dependency before delivery evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17).
 2. Native GitHub blocked-by relationships govern sequencing; body text explains but does not replace them.
 3. Every phase epic has an outcome and completion evidence.
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/protected data handling/retention, entitlements/metering, and operations issues belong to those epics rather than Phase 10. Commercial applications do not block the generic platform roadmap.

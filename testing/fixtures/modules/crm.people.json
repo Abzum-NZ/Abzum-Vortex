@@ -1,20 +1,19 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "module",
-  "root_id": "mod_crm_people",
+  "root_alias": "mod_crm_people",
   "key": "vortex.crm.people",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.crm.people:1.0.0",
   "body": {
     "name": "CRM People",
     "description": "Contacts and unqualified leads, shared by compatible applications in one organisation.",
-    "category": "CRM",
     "dependencies": [
       {
+        "dependency_key": "organisations",
         "module": "vortex.crm.organisations",
-        "version": "1.0.0"
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       }
     ],
     "record_types": [
@@ -24,7 +23,6 @@
         "key": "contact",
         "name": "Contact",
         "plural_name": "Contacts",
-        "description": "A person associated with a company.",
         "storage_scope": "organisation_shared",
         "ownership_mode": "team",
         "title_field": "full_name",
@@ -171,7 +169,8 @@
             "public_display": "refused",
             "settings": {
               "audience": "organisation_accounts",
-              "on_person_deactivation": "retain_reference"
+              "on_person_deactivation": "retain_reference",
+              "application_root_required": false
             }
           },
           {
@@ -185,9 +184,8 @@
             "sortable": false,
             "personal_data": "personal",
             "public_display": "refused",
-            "settings": {
-              "default": false
-            }
+            "settings": {},
+            "default": false
           },
           {
             "id": "fld_contact_notes",
@@ -205,6 +203,17 @@
               "max_length": 5000
             }
           }
+        ],
+        "custom_actions": [],
+        "relationships": [
+          {
+            "id": "fld_contact_company_relationship",
+            "key": "company",
+            "from_field": "company",
+            "to_record_type": "vortex.crm.organisations:company",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "empty_optional"
+          }
         ]
       },
       {
@@ -213,9 +222,8 @@
         "key": "lead",
         "name": "Lead",
         "plural_name": "Leads",
-        "description": "An enquiry that has not yet been qualified.",
         "storage_scope": "application_contained",
-        "ownership_mode": "individual",
+        "ownership_mode": "organisation_account",
         "title_field": "display_name",
         "standard_actions": [
           "create",
@@ -362,9 +370,9 @@
             "public_display": "refused",
             "settings": {
               "minimum": 0,
-              "maximum": 100,
-              "default": 0
-            }
+              "maximum": 100
+            },
+            "default": 0
           },
           {
             "id": "fld_lead_status",
@@ -379,7 +387,6 @@
             "personal_data": "none",
             "public_display": "refused",
             "settings": {
-              "default": "new",
               "options": [
                 {
                   "value": "new",
@@ -402,7 +409,8 @@
                   "label": "Converted"
                 }
               ]
-            }
+            },
+            "default": "new"
           },
           {
             "id": "fld_lead_reason",
@@ -431,23 +439,143 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
-            "settings": {
-              "default": "now"
-            }
+            "settings": {}
           }
-        ]
+        ],
+        "custom_actions": [
+          "act_lead_convert"
+        ],
+        "relationships": []
       }
     ],
     "permissions": [
       {
-        "key": "vortex.crm.people.lead.convert",
-        "record_type": "lead",
-        "label": "Convert a lead"
+        "id": "perm_contact_create",
+        "key": "vortex.crm.people.contact.create",
+        "label": "Create contact",
+        "description": "Allows the standard create operation for contacts.",
+        "record_type": "contact",
+        "action_kind": "create",
+        "administrative": false
       },
       {
-        "key": "vortex.crm.people.contact.view_sensitive_notes",
+        "id": "perm_contact_read",
+        "key": "vortex.crm.people.contact.read",
+        "label": "Read contact",
+        "description": "Allows the standard read operation for contacts.",
         "record_type": "contact",
-        "label": "View sensitive contact notes"
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_contact_update",
+        "key": "vortex.crm.people.contact.update",
+        "label": "Update contact",
+        "description": "Allows the standard update operation for contacts.",
+        "record_type": "contact",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_contact_soft_delete",
+        "key": "vortex.crm.people.contact.soft_delete",
+        "label": "Soft Delete contact",
+        "description": "Allows the standard soft_delete operation for contacts.",
+        "record_type": "contact",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_contact_restore",
+        "key": "vortex.crm.people.contact.restore",
+        "label": "Restore contact",
+        "description": "Allows the standard restore operation for contacts.",
+        "record_type": "contact",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_contact_export",
+        "key": "vortex.crm.people.contact.export",
+        "label": "Export contact",
+        "description": "Allows the standard export operation for contacts.",
+        "record_type": "contact",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_lead_create",
+        "key": "vortex.crm.people.lead.create",
+        "label": "Create lead",
+        "description": "Allows the standard create operation for leads.",
+        "record_type": "lead",
+        "action_kind": "create",
+        "administrative": false
+      },
+      {
+        "id": "perm_lead_read",
+        "key": "vortex.crm.people.lead.read",
+        "label": "Read lead",
+        "description": "Allows the standard read operation for leads.",
+        "record_type": "lead",
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_lead_update",
+        "key": "vortex.crm.people.lead.update",
+        "label": "Update lead",
+        "description": "Allows the standard update operation for leads.",
+        "record_type": "lead",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_lead_soft_delete",
+        "key": "vortex.crm.people.lead.soft_delete",
+        "label": "Soft Delete lead",
+        "description": "Allows the standard soft_delete operation for leads.",
+        "record_type": "lead",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_lead_restore",
+        "key": "vortex.crm.people.lead.restore",
+        "label": "Restore lead",
+        "description": "Allows the standard restore operation for leads.",
+        "record_type": "lead",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_lead_export",
+        "key": "vortex.crm.people.lead.export",
+        "label": "Export lead",
+        "description": "Allows the standard export operation for leads.",
+        "record_type": "lead",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_named_1_convert",
+        "key": "vortex.crm.people.lead.convert",
+        "label": "Convert a lead",
+        "description": "Allows the named convert operation.",
+        "record_type": "lead",
+        "action_kind": "named",
+        "named_action": "convert",
+        "administrative": false
+      },
+      {
+        "id": "perm_named_2_view_sensitive_notes",
+        "key": "vortex.crm.people.contact.view_sensitive_notes",
+        "label": "View sensitive contact notes",
+        "description": "Allows the named view_sensitive_notes operation.",
+        "record_type": "contact",
+        "action_kind": "named",
+        "named_action": "view_sensitive_notes",
+        "administrative": false
       }
     ],
     "actions": [
@@ -458,21 +586,63 @@
         "record_type": "lead",
         "permission": "vortex.crm.people.lead.convert",
         "inputs": [
-          {"key":"first_name","type":"text","required":true},
-          {"key":"last_name","type":"text","required":true},
+          {
+            "key": "first_name",
+            "label": "First Name",
+            "required": true,
+            "type": "text"
+          },
+          {
+            "key": "last_name",
+            "label": "Last Name",
+            "required": true,
+            "type": "text"
+          },
           {
             "key": "company",
-            "type": "link",
+            "label": "Company",
             "required": false,
-            "settings": {
-              "target": "vortex.crm.organisations:company"
-            }
+            "type": "record_reference",
+            "record_types": [
+              "vortex.crm.organisations:company"
+            ]
           }
         ],
         "effects": [
-          {"kind":"create_record","record_type":"vortex.crm.people:contact","values":{"first_name":{"source":"input","input":"first_name"},"last_name":{"source":"input","input":"last_name"},"email":{"source":"subject_field","field":"email"},"company":{"source":"input","input":"company"}}},
-          {"kind":"set_field","field":"status","value":{"source":"literal","value":"converted"}},
-          {"kind":"announce_event","event":"vortex.crm.people.lead.converted"}
+          {
+            "kind": "create_record",
+            "record_type": "vortex.crm.people:contact",
+            "values": {
+              "first_name": {
+                "source": "input",
+                "input": "first_name"
+              },
+              "last_name": {
+                "source": "input",
+                "input": "last_name"
+              },
+              "email": {
+                "source": "subject_field",
+                "field": "email"
+              },
+              "company": {
+                "source": "input",
+                "input": "company"
+              }
+            }
+          },
+          {
+            "kind": "set_field",
+            "field": "status",
+            "value": {
+              "source": "literal",
+              "value": "converted"
+            }
+          },
+          {
+            "kind": "announce_event",
+            "event": "vortex.crm.people.lead.converted"
+          }
         ],
         "shareable": false
       }
@@ -484,9 +654,9 @@
         "record_type": "contact",
         "carries": [
           "contact_number",
-          "full_name",
           "company"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "evt_lead_received",
@@ -494,9 +664,9 @@
         "record_type": "lead",
         "carries": [
           "lead_number",
-          "display_name",
           "source"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "evt_lead_converted",
@@ -504,7 +674,8 @@
         "record_type": "lead",
         "carries": [
           "lead_number"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "rules": [
@@ -527,7 +698,10 @@
             }
           ]
         },
-        "effect": {"kind":"refuse","reason_code":"unqualified_reason_required"}
+        "effect": {
+          "kind": "refuse",
+          "reason_code": "unqualified_reason_required"
+        }
       }
     ],
     "extension_points": [
@@ -547,6 +721,7 @@
           "action"
         ]
       }
-    ]
+    ],
+    "sharing_conditions": []
   }
 }

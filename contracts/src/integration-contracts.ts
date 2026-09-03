@@ -205,21 +205,78 @@ export const incomingMessageSchema = z
   })
   .strict();
 
+export const interfaceValueTypeSchema = z.enum([
+  "text",
+  "number",
+  "boolean",
+  "date",
+  "date_time",
+  "record_reference",
+]);
+export const interfaceInputFieldSchema = z
+  .object({
+    type: interfaceValueTypeSchema,
+    required: z.boolean(),
+    targetBinding: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("action_subject") }).strict(),
+      z.object({ kind: z.literal("action_input"), key: builderKeySchema }).strict(),
+    ]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.targetBinding.kind === "action_subject" && value.type !== "record_reference")
+      context.addIssue({
+        code: "custom",
+        path: ["type"],
+        message: "An action subject input is a record reference",
+      });
+  });
+export const interfaceOutputFieldSchema = z
+  .object({
+    type: interfaceValueTypeSchema,
+    required: z.boolean(),
+    targetBinding: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("query_field"), fieldId: fieldIdSchema }).strict(),
+      z
+        .object({
+          kind: z.literal("query_page_information"),
+          value: z.enum(["continuation_token", "has_more", "result_count"]),
+        })
+        .strict(),
+      z.object({ kind: z.literal("workflow_run_id") }).strict(),
+    ]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.targetBinding.kind === "workflow_run_id" && value.type !== "text")
+      context.addIssue({
+        code: "custom",
+        path: ["type"],
+        message: "A workflow run identifier is text",
+      });
+    if (
+      value.targetBinding.kind === "query_page_information" &&
+      ((value.targetBinding.value === "continuation_token" && value.type !== "text") ||
+        (value.targetBinding.value === "has_more" && value.type !== "boolean") ||
+        (value.targetBinding.value === "result_count" && value.type !== "number"))
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["type"],
+        message: "Query page information has a fixed value type",
+      });
+  });
 export const interfaceOperationSchema = z
   .object({
     operationId: platformIdSchema,
     key: builderKeySchema,
     description: z.string().min(1).max(1_000),
-    inputShape: z.record(
-      builderKeySchema,
-      z.enum(["text", "number", "boolean", "date", "date_time", "record_reference"]),
-    ),
-    outputShape: z.record(
-      builderKeySchema,
-      z.enum(["text", "number", "boolean", "date", "date_time", "record_reference"]),
-    ),
+    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+    path: z.string().startsWith("/").max(500),
+    inputShape: z.record(builderKeySchema, interfaceInputFieldSchema),
+    outputShape: z.record(builderKeySchema, interfaceOutputFieldSchema),
     authentication: z.enum(["organization_token", "partner_token", "public"]),
-    permissionKey: namespacedKeySchema.optional(),
+    permissionKey: namespacedKeySchema,
     visibility: z.enum(["organization_private", "partner", "public"]),
     rateLimitPerMinute: z.number().int().min(1).max(100_000),
     maximumRequestBytes: z.number().int().min(1).max(100_000_000),
@@ -231,7 +288,39 @@ export const interfaceOperationSchema = z
     ]),
     errorCodes: z.array(builderKeySchema),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const inputKinds = new Set(
+      Object.values(value.inputShape).map((field) => field.targetBinding.kind),
+    );
+    const outputKinds = new Set(
+      Object.values(value.outputShape).map((field) => field.targetBinding.kind),
+    );
+    const allowedInputKinds = {
+      action: new Set(["action_subject", "action_input"]),
+      query: new Set(),
+      workflow: new Set(),
+    }[value.target.kind];
+    const allowedOutputKinds = {
+      action: new Set(),
+      query: new Set(["query_field", "query_page_information"]),
+      workflow: new Set(["workflow_run_id"]),
+    }[value.target.kind];
+    for (const kind of inputKinds)
+      if (!allowedInputKinds.has(kind))
+        context.addIssue({
+          code: "custom",
+          path: ["inputShape"],
+          message: `An ${value.target.kind} interface accepts only ${value.target.kind} input bindings`,
+        });
+    for (const kind of outputKinds)
+      if (!allowedOutputKinds.has(kind))
+        context.addIssue({
+          code: "custom",
+          path: ["outputShape"],
+          message: `An ${value.target.kind} interface accepts only ${value.target.kind} output bindings`,
+        });
+  });
 export const interfaceDefinitionSchema = z
   .object({
     interfaceId: interfaceIdSchema,
@@ -799,6 +888,9 @@ export type ConnectionOperation = z.infer<typeof connectionOperationSchema>;
 export type IncomingMessageType = z.infer<typeof incomingMessageTypeSchema>;
 export type ConnectionInstance = z.infer<typeof connectionInstanceSchema>;
 export type IncomingMessage = z.infer<typeof incomingMessageSchema>;
+export type InterfaceValueType = z.infer<typeof interfaceValueTypeSchema>;
+export type InterfaceInputField = z.infer<typeof interfaceInputFieldSchema>;
+export type InterfaceOutputField = z.infer<typeof interfaceOutputFieldSchema>;
 export type InterfaceOperation = z.infer<typeof interfaceOperationSchema>;
 export type InterfaceDefinition = z.infer<typeof interfaceDefinitionSchema>;
 export type InterfaceDependency = z.infer<typeof interfaceDependencySchema>;

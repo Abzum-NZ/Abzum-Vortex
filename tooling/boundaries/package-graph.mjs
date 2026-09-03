@@ -178,7 +178,15 @@ export async function validateImports(packages) {
         const segments = request.split("/");
         const packageName = request.startsWith("@") ? segments.slice(0, 2).join("/") : segments[0];
         if (request.startsWith("@vortex/") && segments.length > 2) {
-          errors.push(`${file} uses forbidden deep import ${request}`);
+          const target = packages.find((item) => item.manifest.name === packageName);
+          const publicSubpath = `./${segments.slice(2).join("/")}`;
+          const exports = target?.manifest.exports;
+          if (
+            exports === null ||
+            typeof exports !== "object" ||
+            !Object.prototype.hasOwnProperty.call(exports, publicSubpath)
+          )
+            errors.push(`${file} uses forbidden deep import ${request}`);
         }
         if (!declared.has(packageName)) {
           errors.push(`${file} imports undeclared dependency ${packageName}`);

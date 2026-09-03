@@ -65,4 +65,16 @@ export const contractIndex = [
     specification: "appendices/version-impact-policy.md",
     owner: "#14",
   },
+  {
+    group: "module, application and platform connection-type authored source",
+    layer: "authored_source",
+    specification: "appendices/data-contracts.md#runtime-and-definition-source-layers",
+    owner: "#15",
+  },
+  {
+    group: "definition resolution, compilation provenance and validation ownership",
+    layer: "compilation_boundary",
+    specification: "03-composition-and-publication.md#authored-definition-compilation",
+    owner: "#15",
+  },
 ] as const;

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { workflowNodeTypeKeys } from "./catalogues";
+import { workflowNodeTypeKeys, workflowValueTypeSchema } from "./catalogues";
 import { duplicateProtectionKeySchema, jsonValueSchema, retryPolicySchema } from "./common";
 import {
   activityIdSchema,
@@ -27,6 +27,7 @@ import { conditionNodeSchema } from "./module-contracts";
 export const workflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
   z.object({ source: z.literal("trigger_field"), fieldId: fieldIdSchema }).strict(),
+  z.object({ source: z.literal("trigger_input"), inputKey: builderKeySchema }).strict(),
   z
     .object({
       source: z.literal("node_output"),
@@ -38,6 +39,22 @@ export const workflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("current_actor") }).strict(),
   z.object({ source: z.literal("current_time") }).strict(),
 ]);
+
+const workflowDeclaredOutputSchema = z
+  .object({
+    key: builderKeySchema,
+    type: workflowValueTypeSchema,
+    recordTypeIds: z.array(recordTypeIdSchema).min(1).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.type === "record_reference") !== (value.recordTypeIds !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["recordTypeIds"],
+        message: "Record-reference outputs require their allowed record types",
+      });
+  });
 
 const nodeConfigByType = {
   start: z.object({}).strict(),
@@ -102,7 +119,7 @@ const nodeConfigByType = {
       responderPermissionKey: namespacedKeySchema,
       dueInSeconds: z.number().int().min(1).max(7_776_000),
       timeoutOutcome: builderKeySchema,
-      outputKeys: z.array(builderKeySchema).min(1),
+      outputs: z.array(workflowDeclaredOutputSchema).min(1),
     })
     .strict(),
   query_records: z.object({ queryId: queryIdSchema }).strict(),
@@ -157,13 +174,110 @@ export const workflowEdgeSchema = z
     outcome: builderKeySchema.optional(),
   })
   .strict();
+const workflowTriggerInputSchema = z.discriminatedUnion("source", [
+  z
+    .object({
+      source: z.literal("record_field"),
+      key: builderKeySchema,
+      type: workflowValueTypeSchema,
+      fieldId: fieldIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("payload"),
+      key: builderKeySchema,
+      type: workflowValueTypeSchema,
+      payloadKey: builderKeySchema,
+      recordTypeIds: z.array(recordTypeIdSchema).min(1).optional(),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      if ((value.type === "record_reference") !== (value.recordTypeIds !== undefined))
+        context.addIssue({
+          code: "custom",
+          path: ["recordTypeIds"],
+          message: "Record-reference inputs require their allowed record types",
+        });
+    }),
+]);
+const workflowTriggerCommon = {
+  inputs: z.array(workflowTriggerInputSchema).max(100),
+  condition: conditionNodeSchema.nullable(),
+  duplicateProtection: z.enum(["not_required", "required"]),
+};
+const workflowScheduleSchema = z
+  .object({
+    cadence: z.enum(["hourly", "daily", "weekly", "monthly"]),
+    interval: z.number().int().min(1).max(365),
+    timeZone: z.string().min(1).max(100),
+    minute: z.number().int().min(0).max(59),
+    hour: z.number().int().min(0).max(23).optional(),
+    weekDay: z.number().int().min(1).max(7).optional(),
+    monthDay: z.number().int().min(1).max(31).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const valid =
+      (value.cadence === "hourly" &&
+        value.hour === undefined &&
+        value.weekDay === undefined &&
+        value.monthDay === undefined) ||
+      (value.cadence === "daily" &&
+        value.hour !== undefined &&
+        value.weekDay === undefined &&
+        value.monthDay === undefined) ||
+      (value.cadence === "weekly" &&
+        value.hour !== undefined &&
+        value.weekDay !== undefined &&
+        value.monthDay === undefined) ||
+      (value.cadence === "monthly" &&
+        value.hour !== undefined &&
+        value.weekDay === undefined &&
+        value.monthDay !== undefined);
+    if (!valid)
+      context.addIssue({
+        code: "custom",
+        path: ["cadence"],
+        message: "Schedule fields must match cadence",
+      });
+  });
 export const workflowTriggerSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("event"), eventKey: namespacedKeySchema }).strict(),
-  z.object({ kind: z.literal("schedule"), scheduleKey: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("incoming_message"), messageKey: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("button"), actionKey: namespacedKeySchema }).strict(),
-  z.object({ kind: z.literal("interface"), operationKey: builderKeySchema }).strict(),
-  z.object({ kind: z.literal("workflow"), workflowId: workflowIdSchema }).strict(),
+  z
+    .object({
+      kind: z.literal("event"),
+      eventKey: namespacedKeySchema,
+      recordTypeId: recordTypeIdSchema,
+      ...workflowTriggerCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("schedule"),
+      schedule: workflowScheduleSchema,
+      ...workflowTriggerCommon,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("incoming_message"),
+      messageKey: builderKeySchema,
+      ...workflowTriggerCommon,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("button"), actionKey: namespacedKeySchema, ...workflowTriggerCommon })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("interface"),
+      operationKey: builderKeySchema,
+      ...workflowTriggerCommon,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("workflow"), workflowId: workflowIdSchema, ...workflowTriggerCommon })
+    .strict(),
 ]);
 export const workflowDefinitionSchema = z
   .object({

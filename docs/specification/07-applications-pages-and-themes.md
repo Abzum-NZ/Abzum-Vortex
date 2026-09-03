@@ -125,13 +125,17 @@ flowchart TD
 - Pages use a twelve-column grid at wide widths and reflow into a deliberate phone order.
 - A block declares its desktop span, phone order, settings, data source, visibility rule, and use permission.
 - Block types come from a closed platform registry shipped with a platform release. Organisations cannot upload executable blocks.
-- Block settings are validated against the registered setting contract at publication and runtime.
+- Block settings are validated against the registered setting contract at publication and runtime. Every value is explicitly tagged as a literal or as a field, relationship, action, page, query, process-pipeline, record-type, or record reference. A reference control accepts only its matching reference kind; it never accepts an untyped JSON value.
 - A page can replace the standard list, detail, or create-form experience for one record type.
 - At most four blocks on one page may receive live updates; other blocks refresh deliberately or when their page is reopened.
 
 A block registration has a permanent identifier, name, icon, one palette group, zero to forty setting declarations, optional child-block allowance, phone behaviour, resizable-height flag, live-update flag, and public-page flag. The seven palette groups are data, figures, record, input, actions, layout, and content.
 
-The closed setting-control list is: text, long text, formatted text, number, switch, choice, theme colour, platform icon, stored image, data reading, record-type picker, record picker, field picker, relationship picker, action picker, page picker, and process-pipeline picker. A picker stores a real definition reference; it never accepts free text in place of an existing reference.
+Every record-scoped page forms one validation boundary. Its primary query, form or guided-form commit action, standard-page replacement, directly placed query, visibility condition, and field, relationship, action, page, query, pipeline, record-type, or record setting must resolve to that page's record type. A dashboard has no single record type and may deliberately compose several separately authorised sources. Publication refuses a record-scoped block that silently reaches into another record type even when the referenced item exists elsewhere in the same application.
+
+The closed setting-control list is: text, long text, formatted text, number, switch, choice, theme colour, platform icon, stored image, data reading, record-type picker, record picker, field picker, relationship picker, action picker, page picker, and process-pipeline picker. Data reading stores a query reference. Each picker stores the corresponding typed reference; it never accepts free text or arbitrary JSON in place of an existing reference.
+
+An application role lists exact permission keys or uses the single value `*` as its whole permission list. `*` means every non-administrative permission declared by that application revision. It cannot be combined with exact keys, does not include a bound module's permissions, and never includes an administrative permission.
 
 ## Forms and guided forms
 
@@ -144,7 +148,7 @@ The closed setting-control list is: text, long text, formatted text, number, swi
 
 ## Public pages
 
-Public pages use a deliberately smaller block list and may submit only one public action. They may display only fields approved under [public access](04-access-and-permissions.md#public-access). They always include rate limits, abuse protection, accessible validation, and a response that does not leak private record existence.
+Public pages use a deliberately smaller block list and may submit only one public action. They may display only fields approved under [public access](04-access-and-permissions.md#public-access). The allowlist covers every field used by a query projection, filter, group, aggregate, or sort, every visibility condition and block setting, and every field changed or created by the public action. A public query and public action must target the page record type; the action must be explicitly shareable, and its subject, permission, and effects must remain within the public surface. Administrative permissions are never valid for a public page, block, or action. Public pages always include rate limits, abuse protection, accessible validation, and a response that does not leak private record existence.
 
 ## Themes
 

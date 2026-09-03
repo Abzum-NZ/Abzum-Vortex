@@ -29,6 +29,7 @@ import {
   connectionTypeIdSchema,
   containedComponentIdSchema,
   fieldIdSchema,
+  fingerprintSchema,
   grantIdSchema,
   lineageIdSchema,
   moduleRootIdSchema,
@@ -73,7 +74,7 @@ export const queryDefinitionSchema = z
     key: builderKeySchema,
     recordType: recordTypeReferenceSchema,
     selectedFieldIds: z.array(fieldIdSchema).min(1).max(200),
-    filter: conditionNodeSchema.optional(),
+    filter: conditionNodeSchema.nullable().optional(),
     groupByFieldIds: z.array(fieldIdSchema).max(10),
     aggregates: z.array(aggregateSchema).max(20),
     sort: z.array(sortSchema).min(1).max(20),
@@ -152,24 +153,63 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
+/** A placed block setting is always explicitly literal or one typed platform reference. */
+export const blockSettingValueSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("literal"), value: jsonValueSchema }).strict(),
+  z.object({ kind: z.literal("field_reference"), fieldId: fieldIdSchema }).strict(),
+  z
+    .object({
+      kind: z.literal("relationship_reference"),
+      relationshipId: containedComponentIdSchema,
+    })
+    .strict(),
+  z.object({ kind: z.literal("action_reference"), actionKey: namespacedKeySchema }).strict(),
+  z.object({ kind: z.literal("page_reference"), pageId: pageIdSchema }).strict(),
+  z.object({ kind: z.literal("query_reference"), queryId: queryIdSchema }).strict(),
+  z.object({ kind: z.literal("pipeline_reference"), pipelineId: pipelineIdSchema }).strict(),
+  z
+    .object({ kind: z.literal("record_type_reference"), recordType: recordTypeReferenceSchema })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("record_reference"),
+      recordType: recordTypeReferenceSchema,
+      recordId: recordIdSchema,
+    })
+    .strict(),
+]);
+export const blockSettingDeclarationSchema = z
+  .object({
+    key: builderKeySchema,
+    control: blockSettingControlSchema,
+    required: z.boolean(),
+  })
+  .strict();
+
+/** Used by publication validation to match a registered control to its placed value kind. */
+export const blockSettingReferenceKindByControl = Object.freeze({
+  data_reading: "query_reference",
+  record_type_picker: "record_type_reference",
+  record_picker: "record_reference",
+  field_picker: "field_reference",
+  relationship_picker: "relationship_reference",
+  action_picker: "action_reference",
+  page_picker: "page_reference",
+  process_pipeline_picker: "pipeline_reference",
+} as const);
+
 export const blockRegistrationSchema = z
   .object({
     blockId: blockIdSchema,
     releaseVersion: semanticVersionSchema,
     name: labelSchema,
-    icon: builderKeySchema,
+    icon: z
+      .string()
+      .min(1)
+      .max(120)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     paletteGroup: blockPaletteGroupSchema,
-    settings: z
-      .array(
-        z
-          .object({
-            key: builderKeySchema,
-            control: blockSettingControlSchema,
-            required: z.boolean(),
-          })
-          .strict(),
-      )
-      .max(40),
+    settings: z.array(blockSettingDeclarationSchema).max(40),
     allowedChildBlockIds: z.array(blockIdSchema),
     phoneBehaviour: z.enum(["stack", "hide", "full_width"]),
     resizableHeight: z.boolean(),
@@ -183,7 +223,7 @@ export const blockPlacementSchema = z
     placementId: containedComponentIdSchema,
     blockId: blockIdSchema,
     blockReleaseVersion: semanticVersionSchema,
-    settings: z.record(builderKeySchema, jsonValueSchema),
+    settings: z.record(builderKeySchema, blockSettingValueSchema),
     desktop: z
       .object({
         startColumn: z.number().int().min(1).max(12),
@@ -341,8 +381,25 @@ export const applicationRoleSchema = z
     name: labelSchema,
     homePageId: pageIdSchema,
     permissionKeys: z.array(namespacedKeySchema).min(1),
+    permissionSelection: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("exact") }).strict(),
+      z
+        .object({
+          kind: z.literal("application_wildcard"),
+          catalogueFingerprint: fingerprintSchema,
+        })
+        .strict(),
+    ]),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.permissionKeys).size !== value.permissionKeys.length)
+      context.addIssue({
+        code: "custom",
+        path: ["permissionKeys"],
+        message: "Compiled application-role permissions must be unique exact keys",
+      });
+  });
 export const themeSchema = z.discriminatedUnion("mode", [
   z
     .object({
@@ -462,7 +519,11 @@ export const applicationContentSchema = z
   .object({
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(1_000),
-    icon: builderKeySchema,
+    icon: z
+      .string()
+      .min(1)
+      .max(120)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     moduleBindings: z.array(moduleBindingSchema).min(1),
     navigation: z.array(navigationItemSchema),
     pages: z.array(pageDefinitionSchema).min(1),
@@ -530,6 +591,8 @@ export type PageDefinition = z.infer<typeof pageDefinitionSchema>;
 export type ApplicationContent = z.infer<typeof applicationContentSchema>;
 export type ApplicationDraft = z.infer<typeof applicationDraftSchema>;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
+export type BlockSettingValue = z.infer<typeof blockSettingValueSchema>;
+export type BlockSettingDeclaration = z.infer<typeof blockSettingDeclarationSchema>;
 export type BlockRegistration = z.infer<typeof blockRegistrationSchema>;
 export type BlockPlacement = z.infer<typeof blockPlacementSchema>;
 export type ResponsivePageLayout = z.infer<typeof responsivePageLayoutSchema>;

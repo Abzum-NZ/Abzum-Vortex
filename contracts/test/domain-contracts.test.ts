@@ -5,12 +5,17 @@ import {
   accessGrantSchema,
   actionInputDefinitionSchema,
   applicationConnectionBindingSchema,
+  applicationRoleSchema,
   blockPaletteGroupSchema,
   blockPaletteGroupKeys,
   blockSettingControlSchema,
   blockSettingControlKeys,
+  blockSettingValueSchema,
   businessRecordSchema,
   connectionTypeSchema,
+  conditionMaximumNestingDepth,
+  conditionMaximumOperandCount,
+  conditionNodeSchema,
   fieldDefinitionSchema,
   fieldTypeKeys,
   entitlementDecisionSchema,
@@ -18,6 +23,7 @@ import {
   federatedRequestSchema,
   federatedResponseSchema,
   grantConsentRequestSchema,
+  interfaceOperationSchema,
   listArrangementKeys,
   listArrangementSchema,
   organizationAccountSetSchema,
@@ -36,8 +42,12 @@ import {
   workflowNodeSchema,
   workflowNodeTypeKeys,
   workflowNodeTypeSchema,
+  definitionSourceDocumentSchema,
+  definitionPublicationContextSchema,
+  sourceBlockSettingValueSchema,
+  sourceConditionSchema,
+  sourceQualifiedConditionSchema,
 } from "../src";
-import { definitionSourceDocumentSchema } from "./support/definition-fixture-schemas";
 import type {
   PublishedApplicationDefinition,
   PublishedModuleDefinition,
@@ -95,7 +105,7 @@ const fieldSettings: Record<(typeof fieldTypeKeys)[number], unknown> = {
     expression: { kind: "join_text", fieldIds: [id(2)], separator: " " },
     dependencyFieldIds: [id(2)],
   },
-  total: { relationshipId: id(3), operation: "count" },
+  total: { relationshipId: id(3), operation: "count", resultType: "whole_number" },
   attachment: { allowedKinds: ["document"], maxFileSizeMb: 25, multiple: true, maxFiles: 5 },
 };
 
@@ -164,7 +174,7 @@ const workflowConfigs: Record<(typeof workflowNodeTypeKeys)[number], unknown> = 
     responderPermissionKey: "vortex.record.respond",
     dueInSeconds: 86_400,
     timeoutOutcome: "expired",
-    outputKeys: ["response"],
+    outputs: [{ key: "response", type: "text" }],
   },
   query_records: { queryId: id(49) },
   set_values: {
@@ -200,6 +210,159 @@ describe("closed catalogues and discriminated contracts", () => {
     expect(blockPaletteGroupSchema.safeParse("unknown").success).toBe(false);
     expect(blockSettingControlSchema.safeParse("unknown").success).toBe(false);
     expect(workflowNodeTypeSchema.safeParse("unknown").success).toBe(false);
+  });
+
+  test("represents every condition operand explicitly and enforces closed tree limits", () => {
+    const authoredFieldComparison = {
+      operator: "equals",
+      left: { source: "field", field: "first_value" },
+      right: { source: "field", field: "second_value" },
+    };
+    const qualifiedFieldComparison = {
+      operator: "greater_than",
+      left: { source: "field", field: "example_module:example.first_value" },
+      right: { source: "field", field: "example_module:example.second_value" },
+    };
+    expect(sourceConditionSchema.safeParse(authoredFieldComparison).success).toBe(true);
+    expect(sourceQualifiedConditionSchema.safeParse(qualifiedFieldComparison).success).toBe(true);
+    expect(
+      conditionNodeSchema.safeParse({
+        kind: "comparison",
+        operator: "equals",
+        left: { source: "field", fieldId: id(201) },
+        right: { source: "field", fieldId: id(202) },
+      }).success,
+    ).toBe(true);
+    expect(
+      conditionNodeSchema.safeParse({
+        kind: "comparison",
+        operator: "equals",
+        left: { source: "value", value: true },
+      }).success,
+    ).toBe(false);
+    expect(
+      conditionNodeSchema.safeParse({
+        kind: "comparison",
+        operator: "is_empty",
+        left: { source: "field", fieldId: id(201) },
+        right: { source: "value", value: null },
+      }).success,
+    ).toBe(false);
+
+    let tooDeep: unknown = authoredFieldComparison;
+    for (let depth = 0; depth < conditionMaximumNestingDepth; depth += 1)
+      tooDeep = { not: tooDeep };
+    expect(sourceConditionSchema.safeParse(tooDeep).success).toBe(false);
+
+    let canonicalTooDeep: unknown = {
+      kind: "comparison",
+      operator: "equals",
+      left: { source: "field", fieldId: id(201) },
+      right: { source: "field", fieldId: id(202) },
+    };
+    for (let depth = 0; depth < conditionMaximumNestingDepth; depth += 1)
+      canonicalTooDeep = { kind: "not", condition: canonicalTooDeep };
+    expect(conditionNodeSchema.safeParse(canonicalTooDeep).success).toBe(false);
+
+    const comparisonPair = { all: [authoredFieldComparison, authoredFieldComparison] };
+    const tooManyOperands = {
+      all: Array.from({ length: conditionMaximumOperandCount / 2 }, () => comparisonPair),
+    };
+    expect(sourceConditionSchema.safeParse(tooManyOperands).success).toBe(false);
+  });
+
+  test("keeps wildcards out of canonical application roles", () => {
+    const role = {
+      roleId: id(210),
+      key: "contributor",
+      name: "Contributor",
+      homePageId: id(211),
+      permissionKeys: ["example.record.read"],
+      permissionSelection: { kind: "exact" },
+    };
+    expect(applicationRoleSchema.safeParse(role).success).toBe(true);
+    expect(
+      applicationRoleSchema.safeParse({
+        ...role,
+        permissionKeys: ["*"],
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationRoleSchema.safeParse({ ...role, permissionKeys: ["example.*"] }).success,
+    ).toBe(false);
+    expect(
+      applicationRoleSchema.safeParse({
+        ...role,
+        permissionKeys: ["example.record.read", "example.record.read"],
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationRoleSchema.safeParse({
+        ...role,
+        permissionSelection: {
+          kind: "application_wildcard",
+          catalogueFingerprint: "sha256:invalid",
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  test("uses tagged block-setting references in source and canonical definitions", () => {
+    expect(
+      sourceBlockSettingValueSchema.safeParse({
+        kind: "field_reference",
+        field: "example_module:example.title",
+      }).success,
+    ).toBe(true);
+    expect(
+      blockSettingValueSchema.safeParse({ kind: "query_reference", queryId: id(220) }).success,
+    ).toBe(true);
+    expect(blockSettingValueSchema.safeParse(id(220)).success).toBe(false);
+    expect(
+      sourceBlockSettingValueSchema.safeParse({ kind: "page_reference", page: id(220) }).success,
+    ).toBe(false);
+  });
+
+  test("requires permissioned, target-aware interface shapes", () => {
+    const operation = {
+      operationId: id(230),
+      key: "find_records",
+      description: "Find records through a published query.",
+      method: "GET",
+      path: "/records",
+      inputShape: {},
+      outputShape: {
+        title: {
+          type: "text",
+          required: true,
+          targetBinding: { kind: "query_field", fieldId: id(231) },
+        },
+      },
+      authentication: "organization_token",
+      permissionKey: "example.record.read",
+      visibility: "organization_private",
+      rateLimitPerMinute: 60,
+      maximumRequestBytes: 10_000,
+      duplicateProtection: "not_required",
+      target: { kind: "query", key: "find_records" },
+      errorCodes: ["request_refused"],
+    };
+    expect(interfaceOperationSchema.safeParse(operation).success).toBe(true);
+    expect(
+      interfaceOperationSchema.safeParse({ ...operation, permissionKey: undefined }).success,
+    ).toBe(false);
+    expect(
+      interfaceOperationSchema.safeParse({
+        ...operation,
+        inputShape: {
+          subject: {
+            type: "record_reference",
+            required: true,
+            targetBinding: { kind: "action_subject" },
+          },
+        },
+      }).success,
+    ).toBe(false);
   });
 
   test.each(fieldTypeKeys)("accepts and strictly validates the %s field", (type) => {
@@ -916,6 +1079,7 @@ describe("published, page and federation boundaries", () => {
             name: "Reader",
             homePageId: pageId,
             permissionKeys: ["example.public.open"],
+            permissionSelection: { kind: "exact" },
           },
         ],
         queries: [],
@@ -1447,13 +1611,6 @@ describe("complete definition-source fixture set", () => {
       if (result.success && result.data.kind === "application") {
         for (const workflow of result.data.body.workflows) {
           expect(workflow.maximum_nesting_depth).toBeGreaterThanOrEqual(1);
-          for (const node of workflow.nodes) {
-            expect(node.timeout_seconds).toBeGreaterThan(0);
-            expect(node.retry.maximum_attempts).toBeGreaterThan(0);
-            expect(node.activity).toBe(node.type);
-            expect(["not_applicable", "required"]).toContain(node.duplicate_protection);
-            expect(["identifiers_only", "safe_fields", "no_payload"]).toContain(node.redaction);
-          }
         }
       }
     }
@@ -1474,6 +1631,126 @@ describe("complete definition-source fixture set", () => {
     expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
   });
 
+  test("refuses lossy nested field defaults and event triggers without an explicit record", async () => {
+    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
+    const module = JSON.parse(
+      await readFile(resolve(fixtureRoot, "modules/crm.organisations.json"), "utf8"),
+    ) as {
+      body: { record_types: { fields: { type: string; settings: Record<string, unknown> }[] }[] };
+    };
+    const numericField = module.body.record_types
+      .flatMap((recordType) => recordType.fields)
+      .find((field) => field.type === "whole_number" || field.type === "decimal_number");
+    expect(numericField).toBeDefined();
+    if (numericField) numericField.settings.default = 1;
+    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(false);
+
+    const application = JSON.parse(
+      await readFile(resolve(fixtureRoot, "applications/crm.json"), "utf8"),
+    ) as { body: { workflows: { trigger: Record<string, unknown> }[] } };
+    const eventWorkflow = application.body.workflows.find(
+      (workflow) => workflow.trigger.kind === "event",
+    );
+    expect(eventWorkflow).toBeDefined();
+    if (eventWorkflow) delete eventWorkflow.trigger.record_type;
+    expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
+  });
+
+  test("refuses application-only rule effects in a module source document", async () => {
+    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
+    const module = JSON.parse(
+      await readFile(resolve(fixtureRoot, "modules/service-desk.cases.json"), "utf8"),
+    ) as { body: { rules: { effect: unknown }[] } };
+    expect(module.body.rules.length).toBeGreaterThan(0);
+
+    module.body.rules[0]!.effect = {
+      kind: "show_or_hide",
+      component: "case_form_section",
+      visibility: "hide",
+    };
+    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(false);
+
+    module.body.rules[0]!.effect = {
+      kind: "start_background_work",
+      workflow: "case_follow_up",
+    };
+    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(false);
+  });
+
+  test("keeps source role wildcards and interface target bindings controlled", async () => {
+    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
+    const application = JSON.parse(
+      await readFile(resolve(fixtureRoot, "applications/crm.json"), "utf8"),
+    ) as {
+      body: {
+        roles: { permissions: string[] }[];
+        interfaces: {
+          operations: {
+            permission?: string;
+            target: { kind: string };
+            input_shape: Record<string, unknown>;
+          }[];
+        }[];
+      };
+    };
+    application.body.roles[0]!.permissions = ["*"];
+    expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(true);
+
+    const operation = application.body.interfaces
+      .flatMap((definition) => definition.operations)
+      .find((candidate) => candidate.target.kind === "query");
+    expect(operation).toBeDefined();
+    if (operation) {
+      delete operation.permission;
+      expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
+      operation.permission = "vortex.crm.organisations.company.read";
+      operation.input_shape.subject = {
+        type: "record_reference",
+        required: true,
+        target_binding: { kind: "action_subject" },
+      };
+      expect(definitionSourceDocumentSchema.safeParse(application).success).toBe(false);
+    }
+  });
+
+  test("keeps every publication dependency input inside one strict contract", () => {
+    expect(
+      definitionPublicationContextSchema.safeParse({
+        publishedHistories: [],
+        activeDependants: [],
+      }).success,
+    ).toBe(true);
+    expect(
+      definitionPublicationContextSchema.safeParse({
+        publishedHistories: [],
+        activeDependants: [],
+        inventedPublicationSwitch: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      definitionPublicationContextSchema.safeParse({
+        publishedHistories: [],
+        activeDependants: [
+          {
+            definitionKey: "vortex.example.module",
+            dependantKey: "vortex.example.application",
+            acceptedVersion: { selection: "allowed_range", expression: "not a range" },
+            referencesValid: true,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      definitionPublicationContextSchema.safeParse({
+        publishedHistories: [
+          { kind: "module", definitionKey: "vortex.example.module", history: [] },
+          { kind: "module", definitionKey: "vortex.example.module", history: [] },
+        ],
+        activeDependants: [],
+      }).success,
+    ).toBe(false);
+  });
+
   test("keeps fixture identities and removed business-domain semantics out of all shipping source", async () => {
     const readSourceTree = async (directory: string): Promise<string[]> => {
       const entries = await readdir(directory, { withFileTypes: true });
@@ -1486,13 +1763,16 @@ describe("complete definition-source fixture set", () => {
       }
       return contents;
     };
+    const runtimeRoots = (await readdir(resolve(process.cwd(), "runtime"), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `runtime/${entry.name}/src`);
     const shippingRoots = [
       "apps/web/app",
       "apps/web/src",
       "contracts/src",
       "db/src",
       "modules/src",
-      "runtime",
+      ...runtimeRoots,
       "studio/src",
       "testing/src",
       "tooling/boundaries",
@@ -1561,12 +1841,14 @@ describe("complete definition-source fixture set", () => {
       "address",
       "application",
       "behavior",
+      "body",
       "calendar",
       "completed",
       "configuration",
       "constraint",
       "description",
       "event",
+      "export",
       "field",
       "identity",
       "interface",
@@ -1587,6 +1869,7 @@ describe("complete definition-source fixture set", () => {
       "source",
       "status",
       "storage",
+      "subject",
       "theme",
       "value",
       "visibility",

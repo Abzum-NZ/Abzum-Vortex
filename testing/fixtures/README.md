@@ -2,29 +2,30 @@
 
 [Worked examples](../../docs/specification/appendices/worked-examples.md) · [Build plan Gate 0](../../docs/build-plan/README.md#gate-0--specification-and-contract-reconciliation)
 
-This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. It is a contract gate: the full set and its exhaustive validator must pass before Phase 1 engine code begins.
+This directory contains the complete, self-consistent JSON dependency set for CRM and Service Desk. It is a contract gate: the full set must pass the production source parser, deterministic compiler and publication validator before Phase 2 begins.
 
-These files are definition-source documents, not runtime API messages. Their readable snake-case aliases are local to this fixture set. The strict schemas in [`@vortex/contracts`](../../contracts/README.md) validate the complete closed shape; [publication validation #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) resolves each alias and builder reference to an immutable platform identifier before any runtime service may accept it.
+These files are definition-source documents, not runtime API messages. Their readable snake-case aliases are local to this fixture set. The strict production schemas in [`@vortex/contracts`](../../contracts/README.md) validate the complete closed shape. The shipping [compiler](../../runtime/definition/src/compiler.ts) resolves each alias and version requirement only from the checked-in immutable snapshot, then the [publication validator](../../runtime/definition/src/validation.ts) proves cross-definition semantics before any runtime service may accept the result.
 
 ## Contents
 
 | Path | Purpose |
 |---|---|
 | `fixture-set.json` | Complete manifest, required field types, workflow node catalogue, applications, and cross-application cases. |
+| `definition-resolution-snapshot.json` | Permanent fixture identifiers, exact definition versions, and connection operation catalogues injected into compilation. |
 | `connection-types/` | Every connection type and operation referenced by either application. |
 | `modules/` | Five CRM modules and three Service Desk modules, each independently versioned. |
 | `applications/` | CRM and Service Desk definitions with exact module bindings, pages, roles, workflows, pipelines, connections, and interfaces. |
 | `scenarios/` | Organisation data and expected outcomes for shared records, collaborative case access, and immediate revocation. |
 | `storage/` | Complete record-type-to-table catalog, physical-name rules, application roots, scoped row examples, and collision tests. |
-| `validate-fixtures.mjs` | Exhaustive reference, dependency, coverage, and policy validation. |
+| `validate-fixtures.test.ts` | Shipping-code compilation plus manifest, scenario, storage, coverage, and policy proof. |
 
 ## Required command
 
 ```text
-node testing/fixtures/validate-fixtures.mjs
+pnpm fixtures
 ```
 
-Success means every manifest file, root, version, dependency, relationship, permission, action, event, page, query, workflow node, pipeline transition, connection operation, interface operation, and scenario reference resolves. It also proves coverage of all twenty-two field types and the complete safe workflow-node catalogue.
+Success means every manifest file, source document, resolved identity, exact version, dependency, relationship, permission, action, event, page, query, workflow node, pipeline transition, connection operation, interface operation, and scenario reference resolves. It also proves complete provenance, all twenty-two field types, the complete safe workflow-node catalogue, a verified incoming-message acknowledgement, and qualified reverse-total relationships.
 
 It also proves that every record type has one storage-contract table, every field has a stable physical column mapping, organisation-shared rows omit an application root, application-contained rows require one, and same-named CRM applications in separate organisations cannot collide.
 
