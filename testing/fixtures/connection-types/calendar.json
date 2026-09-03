@@ -1,41 +1,71 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "connection_type",
-  "root_id": "connection_calendar",
+  "root_alias": "connection_calendar",
   "key": "vortex.connection.calendar",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.connection.calendar:1.0.0",
   "body": {
     "name": "Calendar",
     "purpose": "Create and cancel calendar entries through an organisation-authorised provider.",
     "provider": "Example Calendar",
     "authentication": {
       "kind": "oauth2",
-      "secret_fields": ["client_id", "client_secret", "refresh_token"],
-      "scopes": ["events.write"]
+      "secret_fields": [
+        "client_id",
+        "client_secret",
+        "refresh_token"
+      ],
+      "scopes": [
+        "events.write"
+      ]
     },
-    "allowed_hosts": ["api.calendar.example"],
+    "allowed_hosts": [
+      "api.calendar.example"
+    ],
     "allow_redirects": false,
     "shapes": [
       {
         "key": "calendar_event",
         "fields": [
-          { "key": "title", "type": "text", "required": true },
-          { "key": "starts_at", "type": "date_time", "required": true },
-          { "key": "ends_at", "type": "date_time", "required": true }
+          {
+            "key": "title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "starts_at",
+            "type": "date_time",
+            "required": true
+          },
+          {
+            "key": "ends_at",
+            "type": "date_time",
+            "required": true
+          }
         ]
       },
       {
         "key": "calendar_event_reference",
-        "fields": [{ "key": "event_id", "type": "text", "required": true }]
+        "fields": [
+          {
+            "key": "event_id",
+            "type": "text",
+            "required": true
+          }
+        ]
       },
       {
         "key": "calendar_event_receipt",
         "fields": [
-          { "key": "event_id", "type": "text", "required": true },
-          { "key": "accepted", "type": "boolean", "required": true }
+          {
+            "key": "event_id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "accepted",
+            "type": "boolean",
+            "required": true
+          }
         ]
       }
     ],

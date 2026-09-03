@@ -97,6 +97,61 @@ export const blockPaletteGroupSchema = z.enum(blockPaletteGroupKeys);
 export const blockSettingControlSchema = z.enum(blockSettingControlKeys);
 export const workflowNodeTypeSchema = z.enum(workflowNodeTypeKeys);
 
+export const workflowValueTypeSchema = z.enum([
+  "text",
+  "formatted_text",
+  "whole_number",
+  "decimal_number",
+  "money",
+  "yes_no",
+  "date",
+  "date_time",
+  "choice",
+  "several_choices",
+  "record_reference",
+  "record_reference_list",
+  "organization_account_reference",
+  "workflow_run_reference",
+  "relationship_reference",
+  "relationship_reference_list",
+  "file_reference",
+  "json",
+]);
+export const workflowNodeOutputsByType = Object.freeze({
+  start: [],
+  condition: [{ key: "matched", type: "yes_no", target: "none" }],
+  decision_table: [{ key: "decision", type: "text", target: "none" }],
+  bounded_loop: [{ key: "record", type: "record_reference", target: "query" }],
+  delay: [],
+  wait_until: [],
+  start_workflow: [{ key: "run", type: "workflow_run_reference", target: "none" }],
+  stop: [],
+  create_record: [{ key: "record", type: "record_reference", target: "configured_record" }],
+  change_record: [{ key: "record", type: "record_reference", target: "configured_record" }],
+  run_action: [{ key: "result", type: "json", target: "none" }],
+  soft_delete_record: [],
+  duplicate_record: [{ key: "record", type: "record_reference", target: "configured_record" }],
+  add_relationship: [{ key: "relationship", type: "relationship_reference", target: "none" }],
+  copy_relationships: [
+    { key: "relationships", type: "relationship_reference_list", target: "none" },
+  ],
+  request_form: [],
+  query_records: [{ key: "records", type: "record_reference_list", target: "query" }],
+  set_values: [{ key: "record", type: "record_reference", target: "input_record" }],
+  format_value: [{ key: "value", type: "json", target: "none" }],
+  generate_export: [{ key: "file", type: "file_reference", target: "none" }],
+  attach_file: [{ key: "attachment", type: "file_reference", target: "none" }],
+  move_file: [{ key: "file", type: "file_reference", target: "none" }],
+  call_connection: [{ key: "response", type: "json", target: "none" }],
+  acknowledge_message: [],
+} as const satisfies Record<
+  (typeof workflowNodeTypeKeys)[number],
+  readonly {
+    key: string;
+    type: z.infer<typeof workflowValueTypeSchema>;
+    target: "none" | "query" | "configured_record" | "input_record";
+  }[]
+>);
 export const workflowNodeOutputKeysByType = Object.freeze({
   start: [],
   condition: ["matched"],
@@ -113,7 +168,7 @@ export const workflowNodeOutputKeysByType = Object.freeze({
   duplicate_record: ["record"],
   add_relationship: ["relationship"],
   copy_relationships: ["relationships"],
-  request_form: ["response"],
+  request_form: [],
   query_records: ["records"],
   set_values: ["record"],
   format_value: ["value"],

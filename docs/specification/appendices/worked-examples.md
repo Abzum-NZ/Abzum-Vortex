@@ -2,7 +2,7 @@
 
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Coverage map](traceability.md) · [Fixture README](../../../testing/fixtures/README.md)
 
-The worked examples are executable acceptance fixtures, not informal illustrations. Their test-only readable input schema exercises the canonical capabilities, and [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) must convert it without semantic loss into the same complete contracts used by published definitions. No fixture may contain an unresolved reference.
+The worked examples are executable acceptance fixtures, not informal illustrations. Their readable JSON is parsed by the production authored-source contracts and converted by the shipping compiler without semantic loss into the same complete contracts used by published definitions. A checked-in immutable resolution snapshot supplies every permanent identifier and exact dependency version; no fixture may contain an unresolved reference.
 
 ## Complete fixture set
 
@@ -22,8 +22,9 @@ The fixture set contains two independently versioned applications, eight indepen
 12. Application-contained workflows, pipelines, roles, navigation, pages, themes, queries, actions, and interfaces.
 13. Organisation scenarios for shared company/contact records and a limited collaborative case grant.
 14. A complete storage layout and scope scenario for all record types and fields.
+15. An immutable definition-resolution snapshot containing every fixture alias, permanent identifier, exact definition version and connection operation key.
 
-The complete set is written and validated before Phase 1 engine implementation. A partial example cannot pass by weakening reference checks.
+The complete set is written and validated before Phase 2 implementation. The fixture gate parses, compiles and publication-validates all thirteen documents through shipping code, proves deterministic dependency ordering and provenance coverage, then checks the scenario and storage evidence separately. A partial example cannot pass by weakening reference checks.
 
 ## Application and module composition
 
@@ -136,7 +137,7 @@ Service Desk includes:
 - Customer company and requester views backed by the shared CRM modules.
 - Service-level and business-calendar administration.
 - Knowledge article list, detail, review, and public article pages.
-- Case triage, assignment, escalation, and resolution workflows.
+- Case triage, assignment, escalation, resolution, and verified incoming-message acknowledgement workflows.
 - A case lifecycle pipeline with guarded transitions and time targets.
 - Application roles for agents, managers, and knowledge editors.
 - Email and webhook connection bindings.

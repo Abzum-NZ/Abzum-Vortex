@@ -1,20 +1,19 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "module",
-  "root_id": "mod_service_desk_knowledge",
+  "root_alias": "mod_service_desk_knowledge",
   "key": "vortex.service_desk.knowledge",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.service_desk.knowledge:1.0.0",
   "body": {
     "name": "Service Desk Knowledge",
     "description": "Reviewed knowledge articles linked to cases.",
-    "category": "Service Desk",
     "dependencies": [
       {
+        "dependency_key": "cases",
         "module": "vortex.service_desk.cases",
-        "version": "1.0.0"
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       }
     ],
     "record_types": [
@@ -24,7 +23,6 @@
         "key": "article",
         "name": "Article",
         "plural_name": "Articles",
-        "description": "A reviewed answer or procedure.",
         "storage_scope": "application_contained",
         "ownership_mode": "team",
         "title_field": "title",
@@ -106,7 +104,6 @@
             "personal_data": "none",
             "public_display": "allowed",
             "settings": {
-              "default": "draft",
               "options": [
                 {
                   "value": "draft",
@@ -125,7 +122,8 @@
                   "label": "Retired"
                 }
               ]
-            }
+            },
+            "default": "draft"
           },
           {
             "id": "fld_article_public",
@@ -138,9 +136,8 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "allowed",
-            "settings": {
-              "default": false
-            }
+            "settings": {},
+            "default": false
           },
           {
             "id": "fld_article_review",
@@ -169,7 +166,8 @@
             "public_display": "allowed",
             "settings": {
               "audience": "application_accounts",
-              "on_person_deactivation": "retain_reference"
+              "on_person_deactivation": "retain_reference",
+              "application_root_required": true
             }
           },
           {
@@ -200,7 +198,11 @@
               "max_files": 10
             }
           }
-        ]
+        ],
+        "custom_actions": [
+          "act_article_publish"
+        ],
+        "relationships": []
       },
       {
         "id": "rt_sd_article_case",
@@ -208,7 +210,6 @@
         "key": "article_case",
         "name": "Article case link",
         "plural_name": "Article case links",
-        "description": "An article used to resolve a case.",
         "storage_scope": "application_contained",
         "ownership_mode": "inherited",
         "ownership_relationship": "article",
@@ -266,18 +267,139 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
-            "settings": {
-              "default": "now"
-            }
+            "settings": {}
+          }
+        ],
+        "custom_actions": [],
+        "relationships": [
+          {
+            "id": "fld_article_case_article_relationship",
+            "key": "article",
+            "from_field": "article",
+            "to_record_type": "vortex.service_desk.knowledge:article",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "soft_delete_dependent"
+          },
+          {
+            "id": "fld_article_case_case_relationship",
+            "key": "case",
+            "from_field": "case",
+            "to_record_type": "vortex.service_desk.cases:case",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "soft_delete_dependent"
           }
         ]
       }
     ],
     "permissions": [
       {
-        "key": "vortex.service_desk.knowledge.article.publish",
+        "id": "perm_article_create",
+        "key": "vortex.service_desk.knowledge.article.create",
+        "label": "Create article",
+        "description": "Allows the standard create operation for articles.",
         "record_type": "article",
-        "label": "Publish a knowledge article"
+        "action_kind": "create",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_read",
+        "key": "vortex.service_desk.knowledge.article.read",
+        "label": "Read article",
+        "description": "Allows the standard read operation for articles.",
+        "record_type": "article",
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_update",
+        "key": "vortex.service_desk.knowledge.article.update",
+        "label": "Update article",
+        "description": "Allows the standard update operation for articles.",
+        "record_type": "article",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_soft_delete",
+        "key": "vortex.service_desk.knowledge.article.soft_delete",
+        "label": "Soft Delete article",
+        "description": "Allows the standard soft_delete operation for articles.",
+        "record_type": "article",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_restore",
+        "key": "vortex.service_desk.knowledge.article.restore",
+        "label": "Restore article",
+        "description": "Allows the standard restore operation for articles.",
+        "record_type": "article",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_export",
+        "key": "vortex.service_desk.knowledge.article.export",
+        "label": "Export article",
+        "description": "Allows the standard export operation for articles.",
+        "record_type": "article",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_case_create",
+        "key": "vortex.service_desk.knowledge.article_case.create",
+        "label": "Create article case link",
+        "description": "Allows the standard create operation for article case links.",
+        "record_type": "article_case",
+        "action_kind": "create",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_case_read",
+        "key": "vortex.service_desk.knowledge.article_case.read",
+        "label": "Read article case link",
+        "description": "Allows the standard read operation for article case links.",
+        "record_type": "article_case",
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_case_soft_delete",
+        "key": "vortex.service_desk.knowledge.article_case.soft_delete",
+        "label": "Soft Delete article case link",
+        "description": "Allows the standard soft_delete operation for article case links.",
+        "record_type": "article_case",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_case_restore",
+        "key": "vortex.service_desk.knowledge.article_case.restore",
+        "label": "Restore article case link",
+        "description": "Allows the standard restore operation for article case links.",
+        "record_type": "article_case",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_article_case_export",
+        "key": "vortex.service_desk.knowledge.article_case.export",
+        "label": "Export article case link",
+        "description": "Allows the standard export operation for article case links.",
+        "record_type": "article_case",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_named_1_publish",
+        "key": "vortex.service_desk.knowledge.article.publish",
+        "label": "Publish a knowledge article",
+        "description": "Allows the named publish operation.",
+        "record_type": "article",
+        "action_kind": "named",
+        "named_action": "publish",
+        "administrative": false
       }
     ],
     "actions": [
@@ -289,8 +411,18 @@
         "permission": "vortex.service_desk.knowledge.article.publish",
         "inputs": [],
         "effects": [
-          {"kind":"set_field","field":"status","value":{"source":"literal","value":"published"}},
-          {"kind":"announce_event","event":"vortex.service_desk.knowledge.article.published"}
+          {
+            "kind": "set_field",
+            "field": "status",
+            "value": {
+              "source": "literal",
+              "value": "published"
+            }
+          },
+          {
+            "kind": "announce_event",
+            "event": "vortex.service_desk.knowledge.article.published"
+          }
         ],
         "shareable": false
       }
@@ -304,7 +436,8 @@
           "article_number",
           "title",
           "public"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "rules": [
@@ -328,7 +461,10 @@
             }
           ]
         },
-        "effect": {"kind":"refuse","reason_code":"published_state_required"}
+        "effect": {
+          "kind": "refuse",
+          "reason_code": "published_state_required"
+        }
       }
     ],
     "extension_points": [
@@ -340,6 +476,7 @@
           "field"
         ]
       }
-    ]
+    ],
+    "sharing_conditions": []
   }
 }

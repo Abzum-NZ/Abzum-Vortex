@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { jsonValueSchema, labelSchema } from "./common";
+import {
+  conditionMaximumNestingDepth,
+  conditionMaximumOperandCount,
+  jsonValueSchema,
+  labelSchema,
+} from "./common";
 import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
 import {
   actionIdSchema,
@@ -14,6 +19,7 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   ruleIdSchema,
+  semanticVersionSchema,
   storageContractIdSchema,
   workflowIdSchema,
 } from "./identifiers";
@@ -29,7 +35,7 @@ import type { ResolveRecordTypeReferences } from "./definitions";
 import { permissionDeclarationSchema } from "./permissions";
 
 const finiteNumberSchema = z.number().finite();
-const optionSchema = z.object({ value: builderKeySchema, label: labelSchema }).strict();
+const optionSchema = z.object({ value: z.string().min(1).max(120), label: labelSchema }).strict();
 const parentDeleteSchema = z.enum(["refuse", "empty_optional", "soft_delete_dependent"]);
 const emptySettingsSchema = z.object({}).strict();
 
@@ -41,7 +47,9 @@ const longTextSettingsSchema = z
   .strict();
 const formattedTextSettingsSchema = z
   .object({
-    allowedBlocks: z.array(z.enum(["paragraph", "heading", "list", "link", "attachment"])).min(1),
+    allowedBlocks: z
+      .array(z.enum(["paragraph", "heading", "list", "table", "link", "attachment"]))
+      .min(1),
     maxLength: z.number().int().positive().optional(),
   })
   .strict();
@@ -159,7 +167,11 @@ const multiLinkSettingsSchema = z
   .strict();
 const personLinkSettingsSchema = z
   .object({
-    audience: z.enum(["organization_accounts", "application_accounts"]),
+    audience: z.enum([
+      "organization_accounts",
+      "application_accounts",
+      "organization_identities_and_external_requesters",
+    ]),
     applicationRootIdRequired: z.boolean(),
     onPersonDeactivation: z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
   })
@@ -205,6 +217,14 @@ const calculationExpressionSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   calculationDateOffsetSchema,
+  z
+    .object({
+      kind: z.literal("deadline_passed"),
+      dueFieldId: fieldIdSchema,
+      statusFieldId: fieldIdSchema.optional(),
+      terminalStatusValues: z.array(jsonValueSchema).max(20),
+    })
+    .strict(),
 ]);
 const calculationSettingsSchema = z
   .object({
@@ -227,6 +247,7 @@ const calculationSettingsSchema = z
       (value.expression.kind === "condition" && value.resultType === "yes_no") ||
       (value.expression.kind === "date_offset" &&
         (value.resultType === "date" || value.resultType === "date_time")) ||
+      (value.expression.kind === "deadline_passed" && value.resultType === "yes_no") ||
       ((value.expression.kind === "numeric" || value.expression.kind === "subtract_percentage") &&
         (value.resultType === "whole_number" ||
           value.resultType === "decimal_number" ||
@@ -242,6 +263,15 @@ const totalSettingsSchema = z
   .object({
     relationshipId: containedComponentIdSchema,
     operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
+    resultType: z.enum([
+      "text",
+      "whole_number",
+      "decimal_number",
+      "money",
+      "yes_no",
+      "date",
+      "date_time",
+    ]),
     fieldId: fieldIdSchema.optional(),
     filter: z.lazy(() => conditionNodeSchema).optional(),
     currency: z.string().length(3).optional(),
@@ -409,6 +439,7 @@ export const moduleDependencySchema = z
     moduleRootId: moduleRootIdSchema,
     moduleKey: namespacedKeySchema,
     version: versionRequirementSchema,
+    resolvedVersion: semanticVersionSchema,
   })
   .strict();
 
@@ -418,11 +449,16 @@ export const relationshipDefinitionSchema = z
     key: builderKeySchema,
     fromRecordTypeId: recordTypeIdSchema,
     fromFieldId: fieldIdSchema,
-    toRecordType: recordTypeReferenceSchema,
+    toRecordType: recordTypeReferenceSchema.optional(),
+    toRecordTypes: z.array(recordTypeReferenceSchema).min(2).max(20).optional(),
     cardinality: z.enum(["one_to_one", "many_to_one", "many_to_many"]),
     onParentDelete: parentDeleteSchema,
   })
-  .strict();
+  .strict()
+  .refine((value) => (value.toRecordType !== undefined) !== (value.toRecordTypes !== undefined), {
+    path: ["toRecordType"],
+    message: "A relationship must declare one target or a polymorphic target list",
+  });
 
 const conditionOperandSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("field"), fieldId: fieldIdSchema }).strict(),
@@ -449,22 +485,71 @@ const comparisonConditionSchema = z
     left: conditionOperandSchema,
     right: conditionOperandSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const unary = value.operator === "is_empty" || value.operator === "is_not_empty";
+    if (unary && value.right !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["right"],
+        message: "An empty-value comparison has exactly one operand",
+      });
+    if (!unary && value.right === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["right"],
+        message: "A binary comparison requires two operands",
+      });
+  });
 export type ConditionNode =
   | z.infer<typeof comparisonConditionSchema>
   | { kind: "all" | "any"; conditions: ConditionNode[] }
   | { kind: "not"; condition: ConditionNode };
-export const conditionNodeSchema: z.ZodType<ConditionNode> = z.lazy(() =>
+const conditionNodeTreeSchema: z.ZodType<ConditionNode> = z.lazy(() =>
   z.discriminatedUnion("kind", [
     comparisonConditionSchema,
     z
-      .object({ kind: z.literal("all"), conditions: z.array(conditionNodeSchema).min(1).max(50) })
+      .object({
+        kind: z.literal("all"),
+        conditions: z.array(conditionNodeTreeSchema).min(1).max(50),
+      })
       .strict(),
     z
-      .object({ kind: z.literal("any"), conditions: z.array(conditionNodeSchema).min(1).max(50) })
+      .object({
+        kind: z.literal("any"),
+        conditions: z.array(conditionNodeTreeSchema).min(1).max(50),
+      })
       .strict(),
-    z.object({ kind: z.literal("not"), condition: conditionNodeSchema }).strict(),
+    z.object({ kind: z.literal("not"), condition: conditionNodeTreeSchema }).strict(),
   ]),
+);
+const inspectCondition = (
+  condition: ConditionNode,
+  depth = 1,
+): { depth: number; operands: number } => {
+  if (condition.kind === "comparison")
+    return { depth, operands: condition.right === undefined ? 1 : 2 };
+  if (condition.kind === "not") return inspectCondition(condition.condition, depth + 1);
+  const inspected = condition.conditions.map((child) => inspectCondition(child, depth + 1));
+  return {
+    depth: Math.max(depth, ...inspected.map((child) => child.depth)),
+    operands: inspected.reduce((total, child) => total + child.operands, 0),
+  };
+};
+export const conditionNodeSchema: z.ZodType<ConditionNode> = conditionNodeTreeSchema.superRefine(
+  (condition, context) => {
+    const inspected = inspectCondition(condition);
+    if (inspected.depth > conditionMaximumNestingDepth)
+      context.addIssue({
+        code: "custom",
+        message: `Condition nesting cannot exceed ${conditionMaximumNestingDepth} levels`,
+      });
+    if (inspected.operands > conditionMaximumOperandCount)
+      context.addIssue({
+        code: "custom",
+        message: `Condition operands cannot exceed ${conditionMaximumOperandCount}`,
+      });
+  },
 );
 
 const actionValueSchema = z.discriminatedUnion("source", [

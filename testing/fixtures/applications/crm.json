@@ -1,26 +1,60 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "application",
-  "root_id": "app_crm",
+  "root_alias": "app_crm",
   "key": "vortex.app.crm",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.app.crm:1.0.0",
   "body": {
     "name": "CRM",
     "description": "A general customer relationship application for companies, people, leads, opportunities and activities.",
     "icon": "contact-round",
     "home_page": "crm_dashboard",
     "module_bindings": [
-      { "module": "vortex.crm.organisations", "version": "1.0.0", "purpose": "primary" },
-      { "module": "vortex.crm.people", "version": "1.0.0", "purpose": "primary" },
-      { "module": "vortex.crm.opportunities", "version": "1.0.0", "purpose": "primary" },
-      { "module": "vortex.crm.activities", "version": "1.0.0", "purpose": "primary" },
-      { "module": "vortex.crm.tags", "version": "1.0.0", "purpose": "primary" },
+      {
+        "module": "vortex.crm.organisations",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "primary"
+      },
+      {
+        "module": "vortex.crm.people",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "primary"
+      },
+      {
+        "module": "vortex.crm.opportunities",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "primary"
+      },
+      {
+        "module": "vortex.crm.activities",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "primary"
+      },
+      {
+        "module": "vortex.crm.tags",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
+        "purpose": "primary"
+      },
       {
         "module": "vortex.service_desk.cases",
-        "version": "1.0.0",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
         "purpose": "compatible_shared_record_display"
       }
     ],
@@ -35,10 +69,42 @@
       }
     },
     "permissions": [
-      { "key": "application.crm.open", "label": "Open CRM" },
-      { "key": "application.crm.manage", "label": "Manage CRM" },
-      { "key": "application.crm.shared_cases.read", "label": "Read granted case summaries" },
-      { "key": "application.crm.shared_cases.collaborate", "label": "Collaborate on granted cases" }
+      {
+        "id": "app_permission_1",
+        "key": "application.crm.open",
+        "label": "Open CRM",
+        "description": "Allows open crm.",
+        "action_kind": "named",
+        "named_action": "open",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_2",
+        "key": "application.crm.manage",
+        "label": "Manage CRM",
+        "description": "Allows manage crm.",
+        "action_kind": "named",
+        "named_action": "manage",
+        "administrative": true
+      },
+      {
+        "id": "app_permission_3",
+        "key": "application.crm.shared_cases.read",
+        "label": "Read granted case summaries",
+        "description": "Allows read granted case summaries.",
+        "action_kind": "named",
+        "named_action": "read",
+        "administrative": false
+      },
+      {
+        "id": "app_permission_4",
+        "key": "application.crm.shared_cases.collaborate",
+        "label": "Collaborate on granted cases",
+        "description": "Allows collaborate on granted cases.",
+        "action_kind": "named",
+        "named_action": "collaborate",
+        "administrative": false
+      }
     ],
     "roles": [
       {
@@ -49,11 +115,35 @@
         "permissions": [
           "application.crm.open",
           "vortex.crm.organisations.company.read",
-          "vortex.crm.people.contact.*",
-          "vortex.crm.people.lead.*",
+          "vortex.crm.people.contact.create",
+          "vortex.crm.people.contact.read",
+          "vortex.crm.people.contact.update",
+          "vortex.crm.people.contact.soft_delete",
+          "vortex.crm.people.contact.restore",
+          "vortex.crm.people.contact.export",
+          "vortex.crm.people.contact.view_sensitive_notes",
+          "vortex.crm.people.lead.create",
+          "vortex.crm.people.lead.read",
+          "vortex.crm.people.lead.update",
+          "vortex.crm.people.lead.soft_delete",
+          "vortex.crm.people.lead.restore",
+          "vortex.crm.people.lead.export",
           "vortex.crm.people.lead.convert",
-          "vortex.crm.opportunities.opportunity.*",
-          "vortex.crm.activities.activity.*",
+          "vortex.crm.opportunities.opportunity.create",
+          "vortex.crm.opportunities.opportunity.read",
+          "vortex.crm.opportunities.opportunity.update",
+          "vortex.crm.opportunities.opportunity.soft_delete",
+          "vortex.crm.opportunities.opportunity.restore",
+          "vortex.crm.opportunities.opportunity.export",
+          "vortex.crm.opportunities.opportunity.approve_discount",
+          "vortex.crm.opportunities.opportunity.mark_won",
+          "vortex.crm.activities.activity.create",
+          "vortex.crm.activities.activity.read",
+          "vortex.crm.activities.activity.update",
+          "vortex.crm.activities.activity.soft_delete",
+          "vortex.crm.activities.activity.restore",
+          "vortex.crm.activities.activity.export",
+          "vortex.crm.activities.activity.complete",
           "vortex.crm.tags.record_tag.manage",
           "application.crm.shared_cases.read",
           "application.crm.shared_cases.collaborate"
@@ -65,13 +155,64 @@
         "name": "CRM manager",
         "home_page": "crm_dashboard",
         "permissions": [
-          "application.crm.*",
-          "vortex.crm.organisations.company.*",
+          "application.crm.open",
+          "application.crm.manage",
+          "application.crm.shared_cases.read",
+          "application.crm.shared_cases.collaborate",
+          "vortex.crm.organisations.company.create",
+          "vortex.crm.organisations.company.read",
+          "vortex.crm.organisations.company.update",
+          "vortex.crm.organisations.company.soft_delete",
+          "vortex.crm.organisations.company.restore",
+          "vortex.crm.organisations.company.export",
           "vortex.crm.organisations.company.merge",
-          "vortex.crm.people.*",
-          "vortex.crm.opportunities.*",
-          "vortex.crm.activities.*",
-          "vortex.crm.tags.*"
+          "vortex.crm.people.contact.create",
+          "vortex.crm.people.contact.read",
+          "vortex.crm.people.contact.update",
+          "vortex.crm.people.contact.soft_delete",
+          "vortex.crm.people.contact.restore",
+          "vortex.crm.people.contact.export",
+          "vortex.crm.people.lead.create",
+          "vortex.crm.people.lead.read",
+          "vortex.crm.people.lead.update",
+          "vortex.crm.people.lead.soft_delete",
+          "vortex.crm.people.lead.restore",
+          "vortex.crm.people.lead.export",
+          "vortex.crm.people.lead.convert",
+          "vortex.crm.people.contact.view_sensitive_notes",
+          "vortex.crm.opportunities.opportunity.create",
+          "vortex.crm.opportunities.opportunity.read",
+          "vortex.crm.opportunities.opportunity.update",
+          "vortex.crm.opportunities.opportunity.soft_delete",
+          "vortex.crm.opportunities.opportunity.restore",
+          "vortex.crm.opportunities.opportunity.export",
+          "vortex.crm.opportunities.opportunity_contact.create",
+          "vortex.crm.opportunities.opportunity_contact.read",
+          "vortex.crm.opportunities.opportunity_contact.update",
+          "vortex.crm.opportunities.opportunity_contact.soft_delete",
+          "vortex.crm.opportunities.opportunity_contact.restore",
+          "vortex.crm.opportunities.opportunity_contact.export",
+          "vortex.crm.opportunities.opportunity.approve_discount",
+          "vortex.crm.opportunities.opportunity.mark_won",
+          "vortex.crm.activities.activity.create",
+          "vortex.crm.activities.activity.read",
+          "vortex.crm.activities.activity.update",
+          "vortex.crm.activities.activity.soft_delete",
+          "vortex.crm.activities.activity.restore",
+          "vortex.crm.activities.activity.export",
+          "vortex.crm.activities.activity.complete",
+          "vortex.crm.tags.tag.create",
+          "vortex.crm.tags.tag.read",
+          "vortex.crm.tags.tag.update",
+          "vortex.crm.tags.tag.soft_delete",
+          "vortex.crm.tags.tag.restore",
+          "vortex.crm.tags.tag.export",
+          "vortex.crm.tags.record_tag.create",
+          "vortex.crm.tags.record_tag.read",
+          "vortex.crm.tags.record_tag.soft_delete",
+          "vortex.crm.tags.record_tag.restore",
+          "vortex.crm.tags.record_tag.export",
+          "vortex.crm.tags.record_tag.manage"
         ]
       }
     ],
@@ -154,24 +295,70 @@
           "stage",
           "expected_close_date"
         ],
-        "filter": { "field": "stage", "operator": "not_in", "value": ["won", "lost"] },
-        "sort": [{ "field": "expected_close_date", "direction": "ascending" }]
+        "filter": {
+          "field": "stage",
+          "operator": "not_in",
+          "value": [
+            "won",
+            "lost"
+          ]
+        },
+        "sort": [
+          {
+            "field": "expected_close_date",
+            "direction": "ascending"
+          }
+        ],
+        "group_by": [],
+        "aggregates": [],
+        "page_size": 50,
+        "relationship_hops": 0
       },
       {
         "id": "qry_crm_companies",
         "key": "crm_companies",
         "record_type": "vortex.crm.organisations:company",
-        "select": ["company_number", "name", "industry", "phone", "website"],
+        "select": [
+          "company_number",
+          "name",
+          "industry",
+          "phone",
+          "website"
+        ],
         "filter": null,
-        "sort": [{ "field": "name", "direction": "ascending" }]
+        "sort": [
+          {
+            "field": "name",
+            "direction": "ascending"
+          }
+        ],
+        "group_by": [],
+        "aggregates": [],
+        "page_size": 50,
+        "relationship_hops": 0
       },
       {
         "id": "qry_crm_contacts",
         "key": "crm_contacts",
         "record_type": "vortex.crm.people:contact",
-        "select": ["contact_number", "full_name", "email", "company", "relationship_owner"],
+        "select": [
+          "contact_number",
+          "full_name",
+          "email",
+          "company",
+          "relationship_owner"
+        ],
         "filter": null,
-        "sort": [{ "field": "full_name", "direction": "ascending" }]
+        "sort": [
+          {
+            "field": "full_name",
+            "direction": "ascending"
+          }
+        ],
+        "group_by": [],
+        "aggregates": [],
+        "page_size": 50,
+        "relationship_hops": 0
       },
       {
         "id": "qry_crm_leads",
@@ -186,22 +373,54 @@
           "status",
           "received_at"
         ],
-        "filter": { "field": "status", "operator": "not_equals", "value": "converted" },
-        "sort": [{ "field": "received_at", "direction": "descending" }]
+        "filter": {
+          "field": "status",
+          "operator": "not_equals",
+          "value": "converted"
+        },
+        "sort": [
+          {
+            "field": "received_at",
+            "direction": "descending"
+          }
+        ],
+        "group_by": [],
+        "aggregates": [],
+        "page_size": 50,
+        "relationship_hops": 0
       },
       {
         "id": "qry_crm_activities",
         "key": "crm_activities",
         "record_type": "vortex.crm.activities:activity",
-        "select": ["subject", "activity_type", "due_at", "completed", "regarding", "owner"],
-        "filter": { "field": "completed", "operator": "equals", "value": false },
-        "sort": [{ "field": "due_at", "direction": "ascending" }]
+        "select": [
+          "subject",
+          "activity_type",
+          "due_at",
+          "completed",
+          "regarding",
+          "owner"
+        ],
+        "filter": {
+          "field": "completed",
+          "operator": "equals",
+          "value": false
+        },
+        "sort": [
+          {
+            "field": "due_at",
+            "direction": "ascending"
+          }
+        ],
+        "group_by": [],
+        "aggregates": [],
+        "page_size": 50,
+        "relationship_hops": 0
       },
       {
         "id": "qry_crm_shared_cases",
         "key": "crm_shared_cases",
         "record_type": "vortex.service_desk.cases:case",
-        "source": "active_inter_application_grant",
         "select": [
           "case_number",
           "subject",
@@ -211,7 +430,16 @@
           "resolved_at"
         ],
         "filter": null,
-        "sort": [{ "field": "case_number", "direction": "descending" }]
+        "sort": [
+          {
+            "field": "case_number",
+            "direction": "descending"
+          }
+        ],
+        "group_by": [],
+        "aggregates": [],
+        "page_size": 50,
+        "relationship_hops": 0
       }
     ],
     "pages": [
@@ -221,11 +449,46 @@
         "name": "CRM overview",
         "type": "dashboard",
         "permission": "application.crm.open",
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "blocks": [
+          {
+            "id": "page_crm_dashboard_main",
+            "block": "block_data_view",
+            "block_release_version": "1.0.0",
+            "settings": {},
+            "desktop": {
+              "start_column": 1,
+              "span": 12,
+              "height": 6
+            },
+            "phone": {
+              "order": 0,
+              "behaviour": "full_width"
+            },
+            "view_permission": "application.crm.open",
+            "query": "crm_pipeline"
+          }
+        ],
         "layout": {
-          "desktop": [{ "block": "pipeline_summary", "span": 12, "query": "crm_pipeline" }],
-          "phone": ["pipeline_summary"]
-        },
-        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+          "desktop": {
+            "columns": 12,
+            "component_order": [
+              "page_crm_dashboard_main"
+            ]
+          },
+          "phone": {
+            "component_order": [
+              "page_crm_dashboard_main"
+            ]
+          }
+        }
       },
       {
         "id": "page_crm_companies",
@@ -235,8 +498,27 @@
         "record_type": "vortex.crm.organisations:company",
         "permission": "vortex.crm.organisations.company.read",
         "query": "crm_companies",
-        "arrangements": ["table", "summary"],
-        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+        "arrangements": [
+          "table",
+          "summary"
+        ],
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "layout": {
+          "desktop": {
+            "columns": 12,
+            "component_order": []
+          },
+          "phone": {
+            "component_order": []
+          }
+        }
       },
       {
         "id": "page_crm_contacts",
@@ -246,8 +528,26 @@
         "record_type": "vortex.crm.people:contact",
         "permission": "vortex.crm.people.contact.read",
         "query": "crm_contacts",
-        "arrangements": ["table"],
-        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+        "arrangements": [
+          "table"
+        ],
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "layout": {
+          "desktop": {
+            "columns": 12,
+            "component_order": []
+          },
+          "phone": {
+            "component_order": []
+          }
+        }
       },
       {
         "id": "page_crm_leads",
@@ -257,8 +557,27 @@
         "record_type": "vortex.crm.people:lead",
         "permission": "vortex.crm.people.lead.read",
         "query": "crm_leads",
-        "arrangements": ["table", "board"],
-        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+        "arrangements": [
+          "table",
+          "board"
+        ],
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "layout": {
+          "desktop": {
+            "columns": 12,
+            "component_order": []
+          },
+          "phone": {
+            "component_order": []
+          }
+        }
       },
       {
         "id": "page_crm_opportunities",
@@ -268,9 +587,33 @@
         "record_type": "vortex.crm.opportunities:opportunity",
         "permission": "vortex.crm.opportunities.opportunity.read",
         "query": "crm_pipeline",
-        "arrangements": ["table", "board", "calendar", "summary"],
-        "calendar_mapping": { "start": "expected_close_date", "end": "expected_close_date" },
-        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+        "arrangements": [
+          "table",
+          "board",
+          "calendar",
+          "summary"
+        ],
+        "calendar_mapping": {
+          "start": "expected_close_date",
+          "end": "expected_close_date"
+        },
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "layout": {
+          "desktop": {
+            "columns": 12,
+            "component_order": []
+          },
+          "phone": {
+            "component_order": []
+          }
+        }
       },
       {
         "id": "page_crm_activities",
@@ -280,13 +623,32 @@
         "record_type": "vortex.crm.activities:activity",
         "permission": "vortex.crm.activities.activity.read",
         "query": "crm_activities",
-        "arrangements": ["table", "calendar"],
+        "arrangements": [
+          "table",
+          "calendar"
+        ],
         "calendar_mapping": {
           "start": "due_at",
           "duration_field": "duration_minutes",
           "duration_unit": "minutes"
         },
-        "states": ["normal", "loading", "empty", "refused", "failure", "recovery"]
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "failure",
+          "recovery"
+        ],
+        "layout": {
+          "desktop": {
+            "columns": 12,
+            "component_order": []
+          },
+          "phone": {
+            "component_order": []
+          }
+        }
       },
       {
         "id": "page_crm_qualify",
@@ -295,10 +657,129 @@
         "type": "guided_form",
         "record_type": "vortex.crm.people:lead",
         "permission": "vortex.crm.people.lead.convert",
-        "steps": ["lead_details", "company_match", "opportunity_details", "summary"],
-        "summary_step": "summary",
+        "steps": [
+          {
+            "id": "page_crm_qualify_lead_details",
+            "name": "Lead Details",
+            "summary": false,
+            "blocks": [
+              {
+                "id": "page_crm_qualify_lead_details_form",
+                "block": "block_form",
+                "block_release_version": "1.0.0",
+                "settings": {},
+                "desktop": {
+                  "start_column": 1,
+                  "span": 12,
+                  "height": 6
+                },
+                "phone": {
+                  "order": 0,
+                  "behaviour": "full_width"
+                },
+                "view_permission": "vortex.crm.people.lead.convert"
+              }
+            ]
+          },
+          {
+            "id": "page_crm_qualify_company_match",
+            "name": "Company Match",
+            "summary": false,
+            "blocks": [
+              {
+                "id": "page_crm_qualify_company_match_form",
+                "block": "block_form",
+                "block_release_version": "1.0.0",
+                "settings": {},
+                "desktop": {
+                  "start_column": 1,
+                  "span": 12,
+                  "height": 6
+                },
+                "phone": {
+                  "order": 1,
+                  "behaviour": "full_width"
+                },
+                "view_permission": "vortex.crm.people.lead.convert"
+              }
+            ]
+          },
+          {
+            "id": "page_crm_qualify_opportunity_details",
+            "name": "Opportunity Details",
+            "summary": false,
+            "blocks": [
+              {
+                "id": "page_crm_qualify_opportunity_details_form",
+                "block": "block_form",
+                "block_release_version": "1.0.0",
+                "settings": {},
+                "desktop": {
+                  "start_column": 1,
+                  "span": 12,
+                  "height": 6
+                },
+                "phone": {
+                  "order": 2,
+                  "behaviour": "full_width"
+                },
+                "view_permission": "vortex.crm.people.lead.convert"
+              }
+            ]
+          },
+          {
+            "id": "page_crm_qualify_summary",
+            "name": "Summary",
+            "summary": true,
+            "blocks": [
+              {
+                "id": "page_crm_qualify_summary_form",
+                "block": "block_form",
+                "block_release_version": "1.0.0",
+                "settings": {},
+                "desktop": {
+                  "start_column": 1,
+                  "span": 12,
+                  "height": 6
+                },
+                "phone": {
+                  "order": 3,
+                  "behaviour": "full_width"
+                },
+                "view_permission": "vortex.crm.people.lead.convert"
+              }
+            ]
+          }
+        ],
         "commit_action": "vortex.crm.people.lead.convert",
-        "states": ["normal", "loading", "validation", "refused", "conflict", "failure", "recovery"]
+        "states": [
+          "normal",
+          "loading",
+          "validation",
+          "refused",
+          "conflict",
+          "failure",
+          "recovery"
+        ],
+        "layout": {
+          "desktop": {
+            "columns": 12,
+            "component_order": [
+              "page_crm_qualify_lead_details_form",
+              "page_crm_qualify_company_match_form",
+              "page_crm_qualify_opportunity_details_form",
+              "page_crm_qualify_summary_form"
+            ]
+          },
+          "phone": {
+            "component_order": [
+              "page_crm_qualify_lead_details_form",
+              "page_crm_qualify_company_match_form",
+              "page_crm_qualify_opportunity_details_form",
+              "page_crm_qualify_summary_form"
+            ]
+          }
+        }
       },
       {
         "id": "page_crm_shared_cases",
@@ -308,9 +789,28 @@
         "record_type": "vortex.service_desk.cases:case",
         "permission": "application.crm.shared_cases.read",
         "query": "crm_shared_cases",
-        "arrangements": ["table", "board"],
-        "capabilities_from": "active_inter_application_grant",
-        "states": ["normal", "loading", "empty", "refused", "access_ended", "failure", "recovery"]
+        "arrangements": [
+          "table",
+          "board"
+        ],
+        "states": [
+          "normal",
+          "loading",
+          "empty",
+          "refused",
+          "access_ended",
+          "failure",
+          "recovery"
+        ],
+        "layout": {
+          "desktop": {
+            "columns": 12,
+            "component_order": []
+          },
+          "phone": {
+            "component_order": []
+          }
+        }
       }
     ],
     "workflows": [
@@ -318,15 +818,30 @@
         "id": "wf_crm_qualify",
         "key": "crm_qualify_lead",
         "name": "Qualify a lead",
-        "trigger": { "event": "vortex.crm.people.lead.received" },
+        "trigger": {
+          "kind": "event",
+          "event": "vortex.crm.people.lead.received",
+          "record_type": "vortex.crm.people:lead",
+          "inputs": [],
+          "condition": null,
+          "duplicate_protection": "required"
+        },
         "run_as": "triggering_account",
         "maximum_nesting_depth": 5,
         "nodes": [
-          { "id": "n1", "type": "start", "config": {} },
+          {
+            "id": "n1",
+            "type": "start",
+            "config": {}
+          },
           {
             "id": "n2",
             "type": "condition",
-            "config": { "field": "score", "operator": "greater_than_or_equal", "value": 50 }
+            "config": {
+              "field": "vortex.crm.people:lead.score",
+              "operator": "greater_than_or_equal",
+              "value": 50
+            }
           },
           {
             "id": "n4",
@@ -336,7 +851,23 @@
               "responder_permission": "vortex.crm.people.lead.convert",
               "due_in_seconds": 86400,
               "timeout_outcome": "expired",
-              "outputs": ["first_name", "last_name", "company"]
+              "outputs": [
+                {
+                  "key": "first_name",
+                  "type": "text"
+                },
+                {
+                  "key": "last_name",
+                  "type": "text"
+                },
+                {
+                  "key": "company",
+                  "type": "record_reference",
+                  "record_types": [
+                    "vortex.crm.organisations:company"
+                  ]
+                }
+              ]
             }
           },
           {
@@ -345,11 +876,19 @@
             "config": {
               "decisions": [
                 {
-                  "when": { "field": "score", "operator": "greater_than_or_equal", "value": 80 },
+                  "when": {
+                    "field": "vortex.crm.people:lead.score",
+                    "operator": "greater_than_or_equal",
+                    "value": 80
+                  },
                   "output": "qualified"
                 },
                 {
-                  "when": { "field": "score", "operator": "greater_than_or_equal", "value": 50 },
+                  "when": {
+                    "field": "vortex.crm.people:lead.score",
+                    "operator": "greater_than_or_equal",
+                    "value": 50
+                  },
                   "output": "review"
                 }
               ]
@@ -360,11 +899,25 @@
             "type": "run_action",
             "config": {
               "action": "vortex.crm.people.lead.convert",
-              "subject": { "source": "current_record" },
+              "subject": {
+                "source": "current_record"
+              },
               "inputs": {
-                "first_name": { "source": "node_output", "node": "n4", "output": "first_name" },
-                "last_name": { "source": "node_output", "node": "n4", "output": "last_name" },
-                "company": { "source": "node_output", "node": "n4", "output": "company" }
+                "first_name": {
+                  "source": "node_output",
+                  "node": "n4",
+                  "output": "first_name"
+                },
+                "last_name": {
+                  "source": "node_output",
+                  "node": "n4",
+                  "output": "last_name"
+                },
+                "company": {
+                  "source": "node_output",
+                  "node": "n4",
+                  "output": "company"
+                }
               }
             }
           },
@@ -375,40 +928,108 @@
               "connection": "crm_email",
               "operation": "send_template",
               "inputs": {
-                "recipient": { "source": "literal", "value": "recipient@example.test" },
-                "template_key": { "source": "literal", "value": "lead_qualified" },
-                "variables": { "source": "literal", "value": {} }
+                "recipient": {
+                  "source": "literal",
+                  "value": "recipient@example.test"
+                },
+                "template_key": {
+                  "source": "literal",
+                  "value": "lead_qualified"
+                },
+                "variables": {
+                  "source": "literal",
+                  "value": {}
+                }
               }
             }
           },
-          { "id": "n9", "type": "stop", "config": { "reason_code": "completed" } }
+          {
+            "id": "n9",
+            "type": "stop",
+            "config": {
+              "reason_code": "completed"
+            }
+          }
         ],
         "edges": [
-          ["n1", "n2"],
-          ["n2", "n4", "matched"],
-          ["n2", "n9", "not_matched"],
-          ["n4", "n5", "submitted"],
-          ["n4", "n9", "expired"],
-          ["n5", "n6", "qualified"],
-          ["n5", "n6", "review"],
-          ["n6", "n8"],
-          ["n8", "n9"]
+          [
+            "n1",
+            "n2"
+          ],
+          [
+            "n2",
+            "n4",
+            "matched"
+          ],
+          [
+            "n2",
+            "n9",
+            "not_matched"
+          ],
+          [
+            "n4",
+            "n5",
+            "submitted"
+          ],
+          [
+            "n4",
+            "n9",
+            "expired"
+          ],
+          [
+            "n5",
+            "n6",
+            "qualified"
+          ],
+          [
+            "n5",
+            "n6",
+            "review"
+          ],
+          [
+            "n6",
+            "n8"
+          ],
+          [
+            "n8",
+            "n9"
+          ]
         ]
       },
       {
         "id": "wf_crm_won",
         "key": "crm_opportunity_won",
         "name": "Complete a won opportunity",
-        "trigger": { "event": "vortex.crm.opportunities.opportunity.won" },
+        "trigger": {
+          "kind": "event",
+          "event": "vortex.crm.opportunities.opportunity.won",
+          "record_type": "vortex.crm.opportunities:opportunity",
+          "inputs": [],
+          "condition": null,
+          "duplicate_protection": "required"
+        },
         "run_as": "system_with_source_authority",
         "maximum_nesting_depth": 5,
         "nodes": [
-          { "id": "w1", "type": "start", "config": {} },
-          { "id": "w2", "type": "query_records", "config": { "query": "crm_activities" } },
+          {
+            "id": "w1",
+            "type": "start",
+            "config": {}
+          },
+          {
+            "id": "w2",
+            "type": "query_records",
+            "config": {
+              "query": "crm_activities"
+            }
+          },
           {
             "id": "w3",
             "type": "bounded_loop",
-            "config": { "query": "crm_activities", "maximum_records": 100 }
+            "config": {
+              "query": "crm_activities",
+              "maximum_records": 100
+            }
           },
           {
             "id": "w4",
@@ -416,12 +1037,27 @@
             "config": {
               "record_type": "vortex.crm.activities:activity",
               "values": {
-                "subject": { "source": "literal", "value": "Follow up completed work" },
-                "activity_type": { "source": "literal", "value": "follow_up" },
-                "due_at": { "source": "current_time" },
-                "completed": { "source": "literal", "value": false },
-                "regarding": { "source": "current_record" },
-                "owner": { "source": "current_actor" }
+                "subject": {
+                  "source": "literal",
+                  "value": "Follow up completed work"
+                },
+                "activity_type": {
+                  "source": "literal",
+                  "value": "follow_up"
+                },
+                "due_at": {
+                  "source": "current_time"
+                },
+                "completed": {
+                  "source": "literal",
+                  "value": false
+                },
+                "regarding": {
+                  "source": "current_record"
+                },
+                "owner": {
+                  "source": "current_actor"
+                }
               }
             }
           },
@@ -430,8 +1066,14 @@
             "type": "add_relationship",
             "config": {
               "relationship": "vortex.crm.activities:activity.regarding",
-              "subject": { "source": "node_output", "node": "w4", "output": "record" },
-              "target": { "source": "current_record" }
+              "subject": {
+                "source": "node_output",
+                "node": "w4",
+                "output": "record"
+              },
+              "target": {
+                "source": "current_record"
+              }
             }
           },
           {
@@ -441,64 +1083,136 @@
               "connection": "crm_calendar",
               "operation": "create_event",
               "inputs": {
-                "title": { "source": "literal", "value": "Follow-up" },
-                "starts_at": { "source": "current_time" },
-                "ends_at": { "source": "current_time" }
+                "title": {
+                  "source": "literal",
+                  "value": "Follow-up"
+                },
+                "starts_at": {
+                  "source": "current_time"
+                },
+                "ends_at": {
+                  "source": "current_time"
+                }
               }
             }
           },
           {
             "id": "w7",
             "type": "generate_export",
-            "config": { "query": "crm_pipeline", "maximum_rows": 10000 }
+            "config": {
+              "query": "crm_pipeline",
+              "maximum_rows": 10000
+            }
           },
           {
             "id": "w8",
             "type": "attach_file",
             "config": {
-              "record": { "source": "current_record" },
+              "record": {
+                "source": "current_record"
+              },
               "field": "vortex.crm.opportunities:opportunity.documents",
-              "file": { "source": "node_output", "node": "w7", "output": "file" }
+              "file": {
+                "source": "node_output",
+                "node": "w7",
+                "output": "file"
+              }
             }
           },
-          { "id": "w9", "type": "stop", "config": { "reason_code": "completed" } }
+          {
+            "id": "w9",
+            "type": "stop",
+            "config": {
+              "reason_code": "completed"
+            }
+          }
         ],
         "edges": [
-          ["w1", "w2"],
-          ["w2", "w3"],
-          ["w3", "w4", "record"],
-          ["w3", "w9", "completed"],
-          ["w4", "w5"],
-          ["w5", "w6"],
-          ["w6", "w7"],
-          ["w7", "w8"],
-          ["w8", "w9"]
+          [
+            "w1",
+            "w2"
+          ],
+          [
+            "w2",
+            "w3"
+          ],
+          [
+            "w3",
+            "w4",
+            "record"
+          ],
+          [
+            "w3",
+            "w9",
+            "completed"
+          ],
+          [
+            "w4",
+            "w5"
+          ],
+          [
+            "w5",
+            "w6"
+          ],
+          [
+            "w6",
+            "w7"
+          ],
+          [
+            "w7",
+            "w8"
+          ],
+          [
+            "w8",
+            "w9"
+          ]
         ]
       },
       {
         "id": "wf_crm_hygiene",
         "key": "crm_data_hygiene",
         "name": "Review possible duplicates",
-        "trigger": { "event": "vortex.crm.organisations.company.created" },
+        "trigger": {
+          "kind": "event",
+          "event": "vortex.crm.organisations.company.created",
+          "record_type": "vortex.crm.organisations:company",
+          "inputs": [],
+          "condition": null,
+          "duplicate_protection": "required"
+        },
         "run_as": "system_with_source_authority",
         "maximum_nesting_depth": 5,
         "nodes": [
-          { "id": "h1", "type": "start", "config": {} },
+          {
+            "id": "h1",
+            "type": "start",
+            "config": {}
+          },
           {
             "id": "h2",
             "type": "duplicate_record",
             "config": {
               "record_type": "vortex.crm.organisations:company",
-              "record": { "source": "current_record" }
+              "record": {
+                "source": "current_record"
+              }
             }
           },
           {
             "id": "h3",
             "type": "copy_relationships",
             "config": {
-              "relationships": ["vortex.crm.organisations:company.parent_company"],
-              "source_record": { "source": "current_record" },
-              "target_record": { "source": "node_output", "node": "h2", "output": "record" }
+              "relationships": [
+                "vortex.crm.organisations:company.parent_company"
+              ],
+              "source_record": {
+                "source": "current_record"
+              },
+              "target_record": {
+                "source": "node_output",
+                "node": "h2",
+                "output": "record"
+              }
             }
           },
           {
@@ -506,14 +1220,20 @@
             "type": "soft_delete_record",
             "config": {
               "record_type": "vortex.crm.organisations:company",
-              "record": { "source": "current_record" }
+              "record": {
+                "source": "current_record"
+              }
             }
           },
           {
             "id": "h5",
             "type": "set_values",
             "config": {
-              "record": { "source": "node_output", "node": "h2", "output": "record" },
+              "record": {
+                "source": "node_output",
+                "node": "h2",
+                "output": "record"
+              },
               "values": {
                 "vortex.crm.organisations:company.description": {
                   "source": "literal",
@@ -527,21 +1247,36 @@
             "type": "format_value",
             "config": {
               "formatter": "csv",
-              "input": { "source": "node_output", "node": "h5", "output": "record" }
+              "input": {
+                "source": "node_output",
+                "node": "h5",
+                "output": "record"
+              }
             }
           },
           {
             "id": "h7",
             "type": "generate_export",
-            "config": { "query": "crm_companies", "maximum_rows": 10000 }
+            "config": {
+              "query": "crm_companies",
+              "maximum_rows": 10000
+            }
           },
           {
             "id": "h8",
             "type": "move_file",
             "config": {
-              "record": { "source": "node_output", "node": "h2", "output": "record" },
+              "record": {
+                "source": "node_output",
+                "node": "h2",
+                "output": "record"
+              },
               "field": "vortex.crm.organisations:company.logo",
-              "file": { "source": "node_output", "node": "h7", "output": "file" }
+              "file": {
+                "source": "node_output",
+                "node": "h7",
+                "output": "file"
+              }
             }
           },
           {
@@ -551,30 +1286,81 @@
               "connection": "crm_email",
               "operation": "send_message",
               "inputs": {
-                "recipient": { "source": "literal", "value": "reviewer@example.test" },
-                "subject": { "source": "literal", "value": "Review completed" },
-                "body": { "source": "literal", "value": "A review has completed." }
+                "recipient": {
+                  "source": "literal",
+                  "value": "reviewer@example.test"
+                },
+                "subject": {
+                  "source": "literal",
+                  "value": "Review completed"
+                },
+                "body": {
+                  "source": "literal",
+                  "value": "A review has completed."
+                }
               }
             }
           },
           {
             "id": "h10",
-            "type": "acknowledge_message",
-            "config": { "message": "duplicate_review_completed" }
+            "type": "format_value",
+            "config": {
+              "formatter": "text",
+              "input": {
+                "source": "literal",
+                "value": "Review completed"
+              }
+            }
           },
-          { "id": "h11", "type": "stop", "config": { "reason_code": "completed" } }
+          {
+            "id": "h11",
+            "type": "stop",
+            "config": {
+              "reason_code": "completed"
+            }
+          }
         ],
         "edges": [
-          ["h1", "h2"],
-          ["h2", "h3"],
-          ["h3", "h4"],
-          ["h4", "h5"],
-          ["h5", "h6"],
-          ["h6", "h7"],
-          ["h7", "h8"],
-          ["h8", "h9"],
-          ["h9", "h10"],
-          ["h10", "h11"]
+          [
+            "h1",
+            "h2"
+          ],
+          [
+            "h2",
+            "h3"
+          ],
+          [
+            "h3",
+            "h4"
+          ],
+          [
+            "h4",
+            "h5"
+          ],
+          [
+            "h5",
+            "h6"
+          ],
+          [
+            "h6",
+            "h7"
+          ],
+          [
+            "h7",
+            "h8"
+          ],
+          [
+            "h8",
+            "h9"
+          ],
+          [
+            "h9",
+            "h10"
+          ],
+          [
+            "h10",
+            "h11"
+          ]
         ]
       }
     ],
@@ -586,12 +1372,54 @@
         "record_type": "vortex.crm.opportunities:opportunity",
         "stage_field": "stage",
         "stages": [
-          { "key": "discovery", "label": "Discovery" },
-          { "key": "qualified", "label": "Qualified" },
-          { "key": "proposal", "label": "Proposal" },
-          { "key": "negotiation", "label": "Negotiation" },
-          { "key": "won", "label": "Won" },
-          { "key": "lost", "label": "Lost" }
+          {
+            "key": "discovery",
+            "label": "Discovery",
+            "entry_actions": [],
+            "exit_actions": [],
+            "entry_workflows": [],
+            "exit_workflows": []
+          },
+          {
+            "key": "qualified",
+            "label": "Qualified",
+            "entry_actions": [],
+            "exit_actions": [],
+            "entry_workflows": [],
+            "exit_workflows": []
+          },
+          {
+            "key": "proposal",
+            "label": "Proposal",
+            "entry_actions": [],
+            "exit_actions": [],
+            "entry_workflows": [],
+            "exit_workflows": []
+          },
+          {
+            "key": "negotiation",
+            "label": "Negotiation",
+            "entry_actions": [],
+            "exit_actions": [],
+            "entry_workflows": [],
+            "exit_workflows": []
+          },
+          {
+            "key": "won",
+            "label": "Won",
+            "entry_actions": [],
+            "exit_actions": [],
+            "entry_workflows": [],
+            "exit_workflows": []
+          },
+          {
+            "key": "lost",
+            "label": "Lost",
+            "entry_actions": [],
+            "exit_actions": [],
+            "entry_workflows": [],
+            "exit_workflows": []
+          }
         ],
         "transitions": [
           {
@@ -642,12 +1470,28 @@
       {
         "id": "crm_email",
         "connection_type": "vortex.connection.email",
-        "required_operations": ["send_message", "send_template"]
+        "required_operations": [
+          "send_message",
+          "send_template"
+        ],
+        "key": "crm_email",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       },
       {
         "id": "crm_calendar",
         "connection_type": "vortex.connection.calendar",
-        "required_operations": ["create_event", "cancel_event"]
+        "required_operations": [
+          "create_event",
+          "cancel_event"
+        ],
+        "key": "crm_calendar",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       }
     ],
     "interfaces": [
@@ -657,25 +1501,185 @@
         "version": "1.0.0",
         "operations": [
           {
+            "id": "iface_crm_v1_operation_1",
             "key": "list_companies",
+            "description": "List Companies through this interface.",
+            "input_shape": {},
+            "output_shape": {
+              "name": {
+                "type": "text",
+                "required": true,
+                "target_binding": {
+                  "kind": "query_field",
+                  "field": "vortex.crm.organisations:company.name"
+                }
+              }
+            },
+            "authentication": "organisation_token",
+            "permission": "vortex.crm.organisations.company.read",
+            "visibility": "organisation_private",
+            "rate_limit_per_minute": 120,
+            "maximum_request_bytes": 1000000,
+            "duplicate_protection": "not_required",
+            "target": {
+              "kind": "query",
+              "key": "crm_companies"
+            },
+            "error_codes": [
+              "request_refused",
+              "validation_failed"
+            ],
             "method": "GET",
-            "query": "crm_companies",
-            "permission": "vortex.crm.organisations.company.read"
+            "path": "/list-companies"
           },
           {
-            "key": "create_lead",
+            "id": "iface_crm_v1_operation_2",
+            "key": "convert_lead",
+            "description": "Convert an existing Lead through this interface.",
+            "input_shape": {
+              "lead": {
+                "type": "record_reference",
+                "required": true,
+                "target_binding": {
+                  "kind": "action_subject"
+                }
+              },
+              "first_name": {
+                "type": "text",
+                "required": true,
+                "target_binding": {
+                  "kind": "action_input",
+                  "key": "first_name"
+                }
+              },
+              "last_name": {
+                "type": "text",
+                "required": true,
+                "target_binding": {
+                  "kind": "action_input",
+                  "key": "last_name"
+                }
+              },
+              "company": {
+                "type": "record_reference",
+                "required": false,
+                "target_binding": {
+                  "kind": "action_input",
+                  "key": "company"
+                }
+              }
+            },
+            "output_shape": {},
+            "authentication": "organisation_token",
+            "permission": "vortex.crm.people.lead.convert",
+            "visibility": "organisation_private",
+            "rate_limit_per_minute": 120,
+            "maximum_request_bytes": 1000000,
+            "duplicate_protection": "required",
+            "target": {
+              "kind": "action",
+              "key": "vortex.crm.people.lead.convert"
+            },
+            "error_codes": [
+              "request_refused",
+              "validation_failed"
+            ],
             "method": "POST",
-            "action": "vortex.crm.people.lead.create",
-            "permission": "vortex.crm.people.lead.create"
+            "path": "/convert-lead"
           },
           {
+            "id": "iface_crm_v1_operation_3",
             "key": "list_opportunities",
+            "description": "List Opportunities through this interface.",
+            "input_shape": {},
+            "output_shape": {
+              "name": {
+                "type": "text",
+                "required": true,
+                "target_binding": {
+                  "kind": "query_field",
+                  "field": "vortex.crm.opportunities:opportunity.name"
+                }
+              }
+            },
+            "authentication": "organisation_token",
+            "permission": "vortex.crm.opportunities.opportunity.read",
+            "visibility": "organisation_private",
+            "rate_limit_per_minute": 120,
+            "maximum_request_bytes": 1000000,
+            "duplicate_protection": "not_required",
+            "target": {
+              "kind": "query",
+              "key": "crm_pipeline"
+            },
+            "error_codes": [
+              "request_refused",
+              "validation_failed"
+            ],
             "method": "GET",
-            "query": "crm_pipeline",
-            "permission": "vortex.crm.opportunities.opportunity.read"
+            "path": "/list-opportunities"
           }
-        ]
+        ],
+        "state": "supported"
       }
-    ]
+    ],
+    "block_registrations": [
+      {
+        "id": "block_data_view",
+        "release_version": "1.0.0",
+        "name": "Data view",
+        "icon": "data-view",
+        "palette_group": "data",
+        "settings": [],
+        "allowed_child_blocks": [],
+        "phone_behaviour": "full_width",
+        "resizable_height": true,
+        "live_update": true,
+        "public_page": false
+      },
+      {
+        "id": "block_record_view",
+        "release_version": "1.0.0",
+        "name": "Record view",
+        "icon": "record-view",
+        "palette_group": "record",
+        "settings": [],
+        "allowed_child_blocks": [],
+        "phone_behaviour": "full_width",
+        "resizable_height": true,
+        "live_update": true,
+        "public_page": false
+      },
+      {
+        "id": "block_form",
+        "release_version": "1.0.0",
+        "name": "Form",
+        "icon": "form",
+        "palette_group": "input",
+        "settings": [],
+        "allowed_child_blocks": [],
+        "phone_behaviour": "full_width",
+        "resizable_height": true,
+        "live_update": false,
+        "public_page": false
+      },
+      {
+        "id": "block_public_content",
+        "release_version": "1.0.0",
+        "name": "Public content",
+        "icon": "public-content",
+        "palette_group": "content",
+        "settings": [],
+        "allowed_child_blocks": [],
+        "phone_behaviour": "full_width",
+        "resizable_height": true,
+        "live_update": true,
+        "public_page": true
+      }
+    ],
+    "actions": [],
+    "rules": [],
+    "events": [],
+    "public_addresses": []
   }
 }

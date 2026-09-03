@@ -139,6 +139,43 @@ describe("workspace boundaries", () => {
     expect(errors.some((error) => error.includes("undeclared dependency"))).toBe(true);
   });
 
+  test("accepts a declared package export subpath", async () => {
+    const consumerDirectory = await mkdtemp(path.join(tmpdir(), "vortex-boundary-consumer-"));
+    const providerDirectory = await mkdtemp(path.join(tmpdir(), "vortex-boundary-provider-"));
+    temporaryDirectories.push(consumerDirectory, providerDirectory);
+    await mkdir(path.join(consumerDirectory, "src"));
+    await mkdir(path.join(providerDirectory, "src"));
+    await writeFile(
+      path.join(consumerDirectory, "src", "index.ts"),
+      'import { value } from "@vortex/provider/compiler";\nexport { value };\n',
+    );
+    await writeFile(
+      path.join(providerDirectory, "src", "compiler.ts"),
+      "export const value = 1;\n",
+    );
+    const errors = await validateImports([
+      {
+        directory: consumerDirectory,
+        manifest: {
+          name: "@vortex/consumer",
+          dependencies: { "@vortex/provider": "workspace:*" },
+          exports: { ".": "./src/index.ts" },
+          vortex: { tier: 2, environment: "server", ships: false },
+        },
+      },
+      {
+        directory: providerDirectory,
+        manifest: {
+          name: "@vortex/provider",
+          dependencies: {},
+          exports: { ".": "./src/index.ts", "./compiler": "./src/compiler.ts" },
+          vortex: { tier: 1, environment: "server", ships: true },
+        },
+      },
+    ]);
+    expect(errors).toEqual([]);
+  });
+
   test("rejects undeclared external dependencies and relative package escapes", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "vortex-boundary-"));
     temporaryDirectories.push(directory);

@@ -1,28 +1,35 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "module",
-  "root_id": "mod_crm_activities",
+  "root_alias": "mod_crm_activities",
   "key": "vortex.crm.activities",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.crm.activities:1.0.0",
   "body": {
     "name": "CRM Activities",
     "description": "Calls, meetings, messages and tasks linked to CRM records.",
-    "category": "CRM",
     "dependencies": [
       {
+        "dependency_key": "organisations",
         "module": "vortex.crm.organisations",
-        "version": "1.0.0"
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       },
       {
+        "dependency_key": "people",
         "module": "vortex.crm.people",
-        "version": "1.0.0"
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       },
       {
+        "dependency_key": "opportunities",
         "module": "vortex.crm.opportunities",
-        "version": "1.0.0"
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       }
     ],
     "record_types": [
@@ -32,9 +39,8 @@
         "key": "activity",
         "name": "Activity",
         "plural_name": "Activities",
-        "description": "A planned or completed interaction.",
         "storage_scope": "application_contained",
-        "ownership_mode": "individual",
+        "ownership_mode": "organisation_account",
         "title_field": "subject",
         "standard_actions": [
           "create",
@@ -118,9 +124,8 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
-            "settings": {
-              "default": false
-            }
+            "settings": {},
+            "default": false
           },
           {
             "id": "fld_activity_duration",
@@ -172,7 +177,8 @@
             "public_display": "refused",
             "settings": {
               "audience": "application_accounts",
-              "on_person_deactivation": "retain_reference"
+              "on_person_deactivation": "retain_reference",
+              "application_root_required": true
             }
           },
           {
@@ -195,14 +201,91 @@
               ]
             }
           }
+        ],
+        "custom_actions": [
+          "act_activity_complete"
+        ],
+        "relationships": [
+          {
+            "id": "fld_activity_regarding_relationship",
+            "key": "regarding",
+            "from_field": "regarding",
+            "to_record_types": [
+              "vortex.crm.organisations:company",
+              "vortex.crm.people:contact",
+              "vortex.crm.people:lead",
+              "vortex.crm.opportunities:opportunity"
+            ],
+            "cardinality": "many_to_one",
+            "on_parent_delete": "empty_optional"
+          }
         ]
       }
     ],
     "permissions": [
       {
-        "key": "vortex.crm.activities.activity.complete",
+        "id": "perm_activity_create",
+        "key": "vortex.crm.activities.activity.create",
+        "label": "Create activity",
+        "description": "Allows the standard create operation for activities.",
         "record_type": "activity",
-        "label": "Complete an activity"
+        "action_kind": "create",
+        "administrative": false
+      },
+      {
+        "id": "perm_activity_read",
+        "key": "vortex.crm.activities.activity.read",
+        "label": "Read activity",
+        "description": "Allows the standard read operation for activities.",
+        "record_type": "activity",
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_activity_update",
+        "key": "vortex.crm.activities.activity.update",
+        "label": "Update activity",
+        "description": "Allows the standard update operation for activities.",
+        "record_type": "activity",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_activity_soft_delete",
+        "key": "vortex.crm.activities.activity.soft_delete",
+        "label": "Soft Delete activity",
+        "description": "Allows the standard soft_delete operation for activities.",
+        "record_type": "activity",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_activity_restore",
+        "key": "vortex.crm.activities.activity.restore",
+        "label": "Restore activity",
+        "description": "Allows the standard restore operation for activities.",
+        "record_type": "activity",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_activity_export",
+        "key": "vortex.crm.activities.activity.export",
+        "label": "Export activity",
+        "description": "Allows the standard export operation for activities.",
+        "record_type": "activity",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_named_1_complete",
+        "key": "vortex.crm.activities.activity.complete",
+        "label": "Complete an activity",
+        "description": "Allows the named complete operation.",
+        "record_type": "activity",
+        "action_kind": "named",
+        "named_action": "complete",
+        "administrative": false
       }
     ],
     "actions": [
@@ -214,8 +297,18 @@
         "permission": "vortex.crm.activities.activity.complete",
         "inputs": [],
         "effects": [
-          {"kind":"set_field","field":"completed","value":{"source":"literal","value":true}},
-          {"kind":"announce_event","event":"vortex.crm.activities.activity.completed"}
+          {
+            "kind": "set_field",
+            "field": "completed",
+            "value": {
+              "source": "literal",
+              "value": true
+            }
+          },
+          {
+            "kind": "announce_event",
+            "event": "vortex.crm.activities.activity.completed"
+          }
         ],
         "shareable": false
       }
@@ -230,7 +323,8 @@
           "due_at",
           "owner",
           "regarding"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "evt_activity_completed",
@@ -240,7 +334,8 @@
           "subject",
           "owner",
           "regarding"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "rules": [],
@@ -253,6 +348,7 @@
           "choice_option"
         ]
       }
-    ]
+    ],
+    "sharing_conditions": []
   }
 }

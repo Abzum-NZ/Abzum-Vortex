@@ -11,9 +11,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "semver": "catalog:",
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@types/semver": "catalog:",
     "vitest": "4.1.11"
   },
   "vortex": {

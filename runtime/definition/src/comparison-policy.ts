@@ -1770,26 +1770,37 @@ const isPrivateInterfaceOperation = (operation: RecordValue): boolean =>
   operation.visibility === "organization_private" &&
   operation.authentication === "organization_token";
 
-const compareStringShape = (
+const compareInterfaceShape = (
   reasons: VersionImpactReason[],
   interfaceId: unknown,
   previous: unknown,
   candidate: unknown,
+  direction: "input" | "output",
 ): void => {
   const before = asRecord(previous);
   const after = asRecord(candidate);
   const beforeKeys = Object.keys(before);
   const afterKeys = Object.keys(after);
-  if (afterKeys.some((key) => !(key in before)))
-    reasons.push(
-      makeReason("minor", "constraint_widened", "interface", "configuration", interfaceId),
-    );
+  for (const key of afterKeys)
+    if (!(key in before)) {
+      const descriptor = asRecord(after[key]);
+      const impact = direction === "input" && descriptor.required === true ? "major" : "minor";
+      reasons.push(
+        makeReason(
+          impact,
+          impact === "major" ? "public_contract_changed" : "constraint_widened",
+          "interface",
+          "configuration",
+          interfaceId,
+        ),
+      );
+    }
   if (beforeKeys.some((key) => !(key in after)))
     reasons.push(
       makeReason("major", "constraint_narrowed", "interface", "configuration", interfaceId),
     );
   for (const key of beforeKeys)
-    if (key in after && before[key] !== after[key])
+    if (key in after && !same(before[key], after[key]))
       reasons.push(
         makeReason("major", "public_contract_changed", "interface", "configuration", interfaceId),
       );
@@ -1821,17 +1832,14 @@ const compareInterfaceOperation = (
     "key",
     interfaceId,
   );
-  pushChange(
+  compareInterfaceShape(reasons, interfaceId, previous.inputShape, candidate.inputShape, "input");
+  compareInterfaceShape(
     reasons,
-    previous.inputShape,
-    candidate.inputShape,
-    "major",
-    "public_contract_changed",
-    "interface",
-    "configuration",
     interfaceId,
+    previous.outputShape,
+    candidate.outputShape,
+    "output",
   );
-  compareStringShape(reasons, interfaceId, previous.outputShape, candidate.outputShape);
   compareSet(
     reasons,
     previous.errorCodes as unknown[],
@@ -1857,6 +1865,8 @@ const compareInterfaceOperation = (
     interfaceId,
   );
   for (const key of [
+    "method",
+    "path",
     "authentication",
     "permissionKey",
     "visibility",

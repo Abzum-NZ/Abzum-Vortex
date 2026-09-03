@@ -1,40 +1,62 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "connection_type",
-  "root_id": "connection_webhook",
+  "root_alias": "connection_webhook",
   "key": "vortex.connection.webhook",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.connection.webhook:1.0.0",
   "body": {
     "name": "Webhook",
     "purpose": "Exchange signed generic JSON events with an approved host.",
     "provider": "Generic Webhook",
     "authentication": {
       "kind": "signed_secret",
-      "secret_fields": ["signing_secret"],
+      "secret_fields": [
+        "signing_secret"
+      ],
       "algorithm": "hmac_sha256"
     },
-    "allowed_hosts": ["hooks.example"],
+    "allowed_hosts": [
+      "hooks.example"
+    ],
     "allow_redirects": false,
     "shapes": [
       {
         "key": "signed_json",
         "fields": [
-          { "key": "event_key", "type": "text", "required": true },
-          { "key": "payload", "type": "json", "required": true }
+          {
+            "key": "event_key",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "payload",
+            "type": "json",
+            "required": true
+          }
         ]
       },
       {
         "key": "webhook_receipt",
-        "fields": [{ "key": "accepted", "type": "boolean", "required": true }]
+        "fields": [
+          {
+            "key": "accepted",
+            "type": "boolean",
+            "required": true
+          }
+        ]
       },
       {
         "key": "external_case",
         "fields": [
-          { "key": "external_id", "type": "text", "required": true },
-          { "key": "payload", "type": "json", "required": true }
+          {
+            "key": "external_id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "payload",
+            "type": "json",
+            "required": true
+          }
         ]
       }
     ],
