@@ -1,6 +1,6 @@
 # 11. Files and attachments
 
-[Previous: Queries, reports, search and live updates](10-queries-reports-search.md) · [Specification index](README.md) · Next: [Connections and programmable interfaces](12-connections-and-interfaces.md)
+[Previous: Queries, reports, search and live updates](10-queries-reports-search.md) · [Specification index](README.md) · Next: [Connections, programmable interfaces and MCP](12-connections-and-interfaces.md)
 
 ## File lifecycle
 

@@ -30,7 +30,7 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 
 | Supabase capability | Vortex use | Boundary |
 |---|---|---|
-| [Auth](https://supabase.com/docs/guides/auth) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority and locally verifiable short-lived identity tokens | Organisation roles, teams, application access and grants remain live Vortex data, not token claims. |
+| [Auth](https://supabase.com/docs/guides/auth), [OAuth 2.1 server](https://supabase.com/docs/guides/auth/oauth-server) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority, locally verifiable short-lived identity tokens, and authorization-code-with-PKCE tokens for governed MCP clients | Organisation roles, teams, application access and MCP capability grants remain live Vortex data, not OAuth scope or token claims. Supabase authorizes identity/client; the Vercel MCP route enforces Vortex access. |
 | PostgreSQL and [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) | Authoritative data, transactions, constraints and organisation separation | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. |
 | [Queues](https://supabase.com/docs/guides/queues) | Logged, durable event delivery after a committed save | Queue client functions are server-only and the `pgmq_public` interface is not exposed to browsers. |
 | [Database Webhooks](https://supabase.com/docs/guides/database/webhooks) | Asynchronous low-latency wake-up after durable work exists | A webhook is a hint, not delivery proof; the queue and scheduled Kestra recovery remain authoritative. |
@@ -41,9 +41,13 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 
 Supabase Cron is not a second workflow system: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
 
+Supabase OAuth 2.1 server availability and required MCP interoperability are revalidated against the deployed Local, Testing and Production versions before [Phase 9](../build-plan/README.md#phase-9--connections-and-interfaces) implementation. If the managed capability is unavailable or cannot meet the approved authorization contract, Phase 9 stops and the specification is reviewed; implementation does not silently introduce a second identity or token service.
+
 ```mermaid
 flowchart LR
-    AUTH[Supabase Auth] --> WEB[Vercel server]
+    AUTH[Supabase Auth and OAuth 2.1] --> WEB[Vercel server]
+    AUTH --> MCP[Vercel MCP route]
+    MCP --> WEB
     WEB --> DB[PostgreSQL plus row rules]
     WEB --> STORE[Private Storage]
     DB --> Q[Logged Supabase Queue]
@@ -77,7 +81,7 @@ The codebase is divided into sixteen named services. These are package and owner
 | Search | Search-document maintenance, ranking and access recheck |
 | File | Upload admission, metadata, lifecycle, storage allowance and download grants |
 | Connection | Connection types, secret grants, outgoing calls, incoming messages and health |
-| Interface | Versioned operation catalogue, public interface boundary, cluster directory and federation transport |
+| Interface | Versioned operation catalogue, public interface boundary, governed MCP adapter and semantic projection, cluster directory and federation transport |
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 

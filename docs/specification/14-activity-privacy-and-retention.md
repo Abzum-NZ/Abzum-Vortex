@@ -1,6 +1,6 @@
 # 14. Activity history, privacy and retention
 
-[Previous: Connections and programmable interfaces](12-connections-and-interfaces.md) · [Specification index](README.md) · Next: [Entitlements and metering](15-entitlements-and-metering.md)
+[Previous: Connections, programmable interfaces and MCP](12-connections-and-interfaces.md) · [Specification index](README.md) · Next: [Entitlements and metering](15-entitlements-and-metering.md)
 
 ## Data inventory
 
