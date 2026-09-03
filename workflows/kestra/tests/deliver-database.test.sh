@@ -48,7 +48,7 @@ assert_partial_hierarchy_release_refused() {
     "$partial_checkout/supabase/tests/tenant-organization-concurrency.test.sh"
   mkdir -p "$(dirname "${partial_checkout}/${artifact_path}")"
   : >"${partial_checkout}/${artifact_path}"
-  git -C "$partial_checkout" add "$artifact_path"
+  git -C "$partial_checkout" add --all -- supabase/migrations supabase/tests
   git -C "$partial_checkout" commit --quiet -m "Create partial hierarchy release"
   partial_commit="$(git -C "$partial_checkout" rev-parse HEAD)"
   git -C "$partial_checkout" push --quiet origin HEAD:main
