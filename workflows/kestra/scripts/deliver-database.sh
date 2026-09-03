@@ -311,11 +311,20 @@ say "applying pending migrations through Supabase migration history"
     --ext .sql \
     --recurse \
     supabase/tests
-  if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
-    : >"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-  else
-    VORTEX_CONCURRENCY_DATABASE_URL="$database_url" \
-      bash supabase/tests/tenant-organization-concurrency.test.sh
+  hierarchy_migration='supabase/migrations/20260903174244_tenant_organization_foundation.sql'
+  hierarchy_proof='supabase/tests/tenant-organization-concurrency.test.sh'
+  if [ -e "$hierarchy_migration" ] && [ ! -f "$hierarchy_proof" ]; then
+    die "tenant and organisation migration has no concurrency proof"
+  fi
+  if [ ! -e "$hierarchy_migration" ] && [ -e "$hierarchy_proof" ]; then
+    die "tenant and organisation concurrency proof has no migration"
+  fi
+  if [ -f "$hierarchy_proof" ]; then
+    if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
+      : >"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+    else
+      VORTEX_CONCURRENCY_DATABASE_URL="$database_url" bash "$hierarchy_proof"
+    fi
   fi
   supabase db lint \
     --db-url "$database_url" \

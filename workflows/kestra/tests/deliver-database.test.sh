@@ -136,7 +136,11 @@ unset VORTEX_TEST_REMOTE_MIGRATION_MISMATCH
 export VORTEX_TEST_PG_PROVE_MARKER="$test_root/pg-prove-called"
 "$delivery_script"
 test -f "$VORTEX_TEST_PG_PROVE_MARKER"
-test -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+if [ -f "$source_repository/supabase/tests/tenant-organization-concurrency.test.sh" ]; then
+  test -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+else
+  test ! -e "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+fi
 jq --exit-status \
   '.status == "succeeded" and
    .environment == "production" and
