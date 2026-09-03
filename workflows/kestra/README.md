@@ -52,11 +52,12 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `KESTRA_PUBLIC_URL` | The public Kestra address used in generated links |
 | `VORTEX_TESTING_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of the unpredictable key for the protected Testing push webhook |
 | `VORTEX_PRODUCTION_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of a different unpredictable key for the protected Production push webhook |
-| `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the service token limited to `abzum-vortex` / `stg_operations` |
-| `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate service token limited to `abzum-vortex` / `prd_operations` |
+| `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the read-only service token limited to `abzum-vortex` / `ops_stg` |
+| `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate read-only service token limited to `abzum-vortex` / `ops_prd` |
 
-They are set in Coolify and held in the secret manager. The API credential is also set on the web
-application so it can reach the engine.
+These four Kestra bootstrap values are stored only as protected Coolify runtime variables. Doppler
+remains the source of record for the database values that the two service tokens can read. The
+Kestra API credential is also provided to the web application so it can reach the engine.
 
 Kestra open source recognises sensitive flow values only when the container variable begins
 `SECRET_` and its value is base64-encoded. Coolify therefore stores the four `_BASE64` values above;
@@ -64,14 +65,18 @@ the compose file maps them to Kestra's required names and each flow reads them w
 is not encryption, so Coolify remains the protected host boundary. Kestra masks resolved secrets in
 execution logs.
 
-Webhook keys authenticate only the delivery endpoints; they do not replace the branch, repository,
+Webhook keys authenticate only GitHub-to-Kestra delivery endpoints; they do not authorize Doppler
+or database access and do not replace the branch, repository,
 commit, migration-set, or approval checks performed by the flow. The two Doppler tokens are runtime
 bootstrap credentials. The delivery process asks Doppler only for the existing database connection
 and password plus the Supabase root certificate.
 
-Database delivery uses the unsynced `stg_operations` and `prd_operations` branch configs under the
-`abzum-vortex` project's existing `stg` and `prd` environments. The root configs continue to sync
-restricted application-runtime values to Vercel; the operations configs have no external sync. The
+Database delivery uses the unsynced `ops_stg` and `ops_prd` configs under the `abzum-vortex`
+project's separate `Operations` environment. The `Operations` root contains only the three Testing
+migration values; `ops_stg` inherits them, while `ops_prd` overrides the Production URL and password
+and inherits the common Supabase certificate. The `stg` and `prd` roots continue to sync restricted
+application-runtime values to Vercel; no Operations config has an external sync. Keeping Operations
+separate is required because Doppler branch configs inherit every root secret. The
 delivery script retrieves only `VORTEX_MIGRATION_DATABASE_URL`,
 `VORTEX_MIGRATION_DATABASE_PASSWORD`, and `VORTEX_DATABASE_SSL_ROOT_CERT`. The migration URL contains
 the project-owner username, session-pooler host, port, and database but deliberately contains no
@@ -83,13 +88,21 @@ exact non-secret Supabase project reference for its environment, so swapping the
 database addresses is refused before any connection is opened. It confirms that the separately read
 credential-free URL names the approved owner, project, host, session-mode port, and database, then
 adds `sslmode=verify-full`. The separate raw password travels through `PGPASSWORD`, not a command
-argument or logged address. The certificate is the project Server root certificate downloaded from Supabase Database
-Settings. Backup, restore, web, and connection-provider secrets remain in other configs, so a
+argument or logged address. The certificate is the project Server root certificate downloaded from
+Supabase Database Settings. Backup, restore, web, and connection-provider secrets remain in other
+environments or projects, so a
 migration process cannot receive them accidentally.
 
 The config-scoped read-only service token reaches Doppler through the process environment, not a
 command argument. Every secret request still supplies the reviewed project and config explicitly;
 the token is removed from the delivery process before any database command runs.
+
+Rotate one environment at a time under a recorded change: create the replacement Doppler token or
+webhook key, update only the matching Coolify runtime variable and GitHub webhook, redeploy Kestra,
+prove delivery from the matching protected branch, then revoke the previous value. Never reuse a
+Testing value in Production. A periodic inventory check must reconcile the two active Coolify token
+copies with the two active read-only Doppler tokens and confirm that Preview and build-time scopes
+cannot receive them.
 
 The Kestra environment makes these operational bootstrap values available to reviewed flow
 definitions. Vortex builders cannot upload Kestra YAML, choose a Process runner, interpolate Kestra
