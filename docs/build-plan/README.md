@@ -86,7 +86,7 @@ Exit proof:
 
 Build:
 
-- Keep the one deployable Next.js composition root at `apps/web`, following the official Turborepo deployable-application convention; shared packages remain separate workspace members.
+- Keep the one deployable Next.js composition root and Vercel Root Directory at `apps/web`, following the official Turborepo deployable-application convention; include the workspace files it depends on, run the root `pnpm verify` gate, publish `.next`, and keep shared packages as separate workspace members.
 - Shared identifier, error, actor, organisation context, revision, dependency and version-range contracts.
 - Independently versioned module and application contracts plus their contained-component contracts from [composition and publication](../specification/03-composition-and-publication.md).
 - All core [data contracts](../specification/appendices/data-contracts.md), including the 22 field types, permissions, queries, events, workflow execution references and protected operations, files, connections, interfaces, federation envelopes, protected removal, entitlements, metering and cache versions.
@@ -112,6 +112,7 @@ Exit proof:
 - Schema failures and validation-rule failures produce the same safe public result; adversarial diagnostics never enter that result and no example-specific name appears in the translator or catalogue.
 - First publication is exactly `1.0.0`, unchanged content cannot publish, and patch/minor/major fixtures prove deterministic reasons, minimum version assignment, history integrity, and stale-confirmation refusal.
 - No service-specific package invents a second form of a shared contract, and no core package recognises an example application or ordinary business domain by name.
+- The final Phase 1 revision passes `pnpm verify` from a clean checkout and is recorded moving through the protected feature-to-Testing-to-Production Vercel path.
 
 ## Phase 2 — Definition and Identity
 
@@ -416,7 +417,7 @@ Exit proof:
 
 The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follows these implemented rules:
 
-1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), the original contract delivery [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), safe validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14), complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16), and the P0 platform-primitives correction [#186](https://github.com/Abzum-NZ/Abzum-Vortex/issues/186) are complete. Authored-definition compilation and validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) is the active final implementation dependency before delivery evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17).
+1. Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), repository boundaries [#10](https://github.com/Abzum-NZ/Abzum-Vortex/issues/10), identifier/reference contracts [#11](https://github.com/Abzum-NZ/Abzum-Vortex/issues/11), the original contract delivery [#12](https://github.com/Abzum-NZ/Abzum-Vortex/issues/12), safe validation errors [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13), version impact [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14), authored-definition compilation and validation ownership [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15), complete fixtures [#16](https://github.com/Abzum-NZ/Abzum-Vortex/issues/16), and the P0 platform-primitives correction [#186](https://github.com/Abzum-NZ/Abzum-Vortex/issues/186) are complete. Final delivery evidence [#17](https://github.com/Abzum-NZ/Abzum-Vortex/issues/17) is active.
 2. Native GitHub blocked-by relationships govern sequencing; body text explains but does not replace them.
 3. Every phase epic has an outcome and completion evidence.
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/protected data handling/retention, entitlements/metering, and operations issues belong to those epics rather than Phase 10. Commercial applications do not block the generic platform roadmap.
