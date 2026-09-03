@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { serviceRegistry } from "../src/foundation";
 
 const layers = [
@@ -70,7 +71,7 @@ export default function FoundationPage() {
 
       <footer>
         <span>VORTEX</span>
-        <span>Repository foundation · Issues #10 and #11</span>
+        <Link href="/auth/sign-in">Secure sign in</Link>
       </footer>
     </main>
   );

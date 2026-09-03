@@ -1961,6 +1961,7 @@ describe("complete definition-source fixture set", () => {
       "configuration",
       "constraint",
       "description",
+      "email",
       "event",
       "export",
       "field",
