@@ -23,6 +23,7 @@ describe("Kestra deployment image", () => {
 
     expect(dockerfile).toContain("COPY --chmod=0444 flows/ /app/vortex-flows/");
     expect(dockerfile).toContain("COPY --chmod=0555 scripts/ /app/vortex-operations/");
+    expect(dockerfile).toContain("libtap-parser-sourcehandler-pgtap-perl=3.36-2");
     expect(compose).toContain("server standalone --flow-path /app/vortex-flows");
     expect(compose).not.toContain("./flows:/app/vortex-flows");
     expect(compose).not.toContain("./scripts:/app/vortex-operations");

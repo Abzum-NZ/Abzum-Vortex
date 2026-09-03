@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [ "${1:-}" = "--version" ]; then
+  echo "pg_prove 3.36"
+  exit 0
+fi
+
+[ "${PGPASSWORD:-}" = "placeholder-password" ]
+[[ " $* " = *" --dbname postgres "* ]]
+[[ " $* " = *" --username postgres.abcdefghijklmnopqrst "* ]]
+[[ " $* " = *" --host aws-0-ap-southeast-2.pooler.supabase.com "* ]]
+[[ " $* " = *" --port 5432 "* ]]
+[[ " $* " = *" --ext .sql "* ]]
+[[ " $* " = *" --recurse "* ]]
+[[ " $* " = *" supabase/tests "* ]]
+
+if [ -n "${VORTEX_TEST_PG_PROVE_MARKER:-}" ]; then
+  touch "$VORTEX_TEST_PG_PROVE_MARKER"
+fi

@@ -97,9 +97,11 @@ would be a separate security decision and is refused by the current specificatio
 
 `testing_database_delivery` accepts the GitHub push webhook for `refs/heads/testing`, fetches the
 exact commit, proves that it remains reachable from that protected branch, and applies its ordered
-Supabase migrations. It then runs the remote pgTAP suite and database lint. Only a completely
-successful run writes credential-free evidence to the `vortex.operations` key-value store under the
-exact commit identifier.
+Supabase migrations. It then runs the remote pgTAP suite through the pinned `pg_prove` harness and
+runs Supabase database lint. `supabase test db` deliberately uses a Docker helper, so it remains the
+local-development command and is not used by the operated flow: Kestra does not receive the host
+Docker socket. Only a completely successful run writes credential-free evidence to the
+`vortex.operations` key-value store under the exact commit identifier.
 
 `production_database_delivery` performs the same immutable-commit checks for `refs/heads/main` and
 prepares a credential-free migration fingerprint before pausing. The operator approves and identifies

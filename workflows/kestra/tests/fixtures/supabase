@@ -7,6 +7,11 @@ if [ "${1:-}" = "--version" ]; then
   exit 0
 fi
 
+if [ "${1:-} ${2:-}" = "test db" ]; then
+  echo "operated delivery must not invoke the Docker-based Supabase test harness" >&2
+  exit 1
+fi
+
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--db-url" ]; then
     shift

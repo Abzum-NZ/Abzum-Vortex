@@ -122,7 +122,9 @@ grep --fixed-strings --quiet \
   "$test_root/history-mismatch.log"
 
 unset VORTEX_TEST_REMOTE_MIGRATION_MISMATCH
+export VORTEX_TEST_PG_PROVE_MARKER="$test_root/pg-prove-called"
 "$delivery_script"
+test -f "$VORTEX_TEST_PG_PROVE_MARKER"
 jq --exit-status \
   '.status == "succeeded" and
    .environment == "production" and
