@@ -17,6 +17,21 @@ say() {
   echo "database-delivery: $*"
 }
 
+prepare_database_only_checkout() {
+  local config_path="${checkout}/supabase/config.toml"
+  local temporary_config="${config_path}.database-delivery"
+
+  [ -f "$config_path" ] || die "Supabase configuration is missing"
+
+  # Hosted migrations do not use the Local-only Auth signing key. The Supabase CLI parses the
+  # complete configuration before `db push`, so remove only that path from this disposable checkout
+  # instead of generating or copying a private signing key into the workflow runner.
+  sed \
+    '/^[[:space:]]*signing_keys_path[[:space:]]*=/d' \
+    "$config_path" >"$temporary_config"
+  mv "$temporary_config" "$config_path"
+}
+
 require_variable() {
   local name="$1"
   [ -n "${!name:-}" ] || die "${name} is not set"
@@ -286,6 +301,7 @@ server_version_num="$(psql "$database_url" --no-psqlrc --tuples-only --no-align 
 say "applying pending migrations through Supabase migration history"
 (
   cd "$checkout"
+  prepare_database_only_checkout
   supabase db push --db-url "$database_url" --skip-vault --yes
   pg_prove \
     --dbname "$database_name" \

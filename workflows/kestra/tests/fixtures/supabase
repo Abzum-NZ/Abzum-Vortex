@@ -12,6 +12,13 @@ if [ "${1:-} ${2:-}" = "test db" ]; then
   exit 1
 fi
 
+if grep --extended-regexp --quiet \
+  '^[[:space:]]*signing_keys_path[[:space:]]*=' \
+  supabase/config.toml; then
+  echo "operated database delivery must not load a Local Auth signing key" >&2
+  exit 1
+fi
+
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--db-url" ]; then
     shift
