@@ -44,12 +44,18 @@ export const tenantSchema = z
   .object({
     tenantId: tenantIdSchema,
     shortName: builderKeySchema,
-    displayName: z.string().min(1).max(120),
+    displayName: z.string().trim().min(1).max(120),
     state: administrativeStateSchema,
     createdAt: timestampSchema,
+    createdBy: actorIdSchema,
     stateChangedAt: timestampSchema,
+    revision: revisionSchema,
   })
-  .strict();
+  .strict()
+  .refine((value) => Date.parse(value.stateChangedAt) >= Date.parse(value.createdAt), {
+    path: ["stateChangedAt"],
+    message: "The tenant state-change time cannot precede its creation time",
+  });
 
 export const tenantAdministratorAssignmentSchema = z
   .object({
@@ -73,16 +79,21 @@ export const organizationSchema = z
     tenantId: tenantIdSchema,
     parentOrganizationId: organizationIdSchema.optional(),
     shortName: builderKeySchema,
-    displayName: z.string().min(1).max(120),
+    displayName: z.string().trim().min(1).max(120),
     state: administrativeStateSchema,
     stateChangedAt: timestampSchema,
     createdAt: timestampSchema,
     createdBy: actorIdSchema,
+    revision: revisionSchema,
   })
   .strict()
   .refine((value) => value.parentOrganizationId !== value.organizationId, {
     path: ["parentOrganizationId"],
     message: "An organisation cannot be its own parent",
+  })
+  .refine((value) => Date.parse(value.stateChangedAt) >= Date.parse(value.createdAt), {
+    path: ["stateChangedAt"],
+    message: "The organisation state-change time cannot precede its creation time",
   });
 
 export const identityAuthoritySchema = z

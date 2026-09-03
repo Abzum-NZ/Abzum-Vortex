@@ -85,6 +85,8 @@ The codebase is divided into sixteen named services. These are package and owner
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
+The Identity service begins with the private `vortex_identity` schema. Its tenant and organisation relations enable and force row-level security but expose no policy, table grant, schema usage, or trigger-function execution to `PUBLIC`, Supabase Data API roles, `vortex_runtime`, or `vortex_request`. This structural issue deliberately provides no application operation. Later Identity operations receive only the narrow entry points they require; they do not make the tables directly queryable.
+
 ## Database and storage rules
 
 - Every organisation-owned row carries its organisation identifier and is indexed with that identifier first where the access path requires it.

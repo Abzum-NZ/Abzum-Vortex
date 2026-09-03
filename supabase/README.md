@@ -33,12 +33,13 @@ ES256 JWKS, and password-recovery delivery. It does not configure Testing or Pro
 exercise durable application sessions.
 
 `db:verify` rebuilds the local database from committed migrations and seed
-data, runs every pgTAP test, and fails database lint on errors. It is separate
+data, runs every pgTAP test, proves tenant hierarchy and lifecycle races through
+two real database connections, and fails database lint on errors. It is separate
 from `pnpm verify`: Vercel previews and ordinary pull-request checks remain
 database-free.
 
 Lint is restricted to Vortex-owned schemas. The database baseline covers
-`public` and the private `vortex_context` schema. Each issue that introduces a
+`public`, `vortex_context`, and the private `vortex_identity` schema. Each issue that introduces a
 private service schema must add that schema to the local and operated lint
 commands in the same change. Supabase-managed extension functions are
 deliberately excluded because their diagnostics are owned by the installed
@@ -98,7 +99,10 @@ the schema owner, direct Data API denial, public creation denial, and absence of
 future-object default grants without installing any permanent test function.
 Ordinary service schemas omit the helper's optional runtime-usage flag. Only
 `vortex_context` passes `true`, because its initializer is the one declared
-runtime exception; object execution remains explicitly granted.
+runtime exception; object execution remains explicitly granted. A structural
+schema with no request operation, such as the initial `vortex_identity` schema,
+also passes `false` for the request-usage flag. Later work grants a named service
+entry point rather than making its private tables directly queryable.
 
 PostgreSQL grants temporary-relation capability through the database-wide
 `PUBLIC` role by default. This baseline leaves that Supabase-managed default

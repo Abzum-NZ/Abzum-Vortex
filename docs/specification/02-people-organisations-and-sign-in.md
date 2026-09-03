@@ -25,15 +25,19 @@ flowchart TD
 ## Tenant and organisation hierarchy
 
 - Every organisation belongs to exactly one tenant.
-- An organisation may have one parent organisation in the same tenant. The hierarchy cannot contain a cycle.
-- Moving an organisation moves its complete subtree and is refused if the destination is another tenant, the move would create a cycle, or an active policy prevents it.
-- Archiving or removing a parent is refused until every child is moved, archived through an explicit subtree operation, or otherwise resolved.
+- Tenant identifiers and short names are permanent and unique within one cluster. Organisation identifiers, owning tenants, and short names are permanent; an organisation short name is unique only inside its tenant. Display names may change and need not be unique.
+- An organisation may have one parent organisation in the same tenant. The database stores only that parent link; it does not duplicate the hierarchy in a path, closure table, depth column, or `ltree`. The hierarchy cannot contain a cycle.
+- Moving an organisation changes its parent link. Its descendants retain their links and therefore move as the same subtree. The move is refused if the destination is another tenant, it would create a cycle, or an active policy prevents it.
+- Archiving or marking a tenant or parent organisation for removal is refused while it retains an active or suspended child. A caller may complete an explicitly ordered subtree transition in one transaction; the database validates the final committed state.
+- Suspension does not rewrite descendant lifecycle states. Request-context establishment checks the selected tenant, organisation, and organisation account independently, so suspending a parent or tenant still prevents new entry where required without hiding descendant state changes.
 - Records, files, connections, roles, teams, applications, search, workflow work, and activity remain owned by an organisation. A parent organisation does not inherit access to a child organisation's data.
 - The tenant owns customer-wide hierarchy, lifecycle and [entitlement](15-entitlements-and-metering.md) scope. Metering is attributed to the organisation that caused it where meaningful and can be rolled up to its tenant.
 
 ## Tenant administration
 
 A tenant can have several **tenant administrators**. They may create, move, suspend, restore, and view the administrative status of organisations in that tenant and invoke explicitly granted protected tenant operations.
+
+The private tenant and organisation tables contain structural identity and lifecycle facts only. Protected provisioning, hierarchy commands, tenant-administrator assignments, runtime localisation settings, safe administrative read models, expected-revision command concurrency, duplicate protection, and activity evidence sit above those tables in the Identity service. Neither layer introduces a hardcoded administration page.
 
 Tenant administration does not grant record access. A tenant administrator who needs to use an organisation's applications or data must also have an active organisation account with the required organisation and application roles. This separation prevents customer-wide administration from becoming silent access to every workspace.
 

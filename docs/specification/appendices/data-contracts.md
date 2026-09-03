@@ -75,15 +75,19 @@ Contained components have a permanent identifier unique inside the module or app
 
 ### Tenant
 
-`tenant_id`, permanent `short_name`, `display_name`, state, creation time, and state-change time. Tenant states are active, suspended, archived, and removal pending. Commercial customer or subscription references are ordinary application records and never part of this core identity contract.
+`tenant_id`, permanent `short_name`, `display_name`, state, `created_at`, `created_by`, `state_changed_at`, and positive `revision`. Tenant identifiers and short names are cluster-unique and permanent; display names may change and need not be unique. State-change time cannot precede creation time. Tenant states are active, suspended, archived, and removal pending. Commercial customer or subscription references are ordinary application records and never part of this core identity contract.
 
 A tenant-administrator assignment has tenant, global identity, state, permissions, creator, start, expiry, revocation, and activity references. It grants no organisation record permission.
 
 ### Organisation
 
-`organisation_id`, required `tenant_id`, optional `parent_organisation_id`, permanent `short_name`, `display_name`, `state`, `state_changed_at`, `created_at`, and `created_by`. The parent must belong to the same tenant and cannot produce a cycle. A protected path/depth representation may accelerate checks but is derived from this relationship and must be transactionally consistent.
+`organisation_id`, required permanent `tenant_id`, optional `parent_organisation_id`, permanent `short_name`, `display_name`, `state`, `created_at`, `created_by`, `state_changed_at`, and positive `revision`. The parent must belong to the same tenant and cannot produce a cycle. Organisation short names are unique within their tenant; display names may change and need not be unique. State-change time cannot precede creation time.
+
+The parent link is the only stored hierarchy representation. Reparenting changes that link while descendants retain theirs, so the complete subtree moves without rewriting descendant rows. Hierarchy and lifecycle changes share one tenant-row serialisation point, preventing concurrent opposing changes from bypassing cycle or final-state validation. No closure table, materialised path, duplicated depth, `ltree`, or arbitrary depth cap is introduced.
 
 Organisation states are active, suspended, archived, and removal pending. Data recovery and removal timing comes only from versioned [retention policy](../14-activity-privacy-and-retention.md#retention-policies), legal constraints and platform safety rules; commercial state cannot weaken them.
+
+Archived or removal-pending tenants cannot retain active or suspended organisations. Archived or removal-pending organisations cannot retain active or suspended direct children. These are deferred final-state constraints so a complete subtree transition may be explicitly ordered inside one transaction; invalid committed states are refused. Suspension never cascades by rewriting descendant rows.
 
 ### Global identity
 
