@@ -209,6 +209,9 @@ fi
 require_variable VORTEX_DOPPLER_TOKEN
 require_variable VORTEX_DOPPLER_PROJECT
 require_variable VORTEX_DOPPLER_CONFIG
+require_variable VORTEX_EXPECTED_DATABASE_PROJECT_REF
+[[ "$VORTEX_EXPECTED_DATABASE_PROJECT_REF" =~ ^[a-z0-9]{20}$ ]] ||
+  die "expected Supabase project reference is invalid"
 
 export DOPPLER_TOKEN="$VORTEX_DOPPLER_TOKEN"
 read_doppler_secret() {
@@ -217,7 +220,6 @@ read_doppler_secret() {
     --project "$VORTEX_DOPPLER_PROJECT" \
     --config "$VORTEX_DOPPLER_CONFIG" \
     --no-check-version \
-    --no-read-env \
     --silent
 }
 
@@ -247,6 +249,9 @@ database_port="${database_host_port##*:}"
 
 [[ "$database_user" =~ ^postgres\.[a-z0-9]{20}$ ]] ||
   die "database connection does not name a Supabase project owner"
+database_project_ref="${database_user#postgres.}"
+[ "$database_project_ref" = "$VORTEX_EXPECTED_DATABASE_PROJECT_REF" ] ||
+  die "database connection names the wrong Supabase project"
 [[ "$database_host" =~ ^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$ ]] ||
   die "database connection does not name the Supabase session pooler"
 [ "$database_port" = "5432" ] || die "database connection is not session mode"

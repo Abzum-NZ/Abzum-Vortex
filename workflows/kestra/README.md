@@ -64,12 +64,18 @@ map `stg` to Vercel Preview and `prd` to Vercel Production, so the delivery scri
 three named values rather than importing the whole application config into the migration process.
 Those values are `DATABASE_URL`, `DATABASE_PASSWORD`, and
 `VORTEX_DATABASE_SSL_ROOT_CERT`. The script accepts only Supabase's IPv4 session pooler on port 5432,
-the `postgres.<project-ref>` owner and the `postgres` database. It confirms that the separately read
+the `postgres.<project-ref>` owner and the `postgres` database. Each reviewed flow also carries the
+exact non-secret Supabase project reference for its environment, so swapping the `stg` and `prd`
+database addresses is refused before any connection is opened. It confirms that the separately read
 password matches the configured address, then rebuilds a credential-free address with
 `sslmode=verify-full`. The password travels through `PGPASSWORD`, not a command argument or logged
 address. The certificate is the project Server root certificate downloaded from Supabase Database
 Settings. Backup, restore, web, and connection-provider secrets remain in other configs, so a
 migration process cannot receive them accidentally.
+
+The config-scoped read-only service token reaches Doppler through the process environment, not a
+command argument. Every secret request still supplies the reviewed project and config explicitly;
+the token is removed from the delivery process before any database command runs.
 
 The Kestra environment makes these operational bootstrap values available to reviewed flow
 definitions. Vortex builders cannot upload Kestra YAML, choose a Process runner, interpolate Kestra

@@ -70,6 +70,7 @@ export PATH="/tests/fixtures:$PATH"
 export VORTEX_DOPPLER_TOKEN=local-placeholder
 export VORTEX_DOPPLER_PROJECT=local-placeholder
 export VORTEX_DOPPLER_CONFIG=local-placeholder
+export VORTEX_EXPECTED_DATABASE_PROJECT_REF=abcdefghijklmnopqrst
 export VORTEX_TEST_DATABASE_USER='invalid?role'
 if "$delivery_script" >"$test_root/invalid-role.log" 2>&1; then
   echo "expected an invalid database role to be refused" >&2
@@ -80,6 +81,16 @@ grep --fixed-strings --quiet \
   "$test_root/invalid-role.log"
 
 unset VORTEX_TEST_DATABASE_USER
+export VORTEX_TEST_DATABASE_PROJECT_REF=tsrqponmlkjihgfedcba
+if "$delivery_script" >"$test_root/wrong-project.log" 2>&1; then
+  echo "expected a different Supabase project to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "database connection names the wrong Supabase project" \
+  "$test_root/wrong-project.log"
+
+unset VORTEX_TEST_DATABASE_PROJECT_REF
 if "$delivery_script" >"$test_root/invalid-ca.log" 2>&1; then
   echo "expected an invalid Supabase root certificate to be refused" >&2
   exit 1

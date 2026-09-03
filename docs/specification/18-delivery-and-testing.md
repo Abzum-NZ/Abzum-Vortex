@@ -91,6 +91,7 @@ The [organisation separation suite](20-quality-and-acceptance.md#organisation-se
 - A production change has a defined forward fix. Database rollbacks are used only when the reverse operation is known safe and does not lose accepted data.
 - Feature flags cannot bypass access, protected data handling, retention, or entitlement checks.
 - A failed post-deployment verification stops further promotion and alerts the operator.
+- Each environment's reviewed delivery flow binds its database connection to that environment's exact non-secret Supabase project reference. A correctly shaped connection for another project is refused before the database is opened.
 - The previous web deployment remains available for rollback only while it is compatible with the current database shape.
 - A deployment records code revision, migration set, definition-contract version, fixture version, operator, approvals, and verification outcome.
 
