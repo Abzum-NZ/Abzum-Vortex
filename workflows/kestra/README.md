@@ -25,10 +25,13 @@ Coolify deploys this directory from the repository rather than from a compose fi
 interface, so the stack is reviewed and versioned like anything else, and a change to it arrives by
 pull request.
 
-The `flows/` directory is mounted read-only and passed to Kestra's official `--flow-path` startup
-option. Every Coolify deployment therefore validates and creates or updates these reviewed flows in
-Kestra's PostgreSQL repository. Removing an operational flow is an explicit reviewed deletion; a
-missing file is not silently interpreted as permission to erase stored operational state.
+The `flows/` directory and operational scripts are copied into the pinned Kestra image at build time,
+and the flow directory is passed to Kestra's official `--flow-path` startup option. Baking them into
+the image is required because Coolify removes its temporary checkout after deployment; a relative
+runtime bind mount would become an empty host directory. Every reviewed Coolify deployment therefore
+validates and creates or updates these flows in Kestra's PostgreSQL repository. Removing an
+operational flow is an explicit reviewed deletion; a missing file is not silently interpreted as
+permission to erase stored operational state.
 
 The one-time delivery-engine bootstrap pins Coolify to the exact commit SHA approved in the pull
 request and disables automatic branch redeployment. It does not point the operated service at a

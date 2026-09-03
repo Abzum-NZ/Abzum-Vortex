@@ -37,3 +37,9 @@ RUN set -eux; \
     doppler --version; \
     git --version; \
     psql --version
+
+# Coolify builds from an ephemeral checkout, so runtime bind mounts to relative
+# source paths become empty after deployment. Keep the reviewed operational
+# definitions in the immutable image that was built from the reviewed commit.
+COPY --chmod=0444 flows/ /app/vortex-flows/
+COPY --chmod=0555 scripts/ /app/vortex-operations/

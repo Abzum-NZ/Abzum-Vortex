@@ -63,8 +63,6 @@ services:
     volumes:
       - kestra-storage:/app/storage
       - /tmp/kestra-wd:/tmp/kestra-wd
-      - ./flows:/app/vortex-flows:ro
-      - ./scripts:/app/vortex-operations:ro
     environment:
       SERVICE_FQDN_KESTRA_8080: /
       SECRET_VORTEX_TESTING_MIGRATION_WEBHOOK_KEY: ${VORTEX_TESTING_MIGRATION_WEBHOOK_KEY_BASE64}
