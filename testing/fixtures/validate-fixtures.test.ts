@@ -77,7 +77,6 @@ describe("complete fixture set", () => {
         publishedHistories: sources
           .filter((source) => source.kind === "module" || source.kind === "application")
           .map((source) => ({ kind: source.kind, definitionKey: source.key, history: [] })),
-        activeDependants: [],
       },
     );
     expect(outputs).toHaveLength(13);

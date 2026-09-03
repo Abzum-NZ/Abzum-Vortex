@@ -3,7 +3,6 @@ import { applicationDraftSchema } from "./application-contracts";
 import { publishedApplicationDefinitionSchema } from "./application-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
 import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-contracts";
-import { versionRequirementSchema } from "./definitions";
 import { definitionSourceDocumentSchema } from "./definition-source";
 import {
   actorIdSchema,
@@ -233,31 +232,10 @@ export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const activeDefinitionDependantSchema = z
-  .object({
-    definitionKind: z.enum(["module", "application"]),
-    definitionKey: namespacedKeySchema,
-    definitionRootId: z.union([moduleRootIdSchema, applicationRootIdSchema]),
-    candidateExactVersion: semanticVersionSchema,
-    candidateContentFingerprint: fingerprintSchema,
-    candidateResolutionFingerprint: fingerprintSchema,
-    dependantKey: namespacedKeySchema,
-    dependantKind: z.enum(["module", "application"]),
-    dependantRootId: z.union([moduleRootIdSchema, applicationRootIdSchema]),
-    dependantExactVersion: semanticVersionSchema,
-    dependantContentFingerprint: fingerprintSchema,
-    acceptedVersion: versionRequirementSchema,
-    referencesValid: z.boolean(),
-    comparisonFingerprint: fingerprintSchema,
-    referenceCheckFingerprint: fingerprintSchema,
-  })
-  .strict();
-
 export const definitionPublicationContextSchema = z
   .object({
     dependencyOutputs: z.array(definitionCompilationOutputSchema).max(10_000).optional(),
     publishedHistories: z.array(publishedDefinitionHistorySchema).max(10_000),
-    activeDependants: z.array(activeDefinitionDependantSchema).max(10_000),
   })
   .strict()
   .superRefine((value, context) => {
@@ -278,10 +256,6 @@ export const definitionPublicationContextSchema = z
     ensureUnique(
       value.publishedHistories.map((entry) => `${entry.kind}:${entry.definitionKey}`),
       "publishedHistories",
-    );
-    ensureUnique(
-      value.activeDependants.map((entry) => `${entry.definitionKey}:${entry.dependantKey}`),
-      "activeDependants",
     );
   });
 
@@ -330,7 +304,6 @@ export type DefinitionCompilationOutput = z.infer<typeof definitionCompilationOu
 export type CompiledDefinitionArtifact = z.infer<typeof compiledDefinitionArtifactSchema>;
 export type DefinitionProvenanceEntry = z.infer<typeof definitionProvenanceEntrySchema>;
 export type PublishedDefinitionHistory = z.infer<typeof publishedDefinitionHistorySchema>;
-export type ActiveDefinitionDependant = z.infer<typeof activeDefinitionDependantSchema>;
 export type DefinitionPublicationContext = z.infer<typeof definitionPublicationContextSchema>;
 export type DefinitionInstallCheckRequest = z.infer<typeof definitionInstallCheckRequestSchema>;
 export type DefinitionInstallCheckResult = z.infer<typeof definitionInstallCheckResultSchema>;

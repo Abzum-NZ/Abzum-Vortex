@@ -60,6 +60,7 @@ stateDiagram-v2
 
 - Editing changes only the draft.
 - Publishing creates a numbered, immutable snapshot of the whole module or application and its contained components.
+- The root's current published revision is only the discovery/default pointer used when preparing a new consumer. It is not a global live pointer; advancing it never changes a consumer's exact recorded release.
 - A published snapshot records its complete immutable authored source and source-contract version as well as its canonical runtime content, author, time, source draft revision, validation result, and both source and canonical-content fingerprints.
 - Restoring an older version creates a new draft. It never rewrites publication history.
 - A live request resolves one published module/application version set and uses it for the full request.
@@ -79,9 +80,9 @@ Authored JSON first passes the exported strict source contract. Publication then
 
 Every source leaf receives an exact source path in the returned provenance. Every canonical leaf maps back to an exact source leaf, an approved fixed default, a resolved value, or system metadata. The compiler maps source paths forward into canonical paths; it does not search backwards by value or choose a similarly named sibling. A source value may differ from its canonical leaf or map to a canonical component only when its exact source-path shape is in the compiler's closed transformation catalogue. Any newly accepted but unmapped source property therefore refuses compilation. When several approved source values produce a derived canonical leaf, provenance records every deepest mapped source leaf in that leaf's owning component and marks the mapping with the semantic-transformation or immutable-resolution rule. Publication verifies both sides of this coverage.
 
-The publication caller supplies one strict [publication context contract](../../contracts/src/definition-compilation-contracts.ts): existing immutable compiled dependencies, the full prior published history for each module or application being published, and every active dependant or sharing reference. Every compiled artifact binds its kind, definition key, permanent root, exact version, canonical-content fingerprint, and resolution-snapshot fingerprint. The artifact's exact version must equal the version assigned by the governed version-impact comparison; unchanged content and a snapshot prepared for another candidate version are refused. Each module dependency records its exact resolved version. An application or module accepts a dependency only when its kind, key, root, exact version, content fingerprint, resolution fingerprint, declared requirement, and snapshot entry all agree, and both the dependency artifact and dependency output must carry the requesting definition's resolution fingerprint. Matching a key or root, or presenting an internally consistent artifact from another snapshot, is insufficient.
+The publication caller supplies one strict [publication context contract](../../contracts/src/definition-compilation-contracts.ts): existing immutable compiled dependencies and the full prior published history for each module or application being published. Every compiled artifact binds its kind, definition key, permanent root, exact version, canonical-content fingerprint, and resolution-snapshot fingerprint. The artifact's exact version must equal the version assigned by the governed version-impact comparison; unchanged content and a snapshot prepared for another candidate version are refused. Each module dependency records its exact resolved version. An application or module accepts a dependency only when its kind, key, root, exact version, content fingerprint, resolution fingerprint, declared requirement, and snapshot entry all agree, and both the dependency artifact and dependency output must carry the requesting definition's resolution fingerprint. Matching a key or root, or presenting an internally consistent artifact from another snapshot, is insufficient.
 
-Validation runs the governed version-impact comparison and refuses publication when the assigned version falls outside an active dependant's declared range or a referenced component would become invalid. An active-dependant result carries the candidate and dependant identities, exact versions and content fingerprints, the comparison fingerprint, and a fingerprint over the reference-check result. Changing `references valid`, substituting another compiled definition, or replaying a result from another comparison therefore invalidates the publication context. Each application compilation result records an exact, one-for-one dependency manifest for its module and connection bindings. Publication rejects missing, duplicate, extra, differently resolved, or foreign-snapshot manifest entries, and confirms that every declared version requirement accepts its exact resolved version. Publishing one definition is therefore as strict as publishing a complete batch.
+Validation runs the governed version-impact comparison and assigns the minimum valid next version. Publication appends that release as inert immutable content and advances only its own definition root; it does not inspect, retarget, rewrite, or invalidate an existing application, installation, workflow, or sharing grant. Each existing consumer remains pinned to the exact release already recorded. Compatibility with a newer release is checked only when that consumer's owning operation deliberately prepares an application binding, installation upgrade, storage migration, or grant migration. Each application compilation result records an exact, one-for-one dependency manifest for its module and connection bindings. Publication rejects missing, duplicate, extra, differently resolved, or foreign-snapshot manifest entries, and confirms that every dependency selected for the new release satisfies that release's own declared requirement. Publishing one definition is therefore atomic without creating a dependency deadlock.
 
 Edit/save validation performs strict shape, local identity, and local reference checks before publication resolution is available. Module definitions also check condition and action-value compatibility at edit/save because their fields and actions are local to the same source document. Application actions and workflows refer to bound module definitions, so their cross-definition types are checked at publication against the exact compiled dependencies rather than guessed during an isolated edit. Publication adds immutable-resolution, provenance, dependency, application, workflow, connection, and compatibility checks. Each validation engine is registered once under an honest aggregate owner and declares the closed failure codes it can emit; no cached wrapper pretends that one aggregate is several independent rules. Compiler refusals also come from one closed typed catalogue. A missing nested field, action, workflow node, or dependency identifies that authorised builder-visible component and never includes a submitted value or raw path.
 
@@ -106,13 +107,13 @@ Publication is refused unless:
 5. Public pages expose only fields explicitly approved for public display under [access and permissions](04-access-and-permissions.md).
 6. Every workflow path has an end state or a documented long-running wait.
 7. Required translation, accessibility, and phone-layout checks pass under [quality and acceptance](20-quality-and-acceptance.md).
-8. A migration plan exists for any change affecting stored [records](06-records-and-lifecycle.md).
-9. An active sharing grant remains compatible with every referenced scope, action, field, condition, and contract fingerprint, or the publication includes an explicitly approved grant migration or revocation.
+8. Any change affecting stored [records](06-records-and-lifecycle.md) is classified as breaking. Migration feasibility is checked only when an installation or application binding deliberately adopts that release.
+9. Every dependency selected for this new immutable release satisfies the new release's declared requirement. Existing sharing grants remain pinned and are checked only by an explicit grant migration or revocation operation.
 10. A record-scoped page, its query, commit action, replacement, blocks, and typed block references all target that page record; public pages additionally restrict every selected, filtered, grouped, aggregated, and sorted field, permission, action subject, and action effect to the approved public surface.
 
 ## Dependency graph
 
-Before publication, the platform builds a dependency graph from module/application versions and contained-component references.
+Before publication, the platform builds a dependency graph for the candidate release from its selected module/application versions and contained-component references.
 
 ```mermaid
 flowchart LR
@@ -127,12 +128,12 @@ flowchart LR
     GRAPH --> MOD2
 ```
 
-The graph is used to validate publication, load the live application, copy definitions, calculate cache invalidation, and explain why a definition cannot be changed or removed.
+The candidate graph validates the release being created. Separate consumer graphs load live applications, prepare installations and upgrades, validate grant migrations, calculate cache invalidation, and explain why an installed or bound consumer cannot move to another release.
 
 ## Change compatibility
 
 - Adding an optional field or component is compatible.
-- Removing, renaming, narrowing, or changing the meaning of something used elsewhere is incompatible until all dependants are updated.
+- Removing, renaming, narrowing, or changing meaning is classified as a breaking change. The new major release may publish, while each existing dependant remains pinned until its owner deliberately migrates it.
 - Field type changes follow the explicit rules in [modules, fields and relationships](05-modules-fields-and-relationships.md).
 - Interface version compatibility follows [connections and programmable interfaces](12-connections-and-interfaces.md).
 - The platform never guesses that two differently identified definitions mean the same thing.
@@ -151,7 +152,7 @@ The source and recipient application bindings must use a compatible published re
 
 - Publishing an application produces one consistent snapshot containing its pages, rules, workflows, and roles.
 - Editing a page after publication does not change the live application until the application is published again.
-- Removing a field referenced by a report, rule, page, or interface is refused with links to every dependant.
+- Removing a field referenced by content inside the same candidate release is refused. A breaking release may remove a field used by an older external dependant; that dependant remains on its prior exact release until a compatible migration is prepared.
 - Restoring a prior published version creates a reviewable draft and does not erase later history.
 - Installing or copying an application does not grant access to the publisher's records.
 - A module and an application each retain their own release history; changing one never silently republishes the other.
@@ -159,4 +160,4 @@ The source and recipient application bindings must use a compatible published re
 - A cross-organisation grant does not copy records into the target organisation's storage.
 - Revoking a sharing grant immediately removes the target's ability to query shared records.
 - A cross-organisation grant never exposes fields classified as sensitive.
-- Removing or changing a field used by an active grant is refused until the grant is safely revised or revoked.
+- Removing or changing a field used by an active grant creates a breaking release without changing that grant. Moving the grant to the new release requires a separately approved grant migration or revocation.

@@ -95,7 +95,7 @@ Build:
 - Pure [module/application version-impact comparison](../specification/appendices/version-impact-policy.md), including stable-identity matching, exact content fingerprints, a governed field-by-field policy, Vortex assignment of the minimum valid next release version, and stale-safe builder confirmation or cancellation.
 - Storage-catalog and scope contracts that distinguish definition identity, storage lineage, organisation ownership, and application-contained ownership without creating per-installation tables.
 - Complete [worked-example fixtures](../specification/appendices/worked-examples.md).
-- A capability-complete production authored-source schema and lossless conversion for all 13 example definition documents; no compiler-invented label, permission, layout, public exposure, data shape or business behaviour. Publication consumes immutable prior history, fingerprint-bound active-dependant results and already-published dependencies, and binds every compiled artifact/dependency to its kind, key, root, exact version, canonical content and resolution snapshot.
+- A capability-complete production authored-source schema and lossless conversion for all 13 example definition documents; no compiler-invented label, permission, layout, public exposure, data shape or business behaviour. Publication consumes immutable prior history and already-published dependencies, binds every compiled artifact/dependency to its kind, key, root, exact version, canonical content and resolution snapshot, and never accepts or retargets existing dependant state.
 - Types, lint, unit tests, contract tests and build checks that run without a database.
 
 Exit proof:
