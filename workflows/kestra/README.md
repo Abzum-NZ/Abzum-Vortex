@@ -30,6 +30,13 @@ option. Every Coolify deployment therefore validates and creates or updates thes
 Kestra's PostgreSQL repository. Removing an operational flow is an explicit reviewed deletion; a
 missing file is not silently interpreted as permission to erase stored operational state.
 
+The one-time delivery-engine bootstrap pins Coolify to the exact commit SHA approved in the pull
+request and disables automatic branch redeployment. It does not point the operated service at a
+moving feature or Testing branch. After that exact commit merges to `testing`, the protected event is
+replayed against the pinned engine and must produce successful Testing evidence. Only then is the
+same revision promoted to `main`; Coolify returns to the protected `main` source at that commit and
+normal automatic deployment begins. The bootstrap never authorises a Production database change.
+
 ## Secrets
 
 Every secret is supplied by the environment. Nothing in this directory holds one.

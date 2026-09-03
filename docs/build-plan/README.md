@@ -141,6 +141,7 @@ Exit proof:
 - A stale draft cannot overwrite a later edit.
 - Publishing is atomic and a restored version becomes a new draft.
 - Definition and identity tables pass their database separation tests.
+- The delivery engine is bootstrapped from one exact reviewed commit, produces successful Testing evidence after that commit merges to `testing`, and returns Coolify to the same revision on protected `main` before ordinary automatic delivery begins.
 - Tenant administrators can create and move organisations without gaining record access, and cross-tenant or cyclic hierarchy moves are refused.
 
 ## Phase 3 — Access

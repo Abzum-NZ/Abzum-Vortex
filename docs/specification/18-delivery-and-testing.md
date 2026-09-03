@@ -36,6 +36,8 @@ The following outcomes are required:
 
 Feature branches merge into `testing`. The verified `testing` revision is promoted to `main`. Direct unreviewed changes to either protected branch are refused. An administrator bypass is retained only as a break-glass recovery control: its use requires an incident reference, the reason ordinary review could not be used, the exact commit, the operator, the time, and an immediate follow-up review. It is never the normal delivery path and cannot make a failed required check acceptable.
 
+The first installation of the delivery engine is a bounded bootstrap, not a promotion exception. Before its feature pull request merges, the operated Kestra resource may deploy only the pull request's exact reviewed commit SHA, with automatic branch redeployment disabled. Its Production flow may validate a `main` event and reach the approval hold, but it cannot open Production without successful Testing evidence for an ancestor with the identical migration set. After the exact commit merges to `testing`, the protected Testing event is delivered to that pinned engine and must pass. Only then may that verified revision be promoted to `main`; Coolify is returned to the protected `main` source at the same commit and normal automatic deployment begins. A moving feature branch, `testing`, or another unverified revision is never used as the bootstrap source.
+
 - Every feature branch gets a [Vercel preview](https://vercel.com/docs/deployments/preview-deployments).
 - Preview data is test data only and cannot use production credentials.
 - The repository states which checks run on pull requests and which run only after merge to Testing.
