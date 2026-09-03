@@ -104,7 +104,7 @@ application request.
 - The Supabase project owner is used only by the reviewed Kestra migration and database-verification
   path. It connects through the IPv4 session pooler on port 5432 because those commands require a
   stable PostgreSQL session. Its address, password, and root certificate live only in the unsynced
-  Doppler branch configs `stg_operations` and `prd_operations`.
+  Doppler configs `ops_stg` and `ops_prd` in the separate unsynced `Operations` environment.
 - The Vercel server connects as an environment-specific `vortex_runtime` login through Supabase's
   shared transaction pooler on port 6543. That login owns no object and has no direct service-table
   privilege. Inside an explicit transaction it may initialize the closed request context and enter

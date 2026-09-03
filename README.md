@@ -169,21 +169,25 @@ feature branch ──PR──▶ testing ──PR──▶ main
 
 ## Secrets and connections
 
-Doppler holds every secret. Nobody types one into Vercel by hand.
+Doppler is the source of record for application and database secret material. Nobody types a
+Vercel variable by hand. Coolify stores only the four protected bootstrap values that Kestra must
+receive when its container starts: two environment-specific webhook keys and two read-only Doppler
+service tokens.
 
-| Doppler config | Vercel environment | Serves |
+| Doppler config | Vercel environment | Consumer / sync status |
 |---|---|---|
 | `prd` | Production | `main` |
 | `stg` | Preview | `testing` and every pull request preview |
 | `dev` | Development | `vercel dev` on your own machine |
-| `prd_operations` | None | Production database delivery through Kestra |
-| `stg_operations` | None | Testing database delivery through Kestra |
+| `ops_stg` | None | Testing database delivery through Kestra; no external sync |
+| `ops_prd` | None | Production database delivery through Kestra; no external sync |
 
 Change a value in Doppler and it reaches Vercel within seconds. Change one in Vercel and the next
-sync overwrites it, so there is exactly one place to change anything. Only the `prd`, `stg`, and
-`dev` root configs have Vercel syncs. The `prd_operations` and `stg_operations` branch configs have
-no external sync: Kestra reads their exact migration values at run time through separate read-only
-service tokens.
+sync overwrites it, so there is exactly one place to change application values. Only the `prd`,
+`stg`, and `dev` root configs have Vercel syncs. A separate Doppler `Operations` environment contains
+the unsynced `ops_stg` and `ops_prd` configs. Kestra reads their exact migration values at run time
+through separate config-scoped, read-only service tokens. Doppler branch configs inherit their root
+config, so migration secrets do not live below the Vercel-synced `stg` or `prd` roots.
 
 ### Vercel can refuse a secret and still report success
 
@@ -217,7 +221,7 @@ The password is not copied into a second Vercel variable. Rotate the database ro
 verification are available.
 
 The Supabase project-owner address and password use `VORTEX_MIGRATION_DATABASE_URL` and
-`VORTEX_MIGRATION_DATABASE_PASSWORD` in `stg_operations` and `prd_operations`. Those branch configs
+`VORTEX_MIGRATION_DATABASE_PASSWORD` in `ops_stg` and `ops_prd`. Those configs
 are never synced to Vercel. Rotating a migration password changes its named value in the matching
 operations config. The URL is already credential-free; Kestra validates its owner, project, host,
 session-mode port and database, then supplies the separate raw password through `PGPASSWORD`. A

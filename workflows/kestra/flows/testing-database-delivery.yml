@@ -24,7 +24,7 @@ tasks:
       VORTEX_EVIDENCE_PATH: delivery-evidence.json
       VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_TESTING_DOPPLER_TOKEN') }}"
       VORTEX_DOPPLER_PROJECT: abzum-vortex
-      VORTEX_DOPPLER_CONFIG: stg_operations
+      VORTEX_DOPPLER_CONFIG: ops_stg
       VORTEX_EXPECTED_DATABASE_PROJECT_REF: abflfptnguasinoussws
       VORTEX_LINT_SCHEMAS: public,vortex_context
     outputFiles:

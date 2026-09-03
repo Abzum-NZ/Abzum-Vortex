@@ -101,7 +101,8 @@ port 5432. Both routes verify the certificate and hostname.
 `VORTEX_RUNTIME_DATABASE_URL` and `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` live
 in the Doppler `stg` and `prd` root configs; `VORTEX_MIGRATION_DATABASE_URL`,
 `VORTEX_MIGRATION_DATABASE_PASSWORD`, and `VORTEX_DATABASE_SSL_ROOT_CERT` live
-only in their unsynced `stg_operations` and `prd_operations` branch configs.
+only in the unsynced `ops_stg` and `ops_prd` configs of the separate Doppler
+`Operations` environment.
 The migration URL never embeds a password; the separate raw password supports
 reserved characters without URL-encoding ambiguity.
 
