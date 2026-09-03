@@ -21,7 +21,7 @@ tasks:
       VORTEX_GITHUB_REF: "{{ trigger.body.ref }}"
       VORTEX_GITHUB_COMMIT: "{{ trigger.body.after }}"
       VORTEX_EXECUTION_ID: "{{ execution.id }}"
-      VORTEX_EVIDENCE_PATH: "{{ workingDir }}/preparation-evidence.json"
+      VORTEX_EVIDENCE_PATH: preparation-evidence.json
     outputFiles:
       - preparation-evidence.json
 
@@ -58,7 +58,7 @@ tasks:
       VORTEX_GITHUB_REF: "{{ trigger.body.ref }}"
       VORTEX_GITHUB_COMMIT: "{{ trigger.body.after }}"
       VORTEX_EXECUTION_ID: "{{ execution.id }}"
-      VORTEX_EVIDENCE_PATH: "{{ workingDir }}/delivery-evidence.json"
+      VORTEX_EVIDENCE_PATH: delivery-evidence.json
       VORTEX_APPROVED: "{{ outputs.await_approval.onResume.approved }}"
       VORTEX_APPROVING_ACTOR: "{{ outputs.await_approval.resumed.by }}"
       VORTEX_TESTING_COMMIT: "{{ outputs.await_approval.onResume.testing_commit }}"

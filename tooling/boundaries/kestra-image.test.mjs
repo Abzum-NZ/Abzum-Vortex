@@ -28,5 +28,10 @@ describe("Kestra deployment image", () => {
     expect(compose).not.toContain("./scripts:/app/vortex-operations");
     expect(testingFlow).toContain("trigger.body.ref == 'refs/heads/testing'");
     expect(productionFlow).toContain("trigger.body.ref == 'refs/heads/main'");
+    expect(testingFlow).toContain("VORTEX_EVIDENCE_PATH: delivery-evidence.json");
+    expect(productionFlow).toContain("VORTEX_EVIDENCE_PATH: preparation-evidence.json");
+    expect(productionFlow).toContain("VORTEX_EVIDENCE_PATH: delivery-evidence.json");
+    expect(testingFlow).not.toContain("{{ workingDir }}");
+    expect(productionFlow).not.toContain("{{ workingDir }}");
   });
 });

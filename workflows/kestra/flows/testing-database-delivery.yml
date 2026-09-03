@@ -21,7 +21,7 @@ tasks:
       VORTEX_GITHUB_REF: "{{ trigger.body.ref }}"
       VORTEX_GITHUB_COMMIT: "{{ trigger.body.after }}"
       VORTEX_EXECUTION_ID: "{{ execution.id }}"
-      VORTEX_EVIDENCE_PATH: "{{ workingDir }}/delivery-evidence.json"
+      VORTEX_EVIDENCE_PATH: delivery-evidence.json
       VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_TESTING_DOPPLER_TOKEN') }}"
       VORTEX_DOPPLER_PROJECT: abzum-vortex
       VORTEX_DOPPLER_CONFIG: stg
