@@ -226,7 +226,7 @@ service-role key appears, treat it as a bug.
 | Caller | Route | Port | Why |
 |---|---|---|---|
 | The web application | Session pooler | 5432 | Vercel sends traffic over IPv4. The direct host answers only on IPv6, and the transaction pooler needs the paid IPv4 add-on |
-| Kestra operational flows | Direct connection | 5432 | Migrations and access-rule tests need a real PostgreSQL session; encrypted logical backup needs a dedicated read-only backup role. Each job uses its own narrow role. Kestra runs on our own machine, which has IPv6. Business workflow steps do not use these connections. |
+| Kestra operational flows | Session pooler | 5432 | Migrations and access-rule tests need a real PostgreSQL session, which Supabase session mode preserves while remaining reachable over IPv4. Encrypted logical backup uses a dedicated read-only backup role. Each job uses its own narrow role, and business workflow steps do not use these connections. |
 
 Session mode behaves like a direct connection, so the client needs no special configuration.
 
