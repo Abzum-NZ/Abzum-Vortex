@@ -1970,10 +1970,15 @@ export const normaliseModuleContent = (content: ModuleContent): ModuleContent =>
     ),
     rules: sorted(value.rules as unknown[], "ruleId"),
     sharingConditions: sorted(
-      (value.sharingConditions as RecordValue[]).map((condition) => ({
-        ...condition,
-        declaredFieldIds: sorted(condition.declaredFieldIds as unknown[]),
-      })),
+      (value.sharingConditions as RecordValue[]).map((condition) => {
+        const normalised = {
+          ...condition,
+          declaredFieldIds: sorted(condition.declaredFieldIds as unknown[]),
+        };
+        delete normalised.publishedRevision;
+        delete normalised.contractFingerprint;
+        return normalised;
+      }),
       "conditionId",
     ),
     extensionPoints: sorted(

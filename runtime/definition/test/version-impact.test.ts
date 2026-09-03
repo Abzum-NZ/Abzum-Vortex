@@ -2172,6 +2172,25 @@ describe("definition version impact", () => {
     }
   });
 
+  test("ignores derived saved-condition revision and fingerprint metadata", () => {
+    const draft = moduleDraft();
+    draft.content.sharingConditions.push({
+      conditionId: id(83),
+      sourceRecordTypeId: id(4),
+      key: "shareable",
+      publishedRevision: 1,
+      contractFingerprint: `sha256:${"0".repeat(64)}`,
+      parameters: [],
+      condition: condition(true),
+      declaredFieldIds: [],
+      publicationTests: [{ name: "Allows", parameters: {}, fieldValues: {}, expected: true }],
+    });
+    const request = requestAfter(draft);
+    request.candidate.content.sharingConditions[0]!.publishedRevision = 2;
+    request.candidate.content.sharingConditions[0]!.contractFingerprint = `sha256:${"1".repeat(64)}`;
+    expect(compareDefinitionVersionImpact(request)).toMatchObject({ outcome: "no_change" });
+  });
+
   test("proves directional component addition and removal invariants", () => {
     const moduleDirections: Array<{
       add: (draft: ModuleDraft) => void;
