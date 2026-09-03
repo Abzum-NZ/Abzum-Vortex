@@ -21,6 +21,7 @@
     "dev": "turbo run dev --filter=@vortex/web",
     "auth:local:prepare": "node tooling/supabase/ensure-local-signing-key.mjs",
     "auth:local:proof": "pnpm auth:local:prepare && node runtime/identity/tooling/local-auth-proof.mjs",
+    "auth:testing:proof": "node runtime/identity/tooling/testing-auth-proof.mjs",
     "db:start": "pnpm auth:local:prepare && supabase start",
     "db:stop": "supabase stop",
     "db:reset": "pnpm auth:local:prepare && supabase db reset",

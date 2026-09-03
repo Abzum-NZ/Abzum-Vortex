@@ -228,12 +228,13 @@ session-mode port and database, then supplies the separate raw password through 
 runtime process never receives a migration credential, and a migration process requests only its
 three reviewed database values.
 
-### Names the browser can read
+### Public Supabase configuration
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` carry that prefix because
-Next.js hands only prefixed variables to browser code, and the Supabase client that signs people in
-and delivers live updates runs in the browser. Both values are public by design. Removing the prefix
-would not make them secret. It would only hide them from the code that needs them.
+The neutral authentication journeys run in Next.js server actions and read
+`VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`, and `VORTEX_SITE_URL` only on the server.
+The publishable key remains public by design, but it does not need to be included in the current
+browser bundle. A later browser feature such as Realtime may add separately reviewed
+`NEXT_PUBLIC_` variables when browser code genuinely needs those public values.
 
 **No Supabase service-role key exists anywhere, deliberately.** The application connects as the
 application database account over PostgreSQL, which the

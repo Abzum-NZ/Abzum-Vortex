@@ -79,8 +79,11 @@ const createAuthorityClient = (configuration: IdentityJourneyConfiguration): Sup
 
 const validEmail = (value: string): boolean => value.length <= 320 && EMAIL_PATTERN.test(value);
 
-const validPassword = (value: string): boolean =>
+const validPasswordLength = (value: string): boolean =>
   value.length >= MINIMUM_PASSWORD_LENGTH && value.length <= 1_024;
+
+const validNewPassword = (value: string): boolean =>
+  validPasswordLength(value) && /[A-Za-z]/u.test(value) && /\d/u.test(value);
 
 const confirmationUrl = (configuration: IdentityJourneyConfiguration): string =>
   new URL("/auth/confirm", configuration.siteUrl).toString();
@@ -93,7 +96,7 @@ export const requestRegistration = async (
   email: string,
   password: string,
 ): Promise<IdentityJourneyResult> => {
-  if (!validEmail(email) || !validPassword(password)) {
+  if (!validEmail(email) || !validNewPassword(password)) {
     return { ok: false, code: "vortex.identity.invalid_input" };
   }
 
@@ -118,7 +121,7 @@ export const signInWithPassword = async (
   email: string,
   password: string,
 ): Promise<VerifiedSignInResult> => {
-  if (!validEmail(email) || !validPassword(password)) {
+  if (!validEmail(email) || !validPasswordLength(password)) {
     return { ok: false, code: "vortex.identity.invalid_input" };
   }
 
@@ -178,7 +181,7 @@ export const completePasswordRecovery = async (
   tokenHash: string,
   password: string,
 ): Promise<IdentityJourneyResult> => {
-  if (tokenHash.length < 16 || tokenHash.length > 2_048 || !validPassword(password)) {
+  if (tokenHash.length < 16 || tokenHash.length > 2_048 || !validNewPassword(password)) {
     return { ok: false, code: "vortex.identity.invalid_input" };
   }
 

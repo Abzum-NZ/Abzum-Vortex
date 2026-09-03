@@ -31,9 +31,10 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
           type="password"
           autoComplete="new-password"
           minLength={8}
+          pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
           required
         />
-        <p className="auth-hint">Use at least 8 characters.</p>
+        <p className="auth-hint">Use at least 8 characters, including a letter and a number.</p>
         <SubmitButton pendingLabel="Creating account…">Create account</SubmitButton>
       </form>
     </AuthShell>

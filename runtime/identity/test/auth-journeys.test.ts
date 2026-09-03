@@ -83,6 +83,21 @@ describe("identity authority journeys", () => {
     ).resolves.toEqual({ ok: false, code: "vortex.identity.invalid_credentials" });
   });
 
+  it("requires a letter and number only when creating or replacing a password", async () => {
+    await expect(
+      requestRegistration(configuration, "person@example.test", "letters-only"),
+    ).resolves.toEqual({ ok: false, code: "vortex.identity.invalid_input" });
+    await expect(
+      completePasswordRecovery(configuration, "a".repeat(64), "12345678"),
+    ).resolves.toEqual({ ok: false, code: "vortex.identity.invalid_input" });
+    await expect(
+      signInWithPassword(configuration, "person@example.test", "legacy-pass"),
+    ).resolves.toEqual({ ok: true, accessToken: "verified-access-token" });
+
+    expect(authority.signUp).not.toHaveBeenCalled();
+    expect(authority.verifyOtp).not.toHaveBeenCalled();
+  });
+
   it("confirms email and completes recovery without persisting a session", async () => {
     const tokenHash = "a".repeat(64);
 

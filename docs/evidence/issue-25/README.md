@@ -29,6 +29,7 @@ Run from the repository root:
 
 ```text
 pnpm auth:local:proof
+pnpm auth:testing:proof
 pnpm --filter @vortex/identity test
 pnpm --filter @vortex/identity typecheck
 pnpm --filter @vortex/web typecheck
@@ -36,3 +37,12 @@ pnpm --filter @vortex/web build
 ```
 
 The local proof drives the real App Router pages and server actions over HTTP. It creates an isolated disposable identity, confirms it through the server-side token hash, verifies the issued ES256 token through Vortex, requests recovery without disclosing account existence, changes the password, proves the old password fails and proves the new password succeeds. Confirmation and recovery token hashes travel in browser-only URL fragments and server-action request bodies, not request URLs, access logs or referrers. Generated credentials and tokens stay in process memory and are never printed or committed.
+
+The hosted proof uses the exact Testing deployment and reads these values from the invoking secret
+environment: `VORTEX_TESTING_AUTH_API_URL`, `VORTEX_TESTING_AUTH_PUBLISHABLE_KEY`,
+`VORTEX_TESTING_SITE_URL`, `VORTEX_TESTING_AUTH_EMAIL`,
+`VORTEX_TESTING_MAILTRAP_API_TOKEN`, `VORTEX_TESTING_MAILTRAP_ACCOUNT_ID`,
+`VORTEX_TESTING_MAILTRAP_INBOX_ID`, and `VORTEX_PRODUCTION_AUTH_API_URL`. The email setting may contain `{proof_id}`; otherwise the
+proof adds a unique plus-address component. The Mailtrap token is read-only and the Production inputs
+are public authority metadata used only for a local issuer comparison. The Testing token is never sent
+to Production. No Production email, Auth request or write occurs.
