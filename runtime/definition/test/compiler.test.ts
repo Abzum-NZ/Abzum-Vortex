@@ -48,8 +48,7 @@ const draftMetadata = {
 } as const;
 const savedConditionRevisions = [
   {
-    definitionKey: "vortex.service_desk.cases",
-    alias: "share_case_priority",
+    conditionId: "a4b5546d-8a54-4003-adc4-ddb8b0d7257d",
     revision: 1,
   },
 ] as const;

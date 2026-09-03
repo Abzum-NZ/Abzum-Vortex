@@ -1041,14 +1041,7 @@ const compareSharingCondition = (
     "key",
     id,
   );
-  for (const key of [
-    "sourceRecordTypeId",
-    "publishedRevision",
-    "contractFingerprint",
-    "parameters",
-    "condition",
-    "declaredFieldIds",
-  ])
+  for (const key of ["sourceRecordTypeId", "parameters", "condition", "declaredFieldIds"])
     pushChange(
       reasons,
       previous[key],

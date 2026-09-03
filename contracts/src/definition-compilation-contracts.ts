@@ -9,6 +9,7 @@ import {
   applicationRootIdSchema,
   builderKeySchema,
   connectionTypeIdSchema,
+  containedComponentIdSchema,
   fingerprintSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
@@ -110,8 +111,7 @@ export const definitionDraftMetadataSchema = z
 
 export const savedConditionRevisionAssignmentSchema = z
   .object({
-    definitionKey: namespacedKeySchema,
-    alias: builderKeySchema,
+    conditionId: containedComponentIdSchema,
     revision: revisionSchema,
   })
   .strict();

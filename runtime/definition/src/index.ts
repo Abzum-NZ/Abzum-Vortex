@@ -14,3 +14,4 @@ export * from "./compiler";
 export * from "./validation";
 export * from "./definition-store";
 export * from "./source-identities";
+export * from "./saved-condition-revisions";

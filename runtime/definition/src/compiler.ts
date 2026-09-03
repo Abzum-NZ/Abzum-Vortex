@@ -2186,14 +2186,19 @@ function compileModule(
     const record = qualifiedForRecord(String(saved.source_record_type));
     const localField = (alias: string) => resolution.field(record, alias);
     const compiledCondition = condition(saved.condition, localField);
+    const conditionId = resolution.id(
+      definitionKey,
+      "sharing_condition",
+      String(saved.id),
+      "content",
+    );
     const revisionMatches = savedConditionRevisions.filter(
-      (assignment) =>
-        assignment.definitionKey === definitionKey && assignment.alias === String(saved.id),
+      (assignment) => assignment.conditionId === conditionId,
     );
     if (revisionMatches.length !== 1)
       fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
     const resolved = {
-      conditionId: resolution.id(definitionKey, "sharing_condition", String(saved.id), "content"),
+      conditionId,
       sourceRecordTypeId: resolution.recordType(record).recordTypeId,
       key: saved.key,
       publishedRevision: revisionMatches[0]!.revision,
