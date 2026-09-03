@@ -210,25 +210,52 @@ require_variable VORTEX_DOPPLER_TOKEN
 require_variable VORTEX_DOPPLER_PROJECT
 require_variable VORTEX_DOPPLER_CONFIG
 
-if [ "${VORTEX_SECRETS_LOADED:-false}" != "true" ]; then
-  export DOPPLER_TOKEN="$VORTEX_DOPPLER_TOKEN"
-  export VORTEX_SECRETS_LOADED=true
-  exec doppler run \
+export DOPPLER_TOKEN="$VORTEX_DOPPLER_TOKEN"
+read_doppler_secret() {
+  doppler secrets get "$1" \
+    --plain \
     --project "$VORTEX_DOPPLER_PROJECT" \
     --config "$VORTEX_DOPPLER_CONFIG" \
-    -- "$0"
-fi
+    --no-check-version \
+    --no-read-env \
+    --silent
+}
 
+export VORTEX_DATABASE_PASSWORD="$(read_doppler_secret DATABASE_PASSWORD)"
+export VORTEX_DATABASE_CONNECTION="$(read_doppler_secret DATABASE_URL)"
+export VORTEX_DATABASE_SSL_ROOT_CERT="$(read_doppler_secret VORTEX_DATABASE_SSL_ROOT_CERT)"
 unset DOPPLER_TOKEN VORTEX_DOPPLER_TOKEN
-require_variable VORTEX_DATABASE_USER
 require_variable VORTEX_DATABASE_PASSWORD
-require_variable VORTEX_SUPABASE_PROJECT_REF
+require_variable VORTEX_DATABASE_CONNECTION
 require_variable VORTEX_DATABASE_SSL_ROOT_CERT
-[[ "$VORTEX_DATABASE_USER" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] || die "database role name is invalid"
-[[ "$VORTEX_SUPABASE_PROJECT_REF" =~ ^[a-z0-9]{20}$ ]] || die "Supabase project reference is invalid"
 
-expected_host="db.${VORTEX_SUPABASE_PROJECT_REF}.supabase.co"
-database_url="postgresql://${VORTEX_DATABASE_USER}@${expected_host}:5432/postgres?sslmode=verify-full"
+connection_without_scheme="${VORTEX_DATABASE_CONNECTION#postgresql://}"
+[ "$connection_without_scheme" != "$VORTEX_DATABASE_CONNECTION" ] ||
+  die "database connection must use postgresql"
+connection_credentials="${connection_without_scheme%%@*}"
+connection_host_path="${connection_without_scheme#*@}"
+[ "$connection_host_path" != "$connection_without_scheme" ] ||
+  die "database connection has no host"
+database_user="${connection_credentials%%:*}"
+connection_password="${connection_credentials#*:}"
+[ "$connection_password" != "$connection_credentials" ] ||
+  die "database connection has no password"
+database_host_port="${connection_host_path%%/*}"
+database_name="${connection_host_path#*/}"
+database_host="${database_host_port%:*}"
+database_port="${database_host_port##*:}"
+
+[[ "$database_user" =~ ^postgres\.[a-z0-9]{20}$ ]] ||
+  die "database connection does not name a Supabase project owner"
+[[ "$database_host" =~ ^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$ ]] ||
+  die "database connection does not name the Supabase session pooler"
+[ "$database_port" = "5432" ] || die "database connection is not session mode"
+[ "$database_name" = "postgres" ] || die "database connection does not name postgres"
+[ "$connection_password" = "$VORTEX_DATABASE_PASSWORD" ] ||
+  die "database connection password does not match DATABASE_PASSWORD"
+unset VORTEX_DATABASE_CONNECTION connection_password
+
+database_url="postgresql://${database_user}@${database_host}:5432/postgres?sslmode=verify-full"
 readonly database_url
 
 database_ssl_root_cert="${workdir}/supabase-root.crt"

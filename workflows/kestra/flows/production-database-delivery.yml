@@ -73,8 +73,8 @@ tasks:
       VORTEX_TESTING_EVIDENCE_SUPABASE_CLI_VERSION: "{{ outputs.load_testing_evidence.value.supabase_cli_version }}"
       VORTEX_TESTING_EVIDENCE_POSTGRES_MAJOR: "{{ outputs.load_testing_evidence.value.postgres_major }}"
       VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_PRODUCTION_DOPPLER_TOKEN') }}"
-      VORTEX_DOPPLER_PROJECT: abzum-kestra
-      VORTEX_DOPPLER_CONFIG: database-prd
+      VORTEX_DOPPLER_PROJECT: abzum-vortex
+      VORTEX_DOPPLER_CONFIG: prd
       VORTEX_LINT_SCHEMAS: public
     outputFiles:
       - delivery-evidence.json

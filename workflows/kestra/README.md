@@ -42,8 +42,8 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `KESTRA_PUBLIC_URL` | The public Kestra address used in generated links |
 | `VORTEX_TESTING_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of the unpredictable key for the protected Testing push webhook |
 | `VORTEX_PRODUCTION_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of a different unpredictable key for the protected Production push webhook |
-| `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the service token limited to `abzum-kestra` / `database-stg` |
-| `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate service token limited to `abzum-kestra` / `database-prd` |
+| `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the service token limited to `abzum-vortex` / `stg` |
+| `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate service token limited to `abzum-vortex` / `prd` |
 
 They are set in Coolify and held in the secret manager. The API credential is also set on the web
 application so it can reach the engine.
@@ -56,13 +56,16 @@ execution logs.
 
 Webhook keys authenticate only the delivery endpoints; they do not replace the branch, repository,
 commit, migration-set, or approval checks performed by the flow. The two Doppler tokens are runtime
-bootstrap credentials. Doppler supplies only the narrow database role and password, project
-reference, and root certificate to the delivery process.
+bootstrap credentials. The delivery process asks Doppler only for the existing database connection
+and password plus the Supabase root certificate.
 
-The two database-delivery configs contain only `VORTEX_DATABASE_USER`,
-`VORTEX_DATABASE_PASSWORD`, `VORTEX_SUPABASE_PROJECT_REF`, and
-`VORTEX_DATABASE_SSL_ROOT_CERT`. The delivery script validates those values and constructs the only
-allowed address itself: the project's direct host on port 5432, the `postgres` database, and
+Database delivery reuses the `abzum-vortex` project's `stg` and `prd` configs. Browser-verified syncs
+map `stg` to Vercel Preview and `prd` to Vercel Production, so the delivery script retrieves only its
+three named values rather than importing the whole application config into the migration process.
+Those values are `DATABASE_URL`, `DATABASE_PASSWORD`, and
+`VORTEX_DATABASE_SSL_ROOT_CERT`. The script accepts only Supabase's IPv4 session pooler on port 5432,
+the `postgres.<project-ref>` owner and the `postgres` database. It confirms that the separately read
+password matches the configured address, then rebuilds a credential-free address with
 `sslmode=verify-full`. The password travels through `PGPASSWORD`, not a command argument or logged
 address. The certificate is the project Server root certificate downloaded from Supabase Database
 Settings. Backup, restore, web, and connection-provider secrets remain in other configs, so a
@@ -93,6 +96,15 @@ migration set before opening the Production database connection.
 Both flows queue at concurrency one. Supabase's migration history makes delivery of the same commit
 idempotent; the repository does not create another migration ledger. Production never runs seed data,
 and neither flow resets a shared database.
+
+An exceptional Testing-only recovery is a separate, explicitly authorised operation. Before it
+changes anything, it must prove that Testing contains no application tables, identities, storage
+buckets or files; record the exact existing migration history and legacy roles; and fingerprint
+Production through a read-only query. It may then remove only the verified legacy Testing objects and
+replay the reviewed migrations without seed data. Completion requires an exact migration-history
+match, all committed pgTAP assertions, clean Supabase security and performance advisers, and a second
+read-only Production fingerprint equal to the first. A mismatch stops the recovery. This permission
+never applies to Production and is not built into either delivery flow.
 
 The checked-in flow files are validated against the pinned Kestra image before review. Kestra 1.0.57
 currently reports its supported `Pause.onResume` field as deprecated during local validation even
