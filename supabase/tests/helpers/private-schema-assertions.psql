@@ -3,7 +3,8 @@
 create or replace function pg_temp.vortex_private_schema_assertions(
   candidate_schema text,
   expected_owner name default 'postgres',
-  runtime_may_use boolean default false
+  runtime_may_use boolean default false,
+  request_may_use boolean default true
 )
 returns setof text
 language plpgsql
@@ -43,8 +44,8 @@ begin
     'vortex_runtime schema use matches the declared exception for ' || candidate_schema
   );
   return next extensions.ok(
-    pg_catalog.has_schema_privilege('vortex_request', candidate_schema, 'USAGE'),
-    'vortex_request can use ' || candidate_schema
+    pg_catalog.has_schema_privilege('vortex_request', candidate_schema, 'USAGE') = request_may_use,
+    'vortex_request schema use matches the declared service boundary for ' || candidate_schema
   );
   return next extensions.ok(
     not pg_catalog.has_schema_privilege('public', candidate_schema, 'CREATE'),

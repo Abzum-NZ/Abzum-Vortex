@@ -295,9 +295,15 @@ say "applying pending migrations through Supabase migration history"
     --ext .sql \
     --recurse \
     supabase/tests
+  if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
+    : >"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+  else
+    VORTEX_CONCURRENCY_DATABASE_URL="$database_url" \
+      bash supabase/tests/tenant-organization-concurrency.test.sh
+  fi
   supabase db lint \
     --db-url "$database_url" \
-    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context}" \
+    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context,vortex_identity}" \
     --level warning \
     --fail-on error
 )

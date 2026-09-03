@@ -28,6 +28,7 @@ import {
   listArrangementKeys,
   listArrangementSchema,
   organizationAccountSetSchema,
+  organizationSchema,
   pageTypeKeys,
   pageTypeSchema,
   pageDefinitionSchema,
@@ -49,6 +50,7 @@ import {
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
   supabaseIdentityClaimsSchema,
+  tenantSchema,
   verifiedIdentitySchema,
 } from "../src";
 import type {
@@ -59,6 +61,88 @@ import type {
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
 const fingerprint = `sha256:${"a".repeat(64)}`;
+
+describe("tenant and organisation persistence contracts", () => {
+  const tenant = {
+    tenantId: id(700),
+    shortName: "tenant_one",
+    displayName: "Tenant One",
+    state: "active",
+    createdAt: "2026-09-03T12:00:00.000Z",
+    createdBy: id(701),
+    stateChangedAt: "2026-09-03T12:00:00.000Z",
+    revision: 1,
+  } as const;
+
+  const organization = {
+    organizationId: id(702),
+    tenantId: tenant.tenantId,
+    parentOrganizationId: id(703),
+    shortName: "workspace_one",
+    displayName: "Workspace One",
+    state: "active",
+    createdAt: "2026-09-03T12:05:00.000Z",
+    createdBy: id(701),
+    stateChangedAt: "2026-09-03T12:05:00.000Z",
+    revision: 1,
+  } as const;
+
+  test("accepts complete neutral persistence records", () => {
+    expect(tenantSchema.safeParse(tenant).success).toBe(true);
+    expect(organizationSchema.safeParse(organization).success).toBe(true);
+    expect(tenantSchema.parse({ ...tenant, displayName: "  Tenant One  " }).displayName).toBe(
+      "Tenant One",
+    );
+  });
+
+  test("requires a creation actor and positive revision", () => {
+    const tenantWithoutCreator: Record<string, unknown> = { ...tenant };
+    const organizationWithoutRevision: Record<string, unknown> = { ...organization };
+    delete tenantWithoutCreator.createdBy;
+    delete organizationWithoutRevision.revision;
+
+    expect(tenantSchema.safeParse(tenantWithoutCreator).success).toBe(false);
+    expect(tenantSchema.safeParse({ ...tenant, revision: 0 }).success).toBe(false);
+    expect(organizationSchema.safeParse(organizationWithoutRevision).success).toBe(false);
+    expect(organizationSchema.safeParse({ ...organization, revision: -1 }).success).toBe(false);
+  });
+
+  test("refuses self-parenting and state changes before creation", () => {
+    expect(
+      organizationSchema.safeParse({
+        ...organization,
+        parentOrganizationId: organization.organizationId,
+      }).success,
+    ).toBe(false);
+    expect(
+      tenantSchema.safeParse({
+        ...tenant,
+        stateChangedAt: "2026-09-03T11:59:59.000Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      organizationSchema.safeParse({
+        ...organization,
+        stateChangedAt: "2026-09-03T12:04:59.000Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      tenantSchema.safeParse({
+        ...tenant,
+        createdAt: "2026-09-03T12:00:00.000+12:00",
+        stateChangedAt: "2026-09-03T00:00:01.000Z",
+      }).success,
+    ).toBe(true);
+    expect(
+      organizationSchema.safeParse({
+        ...organization,
+        createdAt: "2026-09-03T12:00:00.000+12:00",
+        stateChangedAt: "2026-09-02T23:59:59.000Z",
+      }).success,
+    ).toBe(false);
+  });
+});
+
 const fieldBase = {
   fieldId: id(1),
   key: "example",
