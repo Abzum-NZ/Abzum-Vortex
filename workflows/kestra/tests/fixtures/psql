@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+[ "${PGPASSWORD:-}" = "placeholder-password" ]
+[ "$1" = "$VORTEX_TEST_EXPECTED_DATABASE_URL" ]
+
+case "$*" in
+  *server_version_num*) printf '170000\n' ;;
+  *supabase_migrations.schema_migrations*)
+    if [ "${VORTEX_TEST_REMOTE_MIGRATION_MISMATCH:-false}" = "true" ]; then
+      printf '20000101000000_unreviewed.sql\n'
+    else
+      git -C "${VORTEX_TEST_SOURCE_REPOSITORY:-/source}" \
+        ls-tree -r --name-only "$VORTEX_GITHUB_COMMIT" -- supabase/migrations |
+        LC_ALL=C sort |
+        sed 's#^supabase/migrations/##'
+    fi
+    ;;
+  *) echo "unexpected psql invocation" >&2; exit 1 ;;
+esac

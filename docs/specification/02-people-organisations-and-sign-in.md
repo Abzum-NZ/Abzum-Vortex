@@ -61,6 +61,12 @@ An ordinary identity token contains only stable global sign-in facts: identity, 
 
 The identity token proves the person; it does not grant tenant administration, organisation membership, or data access. A [cross-cluster shared-record request](17-runtime-storage-and-caching.md#cross-cluster-request) carries a short-lived assertion signed by the recipient cluster and is still evaluated by the source organisation.
 
+### First-release sign-in methods
+
+The first release supports verified email address and password, email verification, and password recovery. Anonymous, SMS, social-provider, passkey, and passwordless sign-in are disabled. Adding a sign-in method later requires an explicit identity/security change; an application definition cannot change how the environment-wide Identity Authority proves a person.
+
+Supabase's restricted development sender is Local-only. Testing and Production use an approved SMTP provider with credentials supplied through [Doppler](19-operations-backup-and-recovery.md#secrets), never through a definition, browser value, fixture, or committed file.
+
 ## Invitations and teams
 
 - An invitation names one organisation, one email address, an expiry, and proposed local roles or teams.

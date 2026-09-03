@@ -60,7 +60,7 @@ stateDiagram-v2
 
 - Editing changes only the draft.
 - Publishing creates a numbered, immutable snapshot of the whole module or application and its contained components.
-- A published snapshot records its author, time, source draft revision, validation result, and content fingerprint.
+- A published snapshot records its complete immutable authored source and source-contract version as well as its canonical runtime content, author, time, source draft revision, validation result, and both source and canonical-content fingerprints.
 - Restoring an older version creates a new draft. It never rewrites publication history.
 - A live request resolves one published module/application version set and uses it for the full request.
 - An application-to-module reference uses a stable module identifier plus an allowed version range or an explicitly pinned version. Publication records the exact resolved module version.

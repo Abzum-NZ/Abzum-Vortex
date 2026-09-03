@@ -67,7 +67,7 @@ Required work:
 - Maintain the dependency-complete [CRM and Service Desk fixture baseline](../specification/appendices/worked-examples.md), including every module, action, connection type, interface, theme, role, workflow, pipeline, page, query, and cross-application scenario. [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) makes every non-defaultable author choice explicit and proves deterministic, lossless conversion to the canonical contracts before Phase 2 begins.
 - Define and validate the [record-table allocation](../specification/17-runtime-storage-and-caching.md#record-table-allocation): one table per compatible record-type storage lineage, explicit organisation/application row scope, stable physical tokens, and collision cases covering same-named applications in different organisations.
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
-- Close the completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and move migration/access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) to the start of Phase 2, before the first database migration.
+- The completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) is closed. The Supabase migration and database-test foundation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) starts Phase 2 before the first service schema.
 - Update [Phase 1 epic #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9) so every active M0 gate is a native dependency.
 - Assign the existing Priority values to active work, add a real Bugs filter, add roadmap dates when scheduling begins, use native blocked-by links, and add epic completion criteria on the [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1).
 
@@ -120,6 +120,8 @@ Exit proof:
 
 **Needs:** Phase 1.
 
+**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) first; database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) and the identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) can then proceed independently. Tenant and organisation structure [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) follows #28. Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) follows #23; organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) follow both #23 and #25. Native GitHub dependencies enforce the order. Work remains in the backlog until its blocker closes.
+
 **Outcome:** A person can sign in, choose an organisation, tenant administrators can manage a safe organisation hierarchy, and authorised builders can draft, validate, publish and restore modules and applications independently.
 
 Build:
@@ -130,6 +132,7 @@ Build:
 - Independent module and application draft concurrency, release versions, validation, immutable revision publication, dependency graph and restore. Themes, pages, workflows, interfaces and application roles remain contained in the application; organisation roles remain live access data.
 - Platform bootstrap definitions required before the Page service exists.
 - Organisation and environment context established at the start of every database transaction.
+- The official Supabase CLI project, ordered migration history, local pgTAP/lint gate, and Kestra Testing/Production delivery path exist before a service schema is introduced.
 
 Exit proof:
 
@@ -138,6 +141,7 @@ Exit proof:
 - A stale draft cannot overwrite a later edit.
 - Publishing is atomic and a restored version becomes a new draft.
 - Definition and identity tables pass their database separation tests.
+- The delivery engine is bootstrapped from one exact reviewed commit, produces successful Testing evidence after that commit merges to `testing`, and returns Coolify to the same revision on protected `main` before ordinary automatic delivery begins.
 - Tenant administrators can create and move organisations without gaining record access, and cross-tenant or cyclic hierarchy moves are refused.
 
 ## Phase 3 — Access
@@ -248,6 +252,8 @@ Exit proof:
 **Needs:** Phases 5 and 6.
 
 **Outcome:** Durable workflows and pipeline time targets execute with [Kestra](https://kestra.io/docs) authoritative for execution status while Vortex remains authoritative for application records and access.
+
+**Foundation order:** Before application-workflow execution [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) must align the pinned Kestra release and its state-database major on an officially supported combination. The change requires a verified off-host backup, a disposable restore rehearsal and a forward migration; an existing PostgreSQL data directory is never opened by an older major.
 
 Build:
 
@@ -433,5 +439,5 @@ The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follow
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/protected data handling/retention, entitlements/metering, and operations issues belong to those epics rather than Phase 10. Commercial applications do not block the generic platform roadmap.
 5. Extension-point use belongs to Phase 4 and standard-page replacement belongs to Phase 6; they are no longer deferred to distribution work.
 6. Priority is explicit on every project issue: `P0 — Critical`, `P1 — Next`, `P2 — Planned`, or `P3 — Later`. The Bugs view filters `label:bug`; roadmap dates and Iteration remain empty until work is genuinely scheduled.
-7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) is closed. Migration and access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) is a Phase 2 prerequisite blocked by Phase 1.
+7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) is closed. Supabase migration and database-test foundation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) is the active first Phase 2 task.
 8. Every later board change follows the current specification and keeps the decision register limited to genuinely open business choices.
