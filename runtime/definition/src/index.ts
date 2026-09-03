@@ -13,3 +13,4 @@ export * from "./compilation-error";
 export * from "./compiler";
 export * from "./validation";
 export * from "./definition-store";
+export * from "./source-identities";

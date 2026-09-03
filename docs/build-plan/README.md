@@ -138,7 +138,8 @@ Build:
 - Identity Authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) owns token verification. Organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) consume the verified identity identifier and email; sessions [#26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26) consume the same result and own durable cookies, refresh, sign-out and revocation.
 - Supabase exclusively owns `auth.*`; repository migrations never create or repair Supabase Auth tables.
 - Independent module and application draft concurrency, release versions, validation, immutable revision publication, dependency graph and restore. Themes, pages, workflows, interfaces and application roles remain contained in the application; organisation roles remain live access data.
-- Platform bootstrap definitions required before the Page service exists.
+- Database-allocated permanent component identities and append-only alias history derived from the same parsed-source catalogue as compilation. Nested identities use a stable parent-owner scope so parent-key changes preserve child identity while current key-based scopes continue to resolve authored references.
+- No starter Module or Application root is seeded in Phase 2. Representative definitions remain test-only until an owning platform feature specifies a required platform definition.
 - One closed request context established for each protected transaction through a non-owning request role. Vercel uses the Supabase transaction pooler with prepared statements disabled; Kestra keeps a separately credentialed session-pooler path for migrations and database verification.
 - The official Supabase CLI project, ordered migration history, local pgTAP/lint gate, and Kestra Testing/Production delivery path exist before a service schema is introduced. Kestra runs the same committed pgTAP files through a pinned in-image `pg_prove` harness, so operated verification does not require the host Docker socket.
 
@@ -197,7 +198,7 @@ Build:
 
 Exit proof:
 
-- CRM records pass create/change/conflict/delete/restore tests.
+- Representative fixture records pass create/change/conflict/delete/restore tests without shipping fixture-specific behaviour.
 - Parent deletion is refused for unresolved required links except explicit dependent-child soft-delete; soft-deleted unique values remain reserved; mixed-currency totals refuse; and incompatible field changes follow add/migrate/switch/retire.
 - A failed save produces no record change, activity entry or event.
 

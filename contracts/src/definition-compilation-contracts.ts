@@ -46,6 +46,7 @@ export const sourceIdentityKindSchema = z.enum([
   "interface_operation",
   "public_address",
 ]);
+export type SourceIdentityKind = z.infer<typeof sourceIdentityKindSchema>;
 
 export const sourceIdentityAssignmentSchema = z
   .object({
@@ -53,7 +54,7 @@ export const sourceIdentityAssignmentSchema = z
     scope: z.string().min(1).max(500),
     kind: sourceIdentityKindSchema,
     componentOwner: z.string().min(1).max(240),
-    alias: z.string().min(1).max(160),
+    alias: z.string().min(1).max(500),
     identifier: platformIdSchema,
   })
   .strict();

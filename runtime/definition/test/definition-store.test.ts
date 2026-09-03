@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fingerprintCanonicalValue } from "../src/canonical-json";
 import { createDefinitionStore } from "../src/definition-store";
 import type { DefinitionStoreError } from "../src/definition-store";
+import { extractSourceIdentityRequirements } from "../src/source-identities";
 
 const source = JSON.parse(
   fs.readFileSync(
@@ -85,6 +86,7 @@ describe("Definition store", () => {
       source.key,
       JSON.stringify(parsedSource),
       fingerprintCanonicalValue(source),
+      JSON.stringify(extractSourceIdentityRequirements(parsedSource)),
     ]);
   });
 
@@ -105,6 +107,7 @@ describe("Definition store", () => {
       1,
       JSON.stringify(parsedSource),
       fingerprintCanonicalValue(source),
+      JSON.stringify(extractSourceIdentityRequirements(parsedSource)),
     ]);
   });
 

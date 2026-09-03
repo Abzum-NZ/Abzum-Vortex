@@ -71,6 +71,12 @@ The database-free [version-impact contract](version-impact-policy.md) accepts on
 
 Contained components have a permanent identifier unique inside the module or application, a builder key, and their typed content. They do not carry a separate live pointer. Platform connection types and themes are identified by platform release and catalogue version; organisation roles and connection instances are live administrative data rather than published definitions. A connection type is authored through the same strict source boundary for platform maintainers, but compiles into a platform catalogue item rather than becoming a third customer-managed publishable definition kind.
 
+### Definition source identity evidence
+
+Each customer-managed Definition root has one permanent source identity whose identifier is the root identifier. Every contained source component has one database-allocated permanent identifier, definition root, component kind, authored owner `id`, stable owner scope, creation time, and creating actor. The stable owner scope uses the owning component's `id` for nested fields, relationships, guided steps, workflow nodes, and interface operations; it never depends on a mutable parent key.
+
+Each authentic source alias has the Definition root, current compiler lookup scope, component kind, alias, stable owner scope, owner `id`, permanent identifier, creation time, and creating actor. Aliases include authored component ids, readable keys where present, root aliases, and public paths where present. Owner and alias evidence is append-only. Removing a component does not release an identifier or alias, and a key or path rename adds an alias rather than changing identity. A historical alias cannot be reassigned. Callers provide only validated authored source; the trusted Definition service derives requirements, while PostgreSQL allocates identifiers and records context-derived evidence atomically with root creation or a successful expected-revision draft save.
+
 ## Tenant, identity and organisation-account records
 
 ### Tenant

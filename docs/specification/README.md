@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.3
+**Status:** Approved specification 2.4
 **Date:** 4 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
@@ -94,6 +94,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.4 | Approved | 4 September 2026 | Defined permanent Definition source identities as database-allocated, append-only owner and alias evidence. Added stable parent-owner scope beside current compiler lookup scope so parent-key changes preserve nested component identity, and confirmed that Phase 2 seeds no starter Module or Application without an owning platform requirement. |
 | 2.3 | Approved | 4 September 2026 | Corrected publication so a Module or Application may append a breaking inert release without inspecting or retargeting existing consumers. Existing applications, installations and grants remain pinned to their exact recorded releases; compatibility and storage migration are checked only when the owning operation deliberately adopts the newer release. |
 | 2.2 | Approved | 3 September 2026 | Added a governed Model Context Protocol surface as a required alternative way to use every authorised interface capability. Defined a permission-filtered semantic view of navigation, forms, controls and actions; shared UI/MCP execution; optional live interface control; OAuth-bound external-agent sessions; and parity acceptance without adding an embedded model or assistant. |
 | 2.1 | Approved | 2 September 2026 | Established the platform-primitives-only boundary. Removed commercial billing, ordinary approvals, business announcements, organisation business profiles and privacy case management from core; retained only generic entitlements, metering, grant consent, protected data handling and operational status. Simplified the workflow catalogue, moved motion implementation to the platform UI system, and corrected public caller contexts and safe errors. |

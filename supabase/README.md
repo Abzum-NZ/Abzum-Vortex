@@ -63,9 +63,13 @@ refused row exists, but it never represents an application success path.
 
 Before the Access service is available, the private Definition entry points accept only a validated
 system context. They derive tenant, organisation, actor, and time from trusted context/database state,
-allocate root identifiers inside PostgreSQL, and expose no underlying table permission. The trusted
-Definition service supplies parsed authored source and an expected draft revision, but no permanent
-identifier, organisation, actor, timestamp, or stored publication evidence comes from its caller.
+allocate root and contained-component identifiers inside PostgreSQL, and expose no underlying table
+permission. The trusted Definition service supplies parsed authored source, source-derived identity
+requirements, and an expected draft revision, but no permanent identifier, organisation, actor,
+timestamp, or stored publication evidence comes from its caller. Source owner and alias rows are
+append-only. Nested components use a stable parent-owner scope alongside their current key-based
+compiler lookup scope, so a parent-key rename preserves child identifiers and retains every historical
+alias.
 
 ### Private service-schema pattern
 

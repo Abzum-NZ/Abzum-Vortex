@@ -17,8 +17,8 @@ select has_table('vortex_definition', 'roots', 'Definition root storage exists')
 select has_table('vortex_definition', 'drafts', 'Definition draft storage exists');
 select tables_are(
   'vortex_definition',
-  array['drafts', 'roots'],
-  'the first Definition storage slice contains only roots and drafts'
+  array['drafts', 'roots', 'source_identities', 'source_identity_aliases'],
+  'Definition storage contains roots, drafts and permanent source identities'
 );
 select columns_are(
   'vortex_definition',
@@ -205,7 +205,7 @@ select is(
 select ok(
   pg_catalog.has_function_privilege(
     'vortex_request',
-    'vortex_definition.create_root(text,text,jsonb,text)',
+    'vortex_definition.create_root(text,text,jsonb,text,jsonb)',
     'EXECUTE'
   ),
   'request may create roots only through the exact entry point'
@@ -213,7 +213,7 @@ select ok(
 select ok(
   pg_catalog.has_function_privilege(
     'vortex_request',
-    'vortex_definition.save_draft(uuid,bigint,jsonb,text)',
+    'vortex_definition.save_draft(uuid,bigint,jsonb,text,jsonb)',
     'EXECUTE'
   ),
   'request may save drafts only through the exact entry point'
@@ -253,20 +253,21 @@ select is(
     where function.pronamespace = 'vortex_definition'::regnamespace
       and function.proconfig @> array['search_path=""']
   ),
-  5,
+  7,
   'every Definition function fixes an empty search path'
 );
 select has_function(
   'vortex_definition',
   'create_root',
-  array['text', 'text', 'jsonb', 'text'],
+  array['text', 'text', 'jsonb', 'text', 'jsonb'],
   'root creation has no caller-supplied root identifier argument'
 );
 select is(
   (
     select count(*)::integer
     from pg_catalog.pg_proc as function
-    where function.oid = 'vortex_definition.create_root(text,text,jsonb,text)'::regprocedure
+    where function.oid =
+      'vortex_definition.create_root(text,text,jsonb,text,jsonb)'::regprocedure
       and 'uuid'::regtype::oid = any (function.proargtypes::oid[])
   ),
   0,
@@ -274,14 +275,14 @@ select is(
 );
 select is(
   pg_catalog.pg_get_function_result(
-    'vortex_definition.create_root(text,text,jsonb,text)'::regprocedure
+    'vortex_definition.create_root(text,text,jsonb,text,jsonb)'::regprocedure
   ),
   'TABLE(root_id uuid, organization_id uuid, kind text, definition_key text, draft_revision bigint, published_revision bigint, authored_source jsonb, source_contract_version text, source_fingerprint text, created_at timestamp with time zone, created_by uuid, updated_at timestamp with time zone, updated_by uuid)',
   'create returns the complete stored-draft contract'
 );
 select is(
   pg_catalog.pg_get_function_result(
-    'vortex_definition.save_draft(uuid,bigint,jsonb,text)'::regprocedure
+    'vortex_definition.save_draft(uuid,bigint,jsonb,text,jsonb)'::regprocedure
   ),
   'TABLE(root_id uuid, organization_id uuid, kind text, definition_key text, draft_revision bigint, published_revision bigint, authored_source jsonb, source_contract_version text, source_fingerprint text, created_at timestamp with time zone, created_by uuid, updated_at timestamp with time zone, updated_by uuid)',
   'save returns the complete stored-draft contract'
@@ -348,8 +349,31 @@ as $function$
   ))
 $function$;
 
+create function pg_temp.definition_root_requirements(
+  definition_key text,
+  root_alias text
+)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'definitionKey', definition_key,
+      'ownerScope', 'document',
+      'scope', 'document',
+      'kind', 'root',
+      'componentOwner', 'root',
+      'aliases', pg_catalog.jsonb_build_array(definition_key, root_alias)
+    )
+  )
+$function$;
+
 grant execute on function pg_temp.definition_test_context(text, uuid, uuid, uuid)
   to vortex_runtime;
+grant execute on function pg_temp.definition_root_requirements(text, text)
+  to vortex_request;
 grant usage on schema extensions to vortex_runtime, vortex_request;
 
 set local role vortex_runtime;
@@ -373,7 +397,8 @@ select is(
         "key":"vortex.shared.root",
         "body":{"order":["first","second"],"preserved":{"enabled":true}}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('a', 64)
+      'sha256:' || pg_catalog.repeat('a', 64),
+      pg_temp.definition_root_requirements('vortex.shared.root', 'shared_root')
     )
   ),
   1,
@@ -392,7 +417,8 @@ select is(
         "key":"vortex.shared.root",
         "body":{"pages":[]}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('b', 64)
+      'sha256:' || pg_catalog.repeat('b', 64),
+      pg_temp.definition_root_requirements('vortex.shared.root', 'shared_application')
     )
   ),
   1,
@@ -411,7 +437,8 @@ select throws_ok(
         "key":"vortex.shared.root",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('c', 64)
+      'sha256:' || pg_catalog.repeat('c', 64),
+      pg_temp.definition_root_requirements('vortex.shared.root', 'duplicate_root')
     )
   $$,
   '23505'::char(5),
@@ -514,7 +541,8 @@ select is(
         "key":"vortex.shared.root",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('d', 64)
+      'sha256:' || pg_catalog.repeat('d', 64),
+      pg_temp.definition_root_requirements('vortex.shared.root', 'other_org_root')
     )
   ),
   1,
@@ -564,7 +592,8 @@ select is(
         "key":"vortex.shared.root",
         "body":{"order":["second","first"],"preserved":{"enabled":false}}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('e', 64)
+      'sha256:' || pg_catalog.repeat('e', 64),
+      pg_temp.definition_root_requirements('vortex.shared.root', 'shared_root')
     )
   ),
   2::bigint,
@@ -583,7 +612,8 @@ select is(
         "key":"vortex.shared.root",
         "body":{"order":["stale"]}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('f', 64)
+      'sha256:' || pg_catalog.repeat('f', 64),
+      pg_temp.definition_root_requirements('vortex.shared.root', 'stale_attempt')
     )
   ),
   0,
@@ -602,7 +632,8 @@ select is(
         "key":"vortex.missing.root",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('9', 64)
+      'sha256:' || pg_catalog.repeat('9', 64),
+      pg_temp.definition_root_requirements('vortex.missing.root', 'missing_root')
     )
   ),
   0,
@@ -621,7 +652,8 @@ select throws_ok(
         "key":"vortex.shared.root",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('0', 64)
+      'sha256:' || pg_catalog.repeat('0', 64),
+      pg_temp.definition_root_requirements('vortex.shared.root', 'unsafe_revision')
     )
   $$,
   '22023'::char(5),
@@ -689,7 +721,8 @@ select throws_ok(
         "key":"vortex.shared.root",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('1', 64)
+      'sha256:' || pg_catalog.repeat('1', 64),
+      pg_temp.definition_root_requirements('vortex.shared.root', 'foreign_attempt')
     )
   $$,
   '42501'::char(5),
@@ -720,7 +753,8 @@ select throws_ok(
         "key":"vortex.context.mismatch",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('2', 64)
+      'sha256:' || pg_catalog.repeat('2', 64),
+      pg_temp.definition_root_requirements('vortex.context.mismatch', 'context_mismatch')
     )
   $$,
   '23503'::char(5),
@@ -751,7 +785,8 @@ select throws_ok(
         "key":"vortex.public.refused",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('3', 64)
+      'sha256:' || pg_catalog.repeat('3', 64),
+      pg_temp.definition_root_requirements('vortex.public.refused', 'public_refused')
     )
   $$,
   '42501'::char(5),
@@ -775,7 +810,8 @@ select throws_ok(
         "key":"vortex.malformed.refused",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('4', 64)
+      'sha256:' || pg_catalog.repeat('4', 64),
+      pg_temp.definition_root_requirements('vortex.malformed.refused', 'malformed_refused')
     )
   $$,
   '22023'::char(5),
@@ -799,7 +835,8 @@ select throws_ok(
         "key":"vortex.missing.refused",
         "body":{}
       }'::jsonb,
-      'sha256:' || pg_catalog.repeat('5', 64)
+      'sha256:' || pg_catalog.repeat('5', 64),
+      pg_temp.definition_root_requirements('vortex.missing.refused', 'missing_refused')
     )
   $$,
   '55000'::char(5),

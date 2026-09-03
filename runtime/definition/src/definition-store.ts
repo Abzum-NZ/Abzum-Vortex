@@ -15,6 +15,7 @@ import {
   type RequestDatabaseTransaction,
 } from "@vortex/db";
 import { fingerprintCanonicalValue } from "./canonical-json";
+import { extractSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 
 export const definitionStoreErrorCodes = [
@@ -107,6 +108,7 @@ export const createDefinitionStore = (
     if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
     const source = validateSource(command.data.source);
     const sourceFingerprint = fingerprintCanonicalValue(source);
+    const identityRequirements = extractSourceIdentityRequirements(source);
     return runInTransaction(context, async (transaction) => {
       const rows = await transaction.query<StoredDraftRow>`
         select *
@@ -114,7 +116,8 @@ export const createDefinitionStore = (
           ${source.kind},
           ${source.key},
           ${JSON.stringify(source)},
-          ${sourceFingerprint}
+          ${sourceFingerprint},
+          ${JSON.stringify(identityRequirements)}
         )
       `;
       if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
@@ -130,6 +133,7 @@ export const createDefinitionStore = (
     if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
     const source = validateSource(command.data.source);
     const sourceFingerprint = fingerprintCanonicalValue(source);
+    const identityRequirements = extractSourceIdentityRequirements(source);
     return runInTransaction(context, async (transaction) => {
       const rows = await transaction.query<StoredDraftRow>`
         select *
@@ -137,7 +141,8 @@ export const createDefinitionStore = (
           ${command.data.rootId},
           ${command.data.expectedDraftRevision},
           ${JSON.stringify(source)},
-          ${sourceFingerprint}
+          ${sourceFingerprint},
+          ${JSON.stringify(identityRequirements)}
         )
       `;
       if (rows.length === 0) throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
