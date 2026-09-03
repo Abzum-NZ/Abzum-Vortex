@@ -1971,7 +1971,7 @@ export const normaliseModuleContent = (content: ModuleContent): ModuleContent =>
     rules: sorted(value.rules as unknown[], "ruleId"),
     sharingConditions: sorted(
       (value.sharingConditions as RecordValue[]).map((condition) => {
-        const normalised = {
+        const normalised: RecordValue = {
           ...condition,
           declaredFieldIds: sorted(condition.declaredFieldIds as unknown[]),
         };
