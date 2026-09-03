@@ -29,6 +29,7 @@ flowchart LR
 - Safe logs, traces, diagnostics, fixtures, screenshots, and exports.
 - Backward-compatible delivery and tested recovery.
 - Continuous navigation, component-scoped loading and refresh, restrained motion, and equivalent reduced-motion behaviour under [core UI continuity](07-applications-pages-and-themes.md#core-ui-continuity-and-motion).
+- Complete behavioural parity between the web interface and the governed [MCP surface](12-connections-and-interfaces.md#governed-mcp-access), with one permission, validation, execution, activity and error path.
 
 ## Organisation separation suite
 
@@ -91,6 +92,11 @@ Run through ordinary product surfaces:
 42. Create direct record shares to an account and a team; prove only allowlisted fields can be read or changed and that delete, restore, export, re-share, and administration remain refused.
 43. Grant CRM limited collaborative access to a Service Desk case; prove CRM reads only the summary fields, changes only `status` and `priority`, adds only a public comment, and never receives internal notes, attachments, service-level calculations, or ownership controls.
 44. Revoke that grant while the case is visible; the next access check removes the values from the component, closes or re-authorises live updates, and browser back navigation or client cache cannot reveal the case.
+45. Authorise an MCP client for one organisation account and prove it discovers exactly the navigation, pages, fields, choices, files, actions, builder controls and administration controls available to that account in the web interface; refused content is absent rather than merely labelled unavailable.
+46. Complete the same form and invoke the same action once through the web interface and once through MCP; prove both use the same typed input, revision checks, validation, permission decision, record effect, event, activity meaning and safe error catalogue.
+47. Pair an authorised MCP client context with one visible web session, navigate and change a draft through semantic control identifiers, then prove the interface applies the acknowledged state. End the pairing, submit a stale revision and revoke the account's access; each next control request is refused without exposing a browser cookie, DOM handle, selector or screen coordinate.
+48. Present an invalid-issuer, expired, revoked, wrong-audience or wrong-client MCP token and prove it is refused before an application operation. Then use a valid token to request an organisation, application or capability outside the live Vortex grant/current account and prove that request is separately refused. Extra standard identity scopes never create Vortex authority. Prove the server neither accepts token pass-through nor requests model sampling, model credentials or autonomous execution.
+49. Send MCP requests with an invalid `Origin`, a missing required Streamable HTTP header and a header value that disagrees with the message body; prove they are refused and a missing or mismatched required header returns `HeaderMismatch`. Prove valid messages use HTTP `POST` with the required JSON or server-sent-event content negotiation, each request carries revision, client information and client capabilities in `_meta`, the modern endpoint is stateless, and `GET` is not available.
 
 Every applicable case runs in both directions between two populated organisations in one cluster and in a two-cluster topology. Tests use recognisably different canary values so accidental mixing is visible.
 
@@ -103,6 +109,30 @@ Every visible issue includes evidence at supported desktop and phone widths. Evi
 Visible page work also includes evidence that internal navigation keeps the application shell mounted, a slow route or block receives immediate local loading feedback, a data refresh changes only affected components and dependent totals, unsaved unrelated state remains intact, and reduced-motion mode communicates the same result without animation. Automated browser checks refuse routine internal navigation that causes a full document reload.
 
 Motion evidence uses the six registered semantic tokens and contains no feature-specific duration, easing, distance, or spring value. Interruption tests navigate from record A to record B, open another component, and then complete record A's delayed response; record A must not flash, regain focus, finish an obsolete transition, or replace any part of the current state. The same cases run at desktop and phone widths, on a throttled low-performance profile, and with reduced motion enabled.
+
+## MCP parity acceptance
+
+The parity test is generated from the published [semantic interface map](07-applications-pages-and-themes.md#semantic-interface-map), not from a manually maintained list of buttons. Each meaningful control has one stable semantic identifier and one platform operation. The test compares the permitted web and MCP views for the same identity, organisation account, application version and access version.
+
+```mermaid
+flowchart LR
+    MAP[Published semantic interface map] --> WEB[Web capability inventory]
+    MAP --> MCP[MCP capability inventory]
+    WEB --> COMPARE{Same permitted meaning and result?}
+    MCP --> COMPARE
+    COMPARE -- No --> FAIL[Release evidence fails]
+    COMPARE -- Yes --> RUN[Run shared operation tests]
+    RUN --> PROVE[Prove access, validation, effects, activity and errors]
+```
+
+The evidence must prove:
+
+- Every meaningful customer-application, Studio, tenant-administration and organisation-administration capability is present on both surfaces when discoverable. View-refused content is disclosed by neither surface. A discoverable but currently unavailable control appears on both as non-invocable with the same safe reason and is absent from MCP tool choices.
+- Navigation, filtering, sorting, paging, refresh, form and guided-form drafts, file operations and named actions use stable semantic resources and controls. Tests refuse reliance on display text, DOM structure, CSS selectors, pointer coordinates, animation timing or unrestricted browser scripting.
+- The MCP adapter calls the same platform service as the web interface. It does not contain a second save engine, action runner, access evaluator or general schema-free record endpoint.
+- A live-interface pairing is explicit, visible, expiring and immediately revocable. Every state-changing request supplies the expected semantic-state or draft revision so an agent cannot overwrite a person's newer work.
+- MCP authorization is audience-bound and scope-limited, follows the approved protocol and transport revisions, and takes effect through the person's current organisation account. Access removal is effective on the next request.
+- Vortex provides no embedded model, assistant, sampling request or autonomous decision loop. The external client chooses whether and how to use the permission-filtered resources and tools.
 
 ## Performance measurement
 
