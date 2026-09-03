@@ -8,7 +8,7 @@ ARG DOPPLER_CLI_VERSION=3.76.5
 
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl git jq openssl postgresql-client; \
+    apt-get install -y --no-install-recommends ca-certificates curl git jq openssl postgresql-client libtap-parser-sourcehandler-pgtap-perl=3.36-2; \
     case "${TARGETARCH}" in \
       amd64) \
         supabase_sha="5b3031cb297d51b25be4c284e4c852254460ec722ec221d3b81b07d55acfd158"; \
@@ -36,7 +36,8 @@ RUN set -eux; \
     supabase --version; \
     doppler --version; \
     git --version; \
-    psql --version
+    psql --version; \
+    pg_prove --version
 
 # Coolify builds from an ephemeral checkout, so runtime bind mounts to relative
 # source paths become empty after deployment. Keep the reviewed operational

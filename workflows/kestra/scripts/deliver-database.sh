@@ -5,6 +5,7 @@ set -euo pipefail
 readonly EXPECTED_REPOSITORY="Abzum-NZ/Abzum-Vortex"
 readonly REPOSITORY_URL="https://github.com/Abzum-NZ/Abzum-Vortex.git"
 readonly EXPECTED_SUPABASE_VERSION="2.116.0"
+readonly EXPECTED_PG_PROVE_VERSION="pg_prove 3.36"
 readonly EXPECTED_POSTGRES_MAJOR="17"
 
 die() {
@@ -277,6 +278,7 @@ export PGSSLROOTCERT="$database_ssl_root_cert"
 export SSL_CERT_FILE="$database_ssl_root_cert"
 
 [ "$(supabase --version)" = "$EXPECTED_SUPABASE_VERSION" ] || die "unexpected Supabase CLI version"
+[ "$(pg_prove --version)" = "$EXPECTED_PG_PROVE_VERSION" ] || die "unexpected pg_prove version"
 export PGCONNECT_TIMEOUT=15
 server_version_num="$(psql "$database_url" --no-psqlrc --tuples-only --no-align \
   --command "select current_setting('server_version_num')")"
@@ -288,7 +290,14 @@ say "applying pending migrations through Supabase migration history"
 (
   cd "$checkout"
   supabase db push --db-url "$database_url" --skip-vault --yes
-  supabase test db --db-url "$database_url"
+  pg_prove \
+    --dbname "$database_name" \
+    --username "$database_user" \
+    --host "$database_host" \
+    --port "$database_port" \
+    --ext .sql \
+    --recurse \
+    supabase/tests
   supabase db lint \
     --db-url "$database_url" \
     --schema "${VORTEX_LINT_SCHEMAS:-public}" \
