@@ -120,15 +120,19 @@ Exit proof:
 
 **Needs:** Phase 1.
 
-**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) is complete. Database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) and the identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) may now proceed independently. Tenant and organisation structure [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) follows #28. Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) follows #23; organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) follow both #23 and #25. Native GitHub dependencies enforce the order.
+**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) and database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) are complete. Tenant and organisation structure [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) and the identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) are now unblocked and may proceed in parallel. Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) follows #23; organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) follow both #23 and #25. Native GitHub dependencies enforce the order.
 
 **Outcome:** A person can sign in, choose an organisation, tenant administrators can manage a safe organisation hierarchy, and authorised builders can draft, validate, publish and restore modules and applications independently.
 
 Build:
 
 - One environment-wide [Vortex Identity Authority](../specification/02-people-organisations-and-sign-in.md#identity-across-clusters), plus tenants, tenant-administrator assignments, acyclic organisation hierarchy, cluster-local organisation accounts, invitations, sessions and organisation launcher.
-- Supabase Auth with asymmetric signing keys and locally verifiable short-lived identity tokens; organisation authority remains live cluster data rather than token claims.
-- Neutral bootstrap sign-in with one global identity and a separate account in every organisation the person belongs to.
+- Supabase Auth with a managed P-256 `ES256` signing key and locally verifiable short-lived identity tokens. The Identity service accepts the required standard Supabase claims, then returns only the closed global identity result, including the permanent identity identifier and verified primary email. It uses no custom access-token hook and never turns provider roles or metadata into Vortex authority.
+- Neutral registration, email confirmation, sign-in and password-recovery journeys under the official `apps/web` Next.js App Router. Authority calls are server-side; one-time token hashes travel in browser-only URL fragments and then in server-action request bodies, never request URLs, access logs or referrers. Confirmation and recovery sessions are request-local, and durable browser sessions remain owned by #26.
+- Exact Local, Testing and Production site and redirect allowlists with no wildcard or customer-controlled redirect.
+- Local email confirmation and recovery are captured in Mailpit. Testing uses a Mailtrap Email Testing inbox through Supabase custom SMTP so confirmation and recovery can be proven without delivering to a person; its dedicated test-only address and credentials are supplied through Doppler. Production sender-domain, SMTP provisioning and delivery proof remain Phase 13 work under #171.
+- Identity Authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) owns token verification. Organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) consume the verified identity identifier and email; sessions [#26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26) consume the same result and own durable cookies, refresh, sign-out and revocation.
+- Supabase exclusively owns `auth.*`; repository migrations never create or repair Supabase Auth tables.
 - Independent module and application draft concurrency, release versions, validation, immutable revision publication, dependency graph and restore. Themes, pages, workflows, interfaces and application roles remain contained in the application; organisation roles remain live access data.
 - Platform bootstrap definitions required before the Page service exists.
 - One closed request context established for each protected transaction through a non-owning request role. Vercel uses the Supabase transaction pooler with prepared statements disabled; Kestra keeps a separately credentialed session-pooler path for migrations and database verification.
@@ -136,8 +140,8 @@ Build:
 
 Exit proof:
 
-- One identity can safely switch between its separate accounts in two organisations, including when those accounts are stored in different test clusters.
-- Both clusters verify the same signed identity token locally while refusing an account or role that exists only in the other cluster.
+- One identity can safely switch between its separate accounts in two organisations without transferring profile, role or cached state between those accounts.
+- Two independently configured verifier instances accept the same Testing identity token, produce the same identity identifier and verified primary email, and refuse a token from another environment. This proof does not require or claim a second physical Testing cluster.
 - A stale draft cannot overwrite a later edit.
 - Publishing is atomic and a restored version becomes a new draft.
 - Definition and identity tables pass their database separation tests.
@@ -419,6 +423,7 @@ Build and prove:
 - SSL enforcement, exposed-schema review and platform adviser review. Supabase CIDR restrictions are deferred until both Kestra and Vercel have stable outbound IP ranges; DNS names cannot be allowlisted.
 - No read replica in the first release; measured demand must create and justify future work.
 - Secret inventory and rotation drills.
+- Production Auth SMTP provisioning with a verified sender, Doppler-held credentials, delivery monitoring, rate-limit review, rotation and confirmation/recovery proof before customer use.
 - Full separation, accessibility, measured performance, load, failure and recovery acceptance. Performance findings create work but never block a release by themselves.
 - The complete web/MCP parity matrix from [quality and acceptance](../specification/20-quality-and-acceptance.md#mcp-parity-acceptance), including permission removal and live-interface pairing, against the release candidate.
 - Production release checklist, change record, support boundary and customer communication path.
@@ -439,5 +444,5 @@ The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follow
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/protected data handling/retention, entitlements/metering, and operations issues belong to those epics rather than Phase 10. Commercial applications do not block the generic platform roadmap.
 5. Extension-point use belongs to Phase 4 and standard-page replacement belongs to Phase 6; they are no longer deferred to distribution work.
 6. Priority is explicit on every project issue: `P0 — Critical`, `P1 — Next`, `P2 — Planned`, or `P3 — Later`. The Bugs view filters `label:bug`; roadmap dates and Iteration remain empty until work is genuinely scheduled.
-7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and Supabase migration and database-test foundation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) are closed. Database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) and identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) are the current parallel Phase 2 foundations; [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) follows #28.
+7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132), Supabase migration and database-test foundation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), and database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) are closed. Tenant hierarchy [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) and identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) are the current parallel Phase 2 workstreams.
 8. Every later board change follows the current specification and keeps the decision register limited to genuinely open business choices.
