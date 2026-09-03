@@ -76,7 +76,7 @@ if "$delivery_script" >"$test_root/invalid-role.log" 2>&1; then
   exit 1
 fi
 grep --fixed-strings --quiet \
-  "database role name is invalid" \
+  "database connection does not name a Supabase project owner" \
   "$test_root/invalid-role.log"
 
 unset VORTEX_TEST_DATABASE_USER
@@ -99,7 +99,7 @@ openssl req \
   -subj /CN=local-delivery-test \
   >/dev/null 2>&1
 export VORTEX_TEST_SSL_ROOT_CERT="$(<"$test_root/test-root.crt")"
-export VORTEX_TEST_EXPECTED_DATABASE_URL='postgresql://migration_role@db.abcdefghijklmnopqrst.supabase.co:5432/postgres?sslmode=verify-full'
+export VORTEX_TEST_EXPECTED_DATABASE_URL='postgresql://postgres.abcdefghijklmnopqrst@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres?sslmode=verify-full'
 export VORTEX_DATABASE_URL='postgresql://attacker:password@attacker.invalid:5432/postgres?host=attacker.invalid&sslmode=disable'
 export VORTEX_TEST_REMOTE_MIGRATION_MISMATCH=true
 if "$delivery_script" >"$test_root/history-mismatch.log" 2>&1; then
