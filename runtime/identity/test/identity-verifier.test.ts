@@ -1,3 +1,5 @@
+import { generateKeyPairSync, sign } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 import { identityAuthoritySchema } from "@vortex/contracts";
 import {
@@ -6,7 +8,10 @@ import {
   identityVerificationRefusalCodes,
   isIdentityVerificationRefusalCode,
 } from "../src";
-import { createIdentityVerifierWithClient } from "../src/identity-verifier";
+import {
+  createIdentityVerifierWithClient,
+  identityVerifierMaximumClockSkewSeconds,
+} from "../src/identity-verifier";
 
 const id = (value: number): string => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
 
@@ -19,11 +24,15 @@ const testingAuthority = identityAuthoritySchema.parse({
   signingAlgorithm: "ES256",
 });
 
+const nowSeconds = 1_800_000_000;
+const fixedClock = vi.fn(() => new Date(nowSeconds * 1_000));
+const verifierOptions = { clock: fixedClock };
+
 const claims = {
   iss: testingAuthority.issuer,
   aud: "authenticated",
-  exp: 1_800_000_000,
-  iat: 1_799_996_400,
+  exp: nowSeconds + 3_600,
+  iat: nowSeconds - 100,
   sub: id(2),
   role: "authenticated",
   aal: "aal1",
@@ -45,19 +54,96 @@ const accepted = (claimOverrides: Record<string, unknown> = {}, headerOverrides 
 });
 
 const clientReturning = (result: ReturnType<typeof accepted>) => ({
-  auth: { getClaims: vi.fn(async () => result) },
+  auth: {
+    getClaims: vi.fn(async () => result),
+  },
 });
 
+const generateSigningKey = (kid: string) => {
+  const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const publicJwk = {
+    ...publicKey.export({ format: "jwk" }),
+    alg: "ES256",
+    kid,
+    use: "sig",
+  };
+  return { kid, privateKey, publicJwk };
+};
+
+type GeneratedSigningKey = ReturnType<typeof generateSigningKey>;
+
+const encodeJson = (value: unknown): string =>
+  Buffer.from(JSON.stringify(value)).toString("base64url");
+
+const signAccessToken = (
+  signingKey: GeneratedSigningKey,
+  claimOverrides: Record<string, unknown> = {},
+  headerOverrides: Record<string, unknown> = {},
+): string => {
+  const header = encodeJson({
+    alg: "ES256",
+    kid: signingKey.kid,
+    typ: "JWT",
+    ...headerOverrides,
+  });
+  const payload = encodeJson({ ...claims, ...claimOverrides });
+  const signature = sign("sha256", Buffer.from(`${header}.${payload}`), {
+    key: signingKey.privateKey,
+    dsaEncoding: "ieee-p1363",
+  }).toString("base64url");
+  return `${header}.${payload}.${signature}`;
+};
+
+const createOfficialClaimsClient = (
+  publicKeys: JsonWebKey[],
+  customFetch = vi.fn(async () => {
+    throw new Error("The in-memory JWKS should avoid an external request");
+  }),
+) => {
+  const client = createClient(
+    new URL(testingAuthority.issuer).origin,
+    "sb_publishable_identity_verifier_test",
+    {
+      auth: {
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        persistSession: false,
+      },
+      global: { fetch: customFetch },
+    },
+  );
+
+  return {
+    claimsClient: {
+      auth: {
+        getClaims: (accessToken: string, options: { allowExpired: true }) =>
+          client.auth.getClaims(accessToken, { ...options, jwks: { keys: publicKeys } }),
+      },
+    },
+    customFetch,
+  };
+};
+
 describe("identity token verification", () => {
-  it("uses two independently configured verifiers to produce the same closed identity", async () => {
-    const firstClient = clientReturning(accepted());
-    const secondClient = clientReturning(accepted());
-    const first = createIdentityVerifierWithClient({ ...testingAuthority }, firstClient);
-    const second = createIdentityVerifierWithClient({ ...testingAuthority }, secondClient);
+  it("uses two official clients and one generated ES256 token to derive the same closed identity", async () => {
+    const signingKey = generateSigningKey("current-testing-key");
+    const token = signAccessToken(signingKey);
+    const firstClient = createOfficialClaimsClient([signingKey.publicJwk]);
+    const secondClient = createOfficialClaimsClient([signingKey.publicJwk]);
+    const first = createIdentityVerifierWithClient(
+      testingAuthority,
+      firstClient.claimsClient,
+      verifierOptions,
+    );
+    const second = createIdentityVerifierWithClient(
+      testingAuthority,
+      secondClient.claimsClient,
+      verifierOptions,
+    );
 
     const [firstResult, secondResult] = await Promise.all([
-      first.verifyAccessToken("same-testing-token"),
-      second.verifyAccessToken("same-testing-token"),
+      first.verifyAccessToken(token),
+      second.verifyAccessToken(token),
     ]);
 
     expect(firstResult).toEqual(secondResult);
@@ -67,19 +153,21 @@ describe("identity token verification", () => {
       issuer: claims.iss,
       audience: "authenticated",
       sessionId: claims.session_id,
-      issuedAt: "2027-01-15T07:00:00.000Z",
-      expiresAt: "2027-01-15T08:00:00.000Z",
+      issuedAt: new Date(claims.iat * 1_000).toISOString(),
+      expiresAt: new Date(claims.exp * 1_000).toISOString(),
       authenticationStrength: "single_factor",
-      keyId: "testing-key",
+      keyId: signingKey.kid,
     });
     expect(firstResult).not.toHaveProperty("role");
     expect(firstResult).not.toHaveProperty("app_metadata");
     expect(firstResult).not.toHaveProperty("user_metadata");
-    expect(firstClient.auth.getClaims).toHaveBeenCalledWith("same-testing-token");
-    expect(secondClient.auth.getClaims).toHaveBeenCalledWith("same-testing-token");
+    expect(firstClient.customFetch).not.toHaveBeenCalled();
+    expect(secondClient.customFetch).not.toHaveBeenCalled();
   });
 
-  it("refuses a token issued by another environment", async () => {
+  it("refuses a generated token issued by another environment after signature verification", async () => {
+    const signingKey = generateSigningKey("shared-test-key");
+    const token = signAccessToken(signingKey);
     const productionAuthority = {
       ...testingAuthority,
       authorityId: id(4),
@@ -87,13 +175,141 @@ describe("identity token verification", () => {
       issuer: "https://identity.example.com/auth/v1",
       jwksUrl: "https://identity.example.com/auth/v1/.well-known/jwks.json",
     };
+    const { claimsClient, customFetch } = createOfficialClaimsClient([signingKey.publicJwk]);
     const verifier = createIdentityVerifierWithClient(
       productionAuthority,
-      clientReturning(accepted()),
+      claimsClient,
+      verifierOptions,
     );
 
-    await expect(verifier.verifyAccessToken("testing-token")).rejects.toMatchObject({
-      refusalCode: "vortex.identity.untrusted_issuer",
+    await expect(verifier.verifyAccessToken(token)).rejects.toEqual(
+      new IdentityVerificationError("vortex.identity.untrusted_issuer"),
+    );
+    expect(customFetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses an invalid generated ES256 signature without leaking SDK detail", async () => {
+    const trustedKey = generateSigningKey("trusted-key");
+    const untrustedKey = generateSigningKey("trusted-key");
+    const token = signAccessToken(untrustedKey);
+    const { claimsClient, customFetch } = createOfficialClaimsClient([trustedKey.publicJwk]);
+    const verifier = createIdentityVerifierWithClient(
+      testingAuthority,
+      claimsClient,
+      verifierOptions,
+    );
+
+    await expect(verifier.verifyAccessToken(token)).rejects.toEqual(
+      new IdentityVerificationError("vortex.identity.token_verification_failed"),
+    );
+    expect(customFetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown generated signing key through one stable safe class", async () => {
+    const trustedKey = generateSigningKey("trusted-key");
+    const unknownKey = generateSigningKey("unknown-key");
+    let requestCount = 0;
+    const customFetch = vi.fn(async () => {
+      requestCount += 1;
+      if (requestCount === 1)
+        return new Response(JSON.stringify({ keys: [trustedKey.publicJwk] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      return new Response(JSON.stringify({ code: "bad_jwt", message: "provider detail" }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    const { claimsClient } = createOfficialClaimsClient([trustedKey.publicJwk], customFetch);
+    const verifier = createIdentityVerifierWithClient(
+      testingAuthority,
+      claimsClient,
+      verifierOptions,
+    );
+
+    await expect(verifier.verifyAccessToken(signAccessToken(unknownKey))).rejects.toEqual(
+      new IdentityVerificationError("vortex.identity.token_verification_failed"),
+    );
+    expect(customFetch).toHaveBeenCalled();
+  });
+
+  it("accepts old and new generated keys during a rotation overlap", async () => {
+    const oldKey = generateSigningKey("old-key");
+    const newKey = generateSigningKey("new-key");
+    const { claimsClient, customFetch } = createOfficialClaimsClient([
+      oldKey.publicJwk,
+      newKey.publicJwk,
+    ]);
+    const verifier = createIdentityVerifierWithClient(
+      testingAuthority,
+      claimsClient,
+      verifierOptions,
+    );
+
+    const [oldIdentity, newIdentity] = await Promise.all([
+      verifier.verifyAccessToken(signAccessToken(oldKey)),
+      verifier.verifyAccessToken(signAccessToken(newKey)),
+    ]);
+
+    expect(oldIdentity.identityId).toBe(claims.sub);
+    expect(oldIdentity.keyId).toBe(oldKey.kid);
+    expect(newIdentity.identityId).toBe(claims.sub);
+    expect(newIdentity.keyId).toBe(newKey.kid);
+    expect(customFetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "vortex.identity.expired_access_token",
+      { iat: nowSeconds - 3_600, exp: nowSeconds - identityVerifierMaximumClockSkewSeconds - 1 },
+    ],
+    [
+      "vortex.identity.not_yet_valid_access_token",
+      { nbf: nowSeconds + identityVerifierMaximumClockSkewSeconds + 1 },
+    ],
+    [
+      "vortex.identity.future_issued_access_token",
+      { iat: nowSeconds + identityVerifierMaximumClockSkewSeconds + 1 },
+    ],
+  ] as const)("returns the deterministic temporal refusal %s", async (refusalCode, overrides) => {
+    const signingKey = generateSigningKey(`temporal-${refusalCode}`);
+    const { claimsClient } = createOfficialClaimsClient([signingKey.publicJwk]);
+    const verifier = createIdentityVerifierWithClient(
+      testingAuthority,
+      claimsClient,
+      verifierOptions,
+    );
+
+    await expect(
+      verifier.verifyAccessToken(signAccessToken(signingKey, overrides)),
+    ).rejects.toEqual(new IdentityVerificationError(refusalCode));
+  });
+
+  it.each([
+    {
+      iat: nowSeconds - 3_600,
+      exp: nowSeconds - identityVerifierMaximumClockSkewSeconds,
+    },
+    { nbf: nowSeconds + identityVerifierMaximumClockSkewSeconds },
+    {
+      iat: nowSeconds + identityVerifierMaximumClockSkewSeconds,
+      exp: nowSeconds + 3_600,
+    },
+  ])("accepts the documented 60-second clock-skew boundary", async (overrides) => {
+    const signingKey = generateSigningKey(`boundary-${JSON.stringify(overrides)}`);
+    const { claimsClient } = createOfficialClaimsClient([signingKey.publicJwk]);
+    const verifier = createIdentityVerifierWithClient(
+      testingAuthority,
+      claimsClient,
+      verifierOptions,
+    );
+
+    await expect(
+      verifier.verifyAccessToken(signAccessToken(signingKey, overrides)),
+    ).resolves.toMatchObject({
+      identityId: claims.sub,
+      verifiedPrimaryEmail: claims.email,
     });
   });
 
@@ -107,14 +323,17 @@ describe("identity token verification", () => {
     ["vortex.identity.invalid_claims", "token", accepted({ is_anonymous: true })],
     ["vortex.identity.untrusted_audience", "token", accepted({ aud: "another-audience" })],
   ] as const)("returns the safe refusal %s", async (refusalCode, token, response) => {
-    const verifier = createIdentityVerifierWithClient(testingAuthority, clientReturning(response));
+    const client = clientReturning(response);
+    const verifier = createIdentityVerifierWithClient(testingAuthority, client, verifierOptions);
 
     await expect(verifier.verifyAccessToken(token)).rejects.toEqual(
       new IdentityVerificationError(refusalCode),
     );
+    if (token.trim().length > 0)
+      expect(client.auth.getClaims).toHaveBeenCalledWith(token, { allowExpired: true });
   });
 
-  it("converts SDK errors and thrown details into one safe verification refusal", async () => {
+  it("converts SDK, network and clock details into one safe verification refusal", async () => {
     const sdkErrorClient = {
       auth: {
         getClaims: vi.fn(async () => ({
@@ -130,26 +349,79 @@ describe("identity token verification", () => {
         }),
       },
     };
+    const invalidClockClient = clientReturning(accepted());
 
-    for (const client of [sdkErrorClient, thrownClient]) {
-      const verifier = createIdentityVerifierWithClient(testingAuthority, client);
+    for (const verifier of [
+      createIdentityVerifierWithClient(testingAuthority, sdkErrorClient, verifierOptions),
+      createIdentityVerifierWithClient(testingAuthority, thrownClient, verifierOptions),
+      createIdentityVerifierWithClient(testingAuthority, invalidClockClient, {
+        clock: () => new Date(Number.NaN),
+      }),
+    ])
       await expect(verifier.verifyAccessToken("token")).rejects.toEqual(
         new IdentityVerificationError("vortex.identity.token_verification_failed"),
       );
-    }
   });
 
-  it("constructs only from valid Supabase authority and public-key configuration", () => {
-    expect(createIdentityVerifier(testingAuthority, "publishable-key").authority).toEqual(
-      testingAuthority,
-    );
-    expect(() => createIdentityVerifier(testingAuthority, "")).toThrowError(
+  it.each([
+    "",
+    "publishable-key",
+    " sb_publishable_surrounding_whitespace ",
+    "sb_publishable_",
+    "sb_secret_server_only_key",
+    "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signature",
+  ])("rejects non-publishable API key material", (apiKey) => {
+    expect(() => createIdentityVerifier(testingAuthority, apiKey)).toThrowError(
       "vortex.identity.invalid_public_api_key",
     );
+  });
+
+  it("accepts current hosted and Local publishable-key contracts", () => {
+    const localAuthority = identityAuthoritySchema.parse({
+      ...testingAuthority,
+      environment: "local",
+      issuer: "http://127.0.0.1:54321/auth/v1",
+      jwksUrl: "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+    });
+
+    expect(
+      createIdentityVerifier(testingAuthority, "sb_publishable_hosted_test_key").authority,
+    ).toEqual(testingAuthority);
+    expect(
+      createIdentityVerifier(localAuthority, "sb_publishable_local_cli_test_key").authority,
+    ).toEqual(localAuthority);
+  });
+
+  it.each([
+    {
+      issuer: "https://user:password@identity.example.test/auth/v1",
+      jwksUrl: "https://user:password@identity.example.test/auth/v1/.well-known/jwks.json",
+    },
+    {
+      jwksUrl: "https://user:password@identity.example.test/auth/v1/.well-known/jwks.json",
+    },
+    { issuer: "https://identity.example.test/auth/v1?environment=testing" },
+    { issuer: "https://identity.example.test/auth/v1#testing" },
+    {
+      jwksUrl: "https://identity.example.test/auth/v1/.well-known/jwks.json?environment=testing",
+    },
+    { jwksUrl: "https://identity.example.test/auth/v1/.well-known/jwks.json#testing" },
+  ])("rejects authority URL credentials, queries and fragments", (overrides) => {
     expect(() =>
-      createIdentityVerifier(
-        { ...testingAuthority, issuer: "https://identity.example.test" },
-        "key",
+      createIdentityVerifierWithClient(
+        { ...testingAuthority, ...overrides },
+        clientReturning(accepted()),
+        verifierOptions,
+      ),
+    ).toThrowError("vortex.identity.invalid_authority_configuration");
+  });
+
+  it("rejects a non-standard JWKS URL instead of silently ignoring it", () => {
+    expect(() =>
+      createIdentityVerifierWithClient(
+        { ...testingAuthority, jwksUrl: "https://identity.example.test/keys.json" },
+        clientReturning(accepted()),
+        verifierOptions,
       ),
     ).toThrowError("vortex.identity.invalid_authority_configuration");
   });

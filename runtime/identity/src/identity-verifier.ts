@@ -21,11 +21,24 @@ type ClaimsVerificationResult = {
   error: unknown | null;
 };
 
+type ClaimsVerificationOptions = Readonly<{
+  allowExpired: true;
+}>;
+
 type IdentityClaimsClient = {
   auth: {
-    getClaims(accessToken: string): Promise<ClaimsVerificationResult>;
+    getClaims(
+      accessToken: string,
+      options: ClaimsVerificationOptions,
+    ): Promise<ClaimsVerificationResult>;
   };
 };
+
+type IdentityVerifierOptions = Readonly<{
+  clock?: () => Date;
+}>;
+
+export const identityVerifierMaximumClockSkewSeconds = 60;
 
 export type IdentityVerifier = Readonly<{
   authority: IdentityAuthority;
@@ -39,7 +52,28 @@ const refuse = (refusalCode: IdentityVerificationRefusalCode): never => {
 const parseAuthority = (input: unknown): IdentityAuthority => {
   const result = identityAuthoritySchema.safeParse(input);
   if (!result.success) return refuse("vortex.identity.invalid_authority_configuration");
+
+  const issuer = new URL(result.data.issuer);
+  const jwks = new URL(result.data.jwksUrl);
+  if (
+    issuer.username.length > 0 ||
+    issuer.password.length > 0 ||
+    issuer.search.length > 0 ||
+    issuer.hash.length > 0 ||
+    jwks.username.length > 0 ||
+    jwks.password.length > 0 ||
+    jwks.search.length > 0 ||
+    jwks.hash.length > 0
+  )
+    return refuse("vortex.identity.invalid_authority_configuration");
+
   return result.data;
+};
+
+const parsePublishableKey = (input: string): string => {
+  if (input.length > 512 || !/^sb_publishable_[A-Za-z0-9_-]+$/.test(input))
+    return refuse("vortex.identity.invalid_public_api_key");
+  return input;
 };
 
 const audienceContains = (audience: string | string[], expected: string): boolean =>
@@ -48,6 +82,7 @@ const audienceContains = (audience: string | string[], expected: string): boolea
 const projectVerifiedIdentity = (
   authority: IdentityAuthority,
   result: NonNullable<ClaimsVerificationResult["data"]>,
+  clock: () => Date,
 ): VerifiedIdentity => {
   if (result.header.alg !== authority.signingAlgorithm)
     return refuse("vortex.identity.unsupported_signing_algorithm");
@@ -66,6 +101,23 @@ const projectVerifiedIdentity = (
   if (parsedClaims.data.iss !== authority.issuer) return refuse("vortex.identity.untrusted_issuer");
   if (!audienceContains(parsedClaims.data.aud, authority.audience))
     return refuse("vortex.identity.untrusted_audience");
+
+  let nowSeconds: number;
+  try {
+    nowSeconds = clock().getTime() / 1_000;
+  } catch {
+    return refuse("vortex.identity.token_verification_failed");
+  }
+  if (!Number.isFinite(nowSeconds)) return refuse("vortex.identity.token_verification_failed");
+
+  const latestAcceptedFutureTime = nowSeconds + identityVerifierMaximumClockSkewSeconds;
+  const earliestAcceptedExpiry = nowSeconds - identityVerifierMaximumClockSkewSeconds;
+  if (parsedClaims.data.exp < earliestAcceptedExpiry)
+    return refuse("vortex.identity.expired_access_token");
+  if (parsedClaims.data.nbf !== undefined && parsedClaims.data.nbf > latestAcceptedFutureTime)
+    return refuse("vortex.identity.not_yet_valid_access_token");
+  if (parsedClaims.data.iat > latestAcceptedFutureTime)
+    return refuse("vortex.identity.future_issued_access_token");
 
   const verifiedIdentity = verifiedIdentitySchema.safeParse({
     identityId: parsedClaims.data.sub,
@@ -89,8 +141,10 @@ const projectVerifiedIdentity = (
 export const createIdentityVerifierWithClient = (
   authorityInput: unknown,
   client: IdentityClaimsClient,
+  options: IdentityVerifierOptions = {},
 ): IdentityVerifier => {
   const authority = parseAuthority(authorityInput);
+  const clock = options.clock ?? (() => new Date());
 
   return Object.freeze({
     authority,
@@ -99,14 +153,19 @@ export const createIdentityVerifierWithClient = (
 
       let result: ClaimsVerificationResult;
       try {
-        result = await client.auth.getClaims(accessToken);
+        // `jwksUrl` remains explicit authority evidence and is constrained by the
+        // contract to Supabase's standard discovery path. The official client
+        // derives and fetches that same path from the issuer origin. We allow the
+        // SDK to skip only its zero-skew expiry check so this boundary can apply
+        // one deterministic, bounded clock policy after signature verification.
+        result = await client.auth.getClaims(accessToken, { allowExpired: true });
       } catch {
         return refuse("vortex.identity.token_verification_failed");
       }
 
       if (result.error !== null || result.data === null)
         return refuse("vortex.identity.token_verification_failed");
-      return projectVerifiedIdentity(authority, result.data);
+      return projectVerifiedIdentity(authority, result.data, clock);
     },
   });
 };
@@ -114,16 +173,17 @@ export const createIdentityVerifierWithClient = (
 export const createIdentityVerifier = (
   authorityInput: unknown,
   publishableKey: string,
+  options: IdentityVerifierOptions = {},
 ): IdentityVerifier => {
   const authority = parseAuthority(authorityInput);
-  if (publishableKey.trim().length === 0) return refuse("vortex.identity.invalid_public_api_key");
+  const publicApiKey = parsePublishableKey(publishableKey);
 
-  const client = createClient(new URL(authority.issuer).origin, publishableKey, {
+  const client = createClient(new URL(authority.issuer).origin, publicApiKey, {
     auth: {
       autoRefreshToken: false,
       detectSessionInUrl: false,
       persistSession: false,
     },
   });
-  return createIdentityVerifierWithClient(authority, client);
+  return createIdentityVerifierWithClient(authority, client, options);
 };

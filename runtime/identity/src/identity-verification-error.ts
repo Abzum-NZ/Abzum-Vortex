@@ -8,6 +8,9 @@ export const identityVerificationRefusalCodes = Object.freeze([
   "vortex.identity.invalid_claims",
   "vortex.identity.untrusted_issuer",
   "vortex.identity.untrusted_audience",
+  "vortex.identity.expired_access_token",
+  "vortex.identity.not_yet_valid_access_token",
+  "vortex.identity.future_issued_access_token",
   "vortex.identity.verified_primary_email_unavailable",
   "vortex.identity.invalid_verified_identity",
 ] as const);
