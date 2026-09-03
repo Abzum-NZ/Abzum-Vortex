@@ -1,21 +1,20 @@
 # The workflow engine
 
-Kestra open source, on the Coolify-managed server, with its own PostgreSQL beside it. It is the third
-of the three services in [Specification section 24.1](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#s24-1),
-and it runs every background thing the platform does: approvals, timers, scheduled jobs, outbound
-messages.
+Kestra open source runs on the Coolify-managed server with its own PostgreSQL. It is the workflow and
+operations service in the [current hosting boundary](../../docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries).
+It runs durable application workflows and reviewed operational jobs such as database migration,
+verification, backup, and recovery.
 
-No user ever sees it. The Workflow engine operates it, and
-[section 25.1](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#s25-1) says so
-outright.
+No application user sees it. The Vortex Workflow service operates customer-authored workflows
+through the [protected-operation boundary](../../docs/specification/09-workflows-and-pipelines.md#protected-operation-contract).
+Operational flows remain separate and use their own narrow credentials.
 
 ## What is here
 
 | File | Holds |
 |---|---|
 | `docker-compose.yml` | The stack Coolify deploys: Kestra and its own PostgreSQL |
-
-Flow definitions are not here yet. They arrive in phase 7, when the Workflow engine is built.
+| `flows/` | Reviewed operational flows. Database delivery begins in Phase 2; application workflow execution arrives in Phase 7. |
 
 ## How it is deployed
 
@@ -64,9 +63,9 @@ interface. The payload carries the instance and session identifiers, the server 
 host's time zone, and system, feature, service and plugin usage counts. No flow content and no records.
 
 Both are turned off. This engine runs tenants' business processes on a server that also holds its own
-database, and a standing hourly call outward from it is a decision, not a default. Chapter 24,
-section 24.9 already refuses third-party analytics on customer pages; this is the same rule one layer
-down.
+database, and a standing hourly call outward from it is a decision, not a default. The
+[privacy and operational rules](../../docs/specification/14-activity-privacy-and-retention.md)
+refuse unapproved third-party analytics; this is the same rule one layer down.
 
 ## Memory
 
@@ -75,8 +74,8 @@ it is given, so both containers carry a limit: 3 GB for Kestra, 1 GB for Postgre
 
 ## Recovering
 
-[Section 24.6](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4#s24-6) promises
-that runs pause and resume from their last completed step when the server returns. That holds only
+The [workflow recovery contract](../../docs/specification/09-workflows-and-pipelines.md#failure-and-display-behaviour)
+requires runs to resume safely when the server returns. That holds only
 while `kestra-postgres-data` survives, so it is backed up on a schedule. Losing it loses every run in
 flight, and nobody would find out until a restore.
 

@@ -1,0 +1,2 @@
+-- Synthetic development and test data will be added by the issue that owns
+-- each schema. Production delivery never applies this file.

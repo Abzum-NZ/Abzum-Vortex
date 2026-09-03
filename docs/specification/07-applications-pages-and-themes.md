@@ -72,6 +72,12 @@ Discoverability and invocability are separate. A page, field, choice or control 
 
 A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Navigation, form changes, action invocation and administration all bind to stable platform operations. This is what lets keyboard access, the web interface and MCP use one behaviour instead of three loosely matched implementations.
 
+## Addresses and routing
+
+The first-release application route is `/{organisation_short_name}/{application_key}/{page_key}`. Organisation short names are permanent within their environment and cannot use a platform-reserved first segment. The initial reserved segments are `signin`, `auth`, `health`, and `api`; adding a platform route and reserving its first segment are one change.
+
+An organisation-branded address may change presentation but never proves membership or grants access. The platform accepts an address only after its exact ownership and routing target have been verified, and an unknown address fails closed. Organisation subdomains and wildcard-domain routing are not part of the first release.
+
 ## Core UI continuity and motion
 
 The [Next.js application](https://nextjs.org/docs/app/getting-started/linking-and-navigating) must feel continuous during ordinary use. Opening another page, changing a section, submitting an action, or refreshing data must not blank or reload the whole application shell. The smallest complete part affected by the change updates in place, together with any totals or related components that would otherwise become inconsistent.

@@ -57,12 +57,13 @@ Every publishable [module or application](../03-composition-and-publication.md#d
 | `kind` | `module` or `application`. |
 | `key` | Permanent builder key within owner and kind. |
 | `draft_revision` | Increasing number used for edit conflicts. |
-| `draft_content` | Complete validated-shape candidate content. |
+| `draft_source` | Complete strict authored-source document. |
+| `source_contract_version`, `source_fingerprint` | The source contract used to read the draft and the fingerprint used for stale-edit protection. |
 | `published_revision` | Current live revision number or absent when never published. |
 | `created_at`, `created_by` | Creation time and actor. |
 | `updated_at`, `updated_by` | Last draft change time and actor. |
 
-Each immutable published revision has `root_id`, `revision`, complete `content`, `content_fingerprint`, `published_at`, `published_by`, validation-contract version, dependency manifest, and release note.
+Each immutable published revision has `root_id`, `revision`, complete `authored_source`, `authored_source_fingerprint`, `source_contract_version`, complete canonical `content`, `content_fingerprint`, `published_at`, `published_by`, validation-contract version, dependency manifest, and release note. Restore copies the stored authored source into a later draft; Vortex never tries to reconstruct editable source from canonical content.
 
 It also has a human-readable release version following the package's version policy. Vortex assigns the minimum valid next patch, minor, or major version from the structural comparison; the builder confirms or cancels publication and cannot enter a different number. The increasing `revision` is the storage identity; the release version communicates compatibility. Two different revisions cannot reuse one release version in the same root.
 

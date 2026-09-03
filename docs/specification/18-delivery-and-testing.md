@@ -64,7 +64,8 @@ Generated module storage changes use the same mechanism. No web request performs
 ### Supabase development and verification
 
 - Developers use the [Supabase CLI local stack and migrations](https://supabase.com/docs/guides/local-development/cli-workflows) for reproducible database work. The repository seed contains only synthetic test data.
-- Each database change includes [pgTAP database tests](https://supabase.com/docs/guides/database/testing) for its constraints, functions and row rules, and runs [database linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) before review.
+- The committed project uses Supabase's standard `supabase/config.toml`, `supabase/migrations/`, `supabase/seed.sql`, and `supabase/tests/` layout. The exact CLI version is pinned in the root workspace; no parallel migration directory or custom migration ledger exists.
+- Each database change includes [pgTAP database tests](https://supabase.com/docs/guides/database/testing) for its constraints, functions and row rules, and runs [database linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) over every Vortex-owned schema before review. Supabase-managed schemas and extension functions are excluded from this repository-owned lint result.
 - Local tests prove fast database behaviour; they do not replace the linked Testing Supabase project. After merge to `testing`, Kestra applies the migration and runs the authoritative request-role, platform-service, and organisation-separation suite there.
 - The Testing environment may use the [Index Advisor](https://supabase.com/docs/guides/database/extensions/index_advisor) against representative queries. A person reviews each suggestion and records an ordinary migration; no adviser creates a Production index directly.
 - Preview builds remain database-free. They validate migration files and contracts without receiving Testing or Production database credentials.

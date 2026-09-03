@@ -26,7 +26,7 @@ changing behaviour, never after.
 
 ## What runs
 
-Three services, and nothing else (Specification, Chapter 24).
+Three operated services, and nothing else ([runtime hosting boundaries](docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries)).
 
 | Service | What it is |
 |---|---|
@@ -34,8 +34,8 @@ Three services, and nothing else (Specification, Chapter 24).
 | The database | One Supabase project. It provides PostgreSQL, sign-in, private file storage, content-free live invalidation and a durable queue. |
 | Kestra | A self-hosted Kestra server on a Coolify-managed machine, with its own database. It runs background work. |
 
-**Kestra is not one of the sixteen engines, and nobody using Vortex ever sees it.** Specification
-section 15.3 draws the line. Vortex owns the designer where someone draws a workflow, owns the
+**Kestra is not one of the sixteen engines, and nobody using Vortex ever sees it.** The
+[workflow boundary](docs/specification/09-workflows-and-pipelines.md) draws the line. Vortex owns the designer where someone draws a workflow, owns the
 definitions, and owns every touch of a business record. A business workflow step calls back into
 Vortex, so the same permission checks apply as when a person clicks a button; Kestra never receives a
 broad runtime credential that lets a workflow read organisation data directly. Separate operational
@@ -43,13 +43,13 @@ flows use narrowly scoped database roles for migrations, access-rule tests, and 
 Those roles cannot be used by customer-authored workflows and do not replace Vortex's service and
 permission boundaries.
 
-The **Workflow engine** is a different thing. It is one of the sixteen engines in Specification
-section 25.1, and it is our code — the code that drives Kestra. Where this file says *Kestra* it means
+The **Workflow engine** is a different thing. It is one of the sixteen
+[platform services](docs/specification/17-runtime-storage-and-caching.md#platform-services-inside-the-codebase), and it is our code — the code that drives Kestra. Where this file says *Kestra* it means
 the server. Where it says *the Workflow engine* it means our code. They are never the same thing.
 
 ## Repository layout
 
-One repository, one deployable application (Specification, section 24.3).
+One repository, one deployable application ([delivery layout](docs/specification/18-delivery-and-testing.md#repository-layout-convention)).
 
 ### The workspace
 
@@ -66,7 +66,7 @@ ui/                   The shadcn/ui base and the block library.
 studio/               The designers — the screens where someone builds an application.
 modules/              The module definitions Abzum ships.
 testing/              Fixtures, the permission matrix, the database tests.
-migrations/           Not a package. Ordered database migrations and their tests.
+supabase/             Not a package. Supabase CLI configuration, migrations, synthetic seed and pgTAP tests.
 workflows/            Not a package. Kestra flow definitions.
 ```
 
@@ -76,9 +76,12 @@ The workspace members are:
 "workspaces": ["apps/*", "contracts", "db", "runtime/*", "ui", "studio", "modules", "testing"]
 ```
 
-`runtime/*` is the line that matters. Section 24.3 states that the runtime is one package per engine
-rather than one package holding all sixteen. So `runtime/` is a directory that contains packages, and
-is never a package itself. The sixteen, in the order section 25.1 lists them:
+`runtime/*` is the line that matters. The
+[platform service boundary](docs/specification/17-runtime-storage-and-caching.md#platform-services-inside-the-codebase)
+requires one package per engine rather than one package holding all sixteen. So `runtime/` is a
+directory that contains packages, and is never a package itself. The sixteen, in the order the
+[current service table](docs/specification/17-runtime-storage-and-caching.md#platform-services-inside-the-codebase)
+lists them:
 
 ```text
 runtime/definition   runtime/identity   runtime/access      runtime/module
@@ -91,13 +94,15 @@ Name every package after its public responsibility, prefixed with `@vortex/`. So
 becomes `@vortex/contracts`, and `runtime/record` becomes `@vortex/record`. The `runtime/` directory
 groups engine packages in the repository; it is not part of their public import names.
 
-`migrations/` and `workflows/` sit outside the workspace. Nothing imports either one. Kestra applies
-the migrations. The application never does.
+`supabase/` and `workflows/` sit outside the workspace. Nothing imports either one. The Supabase CLI
+owns the standard migration layout; Kestra applies shared-environment migrations. The application
+never does.
 
 ### What every package declares
 
-Dependencies run one way only. No package depends on one above it, and no package reaches inside
-another package's files.
+Dependencies run one way only. No package reaches inside another package's files; the
+[service ownership rules](docs/specification/17-runtime-storage-and-caching.md#platform-services-inside-the-codebase)
+and build-plan dependency order govern allowed dependencies.
 
 Every package declares three things. The build works out the allowed dependency graph from those
 declarations, rather than from a list someone keeps by hand.
@@ -105,7 +110,7 @@ declarations, rather than from a list someone keeps by hand.
 | Declaration | What it decides |
 |---|---|
 | What the package makes public | The build refuses any import that reaches past it |
-| Where the package sits in the engine order of section 25.3 | Which packages it may depend on |
+| Where the package sits in the build-plan service order | Which packages it may depend on |
 | Whether the package may run in a browser | Whether server-only code may enter it |
 
 Database credentials and secrets carry a server-only marker. The build refuses to let them enter a
@@ -117,14 +122,15 @@ This catches people out, so read it once.
 
 | Sense | Where it lives | What it is |
 |---|---|---|
-| A **Vortex module** | Rows in the database. Abzum authors its own under `modules/` | A definition — record types, fields, relationships, permissions, rules, events. An organisation assembles its application from these. Specification chapter 27 |
+| A **Vortex module** | Rows in the database. Abzum authors its own under `modules/` | A definition — record types, fields, relationships, permissions, rules, and events. An organisation assembles its application from these under the [module contract](docs/specification/05-modules-fields-and-relationships.md). |
 | A **package** | A directory in this repository | Code that ships. The workspace members listed above |
 
 So `studio/` is a package and not a Vortex module. It is code. Nothing stores it as rows, and no
 application carries it.
 
 The word *workflow* splits the same way. A workflow **inside an application** is a definition, and the
-application carries it and publishes it in the same revision (Specification section 26.2). The
+application carries it and publishes it in the same revision under the
+[workflow ownership rules](docs/specification/09-workflows-and-pipelines.md#ownership-and-versioning). The
 `workflows/` directory holds something unrelated: Kestra flows that operate the platform itself, such
 as applying migrations. One is product. The other is plumbing.
 
@@ -211,7 +217,8 @@ and delivers live updates runs in the browser. Both values are public by design.
 would not make them secret. It would only hide them from the code that needs them.
 
 **No Supabase service-role key exists anywhere, deliberately.** The application connects as the
-application database account over PostgreSQL, which Specification section 2.12 requires. If a
+application database account over PostgreSQL, which the
+[database rules](docs/specification/17-runtime-storage-and-caching.md#database-and-storage-rules) require. If a
 service-role key appears, treat it as a bug.
 
 ### Two ways into the database, on purpose
@@ -262,8 +269,9 @@ froze at `0.20.2` in September 2025 and receives nothing, while the project rele
 August 2026 and commits to it actively. Reaching for the old name gets you a package a year stale that
 looks maintained, because the project behind it is.
 
-Puck has not reached 1.0. Appendix D chose it knowing that. The answer is the block registration
-contract of Specification section 29.9: the platform touches Puck through one registration layer, so a
+Puck has not reached 1.0. The
+[block registration contract](docs/specification/07-applications-pages-and-themes.md#page-composition)
+keeps the integration behind one platform-owned registry, so a
 breaking change upstream lands in one place rather than across the whole block library.
 
 ## Addresses
@@ -274,7 +282,8 @@ breaking change upstream lands in one place rather than across the whole block l
 | Testing | `https://vortex-testing.abzum.com` | `testing`, behind Vercel Authentication |
 | Development | A preview address issued per pull request | that pull request's branch |
 
-The organisation's short name is the first path segment (Specification, section 2.7):
+The organisation's short name is the first path segment under the
+[application-address rules](docs/specification/07-applications-pages-and-themes.md#addresses-and-routing):
 
 ```text
 https://vortex.abzum.com/{organisation}/{application}/{page}
@@ -285,13 +294,13 @@ other, and every organisation has it installed, so it appears under that organis
 beside every other application.
 
 The first path segment therefore holds both organisation short names and the platform's own paths. So
-the platform reserves `signin`, `auth`, `health` and `api`, and refuses them as short names
-(Specification, section 2.2). The platform reads that reserved list from the same table it reads
+the platform reserves `signin`, `auth`, `health` and `api`, and refuses them as short names. The
+platform reads that reserved list from the same table it reads
 addresses from. Add a path to the platform, and add it to that list in the same change.
 
-Subdomains per organisation, `{organisation}.abzum.com`, are not in the first release (Specification,
-Appendix D.2). Adding them later needs a wildcard domain on the Vercel project, which is a paid
-feature. It also needs the address verification of section 2.7: an address works only once someone
+Subdomains per organisation, `{organisation}.abzum.com`, are not in the first release. Adding them
+later needs a wildcard domain on the Vercel project, which is a paid feature. It also needs the
+[address verification rule](docs/specification/07-applications-pages-and-themes.md#addresses-and-routing): an address works only once someone
 verifies it, and the platform refuses an address it does not recognise rather than falling back to a
 default. A blanket wildcard would contradict that rule, so we configure none. The `*.abzum.com` record
 that exists in Cloudflare today points elsewhere and has nothing to do with this platform.

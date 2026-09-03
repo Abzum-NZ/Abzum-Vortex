@@ -1,4 +1,4 @@
-# The workflow engine of Specification section 24.1.
+# The operated Kestra service in the current runtime hosting boundary.
 #
 # Kestra open source and its own PostgreSQL, both on the Coolify-managed server.
 # Kestra keeps its state here and never touches the customer database, which is
