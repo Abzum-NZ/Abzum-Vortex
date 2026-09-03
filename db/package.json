@@ -12,7 +12,11 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "postgres": "catalog:",
     "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "vitest": "4.1.11"
   },
   "vortex": {
     "tier": 1,

@@ -16,7 +16,7 @@ while [ "$#" -gt 0 ]; do
   if [ "$1" = "--db-url" ]; then
     shift
     [ "$1" = "$VORTEX_TEST_EXPECTED_DATABASE_URL" ]
-    [[ "$1" != *placeholder-password* ]]
+    [[ "$1" != *"${PGPASSWORD:-}"* ]]
     exit 0
   fi
   shift

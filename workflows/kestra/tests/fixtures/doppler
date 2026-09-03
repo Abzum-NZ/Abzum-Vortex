@@ -10,12 +10,16 @@ set -euo pipefail
 [[ " $* " != *" --no-read-env "* ]]
 
 case "${3:-}" in
-  DATABASE_PASSWORD)
-    printf '%s\n' placeholder-password
+  VORTEX_MIGRATION_DATABASE_PASSWORD)
+    printf '%s\n' 'placeholder:=/%?&password'
     ;;
-  DATABASE_URL)
-    printf 'postgresql://%s:placeholder-password@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres\n' \
-      "${VORTEX_TEST_DATABASE_USER:-postgres.${VORTEX_TEST_DATABASE_PROJECT_REF:-abcdefghijklmnopqrst}}"
+  VORTEX_MIGRATION_DATABASE_URL)
+    if [ -n "${VORTEX_TEST_DATABASE_URL_OVERRIDE:-}" ]; then
+      printf '%s\n' "$VORTEX_TEST_DATABASE_URL_OVERRIDE"
+    else
+      printf 'postgresql://%s@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres\n' \
+        "${VORTEX_TEST_DATABASE_USER:-postgres.${VORTEX_TEST_DATABASE_PROJECT_REF:-abcdefghijklmnopqrst}}"
+    fi
     ;;
   VORTEX_DATABASE_SSL_ROOT_CERT)
     printf '%s\n' "${VORTEX_TEST_SSL_ROOT_CERT:-not-a-certificate}"
