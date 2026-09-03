@@ -8,7 +8,7 @@ The platform separates work that must finish during a [record save](06-records-a
 
 ```mermaid
 flowchart LR
-    START[Person, interface or workflow requests action] --> ACTION[Action prepares record changes]
+    START[Person, MCP client, interface or workflow requests action] --> ACTION[Action prepares record changes]
     ACTION --> RULE[Rules validate and adjust save]
     RULE --> COMMIT{Save commits?}
     COMMIT -- No --> STOP[Return refusal; no event]
@@ -126,4 +126,4 @@ sequenceDiagram
 - Re-delivering an event does not create a second workflow run for the same trigger.
 - A later change cannot overtake an earlier failed event for the same record.
 - A rule that drops an unsafe condition cannot publish; it must express a safe condition or refuse the operation.
-- Actions called from pages, interfaces, and workflows follow the same validation and permission path.
+- Actions called from pages, MCP, programmable interfaces, and workflows follow the same validation and permission path. MCP does not provide a second action executor.

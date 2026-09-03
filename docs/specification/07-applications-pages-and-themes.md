@@ -42,6 +42,42 @@ Navigation is an ordered tree of headings, page links, and approved external lin
 - An external link is visibly identified and must use an approved secure address.
 - Phone navigation uses the same information architecture in a compact form; it is not a separate definition.
 
+## Semantic interface map
+
+Every published application produces one permission-filtered description of what the current person can see and do. The web interface renders it, and the governed [MCP surface](12-connections-and-interfaces.md#governed-mcp-access) exposes the same meaning to an authorised external client. This description is derived from the published application, page, form, query, action and access contracts; builders do not maintain a second agent-specific definition.
+
+```mermaid
+flowchart LR
+    DEF[Published application definitions] --> ACCESS[Current organisation account and access decision]
+    ACCESS --> MAP[Semantic interface map]
+    MAP --> WEB[Next.js pages and controls]
+    MAP --> MCP[MCP resources and tools]
+    WEB --> SERVICE[Query, Record, Action, Workflow and File services]
+    MCP --> SERVICE
+    SERVICE --> RESULT[One result, activity entry and safe error meaning]
+    RESULT --> WEB
+    RESULT --> MCP
+```
+
+The map covers every meaningful interface capability:
+
+- Application and organisation context, navigation entries, pages, record context, sections and blocks that the person may discover.
+- Current page state, allowed queries, filters, sorting, paging and refresh operations.
+- Forms and guided-form steps, field types, labels, help, validation, allowed choices, current draft revision and commit action.
+- Visible and currently available actions, their declared inputs, confirmation requirement, duplicate-protection rule and safe outcomes.
+- File selection, upload, preview and download capabilities; builder, publication, access, connection and administration capabilities when the same person can use them in the interface.
+- Stable semantic identifiers for tabs, dialogs, drawers and other view controls that a connected client may open, close or select without reading CSS selectors or screen coordinates.
+
+Discoverability and invocability are separate. A page, field, choice or control the person may not discover is absent. A control the person may see but cannot currently invoke remains in the semantic resource with `availability: unavailable` and a safe fixed explanation, but it is absent from invocable MCP tool choices. The client-facing entry never exposes an internal permission key, role name or private value. A direct invocation is still refused by the central access decision. Layout coordinates, colours, animation frames and decorative content are not business capabilities and are not copied into the semantic map.
+
+A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Navigation, form changes, action invocation and administration all bind to stable platform operations. This is what lets keyboard access, the web interface and MCP use one behaviour instead of three loosely matched implementations.
+
+## Addresses and routing
+
+The first-release application route is `/{organisation_short_name}/{application_key}/{page_key}`. Organisation short names are permanent within their environment and cannot use a platform-reserved first segment. The initial reserved segments are `signin`, `auth`, `health`, and `api`; adding a platform route and reserving its first segment are one change.
+
+An organisation-branded address may change presentation but never proves membership or grants access. The platform accepts an address only after its exact ownership and routing target have been verified, and an unknown address fails closed. Organisation subdomains and wildcard-domain routing are not part of the first release.
+
 ## Core UI continuity and motion
 
 The [Next.js application](https://nextjs.org/docs/app/getting-started/linking-and-navigating) must feel continuous during ordinary use. Opening another page, changing a section, submitting an action, or refreshing data must not blank or reload the whole application shell. The smallest complete part affected by the change updates in place, together with any totals or related components that would otherwise become inconsistent.
@@ -142,6 +178,7 @@ An application role lists exact permission keys or uses the single value `*` as 
 - A form commits through one named [action](08-forms-actions-rules-and-events.md).
 - A guided form has two to twenty reachable steps, exactly one summary step, and one final commit action.
 - A guided-form draft is private to the person, form, subject, application, and organisation.
+- The browser and an authorised MCP client may update the same draft only through its current revision. A stale update is refused instead of overwriting newer person or agent input.
 - Drafts do not create business records, appear in queries, or announce events.
 - An untouched draft is removed after thirty days unless [privacy and retention](14-activity-privacy-and-retention.md) sets a shorter organisation policy.
 - The final submission is validated and written as one save operation where its action changes one transaction boundary. Work that cannot fit that boundary starts a [workflow](09-workflows-and-pipelines.md).
@@ -183,6 +220,8 @@ Every page and block follows [quality and acceptance](20-quality-and-acceptance.
 - Moving a board card without the named action permission is refused by the server.
 - A fixture page has a defined desktop layout and phone order.
 - A hidden page remains inaccessible through a copied address.
+- An authorised MCP client sees the same discoverable navigation, form fields, choices and actions as the semantic web interface; view-refused content is absent from both, and a discoverable-unavailable control is non-invocable on both.
+- A form completed through MCP and the same form completed through the web interface produce the same validation, save, activity and error outcome.
 - Internal navigation preserves the application shell and shows immediate destination feedback without a full document reload.
 - Refreshing one list updates that list and its dependent totals without replacing unrelated blocks or losing their state.
 - Every page and independently loaded block demonstrates loading-to-content, success, recoverable failure, and reduced-motion behaviour where applicable.

@@ -1,8 +1,8 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.1
+**Status:** Approved build plan 2.2
 
-**Date:** 2 September 2026
+**Date:** 3 September 2026
 
 **Governing specification:** [Abzum Vortex platform specification](../specification/README.md)
 
@@ -67,7 +67,7 @@ Required work:
 - Maintain the dependency-complete [CRM and Service Desk fixture baseline](../specification/appendices/worked-examples.md), including every module, action, connection type, interface, theme, role, workflow, pipeline, page, query, and cross-application scenario. [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) makes every non-defaultable author choice explicit and proves deterministic, lossless conversion to the canonical contracts before Phase 2 begins.
 - Define and validate the [record-table allocation](../specification/17-runtime-storage-and-caching.md#record-table-allocation): one table per compatible record-type storage lineage, explicit organisation/application row scope, stable physical tokens, and collision cases covering same-named applications in different organisations.
 - Reconcile the repository README with [delivery and testing](../specification/18-delivery-and-testing.md).
-- Close the completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) and move migration/access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) to the start of Phase 2, before the first database migration.
+- The completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) is closed. The Supabase migration and database-test foundation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) starts Phase 2 before the first service schema.
 - Update [Phase 1 epic #9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9) so every active M0 gate is a native dependency.
 - Assign the existing Priority values to active work, add a real Bugs filter, add roadmap dates when scheduling begins, use native blocked-by links, and add epic completion criteria on the [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1).
 
@@ -120,6 +120,8 @@ Exit proof:
 
 **Needs:** Phase 1.
 
+**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) first; database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) and the identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) can then proceed independently. Tenant and organisation structure [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) follows #28. Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) follows #23; organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) follow both #23 and #25. Native GitHub dependencies enforce the order. Work remains in the backlog until its blocker closes.
+
 **Outcome:** A person can sign in, choose an organisation, tenant administrators can manage a safe organisation hierarchy, and authorised builders can draft, validate, publish and restore modules and applications independently.
 
 Build:
@@ -130,6 +132,7 @@ Build:
 - Independent module and application draft concurrency, release versions, validation, immutable revision publication, dependency graph and restore. Themes, pages, workflows, interfaces and application roles remain contained in the application; organisation roles remain live access data.
 - Platform bootstrap definitions required before the Page service exists.
 - Organisation and environment context established at the start of every database transaction.
+- The official Supabase CLI project, ordered migration history, local pgTAP/lint gate, and Kestra Testing/Production delivery path exist before a service schema is introduced. Kestra runs the same committed pgTAP files through a pinned in-image `pg_prove` harness, so operated verification does not require the host Docker socket.
 
 Exit proof:
 
@@ -138,6 +141,7 @@ Exit proof:
 - A stale draft cannot overwrite a later edit.
 - Publishing is atomic and a restored version becomes a new draft.
 - Definition and identity tables pass their database separation tests.
+- The delivery engine is bootstrapped from one exact reviewed commit, produces successful Testing evidence after that commit merges to `testing`, and returns Coolify to the same revision on protected `main` before ordinary automatic delivery begins.
 - Tenant administrators can create and move organisations without gaining record access, and cross-tenant or cyclic hierarchy moves are refused.
 
 ## Phase 3 — Access
@@ -228,6 +232,7 @@ Build:
 - Six page types, four list arrangements, registered blocks, twelve-column responsive layout and page states.
 - [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, the six central semantic tokens, interruptible state-driven motion, and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.
 - Forms, guided-form drafts, action buttons and public pages.
+- A permission-filtered [semantic interface map](../specification/07-applications-pages-and-themes.md#semantic-interface-map) for navigation, pages, queries, forms, drafts, choices, files, actions, Studio and administration. Web components bind to these stable semantic controls so Phase 9 can expose the same capabilities without describing the DOM or rebuilding application behaviour.
 - Complete process-pipeline definition, transition gates and visible stage controls. Timed execution comes in Phase 7.
 - The protected sign-in and recovery shell, plus locked Tenant Administration and Organisation Administration application definitions built with the same application/page primitives as customer applications.
 
@@ -238,6 +243,7 @@ Exit proof:
 - Internal navigation never performs a routine full document reload; slow routes and blocks show immediate local feedback, and refreshing data updates only affected components and dependent totals without losing unrelated state.
 - A delayed response or unfinished animation for an obsolete record, page, or access state never flashes or replaces the current authorised state; no feature defines its own motion timing or spring.
 - Direct addresses cannot bypass page and action permissions.
+- The published semantic map contains every meaningful discoverable interface control, omits view-refused controls, and marks a discoverable-unavailable control as non-invocable without exposing its permission key. It uses stable identifiers rather than labels, selectors or coordinates. Form-draft revisions prevent a later browser or future MCP client from overwriting newer input.
 
 ## Phase 7 — Workflow and pipeline execution
 
@@ -246,6 +252,8 @@ Exit proof:
 **Needs:** Phases 5 and 6.
 
 **Outcome:** Durable workflows and pipeline time targets execute with [Kestra](https://kestra.io/docs) authoritative for execution status while Vortex remains authoritative for application records and access.
+
+**Foundation order:** Before application-workflow execution [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) must align the pinned Kestra release and its state-database major on an officially supported combination. The change requires a verified off-host backup, a disposable restore rehearsal and a forward migration; an existing PostgreSQL data directory is never opened by an older major.
 
 Build:
 
@@ -288,12 +296,16 @@ Exit proof:
 
 **Needs:** Phases 6–8.
 
-**Outcome:** Approved systems and registered Vortex clusters can interact through narrow, versioned, monitored operations.
+**Outcome:** Approved systems and registered Vortex clusters can interact through narrow, versioned, monitored operations, and an authorised external MCP client can use the same governed capabilities as its person's web interface.
 
 Build:
 
 - Connection types and instances, OAuth lifecycle, secret rotation, outgoing operations, incoming verification, network-address safety, shared retry budgets and health.
 - Versioned interface operations, authentication, duplicate protection, rate limits, compatibility ranges and deprecation.
+- One governed remote [MCP surface](../specification/12-connections-and-interfaces.md#governed-mcp-access), delivered by [issue #200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200), using revision `2026-07-28`, Streamable HTTP, mandatory `server/discover`, per-request revision, client-information and capability metadata, pagination and safe change notification. The HTTP adapter separately validates the required protocol-version, method, applicable name and declared-parameter headers against the body, refuses invalid origins or header mismatches, accepts modern MCP messages only by negotiated `POST`, exposes no modern `GET`, and remains stateless. Use the Supabase Auth OAuth 2.1 server for discovery, authorization code with PKCE, refresh rotation and administrator pre-registration; keep deprecated dynamic registration disabled and bind audience-restricted tokens to separate live Vortex organisation-account/application/capability grants.
+- A small generic resource and tool set projected from the Phase 6 semantic interface map. It covers context and navigation, query controls, form and guided-form drafts, validation and submission, files, named actions, Studio and administration without generating one tool per button or exposing a schema-free data bypass.
+- Optional, explicit live-interface pairing for semantic navigation, form updates and actions. Pairing is visible, expiring and revocable, carries expected state revisions, and never exposes browser cookies, DOM handles, selectors, coordinates or unrestricted browser control.
+- One execution path: web and MCP call the same access, validation and platform services and produce the same records, events, activity meaning, duplicate behaviour and safe errors. Vortex hosts no model, assistant, sampling request or autonomous agent loop.
 - [Federation transport and cluster trust issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157): Vortex cluster directory, signed manifests, request-signing and verification library, replay protection, and version negotiation used by the [federation runtime](../specification/17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 
 Exit proof:
@@ -301,6 +313,9 @@ Exit proof:
 - Connection addresses cannot reach unapproved private infrastructure.
 - Incoming and interface writes are safe under replay.
 - Deprecated interface versions cannot be removed while a protected dependency remains.
+- Automated parity evidence proves the same identity and organisation account sees and can use the same permitted capability inventory through web and MCP, while refused fields and controls are absent from both.
+- Form, file, action, Studio and administration scenarios produce the same outcome through web and MCP; revocation applies on the next request and stale paired-interface revisions are refused.
+- Authorization tests refuse invalid-issuer, expired, revoked, wrong-audience, wrong-client and pass-through tokens. A separate access test refuses operations outside the live Vortex grant/current account and proves extra standard identity scopes grant nothing. Every request declares its revision, client information and capabilities in `_meta`; `server/discover` reports the supported set; unsupported or legacy connection-scoped revisions fail safely. Transport tests refuse an invalid `Origin` and missing or mismatched required headers with the defined safe error, verify required `POST` content negotiation and prove the modern endpoint is stateless and has no `GET` behaviour.
 - [Issue #157](https://github.com/Abzum-NZ/Abzum-Vortex/issues/157) proves signed two-cluster transport, replay refusal, compatible rolling versions, key rotation, route shutdown, and bounded outage before record-sharing operations use it.
 
 ## Phase 10 — Copy, gallery, sharing, import and export
@@ -405,6 +420,7 @@ Build and prove:
 - No read replica in the first release; measured demand must create and justify future work.
 - Secret inventory and rotation drills.
 - Full separation, accessibility, measured performance, load, failure and recovery acceptance. Performance findings create work but never block a release by themselves.
+- The complete web/MCP parity matrix from [quality and acceptance](../specification/20-quality-and-acceptance.md#mcp-parity-acceptance), including permission removal and live-interface pairing, against the release candidate.
 - Production release checklist, change record, support boundary and customer communication path.
 
 Exit proof:
@@ -423,5 +439,5 @@ The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follow
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/protected data handling/retention, entitlements/metering, and operations issues belong to those epics rather than Phase 10. Commercial applications do not block the generic platform roadmap.
 5. Extension-point use belongs to Phase 4 and standard-page replacement belongs to Phase 6; they are no longer deferred to distribution work.
 6. Priority is explicit on every project issue: `P0 — Critical`, `P1 — Next`, `P2 — Planned`, or `P3 — Later`. The Bugs view filters `label:bug`; roadmap dates and Iteration remain empty until work is genuinely scheduled.
-7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) is closed. Migration and access-rule operation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) is a Phase 2 prerequisite blocked by Phase 1.
+7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132) is closed. Supabase migration and database-test foundation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) is the active first Phase 2 task.
 8. Every later board change follows the current specification and keeps the decision register limited to genuinely open business choices.

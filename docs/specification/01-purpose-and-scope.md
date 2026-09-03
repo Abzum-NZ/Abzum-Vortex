@@ -33,7 +33,7 @@ An organisation can:
 3. Control who can discover, read, create, change, delete, export, or administer information through [access and permissions](04-access-and-permissions.md).
 4. Guide work through [forms, rules and events](08-forms-actions-rules-and-events.md) and [workflows and process pipelines](09-workflows-and-pipelines.md).
 5. Read information through [queries, reports, search and live updates](10-queries-reports-search.md).
-6. Exchange information through [files](11-files-and-attachments.md), [connections and programmable interfaces](12-connections-and-interfaces.md), and explicit [sharing, import, and export](16-copying-sharing-import-export.md).
+6. Exchange information through [files](11-files-and-attachments.md), [connections, programmable interfaces, and governed MCP access](12-connections-and-interfaces.md), and explicit [sharing, import, and export](16-copying-sharing-import-export.md).
 7. Meet operational obligations through [privacy and retention](14-activity-privacy-and-retention.md), [delivery and testing](18-delivery-and-testing.md), and [backup and recovery](19-operations-backup-and-recovery.md).
 
 ## Product boundaries
@@ -46,6 +46,7 @@ The first complete release includes:
 - Published versions so people use a known, validated configuration.
 - Web experiences that work on desktop and phone.
 - Public pages and programmable interfaces where an organisation explicitly enables them.
+- A governed [Model Context Protocol](12-connections-and-interfaces.md#governed-mcp-access) surface through which an authorised external client can discover and use the same navigation, forms, actions, files, builder operations and administration operations available to that person in the web interface.
 - Generic entitlement decisions, resource metering, export, retention, activity history, and recovery.
 - Governed cross-organisation record sharing with the same product behaviour whether the organisations are in one cluster or different clusters.
 
@@ -57,7 +58,7 @@ The first complete release does not include:
 - Automatic sharing of records, definitions, files, or learned information between organisations.
 - Replicating shared records into recipient-cluster storage or directly connecting customer databases. Cross-cluster access uses the approved [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
 - A marketplace in which unreviewed packages become automatically trusted.
-- Artificial-intelligence assistants, model-generated work, autonomous agents, and model-assisted workflow steps.
+- A Vortex-provided artificial-intelligence assistant, hosted model, model-generated work, autonomous execution, or model-assisted workflow step. The governed MCP surface is an interoperability boundary for an external client; it does not add a model or assistant to Vortex.
 - Privileged business domains. Commercial billing, ordinary approvals, tasks, comments, notices, business calendars and operational case management are built as ordinary applications under the [core contract boundary](appendices/core-contract-boundary.md).
 
 ## Product principles
@@ -69,6 +70,7 @@ The first complete release does not include:
 5. **Unsafe requests fail closed.** When the platform cannot prove an operation is allowed, it refuses the operation and records why.
 6. **Business choices are visible.** An undecided policy is listed in the [decision register](appendices/decisions.md), not embedded as an implementation assumption.
 7. **Core knows primitives, not business domains.** Every privileged contract must pass the [core contract admission test](appendices/core-contract-boundary.md#admission-test).
+8. **Every authorised interface operation has one behaviour.** The web interface and [MCP](12-connections-and-interfaces.md#governed-mcp-access) expose the same permission-filtered semantic controls and call the same platform services. Neither surface invents a second save, action, validation, or access path.
 
 ## Acceptance examples
 

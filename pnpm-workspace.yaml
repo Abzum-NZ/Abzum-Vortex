@@ -10,6 +10,7 @@ packages:
 catalog:
   "@types/semver": 7.7.1
   semver: 7.8.5
+  supabase: 2.116.0
 
 catalogMode: strict
 

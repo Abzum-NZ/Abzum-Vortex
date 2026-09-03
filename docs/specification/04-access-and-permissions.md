@@ -32,7 +32,7 @@ The result is either **allowed** or **refused**, with a stable reason code suita
 The same rules are expressed through two coordinated implementations:
 
 1. A database decision function is the final protection for organisation-owned database rows.
-2. A server access library calls the database decision for row operations and applies the same permission vocabulary to files, caches, search, workflows, connections, and programmable interfaces.
+2. A server access library calls the database decision for row operations and applies the same permission vocabulary to files, caches, search, workflows, connections, programmable interfaces, and the governed MCP surface.
 
 The database function, permission vocabulary, and shared test cases are canonical. The system does not claim that one TypeScript function runs inside PostgreSQL. Parity is proved by the [access test suite](20-quality-and-acceptance.md#organisation-separation-suite).
 

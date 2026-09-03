@@ -57,12 +57,13 @@ Every publishable [module or application](../03-composition-and-publication.md#d
 | `kind` | `module` or `application`. |
 | `key` | Permanent builder key within owner and kind. |
 | `draft_revision` | Increasing number used for edit conflicts. |
-| `draft_content` | Complete validated-shape candidate content. |
+| `draft_source` | Complete strict authored-source document. |
+| `source_contract_version`, `source_fingerprint` | The source contract used to read the draft and the fingerprint used for stale-edit protection. |
 | `published_revision` | Current live revision number or absent when never published. |
 | `created_at`, `created_by` | Creation time and actor. |
 | `updated_at`, `updated_by` | Last draft change time and actor. |
 
-Each immutable published revision has `root_id`, `revision`, complete `content`, `content_fingerprint`, `published_at`, `published_by`, validation-contract version, dependency manifest, and release note.
+Each immutable published revision has `root_id`, `revision`, complete `authored_source`, `authored_source_fingerprint`, `source_contract_version`, complete canonical `content`, `content_fingerprint`, `published_at`, `published_by`, validation-contract version, dependency manifest, and release note. Restore copies the stored authored source into a later draft; Vortex never tries to reconstruct editable source from canonical content.
 
 It also has a human-readable release version following the package's version policy. Vortex assigns the minimum valid next patch, minor, or major version from the structural comparison; the builder confirms or cancels publication and cannot enter a different number. The increasing `revision` is the storage identity; the release version communicates compatibility. Two different revisions cannot reuse one release version in the same root.
 
@@ -389,6 +390,20 @@ A connection instance has organisation, connection-type revision, encrypted-secr
 An incoming message has organisation, connection, message type, provider message identifier or fingerprint, verified time, safe payload reference, duplicate state, workflow trigger result, and retention due time.
 
 An interface operation has interface and major version, operation key, explicit HTTP method and application-relative path, target-aware input/output shapes, authentication method, required permission, visibility, rate/size limits, duplicate-protection rule, called action/query/workflow, and stable error catalogue. Each shape field declares type, required status, and its exact target binding. A custom action requires one subject binding and bindings for all required declared inputs, with no output fields. A query has no inputs and returns at least one selected field, plus optional standard page information. An interface-triggered workflow has no inputs and returns exactly its run identifier. Standard record actions, query parameters, action results, and workflow inputs remain unavailable until their owning contracts explicitly define those values. Publication resolves every binding and checks its type. A public operation refuses administrative permissions and non-shareable actions; its action condition, subject values, changed fields and created-record values may use only fields approved for public display on the correct record type. Public query outputs receive the same field approval check. An interface dependency records minimum and maximum accepted major/minor versions.
+
+### MCP parity contracts
+
+An **MCP authorisation grant** has a permanent grant identifier, identity, OAuth `client_id`, safe client display information and registration method, exact MCP resource audience, approved organisation-account and application scopes, approved capability scopes, issue/expiry/revocation times, access-version bindings and safe activity links. An approved organisation is represented by that identity's separate account in that organisation; the grant never combines roles between accounts. The grant never contains a browser cookie, OAuth refresh token, external-provider credential, model credential or unrestricted service authority. Current account and access state may always narrow or revoke it.
+
+An **MCP interaction context** has an opaque context identifier, authorisation grant, active tenant/organisation-account/application context, exact application version, creation/last-use/expiry times, and optional live-interface pairing. Every self-contained request separately carries the MCP revision and client capabilities required by `2026-07-28`; the context is Vortex state and is not a connection-scoped protocol session. A pairing contains a one-time approved browser-session reference, current semantic-state revision and termination time; it contains no DOM reference or browser credential.
+
+A **semantic interface resource** has schema version, organisation account, application and exact version, page and optional record context, semantic-state revision, and ordered permission-filtered navigation, region, form and control entries. It exposes only entries the current caller may discover. It may describe a visible temporarily unavailable control with one safe catalogue reason, but never includes a denied item, hidden field, secret value, CSS selector, pixel coordinate or executable browser content.
+
+A **semantic control entry** has a stable control identifier, control kind, plain label and description, containing page/region, current availability, optional safe unavailable reason, typed input or value contract, confirmation or reauthentication requirement, exact target operation, duplicate-protection rule where changing, and result shape. The server retains the required permission in the internal operation binding but never projects that permission key to the client. A discoverable unavailable entry appears in the semantic resource but not the invocable tool choices. Control kinds cover navigation, page/record opening, view-state selection, query/filter/sort/page/refresh, form draft and guided step, named action, file operation, builder change, publication and administration. A semantic form entry additionally has form and draft identifiers, current draft revision, field order, write-only markers, allowed choices, validation results and commit action.
+
+An **MCP tool request** identifies the interaction context, protocol revision and client capabilities, semantic control, expected semantic-state or draft revision, typed input and duplicate-protection key where required. The result is the ordinary platform operation outcome plus correlation/activity references and the new state, draft or record revision. MCP protocol failures remain distinct from application validation or access refusals; application results use the same stable safe codes as the web interface.
+
+The server may page resources with opaque cursors and announce that resource or tool lists changed. A cursor is scoped to its authorisation grant, interaction context, protocol revision, application version and access version and cannot be reused to cross any of them.
 
 ## Activity and retention contracts
 

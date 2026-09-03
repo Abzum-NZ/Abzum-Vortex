@@ -1,7 +1,7 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.1
-**Date:** 2 September 2026
+**Status:** Approved specification 2.2
+**Date:** 3 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
@@ -56,8 +56,8 @@ Words such as “organisation,” “module,” “application,” and “publis
 ### Supporting services
 
 11. [Files and attachments](11-files-and-attachments.md)
-12. [Connections and programmable interfaces](12-connections-and-interfaces.md)
-13. Artificial-intelligence functionality is deliberately outside this release; see [Product boundaries](01-purpose-and-scope.md#product-boundaries).
+12. [Connections, programmable interfaces and MCP](12-connections-and-interfaces.md)
+13. A Vortex-provided model or assistant is deliberately outside this release; governed external-client MCP access is covered by [Product boundaries](01-purpose-and-scope.md#product-boundaries).
 14. [Activity history, privacy and retention](14-activity-privacy-and-retention.md)
 15. [Entitlements and metering](15-entitlements-and-metering.md)
 16. [Copying, sharing, import and export](16-copying-sharing-import-export.md)
@@ -94,6 +94,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.2 | Approved | 3 September 2026 | Added a governed Model Context Protocol surface as a required alternative way to use every authorised interface capability. Defined a permission-filtered semantic view of navigation, forms, controls and actions; shared UI/MCP execution; optional live interface control; OAuth-bound external-agent sessions; and parity acceptance without adding an embedded model or assistant. |
 | 2.1 | Approved | 2 September 2026 | Established the platform-primitives-only boundary. Removed commercial billing, ordinary approvals, business announcements, organisation business profiles and privacy case management from core; retained only generic entitlements, metering, grant consent, protected data handling and operational status. Simplified the workflow catalogue, moved motion implementation to the platform UI system, and corrected public caller contexts and safe errors. |
 | 2.0 | Approved | 1 September 2026 | Incorporated all remaining business choices: separate module and application versions, tenant hierarchy and tenant administrators without implicit data access, controlled permission wildcards, multi-team membership and direct record sharing, safe record/field/file rules, Kestra-authoritative workflow status and governed nodes, no AI scope, organisation-scoped erasure, tenant billing and announcements, Testing-only database checks, one-hour RPO/eight-hour RTO, non-blocking performance measurement, storage-lineage table allocation, and explicit use of Supabase Auth, row rules, Queue, Webhooks, private Realtime invalidation, Storage, database verification, advisers and managed recovery. The decision register is clear. |
 | 2.0-draft.5 | Review draft | 1 September 2026 | Final sharing policy written through the specification and plan: approval by both organisations, published saved conditions, no live re-sharing, named application roles, explicit action/field/export rights, and source-executed search, reports, and approved export through ordinary record components. Resolved choices were removed from the open register. |

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+[ "${1:-}" = "secrets" ]
+[ "${2:-}" = "get" ]
+[ "${DOPPLER_TOKEN:-}" = "local-placeholder" ]
+[[ " $* " = *" --project local-placeholder "* ]]
+[[ " $* " = *" --config local-placeholder "* ]]
+[[ " $* " != *" --no-read-env "* ]]
+
+case "${3:-}" in
+  DATABASE_PASSWORD)
+    printf '%s\n' placeholder-password
+    ;;
+  DATABASE_URL)
+    printf 'postgresql://%s:placeholder-password@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres\n' \
+      "${VORTEX_TEST_DATABASE_USER:-postgres.${VORTEX_TEST_DATABASE_PROJECT_REF:-abcdefghijklmnopqrst}}"
+    ;;
+  VORTEX_DATABASE_SSL_ROOT_CERT)
+    printf '%s\n' "${VORTEX_TEST_SSL_ROOT_CERT:-not-a-certificate}"
+    ;;
+  *)
+    echo "unexpected Doppler secret request" >&2
+    exit 1
+    ;;
+esac
