@@ -1,0 +1,138 @@
+-- Included by pgTAP suites with \ir. The helper is session-local and never
+-- becomes part of a migrated database.
+create or replace function pg_temp.vortex_private_schema_assertions(
+  candidate_schema text,
+  expected_owner name default 'postgres',
+  runtime_may_use boolean default false
+)
+returns setof text
+language plpgsql
+as $function$
+declare
+  schema_oid oid;
+  owner_oid oid := expected_owner::regrole;
+begin
+  select oid into schema_oid
+  from pg_catalog.pg_namespace
+  where nspname = candidate_schema;
+
+  return next extensions.has_schema(candidate_schema, candidate_schema || ' private schema exists');
+  return next extensions.is(
+    (select pg_catalog.pg_get_userbyid(nspowner)::text from pg_catalog.pg_namespace where oid = schema_oid),
+    expected_owner::text,
+    candidate_schema || ' has the expected owner'
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('public', candidate_schema, 'USAGE'),
+    'PUBLIC cannot use ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('anon', candidate_schema, 'USAGE'),
+    'anon cannot use ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('authenticated', candidate_schema, 'USAGE'),
+    'authenticated cannot use ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('service_role', candidate_schema, 'USAGE'),
+    'service_role cannot use ' || candidate_schema
+  );
+  return next extensions.ok(
+    pg_catalog.has_schema_privilege('vortex_runtime', candidate_schema, 'USAGE') = runtime_may_use,
+    'vortex_runtime schema use matches the declared exception for ' || candidate_schema
+  );
+  return next extensions.ok(
+    pg_catalog.has_schema_privilege('vortex_request', candidate_schema, 'USAGE'),
+    'vortex_request can use ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('public', candidate_schema, 'CREATE'),
+    'PUBLIC cannot create in ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('anon', candidate_schema, 'CREATE'),
+    'anon cannot create in ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('authenticated', candidate_schema, 'CREATE'),
+    'authenticated cannot create in ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('service_role', candidate_schema, 'CREATE'),
+    'service_role cannot create in ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('vortex_runtime', candidate_schema, 'CREATE'),
+    'vortex_runtime cannot create in ' || candidate_schema
+  );
+  return next extensions.ok(
+    not pg_catalog.has_schema_privilege('vortex_request', candidate_schema, 'CREATE'),
+    'vortex_request cannot create in ' || candidate_schema
+  );
+  return next extensions.ok(
+    not exists (
+      select 1
+      from pg_catalog.pg_default_acl as defaults
+      cross join lateral pg_catalog.aclexplode(defaults.defaclacl) as privilege
+      left join pg_catalog.pg_roles as granted_role on granted_role.oid = privilege.grantee
+      where defaults.defaclnamespace = schema_oid
+        and defaults.defaclrole = owner_oid
+        and (
+          privilege.grantee = 0
+          or granted_role.rolname in (
+            'anon', 'authenticated', 'service_role', 'vortex_runtime', 'vortex_request'
+          )
+        )
+    )
+    and not exists (
+      select 1
+      from (values ('r'::"char"), ('S'::"char"), ('f'::"char")) as object_type(kind)
+      cross join lateral pg_catalog.aclexplode(
+        coalesce(
+          (
+            select defaults.defaclacl
+            from pg_catalog.pg_default_acl as defaults
+            where defaults.defaclnamespace = 0
+              and defaults.defaclrole = owner_oid
+              and defaults.defaclobjtype = object_type.kind
+          ),
+          pg_catalog.acldefault(object_type.kind, owner_oid)
+        )
+      ) as privilege
+      left join pg_catalog.pg_roles as granted_role on granted_role.oid = privilege.grantee
+      where privilege.grantee = 0
+        or granted_role.rolname in (
+          'anon', 'authenticated', 'service_role', 'vortex_runtime', 'vortex_request'
+        )
+    ),
+    candidate_schema || ' default privileges do not expose future objects'
+  );
+  return next extensions.ok(
+    not exists (
+      select 1
+      from pg_catalog.aclexplode(
+        coalesce(
+          (
+            select defaults.defaclacl
+            from pg_catalog.pg_default_acl as defaults
+            where defaults.defaclnamespace = 0
+              and defaults.defaclrole = owner_oid
+              and defaults.defaclobjtype = 'f'
+          ),
+          pg_catalog.acldefault('f', owner_oid)
+        )
+      ) as privilege
+      left join pg_catalog.pg_roles as granted_role on granted_role.oid = privilege.grantee
+      where privilege.privilege_type = 'EXECUTE'
+        and (
+          privilege.grantee = 0
+          or granted_role.rolname in (
+            'anon', 'authenticated', 'service_role', 'vortex_runtime', 'vortex_request'
+          )
+        )
+    ),
+    candidate_schema || ' effective function defaults do not grant Data API execution'
+  );
+end
+$function$;

@@ -224,8 +224,8 @@ read_doppler_secret() {
     --silent
 }
 
-export VORTEX_DATABASE_PASSWORD="$(read_doppler_secret DATABASE_PASSWORD)"
-export VORTEX_DATABASE_CONNECTION="$(read_doppler_secret DATABASE_URL)"
+export VORTEX_DATABASE_PASSWORD="$(read_doppler_secret VORTEX_MIGRATION_DATABASE_PASSWORD)"
+export VORTEX_DATABASE_CONNECTION="$(read_doppler_secret VORTEX_MIGRATION_DATABASE_URL)"
 export VORTEX_DATABASE_SSL_ROOT_CERT="$(read_doppler_secret VORTEX_DATABASE_SSL_ROOT_CERT)"
 unset DOPPLER_TOKEN VORTEX_DOPPLER_TOKEN
 require_variable VORTEX_DATABASE_PASSWORD
@@ -239,10 +239,9 @@ connection_credentials="${connection_without_scheme%%@*}"
 connection_host_path="${connection_without_scheme#*@}"
 [ "$connection_host_path" != "$connection_without_scheme" ] ||
   die "database connection has no host"
-database_user="${connection_credentials%%:*}"
-connection_password="${connection_credentials#*:}"
-[ "$connection_password" != "$connection_credentials" ] ||
-  die "database connection has no password"
+[[ "$connection_credentials" != *:* ]] ||
+  die "database connection must not embed a password"
+database_user="$connection_credentials"
 database_host_port="${connection_host_path%%/*}"
 database_name="${connection_host_path#*/}"
 database_host="${database_host_port%:*}"
@@ -257,9 +256,7 @@ database_project_ref="${database_user#postgres.}"
   die "database connection does not name the Supabase session pooler"
 [ "$database_port" = "5432" ] || die "database connection is not session mode"
 [ "$database_name" = "postgres" ] || die "database connection does not name postgres"
-[ "$connection_password" = "$VORTEX_DATABASE_PASSWORD" ] ||
-  die "database connection password does not match DATABASE_PASSWORD"
-unset VORTEX_DATABASE_CONNECTION connection_password
+unset VORTEX_DATABASE_CONNECTION
 
 database_url="postgresql://${database_user}@${database_host}:5432/postgres?sslmode=verify-full"
 readonly database_url
@@ -300,7 +297,7 @@ say "applying pending migrations through Supabase migration history"
     supabase/tests
   supabase db lint \
     --db-url "$database_url" \
-    --schema "${VORTEX_LINT_SCHEMAS:-public}" \
+    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context}" \
     --level warning \
     --fail-on error
 )

@@ -24,7 +24,7 @@
     "db:reset": "supabase db reset",
     "db:new": "supabase migration new",
     "db:test": "supabase test db",
-    "db:lint": "supabase db lint --schema public --level warning --fail-on error",
+    "db:lint": "supabase db lint --schema public,vortex_context --level warning --fail-on error",
     "db:verify": "pnpm db:reset && pnpm db:test && pnpm db:lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

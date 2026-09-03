@@ -31,7 +31,7 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 | Supabase capability | Vortex use | Boundary |
 |---|---|---|
 | [Auth](https://supabase.com/docs/guides/auth), [OAuth 2.1 server](https://supabase.com/docs/guides/auth/oauth-server) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority, locally verifiable short-lived identity tokens, and authorization-code-with-PKCE tokens for governed MCP clients | Organisation roles, teams, application access and MCP capability grants remain live Vortex data, not OAuth scope or token claims. Supabase authorizes identity/client; the Vercel MCP route enforces Vortex access. |
-| PostgreSQL and [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) | Authoritative data, transactions, constraints and organisation separation | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. |
+| PostgreSQL, [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) and [Supavisor](https://supabase.com/docs/guides/database/connecting-to-postgres) | Authoritative data, transactions, constraints, organisation separation and pooled server connections | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. Vercel uses transaction mode; migrations and database verification use a separate owner credential over session mode. |
 | [Queues](https://supabase.com/docs/guides/queues) | Logged, durable event delivery after a committed save | Queue client functions are server-only and the `pgmq_public` interface is not exposed to browsers. |
 | [Database Webhooks](https://supabase.com/docs/guides/database/webhooks) | Asynchronous low-latency wake-up after durable work exists | A webhook is a hint, not delivery proof; the queue and scheduled Kestra recovery remain authoritative. |
 | [Realtime Broadcast](https://supabase.com/docs/guides/realtime/authorization) | Private, content-free invalidation for open components | Clients reload through the authorised query path; business values are never broadcast. |
@@ -92,9 +92,64 @@ Each service owns its tables and public contract. Another service calls that con
 - Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
 - The table-owner role is limited to migration and controlled verification work.
-- Every database transaction establishes global identity or system actor, tenant, organisation account, organisation, application, and correlation context before reading organisation data. Tenant-administrator context alone never satisfies an organisation record policy.
+- Every protected database transaction establishes one complete context containing the caller kind, global identity or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
+
+### Database roles, connections and request context
+
+Vortex separates the credential that changes the database from the credential that serves an
+application request.
+
+- The Supabase project owner is used only by the reviewed Kestra migration and database-verification
+  path. It connects through the IPv4 session pooler on port 5432 because those commands require a
+  stable PostgreSQL session. Its address, password, and root certificate live only in the unsynced
+  Doppler branch configs `stg_operations` and `prd_operations`.
+- The Vercel server connects as an environment-specific `vortex_runtime` login through Supabase's
+  shared transaction pooler on port 6543. That login owns no object and has no direct service-table
+  privilege. Inside an explicit transaction it may initialize the closed request context and enter
+  only the non-login `vortex_request` role, which has no ownership, schema or persistent-relation
+  creation, replication, superuser, or row-security-bypass capability.
+- `vortex_request` receives only the exact operations required on each relation. It never receives
+  `TRUNCATE`, `REFERENCES`, `TRIGGER`, schema creation, policy management, or table ownership.
+- `PUBLIC`, `anon`, `authenticated`, and `service_role` have no use or execution grant on private
+  Vortex context or service schemas. Direct browser access to those schemas therefore has no database
+  route even if an exposed-schema setting changes.
+
+The server validates the existing closed [session-context
+contract](appendices/data-contracts.md#session-context), then starts one database transaction as
+`vortex_runtime`. The runtime role establishes the context once through its parameterised private
+initializer and then enters `vortex_request` with `SET LOCAL ROLE` before running protected service
+SQL. Only `vortex_runtime` may execute the initializer. Only `vortex_request` may execute the
+read-only context accessors used by row policies and service SQL. The database stores the whole
+context as one transaction-local value, not as independently reusable session settings. Missing,
+empty, malformed, incomplete, internally inconsistent, or expired context fails closed. Commit,
+rollback, and connection reuse make the context unavailable to the next transaction.
+
+Setting a structurally valid context is not itself an access grant. The server establishes it only
+after the owning identity and request boundaries have verified their inputs. As tenant, organisation,
+account, session, and Access records are introduced, their owning services validate the current live
+authority used by each policy. An application-contained policy also refuses a context with no
+application identifier. A tenant-administration operation may use tenant scope only where its owning
+service explicitly permits it; it never satisfies an organisation-record policy.
+
+Vercel's serverless database client disables prepared statements for transaction pooling and begins
+with one client connection per instance. A protected operation keeps all context setup and work
+inside one transaction; it never expects a later statement or request to receive the same physical
+connection. Both runtime and operational database connections require full certificate and hostname
+verification.
+
+Database functions use `SECURITY INVOKER` unless a documented invariant requires otherwise. A rare
+`SECURITY DEFINER` function belongs in a non-exposed schema, uses fully qualified names and a fixed
+safe `search_path`, grants execution only to its exact caller, and has tests proving it cannot broaden
+access.
+
+Every later private service schema uses the copyable [private service-schema
+pattern](../../supabase/README.md#private-service-schema-pattern) and its reusable session-local
+pgTAP assertions. The pattern covers existing-object grants separately from default privileges for
+future tables, sequences, and functions. It preserves PostgreSQL's database-wide temporary-relation
+default for Supabase-managed roles; temporary relations are session-local and never count as service
+storage, durable authority, or persistent relation ownership.
 
 ### Record-table allocation
 
