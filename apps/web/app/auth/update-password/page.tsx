@@ -14,6 +14,11 @@ export default function UpdatePasswordPage() {
     const values = new URLSearchParams(window.location.hash.slice(1));
     const nextTokenHash = values.get("token_hash") ?? "";
     const type = values.get("type") ?? "";
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
     if (nextTokenHash.length >= 16 && type === "recovery") setTokenHash(nextTokenHash);
     setCheckedLink(true);
   }, []);
@@ -47,9 +52,10 @@ export default function UpdatePasswordPage() {
           type="password"
           autoComplete="new-password"
           minLength={8}
+          pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
           required
         />
-        <p className="auth-hint">Use at least 8 characters.</p>
+        <p className="auth-hint">Use at least 8 characters, including a letter and a number.</p>
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>
       </form>
       {!checkedLink ? (

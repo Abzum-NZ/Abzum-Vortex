@@ -14,6 +14,11 @@ export function ConfirmEmailForm() {
     const values = new URLSearchParams(window.location.hash.slice(1));
     const tokenHash = values.get("token_hash") ?? "";
     const type = values.get("type") ?? "";
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
     if (tokenHash.length < 16 || type !== "email") {
       setInvalidLink(true);
       return;
