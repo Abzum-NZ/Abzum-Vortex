@@ -43,6 +43,9 @@ assert_partial_hierarchy_release_refused() {
   git clone --quiet "$test_root/remote.git" "$partial_checkout"
   git -C "$partial_checkout" config user.name delivery-test
   git -C "$partial_checkout" config user.email delivery-test@example.invalid
+  rm -f \
+    "$partial_checkout/supabase/migrations/20260903174244_tenant_organization_foundation.sql" \
+    "$partial_checkout/supabase/tests/tenant-organization-concurrency.test.sh"
   mkdir -p "$(dirname "${partial_checkout}/${artifact_path}")"
   : >"${partial_checkout}/${artifact_path}"
   git -C "$partial_checkout" add "$artifact_path"
