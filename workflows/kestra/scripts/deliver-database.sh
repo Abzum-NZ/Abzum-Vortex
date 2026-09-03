@@ -7,6 +7,8 @@ readonly REPOSITORY_URL="https://github.com/Abzum-NZ/Abzum-Vortex.git"
 readonly EXPECTED_SUPABASE_VERSION="2.116.0"
 readonly EXPECTED_PG_PROVE_VERSION="pg_prove 3.36"
 readonly EXPECTED_POSTGRES_MAJOR="17"
+readonly HIERARCHY_MIGRATION="supabase/migrations/20260903174244_tenant_organization_foundation.sql"
+readonly HIERARCHY_PROOF="supabase/tests/tenant-organization-concurrency.test.sh"
 
 die() {
   echo "database-delivery: FAILED: $*" >&2
@@ -30,6 +32,15 @@ prepare_database_only_checkout() {
     '/^[[:space:]]*signing_keys_path[[:space:]]*=/d' \
     "$config_path" >"$temporary_config"
   mv "$temporary_config" "$config_path"
+}
+
+validate_hierarchy_proof_pair() {
+  if [ -e "${checkout}/${HIERARCHY_MIGRATION}" ] && [ ! -f "${checkout}/${HIERARCHY_PROOF}" ]; then
+    die "tenant and organisation migration has no concurrency proof"
+  fi
+  if [ ! -e "${checkout}/${HIERARCHY_MIGRATION}" ] && [ -e "${checkout}/${HIERARCHY_PROOF}" ]; then
+    die "tenant and organisation concurrency proof has no migration"
+  fi
 }
 
 require_variable() {
@@ -164,6 +175,7 @@ git -C "$checkout" fetch --quiet --no-tags origin \
 git -C "$checkout" merge-base --is-ancestor "$commit" "refs/remotes/origin/${branch_name}" ||
   die "webhook commit is not reachable from the expected protected branch"
 git -C "$checkout" checkout --quiet --detach "$commit"
+validate_hierarchy_proof_pair
 
 migration_set_sha256="$(migration_digest "$commit")"
 readonly migration_set_sha256
@@ -311,9 +323,16 @@ say "applying pending migrations through Supabase migration history"
     --ext .sql \
     --recurse \
     supabase/tests
+  if [ -f "$HIERARCHY_PROOF" ]; then
+    if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
+      : >"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+    else
+      VORTEX_CONCURRENCY_DATABASE_URL="$database_url" bash "$HIERARCHY_PROOF"
+    fi
+  fi
   supabase db lint \
     --db-url "$database_url" \
-    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context}" \
+    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context,vortex_identity}" \
     --level warning \
     --fail-on error
 )
