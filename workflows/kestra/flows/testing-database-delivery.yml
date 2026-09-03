@@ -42,3 +42,6 @@ triggers:
   - id: github_push_to_testing
     type: io.kestra.plugin.core.trigger.Webhook
     key: "{{ secret('VORTEX_TESTING_MIGRATION_WEBHOOK_KEY') }}"
+    conditions:
+      - type: io.kestra.plugin.core.condition.Expression
+        expression: "{{ trigger.body.ref == 'refs/heads/testing' }}"

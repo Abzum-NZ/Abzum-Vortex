@@ -113,6 +113,11 @@ Both flows queue at concurrency one. Supabase's migration history makes delivery
 idempotent; the repository does not create another migration ledger. Production never runs seed data,
 and neither flow resets a shared database.
 
+GitHub sends every push event to both repository webhooks. Each webhook trigger therefore has an
+expression condition: the Testing flow accepts only `refs/heads/testing`, and the Production flow
+accepts only `refs/heads/main`. Kestra returns without creating an execution when the condition does
+not match.
+
 An exceptional Testing-only recovery is a separate, explicitly authorised operation. Before it
 changes anything, it must prove that Testing contains no application tables, identities, storage
 buckets or files; record the exact existing migration history and legacy roles; and fingerprint
