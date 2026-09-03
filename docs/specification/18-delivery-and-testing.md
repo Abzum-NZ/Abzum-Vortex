@@ -45,6 +45,8 @@ Feature branches merge into `testing`. The verified `testing` revision is promot
 
 Deployable applications follow the official Turborepo convention and live under `apps/`; the single Next.js composition root is `apps/web`. Shared packages remain separate workspace members and cannot become additional deployment roots. A different layout requires an explicit architecture reason and updated boundary, build, deployment, and documentation checks in the same change.
 
+The Vercel project uses `apps/web` as its Root Directory and includes files outside that directory during the build. Its application-local `vercel.json` returns to the workspace root to install the frozen lockfile and run the one repository gate, `pnpm verify`, then publishes `.next` relative to `apps/web`. The matching Turborepo task declares `.next/**` except `.next/cache/**` as output so enabling task caching cannot omit the deployable application. Task caching is an optional build optimisation, not a release requirement. Vercel and local verification must not substitute a second command with different checks.
+
 ## Database changes
 
 Database changes are immutable, ordered files. Once applied to a shared environment, a file is not edited. A correction is a later change.
