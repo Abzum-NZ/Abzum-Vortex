@@ -33,6 +33,41 @@ jq --exit-status \
    (.migrations | length) > 0' \
   "$VORTEX_EVIDENCE_PATH" >/dev/null
 
+assert_partial_hierarchy_release_refused() {
+  local artifact_path="$1"
+  local expected_message="$2"
+  local partial_checkout="$test_root/partial-checkout"
+  local partial_commit
+
+  rm -rf "$partial_checkout"
+  git clone --quiet "$test_root/remote.git" "$partial_checkout"
+  git -C "$partial_checkout" config user.name delivery-test
+  git -C "$partial_checkout" config user.email delivery-test@example.invalid
+  mkdir -p "$(dirname "${partial_checkout}/${artifact_path}")"
+  : >"${partial_checkout}/${artifact_path}"
+  git -C "$partial_checkout" add "$artifact_path"
+  git -C "$partial_checkout" commit --quiet -m "Create partial hierarchy release"
+  partial_commit="$(git -C "$partial_checkout" rev-parse HEAD)"
+  git -C "$partial_checkout" push --quiet origin HEAD:main
+  export VORTEX_GITHUB_COMMIT="$partial_commit"
+
+  if "$delivery_script" >"$test_root/partial-release.log" 2>&1; then
+    echo "expected partial tenant and organisation release to be refused" >&2
+    exit 1
+  fi
+  grep --fixed-strings --quiet "$expected_message" "$test_root/partial-release.log"
+
+  git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
+  export VORTEX_GITHUB_COMMIT="$commit"
+}
+
+assert_partial_hierarchy_release_refused \
+  supabase/migrations/20260903174244_tenant_organization_foundation.sql \
+  "tenant and organisation migration has no concurrency proof"
+assert_partial_hierarchy_release_refused \
+  supabase/tests/tenant-organization-concurrency.test.sh \
+  "tenant and organisation concurrency proof has no migration"
+
 migration_set_sha256="$(jq --raw-output '.migration_set_sha256' "$VORTEX_EVIDENCE_PATH")"
 export VORTEX_DELIVERY_OPERATION=apply
 export VORTEX_APPROVED=true
