@@ -7,7 +7,7 @@ if [ "${1:-}" = "--version" ]; then
   exit 0
 fi
 
-[ "${PGPASSWORD:-}" = "placeholder-password" ]
+[ "${PGPASSWORD:-}" = 'placeholder:=/%?&password' ]
 [ "${PGSSLMODE:-}" = "verify-full" ]
 [ -n "${PGSSLROOTCERT:-}" ]
 test -s "$PGSSLROOTCERT"

@@ -52,8 +52,8 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `KESTRA_PUBLIC_URL` | The public Kestra address used in generated links |
 | `VORTEX_TESTING_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of the unpredictable key for the protected Testing push webhook |
 | `VORTEX_PRODUCTION_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of a different unpredictable key for the protected Production push webhook |
-| `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the service token limited to `abzum-vortex` / `stg` |
-| `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate service token limited to `abzum-vortex` / `prd` |
+| `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the service token limited to `abzum-vortex` / `stg_operations` |
+| `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate service token limited to `abzum-vortex` / `prd_operations` |
 
 They are set in Coolify and held in the secret manager. The API credential is also set on the web
 application so it can reach the engine.
@@ -69,17 +69,21 @@ commit, migration-set, or approval checks performed by the flow. The two Doppler
 bootstrap credentials. The delivery process asks Doppler only for the existing database connection
 and password plus the Supabase root certificate.
 
-Database delivery reuses the `abzum-vortex` project's `stg` and `prd` configs. Browser-verified syncs
-map `stg` to Vercel Preview and `prd` to Vercel Production, so the delivery script retrieves only its
-three named values rather than importing the whole application config into the migration process.
-Those values are `DATABASE_URL`, `DATABASE_PASSWORD`, and
-`VORTEX_DATABASE_SSL_ROOT_CERT`. The script accepts only Supabase's IPv4 session pooler on port 5432,
+Database delivery uses the unsynced `stg_operations` and `prd_operations` branch configs under the
+`abzum-vortex` project's existing `stg` and `prd` environments. The root configs continue to sync
+restricted application-runtime values to Vercel; the operations configs have no external sync. The
+delivery script retrieves only `VORTEX_MIGRATION_DATABASE_URL`,
+`VORTEX_MIGRATION_DATABASE_PASSWORD`, and `VORTEX_DATABASE_SSL_ROOT_CERT`. The migration URL contains
+the project-owner username, session-pooler host, port, and database but deliberately contains no
+password; the separate password value remains raw so reserved characters require no URL encoding.
+The script accepts only
+Supabase's IPv4 session pooler on port 5432,
 the `postgres.<project-ref>` owner and the `postgres` database. Each reviewed flow also carries the
 exact non-secret Supabase project reference for its environment, so swapping the `stg` and `prd`
 database addresses is refused before any connection is opened. It confirms that the separately read
-password matches the configured address, then rebuilds a credential-free address with
-`sslmode=verify-full`. The password travels through `PGPASSWORD`, not a command argument or logged
-address. The certificate is the project Server root certificate downloaded from Supabase Database
+credential-free URL names the approved owner, project, host, session-mode port, and database, then
+adds `sslmode=verify-full`. The separate raw password travels through `PGPASSWORD`, not a command
+argument or logged address. The certificate is the project Server root certificate downloaded from Supabase Database
 Settings. Backup, restore, web, and connection-provider secrets remain in other configs, so a
 migration process cannot receive them accidentally.
 

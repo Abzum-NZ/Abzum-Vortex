@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-[ "${PGPASSWORD:-}" = "placeholder-password" ]
+[ "${PGPASSWORD:-}" = 'placeholder:=/%?&password' ]
 [ "$1" = "$VORTEX_TEST_EXPECTED_DATABASE_URL" ]
 
 case "$*" in

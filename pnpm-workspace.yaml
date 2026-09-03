@@ -9,6 +9,7 @@ packages:
   - testing
 catalog:
   "@types/semver": 7.7.1
+  postgres: 3.4.9
   semver: 7.8.5
   supabase: 2.116.0
 
