@@ -140,7 +140,7 @@ test -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 jq --exit-status \
   '.status == "succeeded" and
    .environment == "production" and
-   .applied_migration_count == 1 and
+   .applied_migration_count == (.migrations | length) and
    .approval.approved_by == "local-reviewer" and
    .approval.testing_execution_id == "testing-run"' \
   "$VORTEX_EVIDENCE_PATH" >/dev/null
