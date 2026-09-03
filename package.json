@@ -25,7 +25,7 @@
     "typecheck": "turbo run typecheck",
     "boundaries": "node tooling/boundaries/check.mjs",
     "test": "vitest run",
-    "fixtures": "node testing/fixtures/validate-fixtures.mjs",
+    "fixtures": "vitest run testing/fixtures/validate-fixtures.test.ts",
     "build": "turbo run build",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm fixtures && pnpm build"
   },

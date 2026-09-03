@@ -1,52 +1,97 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "connection_type",
-  "root_id": "connection_email",
+  "root_alias": "connection_email",
   "key": "vortex.connection.email",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.connection.email:1.0.0",
   "body": {
     "name": "Email",
     "purpose": "Send messages and receive delivery status through an organisation-authorised provider.",
     "provider": "Example Mail",
     "authentication": {
       "kind": "oauth2",
-      "secret_fields": ["client_id", "client_secret", "refresh_token"],
-      "scopes": ["messages.send", "delivery.read"]
+      "secret_fields": [
+        "client_id",
+        "client_secret",
+        "refresh_token"
+      ],
+      "scopes": [
+        "messages.send",
+        "delivery.read"
+      ]
     },
-    "allowed_hosts": ["api.mail.example"],
+    "allowed_hosts": [
+      "api.mail.example"
+    ],
     "allow_redirects": false,
     "shapes": [
       {
         "key": "email_message",
         "fields": [
-          { "key": "recipient", "type": "text", "required": true },
-          { "key": "subject", "type": "text", "required": true },
-          { "key": "body", "type": "text", "required": true }
+          {
+            "key": "recipient",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "subject",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "body",
+            "type": "text",
+            "required": true
+          }
         ]
       },
       {
         "key": "template_message",
         "fields": [
-          { "key": "recipient", "type": "text", "required": true },
-          { "key": "template_key", "type": "text", "required": true },
-          { "key": "variables", "type": "json", "required": true }
+          {
+            "key": "recipient",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "template_key",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "variables",
+            "type": "json",
+            "required": true
+          }
         ]
       },
       {
         "key": "delivery_receipt",
         "fields": [
-          { "key": "provider_message_id", "type": "text", "required": true },
-          { "key": "accepted", "type": "boolean", "required": true }
+          {
+            "key": "provider_message_id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "accepted",
+            "type": "boolean",
+            "required": true
+          }
         ]
       },
       {
         "key": "delivery_status",
         "fields": [
-          { "key": "provider_message_id", "type": "text", "required": true },
-          { "key": "status", "type": "text", "required": true }
+          {
+            "key": "provider_message_id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "status",
+            "type": "text",
+            "required": true
+          }
         ]
       }
     ],

@@ -148,6 +148,7 @@ const applicationDraft = (): ApplicationDraft =>
           name: "Reader",
           homePageId: id(21),
           permissionKeys: ["sample.public.open"],
+          permissionSelection: { kind: "exact" },
         },
       ],
       queries: [],
@@ -240,6 +241,14 @@ const resolvedRecordType = (moduleRootId = id(1), recordTypeId = id(4)) => ({
   state: "resolved",
   moduleRootId,
   recordTypeId,
+});
+
+const dailySchedule = () => ({
+  cadence: "daily" as const,
+  interval: 1,
+  timeZone: "Pacific/Auckland",
+  minute: 0,
+  hour: 0,
 });
 
 const fieldCases = [
@@ -380,7 +389,7 @@ const fieldCases = [
   ],
   [
     "total",
-    { relationshipId: id(12), operation: "count" },
+    { relationshipId: id(12), operation: "count", resultType: "whole_number" },
     (value: Record<string, unknown>) => (value.operation = "maximum"),
     "major",
   ],
@@ -492,14 +501,14 @@ const workflowCases = [
       responderPermissionKey: "sample.public.open",
       dueInSeconds: 60,
       timeoutOutcome: "expired",
-      outputKeys: ["response"],
+      outputs: [{ key: "response", type: "text" }],
     },
     {
       pageId: id(21),
       responderPermissionKey: "sample.public.open",
       dueInSeconds: 61,
       timeoutOutcome: "expired",
-      outputKeys: ["response"],
+      outputs: [{ key: "response", type: "text" }],
     },
   ],
   ["query_records", { queryId: id(127) }, { queryId: id(128) }],
@@ -600,14 +609,23 @@ const sampleInterface = (
       operationId: id(71),
       key: "read",
       description: "Read one result.",
+      method: "GET",
+      path: "/sample",
       inputShape: {},
-      outputShape: { result: "text" },
+      outputShape: {
+        result: {
+          type: "text",
+          required: true,
+          targetBinding: { kind: "query_field", fieldId: id(10) },
+        },
+      },
       authentication:
         visibility === "organization_private"
           ? "organization_token"
           : visibility === "partner"
             ? "partner_token"
             : "public",
+      permissionKey: "sample.record.read",
       visibility,
       rateLimitPerMinute: 60,
       maximumRequestBytes: 10_000,
@@ -1092,7 +1110,11 @@ const fieldPolicyDirectionCases: readonly FieldPolicyCase[] = [
   ],
   [
     "total changes",
-    policyField("total", { relationshipId: id(12), operation: "count" }),
+    policyField("total", {
+      relationshipId: id(12),
+      operation: "count",
+      resultType: "whole_number",
+    }),
     (item) => (item.settings.operation = "maximum"),
     "major",
   ],
@@ -1618,7 +1640,13 @@ describe("definition version impact", () => {
           workflowId: id(130),
           key: "sample_workflow",
           name: "Sample workflow",
-          trigger: { kind: "schedule", scheduleKey: "daily" },
+          trigger: {
+            kind: "schedule",
+            schedule: dailySchedule(),
+            inputs: [],
+            condition: null,
+            duplicateProtection: "required",
+          },
           runAs: "system_with_source_authority",
           nodes: [
             {
@@ -1671,7 +1699,13 @@ describe("definition version impact", () => {
         workflowId: id(130),
         key: "sample_workflow",
         name: "Sample workflow",
-        trigger: { kind: "schedule", scheduleKey: "daily" },
+        trigger: {
+          kind: "schedule",
+          schedule: dailySchedule(),
+          inputs: [],
+          condition: null,
+          duplicateProtection: "required",
+        },
         runAs: "system_with_source_authority",
         nodes: [
           { ...common, nodeId: id(131), type: "start", config: {} },
@@ -1841,7 +1875,11 @@ describe("definition version impact", () => {
     expect(compareDefinitionVersionImpact(deprecated)).toMatchObject({ impact: "patch" });
 
     const widenedOutput = applicationRequestAfter(base);
-    widenedOutput.candidate.content.interfaces[0]!.operations[0]!.outputShape.count = "number";
+    widenedOutput.candidate.content.interfaces[0]!.operations[0]!.outputShape.count = {
+      type: "number",
+      required: true,
+      targetBinding: { kind: "query_page_information", value: "result_count" },
+    };
     expect(compareDefinitionVersionImpact(widenedOutput)).toMatchObject({ impact: "minor" });
 
     const widenedErrors = applicationRequestAfter(base);
@@ -1858,9 +1896,45 @@ describe("definition version impact", () => {
     delete narrowedOutput.candidate.content.interfaces[0]!.operations[0]!.outputShape.result;
     expect(compareDefinitionVersionImpact(narrowedOutput)).toMatchObject({ impact: "major" });
 
-    const changedInput = applicationRequestAfter(base);
-    changedInput.candidate.content.interfaces[0]!.operations[0]!.inputShape.value = "text";
-    expect(compareDefinitionVersionImpact(changedInput)).toMatchObject({ impact: "major" });
+    const actionBase = applicationDraft();
+    actionBase.content.interfaces.push(sampleInterface());
+    actionBase.content.interfaces[0]!.operations[0]!.target = {
+      kind: "action",
+      key: "sample.record.update",
+    };
+    actionBase.content.interfaces[0]!.operations[0]!.outputShape = {};
+
+    const optionalInput = applicationRequestAfter(actionBase);
+    optionalInput.candidate.content.interfaces[0]!.operations[0]!.inputShape.value = {
+      type: "text",
+      required: false,
+      targetBinding: { kind: "action_input", key: "first" },
+    };
+    expect(compareDefinitionVersionImpact(optionalInput)).toMatchObject({ impact: "minor" });
+
+    const requiredInput = applicationRequestAfter(actionBase);
+    requiredInput.candidate.content.interfaces[0]!.operations[0]!.inputShape.value = {
+      type: "text",
+      required: true,
+      targetBinding: { kind: "action_input", key: "first" },
+    };
+    expect(compareDefinitionVersionImpact(requiredInput)).toMatchObject({ impact: "major" });
+
+    const changedOutputBinding = applicationRequestAfter(base);
+    changedOutputBinding.candidate.content.interfaces[0]!.operations[0]!.outputShape.result = {
+      type: "text",
+      required: true,
+      targetBinding: { kind: "query_page_information", value: "continuation_token" },
+    };
+    expect(compareDefinitionVersionImpact(changedOutputBinding)).toMatchObject({ impact: "major" });
+
+    const changedMethod = applicationRequestAfter(base);
+    changedMethod.candidate.content.interfaces[0]!.operations[0]!.method = "POST";
+    expect(compareDefinitionVersionImpact(changedMethod)).toMatchObject({ impact: "major" });
+
+    const changedPath = applicationRequestAfter(base);
+    changedPath.candidate.content.interfaces[0]!.operations[0]!.path = "/renamed";
+    expect(compareDefinitionVersionImpact(changedPath)).toMatchObject({ impact: "major" });
   });
 
   test.each(["choice", "table", "workflow_edge"] as const)(
@@ -1873,7 +1947,13 @@ describe("definition version impact", () => {
             workflowId: id(130),
             key: "sample_workflow",
             name: "Sample workflow",
-            trigger: { kind: "schedule", scheduleKey: "daily" },
+            trigger: {
+              kind: "schedule",
+              schedule: dailySchedule(),
+              inputs: [],
+              condition: null,
+              duplicateProtection: "required",
+            },
             runAs: "system_with_source_authority",
             nodes: [
               {
@@ -1967,6 +2047,7 @@ describe("definition version impact", () => {
             moduleRootId: id(80),
             moduleKey: "sample.dependency",
             version: { selection: "exact", version: "1.0.0" },
+            resolvedVersion: "1.0.0",
           }),
       },
       {
@@ -2050,6 +2131,7 @@ describe("definition version impact", () => {
             name: "Viewer",
             homePageId: id(21),
             permissionKeys: ["sample.public.open"],
+            permissionSelection: { kind: "exact" },
           }),
       },
       { impact: "minor", add: (draft) => draft.content.queries.push(sampleQuery()) },
@@ -2162,6 +2244,7 @@ describe("definition version impact", () => {
             name: "Viewer",
             homePageId: id(21),
             permissionKeys: ["sample.public.open"],
+            permissionSelection: { kind: "exact" },
           }),
         remove: (draft) => void draft.content.roles.pop(),
       },

@@ -134,16 +134,16 @@ An input label or input display-order change is patch. Adding an optional input,
 | Permission | Label or description | Add | Remove; change key, record-type scope, action kind, named action, or administrative status |
 | Navigation | Label/order | Add optional item | Remove; change type, target, address, parent, or permission |
 | Page | Name, pure layout/geometry/display order | Add non-public standalone page | Remove; add public/replacement page; change record/query/action/access/public/runtime behaviour |
-| Role | Name | Add | Remove; change key, permissions, or role home page |
+| Role | Name | Add | Remove; change key, exact permissions or `*` expansion, or role home page |
 | Query | — | Add unused optional query | Remove or change any existing query meaning or output order |
 | Block registration | Name, icon, palette, pure phone geometry | Add | Remove or change version, settings, children, live/public/security behaviour |
 | Pipeline | Stage label/display order | — | Add, remove, transition, target, gate, or entry/exit behaviour change |
 | Action/event | Same module policy | Same module policy | Same module policy |
 | Rule or workflow | Name only | — | Add, remove, graph, trigger, execution policy, value, or behaviour change |
-| Interface | Description, declared interface version, supported → deprecated notice | Add private interface/operation; widen output/error/limits | Partner/public exposure; removal; input/auth/access/target/duplicate change; narrowing or any other state transition |
+| Interface | Description, declared interface version, supported → deprecated notice | Add private interface/operation; add optional target-compatible input; widen output/error/limits | Partner/public exposure; removal; method/path/required input/input or output target binding/auth/access/target/duplicate change; narrowing or any other state transition |
 | Public address | — | — | Any add, removal, path, page, state, or rate-limit change |
 
-Arbitrary block settings, conditions, expressions, filters, and executable values are major when changed because the comparator cannot prove their effect safely.
+Changing a placed block's tagged setting value or reference is major unless the owning block contract explicitly classifies that literal as presentation-only. Conditions, expressions, filters, and executable values are major when changed because the comparator cannot prove their effect safely.
 
 ## Workflow-node policy
 

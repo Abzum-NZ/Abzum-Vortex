@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./compiler": "./src/compiler-api.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
@@ -13,9 +14,11 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "semver": "catalog:",
     "server-only": "0.0.1"
   },
   "devDependencies": {
+    "@types/semver": "catalog:",
     "vitest": "4.1.11"
   },
   "vortex": {

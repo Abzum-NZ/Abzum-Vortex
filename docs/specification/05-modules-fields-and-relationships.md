@@ -108,7 +108,7 @@ The platform supports these twenty-two types:
 |---|---|---|
 | `text` | One line of text | Maximum length and optional format |
 | `long_text` | Several lines of plain text | Maximum length |
-| `formatted_text` | Restricted formatted content | Allowed formatting and maximum length |
+| `formatted_text` | Restricted formatted content | Allowed paragraph, heading, list, table, link and attachment blocks, plus maximum length |
 | `whole_number` | Integer | Minimum, maximum, and step |
 | `decimal_number` | Decimal value | Digits before and after the decimal point, minimum, maximum |
 | `money` | Monetary value | Currency, minimum, maximum |
@@ -134,15 +134,15 @@ There is no separate duration type in this release. Each calendar page explicitl
 ## Calculations and totals
 
 - A calculation is deterministic and cannot perform network calls, change records, or read data the current operation is not allowed to read.
-- The first release uses only five closed calculation forms: join named text fields, apply one of four numeric operations to named field/literal operands, subtract a named percentage field from a named amount field, evaluate a typed condition, or offset a named date/date-time field by a named/literal amount. The declared result type must match that form. Arbitrary objects, scripts, and user-defined expressions are refused.
+- The first release uses only six closed calculation forms: join named text fields, apply one of four numeric operations to named field/literal operands, subtract a named percentage field from a named amount field, evaluate a typed condition, offset a named date/date-time field by a named/literal amount, or determine whether a named deadline has passed while excluding explicitly listed terminal status values. The declared result type must match that form. Arbitrary objects, scripts, and user-defined expressions are refused.
 - Calculation dependencies are known at publication and cycles are refused.
-- A total names one relationship, operation, optional source field, and optional filter expressed through the same closed typed condition tree used by rules. Arbitrary filter objects are refused.
-- Supported operations are count, sum, minimum, maximum, and average where the source type permits them.
+- A total names the relationship with its exact `module:record_type.relationship` owner, plus an operation, explicit result type, optional aggregate-source field, and optional aggregate-source filter expressed through the same closed typed condition tree used by rules. The relationship must point from its source records to the record that owns the total. This makes reverse totals unambiguous, resolves fields and filters in the related source record rather than the total-owning record, and refuses unrelated outgoing relationships and arbitrary filter objects.
+- Supported operations are count, sum, minimum, maximum, and average where the source type permits them. Count produces a whole number; sum, minimum, and maximum preserve the compatible source-field type; average produces a decimal number, or money when averaging money. Publication checks the declared result against the referenced field instead of treating every calculated or total value as a number.
 - A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable error that identifies the currency codes present. Vortex never silently converts or splits the total.
 
 ## Relationships
 
-A relationship has one owning field and a generated or explicitly named reverse path.
+A relationship has one owning field and a generated or explicitly named reverse path. It names either one target record type or an explicit list of at least two possible target record types. A polymorphic relationship remains one relationship with one stable identity; it is not expanded into unrelated relationships during compilation.
 
 ```mermaid
 flowchart LR
@@ -165,7 +165,7 @@ Many-to-many relationships use an explicit joining record type so ownership, per
 
 ### Cross-module relationships
 
-A link field may target a record type in another module. The owning module declares a dependency on the target module with an allowed version range. In builder-facing contracts, the link uses the declared dependency key followed by the target record-type key. Published contracts resolve both to stable platform identifiers; a text key is never treated as sufficient identity by itself.
+A link field may target a record type in another module. The owning module declares a dependency on the target module with an exact version or an allowed [npm semantic-version range](https://github.com/npm/node-semver#ranges). In builder-facing contracts, the link uses the target module's full namespaced key followed by a colon and the target record-type key, for example `vortex.example.people:contact`. The declared dependency key remains the local identity of the dependency entry; it is not substituted into a record-type reference. Published contracts resolve the module and record type to stable platform identifiers, so a text key is never sufficient identity by itself.
 
 Cross-module links follow the same relationship rules as intra-module links: one owning field, a generated or named reverse path, and a declared parent-deletion behaviour. The dependency graph built during [publication](03-composition-and-publication.md#dependency-graph) validates that the target module exists, the version is compatible, and the target record type is present.
 

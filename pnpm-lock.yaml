@@ -4,6 +4,15 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@types/semver':
+      specifier: 7.7.1
+      version: 7.7.1
+    semver:
+      specifier: 7.8.5
+      version: 7.8.5
+
 importers:
 
   .:
@@ -117,10 +126,16 @@ importers:
 
   contracts:
     dependencies:
+      semver:
+        specifier: 'catalog:'
+        version: 7.8.5
       zod:
         specifier: 4.5.4
         version: 4.5.4
     devDependencies:
+      '@types/semver':
+        specifier: 'catalog:'
+        version: 7.7.1
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
@@ -187,10 +202,16 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      semver:
+        specifier: 'catalog:'
+        version: 7.8.5
       server-only:
         specifier: 0.0.1
         version: 0.0.1
     devDependencies:
+      '@types/semver':
+        specifier: 'catalog:'
+        version: 7.7.1
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
@@ -365,9 +386,16 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@vortex/definition':
+        specifier: workspace:*
+        version: link:../runtime/definition
       '@vortex/modules':
         specifier: workspace:*
         version: link:../modules
+    devDependencies:
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   ui:
     dependencies:
@@ -821,6 +849,9 @@ packages:
 
   '@types/react@19.2.18':
     resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@typescript-eslint/eslint-plugin@8.69.0':
     resolution: {integrity: sha512-t5jQTKPIgVW1PE6dR6H6Qz5gm8zjMlX5/2gRaOGd9eO6V7J+tQc6iWKukEe7dY8u9HyYasQ0yfF0/FSSTEO2gA==}
@@ -1880,6 +1911,8 @@ snapshots:
   '@types/react@19.2.18':
     dependencies:
       csstype: 3.2.3
+
+  '@types/semver@7.7.1': {}
 
   '@typescript-eslint/eslint-plugin@8.69.0(@typescript-eslint/parser@8.69.0(eslint@9.39.5)(typescript@5.9.3))(eslint@9.39.5)(typescript@5.9.3)':
     dependencies:

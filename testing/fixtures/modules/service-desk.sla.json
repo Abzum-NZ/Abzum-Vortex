@@ -1,16 +1,11 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "module",
-  "root_id": "mod_service_desk_sla",
+  "root_alias": "mod_service_desk_sla",
   "key": "vortex.service_desk.sla",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.service_desk.sla:1.0.0",
   "body": {
     "name": "Service Desk Service Levels",
     "description": "Business calendars and service-level targets used by cases.",
-    "category": "Service Desk",
     "dependencies": [],
     "record_types": [
       {
@@ -19,7 +14,6 @@
         "key": "business_calendar",
         "name": "Business calendar",
         "plural_name": "Business calendars",
-        "description": "Working hours and excluded dates for response calculations.",
         "storage_scope": "organisation_shared",
         "ownership_mode": "team",
         "title_field": "name",
@@ -137,7 +131,9 @@
               ]
             }
           }
-        ]
+        ],
+        "custom_actions": [],
+        "relationships": []
       },
       {
         "id": "rt_sd_service_level",
@@ -145,7 +141,6 @@
         "key": "service_level",
         "name": "Service level",
         "plural_name": "Service levels",
-        "description": "Response and resolution targets for cases.",
         "storage_scope": "organisation_shared",
         "ownership_mode": "team",
         "title_field": "name",
@@ -233,18 +228,143 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
-            "settings": {
-              "default": true
-            }
+            "settings": {},
+            "default": true
+          }
+        ],
+        "custom_actions": [
+          "act_sla_pause"
+        ],
+        "relationships": [
+          {
+            "id": "fld_sla_calendar_relationship",
+            "key": "calendar",
+            "from_field": "calendar",
+            "to_record_type": "vortex.service_desk.sla:business_calendar",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "refuse"
           }
         ]
       }
     ],
     "permissions": [
       {
-        "key": "vortex.service_desk.sla.service_level.manage",
+        "id": "perm_business_calendar_create",
+        "key": "vortex.service_desk.sla.business_calendar.create",
+        "label": "Create business calendar",
+        "description": "Allows the standard create operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "create",
+        "administrative": false
+      },
+      {
+        "id": "perm_business_calendar_read",
+        "key": "vortex.service_desk.sla.business_calendar.read",
+        "label": "Read business calendar",
+        "description": "Allows the standard read operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_business_calendar_update",
+        "key": "vortex.service_desk.sla.business_calendar.update",
+        "label": "Update business calendar",
+        "description": "Allows the standard update operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_business_calendar_soft_delete",
+        "key": "vortex.service_desk.sla.business_calendar.soft_delete",
+        "label": "Soft Delete business calendar",
+        "description": "Allows the standard soft_delete operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_business_calendar_restore",
+        "key": "vortex.service_desk.sla.business_calendar.restore",
+        "label": "Restore business calendar",
+        "description": "Allows the standard restore operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_business_calendar_export",
+        "key": "vortex.service_desk.sla.business_calendar.export",
+        "label": "Export business calendar",
+        "description": "Allows the standard export operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_service_level_create",
+        "key": "vortex.service_desk.sla.service_level.create",
+        "label": "Create service level",
+        "description": "Allows the standard create operation for service levels.",
         "record_type": "service_level",
-        "label": "Manage service levels"
+        "action_kind": "create",
+        "administrative": false
+      },
+      {
+        "id": "perm_service_level_read",
+        "key": "vortex.service_desk.sla.service_level.read",
+        "label": "Read service level",
+        "description": "Allows the standard read operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_service_level_update",
+        "key": "vortex.service_desk.sla.service_level.update",
+        "label": "Update service level",
+        "description": "Allows the standard update operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_service_level_soft_delete",
+        "key": "vortex.service_desk.sla.service_level.soft_delete",
+        "label": "Soft Delete service level",
+        "description": "Allows the standard soft_delete operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_service_level_restore",
+        "key": "vortex.service_desk.sla.service_level.restore",
+        "label": "Restore service level",
+        "description": "Allows the standard restore operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_service_level_export",
+        "key": "vortex.service_desk.sla.service_level.export",
+        "label": "Export service level",
+        "description": "Allows the standard export operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_named_1_manage",
+        "key": "vortex.service_desk.sla.service_level.manage",
+        "label": "Manage service levels",
+        "description": "Allows the named manage operation.",
+        "record_type": "service_level",
+        "action_kind": "named",
+        "named_action": "manage",
+        "administrative": false
       }
     ],
     "actions": [
@@ -256,8 +376,18 @@
         "permission": "vortex.service_desk.sla.service_level.manage",
         "inputs": [],
         "effects": [
-          {"kind":"set_field","field":"active","value":{"source":"literal","value":false}},
-          {"kind":"announce_event","event":"vortex.service_desk.sla.service_level.changed"}
+          {
+            "kind": "set_field",
+            "field": "active",
+            "value": {
+              "source": "literal",
+              "value": false
+            }
+          },
+          {
+            "kind": "announce_event",
+            "event": "vortex.service_desk.sla.service_level.changed"
+          }
         ],
         "shareable": false
       }
@@ -272,7 +402,8 @@
           "first_response_minutes",
           "resolution_minutes",
           "active"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "rules": [],
@@ -285,6 +416,7 @@
           "field"
         ]
       }
-    ]
+    ],
+    "sharing_conditions": []
   }
 }

@@ -1,24 +1,27 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "module",
-  "root_id": "mod_crm_opportunities",
+  "root_alias": "mod_crm_opportunities",
   "key": "vortex.crm.opportunities",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.crm.opportunities:1.0.0",
   "body": {
     "name": "CRM Opportunities",
     "description": "Sales opportunities, stakeholders and commercial values.",
-    "category": "CRM",
     "dependencies": [
       {
+        "dependency_key": "organisations",
         "module": "vortex.crm.organisations",
-        "version": "1.0.0"
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       },
       {
+        "dependency_key": "people",
         "module": "vortex.crm.people",
-        "version": "1.0.0"
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       }
     ],
     "record_types": [
@@ -28,7 +31,6 @@
         "key": "opportunity",
         "name": "Opportunity",
         "plural_name": "Opportunities",
-        "description": "A potential sale being progressed.",
         "storage_scope": "application_contained",
         "ownership_mode": "team",
         "title_field": "name",
@@ -141,8 +143,9 @@
               "minimum": 0,
               "maximum": 100,
               "decimal_places": 2,
-              "default": 0
-            }
+              "digits_before_decimal": 18
+            },
+            "default": 0
           },
           {
             "id": "fld_opp_net",
@@ -177,9 +180,9 @@
             "public_display": "refused",
             "settings": {
               "minimum": 0,
-              "maximum": 100,
-              "default": 10
-            }
+              "maximum": 100
+            },
+            "default": 10
           },
           {
             "id": "fld_opp_stage",
@@ -194,7 +197,6 @@
             "personal_data": "none",
             "public_display": "refused",
             "settings": {
-              "default": "discovery",
               "options": [
                 {
                   "value": "discovery",
@@ -221,7 +223,8 @@
                   "label": "Lost"
                 }
               ]
-            }
+            },
+            "default": "discovery"
           },
           {
             "id": "fld_opp_close",
@@ -302,6 +305,27 @@
               "max_files": 20
             }
           }
+        ],
+        "custom_actions": [
+          "act_opp_mark_won"
+        ],
+        "relationships": [
+          {
+            "id": "fld_opp_company_relationship",
+            "key": "company",
+            "from_field": "company",
+            "to_record_type": "vortex.crm.organisations:company",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "refuse"
+          },
+          {
+            "id": "fld_opp_contact_relationship",
+            "key": "primary_contact",
+            "from_field": "primary_contact",
+            "to_record_type": "vortex.crm.people:contact",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "empty_optional"
+          }
         ]
       },
       {
@@ -310,7 +334,6 @@
         "key": "opportunity_contact",
         "name": "Opportunity contact",
         "plural_name": "Opportunity contacts",
-        "description": "A contact's role in an opportunity.",
         "storage_scope": "application_contained",
         "ownership_mode": "inherited",
         "ownership_relationship": "opportunity",
@@ -392,19 +415,156 @@
               ]
             }
           }
+        ],
+        "custom_actions": [],
+        "relationships": [
+          {
+            "id": "fld_oc_opp_relationship",
+            "key": "opportunity",
+            "from_field": "opportunity",
+            "to_record_type": "vortex.crm.opportunities:opportunity",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "soft_delete_dependent"
+          },
+          {
+            "id": "fld_oc_contact_relationship",
+            "key": "contact",
+            "from_field": "contact",
+            "to_record_type": "vortex.crm.people:contact",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "soft_delete_dependent"
+          }
         ]
       }
     ],
     "permissions": [
       {
-        "key": "vortex.crm.opportunities.opportunity.approve_discount",
+        "id": "perm_opportunity_create",
+        "key": "vortex.crm.opportunities.opportunity.create",
+        "label": "Create opportunity",
+        "description": "Allows the standard create operation for opportunities.",
         "record_type": "opportunity",
-        "label": "Approve a discount above 15 percent"
+        "action_kind": "create",
+        "administrative": false
       },
       {
-        "key": "vortex.crm.opportunities.opportunity.mark_won",
+        "id": "perm_opportunity_read",
+        "key": "vortex.crm.opportunities.opportunity.read",
+        "label": "Read opportunity",
+        "description": "Allows the standard read operation for opportunities.",
         "record_type": "opportunity",
-        "label": "Mark an opportunity as won"
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_update",
+        "key": "vortex.crm.opportunities.opportunity.update",
+        "label": "Update opportunity",
+        "description": "Allows the standard update operation for opportunities.",
+        "record_type": "opportunity",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_soft_delete",
+        "key": "vortex.crm.opportunities.opportunity.soft_delete",
+        "label": "Soft Delete opportunity",
+        "description": "Allows the standard soft_delete operation for opportunities.",
+        "record_type": "opportunity",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_restore",
+        "key": "vortex.crm.opportunities.opportunity.restore",
+        "label": "Restore opportunity",
+        "description": "Allows the standard restore operation for opportunities.",
+        "record_type": "opportunity",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_export",
+        "key": "vortex.crm.opportunities.opportunity.export",
+        "label": "Export opportunity",
+        "description": "Allows the standard export operation for opportunities.",
+        "record_type": "opportunity",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_contact_create",
+        "key": "vortex.crm.opportunities.opportunity_contact.create",
+        "label": "Create opportunity contact",
+        "description": "Allows the standard create operation for opportunity contacts.",
+        "record_type": "opportunity_contact",
+        "action_kind": "create",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_contact_read",
+        "key": "vortex.crm.opportunities.opportunity_contact.read",
+        "label": "Read opportunity contact",
+        "description": "Allows the standard read operation for opportunity contacts.",
+        "record_type": "opportunity_contact",
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_contact_update",
+        "key": "vortex.crm.opportunities.opportunity_contact.update",
+        "label": "Update opportunity contact",
+        "description": "Allows the standard update operation for opportunity contacts.",
+        "record_type": "opportunity_contact",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_contact_soft_delete",
+        "key": "vortex.crm.opportunities.opportunity_contact.soft_delete",
+        "label": "Soft Delete opportunity contact",
+        "description": "Allows the standard soft_delete operation for opportunity contacts.",
+        "record_type": "opportunity_contact",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_contact_restore",
+        "key": "vortex.crm.opportunities.opportunity_contact.restore",
+        "label": "Restore opportunity contact",
+        "description": "Allows the standard restore operation for opportunity contacts.",
+        "record_type": "opportunity_contact",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_opportunity_contact_export",
+        "key": "vortex.crm.opportunities.opportunity_contact.export",
+        "label": "Export opportunity contact",
+        "description": "Allows the standard export operation for opportunity contacts.",
+        "record_type": "opportunity_contact",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_named_1_approve_discount",
+        "key": "vortex.crm.opportunities.opportunity.approve_discount",
+        "label": "Approve a discount above 15 percent",
+        "description": "Allows the named approve_discount operation.",
+        "record_type": "opportunity",
+        "action_kind": "named",
+        "named_action": "approve_discount",
+        "administrative": false
+      },
+      {
+        "id": "perm_named_2_mark_won",
+        "key": "vortex.crm.opportunities.opportunity.mark_won",
+        "label": "Mark an opportunity as won",
+        "description": "Allows the named mark_won operation.",
+        "record_type": "opportunity",
+        "action_kind": "named",
+        "named_action": "mark_won",
+        "administrative": false
       }
     ],
     "actions": [
@@ -416,8 +576,18 @@
         "permission": "vortex.crm.opportunities.opportunity.mark_won",
         "inputs": [],
         "effects": [
-          {"kind":"set_field","field":"stage","value":{"source":"literal","value":"won"}},
-          {"kind":"announce_event","event":"vortex.crm.opportunities.opportunity.won"}
+          {
+            "kind": "set_field",
+            "field": "stage",
+            "value": {
+              "source": "literal",
+              "value": "won"
+            }
+          },
+          {
+            "kind": "announce_event",
+            "event": "vortex.crm.opportunities.opportunity.won"
+          }
         ],
         "shareable": false
       }
@@ -432,7 +602,8 @@
           "company",
           "value",
           "stage"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "evt_opp_stage",
@@ -442,7 +613,8 @@
           "opportunity_number",
           "stage",
           "value"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "evt_opp_won",
@@ -452,7 +624,8 @@
           "opportunity_number",
           "company",
           "net_value"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "rules": [
@@ -467,7 +640,10 @@
           "operator": "greater_than",
           "value": 15
         },
-        "effect": {"kind":"warn","message":"large_discount_review"}
+        "effect": {
+          "kind": "warn",
+          "message": "large_discount_review"
+        }
       }
     ],
     "extension_points": [
@@ -487,6 +663,7 @@
           "action"
         ]
       }
-    ]
+    ],
+    "sharing_conditions": []
   }
 }

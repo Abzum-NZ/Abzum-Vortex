@@ -61,9 +61,9 @@ Permissions use permanent names, not display labels. A name identifies the area,
 - `application.example.open`
 - `application.example.action.complete`
 
-Unknown names are refused at publication and at runtime. A role may use a controlled trailing wildcard only for a named module or application's non-administrative permissions, for example `module.example.record.*`. A global `*` is invalid. Wildcards cannot cover tenant administration, organisation administration, security, entitlements, protected data handling, export, or sharing administration.
+Unknown names are refused at publication and at runtime. An application role may use the single entry `*` to mean all non-administrative permissions declared by that exact published application version. It cannot be combined with another permission entry, cannot include permissions from a bound module, and cannot cover tenant or organisation administration, security, entitlements, protected data handling, export, or sharing administration. Module-scoped and trailing wildcards are not supported.
 
-Publishing a role resolves each wildcard against the current permission catalogue and records the catalogue fingerprint and expanded permission identifiers. A permission added later is not silently granted; the role must be reviewed and published again.
+Publishing an application role resolves `*` against that application's permission catalogue and records the catalogue fingerprint and expanded permission identifiers. A permission added later is not silently granted; the role must be reviewed and published again.
 
 ## Record visibility
 

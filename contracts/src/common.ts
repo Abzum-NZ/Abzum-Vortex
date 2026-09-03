@@ -9,6 +9,9 @@ export const safeHttpsUrlSchema = z.url().refine((value) => new URL(value).proto
 });
 export const duplicateProtectionKeySchema = z.string().min(16).max(200);
 export const correlationIdSchema = platformIdSchema.brand<"CorrelationId">();
+/** Closed safety limits shared by every authored and canonical condition tree. */
+export const conditionMaximumNestingDepth = 10;
+export const conditionMaximumOperandCount = 100;
 
 export type JsonValue =
   string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

@@ -15,8 +15,8 @@ import {
   publicDefinitionValidationErrorSchema,
   translateDefinitionRuleFailures,
   translateDefinitionSchemaError,
+  connectionTypeSourceDocumentSchema,
 } from "../src";
-import { connectionTypeSourceDocumentSchema } from "./support/definition-fixture-schemas";
 
 const correlationId = correlationIdSchema.parse("00000000-0000-4000-8000-000000000013");
 const rootLocation = {
@@ -35,14 +35,10 @@ const context = {
   requiredPaths: [["body", "required_value"]],
 };
 const validSourceDefinition = {
-  schema_version: "2.0.0",
+  source_contract_version: "1.0.0",
   kind: "connection_type" as const,
-  root_id: "example_connection",
+  root_alias: "example_connection",
   key: "example.connection",
-  version: "1.0.0",
-  revision: 1,
-  state: "published" as const,
-  content_fingerprint: "fixture:example.connection:1.0.0",
   body: {
     name: "Example connection",
     purpose: "Submit a typed request to an approved example provider.",
@@ -96,7 +92,7 @@ const brokenSourceDefinitionCases: BrokenSourceDefinitionCase[] = [
   {
     name: "malformed root alias",
     mutate: (value) => {
-      value.root_id = "Not Allowed";
+      value.root_alias = "Not Allowed";
     },
     expectedCode: "definition_invalid_value",
   },
@@ -108,18 +104,18 @@ const brokenSourceDefinitionCases: BrokenSourceDefinitionCase[] = [
     expectedCode: "definition_unknown_property",
   },
   {
-    name: "malformed release version",
+    name: "author-supplied release version",
     mutate: (value) => {
       value.version = "first";
     },
-    expectedCode: "definition_invalid_value",
+    expectedCode: "definition_unknown_property",
   },
   {
-    name: "non-positive revision",
+    name: "author-supplied revision",
     mutate: (value) => {
       value.revision = 0;
     },
-    expectedCode: "definition_invalid_value",
+    expectedCode: "definition_unknown_property",
   },
   {
     name: "empty display name",
@@ -193,6 +189,10 @@ function schemaError(schema: z.ZodType, value: unknown) {
 }
 
 describe("safe definition validation errors", () => {
+  test("starts adversarial translation cases from a valid production source document", () => {
+    expect(connectionTypeSourceDocumentSchema.safeParse(validSourceDefinition).success).toBe(true);
+  });
+
   test("keeps test-only scenarios and storage evidence out of the public location contract", () => {
     expect(definitionDocumentKindSchema.safeParse("module").success).toBe(true);
     expect(definitionDocumentKindSchema.safeParse("acceptance_scenario").success).toBe(false);
@@ -547,8 +547,11 @@ describe("safe definition validation errors", () => {
     const manifest = JSON.parse(
       await readFile(resolve(fixtureRoot, "fixture-set.json"), "utf8"),
     ) as { files: string[] };
+    const definitionFiles = manifest.files.filter((file) =>
+      /^(applications|connection-types|modules)\//.test(file),
+    );
     const documents = await Promise.all(
-      manifest.files.map(async (file) =>
+      definitionFiles.map(async (file) =>
         JSON.parse(await readFile(resolve(fixtureRoot, file), "utf8")),
       ),
     );
@@ -583,6 +586,7 @@ describe("safe definition validation errors", () => {
       "application",
       "connection",
       "detail",
+      "export",
       "interface",
       "new",
       "pipeline",
@@ -595,6 +599,7 @@ describe("safe definition validation errors", () => {
       "scenario",
       "source",
       "storage",
+      "update",
       "value",
     ]);
     const authoredKeys = new Set<string>();

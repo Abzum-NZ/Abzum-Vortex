@@ -263,6 +263,7 @@ export type DefinitionValidationErrorCode = z.infer<typeof definitionValidationE
 export type PublicDefinitionValidationError = z.infer<typeof publicDefinitionValidationErrorSchema>;
 export type DefinitionValidationResult = z.infer<typeof definitionValidationResultSchema>;
 export type DefinitionRuleFailure = z.infer<typeof definitionRuleFailureSchema>;
+export type DefinitionRuleFailureFamily = z.infer<typeof definitionRuleFailureFamilySchema>;
 export type DefinitionValidationTranslationContext = z.input<
   typeof definitionValidationTranslationContextSchema
 >;

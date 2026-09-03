@@ -12,7 +12,11 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "@vortex/definition": "workspace:*",
     "@vortex/modules": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "4.1.11"
   },
   "vortex": {
     "tier": 13,

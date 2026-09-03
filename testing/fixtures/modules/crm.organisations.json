@@ -1,16 +1,11 @@
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "module",
-  "root_id": "mod_crm_organisations",
+  "root_alias": "mod_crm_organisations",
   "key": "vortex.crm.organisations",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:vortex.crm.organisations:1.0.0",
   "body": {
     "name": "CRM Organisations",
     "description": "Companies and their organisational details, shared by compatible applications in one organisation.",
-    "category": "CRM",
     "dependencies": [],
     "record_types": [
       {
@@ -19,7 +14,6 @@
         "key": "company",
         "name": "Company",
         "plural_name": "Companies",
-        "description": "A customer, prospect, supplier or partner organisation.",
         "storage_scope": "organisation_shared",
         "ownership_mode": "team",
         "title_field": "name",
@@ -273,14 +267,86 @@
             "public_display": "refused",
             "settings": {}
           }
+        ],
+        "custom_actions": [
+          "act_company_merge"
+        ],
+        "relationships": [
+          {
+            "id": "fld_company_parent_relationship",
+            "key": "parent_company",
+            "from_field": "parent_company",
+            "to_record_type": "vortex.crm.organisations:company",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "empty_optional"
+          }
         ]
       }
     ],
     "permissions": [
       {
-        "key": "vortex.crm.organisations.company.merge",
+        "id": "perm_company_create",
+        "key": "vortex.crm.organisations.company.create",
+        "label": "Create company",
+        "description": "Allows the standard create operation for companies.",
         "record_type": "company",
-        "label": "Merge duplicate companies"
+        "action_kind": "create",
+        "administrative": false
+      },
+      {
+        "id": "perm_company_read",
+        "key": "vortex.crm.organisations.company.read",
+        "label": "Read company",
+        "description": "Allows the standard read operation for companies.",
+        "record_type": "company",
+        "action_kind": "read",
+        "administrative": false
+      },
+      {
+        "id": "perm_company_update",
+        "key": "vortex.crm.organisations.company.update",
+        "label": "Update company",
+        "description": "Allows the standard update operation for companies.",
+        "record_type": "company",
+        "action_kind": "update",
+        "administrative": false
+      },
+      {
+        "id": "perm_company_soft_delete",
+        "key": "vortex.crm.organisations.company.soft_delete",
+        "label": "Soft Delete company",
+        "description": "Allows the standard soft_delete operation for companies.",
+        "record_type": "company",
+        "action_kind": "delete",
+        "administrative": false
+      },
+      {
+        "id": "perm_company_restore",
+        "key": "vortex.crm.organisations.company.restore",
+        "label": "Restore company",
+        "description": "Allows the standard restore operation for companies.",
+        "record_type": "company",
+        "action_kind": "restore",
+        "administrative": false
+      },
+      {
+        "id": "perm_company_export",
+        "key": "vortex.crm.organisations.company.export",
+        "label": "Export company",
+        "description": "Allows the standard export operation for companies.",
+        "record_type": "company",
+        "action_kind": "export",
+        "administrative": false
+      },
+      {
+        "id": "perm_named_1_merge",
+        "key": "vortex.crm.organisations.company.merge",
+        "label": "Merge duplicate companies",
+        "description": "Allows the named merge operation.",
+        "record_type": "company",
+        "action_kind": "named",
+        "named_action": "merge",
+        "administrative": false
       }
     ],
     "actions": [
@@ -293,17 +359,29 @@
         "inputs": [
           {
             "key": "duplicate_company",
-            "type": "link",
+            "label": "Duplicate Company",
             "required": true,
-            "settings": {
-              "target": "vortex.crm.organisations:company"
-            }
+            "type": "record_reference",
+            "record_types": [
+              "vortex.crm.organisations:company"
+            ]
           }
         ],
         "effects": [
-          {"kind":"copy_relationships","relationships":["parent_company"],"target_input":"duplicate_company"},
-          {"kind":"soft_delete_subject"},
-          {"kind":"announce_event","event":"vortex.crm.organisations.company.merged"}
+          {
+            "kind": "copy_relationships",
+            "relationships": [
+              "parent_company"
+            ],
+            "target_input": "duplicate_company"
+          },
+          {
+            "kind": "soft_delete_subject"
+          },
+          {
+            "kind": "announce_event",
+            "event": "vortex.crm.organisations.company.merged"
+          }
         ],
         "shareable": false
       }
@@ -317,7 +395,8 @@
           "company_number",
           "name",
           "company_kind"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       },
       {
         "id": "evt_company_merged",
@@ -325,7 +404,8 @@
         "record_type": "company",
         "carries": [
           "company_number"
-        ]
+        ],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "rules": [
@@ -339,7 +419,10 @@
           "field": "name",
           "operator": "is_empty"
         },
-        "effect": {"kind":"refuse","reason_code":"company_name_required"}
+        "effect": {
+          "kind": "refuse",
+          "reason_code": "company_name_required"
+        }
       }
     ],
     "extension_points": [
@@ -359,6 +442,7 @@
           "action"
         ]
       }
-    ]
+    ],
+    "sharing_conditions": []
   }
 }

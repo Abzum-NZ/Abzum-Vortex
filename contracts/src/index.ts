@@ -4,6 +4,8 @@ export * from "./catalogues";
 export * from "./common";
 export * from "./contract-index";
 export * from "./definitions";
+export * from "./definition-source";
+export * from "./definition-compilation-contracts";
 export * from "./identifiers";
 export * from "./identity-access";
 export * from "./integration-contracts";

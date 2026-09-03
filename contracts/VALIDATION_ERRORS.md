@@ -2,7 +2,7 @@
 
 [Contract index](README.md) · [Data-contract specification](../docs/specification/appendices/data-contracts.md#definition-validation-errors) · [Issue #13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13)
 
-This guide explains how a definition validator returns useful errors without exposing raw definition content or protected diagnostics. The catalogue and translator are generic platform contracts. They do not know which applications, modules, record types, fields, workflows, connections, or example fixtures are installed. The snake-case documents below are exercised through the test-only fixture schema; [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns the complete production authored-source schema and conversion into canonical contracts.
+This guide explains how a definition validator returns useful errors without exposing raw definition content or protected diagnostics. The catalogue and translator are generic platform contracts. They do not know which applications, modules, record types, fields, workflows, connections, or example fixtures are installed. The snake-case documents below are exercised through the exported production authored-source schema and contain only author-controlled values.
 
 ## Public flow
 
@@ -45,14 +45,10 @@ This complete source document has one deliberate error: it omits the required `a
 
 ```json
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "connection_type",
-  "root_id": "example_connection",
+  "root_alias": "example_connection",
   "key": "example.connection",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:example.connection:1.0.0",
   "body": {
     "name": "Example connection",
     "purpose": "Submit a typed request to an approved example provider.",
@@ -107,18 +103,14 @@ After the caller maps the schema location to an authorised builder-visible locat
 }
 ```
 
-The corrected document adds the required value and passes the strict test-only fixture-source schema:
+The corrected document adds the required value and passes the strict production authored-source schema:
 
 ```json
 {
-  "schema_version": "2.0.0",
+  "source_contract_version": "1.0.0",
   "kind": "connection_type",
-  "root_id": "example_connection",
+  "root_alias": "example_connection",
   "key": "example.connection",
-  "version": "1.0.0",
-  "revision": 1,
-  "state": "published",
-  "content_fingerprint": "fixture:example.connection:1.0.0",
   "body": {
     "name": "Example connection",
     "purpose": "Submit a typed request to an approved example provider.",
