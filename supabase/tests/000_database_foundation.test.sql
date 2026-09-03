@@ -1,6 +1,6 @@
 begin;
 
-select plan(4);
+select plan(3);
 
 select has_extension(
   'pgtap',
@@ -25,8 +25,6 @@ select ok(
   ),
   'the database foundation migration is recorded by Supabase migration history'
 );
-
-select fail('controlled Testing delivery acceptance failure');
 
 select * from finish();
 
