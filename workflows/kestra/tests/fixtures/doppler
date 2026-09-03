@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
+  shift
+done
+[ "$#" -gt 0 ]
+shift
+
+export VORTEX_DATABASE_USER="${VORTEX_TEST_DATABASE_USER:-migration_role}"
+export VORTEX_DATABASE_PASSWORD=placeholder-password
+export VORTEX_SUPABASE_PROJECT_REF=abcdefghijklmnopqrst
+export VORTEX_DATABASE_SSL_ROOT_CERT="${VORTEX_TEST_SSL_ROOT_CERT:-not-a-certificate}"
+
+exec "$@"

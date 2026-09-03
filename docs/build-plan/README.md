@@ -252,6 +252,8 @@ Exit proof:
 
 **Outcome:** Durable workflows and pipeline time targets execute with [Kestra](https://kestra.io/docs) authoritative for execution status while Vortex remains authoritative for application records and access.
 
+**Foundation order:** Before application-workflow execution [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) must align the pinned Kestra release and its state-database major on an officially supported combination. The change requires a verified off-host backup, a disposable restore rehearsal and a forward migration; an existing PostgreSQL data directory is never opened by an older major.
+
 Build:
 
 - Workflow triggers and the governed 24-node catalogue: flow control, bounded queries and loops, record actions, generic human-input waits, files, and named connection operations.

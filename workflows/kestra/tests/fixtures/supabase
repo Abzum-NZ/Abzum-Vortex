@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [ "${1:-}" = "--version" ]; then
+  echo "2.116.0"
+  exit 0
+fi
+
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--db-url" ]; then
+    shift
+    [ "$1" = "$VORTEX_TEST_EXPECTED_DATABASE_URL" ]
+    [[ "$1" != *placeholder-password* ]]
+    exit 0
+  fi
+  shift
+done
+
+echo "expected a credential-free --db-url argument" >&2
+exit 1

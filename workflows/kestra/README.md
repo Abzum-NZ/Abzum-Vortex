@@ -13,14 +13,22 @@ Operational flows remain separate and use their own narrow credentials.
 
 | File | Holds |
 |---|---|
+| `Dockerfile` | The pinned Kestra operations image with checksum-verified Supabase and Doppler command-line tools |
 | `docker-compose.yml` | The stack Coolify deploys: Kestra and its own PostgreSQL |
 | `flows/` | Reviewed operational flows. Database delivery begins in Phase 2; application workflow execution arrives in Phase 7. |
+| `scripts/` | Reviewed commands called by operational flows; these are not available as application workflow nodes |
+| `tests/` | Credential-free contract checks for the operational delivery boundary |
 
 ## How it is deployed
 
 Coolify deploys this directory from the repository rather than from a compose file pasted into its
 interface, so the stack is reviewed and versioned like anything else, and a change to it arrives by
 pull request.
+
+The `flows/` directory is mounted read-only and passed to Kestra's official `--flow-path` startup
+option. Every Coolify deployment therefore validates and creates or updates these reviewed flows in
+Kestra's PostgreSQL repository. Removing an operational flow is an explicit reviewed deletion; a
+missing file is not silently interpreted as permission to erase stored operational state.
 
 ## Secrets
 
@@ -31,9 +39,84 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `KESTRA_DB_PASSWORD` | The password for Kestra's own PostgreSQL |
 | `KESTRA_BASIC_AUTH_USERNAME` | The account the API and interface demand |
 | `KESTRA_BASIC_AUTH_PASSWORD` | Its password |
+| `KESTRA_PUBLIC_URL` | The public Kestra address used in generated links |
+| `VORTEX_TESTING_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of the unpredictable key for the protected Testing push webhook |
+| `VORTEX_PRODUCTION_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of a different unpredictable key for the protected Production push webhook |
+| `VORTEX_TESTING_DOPPLER_TOKEN_BASE64` | Base64 encoding of the service token limited to `abzum-kestra` / `database-stg` |
+| `VORTEX_PRODUCTION_DOPPLER_TOKEN_BASE64` | Base64 encoding of the separate service token limited to `abzum-kestra` / `database-prd` |
 
 They are set in Coolify and held in the secret manager. The API credential is also set on the web
 application so it can reach the engine.
+
+Kestra open source recognises sensitive flow values only when the container variable begins
+`SECRET_` and its value is base64-encoded. Coolify therefore stores the four `_BASE64` values above;
+the compose file maps them to Kestra's required names and each flow reads them with `secret()`. Base64
+is not encryption, so Coolify remains the protected host boundary. Kestra masks resolved secrets in
+execution logs.
+
+Webhook keys authenticate only the delivery endpoints; they do not replace the branch, repository,
+commit, migration-set, or approval checks performed by the flow. The two Doppler tokens are runtime
+bootstrap credentials. Doppler supplies only the narrow database role and password, project
+reference, and root certificate to the delivery process.
+
+The two database-delivery configs contain only `VORTEX_DATABASE_USER`,
+`VORTEX_DATABASE_PASSWORD`, `VORTEX_SUPABASE_PROJECT_REF`, and
+`VORTEX_DATABASE_SSL_ROOT_CERT`. The delivery script validates those values and constructs the only
+allowed address itself: the project's direct host on port 5432, the `postgres` database, and
+`sslmode=verify-full`. The password travels through `PGPASSWORD`, not a command argument or logged
+address. The certificate is the project Server root certificate downloaded from Supabase Database
+Settings. Backup, restore, web, and connection-provider secrets remain in other configs, so a
+migration process cannot receive them accidentally.
+
+The Kestra environment makes these operational bootstrap values available to reviewed flow
+definitions. Vortex builders cannot upload Kestra YAML, choose a Process runner, interpolate Kestra
+environment values, or invoke an operational script. Application workflows are compiled from the
+published generic node catalogue and call protected Vortex operations; adding any raw command node
+would be a separate security decision and is refused by the current specification.
+
+## Database delivery
+
+`testing_database_delivery` accepts the GitHub push webhook for `refs/heads/testing`, fetches the
+exact commit, proves that it remains reachable from that protected branch, and applies its ordered
+Supabase migrations. It then runs the remote pgTAP suite and database lint. Only a completely
+successful run writes credential-free evidence to the `vortex.operations` key-value store under the
+exact commit identifier.
+
+`production_database_delivery` performs the same immutable-commit checks for `refs/heads/main` and
+prepares a credential-free migration fingerprint before pausing. The operator approves and identifies
+the Testing commit. Kestra records the authenticated account that resumes the hold; the operator does
+not type their own identity, an execution identifier, or a migration fingerprint. Production then
+loads the successful Testing evidence itself. The delivery script independently proves that the
+tested commit is an ancestor of the Production commit and that both revisions contain the same
+migration set before opening the Production database connection.
+
+Both flows queue at concurrency one. Supabase's migration history makes delivery of the same commit
+idempotent; the repository does not create another migration ledger. Production never runs seed data,
+and neither flow resets a shared database.
+
+The checked-in flow files are validated against the pinned Kestra image before review. Kestra 1.0.57
+currently reports its supported `Pause.onResume` field as deprecated during local validation even
+though the current official Pause contract documents and uses that field; this warning is recorded
+and does not justify an unverified replacement.
+
+The local operational gate is:
+
+```text
+docker compose -f workflows/kestra/docker-compose.yml build kestra
+docker run --rm -v <repository>/workflows/kestra/flows:/flows:ro abzum-vortex-kestra:v1.0.57-operations.1 flow validate --local /flows/testing-database-delivery.yml
+docker run --rm -v <repository>/workflows/kestra/flows:/flows:ro abzum-vortex-kestra:v1.0.57-operations.1 flow validate --local /flows/production-database-delivery.yml
+docker run --rm --entrypoint bash -v <repository>:/source:ro -v <repository>/workflows/kestra/scripts:/app/vortex-operations:ro -v <repository>/workflows/kestra/tests:/tests:ro abzum-vortex-kestra:v1.0.57-operations.1 /tests/deliver-database.test.sh
+```
+
+The contract test uses a disposable local Git remote and a credential-free Doppler stand-in. It
+proves exact-commit preparation, evidence shape, refusal of unsuccessful Testing evidence, that valid
+approval reaches the Doppler boundary, refusal of an invalid role or root certificate, and construction
+of the exact credential-free `verify-full` database address even when an unsafe address is present in
+the process environment. It also refuses a remote migration history containing a file absent from the
+selected commit. Actual Testing/Production application remains a remote environment
+acceptance check because local evidence cannot prove the configured Supabase projects or their
+least-privilege roles, each Doppler token's external scope, or that only the named Production
+operator can resume the approval hold.
 
 ## Three deliberate departures from Kestra's published compose file
 
@@ -43,14 +126,28 @@ the host with any mount it chose, which is root on the machine that also runs Co
 runs customer-defined workflows, so that mount would hand a tenant the host. The Docker task runner
 is given up until there is a sandbox for it.
 
-**Both images are pinned, to the LTS line.** Kestra's file uses `kestra/kestra:latest`. Pinned, the
-workflow engine changes only as its own reviewed change, the same rule
+**Both images are pinned.** Kestra's file uses `kestra/kestra:latest`. This repository pins Kestra's
+exact release and multi-platform image digest, and pins its state database to an exact PostgreSQL
+patch release, distribution and digest. The workflow engine and its database therefore change only
+as their own reviewed change, the same rule
 [#6](https://github.com/Abzum-NZ/Abzum-Vortex/issues/6) applies to Next.js and Puck.
 
-The tag is `v1.0.57`, not the newer `v1.3.x`. The 1.0 line is what `latest-lts` tracks, it is patched
-on the same day as the current line, and the workflow engine is the part of this platform that should
-be dull. A first attempt pinned `v1.3.35` because that was the newest GitHub release; the deployment
-failed because **no image is published under that tag**. Check Docker Hub, not the release list.
+The image remains temporarily pinned to the exact `v1.0.57` deployment that this repository has
+verified. Kestra's current [release policy](https://kestra.io/docs/releases) identifies 1.3 as the
+current LTS and states that 1.0 support ends in September 2026; its
+[changelog](https://kestra.io/docs/changelog) also records `v1.0.58` after this pin. The required
+forward upgrade and state-database compatibility rehearsal belong to
+[#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198), rather than an unreviewed tag change in
+the database-delivery task. A first attempt used `v1.3.35` because it appeared in the release list,
+but no image was published under that tag at the time. Confirm the registry artifact and digest before
+changing any pin.
+
+A fresh disposable startup with the pinned PostgreSQL 18.4 image succeeds, applies all Kestra
+migrations and loads the two reviewed operational flows. Its bundled Flyway nevertheless warns that
+PostgreSQL 18 is newer than its tested maximum of 17. Operational database delivery can use this
+verified combination, but application-workflow execution [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76)
+is blocked by the forward-only compatibility gate [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198).
+The existing PostgreSQL 18 data directory must never be opened by PostgreSQL 17.
 
 **No password is written down.** Kestra's file publishes `POSTGRES_PASSWORD: k3str4` in its own
 public repository.

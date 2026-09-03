@@ -1,0 +1,43 @@
+id: testing_database_delivery
+namespace: vortex.operations
+description: Apply and verify the exact commit pushed to the protected Testing branch.
+
+concurrency:
+  limit: 1
+  behavior: QUEUE
+
+tasks:
+  - id: apply_and_verify
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - /app/vortex-operations/deliver-database.sh
+    env:
+      VORTEX_DELIVERY_OPERATION: apply
+      VORTEX_DELIVERY_ENVIRONMENT: testing
+      VORTEX_EXPECTED_REF: refs/heads/testing
+      VORTEX_GITHUB_REPOSITORY: "{{ trigger.body.repository.full_name }}"
+      VORTEX_GITHUB_REF: "{{ trigger.body.ref }}"
+      VORTEX_GITHUB_COMMIT: "{{ trigger.body.after }}"
+      VORTEX_EXECUTION_ID: "{{ execution.id }}"
+      VORTEX_EVIDENCE_PATH: "{{ workingDir }}/delivery-evidence.json"
+      VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_TESTING_DOPPLER_TOKEN') }}"
+      VORTEX_DOPPLER_PROJECT: abzum-kestra
+      VORTEX_DOPPLER_CONFIG: database-stg
+      VORTEX_LINT_SCHEMAS: public
+    outputFiles:
+      - delivery-evidence.json
+
+  - id: publish_testing_evidence
+    type: io.kestra.plugin.core.kv.Set
+    namespace: vortex.operations
+    key: "database-testing-{{ trigger.body.after }}"
+    value: "{{ read(outputs.apply_and_verify.outputFiles['delivery-evidence.json']) }}"
+    kvType: JSON
+    overwrite: true
+
+triggers:
+  - id: github_push_to_testing
+    type: io.kestra.plugin.core.trigger.Webhook
+    key: "{{ secret('VORTEX_TESTING_MIGRATION_WEBHOOK_KEY') }}"

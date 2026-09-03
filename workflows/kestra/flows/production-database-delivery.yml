@@ -1,0 +1,85 @@
+id: production_database_delivery
+namespace: vortex.operations
+description: Validate main, wait for explicit approval, then apply the exact Testing-proven migration set.
+
+concurrency:
+  limit: 1
+  behavior: QUEUE
+
+tasks:
+  - id: prepare
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - /app/vortex-operations/deliver-database.sh
+    env:
+      VORTEX_DELIVERY_OPERATION: prepare
+      VORTEX_DELIVERY_ENVIRONMENT: production
+      VORTEX_EXPECTED_REF: refs/heads/main
+      VORTEX_GITHUB_REPOSITORY: "{{ trigger.body.repository.full_name }}"
+      VORTEX_GITHUB_REF: "{{ trigger.body.ref }}"
+      VORTEX_GITHUB_COMMIT: "{{ trigger.body.after }}"
+      VORTEX_EXECUTION_ID: "{{ execution.id }}"
+      VORTEX_EVIDENCE_PATH: "{{ workingDir }}/preparation-evidence.json"
+    outputFiles:
+      - preparation-evidence.json
+
+  - id: await_approval
+    type: io.kestra.plugin.core.flow.Pause
+    onResume:
+      - id: approved
+        type: BOOLEAN
+        required: true
+        defaults: false
+        description: Approve this exact main commit for Production database delivery.
+      - id: testing_commit
+        type: STRING
+        required: true
+        description: Commit recorded by the successful Testing delivery.
+
+  - id: load_testing_evidence
+    type: io.kestra.plugin.core.kv.Get
+    namespace: vortex.operations
+    key: "database-testing-{{ outputs.await_approval.onResume.testing_commit }}"
+    errorOnMissing: true
+
+  - id: apply_and_verify
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - /app/vortex-operations/deliver-database.sh
+    env:
+      VORTEX_DELIVERY_OPERATION: apply
+      VORTEX_DELIVERY_ENVIRONMENT: production
+      VORTEX_EXPECTED_REF: refs/heads/main
+      VORTEX_GITHUB_REPOSITORY: "{{ trigger.body.repository.full_name }}"
+      VORTEX_GITHUB_REF: "{{ trigger.body.ref }}"
+      VORTEX_GITHUB_COMMIT: "{{ trigger.body.after }}"
+      VORTEX_EXECUTION_ID: "{{ execution.id }}"
+      VORTEX_EVIDENCE_PATH: "{{ workingDir }}/delivery-evidence.json"
+      VORTEX_APPROVED: "{{ outputs.await_approval.onResume.approved }}"
+      VORTEX_APPROVING_ACTOR: "{{ outputs.await_approval.resumed.by }}"
+      VORTEX_TESTING_COMMIT: "{{ outputs.await_approval.onResume.testing_commit }}"
+      VORTEX_TESTING_EXECUTION_ID: "{{ outputs.load_testing_evidence.value.execution_id }}"
+      VORTEX_TESTING_MIGRATION_SET_SHA256: "{{ outputs.load_testing_evidence.value.migration_set_sha256 }}"
+      VORTEX_TESTING_EVIDENCE_SCHEMA_VERSION: "{{ outputs.load_testing_evidence.value.schema_version }}"
+      VORTEX_TESTING_EVIDENCE_ENVIRONMENT: "{{ outputs.load_testing_evidence.value.environment }}"
+      VORTEX_TESTING_EVIDENCE_REPOSITORY: "{{ outputs.load_testing_evidence.value.repository }}"
+      VORTEX_TESTING_EVIDENCE_REF: "{{ outputs.load_testing_evidence.value.ref }}"
+      VORTEX_TESTING_EVIDENCE_COMMIT: "{{ outputs.load_testing_evidence.value.commit }}"
+      VORTEX_TESTING_EVIDENCE_STATUS: "{{ outputs.load_testing_evidence.value.status }}"
+      VORTEX_TESTING_EVIDENCE_SUPABASE_CLI_VERSION: "{{ outputs.load_testing_evidence.value.supabase_cli_version }}"
+      VORTEX_TESTING_EVIDENCE_POSTGRES_MAJOR: "{{ outputs.load_testing_evidence.value.postgres_major }}"
+      VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_PRODUCTION_DOPPLER_TOKEN') }}"
+      VORTEX_DOPPLER_PROJECT: abzum-kestra
+      VORTEX_DOPPLER_CONFIG: database-prd
+      VORTEX_LINT_SCHEMAS: public
+    outputFiles:
+      - delivery-evidence.json
+
+triggers:
+  - id: github_push_to_main
+    type: io.kestra.plugin.core.trigger.Webhook
+    key: "{{ secret('VORTEX_PRODUCTION_MIGRATION_WEBHOOK_KEY') }}"
