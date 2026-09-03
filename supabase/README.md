@@ -39,11 +39,10 @@ from `pnpm verify`: Vercel previews and ordinary pull-request checks remain
 database-free.
 
 Lint is restricted to Vortex-owned schemas. The database baseline covers
-`public`, `vortex_context`, and the private `vortex_identity` schema. Each issue that introduces a
-private service schema must add that schema to the local and operated lint
-commands in the same change. Supabase-managed extension functions are
-deliberately excluded because their diagnostics are owned by the installed
-platform image, not this repository.
+`public`, `vortex_context`, and the private `vortex_identity` and `vortex_definition` schemas. Each
+issue that introduces another private service schema must add it to the local and operated lint
+commands in the same change. Supabase-managed extension functions are deliberately excluded because
+their diagnostics are owned by the installed platform image, not this repository.
 
 ## Roles and request context
 
@@ -61,6 +60,12 @@ be reused.
 Local and pgTAP checks may connect as the local owner and switch to the request
 role to prove its restrictions. An owner-control assertion may prove that a
 refused row exists, but it never represents an application success path.
+
+Before the Access service is available, the private Definition entry points accept only a validated
+system context. They derive tenant, organisation, actor, and time from trusted context/database state,
+allocate root identifiers inside PostgreSQL, and expose no underlying table permission. The trusted
+Definition service supplies parsed authored source and an expected draft revision, but no permanent
+identifier, organisation, actor, timestamp, or stored publication evidence comes from its caller.
 
 ### Private service-schema pattern
 

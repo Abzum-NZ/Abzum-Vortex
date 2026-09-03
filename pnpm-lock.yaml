@@ -224,6 +224,9 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/db':
+        specifier: workspace:*
+        version: link:../../db
       semver:
         specifier: 'catalog:'
         version: 7.8.5

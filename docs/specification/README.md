@@ -1,7 +1,7 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.2
-**Date:** 3 September 2026
+**Status:** Approved specification 2.3
+**Date:** 4 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
@@ -94,6 +94,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.3 | Approved | 4 September 2026 | Corrected publication so a Module or Application may append a breaking inert release without inspecting or retargeting existing consumers. Existing applications, installations and grants remain pinned to their exact recorded releases; compatibility and storage migration are checked only when the owning operation deliberately adopts the newer release. |
 | 2.2 | Approved | 3 September 2026 | Added a governed Model Context Protocol surface as a required alternative way to use every authorised interface capability. Defined a permission-filtered semantic view of navigation, forms, controls and actions; shared UI/MCP execution; optional live interface control; OAuth-bound external-agent sessions; and parity acceptance without adding an embedded model or assistant. |
 | 2.1 | Approved | 2 September 2026 | Established the platform-primitives-only boundary. Removed commercial billing, ordinary approvals, business announcements, organisation business profiles and privacy case management from core; retained only generic entitlements, metering, grant consent, protected data handling and operational status. Simplified the workflow catalogue, moved motion implementation to the platform UI system, and corrected public caller contexts and safe errors. |
 | 2.0 | Approved | 1 September 2026 | Incorporated all remaining business choices: separate module and application versions, tenant hierarchy and tenant administrators without implicit data access, controlled permission wildcards, multi-team membership and direct record sharing, safe record/field/file rules, Kestra-authoritative workflow status and governed nodes, no AI scope, organisation-scoped erasure, tenant billing and announcements, Testing-only database checks, one-hour RPO/eight-hour RTO, non-blocking performance measurement, storage-lineage table allocation, and explicit use of Supabase Auth, row rules, Queue, Webhooks, private Realtime invalidation, Storage, database verification, advisers and managed recovery. The decision register is clear. |

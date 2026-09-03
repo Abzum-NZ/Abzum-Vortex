@@ -12,3 +12,4 @@ export * from "./version-impact-error";
 export * from "./compilation-error";
 export * from "./compiler";
 export * from "./validation";
+export * from "./definition-store";

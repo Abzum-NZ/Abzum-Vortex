@@ -1,8 +1,8 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.2
+**Status:** Approved build plan 2.3
 
-**Date:** 3 September 2026
+**Date:** 4 September 2026
 
 **Governing specification:** [Abzum Vortex platform specification](../specification/README.md)
 
@@ -120,7 +120,7 @@ Exit proof:
 
 **Needs:** Phase 1.
 
-**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139) and database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) are complete. Private tenant/organisation storage invariants [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) and the identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) are now unblocked and may proceed in parallel. Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) follows #23; organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) follow both #23 and #25. Request context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) follows sessions, and protected tenant/organisation operations [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) then consume #23 and #27. Native GitHub dependencies enforce the order.
+**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), and private tenant/organisation storage invariants [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) are complete. Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) and the identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) are active, independent workstreams. Organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) follow both #23 and #25. Request context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) follows sessions, and protected tenant/organisation operations [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) then consume #23 and #27. Native GitHub dependencies enforce the order.
 
 **Outcome:** A person can sign in, choose an organisation, tenant administrators can manage a safe organisation hierarchy, and authorised builders can draft, validate, publish and restore modules and applications independently.
 
@@ -448,5 +448,5 @@ The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follow
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/protected data handling/retention, entitlements/metering, and operations issues belong to those epics rather than Phase 10. Commercial applications do not block the generic platform roadmap.
 5. Extension-point use belongs to Phase 4 and standard-page replacement belongs to Phase 6; they are no longer deferred to distribution work.
 6. Priority is explicit on every project issue: `P0 — Critical`, `P1 — Next`, `P2 — Planned`, or `P3 — Later`. The Bugs view filters `label:bug`; roadmap dates and Iteration remain empty until work is genuinely scheduled.
-7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132), Supabase migration and database-test foundation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), and database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28) are closed. Tenant hierarchy [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) and identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) are the current parallel Phase 2 workstreams.
+7. Completed backup [issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132), Supabase migration and database-test foundation [issue #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), and tenant hierarchy [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23) are closed. The Definition store [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) is the current dependency-critical Phase 2 workstream; identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) proceeds independently and does not block its system-context verification.
 8. Every later board change follows the current specification and keeps the decision register limited to genuinely open business choices.

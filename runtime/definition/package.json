@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "@vortex/db": "workspace:*",
     "semver": "catalog:",
     "server-only": "0.0.1"
   },

@@ -26,7 +26,7 @@ tasks:
       VORTEX_DOPPLER_PROJECT: abzum-vortex
       VORTEX_DOPPLER_CONFIG: ops_stg
       VORTEX_EXPECTED_DATABASE_PROJECT_REF: abflfptnguasinoussws
-      VORTEX_LINT_SCHEMAS: public,vortex_context,vortex_identity
+      VORTEX_LINT_SCHEMAS: public,vortex_context,vortex_identity,vortex_definition
     outputFiles:
       - delivery-evidence.json
 
