@@ -169,16 +169,25 @@ feature branch ──PR──▶ testing ──PR──▶ main
 
 ## Secrets and connections
 
-Doppler holds every secret. Nobody types one into Vercel by hand.
+Doppler is the source of record for application and database secret material. Nobody types a
+Vercel variable by hand. Coolify stores only the four protected bootstrap values that Kestra must
+receive when its container starts: two environment-specific webhook keys and two read-only Doppler
+service tokens.
 
-| Doppler config | Vercel environment | Serves |
+| Doppler config | Vercel environment | Consumer / sync status |
 |---|---|---|
 | `prd` | Production | `main` |
 | `stg` | Preview | `testing` and every pull request preview |
 | `dev` | Development | `vercel dev` on your own machine |
+| `ops_stg` | None | Testing database delivery through Kestra; no external sync |
+| `ops_prd` | None | Production database delivery through Kestra; no external sync |
 
 Change a value in Doppler and it reaches Vercel within seconds. Change one in Vercel and the next
-sync overwrites it, so there is exactly one place to change anything.
+sync overwrites it, so there is exactly one place to change application values. Only the `prd`,
+`stg`, and `dev` root configs have Vercel syncs. A separate Doppler `Operations` environment contains
+the unsynced `ops_stg` and `ops_prd` configs. Kestra reads their exact migration values at run time
+through separate config-scoped, read-only service tokens. Doppler branch configs inherit their root
+config, so migration secrets do not live below the Vercel-synced `stg` or `prd` roots.
 
 ### Vercel can refuse a secret and still report success
 
@@ -197,17 +206,27 @@ that reports `In Sync` proves nothing about whether it wrote anything.
 
 That is why nobody adds a variable in Vercel by hand.
 
-### A password lives in exactly one place
+### Each password lives in exactly one place
 
-`DATABASE_URL` does not contain the password. It points at it:
+The Vercel-synced `VORTEX_RUNTIME_DATABASE_URL` contains only the restricted runtime account and its
+generated password:
 
 ```text
-postgresql://postgres.<project-ref>:${DATABASE_PASSWORD}@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres
+postgresql://vortex_runtime.<project-ref>:<generated-password>@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres
 ```
 
-Doppler resolves that reference as it syncs, so Vercel receives a complete string. To rotate the
-password, change `DATABASE_PASSWORD` and nothing else. The connection string rebuilds itself, and
-nobody has to remember that a password also sits inside a URL somewhere.
+The password is not copied into a second Vercel variable. Rotate the database role password and
+`VORTEX_RUNTIME_DATABASE_URL` together as one controlled operation. The application also receives
+`VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` and refuses a connection unless certificate and hostname
+verification are available.
+
+The Supabase project-owner address and password use `VORTEX_MIGRATION_DATABASE_URL` and
+`VORTEX_MIGRATION_DATABASE_PASSWORD` in `ops_stg` and `ops_prd`. Those configs
+are never synced to Vercel. Rotating a migration password changes its named value in the matching
+operations config. The URL is already credential-free; Kestra validates its owner, project, host,
+session-mode port and database, then supplies the separate raw password through `PGPASSWORD`. A
+runtime process never receives a migration credential, and a migration process requests only its
+three reviewed database values.
 
 ### Names the browser can read
 
@@ -225,18 +244,21 @@ service-role key appears, treat it as a bug.
 
 | Caller | Route | Port | Why |
 |---|---|---|---|
-| The web application | Session pooler | 5432 | Vercel sends traffic over IPv4. The direct host answers only on IPv6, and the transaction pooler needs the paid IPv4 add-on |
+| The web application | Shared transaction pooler | 6543 | Supabase recommends transaction mode for serverless and automatically scaling application traffic. The shared pooler is reachable over IPv4 on every project tier. |
 | Kestra operational flows | Session pooler | 5432 | Migrations and access-rule tests need a real PostgreSQL session, which Supabase session mode preserves while remaining reachable over IPv4. Encrypted logical backup uses a dedicated read-only backup role. Each job uses its own narrow role, and business workflow steps do not use these connections. |
 
-Session mode behaves like a direct connection, so the client needs no special configuration.
+The application disables prepared statements and keeps a minimal client pool. Every protected
+operation explicitly begins one transaction as `vortex_runtime`, establishes its transaction-local
+request context through the private initializer, enters the non-owning `vortex_request` role with
+`SET LOCAL ROLE`, completes the work, and commits or rolls back. Only `vortex_runtime` may execute
+the initializer; only `vortex_request` may execute the context accessors used by protected service
+SQL. Transaction mode keeps one physical connection for that complete transaction; no operation
+relies on state from an earlier transaction. Start with one client connection per serverless instance
+and raise it only from measured demand.
 
-If we ever buy the IPv4 add-on and move the application to the transaction pooler on port 6543, turn
-prepared statements off in the client first. Transaction mode hands the next statement a different
-physical connection, so nothing the server remembered survives.
-
-The pooler allows **15 connections** on the current compute size, and in session mode one caller holds
-one connection for as long as it stays connected. Keep the client pool to one or two per instance. A
-library default of ten exhausts the pool with two warm instances.
+Session mode behaves like a direct connection for the migration and verification commands that need
+it. Its project-owner credential comes only from the unsynced operations config and never reaches a
+Vercel build, function, preview, or browser.
 
 ## Pinned versions
 

@@ -71,6 +71,16 @@ export VORTEX_DOPPLER_TOKEN=local-placeholder
 export VORTEX_DOPPLER_PROJECT=local-placeholder
 export VORTEX_DOPPLER_CONFIG=local-placeholder
 export VORTEX_EXPECTED_DATABASE_PROJECT_REF=abcdefghijklmnopqrst
+export VORTEX_TEST_DATABASE_URL_OVERRIDE='postgresql://postgres.abcdefghijklmnopqrst:placeholder%3A%3D%2F%25%3F%26password@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres'
+if "$delivery_script" >"$test_root/embedded-password.log" 2>&1; then
+  echo "expected an embedded database password to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "database connection must not embed a password" \
+  "$test_root/embedded-password.log"
+
+unset VORTEX_TEST_DATABASE_URL_OVERRIDE
 export VORTEX_TEST_DATABASE_USER='invalid?role'
 if "$delivery_script" >"$test_root/invalid-role.log" 2>&1; then
   echo "expected an invalid database role to be refused" >&2

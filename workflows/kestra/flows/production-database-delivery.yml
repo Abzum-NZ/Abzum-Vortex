@@ -74,9 +74,9 @@ tasks:
       VORTEX_TESTING_EVIDENCE_POSTGRES_MAJOR: "{{ outputs.load_testing_evidence.value.postgres_major }}"
       VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_PRODUCTION_DOPPLER_TOKEN') }}"
       VORTEX_DOPPLER_PROJECT: abzum-vortex
-      VORTEX_DOPPLER_CONFIG: prd
+      VORTEX_DOPPLER_CONFIG: ops_prd
       VORTEX_EXPECTED_DATABASE_PROJECT_REF: nkvcbtwsjhkgqhosqeib
-      VORTEX_LINT_SCHEMAS: public
+      VORTEX_LINT_SCHEMAS: public,vortex_context
     outputFiles:
       - delivery-evidence.json
 
