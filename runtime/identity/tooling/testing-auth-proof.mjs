@@ -125,7 +125,9 @@ const expectRedirect = (location, pathname, expectedSearch) => {
     location.pathname !== pathname ||
     (expectedSearch && location.search !== expectedSearch)
   )
-    throw new Error("The Testing identity journey returned an unexpected destination");
+    throw new Error(
+      `The Testing identity journey returned an unexpected destination: ${location.pathname}${location.search}`,
+    );
 };
 
 const mailtrapHeaders = Object.freeze({ "Api-Token": mailtrapApiToken });
