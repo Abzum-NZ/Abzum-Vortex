@@ -101,9 +101,16 @@ validate_verification_manifest() {
   repository_schemas="$(
     {
       printf '%s\n' public
-      git -C "$checkout" grep -h -o -i -E \
-        'create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?vortex_[a-z0-9_]+' \
-        "$commit" -- 'supabase/migrations/*.sql' || true
+      while IFS= read -r migration; do
+        git -C "$checkout" show "${commit}:${migration}" | tr '[:space:]' ' '
+        printf '\n'
+      done < <(
+        git -C "$checkout" ls-tree -r --name-only "$commit" -- supabase/migrations |
+          grep --extended-regexp '^supabase/migrations/[0-9]{14}_[a-z0-9_]+[.]sql$' |
+          LC_ALL=C sort
+      ) |
+        grep -o -i -E \
+          '(^|[^[:alnum:]_])create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?vortex_[a-z0-9_]+' || true
     } |
       sed --regexp-extended 's/.*(vortex_[a-z0-9_]+)$/\1/I' |
       tr '[:upper:]' '[:lower:]' |

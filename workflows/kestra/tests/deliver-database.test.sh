@@ -170,6 +170,96 @@ grep --fixed-strings --quiet \
 git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
 export VORTEX_GITHUB_COMMIT="$commit"
 
+assert_invalid_manifest_mutation_refused() {
+  local name="$1"
+  local filter="$2"
+  local checkout="$test_root/${name}-checkout"
+  local mutated_commit
+
+  git clone --quiet "$test_root/remote.git" "$checkout"
+  git -C "$checkout" config user.name delivery-test
+  git -C "$checkout" config user.email delivery-test@example.invalid
+  jq "$filter" \
+    "$checkout/workflows/kestra/database-verification.json" \
+    >"$checkout/workflows/kestra/database-verification.json.next"
+  mv \
+    "$checkout/workflows/kestra/database-verification.json.next" \
+    "$checkout/workflows/kestra/database-verification.json"
+  git -C "$checkout" add workflows/kestra/database-verification.json
+  git -C "$checkout" commit --quiet -m "Create ${name} verification manifest"
+  mutated_commit="$(git -C "$checkout" rev-parse HEAD)"
+  git -C "$checkout" push --quiet origin HEAD:main
+  export VORTEX_GITHUB_COMMIT="$mutated_commit"
+
+  if "$delivery_script" >"$test_root/${name}.log" 2>&1; then
+    echo "expected ${name} verification manifest to be refused" >&2
+    exit 1
+  fi
+  grep --fixed-strings --quiet \
+    "database verification manifest is invalid" \
+    "$test_root/${name}.log"
+
+  git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
+  export VORTEX_GITHUB_COMMIT="$commit"
+}
+
+assert_invalid_manifest_mutation_refused \
+  duplicate-migration \
+  '.concurrencyProofs += [{migration: .concurrencyProofs[0].migration, proof: "supabase/tests/duplicate-migration-concurrency.test.sh", label: "Duplicate migration"}]'
+assert_invalid_manifest_mutation_refused \
+  duplicate-proof \
+  '.concurrencyProofs += [{migration: "supabase/migrations/20990101000000_duplicate_proof.sql", proof: .concurrencyProofs[0].proof, label: "Duplicate proof"}]'
+assert_invalid_manifest_mutation_refused \
+  duplicate-schema \
+  '.lintSchemas += [.lintSchemas[0]]'
+
+missing_schema_checkout="$test_root/missing-schema-checkout"
+git clone --quiet "$test_root/remote.git" "$missing_schema_checkout"
+git -C "$missing_schema_checkout" config user.name delivery-test
+git -C "$missing_schema_checkout" config user.email delivery-test@example.invalid
+printf '%s\n' \
+  'create schema vortex_unlisted authorization postgres;' \
+  >"$missing_schema_checkout/supabase/migrations/20990101000000_unlisted_schema.sql"
+git -C "$missing_schema_checkout" add supabase/migrations
+git -C "$missing_schema_checkout" commit --quiet -m "Create unlisted operated schema"
+missing_schema_commit="$(git -C "$missing_schema_checkout" rev-parse HEAD)"
+git -C "$missing_schema_checkout" push --quiet origin HEAD:main
+export VORTEX_GITHUB_COMMIT="$missing_schema_commit"
+if "$delivery_script" >"$test_root/missing-schema.log" 2>&1; then
+  echo "expected an unlisted operated schema to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "database verification manifest does not list every operated schema exactly once" \
+  "$test_root/missing-schema.log"
+git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
+export VORTEX_GITHUB_COMMIT="$commit"
+
+unexpected_schema_checkout="$test_root/unexpected-schema-checkout"
+git clone --quiet "$test_root/remote.git" "$unexpected_schema_checkout"
+git -C "$unexpected_schema_checkout" config user.name delivery-test
+git -C "$unexpected_schema_checkout" config user.email delivery-test@example.invalid
+jq '.lintSchemas += ["vortex_uncreated"]' \
+  "$unexpected_schema_checkout/workflows/kestra/database-verification.json" \
+  >"$unexpected_schema_checkout/workflows/kestra/database-verification.json.next"
+mv \
+  "$unexpected_schema_checkout/workflows/kestra/database-verification.json.next" \
+  "$unexpected_schema_checkout/workflows/kestra/database-verification.json"
+git -C "$unexpected_schema_checkout" add workflows/kestra/database-verification.json
+git -C "$unexpected_schema_checkout" commit --quiet -m "Create unexpected lint schema"
+unexpected_schema_commit="$(git -C "$unexpected_schema_checkout" rev-parse HEAD)"
+git -C "$unexpected_schema_checkout" push --quiet origin HEAD:main
+export VORTEX_GITHUB_COMMIT="$unexpected_schema_commit"
+if "$delivery_script" >"$test_root/unexpected-schema.log" 2>&1; then
+  echo "expected a manifest-only schema to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "database verification manifest does not list every operated schema exactly once" \
+  "$test_root/unexpected-schema.log"
+git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
+export VORTEX_GITHUB_COMMIT="$commit"
+
 missing_runner_checkout="$test_root/missing-runner-checkout"
 git clone --quiet "$test_root/remote.git" "$missing_runner_checkout"
 git -C "$missing_runner_checkout" config user.name delivery-test
@@ -187,6 +277,53 @@ fi
 grep --fixed-strings --quiet \
   "selected commit does not contain the required regular delivery runner" \
   "$test_root/missing-runner.log"
+git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
+export VORTEX_GITHUB_COMMIT="$commit"
+
+symlink_runner_checkout="$test_root/symlink-runner-checkout"
+git clone --quiet "$test_root/remote.git" "$symlink_runner_checkout"
+git -C "$symlink_runner_checkout" config user.name delivery-test
+git -C "$symlink_runner_checkout" config user.email delivery-test@example.invalid
+rm "$symlink_runner_checkout/workflows/kestra/scripts/run-database-delivery.sh"
+ln -s ../database-verification.json \
+  "$symlink_runner_checkout/workflows/kestra/scripts/run-database-delivery.sh"
+git -C "$symlink_runner_checkout" add workflows/kestra/scripts/run-database-delivery.sh
+git -C "$symlink_runner_checkout" commit --quiet -m "Create symbolic delivery runner"
+symlink_runner_commit="$(git -C "$symlink_runner_checkout" rev-parse HEAD)"
+git -C "$symlink_runner_checkout" push --quiet origin HEAD:main
+export VORTEX_GITHUB_COMMIT="$symlink_runner_commit"
+if "$delivery_script" >"$test_root/symlink-runner.log" 2>&1; then
+  echo "expected a symbolic delivery runner to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "selected commit does not contain the required regular delivery runner" \
+  "$test_root/symlink-runner.log"
+git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
+export VORTEX_GITHUB_COMMIT="$commit"
+
+symlink_manifest_checkout="$test_root/symlink-manifest-checkout"
+git clone --quiet "$test_root/remote.git" "$symlink_manifest_checkout"
+git -C "$symlink_manifest_checkout" config user.name delivery-test
+git -C "$symlink_manifest_checkout" config user.email delivery-test@example.invalid
+mv \
+  "$symlink_manifest_checkout/workflows/kestra/database-verification.json" \
+  "$symlink_manifest_checkout/workflows/kestra/database-verification-target.json"
+ln -s database-verification-target.json \
+  "$symlink_manifest_checkout/workflows/kestra/database-verification.json"
+git -C "$symlink_manifest_checkout" add workflows/kestra/database-verification.json \
+  workflows/kestra/database-verification-target.json
+git -C "$symlink_manifest_checkout" commit --quiet -m "Create symbolic verification manifest"
+symlink_manifest_commit="$(git -C "$symlink_manifest_checkout" rev-parse HEAD)"
+git -C "$symlink_manifest_checkout" push --quiet origin HEAD:main
+export VORTEX_GITHUB_COMMIT="$symlink_manifest_commit"
+if "$delivery_script" >"$test_root/symlink-manifest.log" 2>&1; then
+  echo "expected a symbolic verification manifest to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "database verification manifest is not a regular file in the selected commit" \
+  "$test_root/symlink-manifest.log"
 git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
 export VORTEX_GITHUB_COMMIT="$commit"
 
@@ -227,6 +364,49 @@ grep --fixed-strings --quiet \
   "$test_root/unreachable.log"
 export VORTEX_GITHUB_COMMIT="$commit"
 
+real_git="$(command -v git)"
+git_wrapper_directory="$test_root/git-wrapper"
+mkdir -p "$git_wrapper_directory"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'if [ "${VORTEX_TEST_ASSERT_TOKEN_FREE_GIT:-}" = true ] &&' \
+  '  [ -z "${VORTEX_VERIFIED_RUNNER_SHA256:-}" ] &&' \
+  '  [ -n "${VORTEX_DOPPLER_TOKEN:-}" ]; then' \
+  '  : >"$VORTEX_TEST_GIT_TOKEN_LEAK_MARKER"' \
+  '  exit 97' \
+  'fi' \
+  '"$VORTEX_TEST_REAL_GIT" "$@" || exit $?' \
+  'if [ "${VORTEX_TEST_TAMPER_RUNNER_AFTER_CHECKOUT:-}" = true ] &&' \
+  '  [ "${1:-}" = -C ] && [ "${3:-}" = checkout ]; then' \
+  '  printf "%s\n" "# post-checkout tamper" >>"$2/workflows/kestra/scripts/run-database-delivery.sh"' \
+  'fi' \
+  >"$git_wrapper_directory/git"
+chmod 0555 "$git_wrapper_directory/git"
+original_path="$PATH"
+export VORTEX_TEST_REAL_GIT="$real_git"
+export PATH="$git_wrapper_directory:$PATH"
+
+export VORTEX_TEST_TAMPER_RUNNER_AFTER_CHECKOUT=true
+if "$delivery_script" >"$test_root/tampered-runner.log" 2>&1; then
+  echo "expected modified checked-out runner bytes to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "checked-out delivery runner differs from the selected commit" \
+  "$test_root/tampered-runner.log"
+unset VORTEX_TEST_TAMPER_RUNNER_AFTER_CHECKOUT
+
+export VORTEX_DOPPLER_TOKEN=local-placeholder
+export VORTEX_TEST_ASSERT_TOKEN_FREE_GIT=true
+export VORTEX_TEST_GIT_TOKEN_LEAK_MARKER="$test_root/git-token-leaked"
+rm -f "$VORTEX_TEST_GIT_TOKEN_LEAK_MARKER"
+"$delivery_script"
+test ! -e "$VORTEX_TEST_GIT_TOKEN_LEAK_MARKER"
+unset VORTEX_DOPPLER_TOKEN VORTEX_TEST_ASSERT_TOKEN_FREE_GIT VORTEX_TEST_GIT_TOKEN_LEAK_MARKER
+export PATH="$original_path"
+unset VORTEX_TEST_REAL_GIT
+
 # The script path represents an older deployed image. The disposable protected commit below changes
 # its runner and verification manifest; success proves the old bootstrap executes commit-owned logic.
 older_bootstrap="$test_root/older-bootstrap.sh"
@@ -250,7 +430,14 @@ done < <(jq --raw-output '.concurrencyProofs[].proof' \
 
 parity_migration="supabase/migrations/20990101000000_runner_parity_fixture.sql"
 parity_proof="supabase/tests/runner-parity-concurrency.test.sh"
-printf '%s\n' '-- Disposable operational-test migration.' >"${fixture_checkout}/${parity_migration}"
+printf '%s\n' \
+  '-- Disposable operational-test migration with deliberately multiline schema syntax.' \
+  'create' \
+  '  schema' \
+  '  if not' \
+  '  exists' \
+  '  vortex_runner_parity authorization postgres;' \
+  >"${fixture_checkout}/${parity_migration}"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'set -euo pipefail' \
@@ -261,7 +448,8 @@ printf '%s\n' \
 jq \
   --arg migration "$parity_migration" \
   --arg proof "$parity_proof" \
-  '.concurrencyProofs += [{migration: $migration, proof: $proof, label: "Runner parity fixture"}]' \
+  '.concurrencyProofs += [{migration: $migration, proof: $proof, label: "Runner parity fixture"}] |
+   .lintSchemas += ["vortex_runner_parity"]' \
   "$fixture_checkout/workflows/kestra/database-verification.json" \
   >"$fixture_checkout/workflows/kestra/database-verification.json.next"
 mv \
@@ -290,7 +478,9 @@ jq --exit-status \
   '.schema_version == 2 and
    .status == "prepared" and
    .runner.sha256 == $expected_runner and
-   (.selected_concurrency_proofs | length) == 8' \
+   (.selected_concurrency_proofs | length) == 8 and
+   (.selected_lint_schemas | length) == 6 and
+   (.selected_lint_schemas[-1]) == "vortex_runner_parity"' \
   "$VORTEX_EVIDENCE_PATH" >/dev/null
 
 migration_set_sha256="$(jq --raw-output '.migration_set_sha256' "$VORTEX_EVIDENCE_PATH")"
@@ -343,6 +533,26 @@ grep --fixed-strings --quiet \
   "Production runner differs from the successful Testing runner" \
   "$test_root/runner-evidence.log"
 export VORTEX_TESTING_EVIDENCE_RUNNER_SHA256="$runner_sha256"
+
+export VORTEX_TESTING_EVIDENCE_MANIFEST_SHA256="$(printf '0%.0s' {1..64})"
+if "$older_bootstrap" >"$test_root/manifest-evidence.log" 2>&1; then
+  echo "expected mismatched Testing manifest evidence to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "Production verification manifest differs from successful Testing" \
+  "$test_root/manifest-evidence.log"
+export VORTEX_TESTING_EVIDENCE_MANIFEST_SHA256="$manifest_sha256"
+
+export VORTEX_TESTING_EVIDENCE_COVERAGE_SHA256="$(printf '0%.0s' {1..64})"
+if "$older_bootstrap" >"$test_root/coverage-evidence.log" 2>&1; then
+  echo "expected mismatched Testing coverage evidence to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "stored Testing evidence did not complete the current verification coverage" \
+  "$test_root/coverage-evidence.log"
+export VORTEX_TESTING_EVIDENCE_COVERAGE_SHA256="$coverage_sha256"
 
 if "$older_bootstrap" >"$test_root/secret-boundary.log" 2>&1; then
   echo "expected the credential-free test to stop before database access" >&2
@@ -483,7 +693,7 @@ grep --fixed-strings --quiet \
   "runner-parity-concurrency.test.sh" \
   "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 grep --fixed-strings --quiet \
-  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access --level warning --fail-on error" \
+  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access,vortex_runner_parity --level warning --fail-on error" \
   "$VORTEX_TEST_SUPABASE_CALL_MARKER"
 jq --exit-status \
   '.status == "succeeded" and
