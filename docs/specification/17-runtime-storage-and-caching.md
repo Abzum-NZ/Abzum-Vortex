@@ -85,7 +85,7 @@ The codebase is divided into sixteen named services. These are package and owner
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
-The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives schema usage and execution only for the exact pre-request operations that ensure a verified identity projection, list active organisations, and accept an invitation. Invitation administration and account-lifecycle helpers remain owner-only until Access and protected administration compose their authorisation. `vortex_request` receives no Identity schema usage in this phase. Trigger functions remain non-executable by runtime roles.
+The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives Identity schema usage and execution only for the exact pre-request operations that ensure a verified identity projection and list active organisations. Runtime invitation acceptance is available only through the private `vortex_access` schema. Access calls an owner-only Identity operation that classifies the result as first activation, reactivation or no access change; Access never reads Identity relations. The Identity transition and required organisation Access-version change then commit or roll back together. `vortex_runtime` may also read the current version for one exact active tenant/organisation pair; it receives no Access table, generic increment, initialisation or administrative lifecycle authority. Invitation administration and account lifecycle remain owner-only until protected administration composes their authorisation. `vortex_request` receives no Identity or Access schema usage in this phase. Trigger functions remain non-executable by runtime roles.
 
 ```mermaid
 flowchart LR
@@ -93,10 +93,16 @@ flowchart LR
     V --> R[Identity runtime operation]
     R --> P[Minimal cluster identity projection]
     R --> O[Active organisation accounts]
-    R --> I[Fingerprint-only invitation acceptance]
-    X[Data API or raw request role] -. no table or function access .-> P
-    X -. no table or function access .-> O
-    X -. no table or function access .-> I
+    V --> AO[Access runtime operation]
+    AO --> I[Fingerprint-only invitation acceptance]
+    I --> P
+    I --> O
+    I --> AV[Organisation Access version]
+    AO --> AV
+    D[Data API or raw request role] -. no table or function access .-> P
+    D -. no table or function access .-> O
+    D -. no direct access .-> I
+    D -. no direct access .-> AV
 ```
 
 ## Database and storage rules

@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   accessGrantSchema,
+  accessVersionChangeReasonSchema,
   actionInputDefinitionSchema,
   applicationConnectionBindingSchema,
   applicationRoleSchema,
@@ -27,10 +28,12 @@ import {
   identityAuthoritySchema,
   identityProjectionSchema,
   invitationSchema,
+  invitationAcceptanceWithAccessVersionSchema,
   listArrangementKeys,
   listArrangementSchema,
   organizationAccountSetSchema,
   organizationAccountSchema,
+  organizationAccessVersionSchema,
   organizationSchema,
   pageTypeKeys,
   pageTypeSchema,
@@ -55,6 +58,7 @@ import {
   supabaseIdentityClaimsSchema,
   tenantSchema,
   verifiedIdentitySchema,
+  readOrganizationAccessVersionCommandSchema,
 } from "../src";
 import type {
   PublishedApplicationDefinition,
@@ -114,6 +118,67 @@ describe("identity projection, organisation-account and invitation contracts", (
     expect(identityProjectionSchema.safeParse({ ...projection, accessVersion: 1 }).success).toBe(
       false,
     );
+  });
+
+  test("keeps the organisation access version strict, positive and independently scoped", () => {
+    const version = {
+      organizationId: account.organizationId,
+      currentVersion: 2,
+      changedAt: "2026-09-04T00:03:00.000Z",
+      changedBy: account.organizationAccountId,
+      changeCorrelationId: id(717),
+      changeReason: "organization_account_activated",
+    } as const;
+
+    expect(organizationAccessVersionSchema.safeParse(version).success).toBe(true);
+    expect(
+      organizationAccessVersionSchema.safeParse({ ...version, currentVersion: 0 }).success,
+    ).toBe(false);
+    expect(
+      organizationAccessVersionSchema.safeParse({ ...version, tenantId: id(718) }).success,
+    ).toBe(false);
+    expect(accessVersionChangeReasonSchema.safeParse("organization_initialized").success).toBe(
+      true,
+    );
+    expect(accessVersionChangeReasonSchema.safeParse("business_record_changed").success).toBe(
+      false,
+    );
+  });
+
+  test("requires exact scope to read a current access version", () => {
+    expect(
+      readOrganizationAccessVersionCommandSchema.safeParse({
+        tenantId: id(718),
+        organizationId: account.organizationId,
+      }).success,
+    ).toBe(true);
+    expect(
+      readOrganizationAccessVersionCommandSchema.safeParse({
+        organizationId: account.organizationId,
+      }).success,
+    ).toBe(false);
+  });
+
+  test("returns access version only for invitation outcomes that return an account", () => {
+    expect(
+      invitationAcceptanceWithAccessVersionSchema.safeParse({
+        outcome: "accepted",
+        account,
+        accessVersion: 2,
+      }).success,
+    ).toBe(true);
+    expect(
+      invitationAcceptanceWithAccessVersionSchema.safeParse({
+        outcome: "accepted",
+        account,
+      }).success,
+    ).toBe(false);
+    expect(
+      invitationAcceptanceWithAccessVersionSchema.safeParse({
+        outcome: "unavailable",
+        accessVersion: 2,
+      }).success,
+    ).toBe(false);
   });
 
   test("has no placeholder invited account state and validates lifecycle evidence", () => {

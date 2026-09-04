@@ -33,13 +33,13 @@ ES256 JWKS, and password-recovery delivery. It does not configure Testing or Pro
 exercise durable application sessions.
 
 `db:verify` rebuilds the local database from committed migrations and seed
-data, runs every pgTAP test, proves tenant hierarchy, lifecycle and Definition
-publication races through two real database connections, and fails database lint on errors. It is separate
+data, runs every pgTAP test, proves tenant hierarchy, invitation acceptance, Access-version increments,
+lifecycle and Definition publication races through two real database connections, and fails database lint on errors. It is separate
 from `pnpm verify`: Vercel previews and ordinary pull-request checks remain
 database-free.
 
 Lint is restricted to Vortex-owned schemas. The database baseline covers
-`public`, `vortex_context`, and the private `vortex_identity` and `vortex_definition` schemas. Each
+`public`, `vortex_context`, and the private `vortex_identity`, `vortex_definition` and `vortex_access` schemas. Each
 issue that introduces another private service schema must add it to the local and operated lint
 commands in the same change. Supabase-managed extension functions are deliberately excluded because
 their diagnostics are owned by the installed platform image, not this repository.
@@ -117,12 +117,13 @@ Later pgTAP suites include
 the schema owner, direct Data API denial, public creation denial, and absence of
 future-object default grants without installing any permanent test function.
 Ordinary service schemas omit the helper's optional runtime-usage flag. The
-`vortex_context` and `vortex_identity` schemas pass `true` only where their
+`vortex_context`, `vortex_identity` and `vortex_access` schemas pass `true` only where their
 named runtime functions require schema usage; object execution remains
-explicitly granted. `vortex_identity` gives `vortex_request` no schema usage or
-function grant in Phase 2. Its invitation and account-lifecycle helpers remain
-owner-only until the Access service composes and exposes an authorised command.
-Neither runtime role receives direct relation access.
+explicitly granted. `vortex_identity` gives `vortex_request` no schema usage or function grant in
+Phase 2. Runtime invitation acceptance is available only through `vortex_access`, which commits the
+Identity transition and organisation version increment together. Its generic increment, initialisation
+and account-administration composition remain owner-only; #30 must perform permission checking before
+the latter becomes an authenticated command. Neither runtime role receives direct relation access.
 
 PostgreSQL grants temporary-relation capability through the database-wide
 `PUBLIC` role by default. This baseline leaves that Supabase-managed default

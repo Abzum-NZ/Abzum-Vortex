@@ -144,12 +144,20 @@ select ok(
   'PUBLIC cannot execute invitation acceptance'
 );
 select ok(
-  pg_catalog.has_function_privilege(
+  not pg_catalog.has_function_privilege(
     'vortex_runtime',
     'vortex_identity.accept_organization_invitation(text,uuid,text,text,uuid)',
     'EXECUTE'
   ),
-  'runtime receives only the narrow pre-context acceptance function'
+  'runtime cannot bypass Access-owned invitation composition'
+);
+select ok(
+  not pg_catalog.has_function_privilege(
+    'vortex_runtime',
+    'vortex_identity.accept_organization_invitation_with_transition(text,uuid,text,text,uuid)',
+    'EXECUTE'
+  ),
+  'the Identity transition classifier remains owner-only'
 );
 select ok(
   not pg_catalog.has_function_privilege(
@@ -177,10 +185,11 @@ select is(
       'vortex_identity.create_organization_invitation(text,text,timestamptz)'::regprocedure,
       'vortex_identity.revoke_organization_invitation(uuid,bigint)'::regprocedure,
       'vortex_identity.change_organization_account_state(uuid,bigint,text)'::regprocedure,
-      'vortex_identity.accept_organization_invitation(text,uuid,text,text,uuid)'::regprocedure
+      'vortex_identity.accept_organization_invitation(text,uuid,text,text,uuid)'::regprocedure,
+      'vortex_identity.accept_organization_invitation_with_transition(text,uuid,text,text,uuid)'::regprocedure
     ) and prosecdef and proconfig @> array['search_path=""']
   ),
-  6,
+  7,
   'every callable Identity operation is security definer with an empty search path'
 );
 
@@ -214,6 +223,17 @@ insert into vortex_identity.organizations (
     pg_catalog.statement_timestamp(), '90000000-0000-4000-8000-000000000090',
     pg_catalog.statement_timestamp(), 1
   );
+
+select * from vortex_access.initialize_organization_access_version(
+  '20000000-0000-4000-8000-000000000090',
+  '90000000-0000-4000-8000-000000000090',
+  '70000000-0000-4000-8000-000000000080'
+);
+select * from vortex_access.initialize_organization_access_version(
+  '20000000-0000-4000-8000-000000000091',
+  '90000000-0000-4000-8000-000000000090',
+  '70000000-0000-4000-8000-000000000081'
+);
 
 select lives_ok(
   $$
@@ -311,7 +331,7 @@ select ok(
 
 set local role vortex_runtime;
 create temporary table wrong_email_result on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '40000000-0000-4000-8000-000000000090',
   'other@example.test',
@@ -332,7 +352,7 @@ select is(
 
 set local role vortex_runtime;
 create temporary table accepted_result on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '40000000-0000-4000-8000-000000000090',
   'person@example.test',
@@ -341,6 +361,11 @@ select * from vortex_identity.accept_organization_invitation(
 );
 reset role;
 select is((select outcome from accepted_result), 'accepted', 'the matching identity accepts once');
+select is(
+  (select access_version from accepted_result),
+  2::bigint,
+  'first account activation increments the Access-owned version once'
+);
 select is(
   (
     select count(*)::integer
@@ -364,7 +389,7 @@ select ok(
 
 set local role vortex_runtime;
 create temporary table replay_result on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '40000000-0000-4000-8000-000000000090',
   'person@example.test',
@@ -381,6 +406,46 @@ select is(
   (select display_name from replay_result),
   'Person',
   'an invitation replay cannot overwrite the existing local profile'
+);
+select is(
+  (select access_version from replay_result),
+  2::bigint,
+  'an invitation replay returns the unchanged current access version'
+);
+
+create temporary table active_account_invitation on commit drop as
+select * from vortex_identity.create_organization_invitation(
+  'person@example.test',
+  'sha256:abababababababababababababababababababababababababababababababab',
+  pg_catalog.statement_timestamp() + interval '1 day'
+);
+set local role vortex_runtime;
+create temporary table active_account_acceptance on commit drop as
+select * from vortex_access.accept_organization_invitation(
+  'sha256:abababababababababababababababababababababababababababababababab',
+  '40000000-0000-4000-8000-000000000090',
+  'person@example.test',
+  null,
+  '70000000-0000-4000-8000-000000000096'
+);
+reset role;
+select is(
+  (select outcome from active_account_acceptance),
+  'accepted',
+  'a fresh valid invitation may bind to an already-active account'
+);
+select is(
+  (select access_version from active_account_acceptance),
+  2::bigint,
+  'binding a fresh invitation to an already-active account does not invalidate access'
+);
+select is(
+  (
+    select revision from vortex_identity.organization_accounts
+    where organization_account_id = (select organization_account_id from accepted_result)
+  ),
+  1::bigint,
+  'the no-op account binding leaves the account revision unchanged'
 );
 
 insert into vortex_identity.organization_invitations (
@@ -403,7 +468,7 @@ insert into vortex_identity.organization_invitations (
 );
 set local role vortex_runtime;
 create temporary table expired_accepted_replay_result on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
   '40000000-0000-4000-8000-000000000090',
   'person@example.test',
@@ -419,7 +484,7 @@ select is(
 
 set local role vortex_runtime;
 create temporary table other_identity_replay on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '40000000-0000-4000-8000-000000000098',
   'person@example.test',
@@ -490,7 +555,7 @@ insert into vortex_identity.organization_invitations (
 );
 set local role vortex_runtime;
 create temporary table expired_result on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
   '40000000-0000-4000-8000-000000000098',
   'expired@example.test',
@@ -523,7 +588,7 @@ select * from vortex_identity.create_organization_invitation(
 );
 set local role vortex_runtime;
 create temporary table invitation_reactivation_result on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
   '40000000-0000-4000-8000-000000000090',
   'person@example.test',
@@ -540,6 +605,11 @@ select is(
   (select activated_at from invitation_reactivation_result),
   (select activated_at from original_activation),
   'invitation reactivation preserves the account original activation time'
+);
+select is(
+  (select access_version from invitation_reactivation_result),
+  3::bigint,
+  'invitation reactivation increments the Access-owned version once'
 );
 
 create temporary table administrative_suspension on commit drop as
@@ -603,7 +673,7 @@ select is(
 
 set local role vortex_runtime;
 create temporary table suspended_replay_result on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '40000000-0000-4000-8000-000000000090',
   'person@example.test',
@@ -629,7 +699,7 @@ set state = 'suspended', state_changed_at = pg_catalog.statement_timestamp(),
 where organization_id = '20000000-0000-4000-8000-000000000090';
 set local role vortex_runtime;
 create temporary table inactive_scope_result on commit drop as
-select * from vortex_identity.accept_organization_invitation(
+select * from vortex_access.accept_organization_invitation(
   'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
   '40000000-0000-4000-8000-000000000097',
   'inactive-scope@example.test',

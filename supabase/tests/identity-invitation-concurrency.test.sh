@@ -29,6 +29,9 @@ cleanup() {
     kill "$pid" >/dev/null 2>&1 || true
   done < <(jobs -pr)
   run_sql "
+    set session_replication_role = replica;
+    delete from vortex_access.organization_access_versions
+      where organization_id = '$organization_id';
     delete from vortex_identity.organization_invitations
       where organization_id = '$organization_id';
     delete from vortex_identity.organization_accounts
@@ -37,6 +40,7 @@ cleanup() {
       where identity_id in ('$inviter_identity_id', '$invited_identity_id');
     delete from vortex_identity.organizations where organization_id = '$organization_id';
     delete from vortex_identity.tenants where tenant_id = '$tenant_id';
+    set session_replication_role = origin;
   " >/dev/null 2>&1 || true
   rm -rf "$proof_root"
 }
@@ -81,6 +85,9 @@ run_sql "
     'Invitation concurrency', 'active', clock_timestamp(), '$actor_id',
     clock_timestamp(), 1
   );
+  select * from vortex_access.initialize_organization_access_version(
+    '$organization_id', '$actor_id', '$correlation_id'
+  );
   insert into vortex_identity.identity_projections (
     identity_id, state, created_at, state_changed_at, state_changed_by,
     state_change_correlation_id, revision
@@ -113,7 +120,7 @@ begin;
 select pg_catalog.pg_backend_pid()
 \g '$proof_root/a.pid'
 set local role vortex_runtime;
-select outcome from vortex_identity.accept_organization_invitation(
+select outcome from vortex_access.accept_organization_invitation(
   '$token_fingerprint', '$invited_identity_id', 'person@example.test', 'Person', '$correlation_id'
 )
 \g '$proof_root/a.outcome'
@@ -131,7 +138,7 @@ select pg_catalog.pg_backend_pid()
 \g '$proof_root/b.pid'
 set local lock_timeout = '30s';
 set local role vortex_runtime;
-select outcome from vortex_identity.accept_organization_invitation(
+select outcome from vortex_access.accept_organization_invitation(
   '$token_fingerprint', '$invited_identity_id', 'person@example.test', 'Other', '$correlation_id'
 )
 \g '$proof_root/b.outcome'
@@ -170,6 +177,10 @@ wait "$b_pid"
 }
 [ "$(run_sql "select revision from vortex_identity.organization_invitations where invitation_id = '$invitation_id';")" = '2' ] || {
   echo 'concurrent acceptance changed the invitation more than once' >&2
+  exit 1
+}
+[ "$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id = '$organization_id';")" = '2' ] || {
+  echo 'concurrent acceptance did not increment the access version exactly once' >&2
   exit 1
 }
 
