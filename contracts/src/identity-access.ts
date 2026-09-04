@@ -38,7 +38,7 @@ import { correlationIdSchema, descriptionSchema, jsonValueSchema, labelSchema } 
 import { permissionDeclarationSchema } from "./permissions";
 
 const administrativeStateSchema = z.enum(["active", "suspended", "archived", "removal_pending"]);
-const accountStateSchema = z.enum(["invited", "active", "suspended", "closed"]);
+const accountStateSchema = z.enum(["active", "suspended", "closed"]);
 
 export const tenantSchema = z
   .object({
@@ -150,16 +150,21 @@ export const identityAuthoritySchema = z
       });
   });
 
-export const globalIdentitySchema = z
+export const identityProjectionSchema = z
   .object({
     identityId: identityIdSchema,
-    verifiedPrimaryEmail: z.email(),
     state: z.enum(["active", "suspended", "closed"]),
-    secondFactorState: z.enum(["not_enrolled", "enrolled", "required"]),
     createdAt: timestampSchema,
-    lastSuccessfulSignInAt: timestampSchema.optional(),
+    stateChangedAt: timestampSchema,
+    stateChangedBy: actorIdSchema,
+    stateChangeCorrelationId: correlationIdSchema,
+    revision: revisionSchema,
   })
-  .strict();
+  .strict()
+  .refine((value) => Date.parse(value.stateChangedAt) >= Date.parse(value.createdAt), {
+    path: ["stateChangedAt"],
+    message: "The identity state-change time cannot precede its creation time",
+  });
 
 const jwtNumericDateSchema = z.number().int().nonnegative().max(253_402_300_799);
 
@@ -241,16 +246,60 @@ export const organizationAccountSchema = z
     organizationAccountId: organizationAccountIdSchema,
     organizationId: organizationIdSchema,
     identityId: identityIdSchema,
-    displayName: z.string().min(1).max(120),
+    displayName: z.string().trim().min(1).max(120).optional(),
     state: accountStateSchema,
     language: z.string().min(2).max(35).optional(),
     timeZone: z.string().min(1).max(100).optional(),
     invitationId: invitationIdSchema.optional(),
-    activatedAt: timestampSchema.optional(),
+    activatedAt: timestampSchema,
     suspendedAt: timestampSchema.optional(),
     closedAt: timestampSchema.optional(),
+    changedAt: timestampSchema,
+    stateChangedAt: timestampSchema,
+    stateChangedBy: actorIdSchema,
+    stateChangeCorrelationId: correlationIdSchema,
+    revision: revisionSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const created = Date.parse(value.activatedAt);
+    if (Date.parse(value.changedAt) < created)
+      context.addIssue({
+        code: "custom",
+        path: ["changedAt"],
+        message: "The account change time cannot precede activation",
+      });
+    if (Date.parse(value.stateChangedAt) < created)
+      context.addIssue({
+        code: "custom",
+        path: ["stateChangedAt"],
+        message: "The account state-change time cannot precede activation",
+      });
+    if (value.suspendedAt !== undefined && Date.parse(value.suspendedAt) < created)
+      context.addIssue({
+        code: "custom",
+        path: ["suspendedAt"],
+        message: "The account suspension time cannot precede activation",
+      });
+    if (value.closedAt !== undefined && Date.parse(value.closedAt) < created)
+      context.addIssue({
+        code: "custom",
+        path: ["closedAt"],
+        message: "The account closure time cannot precede activation",
+      });
+    if (value.state === "suspended" && value.suspendedAt === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["suspendedAt"],
+        message: "A suspended account requires suspension evidence",
+      });
+    if (value.state === "closed" && value.closedAt === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["closedAt"],
+        message: "A closed account requires closure evidence",
+      });
+  });
 
 export const organizationAccountSetSchema = z
   .array(organizationAccountSchema)
@@ -311,15 +360,109 @@ export const invitationSchema = z
     invitationId: invitationIdSchema,
     organizationId: organizationIdSchema,
     invitedEmail: z.email(),
-    proposedRoleIds: z.array(roleIdSchema),
-    tokenFingerprint: fingerprintSchema,
     invitedBy: organizationAccountIdSchema,
     createdAt: timestampSchema,
     invitedAt: timestampSchema,
     expiresAt: timestampSchema,
     revokedAt: timestampSchema.optional(),
+    revokedBy: organizationAccountIdSchema.optional(),
     acceptedAt: timestampSchema.optional(),
     acceptedOrganizationAccountId: organizationAccountIdSchema.optional(),
+    changedAt: timestampSchema,
+    revision: revisionSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (Date.parse(value.invitedAt) < Date.parse(value.createdAt))
+      context.addIssue({
+        code: "custom",
+        path: ["invitedAt"],
+        message: "Invitation time cannot precede creation",
+      });
+    if (Date.parse(value.expiresAt) <= Date.parse(value.invitedAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Invitation expiry must be later than invitation time",
+      });
+    if (Date.parse(value.changedAt) < Date.parse(value.createdAt))
+      context.addIssue({
+        code: "custom",
+        path: ["changedAt"],
+        message: "Invitation change time cannot precede creation",
+      });
+    if (value.revokedAt !== undefined && Date.parse(value.revokedAt) < Date.parse(value.invitedAt))
+      context.addIssue({
+        code: "custom",
+        path: ["revokedAt"],
+        message: "Invitation revocation cannot precede invitation",
+      });
+    if (
+      value.acceptedAt !== undefined &&
+      Date.parse(value.acceptedAt) < Date.parse(value.invitedAt)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["acceptedAt"],
+        message: "Invitation acceptance cannot precede invitation",
+      });
+    if ((value.revokedAt === undefined) !== (value.revokedBy === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["revokedAt"],
+        message: "Invitation revocation evidence must be complete",
+      });
+    if ((value.acceptedAt === undefined) !== (value.acceptedOrganizationAccountId === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["acceptedAt"],
+        message: "Invitation acceptance evidence must be complete",
+      });
+    if (value.revokedAt !== undefined && value.acceptedAt !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["acceptedAt"],
+        message: "An invitation cannot be both revoked and accepted",
+      });
+  });
+
+export const storedInvitationSchema = invitationSchema.safeExtend({
+  tokenFingerprint: fingerprintSchema,
+});
+
+export const ensureIdentityProjectionCommandSchema = z
+  .object({
+    correlationId: correlationIdSchema,
+  })
+  .strict();
+
+export const createOrganizationInvitationCommandSchema = z
+  .object({
+    invitedEmail: z.email(),
+    expiresAt: timestampSchema,
+  })
+  .strict();
+
+export const acceptOrganizationInvitationCommandSchema = z
+  .object({
+    invitationSecret: z.string().min(32).max(2_000),
+    displayName: z.string().trim().min(1).max(120).optional(),
+    correlationId: correlationIdSchema,
+  })
+  .strict();
+
+export const revokeOrganizationInvitationCommandSchema = z
+  .object({
+    invitationId: invitationIdSchema,
+    expectedRevision: revisionSchema,
+  })
+  .strict();
+
+export const changeOrganizationAccountStateCommandSchema = z
+  .object({
+    organizationAccountId: organizationAccountIdSchema,
+    expectedRevision: revisionSchema,
+    state: accountStateSchema,
   })
   .strict();
 
@@ -750,7 +893,7 @@ export type Tenant = z.infer<typeof tenantSchema>;
 export type TenantAdministratorAssignment = z.infer<typeof tenantAdministratorAssignmentSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type IdentityAuthority = z.infer<typeof identityAuthoritySchema>;
-export type GlobalIdentity = z.infer<typeof globalIdentitySchema>;
+export type IdentityProjection = z.infer<typeof identityProjectionSchema>;
 export type SupabaseIdentityClaims = z.infer<typeof supabaseIdentityClaimsSchema>;
 export type VerifiedIdentity = z.infer<typeof verifiedIdentitySchema>;
 export type OrganizationAccount = z.infer<typeof organizationAccountSchema>;
@@ -759,6 +902,20 @@ export type OrganizationRuntimeSettings = z.infer<typeof organizationRuntimeSett
 export type Team = z.infer<typeof teamSchema>;
 export type TeamMembership = z.infer<typeof teamMembershipSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
+export type StoredInvitation = z.infer<typeof storedInvitationSchema>;
+export type EnsureIdentityProjectionCommand = z.infer<typeof ensureIdentityProjectionCommandSchema>;
+export type CreateOrganizationInvitationCommand = z.infer<
+  typeof createOrganizationInvitationCommandSchema
+>;
+export type AcceptOrganizationInvitationCommand = z.infer<
+  typeof acceptOrganizationInvitationCommandSchema
+>;
+export type RevokeOrganizationInvitationCommand = z.infer<
+  typeof revokeOrganizationInvitationCommandSchema
+>;
+export type ChangeOrganizationAccountStateCommand = z.infer<
+  typeof changeOrganizationAccountStateCommandSchema
+>;
 export type SessionContext = z.infer<typeof sessionContextSchema>;
 export type Permission = z.infer<typeof permissionSchema>;
 export type PermissionEntry = z.infer<typeof permissionEntrySchema>;

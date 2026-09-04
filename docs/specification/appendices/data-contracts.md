@@ -95,9 +95,9 @@ Organisation states are active, suspended, archived, and removal pending. Data r
 
 Archived or removal-pending tenants cannot retain active or suspended organisations. Archived or removal-pending organisations cannot retain active or suspended direct children. These are deferred final-state constraints so a complete subtree transition may be explicitly ordered inside one transaction; invalid committed states are refused. Suspension never cascades by rewriting descendant rows.
 
-### Global identity
+### Identity projection
 
-`identity_id`, verified primary email, identity state, second-factor enrolment state, creation time, and last successful sign-in time. Credentials and second-factor secrets are stored only by the identity-provider boundary, not in this record.
+Each cluster stores one minimal projection keyed by the environment Identity Authority's permanent `identity_id`. It contains only cluster-local state (`active`, `suspended`, or `closed`), creation time, state-change time, state-changing actor, correlation identifier, and positive revision. It contains no copied email, provider profile, phone, password or token, MFA state, sign-in history, session state, tenant assignment, role, capability, or Access-owned version. Its state controls eligibility in that cluster only; environment-wide disablement and session revocation remain protected Supabase Auth operations.
 
 ### Identity authority
 
@@ -113,7 +113,7 @@ Ordinary identity tokens use no custom access-token hook because the standard cl
 
 ### Organisation account
 
-`organisation_account_id`, `organisation_id`, `identity_id`, organisation-specific display name, state, optional language and time-zone preferences, invitation details, and activation/suspension/closure times. The pair `organisation_id` and `identity_id` is unique, so one identity cannot have two accounts in the same organisation. Access version is deliberately absent because the Access service owns one counter for the whole organisation.
+`organisation_account_id`, `organisation_id`, `identity_id`, optional organisation-specific display name, state (`active`, `suspended`, or `closed`), optional language and time-zone preferences, optional originating invitation, activation/suspension/closure times, last-change time, state-change time, state-changing actor, correlation identifier, and positive revision. The pair `organisation_id` and `identity_id` is unique, so one identity cannot have two accounts in the same organisation. There is no `invited` account state: an unaccepted invitation is a separate record and creates no account. Access version is deliberately absent because the Access service owns one counter for the whole organisation.
 
 ### Team and membership
 
@@ -121,7 +121,7 @@ A team has `team_id`, organisation, key, label, state, creator, and creation/cha
 
 ### Invitation
 
-`invitation_id`, organisation, normalised invited email, proposed role assignments, one-way token fingerprint, created/invited/expiry/revocation/acceptance times, inviter organisation account, and accepted organisation account. Before role and Team assignment work is delivered by [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33), proposed assignments must be an empty list; invitation acceptance cannot invent temporary authority.
+The private stored record contains `invitation_id`, organisation, lower-cased and trimmed invited email, a unique `sha256:` fingerprint of a 32-byte random secret, inviter organisation account, creation/invitation/expiry times, optional revocation time and revoker account, optional acceptance time and accepted account, last-change time, and positive revision. Phase 2 contains no role or Team assignment field; [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) owns any later authorised assignment transaction. The safe read contract omits the fingerprint. The raw secret appears only once in the successful trusted creation result and is absent from storage, fixtures, logs, errors, and durable evidence. Expiry is evaluated from database time for first acceptance rather than maintained by a background state-change job. A later exact replay by the accepting identity may return the same still-active account without mutating the invitation or account, even after that first-use expiry; every other reuse remains unavailable.
 
 ### Session context
 

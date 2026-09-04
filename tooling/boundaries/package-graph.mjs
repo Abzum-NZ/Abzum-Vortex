@@ -29,7 +29,10 @@ const allowedEnvironmentDependencies = {
   shared: new Set(["shared"]),
   test: new Set(["app", "browser", "server", "shared", "test"]),
 };
-const privateDatabaseSchemaOwners = new Map([["vortex_definition", "@vortex/definition"]]);
+const privateDatabaseSchemaOwners = new Map([
+  ["vortex_definition", "@vortex/definition"],
+  ["vortex_identity", "@vortex/identity"],
+]);
 
 async function readJson(file) {
   return JSON.parse(await readFile(file, "utf8"));
