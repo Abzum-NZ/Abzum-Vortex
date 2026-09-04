@@ -34,8 +34,8 @@ Its cookie-bearing browser state is deliberately not copied into repository evid
   [pull request #246](https://github.com/Abzum-NZ/Abzum-Vortex/pull/246).
 - Corrected Vercel Preview deployment: `7RS45p5PJEa4rXfZbmFyZ8BXXpqm`, serving the stable
   [Testing site](https://vortex-testing.abzum.com).
-- Kestra execution `59nl9rvGYhFfqnyMvZUVx7` succeeded for the exact Testing merge. It applied
-  migration `20260905010000_identity_projection_runtime_read.sql`, matched migration-set fingerprint
+- Kestra execution `59nl9rvGYhFfqnyMvZUVx7` succeeded for the exact Testing merge. It verified that
+  migration `20260905010000_identity_projection_runtime_read.sql` was present, matched migration-set fingerprint
   `05acb651be1ab523f610f2b1a001afd0a0737f693ef14ed4694b924e85d4891c`, and completed all
   12 registered pgTAP files and 701 assertions.
 - The Testing runtime was repaired with a newly rotated, environment-only restricted role credential,

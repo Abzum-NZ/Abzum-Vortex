@@ -173,8 +173,9 @@ application request.
 - Migrations create `vortex_runtime` without a password. Before a hosted environment may serve a
   protected request, an operator generates a different high-entropy password for that environment,
   assigns it to that exact role through the Supabase administrative path, and builds the restricted
-  transaction-pooler URL. Only that complete URL and the public Supabase root certificate enter the
-  matching Vercel-synchronised Doppler root config. The role password is never committed, shared
+  transaction-pooler URL. The database credential enters the matching Vercel-synchronised Doppler
+  root config only inside that complete URL, alongside the public root certificate and required
+  non-database application settings. The role password is never committed, shared
   with another environment, exposed as a second Vercel variable, or reused by Kestra.
 - `vortex_request` receives only the exact operations required on each relation. It never receives
   `TRUNCATE`, `REFERENCES`, `TRIGGER`, schema creation, policy management, or table ownership.
@@ -207,7 +208,8 @@ certificate and hostname verification.
 
 A hosted runtime is not ready merely because its migrations and Vercel build succeeded. Its release
 proof verifies that the exact deployed revision received the matching restricted runtime URL,
-certificate, environment name and Identity Authority identifier; that no project-owner, migration,
+certificate, Supabase URL and publishable key, site URL, environment name and Identity Authority
+identifier; that no project-owner, migration,
 general `DATABASE_*`, or Kestra credential entered the Vercel target; and that one real protected
 journey succeeded through `vortex_runtime`. Production provisioning and proof remain separately
 gated from Testing.
