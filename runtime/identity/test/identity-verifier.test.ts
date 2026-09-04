@@ -165,25 +165,55 @@ describe("identity token verification", () => {
     expect(secondClient.customFetch).not.toHaveBeenCalled();
   });
 
-  it("refuses a generated token issued by another environment after signature verification", async () => {
+  it("pairwise refuses generated tokens issued by every other configured environment", async () => {
     const signingKey = generateSigningKey("shared-test-key");
-    const token = signAccessToken(signingKey);
-    const productionAuthority = {
-      ...testingAuthority,
-      authorityId: id(4),
-      environment: "production",
-      issuer: "https://identity.example.com/auth/v1",
-      jwksUrl: "https://identity.example.com/auth/v1/.well-known/jwks.json",
-    };
+    const authorities = [
+      {
+        ...testingAuthority,
+        authorityId: id(4),
+        environment: "local" as const,
+        issuer: "http://127.0.0.1:54321/auth/v1",
+        jwksUrl: "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+      },
+      testingAuthority,
+      {
+        ...testingAuthority,
+        authorityId: id(5),
+        environment: "production" as const,
+        issuer: "https://identity.example.com/auth/v1",
+        jwksUrl: "https://identity.example.com/auth/v1/.well-known/jwks.json",
+      },
+    ];
+
+    for (const acceptingAuthority of authorities) {
+      for (const issuingAuthority of authorities) {
+        if (acceptingAuthority.environment === issuingAuthority.environment) continue;
+        const { claimsClient, customFetch } = createOfficialClaimsClient([signingKey.publicJwk]);
+        const verifier = createIdentityVerifierWithClient(
+          acceptingAuthority,
+          claimsClient,
+          verifierOptions,
+        );
+
+        await expect(
+          verifier.verifyAccessToken(signAccessToken(signingKey, { iss: issuingAuthority.issuer })),
+        ).rejects.toEqual(new IdentityVerificationError("vortex.identity.untrusted_issuer"));
+        expect(customFetch).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it("refuses a malformed token through the official Supabase client", async () => {
+    const signingKey = generateSigningKey("malformed-token-key");
     const { claimsClient, customFetch } = createOfficialClaimsClient([signingKey.publicJwk]);
     const verifier = createIdentityVerifierWithClient(
-      productionAuthority,
+      testingAuthority,
       claimsClient,
       verifierOptions,
     );
 
-    await expect(verifier.verifyAccessToken(token)).rejects.toEqual(
-      new IdentityVerificationError("vortex.identity.untrusted_issuer"),
+    await expect(verifier.verifyAccessToken("not-a-jwt")).rejects.toEqual(
+      new IdentityVerificationError("vortex.identity.token_verification_failed"),
     );
     expect(customFetch).not.toHaveBeenCalled();
   });
