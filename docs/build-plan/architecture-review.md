@@ -12,6 +12,7 @@ The inspected documentation baseline is Testing commit `f84fc46915f3d1f200d426b3
 
 | Finding | Required correction | Delivery owner |
 |---|---|---|
+| Tenant governance requires the active organisation context it must create or restore | Distinguish server-resolved tenant-administrator operations from organisation-local account/data operations; preserve #27's checks | [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) |
 | Page contract is flat while the canvas promises nesting and shells | Add canonical declared slots, nested placement identity and shell ownership; preserve old releases | [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) |
 | Literal settings accept JSON without useful property constraints | Registry-driven recursive types, defaults, safe rich text/assets, arrays/groups and typed references | [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249), [#66](https://github.com/Abzum-NZ/Abzum-Vortex/issues/66) |
 | Record pages reject legitimate related-record panels | Explicit subject/relationship/query/row contexts, each authorised | [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), [#67](https://github.com/Abzum-NZ/Abzum-Vortex/issues/67) |
