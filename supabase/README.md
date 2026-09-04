@@ -33,8 +33,8 @@ ES256 JWKS, and password-recovery delivery. It does not configure Testing or Pro
 exercise durable application sessions.
 
 `db:verify` rebuilds the local database from committed migrations and seed
-data, runs every pgTAP test, proves tenant hierarchy and lifecycle races through
-two real database connections, and fails database lint on errors. It is separate
+data, runs every pgTAP test, proves tenant hierarchy, lifecycle and Definition
+publication races through two real database connections, and fails database lint on errors. It is separate
 from `pnpm verify`: Vercel previews and ordinary pull-request checks remain
 database-free.
 
@@ -69,7 +69,17 @@ requirements, and an expected draft revision, but no permanent identifier, organ
 timestamp, or stored publication evidence comes from its caller. Source owner and alias rows are
 append-only. Nested components use a stable parent-owner scope alongside their current key-based
 compiler lookup scope, so a parent-key rename preserves child identifiers and retains every historical
-alias.
+alias. Each draft also stores its exact current source-derived requirements, so publication preparation
+returns only current aliases while immutable earlier releases keep their own resolution snapshots.
+
+Definition publication preparation reads the organisation-owned draft, immutable history, permanent
+identity evidence and available exact Module releases through narrow operations. Publication then locks
+the root and draft and appends the authored source, complete canonical compilation output, exact resolution
+snapshot, exact dependency manifest, actor and database time as one immutable effect before advancing only
+that root's current discovery pointer. The append refuses a root that already has 10,000 releases before
+writing anything. The two-connection proof verifies that only one publication from the
+same draft can commit and that an Application's prepared exact Module release is not retargeted when a newer
+Module release commits concurrently.
 
 ### Private service-schema pattern
 

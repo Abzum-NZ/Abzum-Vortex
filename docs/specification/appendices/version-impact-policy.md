@@ -78,9 +78,9 @@ Duplicate comparison identities are refused as `ambiguous_component_identity`; t
 | Event | — | Add or add a carried field | Remove; key/record type/privacy choice or carried-field removal |
 | Rule | — | — | Add, remove, priority, condition, trigger, or effect change |
 | Extension point | — | Add or widen accepted kinds | Remove, retarget, rename key, or narrow accepted kinds |
-| Saved sharing condition | Publication-test name/order only | Add | Remove or change record type, key, parameters, condition, declared fields, test field/parameter values or expected result, revision, or fingerprint |
+| Saved sharing condition | Publication-test name/order only | Add | Remove or change record type, key, parameters, condition, declared fields, or test field/parameter values or expected result |
 
-The saved sharing-condition collection is part of canonical module content. A sharing grant pins its condition identifier, revision, and fingerprint as specified in [record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions).
+The saved sharing-condition collection is part of canonical module content. A sharing grant pins its condition identifier, revision, and fingerprint as specified in [record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions). Revision and fingerprint are derived publication evidence, not independently authored changes, so the comparator ignores those two fields and classifies the underlying resolved contract change that caused them.
 
 ### Action inputs
 

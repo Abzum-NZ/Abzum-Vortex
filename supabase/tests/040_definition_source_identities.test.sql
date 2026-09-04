@@ -350,6 +350,48 @@ select ok(
   ),
   'the old record key remains reserved as historical alias evidence'
 );
+select is(
+  (
+    select identity_requirements
+    from vortex_definition.drafts
+    where root_id = :'identity_created_root_id'::uuid
+  ),
+  '[
+    {
+      "definitionKey":"example.identity_store",
+      "ownerScope":"document",
+      "scope":"document",
+      "kind":"root",
+      "componentOwner":"root",
+      "aliases":["example.identity_store","module_root"]
+    },
+    {
+      "definitionKey":"example.identity_store",
+      "ownerScope":"content",
+      "scope":"content",
+      "kind":"record_type",
+      "componentOwner":"record_owner",
+      "aliases":["record_owner","item"]
+    },
+    {
+      "definitionKey":"example.identity_store",
+      "ownerScope":"record_owner:record_owner",
+      "scope":"record:item",
+      "kind":"storage_contract",
+      "componentOwner":"storage_owner",
+      "aliases":["storage_owner","item"]
+    },
+    {
+      "definitionKey":"example.identity_store",
+      "ownerScope":"record_owner:record_owner",
+      "scope":"record:item",
+      "kind":"field",
+      "componentOwner":"field_owner",
+      "aliases":["field_owner","title"]
+    }
+  ]'::jsonb,
+  'the draft stores only the renamed source revision current identity requirements'
+);
 
 select pg_catalog.set_config('vortex.request_context', '', true);
 set local role vortex_runtime;
@@ -504,6 +546,21 @@ select is(
   3::bigint,
   'removing contained components saves without deleting their permanent identities'
 );
+reset role;
+select is(
+  (
+    select pg_catalog.jsonb_array_length(identity_requirements)
+    from vortex_definition.drafts
+    where root_id = :'identity_created_root_id'::uuid
+  ),
+  1,
+  'removing components removes them from the current draft requirements without deleting history'
+);
+
+select pg_catalog.set_config('vortex.request_context', '', true);
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.identity_store_context());
+set local role vortex_request;
 
 select is(
   (

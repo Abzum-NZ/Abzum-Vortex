@@ -16,7 +16,8 @@ create table vortex_definition.releases (
   authored_source jsonb not null,
   authored_source_fingerprint text not null,
   source_contract_version text not null,
-  canonical_content jsonb not null,
+  compilation_output jsonb not null,
+  resolution_snapshot jsonb not null,
   content_fingerprint text not null,
   resolution_fingerprint text not null,
   validation_contract_version text not null,
@@ -51,8 +52,14 @@ create table vortex_definition.releases (
     and source_contract_version ~
       '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'
   ),
-  constraint releases_canonical_content_object check (
-    pg_catalog.jsonb_typeof(canonical_content) = 'object'
+  constraint releases_compilation_output_object check (
+    pg_catalog.jsonb_typeof(compilation_output) = 'object'
+  ),
+  constraint releases_resolution_snapshot_object check (
+    pg_catalog.jsonb_typeof(resolution_snapshot) = 'object'
+  ),
+  constraint releases_resolution_snapshot_fingerprint_match check (
+    resolution_snapshot ->> 'fingerprint' = resolution_fingerprint
   ),
   constraint releases_content_fingerprint_format check (
     content_fingerprint ~ '^sha256:[a-f0-9]{64}$'
@@ -263,7 +270,7 @@ revoke execute on function vortex_definition.validate_release_insert()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on table vortex_definition.releases is
-  'Immutable published Module and Application revisions; consumers retain their exact release reference.';
+  'Immutable published Module and Application revisions with their complete compilation and resolution evidence.';
 comment on table vortex_definition.release_dependencies is
   'Exact immutable dependency manifest for one Definition release; module dependencies bind to one target release.';
 comment on column vortex_definition.roots.current_release_revision is

@@ -4,7 +4,7 @@ import {
   type SavedConditionRevisionAssignment,
   type SavedSharingCondition,
 } from "@vortex/contracts";
-import { canonicalJson } from "./canonical-json";
+import { canonicalJson, compareCanonicalStrings } from "./canonical-json";
 import { refuseVersionImpact } from "./version-impact-error";
 
 export type SavedConditionRevisionInput = Readonly<{
@@ -17,7 +17,10 @@ const revisionShape = (condition: SavedSharingCondition) => {
   const contract: Partial<SavedSharingCondition> = { ...condition };
   delete contract.publishedRevision;
   delete contract.contractFingerprint;
-  return { ...contract, declaredFieldIds: [...condition.declaredFieldIds].sort() };
+  return {
+    ...contract,
+    declaredFieldIds: [...condition.declaredFieldIds].sort(compareCanonicalStrings),
+  };
 };
 
 const sameContract = (left: SavedSharingCondition, right: SavedSharingCondition): boolean =>
@@ -69,7 +72,7 @@ export const deriveSavedConditionRevisions = ({
 
   const candidateIds = new Set<string>();
   return [...conditions]
-    .sort((left, right) => left.conditionId.localeCompare(right.conditionId))
+    .sort((left, right) => compareCanonicalStrings(left.conditionId, right.conditionId))
     .map((condition) => {
       if (candidateIds.has(condition.conditionId))
         refuseVersionImpact("ambiguous_component_identity");

@@ -13,7 +13,11 @@ import {
   confirmDefinitionVersionImpact,
   compareDefinitionVersionImpact,
 } from "../src/version-impact";
-import { canonicalJson, fingerprintCanonicalValue } from "../src/canonical-json";
+import {
+  canonicalJson,
+  compareCanonicalStrings,
+  fingerprintCanonicalValue,
+} from "../src/canonical-json";
 import { DefinitionVersionImpactError } from "../src/version-impact-error";
 import { assignNextDefinitionVersion } from "../src/semantic-version";
 
@@ -1223,6 +1227,10 @@ describe("definition version impact", () => {
   test("uses locale-independent canonical JSON and rejects undefined properties", () => {
     expect(canonicalJson({ z: 1, A: 2, a: 3 })).toBe('{"A":2,"a":3,"z":1}');
     expect(() => canonicalJson({ present: true, missing: undefined })).toThrow(TypeError);
+  });
+
+  test("uses contract-compatible code-unit ordering when punctuation differs", () => {
+    expect(["a_a.a", "a.a"].sort(compareCanonicalStrings)).toEqual(["a.a", "a_a.a"]);
   });
 
   test.each([

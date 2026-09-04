@@ -5,7 +5,6 @@ import {
   definitionSourceDocumentSchema,
   publishedModuleDefinitionSchema,
   sessionContextSchema,
-  type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
   type PublishedDefinitionHistory,
   type PublishDefinitionResult,
@@ -115,9 +114,10 @@ const releaseFor = (
   releaseRevision: number,
 ): ResolvableModuleRelease => {
   if (source.kind !== "module") throw new Error("Module fixture required");
+  const resolutionSnapshot = resolutionAt(source.key, releaseVersion);
   const compilationOutput = compileDefinition({
     source,
-    resolution: resolutionAt(source.key, releaseVersion),
+    resolution: resolutionSnapshot,
     draftMetadata: metadata(releaseRevision),
     savedConditionRevisions: [],
   });
@@ -147,9 +147,7 @@ const releaseFor = (
     resolutionFingerprint: compilationOutput.resolutionFingerprint,
     published,
     compilationOutput,
-    identities: baseResolution.identities.filter(
-      (identity) => identity.definitionKey === source.key,
-    ),
+    resolutionSnapshot,
   };
 };
 
@@ -313,18 +311,22 @@ describe("Definition publication service", () => {
     expect(repository.appends).toHaveLength(0);
     expect(repository.transactions).toBe(0);
 
-    const result = await service.publish(context(), prepared, {
-      confirmation: prepared.confirmation,
+    const portableConfirmation = JSON.parse(JSON.stringify(prepared.confirmation));
+    const result = await service.publish(context(), {
+      confirmation: portableConfirmation,
       releaseNote: "Initial neutral module release",
     });
 
     expect(result.releaseRevision).toBe(1);
     expect(repository.appends).toHaveLength(1);
+    expect(repository.appends[0]?.resolutionSnapshot.fingerprint).toBe(
+      prepared.confirmation.resolutionFingerprint,
+    );
     expect(repository.transactions).toBe(1);
     expect(repository.candidate.draft.publishedRevision).toBe(1);
   });
 
-  it("rejects malformed and altered confirmations before opening a transaction", async () => {
+  it("rejects malformed commands before and altered confirmations inside a transaction", async () => {
     const repository = new MemoryRepository(candidateFor(sourceNamed("crm.organisations.json")));
     const service = createDefinitionPublicationService(repository, emptyCatalogue);
     await expect(service.prepare(context(), { expectedDraftRevision: 1 })).rejects.toMatchObject({
@@ -337,7 +339,7 @@ describe("Definition publication service", () => {
       expectedDraftRevision: 1,
     });
     await expect(
-      service.publish(context(), prepared, {
+      service.publish(context(), {
         confirmation: {
           ...prepared.confirmation,
           sourceFingerprint: `sha256:${"0".repeat(64)}`,
@@ -345,7 +347,7 @@ describe("Definition publication service", () => {
         releaseNote: "Altered confirmation",
       }),
     ).rejects.toMatchObject({ code: "DEFINITION_CONFIRMATION_MISMATCH" });
-    expect(repository.transactions).toBe(0);
+    expect(repository.transactions).toBe(1);
     expect(repository.appends).toHaveLength(0);
   });
 
@@ -357,7 +359,7 @@ describe("Definition publication service", () => {
       expectedDraftRevision: 1,
     });
     const publish = () =>
-      service.publish(context(), prepared, {
+      service.publish(context(), {
         confirmation: prepared.confirmation,
         releaseNote: "One release only",
       });
@@ -393,7 +395,7 @@ describe("Definition publication service", () => {
     });
 
     repository.moduleReleases.push(releaseFor(dependencySource, "1.3.0", 3));
-    await service.publish(context(), prepared, {
+    await service.publish(context(), {
       confirmation: prepared.confirmation,
       releaseNote: "Keep the prepared exact dependency",
     });
@@ -414,7 +416,7 @@ describe("Definition publication service", () => {
     repository.failAppend = true;
 
     await expect(
-      service.publish(context(), prepared, {
+      service.publish(context(), {
         confirmation: prepared.confirmation,
         releaseNote: "Injected failure",
       }),

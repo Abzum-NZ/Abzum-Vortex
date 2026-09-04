@@ -16,3 +16,6 @@ export * from "./definition-store";
 export * from "./source-identities";
 export * from "./saved-condition-revisions";
 export * from "./definition-publication";
+export * from "./definition-publication-repository";
+export * from "./definition-publication-catalogue";
+export * from "./definition-publication-composition";

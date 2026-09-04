@@ -136,4 +136,47 @@ describe("Definition store", () => {
     );
     expect(runner).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["createRoot", "23505", "DEFINITION_ROOT_ALREADY_EXISTS"],
+    ["saveDraft", "23505", "DEFINITION_IDENTITY_ALIAS_CONFLICT"],
+    ["saveDraft", "40001", "DEFINITION_DRAFT_STALE_OR_MISSING"],
+    ["saveDraft", "23503", "DEFINITION_ROOT_MISSING"],
+    ["saveDraft", "42501", "DEFINITION_CONTEXT_REFUSED"],
+    ["saveDraft", "22023", "DEFINITION_STORAGE_VALIDATION_FAILED"],
+    ["saveDraft", "XX000", "DEFINITION_STORAGE_FAILED"],
+  ] as const)(
+    "maps %s database failure %s to closed error %s",
+    async (operation, databaseCode, expectedCode) => {
+      const store = createDefinitionStore(async () => {
+        throw { code: databaseCode, message: "sensitive database detail" };
+      });
+      const pending =
+        operation === "createRoot"
+          ? store.createRoot(context(), { source })
+          : store.saveDraft(context(), {
+              rootId: row().root_id,
+              expectedDraftRevision: 1,
+              source,
+            });
+
+      await expect(pending).rejects.toMatchObject({
+        name: "DefinitionStoreError",
+        code: expectedCode,
+        message: expectedCode,
+      });
+    },
+  );
+
+  it("maps raw runner failures without exposing their message", async () => {
+    const store = createDefinitionStore(async () => {
+      throw new Error("sensitive driver detail");
+    });
+
+    await expect(store.createRoot(context(), { source })).rejects.toMatchObject({
+      name: "DefinitionStoreError",
+      code: "DEFINITION_STORAGE_FAILED",
+      message: "DEFINITION_STORAGE_FAILED",
+    });
+  });
 });

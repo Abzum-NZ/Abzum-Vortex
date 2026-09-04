@@ -1,0 +1,109 @@
+import fs from "node:fs";
+import path from "node:path";
+import {
+  connectionTypeSourceDocumentSchema,
+  definitionResolutionSnapshotSchema,
+  type ConnectionTypeId,
+  type SemanticVersion,
+} from "@vortex/contracts";
+import { describe, expect, it } from "vitest";
+import { createImmutableDefinitionPublicationCatalogue } from "../src/definition-publication-catalogue";
+
+const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const source = connectionTypeSourceDocumentSchema.parse(
+  JSON.parse(fs.readFileSync(path.join(fixtureRoot, "connection-types/email.json"), "utf8")),
+);
+const fixtureResolution = definitionResolutionSnapshotSchema.parse(
+  JSON.parse(
+    fs.readFileSync(path.join(fixtureRoot, "definition-resolution-snapshot.json"), "utf8"),
+  ),
+);
+const resolvedConnection = fixtureResolution.definitions.find(
+  (definition) => definition.kind === "connection_type" && definition.key === source.key,
+);
+if (resolvedConnection?.kind !== "connection_type") throw new Error("Connection fixture missing");
+const rootId = resolvedConnection.rootId;
+const themeId = "70000000-0000-4000-8000-000000000001";
+const themeContentFingerprint = `sha256:${"b".repeat(64)}`;
+const connectionRelease = (releaseVersion: SemanticVersion) => ({
+  source,
+  rootId,
+  releaseVersion,
+});
+
+describe("immutable Definition publication catalogue", () => {
+  it("lists governed connection releases deterministically and reads only an exact identity", async () => {
+    const catalogue = createImmutableDefinitionPublicationCatalogue({
+      connectionTypeReleases: [connectionRelease("1.4.0"), connectionRelease("1.0.0")],
+      platformThemeReleases: [],
+    });
+
+    const releases = await catalogue.listConnectionTypeReleases(source.key);
+    expect(releases.map((release) => release.releaseVersion)).toEqual(["1.0.0", "1.4.0"]);
+    expect(releases[1]?.compilationOutput.canonical.operations.map(({ key }) => key)).toEqual([
+      "send_message",
+      "send_template",
+    ]);
+    await expect(catalogue.readConnectionTypeRelease(rootId, "1.0.0")).resolves.toBe(releases[0]);
+    await expect(
+      catalogue.readConnectionTypeRelease(
+        "70000000-0000-4000-8000-000000000099" as ConnectionTypeId,
+        "1.0.0",
+      ),
+    ).resolves.toBeUndefined();
+    await expect(catalogue.readConnectionTypeRelease(rootId, "1.0.1")).resolves.toBeUndefined();
+    await expect(
+      catalogue.listConnectionTypeReleases("vortex.connection.missing"),
+    ).resolves.toEqual([]);
+    expect(Object.isFrozen(releases)).toBe(true);
+    expect(Object.isFrozen(releases[0]?.compilationOutput.canonical)).toBe(true);
+  });
+
+  it("looks up platform themes only by their exact immutable release", async () => {
+    const catalogue = createImmutableDefinitionPublicationCatalogue({
+      connectionTypeReleases: [],
+      platformThemeReleases: [
+        {
+          catalogueThemeId: themeId,
+          releaseVersion: "2.1.0",
+          contentFingerprint: themeContentFingerprint,
+        },
+      ],
+    });
+
+    const theme = await catalogue.readPlatformThemeRelease(themeId, "2.1.0");
+    expect(theme).toMatchObject({
+      catalogueThemeId: themeId,
+      releaseVersion: "2.1.0",
+      contentFingerprint: themeContentFingerprint,
+    });
+    expect(theme?.catalogueFingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
+    await expect(catalogue.readPlatformThemeRelease(themeId, "2.1.1")).resolves.toBeUndefined();
+    await expect(
+      catalogue.readPlatformThemeRelease("70000000-0000-4000-8000-000000000002", "2.1.0"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("refuses ambiguous versions and connection-key substitutions at construction", () => {
+    expect(() =>
+      createImmutableDefinitionPublicationCatalogue({
+        connectionTypeReleases: [connectionRelease("1.0.0"), connectionRelease("1.0.0")],
+        platformThemeReleases: [],
+      }),
+    ).toThrow("INVALID_PLATFORM_RELEASE_CATALOGUE");
+
+    expect(() =>
+      createImmutableDefinitionPublicationCatalogue({
+        connectionTypeReleases: [
+          connectionRelease("1.0.0"),
+          {
+            source,
+            rootId: "70000000-0000-4000-8000-000000000003",
+            releaseVersion: "1.1.0",
+          },
+        ],
+        platformThemeReleases: [],
+      }),
+    ).toThrow("INVALID_PLATFORM_RELEASE_CATALOGUE");
+  });
+});

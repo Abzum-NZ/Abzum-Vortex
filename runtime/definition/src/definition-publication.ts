@@ -34,7 +34,7 @@ import {
   type SemanticVersion,
 } from "@vortex/contracts";
 import { compare, satisfies } from "semver";
-import { fingerprintCanonicalValue } from "./canonical-json";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compileDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { deriveSavedConditionRevisions } from "./saved-condition-revisions";
@@ -96,7 +96,7 @@ export type ResolvableModuleRelease = Readonly<{
   resolutionFingerprint: Fingerprint;
   published: PublishedModuleDefinition;
   compilationOutput: ModuleOutput;
-  identities: SourceIdentityAssignments;
+  resolutionSnapshot: DefinitionResolutionSnapshot;
 }>;
 
 export type ResolvableConnectionTypeRelease = Readonly<{
@@ -147,12 +147,13 @@ export type DefinitionReleaseAppend = Readonly<{
   comparisonFingerprint: string;
   reasons: DefinitionPublicationConfirmation["reasons"];
   dependencyManifest: readonly ExactDefinitionDependency[];
+  resolutionSnapshot: DefinitionResolutionSnapshot;
   validationContractVersion: "1.0.0";
   releaseNote: string;
 }>;
 
 export interface DefinitionPublicationTransaction extends DefinitionPublicationReader {
-  /** Must lock the root and draft until the surrounding request transaction completes. */
+  /** Re-reads immediately before compilation; appendRelease owns the atomic row lock/check. */
   lockCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
   /** Must append the release and manifest and advance only this root's pointer atomically. */
   appendRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult>;
@@ -173,13 +174,10 @@ type PreparedState = Readonly<{
   confirmation: DefinitionPublicationConfirmation;
   draft: StoredDefinitionDraft;
   compilationOutput: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
+  resolutionSnapshot: DefinitionResolutionSnapshot;
 }>;
 
-const preparedState = Symbol("definition-publication-prepared-state");
-
-export type PreparedDefinitionPublication = PrepareDefinitionPublicationResult & {
-  readonly [preparedState]: PreparedState;
-};
+export type PreparedDefinitionPublication = PrepareDefinitionPublicationResult;
 
 type Requirement = Readonly<{ key: string; version: VersionRequirement }>;
 
@@ -203,7 +201,7 @@ const groupRequirements = (requirements: readonly Requirement[]) => {
   const grouped = new Map<string, VersionRequirement[]>();
   for (const requirement of requirements)
     grouped.set(requirement.key, [...(grouped.get(requirement.key) ?? []), requirement.version]);
-  return [...grouped].sort(([left], [right]) => left.localeCompare(right));
+  return [...grouped].sort(([left], [right]) => compareCanonicalStrings(left, right));
 };
 
 const chooseStableRelease = <Release extends { releaseVersion: string }>(
@@ -250,7 +248,9 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
 const sortedManifest = (
   dependencies: readonly ExactDefinitionDependency[],
 ): ExactDefinitionDependency[] =>
-  [...dependencies].sort((left, right) => subjectOf(left).localeCompare(subjectOf(right)));
+  [...dependencies].sort((left, right) =>
+    compareCanonicalStrings(subjectOf(left), subjectOf(right)),
+  );
 
 const verifyModuleRelease = (
   candidate: DefinitionPublicationCandidate,
@@ -258,13 +258,33 @@ const verifyModuleRelease = (
   release: ResolvableModuleRelease,
 ): void => {
   const parsedOutput = definitionCompilationOutputSchema.safeParse(release.compilationOutput);
+  const parsedResolution = definitionResolutionSnapshotSchema.safeParse(release.resolutionSnapshot);
   const publication = release.published.publication;
+  const ownResolution = parsedResolution.success
+    ? parsedResolution.data.definitions.filter(
+        (definition) =>
+          definition.kind === "module" &&
+          definition.key === release.key &&
+          definition.rootId === release.rootId &&
+          definition.exactVersion === release.releaseVersion,
+      )
+    : [];
+  const authenticResolutionFingerprint = parsedResolution.success
+    ? fingerprintCanonicalValue({
+        contractVersion: parsedResolution.data.contractVersion,
+        definitions: parsedResolution.data.definitions,
+        identities: parsedResolution.data.identities,
+      })
+    : undefined;
   if (
     release.organizationId !== candidate.draft.organizationId ||
     release.key !== expectedKey ||
     !stable(release.releaseVersion) ||
     !parsedOutput.success ||
     parsedOutput.data.kind !== "module" ||
+    !parsedResolution.success ||
+    ownResolution.length !== 1 ||
+    authenticResolutionFingerprint !== release.resolutionFingerprint ||
     publication.kind !== "module" ||
     publication.rootId !== release.rootId ||
     publication.revision !== release.releaseRevision ||
@@ -274,6 +294,7 @@ const verifyModuleRelease = (
     release.compilationOutput.canonical.envelope.key !== release.key ||
     release.compilationOutput.artifact.exactVersion !== release.releaseVersion ||
     release.compilationOutput.artifact.contentFingerprint !== release.contentFingerprint ||
+    release.resolutionSnapshot.fingerprint !== release.resolutionFingerprint ||
     release.compilationOutput.artifact.resolutionFingerprint !== release.resolutionFingerprint ||
     release.compilationOutput.resolutionFingerprint !== release.resolutionFingerprint ||
     fingerprintCanonicalValue(release.published.content) !== release.contentFingerprint
@@ -408,10 +429,11 @@ const resolveDependencies = async (
     ...modules.map((release) => `module:${release.key}`),
     ...connections.map((release) => `connection_type:${release.key}`),
     ...(theme === undefined ? [] : [`platform_theme:${theme.catalogueThemeId}`]),
-  ].sort();
+  ].sort(compareCanonicalStrings);
   if (
     pinned !== undefined &&
-    JSON.stringify([...pinned].map(subjectOf).sort()) !== JSON.stringify(expectedSubjects)
+    JSON.stringify([...pinned].map(subjectOf).sort(compareCanonicalStrings)) !==
+      JSON.stringify(expectedSubjects)
   )
     refuse("DEFINITION_CONFIRMATION_MISMATCH");
   return { modules, connections, ...(theme === undefined ? {} : { theme }) };
@@ -527,19 +549,26 @@ const buildResolution = (
         (operation) => operation.key,
       ),
     })),
-  ].sort((left, right) => `${left.kind}:${left.key}`.localeCompare(`${right.kind}:${right.key}`));
+  ].sort((left, right) =>
+    compareCanonicalStrings(`${left.kind}:${left.key}`, `${right.kind}:${right.key}`),
+  );
   const identities = [
     ...candidate.identities,
-    ...dependencies.modules.flatMap((release) => release.identities),
+    ...dependencies.modules.flatMap((release) =>
+      release.resolutionSnapshot.identities.filter(
+        (identity) => identity.definitionKey === release.key,
+      ),
+    ),
   ].sort((left, right) =>
-    JSON.stringify([
-      left.definitionKey,
-      left.scope,
-      left.kind,
-      left.componentOwner,
-      left.alias,
-      left.identifier,
-    ]).localeCompare(
+    compareCanonicalStrings(
+      JSON.stringify([
+        left.definitionKey,
+        left.scope,
+        left.kind,
+        left.componentOwner,
+        left.alias,
+        left.identifier,
+      ]),
       JSON.stringify([
         right.definitionKey,
         right.scope,
@@ -735,7 +764,12 @@ const prepareFromReader = async (
     reasons: finalImpact.reasons,
     ...(finalImpact.outcome === "release_required" ? { impact: finalImpact.impact } : {}),
   });
-  return { confirmation, draft: candidate.draft, compilationOutput };
+  return {
+    confirmation,
+    draft: candidate.draft,
+    compilationOutput,
+    resolutionSnapshot: resolution,
+  };
 };
 
 const safely = async <Result>(operation: () => Promise<Result>): Promise<Result> => {
@@ -750,8 +784,8 @@ const safely = async <Result>(operation: () => Promise<Result>): Promise<Result>
 };
 
 /**
- * Publication orchestration over private injected stores. Preparation exposes only safe evidence;
- * the richer state is symbol-bound and every byte that matters is recomputed under the publish lock.
+ * Publication orchestration over private injected stores. Preparation exposes only safe JSON
+ * evidence; every byte that matters is recomputed inside the publish transaction.
  */
 export const createDefinitionPublicationService = (
   repository: DefinitionPublicationRepository,
@@ -774,32 +808,16 @@ export const createDefinitionPublicationService = (
           await reader.readCandidate(parsedCommand.rootId),
         ),
       );
-      const result = prepareDefinitionPublicationResultSchema.parse({
+      return prepareDefinitionPublicationResultSchema.parse({
         confirmation: state.confirmation,
-      }) as PreparedDefinitionPublication;
-      Object.defineProperty(result, preparedState, { value: state, enumerable: false });
-      return result;
+      });
     });
   },
 
-  publish: async (
-    context: SessionContext,
-    prepared: PreparedDefinitionPublication,
-    input: unknown,
-  ): Promise<PublishDefinitionResult> => {
+  publish: async (context: SessionContext, input: unknown): Promise<PublishDefinitionResult> => {
     const command = publishDefinitionCommandSchema.safeParse(input);
-    const initialState = prepared?.[preparedState];
-    if (!command.success || initialState === undefined)
-      refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PublishDefinitionCommand;
-    const verifiedInitialState = initialState as PreparedState;
-    if (
-      fingerprintCanonicalValue(parsedCommand.confirmation) !==
-        fingerprintCanonicalValue(verifiedInitialState.confirmation) ||
-      fingerprintCanonicalValue(prepared.confirmation) !==
-        fingerprintCanonicalValue(verifiedInitialState.confirmation)
-    )
-      refuse("DEFINITION_CONFIRMATION_MISMATCH");
     return safely(async () =>
       repository.transaction(context, async (transaction) => {
         const confirmation = parsedCommand.confirmation;
@@ -826,6 +844,7 @@ export const createDefinitionPublicationService = (
           comparisonFingerprint: confirmation.comparisonFingerprint,
           reasons: confirmation.reasons,
           dependencyManifest: confirmation.dependencyManifest,
+          resolutionSnapshot: recomputed.resolutionSnapshot,
           validationContractVersion: "1.0.0",
           releaseNote: parsedCommand.releaseNote,
         });

@@ -23,6 +23,12 @@ export const definitionStoreErrorCodes = [
   "INVALID_DEFINITION_SOURCE",
   "INVALID_DEFINITION_STORAGE_RESULT",
   "DEFINITION_DRAFT_STALE_OR_MISSING",
+  "DEFINITION_ROOT_ALREADY_EXISTS",
+  "DEFINITION_ROOT_MISSING",
+  "DEFINITION_IDENTITY_ALIAS_CONFLICT",
+  "DEFINITION_CONTEXT_REFUSED",
+  "DEFINITION_STORAGE_VALIDATION_FAILED",
+  "DEFINITION_STORAGE_FAILED",
 ] as const;
 
 export type DefinitionStoreErrorCode = (typeof definitionStoreErrorCodes)[number];
@@ -97,6 +103,39 @@ const validateSource = (source: CreateDefinitionRootCommand["source"]) => {
   return source;
 };
 
+type DefinitionStoreOperation = "create_root" | "save_draft";
+
+const safeStoreOperation = async <Result>(
+  operationKind: DefinitionStoreOperation,
+  operation: () => Promise<Result>,
+): Promise<Result> => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof DefinitionStoreError) throw error;
+    const databaseCode =
+      error !== null && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : undefined;
+    if (databaseCode === "40001")
+      throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    if (databaseCode === "23505")
+      throw new DefinitionStoreError(
+        operationKind === "create_root"
+          ? "DEFINITION_ROOT_ALREADY_EXISTS"
+          : "DEFINITION_IDENTITY_ALIAS_CONFLICT",
+      );
+    if (databaseCode === "42501") throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    if (databaseCode === "23503")
+      throw new DefinitionStoreError(
+        operationKind === "create_root" ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_ROOT_MISSING",
+      );
+    if (databaseCode === "22023" || databaseCode === "23514")
+      throw new DefinitionStoreError("DEFINITION_STORAGE_VALIDATION_FAILED");
+    throw new DefinitionStoreError("DEFINITION_STORAGE_FAILED");
+  }
+};
+
 export const createDefinitionStore = (
   runInTransaction: DefinitionTransactionRunner = withRequestTransaction,
 ) => ({
@@ -104,24 +143,26 @@ export const createDefinitionStore = (
     context: SessionContext,
     candidate: CreateDefinitionRootCommand,
   ): Promise<StoredDefinitionDraft> {
-    const command = createDefinitionRootCommandSchema.safeParse(candidate);
-    if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
-    const source = validateSource(command.data.source);
-    const sourceFingerprint = fingerprintCanonicalValue(source);
-    const identityRequirements = extractSourceIdentityRequirements(source);
-    return runInTransaction(context, async (transaction) => {
-      const rows = await transaction.query<StoredDraftRow>`
-        select *
-        from vortex_definition.create_root(
-          ${source.kind},
-          ${source.key},
-          ${JSON.stringify(source)},
-          ${sourceFingerprint},
-          ${JSON.stringify(identityRequirements)}
-        )
-      `;
-      if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
-      return parseStoredDraft(rows[0]!);
+    return safeStoreOperation("create_root", async () => {
+      const command = createDefinitionRootCommandSchema.safeParse(candidate);
+      if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+      const source = validateSource(command.data.source);
+      const sourceFingerprint = fingerprintCanonicalValue(source);
+      const identityRequirements = extractSourceIdentityRequirements(source);
+      return runInTransaction(context, async (transaction) => {
+        const rows = await transaction.query<StoredDraftRow>`
+          select *
+          from vortex_definition.create_root(
+            ${source.kind},
+            ${source.key},
+            ${JSON.stringify(source)},
+            ${sourceFingerprint},
+            ${JSON.stringify(identityRequirements)}
+          )
+        `;
+        if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+        return parseStoredDraft(rows[0]!);
+      });
     });
   },
 
@@ -129,25 +170,27 @@ export const createDefinitionStore = (
     context: SessionContext,
     candidate: SaveDefinitionDraftCommand,
   ): Promise<StoredDefinitionDraft> {
-    const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
-    if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
-    const source = validateSource(command.data.source);
-    const sourceFingerprint = fingerprintCanonicalValue(source);
-    const identityRequirements = extractSourceIdentityRequirements(source);
-    return runInTransaction(context, async (transaction) => {
-      const rows = await transaction.query<StoredDraftRow>`
-        select *
-        from vortex_definition.save_draft(
-          ${command.data.rootId},
-          ${command.data.expectedDraftRevision},
-          ${JSON.stringify(source)},
-          ${sourceFingerprint},
-          ${JSON.stringify(identityRequirements)}
-        )
-      `;
-      if (rows.length === 0) throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
-      return parseStoredDraft(rows[0]!);
+    return safeStoreOperation("save_draft", async () => {
+      const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
+      if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+      const source = validateSource(command.data.source);
+      const sourceFingerprint = fingerprintCanonicalValue(source);
+      const identityRequirements = extractSourceIdentityRequirements(source);
+      return runInTransaction(context, async (transaction) => {
+        const rows = await transaction.query<StoredDraftRow>`
+          select *
+          from vortex_definition.save_draft(
+            ${command.data.rootId},
+            ${command.data.expectedDraftRevision},
+            ${JSON.stringify(source)},
+            ${sourceFingerprint},
+            ${JSON.stringify(identityRequirements)}
+          )
+        `;
+        if (rows.length === 0) throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        if (rows.length !== 1) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+        return parseStoredDraft(rows[0]!);
+      });
     });
   },
 });

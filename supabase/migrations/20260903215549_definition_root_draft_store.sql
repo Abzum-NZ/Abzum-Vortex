@@ -52,6 +52,7 @@ create table vortex_definition.drafts (
   root_id uuid not null,
   draft_revision bigint not null,
   draft_source jsonb not null,
+  identity_requirements jsonb not null default '[]'::jsonb,
   source_contract_version text not null,
   source_fingerprint text not null,
   updated_at timestamptz not null default pg_catalog.statement_timestamp(),
@@ -59,6 +60,9 @@ create table vortex_definition.drafts (
   constraint drafts_pk primary key (root_id),
   constraint drafts_revision_range check (draft_revision between 1 and 9007199254740991),
   constraint drafts_source_object check (pg_catalog.jsonb_typeof(draft_source) = 'object'),
+  constraint drafts_identity_requirements_array check (
+    pg_catalog.jsonb_typeof(identity_requirements) = 'array'
+  ),
   constraint drafts_source_contract_version_format check (
     pg_catalog.char_length(source_contract_version) between 1 and 120
     and source_contract_version ~

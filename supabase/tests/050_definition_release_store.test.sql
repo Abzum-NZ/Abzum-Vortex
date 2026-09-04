@@ -24,7 +24,8 @@ select columns_are(
   'releases',
   array[
     'root_id', 'release_revision', 'release_version', 'authored_source',
-    'authored_source_fingerprint', 'source_contract_version', 'canonical_content',
+    'authored_source_fingerprint', 'source_contract_version', 'compilation_output',
+    'resolution_snapshot',
     'content_fingerprint', 'resolution_fingerprint', 'validation_contract_version',
     'comparison_fingerprint', 'impact_reasons', 'release_note', 'published_at',
     'published_by'
@@ -65,9 +66,16 @@ select col_type_is(
 select col_type_is(
   'vortex_definition',
   'releases',
-  'canonical_content',
+  'compilation_output',
   'jsonb',
-  'immutable canonical content uses jsonb'
+  'immutable complete compilation output uses jsonb'
+);
+select col_type_is(
+  'vortex_definition',
+  'releases',
+  'resolution_snapshot',
+  'jsonb',
+  'immutable resolution snapshot uses jsonb'
 );
 select has_pk('vortex_definition', 'releases', 'one release is identified by its root and draft revision');
 select has_pk(
@@ -260,7 +268,7 @@ insert into vortex_definition.roots (
 
 insert into vortex_definition.releases (
   root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, canonical_content,
+  authored_source_fingerprint, source_contract_version, compilation_output, resolution_snapshot,
   content_fingerprint, resolution_fingerprint, validation_contract_version,
   comparison_fingerprint, impact_reasons, release_note, published_at, published_by
 ) values (
@@ -271,6 +279,7 @@ insert into vortex_definition.releases (
   'sha256:' || pg_catalog.repeat('a', 64),
   '1.0.0',
   '{"name":"Target"}'::jsonb,
+  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('c', 64)),
   'sha256:' || pg_catalog.repeat('b', 64),
   'sha256:' || pg_catalog.repeat('c', 64),
   '1.0.0',
@@ -287,6 +296,7 @@ insert into vortex_definition.releases (
   'sha256:' || pg_catalog.repeat('d', 64),
   '1.0.0',
   '{"name":"Owner"}'::jsonb,
+  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('f', 64)),
   'sha256:' || pg_catalog.repeat('e', 64),
   'sha256:' || pg_catalog.repeat('f', 64),
   '1.0.0',
@@ -468,7 +478,7 @@ select throws_ok(
   $sql$
     insert into vortex_definition.releases (
       root_id, release_revision, release_version, authored_source,
-      authored_source_fingerprint, source_contract_version, canonical_content,
+      authored_source_fingerprint, source_contract_version, compilation_output, resolution_snapshot,
       content_fingerprint, resolution_fingerprint, validation_contract_version,
       comparison_fingerprint, impact_reasons, release_note, published_at, published_by
     ) values (
@@ -479,6 +489,7 @@ select throws_ok(
       'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
       '1.0.0',
       '{"name":"Invalid"}'::jsonb,
+      '{"fingerprint":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}'::jsonb,
       'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
       'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
       '1.0.0',

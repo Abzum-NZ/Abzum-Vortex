@@ -430,6 +430,7 @@ begin
     root_id,
     draft_revision,
     draft_source,
+    identity_requirements,
     source_contract_version,
     source_fingerprint,
     updated_at,
@@ -438,6 +439,7 @@ begin
     new_root_id,
     1,
     p_draft_source,
+    p_identity_requirements,
     p_draft_source ->> 'source_contract_version',
     p_source_fingerprint,
     operation_at,
@@ -530,6 +532,7 @@ begin
   set
     draft_revision = draft.draft_revision + 1,
     draft_source = p_draft_source,
+    identity_requirements = p_identity_requirements,
     source_contract_version = p_draft_source ->> 'source_contract_version',
     source_fingerprint = p_source_fingerprint,
     updated_at = operation_at,

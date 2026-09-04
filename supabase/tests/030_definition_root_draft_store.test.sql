@@ -37,9 +37,9 @@ select columns_are(
   'drafts',
   array[
     'root_id', 'draft_revision', 'draft_source', 'source_contract_version',
-    'source_fingerprint', 'updated_at', 'updated_by'
+    'identity_requirements', 'source_fingerprint', 'updated_at', 'updated_by'
   ],
-  'draft columns contain one current authored-source value and update evidence'
+  'draft columns contain current authored source, current identity requirements and update evidence'
 );
 select col_type_is('vortex_definition', 'roots', 'root_id', 'uuid', 'root identifiers use UUID');
 select col_type_is(
@@ -55,6 +55,13 @@ select col_type_is(
   'draft_source',
   'jsonb',
   'complete authored source uses jsonb'
+);
+select col_type_is(
+  'vortex_definition',
+  'drafts',
+  'identity_requirements',
+  'jsonb',
+  'current source identity requirements use jsonb'
 );
 select col_type_is(
   'vortex_definition',
@@ -187,8 +194,15 @@ select is(
       and privilege.grantee = 'vortex_request'::regrole
       and privilege.privilege_type = 'EXECUTE'
   ),
-  array['create_root', 'save_draft'],
-  'request receives EXECUTE only on the two narrow Definition entry points'
+  array[
+    'append_release',
+    'create_root',
+    'list_module_releases',
+    'read_module_release',
+    'read_publication_state',
+    'save_draft'
+  ],
+  'request receives EXECUTE only on the narrow Definition entry points'
 );
 select is(
   (
@@ -249,8 +263,15 @@ select is(
     where function.pronamespace = 'vortex_definition'::regnamespace
       and function.prosecdef
   ),
-  array['create_root', 'save_draft'],
-  'only the two table-isolating entry points are security definer'
+  array[
+    'append_release',
+    'create_root',
+    'list_module_releases',
+    'read_module_release',
+    'read_publication_state',
+    'save_draft'
+  ],
+  'only table-isolating Definition entry points are security definer'
 );
 select is(
   (
@@ -259,7 +280,7 @@ select is(
     where function.pronamespace = 'vortex_definition'::regnamespace
       and function.proconfig @> array['search_path=""']
   ),
-  9,
+  13,
   'every Definition function fixes an empty search path'
 );
 select has_function(

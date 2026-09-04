@@ -19,7 +19,7 @@ import {
 import { satisfies } from "semver";
 import { compileDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
-import { fingerprintCanonicalValue } from "./canonical-json";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compareDefinitionVersionImpact } from "./version-impact";
 
 type JsonObject = Record<string, unknown>;
@@ -1257,10 +1257,12 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
             : fromField?.type === "link_to_one_of_several"
               ? (object(fromField.settings).targets as unknown[])
               : [];
-        const targetIds = targets.map((target) => String(object(target).recordTypeId)).sort();
+        const targetIds = targets
+          .map((target) => String(object(target).recordTypeId))
+          .sort(compareCanonicalStrings);
         const fieldTargetIds = fieldTargets
           .map((target) => String(object(target).recordTypeId))
-          .sort();
+          .sort(compareCanonicalStrings);
         if (
           String(relationship.fromRecordTypeId) !== recordId ||
           !fromField ||
@@ -1425,7 +1427,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         visitingCalculations.delete(fieldId);
         visitedCalculations.add(fieldId);
       };
-      [...calculationDependencies.keys()].sort().forEach(visitCalculation);
+      [...calculationDependencies.keys()].sort(compareCanonicalStrings).forEach(visitCalculation);
       if (calculationCycle)
         failures.push(
           failure(output, "vortex.definition.module_calculation_acyclic", "dependency_cycle"),
@@ -1947,10 +1949,10 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const expectedManifestFingerprints = expectedManifest
       .filter((entry) => entry !== undefined)
       .map((entry) => fingerprintCanonicalValue(entry))
-      .sort();
+      .sort(compareCanonicalStrings);
     const recordedManifestFingerprints = output.resolvedDependencies
       .map((entry) => fingerprintCanonicalValue(entry))
-      .sort();
+      .sort(compareCanonicalStrings);
     if (
       expectedManifest.some((entry) => entry === undefined) ||
       expectedManifestFingerprints.length !== recordedManifestFingerprints.length ||
@@ -2425,7 +2427,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       const permissionSelection = object(role.permissionSelection);
       const expectedWildcardPermissions = [...applicationPermissions.values()]
         .filter((permission) => permission.administrative === false)
-        .sort((left, right) => String(left.key).localeCompare(String(right.key)));
+        .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
       const expectedWildcardKeys = expectedWildcardPermissions.map((permission) =>
         String(permission.key),
       );
@@ -4074,13 +4076,14 @@ export function validateDefinitionSet(
     "validation_failed",
   ];
   const sorted = [...unique.values()].sort((left, right) => {
-    const locationComparison = safeLocationKey(left.location).localeCompare(
+    const locationComparison = compareCanonicalStrings(
+      safeLocationKey(left.location),
       safeLocationKey(right.location),
     );
     if (locationComparison !== 0) return locationComparison;
     const familyComparison = familyOrder.indexOf(left.family) - familyOrder.indexOf(right.family);
     if (familyComparison !== 0) return familyComparison;
-    return left.ruleCode.localeCompare(right.ruleCode);
+    return compareCanonicalStrings(left.ruleCode, right.ruleCode);
   });
   return { valid: sorted.length === 0, failures: sorted } as const;
 }
@@ -4241,12 +4244,12 @@ export function compileDefinitionSet(
     const input = byKey.get(key);
     if (!input) return;
     visiting.add(key);
-    dependencyKeys(input).sort().forEach(visit);
+    dependencyKeys(input).sort(compareCanonicalStrings).forEach(visit);
     visiting.delete(key);
     visited.add(key);
     ordered.push(input);
   };
-  [...byKey.keys()].sort().forEach(visit);
+  [...byKey.keys()].sort(compareCanonicalStrings).forEach(visit);
   const outputs = ordered.map(compileDefinition);
   const validation = validateDefinitionSet({
     requests: ordered,

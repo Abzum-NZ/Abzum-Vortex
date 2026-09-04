@@ -12,7 +12,11 @@ import {
   type DefinitionSourceDocument,
   type DefinitionValidationLocation,
 } from "@vortex/contracts";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
+import {
+  canonicalJson,
+  compareCanonicalStrings,
+  fingerprintCanonicalValue,
+} from "./canonical-json";
 import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
@@ -2880,7 +2884,7 @@ function compileApplication(source: JsonObject, resolution: Resolution, metadata
   }));
   const wildcardPermissions = permissions
     .filter((permission) => permission.administrative === false)
-    .sort((left, right) => String(left.key).localeCompare(String(right.key)));
+    .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
   const wildcardPermissionKeys = wildcardPermissions.map((permission) => permission.key);
   const wildcardCatalogueFingerprint = fingerprintCanonicalValue(wildcardPermissions);
   const canonical = applicationDraftSchema.parse({
