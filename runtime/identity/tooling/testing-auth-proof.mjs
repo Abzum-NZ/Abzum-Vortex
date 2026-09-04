@@ -143,19 +143,33 @@ const waitForMessage = async (expectedType) => {
   throw new Error("Mailtrap did not capture the expected Testing identity message");
 };
 
-const verificationLink = (message, pathname, type) => {
-  const match = message.match(/https?:\/\/[^\s<>"']+\/auth\/[^\s<>"']+#[^\s<>"']+/);
+const verificationSession = async (message, pathname, type) => {
+  const match = message.match(/https?:\/\/[^\s<>"']+\/auth\/v1\/verify\?[^\s<>"']+/);
   if (!match) throw new Error("The Testing identity message has no verification link");
   const link = new URL(match[0].replaceAll("&amp;", "&"));
-  const fragment = new globalThis.URLSearchParams(link.hash.slice(1));
   if (
-    link.origin !== siteUrl ||
-    link.pathname !== pathname ||
-    fragment.get("type") !== type ||
-    !fragment.get("token_hash")
+    link.origin !== new URL(apiUrl).origin ||
+    link.pathname !== "/auth/v1/verify" ||
+    link.searchParams.get("type") !== type
   )
-    throw new Error("The Testing identity message contains an unexpected verification destination");
-  return link;
+    throw new Error("The Testing identity message contains an unexpected verification authority");
+
+  const response = await globalThis.fetch(link, { redirect: "manual" });
+  const location = response.headers.get("location");
+  if (response.status < 300 || response.status >= 400 || !location)
+    throw new Error("The Testing identity authority did not return a safe application redirect");
+
+  const sessionUrl = new URL(location, siteUrl);
+  const fragment = new globalThis.URLSearchParams(sessionUrl.hash.slice(1));
+  if (
+    sessionUrl.origin !== siteUrl ||
+    sessionUrl.pathname !== pathname ||
+    fragment.get("type") !== type ||
+    !fragment.get("access_token") ||
+    !fragment.get("refresh_token")
+  )
+    throw new Error("The Testing identity authority returned an unexpected session destination");
+  return sessionUrl;
 };
 
 expectRedirect(
@@ -168,11 +182,16 @@ const unconfirmedSignIn = await client.auth.signInWithPassword({ email, password
 if (!unconfirmedSignIn.error || unconfirmedSignIn.data.session)
   throw new Error("Testing Auth allowed an unconfirmed identity to sign in");
 
-const confirmationLink = verificationLink(await waitForMessage("email"), "/auth/confirm", "email");
+const confirmationLink = await verificationSession(
+  await waitForMessage("signup"),
+  "/auth/confirm",
+  "signup",
+);
+const confirmationFragment = new globalThis.URLSearchParams(confirmationLink.hash.slice(1));
 expectRedirect(
   await submitForm(confirmationLink.pathname, {
-    token_hash: new globalThis.URLSearchParams(confirmationLink.hash.slice(1)).get("token_hash"),
-    type: "email",
+    access_token: confirmationFragment.get("access_token"),
+    type: "signup",
   }),
   "/auth/success",
   "?state=email-confirmed",
@@ -221,14 +240,16 @@ expectRedirect(
   "?purpose=recovery",
 );
 
-const recoveryLink = verificationLink(
+const recoveryLink = await verificationSession(
   await waitForMessage("recovery"),
   "/auth/update-password",
   "recovery",
 );
+const recoveryFragment = new globalThis.URLSearchParams(recoveryLink.hash.slice(1));
 expectRedirect(
   await submitForm(recoveryLink.pathname, {
-    token_hash: new globalThis.URLSearchParams(recoveryLink.hash.slice(1)).get("token_hash"),
+    access_token: recoveryFragment.get("access_token"),
+    refresh_token: recoveryFragment.get("refresh_token"),
     password: replacementPassword,
   }),
   "/auth/success",

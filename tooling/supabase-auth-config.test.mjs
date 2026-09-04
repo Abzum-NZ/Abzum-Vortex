@@ -93,17 +93,13 @@ describe("Local Supabase Auth configuration", () => {
     expect(values.get("auth.email.smtp.enabled")).not.toBe("true");
   });
 
-  test("keeps one-time identity tokens out of HTTP request URLs", async () => {
+  test("uses Supabase's supported email verification links", async () => {
     const confirmationTemplate = await readFile(confirmationTemplatePath, "utf8");
     const recoveryTemplate = await readFile(recoveryTemplatePath, "utf8");
 
-    expect(confirmationTemplate).toContain(
-      "/auth/confirm#token_hash={{ .TokenHash }}&amp;type=email",
-    );
-    expect(recoveryTemplate).toContain(
-      "/auth/update-password#token_hash={{ .TokenHash }}&amp;type=recovery",
-    );
-    expect(confirmationTemplate).not.toContain("?token_hash=");
-    expect(recoveryTemplate).not.toContain("?token_hash=");
+    expect(confirmationTemplate).toContain('href="{{ .ConfirmationURL }}"');
+    expect(recoveryTemplate).toContain('href="{{ .ConfirmationURL }}"');
+    expect(confirmationTemplate).not.toContain(".TokenHash");
+    expect(recoveryTemplate).not.toContain(".TokenHash");
   });
 });

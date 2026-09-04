@@ -11,15 +11,16 @@ export function ConfirmEmailForm() {
 
   useEffect(() => {
     if (submitted.current) return;
-    const values = new URLSearchParams(window.location.hash.slice(1));
-    const tokenHash = values.get("token_hash") ?? "";
-    const type = values.get("type") ?? "";
+    const fragment = window.location.hash;
     window.history.replaceState(
       window.history.state,
       "",
       `${window.location.pathname}${window.location.search}`,
     );
-    if (tokenHash.length < 16 || type !== "email") {
+    const values = new URLSearchParams(fragment.slice(1));
+    const accessToken = values.get("access_token") ?? "";
+    const type = values.get("type") ?? "";
+    if (values.has("error") || accessToken.length < 64 || type !== "signup") {
       setInvalidLink(true);
       return;
     }
@@ -27,13 +28,13 @@ export function ConfirmEmailForm() {
     const form = formRef.current;
     if (!form) return;
     submitted.current = true;
-    const tokenInput = form.elements.namedItem("token_hash");
+    const tokenInput = form.elements.namedItem("access_token");
     const typeInput = form.elements.namedItem("type");
     if (!(tokenInput instanceof HTMLInputElement) || !(typeInput instanceof HTMLInputElement)) {
       setInvalidLink(true);
       return;
     }
-    tokenInput.value = tokenHash;
+    tokenInput.value = accessToken;
     typeInput.value = type;
     form.requestSubmit();
   }, []);
@@ -41,7 +42,7 @@ export function ConfirmEmailForm() {
   return (
     <>
       <form ref={formRef} action={confirmEmail} hidden>
-        <input name="token_hash" type="hidden" />
+        <input name="access_token" type="hidden" />
         <input name="type" type="hidden" />
       </form>
       {invalidLink ? (
