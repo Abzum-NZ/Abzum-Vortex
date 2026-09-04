@@ -43,6 +43,8 @@ The private tenant and organisation tables contain structural identity and lifec
 
 Tenant administration does not grant record access. A tenant administrator who needs to use an organisation's applications or data must also have an active organisation account with the required organisation and application roles. This separation prevents customer-wide administration from becoming silent access to every workspace.
 
+Protected tenant-governance operations use a server-resolved verified identity and current tenant-administrator assignment; they do not require an active account inside the target organisation. Otherwise an administrator could not create the first organisation or restore a suspended organisation. The Identity service validates the selected tenant and target, the current assignment, expected revision and each lifecycle transition inside its protected transaction. This narrow tenant context cannot read organisation records or be used as an organisation request context. System-only first provisioning remains separate and idempotent. Organisation-local settings, application data and account operations still require their documented organisation authorization path. [Issue #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns this distinction; it does not weaken [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27)'s active-account entry checks.
+
 ```mermaid
 flowchart LR
     TA[Tenant administrator] --> GOV[Tenant structure and protected tenant operations]

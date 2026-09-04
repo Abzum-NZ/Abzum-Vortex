@@ -113,9 +113,13 @@ The record's current stage is Vortex business data. Stage movement is a named [a
 
 ## Acceptance examples
 
-- Repeated delivery of a node request performs a record change or external side effect once.
+- Repeated delivery performs a Vortex transactional change once through its effect receipt. External calls use provider idempotency when supported; an uncertain non-idempotent outcome requires reconciliation before another attempt.
 - Removing a role before the next node runs causes that protected operation to be refused.
 - A workflow cannot call an unapproved connection, arbitrary address, SQL statement, or uploaded script.
 - A run started under one application version remains explainable after a newer version is published.
 - Vortex displays Kestra's current completed, waiting, cancelled, or failed state and labels status unavailable during a Kestra outage.
 - Moving a pipeline stage without its transition permission or gate is refused even if a workflow tries to request it.
+
+## External outcome uncertainty
+
+A local duplicate key cannot prove that an external provider did not act before a timeout. Use provider-supported idempotency keys where available. Otherwise record an unknown outcome and reconcile or obtain an explicit authorised resolution before retrying a possibly completed side effect. Never promise exactly-once third-party execution from a local receipt alone. [Connection execution #100](https://github.com/Abzum-NZ/Abzum-Vortex/issues/100) tests both cases.

@@ -216,3 +216,7 @@ The recipient interface must remove previously displayed shared values when that
 - Assigning a named role to another active account deliberately adds that account to the approved audience; removing the role removes access on the next request.
 - Moving either organisation to another cluster in an already approved region does not change the grant's business meaning; the gateway changes route after the protected directory and grant routing state are updated and verified. Moving the recipient to a different region suspends the grant until the source approves that destination.
 - A forged, expired, replayed, version-incompatible, or incorrectly addressed cross-cluster request is refused before any source record is queried.
+
+## Declarative actor-relative scopes
+
+The saved conditions and relationship scopes above need an explicit typed contract in [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), using the shared [condition builder #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57). Current-account parameters are bound from verified server context; client-supplied identity is never authority. Scope filtering occurs before fetching, counting or aggregating. The [HR example](appendices/page-builder-contracts.md#hr-example-policy) exercises own-record/direct-report scopes and no self-approval without an HR-specific predicate or custom handler.

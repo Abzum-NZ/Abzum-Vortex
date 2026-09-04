@@ -39,14 +39,14 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 1. The server checks create/update permission for the target record and field.
 2. The server creates a short-lived pending-file record and a restricted [signed upload instruction](https://supabase.com/docs/guides/storage/uploads).
 3. The client uploads directly to organisation-scoped [Supabase Storage](https://supabase.com/docs/guides/storage). Large or interruption-prone files use its resumable upload path rather than restarting the complete transfer.
-4. The platform verifies actual size, detected content type, extension, checksum, and safety result. Browser-supplied metadata is not trusted.
+4. The platform verifies actual size, detected content type, extension, checksum and safety result, then rechecks current authority before activation. A still-valid upload token does not authorise attachment after access revocation. Browser-supplied metadata is not trusted.
 5. The record save attaches the active file by identifier.
 6. Unattached pending uploads expire and are removed.
 
 ## Download and preview
 
 - Every download rechecks organisation, record, field, and file access.
-- Private storage addresses are short lived and cannot be reused as permanent public links.
+- Private downloads/previews use an authenticated File-service route that rechecks current authority on every new request, including range requests. Upstream Storage addresses remain server-side; do not redirect clients to reusable bearer signed URLs.
 - The response uses a safe content type and download disposition where browser display could execute content.
 - Preview generation is isolated from the application process and never executes macros, scripts, or active document content.
 - Public pages use separately published public-file variants; a private attachment address is never exposed.
@@ -59,11 +59,11 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 - Checksums support duplicate detection and integrity checks but do not grant cross-organisation access or shared storage identity.
 - File metadata, previews, extracted text, and deletion jobs carry the same organisation identifier as the original.
 - [Storage row policies](https://supabase.com/docs/guides/storage/security/access-control) on `storage.objects` and application checks both enforce organisation separation.
-- Downloads use short-lived signed addresses. Image transformation and content delivery acceleration may be used only for approved public assets or a currently authorised short-lived private response; neither changes the file's access rules.
+- Public assets may use content acceleration. Private/shared responses use private/no-store handling and the authenticated gateway, without persistent recipient copies. [Supabase signed URLs](https://supabase.com/docs/guides/storage/serving/downloads) remain usable until expiry and cannot by themselves enforce Vortex grant/account revocation on each request.
 
 ## Attachments on shared records
 
-A record-sharing grant does not automatically grant file access. The grant must name the attachment field as readable, and every list, preview, and download rechecks the source record, grant, field, recipient organisation account, and recipient application. Bytes remain in the source organisation's storage; the recipient receives only a short-lived, request-bound download instruction. Across clusters, the source File service either streams the bytes through the signed [federation request](17-runtime-storage-and-caching.md#cross-cluster-request) or issues a short-lived source-storage grant bound to the same recipient assertion. The recipient cluster does not retain the file or preview.
+A record-sharing grant does not automatically grant file access. The grant must name the attachment field as readable, and every list, preview, and download rechecks the source record, grant, field, recipient organisation account, and recipient application. Bytes remain in the source organisation's storage; the recipient receives only a short-lived, request-bound download instruction. Across clusters, the source File service streams authorised bytes through the signed [federation request](17-runtime-storage-and-caching.md#cross-cluster-request) or an authenticated source gateway that verifies the same current recipient authority on every new request. A normal Supabase signed URL is not an account-bound Vortex grant. The recipient cluster does not retain the file or preview.
 
 Uploading an attachment from another organisation requires a separately allowed attachment action. The source File service admits the upload and issues a short-lived source-storage instruction; after safety checks, the source Record service attaches it in the source record save. The new file is owned by the source organisation, follows its limits and retention policy, and records both the acting global identity and recipient organisation account. A recipient cannot browse the source organisation's file store, reuse an upload or download instruction for another account, retain the bytes in recipient-cluster storage, or attach one source organisation's file to its own record.
 
@@ -79,7 +79,7 @@ Uploads enforce per-file, per-field, per-request, and organisation storage limit
 
 - Renaming an executable file to an allowed extension does not bypass detected-type checks.
 - A person with record access but without attachment-field read access cannot list or download its files.
-- A signed download address from one organisation cannot retrieve a file from another.
+- A copied private download route fails for another account and after revocation, including preview and range requests. Already delivered or intentionally exported bytes cannot be recalled.
 - An abandoned upload is removed without creating record activity.
 - Restoring a record restores only files still inside their recovery period and not rejected by safety policy.
 - Sharing a record without naming its attachment field exposes neither file metadata nor file content.
