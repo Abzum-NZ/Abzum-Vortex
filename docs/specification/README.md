@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.5
+**Status:** Approved specification 2.6
 **Date:** 4 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
@@ -94,6 +94,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.6 | Approved | 4 September 2026 | Defined stable operated Auth domains and protected-site automation access for Testing identity proof; assigned the live access-version counter exclusively to the Access service; kept Phase 2 request context application-free; and aligned identity suspension, restore provenance, contracts, delivery tasks and dependencies with those boundaries. |
 | 2.5 | Approved | 4 September 2026 | Defined deterministic Definition publication: permanent-ID sharing-condition revision history, read-only exact dependency preparation, immutable releases containing their canonical compilation output and exact resolution snapshot, and one locked append that stores the one-for-one manifest and advances only the root discovery pointer without retargeting consumers. |
 | 2.4 | Approved | 4 September 2026 | Defined permanent Definition source identities as database-allocated, append-only owner and alias evidence. Added stable parent-owner scope beside current compiler lookup scope so parent-key changes preserve nested component identity, and confirmed that Phase 2 seeds no starter Module or Application without an owning platform requirement. |
 | 2.3 | Approved | 4 September 2026 | Corrected publication so a Module or Application may append a breaking inert release without inspecting or retargeting existing consumers. Existing applications, installations and grants remain pinned to their exact recorded releases; compatibility and storage migration are checked only when the owning operation deliberately adopts the newer release. |

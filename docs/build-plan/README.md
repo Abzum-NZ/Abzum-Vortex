@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.3
+**Status:** Approved build plan 2.4
 
 **Date:** 4 September 2026
 
@@ -11,6 +11,12 @@
 This plan replaces the sequencing of the earlier [Build Plan](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef). It keeps the useful ownership boundaries while correcting missing dependencies, an impossible background-worker assumption, incomplete fixtures, and an oversized final phase.
 
 The [decision register](../specification/appendices/decisions.md) is clear. Vortex assigns the minimum valid next module or application release version after structural comparison, and the builder confirms or cancels publication. A new unresolved business choice must be recorded before implementation assumes an answer.
+
+## Version history
+
+| Version | Status | Date | Summary |
+|---|---|---|---|
+| 2.4 | Approved | 4 September 2026 | Added the Access-owned version foundation to Phase 2 sequencing; clarified stable Auth domains, protected Testing automation, application-free Phase 2 request context, restore evidence and Activity ownership; and reconciled the plan with the native GitHub dependency graph. |
 
 ## Planning rules
 

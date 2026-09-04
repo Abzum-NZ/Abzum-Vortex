@@ -21,6 +21,6 @@ export const createProtectedSiteFetch = (fetchImplementation, siteUrl, bypassSec
     const headers = new globalThis.Headers(init.headers);
     headers.set(bypassHeaderName, bypassSecret);
 
-    return fetchImplementation(requestUrl, { ...init, headers });
+    return fetchImplementation(requestUrl, { ...init, redirect: "manual", headers });
   };
 };
