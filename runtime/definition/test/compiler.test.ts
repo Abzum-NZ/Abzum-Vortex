@@ -112,6 +112,11 @@ describe("authored definition compiler", () => {
       state: "unresolved",
       qualifiedKey: "sample:item",
       source: "node_output",
+      field: "application data",
+      node: "application data",
+      output: "application data",
+      action: "application data",
+      record_type: "application data",
       nodeId: "application data",
       fieldId: "application data",
       entries: [
@@ -121,6 +126,14 @@ describe("authored definition compiler", () => {
       nested: [{ source: "field", fieldId: "not a dependency" }],
     };
     node.config.inputs.variables = { source: "literal", value: payload };
+    const page = source.body.pages.find((entry) => "blocks" in entry);
+    const placement = page && "blocks" in page ? page.blocks[0] : undefined;
+    const registration = placement
+      ? source.body.block_registrations.find((entry) => entry.id === placement.block)
+      : undefined;
+    if (!placement || !registration) throw new Error("Placed block registration required");
+    registration.settings.push({ key: "field", control: "text", required: true });
+    placement.settings.field = { kind: "literal", value: "ordinary setting" };
     const requests = amended.map(requestFor);
     const result = compileDefinitionSet(requests, publicationOptions);
     expect(JSON.stringify(result)).toContain(JSON.stringify(payload));
@@ -128,6 +141,21 @@ describe("authored definition compiler", () => {
       .map(compileDefinition)
       .find((entry) => entry.kind === "application" && entry.canonical.envelope.key === source.key);
     expect(JSON.stringify(output)).toContain(JSON.stringify(payload));
+    const literalProvenance = output?.provenance.filter((entry) =>
+      entry.sourcePath?.includes("variables"),
+    );
+    const literalSourcePaths = literalProvenance.map((entry) => entry.sourcePath);
+    expect(literalSourcePaths).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining(["field"]),
+        expect.arrayContaining(["node"]),
+        expect.arrayContaining(["output"]),
+        expect.arrayContaining(["action"]),
+        expect.arrayContaining(["record_type"]),
+      ]),
+    );
+    expect(literalProvenance?.every((entry) => entry.origin === "source")).toBe(true);
+    expect(JSON.stringify(output)).toContain('"field":{"kind":"literal"');
   });
   it("compiles all thirteen source definitions through the immutable snapshot", () => {
     const outputs = sources.map((source) => {

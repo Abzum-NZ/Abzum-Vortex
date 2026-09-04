@@ -7,21 +7,28 @@ type JsonObject = Record<string, unknown>;
 export const createContractValueWalker = (
   roots: readonly { schema: z.core.$ZodType; value: unknown }[],
 ) => {
-  const positions = new WeakMap<object, z.core.$ZodType>();
-  for (const root of roots)
-    walkDefinitionContract(root.schema, root.value, (schema, value) => {
-      if (value !== null && typeof value === "object") positions.set(value, schema);
+  const positions = new WeakMap<object, { schema: z.core.$ZodType; location: string } | null>();
+  for (const [rootIndex, root] of roots.entries())
+    walkDefinitionContract(root.schema, root.value, (schema, value, path) => {
+      if (value === null || typeof value !== "object") return;
+      const location = JSON.stringify([rootIndex, path]);
+      const existing = positions.get(value);
+      if (existing && existing.location !== location) positions.set(value, null);
+      else if (existing !== null) positions.set(value, { schema, location });
     });
 
   return (value: unknown, visit: (value: JsonObject) => void): void => {
     if (value === null || typeof value !== "object") return;
-    const schema = positions.get(value);
-    if (!schema) throw new Error("Semantic traversal requires a declared contract position");
+    const position = positions.get(value);
+    if (position === undefined)
+      throw new Error("Semantic traversal requires a declared contract position");
+    if (position === null)
+      throw new Error("Semantic traversal refuses an ambiguous shared contract value");
     const visited = new WeakSet<object>();
-    walkDefinitionContract(schema, value, (position, entry) => {
+    walkDefinitionContract(position.schema, value, (schema, entry) => {
       if (
-        position === jsonValueSchema ||
-        position._zod.def.type !== "object" ||
+        schema === jsonValueSchema ||
+        schema._zod.def.type !== "object" ||
         entry === null ||
         typeof entry !== "object" ||
         Array.isArray(entry) ||

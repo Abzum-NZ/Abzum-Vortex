@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   actionDefinitionSchema,
   conditionNodeSchema,
+  jsonValueSchema,
   workflowValueSchema,
 } from "@vortex/contracts";
 import { createContractValueWalker } from "../src/contract-value-walker";
@@ -77,5 +78,19 @@ describe("semantic contract traversal", () => {
     walk(producer, inspect);
     expect(references).toEqual([fieldId]);
     expect(() => walk(structuredClone(producer), inspect)).toThrow("declared contract position");
+  });
+
+  it("refuses an object reused at both literal and structured positions", () => {
+    const shared = {
+      source: "node_output",
+      nodeId: fieldId,
+      outputKey: "result",
+    };
+    const schema = z.object({ literal: jsonValueSchema, producer: workflowValueSchema }).strict();
+    const value = { literal: shared, producer: shared };
+    const inspect = () => undefined;
+    expect(() => createContractValueWalker([{ schema, value }])(shared, inspect)).toThrow(
+      "ambiguous shared contract value",
+    );
   });
 });
