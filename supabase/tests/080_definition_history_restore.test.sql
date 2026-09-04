@@ -141,6 +141,17 @@ select ok(
   ),
   'restore provenance references one exact immutable release source snapshot'
 );
+select has_index(
+  'vortex_definition',
+  'drafts',
+  'drafts_restored_release_source_idx',
+  array[
+    'root_id',
+    'restored_from_release_revision',
+    'restored_from_source_fingerprint'
+  ]::name[],
+  'restore provenance foreign-key checks use a covering index'
+);
 
 insert into vortex_identity.tenants (
   tenant_id, short_name, display_name, state, created_at, created_by,
