@@ -4,6 +4,8 @@
 
 ## Application composition
 
+The locked [IAM application](appendices/iam-application.md) is an ordinary consumer of these application/page primitives. It supplies the single role-grant journey through user-linked records, forms, reviews and workflows. Tenant and Organisation Administration may link to IAM but cannot offer competing grant controls; reusable IAM components still invoke the same governed actions. Its name and module names are never renderer or runtime conditions.
+
 An **application** is a published experience for a defined group of people in one organisation. It selects [modules](05-modules-fields-and-relationships.md) and adds navigation, pages, forms, roles, behaviour, and a theme.
 
 ```mermaid

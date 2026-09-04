@@ -38,6 +38,10 @@ The database function, permission vocabulary, and shared test cases are canonica
 
 ## Roles
 
+### IAM is the access-management application
+
+All user-facing role grants and access-expanding changes use the [IAM Vortex application](appendices/iam-application.md), including its user-linked request, review and assignment views and generic approval workflows. Organisation ownership remains unchanged. IAM calls the protected Access operations; editing an ordinary request or approval record cannot grant access. Other administration applications link to IAM instead of offering parallel role-grant forms. Its guided first-steward setup and immediate removal paths are defined in the same application contract.
+
 ### One organisation-managed catalogue
 
 All organisation roles, application-role registrations, permission availability, Teams and assignments are managed within one organisation. An application declares its permissions and reusable role templates; it does not operate an independent user or permission administration system. Organisation administrators manage both organisation-wide and application-specific access through the same [administration operations](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
@@ -95,9 +99,9 @@ The delegation representation is a closed scope and subset check, not a user-aut
 
 ### Initial organisation stewardship
 
-The trusted [organisation-provisioning operation #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) explicitly nominates the initial organisation steward and atomically establishes the active organisation account, minimum role/account-management permissions and direct, non-expiring organisation-wide delegation assignment. It grants no application-data use. The first person to sign in, a role label, an application installer and tenant-administrator status are never inferred to be the steward. Tenant and organisation stewards may be the same person only when both appointments are explicit.
+The trusted [organisation-provisioning operation #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) explicitly nominates the initial organisation steward and atomically establishes the active organisation account, minimum role/account-management permissions and direct, non-expiring organisation-wide delegation assignment. Those core permissions grant no application-data use. The complete [IAM setup](appendices/iam-application.md#setup-and-removal) separately and explicitly accepts only the exact application operating role needed to enter IAM and manage access, never rights to unrelated applications. The first person to sign in, a role label, an application installer and tenant-administrator status are never inferred to be the steward. Tenant and organisation stewards may be the same person only when both appointments are explicit.
 
-Every usable organisation retains at least one active organisation account with a current, direct, non-expiring assignment carrying those minimum stewardship powers. A Team assignment or expiring delegate does not fulfil that permanent safeguard. Account suspension, role edits, assignment changes and identity lifecycle changes must preserve it in one concurrency-safe transaction. Existing organisations must be explicitly adopted through the trusted provisioning boundary; a migration cannot guess an owner. Until adoption, protected administration is unavailable rather than silently selecting an account.
+Every usable organisation retains at least one active organisation account with a current, direct, non-expiring assignment carrying those minimum stewardship powers. Once IAM is activated, the required management-application operating assignment and availability are also protected as specified in [IAM setup](appendices/iam-application.md#setup-and-removal). A Team assignment or expiring delegate does not fulfil that permanent safeguard. Account suspension, role edits, assignment changes and identity lifecycle changes must preserve it in one concurrency-safe transaction. Existing organisations must be explicitly adopted through the trusted provisioning boundary; a migration cannot guess an owner. Until adoption, protected administration is unavailable rather than silently selecting an account.
 
 ## Permission names
 

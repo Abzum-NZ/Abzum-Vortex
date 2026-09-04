@@ -57,6 +57,7 @@ The following are built from the retained primitives:
 |---|---|
 | Commercial billing, pricing, subscriptions, invoices and payments | Modules and records plus [connections](../12-connections-and-interfaces.md) and [workflows](../09-workflows-and-pipelines.md). |
 | Business approvals and work queues | Request and decision record types, pages, permissions, human-input workflow steps and named actions. |
+| IAM access requests, reviews and administration journeys | The ordinary [IAM application](iam-application.md) owns request/review records and workflows. Protected Access owns effective assignments and delegation because editable business records cannot safely be their own authorisation authority. |
 | Tasks, comments, tags, calendar entries and notifications | Ordinary record types and actions. Delivery to an external provider uses a connection call. |
 | Organisation legal details, contacts, branding and business calendar | A locked Organisation Administration application using ordinary fields and pages. |
 | Privacy request case management | A locked Privacy Operations application that invokes protected discovery, export and removal operations. |
