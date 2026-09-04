@@ -111,11 +111,116 @@ select ok(
   ),
   'a module dependency binds one exact target release and its immutable content'
 );
-select has_index(
-  'vortex_definition',
-  'release_dependencies',
-  'release_dependencies_target_release_idx',
-  'module dependency reverse lookups use an index'
+select is(
+  (
+    select index_definition.indrelid::regclass
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.release_dependencies_target_release_idx'
+    )
+  ),
+  'vortex_definition.release_dependencies'::regclass,
+  'the target-release index belongs to the target-release foreign key referencing table'
+);
+select is(
+  (
+    select array_agg(attribute.attname::text order by key_column.ordinality)
+    from pg_catalog.pg_index as index_definition
+    cross join lateral pg_catalog.unnest(index_definition.indkey)
+      with ordinality as key_column(attnum, ordinality)
+    join pg_catalog.pg_attribute as attribute
+      on attribute.attrelid = index_definition.indrelid
+      and attribute.attnum = key_column.attnum
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.release_dependencies_target_release_idx'
+    )
+      and key_column.ordinality <= index_definition.indnkeyatts
+  ),
+  array[
+    'target_root_id',
+    'target_release_revision',
+    'dependency_version',
+    'dependency_content_fingerprint'
+  ]::text[],
+  'the target-release index has the complete foreign-key columns in order'
+);
+select is(
+  (
+    select index_definition.indisvalid and index_definition.indisready
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.release_dependencies_target_release_idx'
+    )
+  ),
+  true,
+  'the target-release foreign-key index is valid and ready'
+);
+select is(
+  (
+    select pg_catalog.pg_get_expr(
+      index_definition.indpred,
+      index_definition.indrelid
+    )
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.release_dependencies_target_release_idx'
+    )
+  ),
+  '(target_root_id IS NOT NULL)'::text,
+  'the target-release index retains its predicate, which excludes only rows without a target release'
+);
+select is(
+  (
+    select index_definition.indrelid::regclass
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.roots_current_release_idx'
+    )
+  ),
+  'vortex_definition.roots'::regclass,
+  'the current-release index belongs to the current-release foreign key referencing table'
+);
+select is(
+  (
+    select array_agg(attribute.attname::text order by key_column.ordinality)
+    from pg_catalog.pg_index as index_definition
+    cross join lateral pg_catalog.unnest(index_definition.indkey)
+      with ordinality as key_column(attnum, ordinality)
+    join pg_catalog.pg_attribute as attribute
+      on attribute.attrelid = index_definition.indrelid
+      and attribute.attnum = key_column.attnum
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.roots_current_release_idx'
+    )
+      and key_column.ordinality <= index_definition.indnkeyatts
+  ),
+  array['root_id', 'current_release_revision']::text[],
+  'the current-release index has the complete foreign-key columns in order'
+);
+select is(
+  (
+    select index_definition.indisvalid and index_definition.indisready
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.roots_current_release_idx'
+    )
+  ),
+  true,
+  'the current-release foreign-key index is valid and ready'
+);
+select is(
+  (
+    select pg_catalog.pg_get_expr(
+      index_definition.indpred,
+      index_definition.indrelid
+    )
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.roots_current_release_idx'
+    )
+  ),
+  null::text,
+  'the current-release index has no predicate that could exclude foreign-key rows'
 );
 select ok(
   exists (
