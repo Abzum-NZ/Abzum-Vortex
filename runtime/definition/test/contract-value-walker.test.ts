@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   actionDefinitionSchema,
   conditionNodeSchema,
@@ -14,6 +15,17 @@ const payload = {
 };
 
 describe("semantic contract traversal", () => {
+  it("does not interpret user-defined input-map keys as platform reference properties", () => {
+    const schema = z.object({ inputs: z.record(z.string(), workflowValueSchema) }).strict();
+    const value = schema.parse({
+      inputs: { fieldId: { source: "literal", value: "ordinary input" } },
+    });
+    const references: unknown[] = [];
+    createContractValueWalker([{ schema, value }])(value, (entry) => {
+      if ("fieldId" in entry) references.push(entry.fieldId);
+    });
+    expect(references).toEqual([]);
+  });
   it("inspects the real condition operand but not reference-shaped comparison data", () => {
     const condition = conditionNodeSchema.parse({
       kind: "comparison",

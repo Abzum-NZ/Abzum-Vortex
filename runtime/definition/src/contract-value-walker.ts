@@ -21,6 +21,7 @@ export const createContractValueWalker = (
     walkDefinitionContract(schema, value, (position, entry) => {
       if (
         position === jsonValueSchema ||
+        position._zod.def.type !== "object" ||
         entry === null ||
         typeof entry !== "object" ||
         Array.isArray(entry) ||
