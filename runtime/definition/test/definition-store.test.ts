@@ -92,28 +92,24 @@ const row = (revision = 1) => ({
 
 const runnerReturning = (rows: readonly DatabaseRow[]) => {
   const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
-  const runner = async <Result>(
-    _context: SessionContext,
-    operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-  ): Promise<Result> =>
-    operation({
-      query: async <ResultRow extends DatabaseRow>(
-        strings: TemplateStringsArray,
-        ...values: readonly DatabaseValue[]
-      ) => {
-        calls.push({ text: strings.join("$value"), values });
-        return rows as readonly ResultRow[];
-      },
-    });
-  return { calls, runner };
+  const transaction: RequestDatabaseTransaction = {
+    query: async <ResultRow extends DatabaseRow>(
+      strings: TemplateStringsArray,
+      ...values: readonly DatabaseValue[]
+    ) => {
+      calls.push({ text: strings.join("$value"), values });
+      return rows as readonly ResultRow[];
+    },
+  };
+  return { calls, transaction };
 };
 
 describe("Definition store", () => {
   it("validates and fingerprints source before creating a database-owned root", async () => {
-    const { calls, runner } = runnerReturning([row()]);
-    const store = createDefinitionStore(runner);
+    const { calls, transaction } = runnerReturning([row()]);
+    const store = createDefinitionStore(transaction);
 
-    await expect(store.createRoot(context(), { source })).resolves.toMatchObject({
+    await expect(store.createRoot({ source })).resolves.toMatchObject({
       kind: "module",
       key: source.key,
       draftRevision: 1,
@@ -131,11 +127,11 @@ describe("Definition store", () => {
   });
 
   it("passes only the expected revision and service-derived source evidence when saving", async () => {
-    const { calls, runner } = runnerReturning([row(2)]);
-    const store = createDefinitionStore(runner);
+    const { calls, transaction } = runnerReturning([row(2)]);
+    const store = createDefinitionStore(transaction);
 
     await expect(
-      store.saveDraft(context(), {
+      store.saveDraft({
         rootId: row().root_id,
         expectedDraftRevision: 1,
         source,
@@ -160,10 +156,10 @@ describe("Definition store", () => {
       restored_at: new Date("2026-09-04T00:00:01Z"),
       restore_correlation_id: context().correlationId,
     };
-    const store = createDefinitionStore(runnerReturning([restored]).runner);
+    const store = createDefinitionStore(runnerReturning([restored]).transaction);
 
     await expect(
-      store.saveDraft(context(), {
+      store.saveDraft({
         rootId: row().root_id,
         expectedDraftRevision: 1,
         source,
@@ -188,9 +184,9 @@ describe("Definition store", () => {
       },
     ];
     for (const invalid of invalidRows) {
-      const store = createDefinitionStore(runnerReturning([invalid]).runner);
+      const store = createDefinitionStore(runnerReturning([invalid]).transaction);
       await expect(
-        store.saveDraft(context(), {
+        store.saveDraft({
           rootId: row().root_id,
           expectedDraftRevision: 1,
           source,
@@ -200,11 +196,11 @@ describe("Definition store", () => {
   });
 
   it("maps a zero-row conditional save to one safe stale-or-missing error", async () => {
-    const { runner } = runnerReturning([]);
-    const store = createDefinitionStore(runner);
+    const { transaction } = runnerReturning([]);
+    const store = createDefinitionStore(transaction);
 
     await expect(
-      store.saveDraft(context(), {
+      store.saveDraft({
         rootId: row().root_id,
         expectedDraftRevision: 1,
         source,
@@ -216,13 +212,13 @@ describe("Definition store", () => {
   });
 
   it("refuses malformed commands and invalid source before opening a transaction", async () => {
-    const runner = vi.fn();
-    const store = createDefinitionStore(runner);
+    const transaction = { query: vi.fn() };
+    const store = createDefinitionStore(transaction);
 
-    await expect(store.createRoot(context(), { source: { ...source, body: {} } })).rejects.toThrow(
+    await expect(store.createRoot({ source: { ...source, body: {} } })).rejects.toThrow(
       "INVALID_DEFINITION_COMMAND",
     );
-    expect(runner).not.toHaveBeenCalled();
+    expect(transaction.query).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -236,13 +232,15 @@ describe("Definition store", () => {
   ] as const)(
     "maps %s database failure %s to closed error %s",
     async (operation, databaseCode, expectedCode) => {
-      const store = createDefinitionStore(async () => {
-        throw { code: databaseCode, message: "sensitive database detail" };
+      const store = createDefinitionStore({
+        query: async () => {
+          throw { code: databaseCode, message: "sensitive database detail" };
+        },
       });
       const pending =
         operation === "createRoot"
-          ? store.createRoot(context(), { source })
-          : store.saveDraft(context(), {
+          ? store.createRoot({ source })
+          : store.saveDraft({
               rootId: row().root_id,
               expectedDraftRevision: 1,
               source,
@@ -257,11 +255,13 @@ describe("Definition store", () => {
   );
 
   it("maps raw runner failures without exposing their message", async () => {
-    const store = createDefinitionStore(async () => {
-      throw new Error("sensitive driver detail");
+    const store = createDefinitionStore({
+      query: async () => {
+        throw new Error("sensitive driver detail");
+      },
     });
 
-    await expect(store.createRoot(context(), { source })).rejects.toMatchObject({
+    await expect(store.createRoot({ source })).rejects.toMatchObject({
       name: "DefinitionStoreError",
       code: "DEFINITION_STORAGE_FAILED",
       message: "DEFINITION_STORAGE_FAILED",

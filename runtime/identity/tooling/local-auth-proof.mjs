@@ -210,7 +210,7 @@ expectRedirect(
 const signedInPage = await globalThis.fetch(`${siteUrl}/signed-in`, {
   headers: { cookie: cookieHeader(sessionCookies) },
 });
-if (!signedInPage.ok || !(await signedInPage.text()).includes("You are signed in"))
+if (!signedInPage.ok || !(await signedInPage.text()).includes("No organisations available"))
   throw new Error("The Local protected identity-session page was unavailable");
 
 expectRedirect(
@@ -223,7 +223,10 @@ if (sessionCookies.size !== 0)
 const independentBrowser = await globalThis.fetch(`${siteUrl}/signed-in`, {
   headers: { cookie: cookieHeader(secondBrowserCookies) },
 });
-if (!independentBrowser.ok || !(await independentBrowser.text()).includes("You are signed in"))
+if (
+  !independentBrowser.ok ||
+  !(await independentBrowser.text()).includes("No organisations available")
+)
   throw new Error("Signing out one Local browser ended an independent browser session");
 
 const signin = await client.auth.signInWithPassword({ email, password });

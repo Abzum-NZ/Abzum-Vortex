@@ -153,6 +153,12 @@ select ok(
 );
 select ok(
   not pg_catalog.has_function_privilege(
+    'vortex_runtime', 'vortex_identity.list_organization_accounts(uuid)', 'EXECUTE'
+  ),
+  'runtime cannot read the legacy rich organisation-account list'
+);
+select ok(
+  not pg_catalog.has_function_privilege(
     'vortex_runtime',
     'vortex_identity.accept_organization_invitation_with_transition(text,uuid,text,text,uuid)',
     'EXECUTE'
@@ -290,6 +296,7 @@ insert into vortex_identity.organization_accounts (
 select vortex_context.initialize(
   pg_catalog.jsonb_build_object(
     'callerKind', 'human',
+    'identityAuthorityId', '80000000-0000-4000-8000-000000000090',
     'tenantId', '10000000-0000-4000-8000-000000000090',
     'organizationId', '20000000-0000-4000-8000-000000000090',
     'sessionId', '60000000-0000-4000-8000-000000000090',
@@ -642,7 +649,7 @@ where organization_id = '20000000-0000-4000-8000-000000000090'
 set local role vortex_runtime;
 create temporary table suspended_account_list_result on commit drop as
 select *
-from vortex_identity.list_organization_accounts(
+from vortex_identity.list_organization_launcher(
   '40000000-0000-4000-8000-000000000090'
 );
 reset role;
@@ -661,7 +668,7 @@ where identity_id = '40000000-0000-4000-8000-000000000090';
 set local role vortex_runtime;
 create temporary table suspended_list_result on commit drop as
 select *
-from vortex_identity.list_organization_accounts(
+from vortex_identity.list_organization_launcher(
   '40000000-0000-4000-8000-000000000090'
 );
 reset role;

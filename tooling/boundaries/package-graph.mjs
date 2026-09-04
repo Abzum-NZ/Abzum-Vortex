@@ -31,6 +31,7 @@ const allowedEnvironmentDependencies = {
 };
 const privateDatabaseSchemaOwners = new Map([
   ["vortex_access", "@vortex/access"],
+  ["vortex_context", "@vortex/db"],
   ["vortex_definition", "@vortex/definition"],
   ["vortex_identity", "@vortex/identity"],
 ]);
@@ -163,6 +164,12 @@ export async function validateImports(packages) {
     );
     for (const file of files) {
       const source = await readFile(file, "utf8");
+      if (
+        manifest.name !== "@vortex/access" &&
+        manifest.name !== "@vortex/db" &&
+        source.includes("withResolvedRequestTransaction")
+      )
+        errors.push(`${file} uses the Access-only resolved request transaction capability`);
       for (const [schema, owner] of privateDatabaseSchemaOwners)
         if (manifest.name !== owner && source.includes(`${schema}.`))
           errors.push(`${file} references private database schema ${schema} owned by ${owner}`);
