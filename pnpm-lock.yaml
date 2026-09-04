@@ -224,12 +224,18 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/db':
+        specifier: workspace:*
+        version: link:../../db
       semver:
         specifier: 'catalog:'
         version: 7.8.5
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
     devDependencies:
       '@types/semver':
         specifier: 'catalog:'

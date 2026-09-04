@@ -9,7 +9,7 @@ import {
   versionImpactProperties,
   versionImpactReasonCodes,
 } from "@vortex/contracts";
-import { canonicalJson } from "./canonical-json";
+import { canonicalJson, compareCanonicalStrings } from "./canonical-json";
 import { refuseVersionImpact } from "./version-impact-error";
 
 type RecordValue = Record<string, unknown>;
@@ -23,8 +23,9 @@ const componentKindRank = new Map(
 );
 const propertyRank = new Map(versionImpactProperties.map((value, index) => [value, index]));
 const reasonCodeRank = new Map(versionImpactReasonCodes.map((value, index) => [value, index]));
-const compareText = (left: string, right: string): number =>
-  left < right ? -1 : left > right ? 1 : 0;
+const compareText = compareCanonicalStrings;
+const compareUnknownText = (left: unknown, right: unknown): number =>
+  compareCanonicalStrings(String(left), String(right));
 const asRecord = (value: unknown): RecordValue => value as RecordValue;
 const same = (left: unknown, right: unknown): boolean => {
   if (left === undefined || right === undefined) return left === right;
@@ -432,7 +433,10 @@ const compareOptions = (
   );
   const beforeOrder = before.map((option) => option.value);
   const afterOrder = after.map((option) => option.value);
-  if (same([...beforeOrder].sort(), [...afterOrder].sort()) && !same(beforeOrder, afterOrder))
+  if (
+    same([...beforeOrder].sort(compareUnknownText), [...afterOrder].sort(compareUnknownText)) &&
+    !same(beforeOrder, afterOrder)
+  )
     reasons.push(makeReason("patch", "presentation_changed", "field", "order", candidate.fieldId));
 };
 
@@ -481,7 +485,10 @@ const compareTableSettings = (
   );
   const beforeOrder = (before.columns as RecordValue[]).map((column) => column.key);
   const afterOrder = (after.columns as RecordValue[]).map((column) => column.key);
-  if (same([...beforeOrder].sort(), [...afterOrder].sort()) && !same(beforeOrder, afterOrder))
+  if (
+    same([...beforeOrder].sort(compareUnknownText), [...afterOrder].sort(compareUnknownText)) &&
+    !same(beforeOrder, afterOrder)
+  )
     reasons.push(makeReason("patch", "presentation_changed", "field", "order", candidate.fieldId));
 };
 
@@ -1041,14 +1048,7 @@ const compareSharingCondition = (
     "key",
     id,
   );
-  for (const key of [
-    "sourceRecordTypeId",
-    "publishedRevision",
-    "contractFingerprint",
-    "parameters",
-    "condition",
-    "declaredFieldIds",
-  ])
+  for (const key of ["sourceRecordTypeId", "parameters", "condition", "declaredFieldIds"])
     pushChange(
       reasons,
       previous[key],
@@ -1413,7 +1413,7 @@ const comparePage = (
     const after = (candidate.steps as RecordValue[] | undefined) ?? [];
     const beforeIds = before.map((step) => step.id);
     const afterIds = after.map((step) => step.id);
-    if (!same([...beforeIds].sort(), [...afterIds].sort()))
+    if (!same([...beforeIds].sort(compareUnknownText), [...afterIds].sort(compareUnknownText)))
       reasons.push(makeReason("major", "existing_behavior_changed", "page", "behavior", id));
     else if (!same(beforeIds, afterIds))
       reasons.push(makeReason("patch", "presentation_changed", "page", "order", id));
@@ -1663,7 +1663,10 @@ const comparePipeline = (
   );
   const beforeOrder = (previous.stages as RecordValue[]).map((stage) => stage.key);
   const afterOrder = (candidate.stages as RecordValue[]).map((stage) => stage.key);
-  if (same([...beforeOrder].sort(), [...afterOrder].sort()) && !same(beforeOrder, afterOrder))
+  if (
+    same([...beforeOrder].sort(compareUnknownText), [...afterOrder].sort(compareUnknownText)) &&
+    !same(beforeOrder, afterOrder)
+  )
     reasons.push(makeReason("patch", "presentation_changed", "pipeline", "order", id));
 };
 
@@ -1977,10 +1980,15 @@ export const normaliseModuleContent = (content: ModuleContent): ModuleContent =>
     ),
     rules: sorted(value.rules as unknown[], "ruleId"),
     sharingConditions: sorted(
-      (value.sharingConditions as RecordValue[]).map((condition) => ({
-        ...condition,
-        declaredFieldIds: sorted(condition.declaredFieldIds as unknown[]),
-      })),
+      (value.sharingConditions as RecordValue[]).map((condition) => {
+        const normalised: RecordValue = {
+          ...condition,
+          declaredFieldIds: sorted(condition.declaredFieldIds as unknown[]),
+        };
+        delete normalised.publishedRevision;
+        delete normalised.contractFingerprint;
+        return normalised;
+      }),
       "conditionId",
     ),
     extensionPoints: sorted(

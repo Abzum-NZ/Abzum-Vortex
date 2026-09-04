@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 
+/** Locale-independent UTF-16 code-unit order, matching JavaScript `<`/`>` contract checks. */
+export const compareCanonicalStrings = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
+
 /**
  * Serialises JSON values with recursively sorted object keys. Arrays remain in
  * their supplied order; callers must normalise collections whose order is not
@@ -18,7 +22,7 @@ export const canonicalJson = (value: unknown): string => {
   const entries = Object.entries(value as Record<string, unknown>);
   if (entries.some(([, entry]) => entry === undefined))
     throw new TypeError("Canonical JSON does not accept undefined object properties");
-  entries.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  entries.sort(([left], [right]) => compareCanonicalStrings(left, right));
   return `{${entries
     .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
     .join(",")}}`;

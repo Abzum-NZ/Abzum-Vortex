@@ -14,13 +14,12 @@ import {
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
   type PublishedDefinitionHistory,
-  type ActiveDefinitionDependant,
   type VersionRequirement,
 } from "@vortex/contracts";
 import { satisfies } from "semver";
 import { compileDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
-import { fingerprintCanonicalValue } from "./canonical-json";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compareDefinitionVersionImpact } from "./version-impact";
 
 type JsonObject = Record<string, unknown>;
@@ -34,11 +33,7 @@ export type DefinitionSemanticRule = Readonly<{
   stage: DefinitionValidationStage;
   definitionKinds: readonly ("module" | "application" | "connection_type")[];
   requiredContext: readonly (
-    | "source"
-    | "resolution_snapshot"
-    | "compiled_set"
-    | "prior_published_version"
-    | "active_dependants"
+    "source" | "resolution_snapshot" | "compiled_set" | "prior_published_version"
   )[];
   safeLocationFamily: DefinitionValidationLocation["segments"][number]["kind"];
   run: (context: DefinitionSetValidationContext) => DefinitionRuleFailure[];
@@ -50,7 +45,6 @@ export type DefinitionSetValidationContext = Readonly<{
   rawSources?: readonly unknown[];
   dependencyOutputs?: readonly Output[];
   publishedHistories?: readonly PublishedDefinitionHistory[];
-  activeDependants?: readonly ActiveDefinitionDependant[];
 }>;
 
 const allValidationOutputs = (context: DefinitionSetValidationContext): readonly Output[] => [
@@ -206,12 +200,6 @@ const outputKey = (output: Output) => {
   const canonical = object(output.canonical);
   return String(object(canonical.envelope ?? canonical).key);
 };
-
-export function fingerprintActiveDependantCheck(
-  input: Omit<ActiveDefinitionDependant, "referenceCheckFingerprint">,
-) {
-  return fingerprintCanonicalValue(input);
-}
 
 function artifactBindingRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
@@ -1269,10 +1257,12 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
             : fromField?.type === "link_to_one_of_several"
               ? (object(fromField.settings).targets as unknown[])
               : [];
-        const targetIds = targets.map((target) => String(object(target).recordTypeId)).sort();
+        const targetIds = targets
+          .map((target) => String(object(target).recordTypeId))
+          .sort(compareCanonicalStrings);
         const fieldTargetIds = fieldTargets
           .map((target) => String(object(target).recordTypeId))
-          .sort();
+          .sort(compareCanonicalStrings);
         if (
           String(relationship.fromRecordTypeId) !== recordId ||
           !fromField ||
@@ -1437,7 +1427,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         visitingCalculations.delete(fieldId);
         visitedCalculations.add(fieldId);
       };
-      [...calculationDependencies.keys()].sort().forEach(visitCalculation);
+      [...calculationDependencies.keys()].sort(compareCanonicalStrings).forEach(visitCalculation);
       if (calculationCycle)
         failures.push(
           failure(output, "vortex.definition.module_calculation_acyclic", "dependency_cycle"),
@@ -1959,10 +1949,10 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const expectedManifestFingerprints = expectedManifest
       .filter((entry) => entry !== undefined)
       .map((entry) => fingerprintCanonicalValue(entry))
-      .sort();
+      .sort(compareCanonicalStrings);
     const recordedManifestFingerprints = output.resolvedDependencies
       .map((entry) => fingerprintCanonicalValue(entry))
-      .sort();
+      .sort(compareCanonicalStrings);
     if (
       expectedManifest.some((entry) => entry === undefined) ||
       expectedManifestFingerprints.length !== recordedManifestFingerprints.length ||
@@ -2437,7 +2427,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       const permissionSelection = object(role.permissionSelection);
       const expectedWildcardPermissions = [...applicationPermissions.values()]
         .filter((permission) => permission.administrative === false)
-        .sort((left, right) => String(left.key).localeCompare(String(right.key)));
+        .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
       const expectedWildcardKeys = expectedWildcardPermissions.map((permission) =>
         String(permission.key),
       );
@@ -3859,41 +3849,6 @@ function publicationCompatibilityRule(
         );
         continue;
       }
-      const dependants =
-        context.activeDependants?.filter((entry) => entry.definitionKey === key) ?? [];
-      if (
-        dependants.some(
-          (dependant) =>
-            dependant.definitionKind !== output.kind ||
-            dependant.definitionRootId !== output.artifact.rootId ||
-            dependant.candidateExactVersion !== candidateVersion ||
-            dependant.candidateContentFingerprint !== output.artifact.contentFingerprint ||
-            dependant.candidateResolutionFingerprint !== output.artifact.resolutionFingerprint ||
-            dependant.comparisonFingerprint !== result.comparisonFingerprint ||
-            dependant.referenceCheckFingerprint !==
-              fingerprintActiveDependantCheck({
-                definitionKind: dependant.definitionKind,
-                definitionKey: dependant.definitionKey,
-                definitionRootId: dependant.definitionRootId,
-                candidateExactVersion: dependant.candidateExactVersion,
-                candidateContentFingerprint: dependant.candidateContentFingerprint,
-                candidateResolutionFingerprint: dependant.candidateResolutionFingerprint,
-                dependantKey: dependant.dependantKey,
-                dependantKind: dependant.dependantKind,
-                dependantRootId: dependant.dependantRootId,
-                dependantExactVersion: dependant.dependantExactVersion,
-                dependantContentFingerprint: dependant.dependantContentFingerprint,
-                acceptedVersion: dependant.acceptedVersion,
-                referencesValid: dependant.referencesValid,
-                comparisonFingerprint: dependant.comparisonFingerprint,
-              }) ||
-            !dependant.referencesValid ||
-            !versionRequirementAccepts(dependant.acceptedVersion, candidateVersion),
-        )
-      )
-        failures.push(
-          failure(output, "vortex.definition.active_dependants_compatible", "incompatible_change"),
-        );
     } catch {
       failures.push(
         failure(output, "vortex.definition.prior_published_version_invalid", "invalid_value"),
@@ -3910,8 +3865,7 @@ function publicationContextRule(context: DefinitionSetValidationContext): Defini
   if (
     context.requests.length > 0 &&
     context.outputs.length > 0 &&
-    (!publishesVersionedDefinition ||
-      (context.publishedHistories !== undefined && context.activeDependants !== undefined))
+    (!publishesVersionedDefinition || context.publishedHistories !== undefined)
   )
     return [];
   const output = context.outputs[0];
@@ -4052,11 +4006,10 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
       "vortex.definition.prior_published_version_invalid",
       "vortex.definition.publication_change_required",
       "vortex.definition.candidate_version_binding",
-      "vortex.definition.active_dependants_compatible",
     ],
     "publish",
     ["module", "application"],
-    ["compiled_set", "prior_published_version", "active_dependants"],
+    ["compiled_set", "prior_published_version"],
     "document",
     publicationCompatibilityRule,
   ),
@@ -4078,7 +4031,7 @@ function hasRequiredContext(
     if (item === "resolution_snapshot") return context.requests.length > 0;
     if (item === "compiled_set") return context.outputs.length > 0;
     if (item === "prior_published_version") return context.publishedHistories !== undefined;
-    return context.activeDependants !== undefined;
+    return false;
   });
 }
 
@@ -4123,13 +4076,14 @@ export function validateDefinitionSet(
     "validation_failed",
   ];
   const sorted = [...unique.values()].sort((left, right) => {
-    const locationComparison = safeLocationKey(left.location).localeCompare(
+    const locationComparison = compareCanonicalStrings(
+      safeLocationKey(left.location),
       safeLocationKey(right.location),
     );
     if (locationComparison !== 0) return locationComparison;
     const familyComparison = familyOrder.indexOf(left.family) - familyOrder.indexOf(right.family);
     if (familyComparison !== 0) return familyComparison;
-    return left.ruleCode.localeCompare(right.ruleCode);
+    return compareCanonicalStrings(left.ruleCode, right.ruleCode);
   });
   return { valid: sorted.length === 0, failures: sorted } as const;
 }
@@ -4290,12 +4244,12 @@ export function compileDefinitionSet(
     const input = byKey.get(key);
     if (!input) return;
     visiting.add(key);
-    dependencyKeys(input).sort().forEach(visit);
+    dependencyKeys(input).sort(compareCanonicalStrings).forEach(visit);
     visiting.delete(key);
     visited.add(key);
     ordered.push(input);
   };
-  [...byKey.keys()].sort().forEach(visit);
+  [...byKey.keys()].sort(compareCanonicalStrings).forEach(visit);
   const outputs = ordered.map(compileDefinition);
   const validation = validateDefinitionSet({
     requests: ordered,
@@ -4304,7 +4258,6 @@ export function compileDefinitionSet(
       ? {}
       : { dependencyOutputs: publicationContext.dependencyOutputs }),
     publishedHistories: publicationContext.publishedHistories,
-    activeDependants: publicationContext.activeDependants,
   });
   if (!validation.valid) {
     const first = validation.failures[0]!;

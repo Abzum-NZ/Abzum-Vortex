@@ -176,6 +176,46 @@ describe("workspace boundaries", () => {
     expect(errors).toEqual([]);
   });
 
+  test("keeps private Definition schema names inside the Definition package", async () => {
+    const definitionDirectory = await mkdtemp(path.join(tmpdir(), "vortex-definition-owner-"));
+    const consumerDirectory = await mkdtemp(path.join(tmpdir(), "vortex-definition-consumer-"));
+    temporaryDirectories.push(definitionDirectory, consumerDirectory);
+    await mkdir(path.join(definitionDirectory, "src"));
+    await mkdir(path.join(consumerDirectory, "src"));
+    await writeFile(
+      path.join(definitionDirectory, "src", "index.ts"),
+      'export const operation = "vortex_definition.create_root";\n',
+    );
+    await writeFile(
+      path.join(consumerDirectory, "src", "index.ts"),
+      'export const leakedRelation = "vortex_definition.roots";\n',
+    );
+    const errors = await validateImports([
+      {
+        directory: definitionDirectory,
+        manifest: {
+          name: "@vortex/definition",
+          dependencies: {},
+          exports: { ".": "./src/index.ts" },
+          vortex: { tier: 2, environment: "server", ships: true },
+        },
+      },
+      {
+        directory: consumerDirectory,
+        manifest: {
+          name: "@vortex/consumer",
+          dependencies: {},
+          exports: { ".": "./src/index.ts" },
+          vortex: { tier: 2, environment: "server", ships: true },
+        },
+      },
+    ]);
+    expect(errors).toContain(
+      `${path.join(consumerDirectory, "src", "index.ts")} references private database schema vortex_definition owned by @vortex/definition`,
+    );
+    expect(errors.some((error) => error.includes(definitionDirectory))).toBe(false);
+  });
+
   test("rejects undeclared external dependencies and relative package escapes", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "vortex-boundary-"));
     temporaryDirectories.push(directory);

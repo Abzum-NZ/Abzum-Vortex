@@ -1915,27 +1915,18 @@ describe("complete definition-source fixture set", () => {
     expect(
       definitionPublicationContextSchema.safeParse({
         publishedHistories: [],
-        activeDependants: [],
       }).success,
     ).toBe(true);
     expect(
       definitionPublicationContextSchema.safeParse({
         publishedHistories: [],
-        activeDependants: [],
         inventedPublicationSwitch: true,
       }).success,
     ).toBe(false);
     expect(
       definitionPublicationContextSchema.safeParse({
         publishedHistories: [],
-        activeDependants: [
-          {
-            definitionKey: "vortex.example.module",
-            dependantKey: "vortex.example.application",
-            acceptedVersion: { selection: "allowed_range", expression: "not a range" },
-            referencesValid: true,
-          },
-        ],
+        activeDependants: [],
       }).success,
     ).toBe(false);
     expect(
@@ -1944,7 +1935,6 @@ describe("complete definition-source fixture set", () => {
           { kind: "module", definitionKey: "vortex.example.module", history: [] },
           { kind: "module", definitionKey: "vortex.example.module", history: [] },
         ],
-        activeDependants: [],
       }).success,
     ).toBe(false);
   });
