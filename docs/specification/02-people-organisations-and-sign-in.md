@@ -162,6 +162,8 @@ An organisation-branded address may start a branded sign-in journey, but the add
 
 An organisation account does not automatically grant every [application](07-applications-pages-and-themes.md). Application access comes from an application role or explicit application assignment under [access and permissions](04-access-and-permissions.md). A person-link field that requires application access checks the linked organisation account in the current organisation, never the global identity alone.
 
+The organisation manages its complete role and permission catalogue, including application-role registrations and custom roles spanning selected applications. Registering an application contributes templates and declared permissions, not automatic assignments. The [explicit initial organisation steward](04-access-and-permissions.md#initial-organisation-stewardship) can manage who receives access without receiving business-data access personally; tenant administration remains separately scoped. Existing organisations require deliberate steward adoption, not a migration that guesses the first account or tenant administrator.
+
 ## Administrative portals
 
 Tenant Administration and Organisation Administration are locked, system-installed Vortex applications. They use ordinary modules, records, pages, roles and workflows while calling narrowly protected identity, hierarchy, access, entitlement and data-handling operations. The engine does not contain special portal page logic.

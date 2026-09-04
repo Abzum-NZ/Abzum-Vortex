@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.14
+**Status:** Approved build plan 2.15
 
 **Date:** 5 September 2026
 
@@ -20,6 +20,7 @@ The [corrected dependency and coverage map](architecture-review.md) is part of t
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.15 | Approved | 5 September 2026 | One organisation-managed role and permission catalogue; application registration supplies templates without automatic access; explicit review of expanded grants; shared Access foundations must precede organisation-local administration, correcting the earlier phase-order assumption. |
 | 2.14 | Approved | 5 September 2026 | Page/shell/binding contract completion, workflow-only HR example, corrected task dependencies and cross-cutting foundations. |
 | 2.13 | Approved | 5 September 2026 | Completed organisation selection and request context #27: a minimum safe launcher, address-scoped tab selection, browser-supplied identifier only, atomic Identity/Access scope resolution, trusted Identity Authority binding, live Access-version validation, capability-injected protected repositories with no caller-context transaction bypass, pooled transaction cleanup, 725 pgTAP assertions and seven real concurrency proofs. Protected tenant/organisation operations #30 are now dependency-unblocked; the separation suite #29 remains blocked on #30. |
 | 2.12 | Approved | 5 September 2026 | Made hosted runtime provisioning and proof explicit: migrations leave the restricted login passwordless; each environment receives a separate operator-generated password and exact transaction-pooler URL through its Vercel-synchronised Doppler target; forbidden owner, migration, general database and Kestra variables are checked; the intended deployment must then pass a real protected journey. |
@@ -48,8 +49,14 @@ The [corrected dependency and coverage map](architecture-review.md) is part of t
 ```mermaid
 flowchart TD
     G0[Gate 0<br/>Decisions and platform readiness] --> P1[Phase 1<br/>Contracts and complete fixtures]
-    P1 --> P2[Phase 2<br/>Definition and Identity]
-    P2 --> P3[Phase 3<br/>Access]
+    P2F[Completed Phase 2<br/>Definition and Identity foundations] --> AF[Shared Access foundations<br/>Permission registry, roles and decision]
+    P1 --> P2F
+    AF --> ADM[Protected tenant and organisation administration]
+    ADM --> ISO[Phase 2 isolation proof]
+    HY[Database index hygiene] --> ISO
+    ISO --> P2[Phase 2 completion]
+    P2 --> P3[Remaining Phase 3<br/>Access surfaces]
+    AF --> P3
     P3 --> P4[Phase 4<br/>Module and Record]
     P4 --> P5[Phase 5<br/>Query, Rule and Event]
     P4 --> P8C[Phase 8 core<br/>Search and File storage]
@@ -140,7 +147,7 @@ Exit proof:
 
 **Needs:** Phase 1.
 
-**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), private tenant/organisation storage invariants [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23), Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19), history and restore [#21](https://github.com/Abzum-NZ/Abzum-Vortex/issues/21), consumer reads [#22](https://github.com/Abzum-NZ/Abzum-Vortex/issues/22), the Identity Authority with Local and hosted Testing proofs [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25), cluster-local identity projections, organisation accounts and invitations [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24), the Access-version foundation [#224](https://github.com/Abzum-NZ/Abzum-Vortex/issues/224), Identity sessions [#26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26), and organisation selection/request context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) are complete. Protected tenant/organisation operations [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) are now dependency-unblocked. The separation suite [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29) follows #30 and remains blocked until those administration paths exist. Native GitHub dependencies enforce the order.
+**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), private tenant/organisation storage invariants [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23), Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19), history and restore [#21](https://github.com/Abzum-NZ/Abzum-Vortex/issues/21), consumer reads [#22](https://github.com/Abzum-NZ/Abzum-Vortex/issues/22), the Identity Authority with Local and hosted Testing proofs [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25), cluster-local identity projections, organisation accounts and invitations [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24), the Access-version foundation [#224](https://github.com/Abzum-NZ/Abzum-Vortex/issues/224), Identity sessions [#26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26), and organisation selection/request context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) are complete. Membership alone does not authorise administration. Advance the shared [permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32), [roles and assignments #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) and [central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) from their actual completed prerequisites before exposing organisation-local operations in [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30). Do not make those foundations depend on this whole epic and thereby create a cycle. The separation suite [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29) follows #30 and [#235](https://github.com/Abzum-NZ/Abzum-Vortex/issues/235). Phase 2 remains open until its full administration and isolation outcomes are proved; this dependency correction does not remove them.
 
 **Phase exit and follow-ups:** the adviser cleanup in [#235](https://github.com/Abzum-NZ/Abzum-Vortex/issues/235) is Phase 2 exit hygiene and should land before the final #29 proof so the hosted performance-adviser result is clean. The bounded-publication work in [#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257) is an independent, non-gating scale follow-up and does not block closing the Phase 2 epic.
 
@@ -150,7 +157,7 @@ Build:
 
 - One environment-wide [Vortex Identity Authority](../specification/02-people-organisations-and-sign-in.md#identity-across-clusters), plus a minimal identity projection in each cluster, private tenant/organisation structural storage, tenant-administrator assignments, cluster-local organisation accounts, invitations, sessions and organisation launcher.
 - Store one same-tenant adjacency-list parent per organisation. Permanent scope keys, tenant-scoped short-name uniqueness, tenant-row serialisation, recursive cycle refusal, deferred final-state lifecycle validation, forced row security, and absent direct runtime/Data API grants are database invariants owned by #23. No duplicate hierarchy representation or implicit lifecycle cascade is added.
-- Add tenant-administrator assignments, system-only initial provisioning, protected hierarchy/lifecycle commands, runtime localisation settings, safe read models, expected-revision command concurrency, duplicate protection, and typed audit-ready operation evidence only in #30 after its identity and request-context dependencies exist. Generic persisted Activity remains owned by #115.
+- Add tenant-administrator assignments, system-only initial provisioning, protected hierarchy/lifecycle commands, runtime localisation settings, safe read models, expected-revision command concurrency, duplicate protection, and typed audit-ready operation evidence in #30. Tenant governance uses separate explicit tenant authority; organisation-account, invitation and settings operations require the shared central decision and exact organisation-role permissions in the resolved #27 context. Neither membership nor tenant-administrator status substitutes for organisation permission. Creates have no prior revision; mutations of existing resources require the expected revision. Generic persisted Activity remains owned by #252/#115.
 - Supabase Auth with a managed P-256 `ES256` signing key and locally verifiable short-lived identity tokens. The Identity service accepts the required standard Supabase claims, then returns only the closed verified-identity result, including the permanent identity identifier and current verified primary email. It uses no custom access-token hook and never turns provider roles or metadata into Vortex authority.
 - Neutral registration, email confirmation, sign-in and password-recovery journeys under the official `apps/web` Next.js App Router. Templates use Supabase's supported verification URL, which redirects only to exact allowlisted callbacks with a browser-only implicit session fragment. The callback removes the fragment before validation or submission. Confirmation submits only the access token for `getUser`; recovery uses its access/refresh pair only in a non-persisting request-local client to replace the password. Confirmation and recovery persist no durable Vortex browser session; #26 replaces the completed sign-in journey's deliberate credential discard with server-only cookies, refresh and ongoing session state.
 - New and replacement passwords require at least 8 characters including a letter and a number; sign-in continues to defer existing-password validity to the Identity Authority.
@@ -197,13 +204,13 @@ Exit proof:
 
 **Current project epic:** [#31](https://github.com/Abzum-NZ/Abzum-Vortex/issues/31)
 
-**Needs:** Phase 2.
+**Needs:** The permission/role/decision foundations consume the actual completed Definition, Identity and Access-version prerequisites and precede #30's organisation-local administration. The remaining Phase 3 work consumes those foundations and the completed Phase 2 isolation proof. Native issue dependencies express this order instead of a blanket whole-phase blocker on #32.
 
 **Outcome:** One permission vocabulary and test catalogue protects database rows and every server surface.
 
 Build:
 
-- Permission, role, assignment, team/group and application-access contracts.
+- One organisation-managed permission, role, assignment, Team and application-access catalogue. Published applications supply immutable role templates; registration creates organisation-local version-pinned registrations without assigning access. Organisation-owned custom roles may select exact scoped permissions across several applications, and updates require explicit review before existing grants broaden. Actual application-engine registration/withdrawal and rendered administration journeys remain #64/#72, consuming the #32/#33/#40 operations.
 - Canonical PostgreSQL allow/refuse function for row operations.
 - Server Access library for files, caches, search, connections, workflows and interfaces.
 - The sole application-role `*` entry expanded only against that exact application's non-administrative permission catalogue and fingerprinted at publication; organisation roles and module permissions remain exact-only.
@@ -497,7 +504,7 @@ The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follow
 4. Phases 11–13 use epics [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164), [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165), and [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166). Activity/protected data handling/retention, entitlements/metering, and operations issues belong to those epics rather than Phase 10. Commercial applications do not block the generic platform roadmap.
 5. Extension-point use belongs to Phase 4 and standard-page replacement belongs to Phase 6; they are no longer deferred to distribution work.
 6. Priority is explicit on every project issue: `P0 — Critical`, `P1 — Next`, `P2 — Planned`, or `P3 — Later`. The [Bugs view](https://github.com/orgs/Abzum-NZ/projects/2/views/4) filters `is:issue is:open label:bug`. The [In review view](https://github.com/orgs/Abzum-NZ/projects/2/views/5) filters `status:"In review"` and includes review-ready PRs as well as issues. The [Roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) is a saved phase table, filtered by `label:epic`, manually ordered from Phase 1 to Phase 13 with Status, Sub-issues progress and Priority. Expand a phase to see its tasks. Dates and Iteration remain unset until genuinely scheduled; do not invent delivery dates to fill a timeline.
-7. Phase 1 foundations are complete and Phase 2 remains active. Request-context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) implementation is present in Testing; its existing delivery owner controls proof and closure. Protected administration [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) follows #27, and the separation suite [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29) also requires #30. Use native dependencies and verified delivery evidence rather than treating a documentation statement as issue completion.
+7. Phase 1 foundations are complete and Phase 2 remains active. Request-context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) is complete. Shared Access foundations [#32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32), [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) and [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) precede organisation-local administration in [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30); [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29) then proves the full delivered Phase 2 isolation boundary after [#235](https://github.com/Abzum-NZ/Abzum-Vortex/issues/235). Never implement a temporary tenant-authority permission shortcut to retain an earlier issue order.
 8. Every later board change follows the current specification and keeps the decision register limited to genuinely open business choices.
 
 ### Post-delivery correction track
