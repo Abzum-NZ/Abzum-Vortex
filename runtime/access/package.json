@@ -8,11 +8,12 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root ../.. runtime/access/test"
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
-    "@vortex/identity": "workspace:*",
+    "@vortex/db": "workspace:*",
     "server-only": "0.0.1"
   },
   "vortex": {
@@ -21,5 +22,8 @@
     "ships": true,
     "engine": true,
     "service": "access"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   }
 }

@@ -200,42 +200,6 @@ describe("organisation-account service", () => {
     expect(calls[0]?.values).not.toContain(secret);
   });
 
-  it("hashes the acceptance secret before the database call and validates the account result", async () => {
-    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
-    const secret = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
-    const store = createOrganizationAccountStore({
-      runtimeTransaction: runtimeRunner([{ outcome: "accepted", ...accountRow }], calls),
-    });
-
-    await expect(
-      store.acceptInvitation(verifiedIdentity(), {
-        invitationSecret: secret,
-        displayName: "Person",
-        correlationId: id(12),
-      }),
-    ).resolves.toEqual({
-      outcome: "accepted",
-      account: expect.objectContaining({ organizationAccountId: id(10) }),
-    });
-    expect(calls[0]?.values[0]).toMatch(/^sha256:[0-9a-f]{64}$/);
-    expect(calls[0]?.values[1]).toBe(id(1));
-    expect(calls[0]?.values[2]).toBe("person@example.test");
-    expect(calls[0]?.values).not.toContain(secret);
-  });
-
-  it("returns closed refusal outcomes without parsing absent account fields", async () => {
-    const store = createOrganizationAccountStore({
-      runtimeTransaction: runtimeRunner([{ outcome: "unavailable" }]),
-    });
-
-    await expect(
-      store.acceptInvitation(verifiedIdentity(), {
-        invitationSecret: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
-        correlationId: id(12),
-      }),
-    ).resolves.toEqual({ outcome: "unavailable" });
-  });
-
   it("maps database details to a closed safe error", async () => {
     const store = createOrganizationAccountStore({
       runtimeTransaction: async () => {

@@ -76,7 +76,6 @@ tasks:
       VORTEX_DOPPLER_PROJECT: abzum-vortex
       VORTEX_DOPPLER_CONFIG: ops_prd
       VORTEX_EXPECTED_DATABASE_PROJECT_REF: nkvcbtwsjhkgqhosqeib
-      VORTEX_LINT_SCHEMAS: public,vortex_context,vortex_identity,vortex_definition
     outputFiles:
       - delivery-evidence.json
 

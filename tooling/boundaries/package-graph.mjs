@@ -30,6 +30,7 @@ const allowedEnvironmentDependencies = {
   test: new Set(["app", "browser", "server", "shared", "test"]),
 };
 const privateDatabaseSchemaOwners = new Map([
+  ["vortex_access", "@vortex/access"],
   ["vortex_definition", "@vortex/definition"],
   ["vortex_identity", "@vortex/identity"],
 ]);

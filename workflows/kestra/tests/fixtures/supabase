@@ -19,6 +19,10 @@ if grep --extended-regexp --quiet \
   exit 1
 fi
 
+if [ -n "${VORTEX_TEST_SUPABASE_CALL_MARKER:-}" ]; then
+  printf '%s\n' "$*" >>"$VORTEX_TEST_SUPABASE_CALL_MARKER"
+fi
+
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--db-url" ]; then
     shift

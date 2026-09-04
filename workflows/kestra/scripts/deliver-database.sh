@@ -15,6 +15,11 @@ readonly DEFINITION_CONSUMER_READ_MIGRATION="supabase/migrations/20260904025500_
 readonly DEFINITION_CONSUMER_READ_PROOF="supabase/tests/definition-consumer-read-concurrency.test.sh"
 readonly DEFINITION_HISTORY_RESTORE_MIGRATION="supabase/migrations/20260904040758_definition_history_restore.sql"
 readonly DEFINITION_HISTORY_RESTORE_PROOF="supabase/tests/definition-history-restore-concurrency.test.sh"
+readonly IDENTITY_INVITATION_MIGRATION="supabase/migrations/20260904094030_identity_accounts_invitations.sql"
+readonly IDENTITY_INVITATION_PROOF="supabase/tests/identity-invitation-concurrency.test.sh"
+readonly ACCESS_VERSION_MIGRATION="supabase/migrations/20260904112625_access_version_foundation.sql"
+readonly ACCESS_VERSION_PROOF="supabase/tests/access-version-concurrency.test.sh"
+readonly LINT_SCHEMAS="public,vortex_context,vortex_identity,vortex_definition,vortex_access"
 
 die() {
   echo "database-delivery: FAILED: $*" >&2
@@ -196,6 +201,14 @@ validate_concurrency_proof_pair \
   "$DEFINITION_HISTORY_RESTORE_MIGRATION" \
   "$DEFINITION_HISTORY_RESTORE_PROOF" \
   "Definition history and restore"
+validate_concurrency_proof_pair \
+  "$IDENTITY_INVITATION_MIGRATION" \
+  "$IDENTITY_INVITATION_PROOF" \
+  "Identity invitation"
+validate_concurrency_proof_pair \
+  "$ACCESS_VERSION_MIGRATION" \
+  "$ACCESS_VERSION_PROOF" \
+  "Access version"
 
 migration_set_sha256="$(migration_digest "$commit")"
 readonly migration_set_sha256
@@ -347,7 +360,9 @@ say "applying pending migrations through Supabase migration history"
     "$HIERARCHY_PROOF" \
     "$DEFINITION_PUBLICATION_PROOF" \
     "$DEFINITION_CONSUMER_READ_PROOF" \
-    "$DEFINITION_HISTORY_RESTORE_PROOF"; do
+    "$DEFINITION_HISTORY_RESTORE_PROOF" \
+    "$IDENTITY_INVITATION_PROOF" \
+    "$ACCESS_VERSION_PROOF"; do
     if [ -f "$concurrency_proof" ]; then
       if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
         printf '%s\n' "$concurrency_proof" >>"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
@@ -358,7 +373,7 @@ say "applying pending migrations through Supabase migration history"
   done
   supabase db lint \
     --db-url "$database_url" \
-    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context,vortex_identity,vortex_definition}" \
+    --schema "$LINT_SCHEMAS" \
     --level warning \
     --fail-on error
 )
