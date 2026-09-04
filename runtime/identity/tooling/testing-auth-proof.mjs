@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { URL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { createProtectedSiteFetch } from "./protected-site-request.mjs";
+import { createVerifierProcessEnvironment } from "./verifier-process-environment.mjs";
 
 const pnpmEntry = process.env.npm_execpath;
 if (!pnpmEntry) throw new Error("Run this proof through `pnpm auth:testing:proof`");
@@ -219,15 +220,14 @@ const verifierProof = spawnSync(
   {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    env: {
-      ...process.env,
+    env: createVerifierProcessEnvironment(process.env, {
       VORTEX_TESTING_AUTH_API_URL: apiUrl,
       VORTEX_TESTING_AUTH_PUBLISHABLE_KEY: publishableKey,
       VORTEX_TESTING_AUTH_ACCESS_TOKEN: signin.data.session.access_token,
       VORTEX_TESTING_AUTH_EXPECTED_IDENTITY_ID: signin.data.user.id,
       VORTEX_TESTING_AUTH_EXPECTED_EMAIL: email,
       VORTEX_PRODUCTION_AUTH_API_URL: productionApiUrl,
-    },
+    }),
   },
 );
 if (verifierProof.status !== 0)
