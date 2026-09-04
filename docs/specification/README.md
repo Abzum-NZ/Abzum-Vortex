@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.12
+**Status:** Approved specification 2.14
 **Date:** 5 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
@@ -10,6 +10,12 @@
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
 
 This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) is clear; a future material uncertainty must be recorded there before implementation assumes an answer.
+
+## Architecture review additions
+
+- [Page-builder contracts and Fluid adaptation](appendices/page-builder-contracts.md): shells, slots, typed settings/data/forms, responsive layout, operation parity and immutable-release migration.
+- [Review findings, subject coverage and corrected delivery order](../build-plan/architecture-review.md).
+- [HR example and workflow-only approvals](appendices/page-builder-contracts.md#hr-example-policy), approved by the owner in this review. This is a normal Vortex application, never hardcoded runtime behavior.
 
 ## How to read this specification
 
@@ -94,6 +100,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.13 | Approved | 5 September 2026 | Defined organisation selection and request-context composition: a minimum safe launcher, address-scoped tab selection, browser-supplied organisation identifier only, trusted Identity Authority binding, atomic Identity/Access scope resolution, live Access-version validation, shared row locks, transaction-local request authority and neutral unavailable outcomes. |
 | 2.12 | Approved | 5 September 2026 | Defined the server-only Supabase identity-session boundary: request-specific SSR clients, `getClaims()` Proxy refresh, independent protected-operation verification, non-mutating cluster projection reads, closed temporary failures, secure hosted and loopback cookie profiles, staged writes, local sign-out, realistic refresh/revocation guarantees and no Vortex session store. |
 | 2.11 | Approved | 5 September 2026 | Implemented the Access-version foundation: one private counter per organisation, exact active-scope reads, atomic invitation/account lifecycle composition, a closed change-reason catalogue, strict grants and real concurrent-increment proof. Identity can no longer expose runtime invitation acceptance or account-state changes outside the Access-owned transaction. |
 | 2.10 | Approved | 4 September 2026 | Defined the cluster-local identity projection, organisation-account and fingerprint-only invitation contracts: provider identity data remains in Supabase Auth, pending invitations create no account, verified-email acceptance is single-use and concurrency-safe, and only exact pre-request Identity functions receive runtime access. |

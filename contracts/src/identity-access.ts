@@ -268,6 +268,39 @@ export const identitySessionResolutionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("invalid_session_state") }).strict(),
 ]);
 
+export const organizationLauncherEntrySchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    tenantDisplayName: z.string().trim().min(1).max(120),
+    organizationDisplayName: z.string().trim().min(1).max(120),
+    accountDisplayName: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();
+
+export const organizationLauncherResolutionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("available"),
+      entries: z.array(organizationLauncherEntrySchema),
+    })
+    .strict(),
+  z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
+  z.object({ kind: z.literal("invalid_session_state") }).strict(),
+]);
+
+export const organizationSelectionCandidateSchema = z
+  .object({ organizationId: organizationIdSchema })
+  .strict();
+
+export const selectedOrganizationScopeSchema = z
+  .object({
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema,
+    organizationAccountId: organizationAccountIdSchema,
+    accessVersion: revisionSchema,
+  })
+  .strict();
+
 export const organizationAccountSchema = z
   .object({
     organizationAccountId: organizationAccountIdSchema,
@@ -579,6 +612,7 @@ const supportContextSchema = z
   })
   .strict();
 const authenticatedHumanContext = {
+  identityAuthorityId: identityAuthorityIdSchema,
   identityId: identityIdSchema,
   organizationAccountId: organizationAccountIdSchema,
   authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
@@ -985,6 +1019,10 @@ export type SupabaseIdentityClaims = z.infer<typeof supabaseIdentityClaimsSchema
 export type VerifiedIdentity = z.infer<typeof verifiedIdentitySchema>;
 export type IdentitySession = z.infer<typeof identitySessionSchema>;
 export type IdentitySessionResolution = z.infer<typeof identitySessionResolutionSchema>;
+export type OrganizationLauncherEntry = z.infer<typeof organizationLauncherEntrySchema>;
+export type OrganizationLauncherResolution = z.infer<typeof organizationLauncherResolutionSchema>;
+export type OrganizationSelectionCandidate = z.infer<typeof organizationSelectionCandidateSchema>;
+export type SelectedOrganizationScope = z.infer<typeof selectedOrganizationScopeSchema>;
 export type OrganizationAccount = z.infer<typeof organizationAccountSchema>;
 export type OrganizationAccountSet = z.infer<typeof organizationAccountSetSchema>;
 export type AccessVersionChangeReason = z.infer<typeof accessVersionChangeReasonSchema>;

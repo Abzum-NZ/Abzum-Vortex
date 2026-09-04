@@ -127,3 +127,7 @@ sequenceDiagram
 - A later change cannot overtake an earlier failed event for the same record.
 - A rule that drops an unsafe condition cannot publish; it must express a safe condition or refuse the operation.
 - Actions called from pages, MCP, programmable interfaces, and workflows follow the same validation and permission path. MCP does not provide a second action executor.
+
+## Page binding boundary
+
+[Typed page/form/operation bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map controls to these actions and their inputs. Authorised administration forms may instead invoke a closed protected platform operation owned by its service. Neither path permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection.

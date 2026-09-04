@@ -43,6 +43,8 @@ The private tenant and organisation tables contain structural identity and lifec
 
 Tenant administration does not grant record access. A tenant administrator who needs to use an organisation's applications or data must also have an active organisation account with the required organisation and application roles. This separation prevents customer-wide administration from becoming silent access to every workspace.
 
+Protected tenant-governance operations use a server-resolved verified identity and current tenant-administrator assignment; they do not require an active account inside the target organisation. Otherwise an administrator could not create the first organisation or restore a suspended organisation. The Identity service validates the selected tenant and target, the current assignment, expected revision and each lifecycle transition inside its protected transaction. This narrow tenant context cannot read organisation records or be used as an organisation request context. System-only first provisioning remains separate and idempotent. Organisation-local settings, application data and account operations still require their documented organisation authorization path. [Issue #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns this distinction; it does not weaken [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27)'s active-account entry checks.
+
 ```mermaid
 flowchart LR
     TA[Tenant administrator] --> GOV[Tenant structure and protected tenant operations]
@@ -55,7 +57,7 @@ flowchart LR
 1. A person proves control of a supported sign-in method.
 2. The platform loads the identity's active organisation accounts and tenant-administrator assignments.
 3. If exactly one organisation account is active, the platform may open it directly. Otherwise it shows the organisation launcher.
-4. After an organisation is chosen, every request carries the identity, tenant, organisation, and organisation-account identifiers.
+4. After an organisation is chosen, its permanent identifier appears in the tab's `/organizations/[organizationId]` address. That browser value is only an untrusted selection candidate. The server derives the identity, Identity Authority, tenant, organisation account, Access version, session times, and correlation identifier from live trusted state before protected work begins.
 5. Leaving, suspending, or closing an organisation account affects only that organisation. Suspending or closing the cluster-local identity projection prevents entry to every account in that cluster. Environment-wide identity disablement and session revocation are protected Identity Authority operations delivered by [operational readiness](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not a meaning assigned to a cluster row.
 6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the Access service's one live version for that organisation. Account activation, reactivation, suspension and closure change Identity state and that version together or change neither.
 
@@ -134,7 +136,25 @@ flowchart LR
 
 ## Organisation launcher and sign-in experience
 
-The neutral launcher shows only organisations the identity may enter. It may group them by tenant and organisation hierarchy, and show approved names, logos, and discoverable applications. It never reveals private data, other accounts, commercial details, or the existence of organisations the identity cannot enter.
+The neutral launcher is a minimum safe projection of the organisations the current verified identity may enter. Each entry contains only the tenant and organisation display names and permanent organisation identifier, plus the organisation-account display name when one exists. It does not expose tenant or account identifiers, hierarchy, lifecycle state, logos, applications, roles, teams, permissions, commercial details, or another identity's account. Entries use display-name ordering with permanent identifiers as stable tie-breakers.
+
+No active account shows a neutral empty state; one active account redirects directly to its organisation address; several active accounts show the launcher. Identity or storage unavailability shows a retryable neutral state and does not pretend the account list is empty. An unknown, foreign, suspended, closed, or otherwise unavailable selection has one indistinguishable unavailable result.
+
+Organisation selection is address-scoped rather than stored as mutable global browser state. Two tabs may therefore hold two different organisation addresses for the same signed-in identity. Every protected request resolves its address candidate again and cannot inherit the other tab's organisation. Switching follows another organisation address and causes a new independently derived request context; organisation-specific caches and server state are never reused across it.
+
+```mermaid
+flowchart LR
+    S[Verified server session] --> L[Identity safe launcher]
+    L --> Z{Active accounts}
+    Z -- None --> E[Neutral empty state]
+    Z -- One --> R[Redirect to organisation address]
+    Z -- Several --> C[Choose organisation]
+    C --> U[Untrusted organizationId in URL]
+    R --> U
+    U --> A[Access resolves live tenant, account and version]
+    A --> T[One protected database transaction]
+    T --> P[Organisation page]
+```
 
 An organisation-branded address may start a branded sign-in journey, but the address and branding never determine access. Switching organisations creates a new request context and clears organisation-specific browser and server state.
 
@@ -160,6 +180,8 @@ The platform stores the tenant, tenant-administrator assignment, organisation an
 - A hierarchy move across tenants and a move that creates a cycle are both refused.
 - Suspending one organisation account removes its access on the next request without affecting the identity's other accounts.
 - Suspending a cluster-local identity projection removes every organisation from that cluster's launcher without changing the person's authority record or accounts in another cluster.
+- A forged, foreign, inactive, or unknown organisation address returns the same neutral unavailable state and never reveals which check failed.
+- Two tabs selecting two different organisations resolve independent live request contexts; neither tab changes or lends authority to the other.
 - An invitation with a different current verified email cannot be accepted, and two concurrent acceptances create exactly one organisation account.
 - Two independently configured verifier instances accept the same Testing identity token and produce the same closed identity result without requiring a second physical Testing cluster.
 - Rotating the Supabase signing key keeps the current and next public keys available through the overlap window, and neither key contains organisation authority.
