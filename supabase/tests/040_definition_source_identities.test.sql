@@ -52,6 +52,17 @@ select has_fk(
 );
 select is(
   (
+    select index_definition.indrelid::regclass
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.source_identity_aliases_owner_idx'
+    )
+  ),
+  'vortex_definition.source_identity_aliases'::regclass,
+  'the source-alias owner index belongs to the owner foreign key referencing table'
+);
+select is(
+  (
     select array_agg(attribute.attname::text order by key_column.ordinality)
     from pg_catalog.pg_index as index_definition
     cross join lateral pg_catalog.unnest(index_definition.indkey)

@@ -33,20 +33,29 @@ had no predicate. A local equivalent of Supabase Splinter's
 [`0001_unindexed_foreign_keys` check](https://github.com/supabase/splinter/blob/main/lints/0001_unindexed_foreign_keys.sql)
 returned zero rows for all three constraints.
 
-- `pnpm db:test` passed: 13 pgTAP files and 733 assertions.
+- `pnpm db:test` passed: 13 pgTAP files and 736 assertions.
 - `pnpm db:concurrency` passed: all seven two-connection proofs.
 - `pnpm db:lint` passed for every Vortex-owned schema with no errors.
 - The `pnpm verify` gate's formatting, lint, type, boundary, unit, fixture and
   production-build phases passed with this feature revision.
 
-The new pgTAP assertions resolve each index by its required name, compare its
-complete ordered key-column array, and require both validity and readiness.
-They also assert the allowed target predicate or no predicate as appropriate.
+The new pgTAP assertions resolve each index by its required name, bind it to
+the named foreign key's referencing table, compare its complete ordered
+key-column array, and require both validity and readiness. They also assert the
+allowed target predicate or no predicate as appropriate.
 As a mutation check, the Local-only target index was recreated with
 `dependency_version` and `target_release_revision` swapped. The focused
 `050_definition_release_store.test.sql` suite failed its new assertion,
 reporting the reordered actual array; the database was then reset from the
 committed migration chain and the full suite passed.
+
+As a separate relation-binding mutation check, a single Local transaction
+recreated `source_identity_aliases_owner_idx` on `source_identities`, which has
+the same five column names. The pgTAP relation assertion emitted `not ok`,
+showing `source_identities` where `source_identity_aliases` was required. The
+same session explicitly rolled back and a follow-up catalogue query confirmed
+the original valid, ready alias index was restored. This check changed no data
+or durable Local schema state.
 
 No table, policy, grant, function, runtime result, API contract or business rule
 changed. Hosted Testing delivery, hosted advisers and independent review are

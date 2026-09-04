@@ -113,6 +113,17 @@ select ok(
 );
 select is(
   (
+    select index_definition.indrelid::regclass
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.release_dependencies_target_release_idx'
+    )
+  ),
+  'vortex_definition.release_dependencies'::regclass,
+  'the target-release index belongs to the target-release foreign key referencing table'
+);
+select is(
+  (
     select array_agg(attribute.attname::text order by key_column.ordinality)
     from pg_catalog.pg_index as index_definition
     cross join lateral pg_catalog.unnest(index_definition.indkey)
@@ -157,6 +168,17 @@ select is(
   ),
   '(target_root_id IS NOT NULL)'::text,
   'the target-release index retains its predicate, which excludes only rows without a target release'
+);
+select is(
+  (
+    select index_definition.indrelid::regclass
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.roots_current_release_idx'
+    )
+  ),
+  'vortex_definition.roots'::regclass,
+  'the current-release index belongs to the current-release foreign key referencing table'
 );
 select is(
   (
