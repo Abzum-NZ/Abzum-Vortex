@@ -157,4 +157,6 @@ flowchart LR
 
 ## Literal data is not a reference
 
+Acceptance by a JSON value contract does not authorize every registered control to accept every JSON shape. Existing scalar controls continue to reject object/array values that do not match their declared types. [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) adds the richer setting declarations and their complete publication proof; [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) must not weaken current control validation to imitate that later feature. User-defined input-map keys are also data labels, not platform reference properties.
+
 Reference traversal follows declared contract positions and discriminated value kinds. An explicitly literal value remains data even if it contains keys named `state`, `qualifiedKey`, `rootId` or `fieldId`. Do not infer platform authority or unresolved references from arbitrary object shape. Literal content still participates in schema validation, fingerprints and its owning component's version-impact policy. [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) corrects the delivered shape-based scanner before [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) expands the representation.

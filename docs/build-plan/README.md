@@ -510,3 +510,5 @@ The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follow
 - Set an item to In review when its proposed work is ready for review. Mark Done only when that item's acceptance and applicable delivery evidence are complete. Filing a review PR does not make its implementation issues Done.
 
 [Completed-work review and exclusions](completed-work-review.md).
+
+The [#258 correction evidence](../evidence/issue-258/README.md) records literal/reference regression coverage. Richer page-setting declarations remain in #249; full current-control type checking is retained.

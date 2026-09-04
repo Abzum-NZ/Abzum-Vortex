@@ -6,6 +6,8 @@ This package is the database-free definition language shared by the Vortex servi
 
 Every schema rejects unknown properties. A schema file can depend only on this package's lower-level files and Zod; it cannot import browser, server, database, Supabase, Kestra, or service code.
 
+Reference inspection follows declared schemas through `walkDefinitionContract`, not arbitrary property names. Reuse `jsonValueSchema` for opaque data; its contents are validated and fingerprinted but are never reference positions. Semantic inspection visits declared object properties, not user-defined record-map keys. Publication and version comparison share `unresolvedRecordTypeReferencePaths`; genuine unresolved references still fail. See [#258 evidence](../docs/evidence/issue-258/README.md) and [Zod's documented schema traversal](https://zod.dev/packages/core#internals).
+
 | Export group | Layer | Governing specification | Source |
 |---|---|---|---|
 | Identifiers, definition envelopes, references, storage and lineage | Canonical runtime | [Identifiers and published definitions](../docs/specification/appendices/data-contracts.md#identifier-rules) | `identifiers.ts`, `definitions.ts`, `records.ts`, `storage.ts`, `lineage.ts` |
