@@ -839,7 +839,6 @@ describe("identity, sharing and secret invariants", () => {
     identityId: id(100),
     displayName: "Example person",
     state: "active",
-    accessVersionContribution: 1,
   });
 
   test("allows one identity to have separately scoped accounts in several organisations", () => {
@@ -851,6 +850,10 @@ describe("identity, sharing and secret invariants", () => {
     );
     expect(
       organizationAccountSetSchema.safeParse([{ identityId: id(100), displayName: "Unscoped" }])
+        .success,
+    ).toBe(false);
+    expect(
+      organizationAccountSetSchema.safeParse([{ ...account(1, 10), accessVersionContribution: 1 }])
         .success,
     ).toBe(false);
   });

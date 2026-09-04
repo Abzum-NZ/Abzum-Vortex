@@ -166,6 +166,8 @@ Public create and update field lists are checked against the same `public_displa
 
 Role, organisation-account, team, sharing, and public-policy changes increase an organisation access version. Every cached access answer includes that version. A request with an old version is recalculated.
 
+The Access service stores exactly one positive, monotonically increasing counter per organisation. The counter begins at `1`, is not an Identity or organisation-account field, and can be read or incremented only through narrow server-side Access operations. An access-affecting change and its increment commit in one transaction; a refused, rolled-back, or duplicate change does not advance it. Concurrent changes use an atomic database increment so neither update is lost. The request-context boundary reads the live value after it has verified the selected active organisation account; it never accepts a browser-supplied version.
+
 Access removal takes effect on the next request. Long-running work rechecks access before every protected side effect, and subscriptions close or re-authorise when their access version changes.
 
 The recipient interface must remove previously displayed shared values when that next check is refused. It may retain non-content routing and activity references, but it cannot keep a visible snapshot, stale search result, component cache, or offline copy after the grant ends. A completed, separately approved export is the only exception because a downloaded file cannot be recalled.

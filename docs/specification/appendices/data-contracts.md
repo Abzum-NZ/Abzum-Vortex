@@ -113,7 +113,7 @@ Ordinary identity tokens use no custom access-token hook because the standard cl
 
 ### Organisation account
 
-`organisation_account_id`, `organisation_id`, `identity_id`, organisation-specific display name, state, optional language and time-zone preferences, invitation details, activation/suspension/closure times, and access-version contribution. The pair `organisation_id` and `identity_id` is unique, so one identity cannot have two accounts in the same organisation.
+`organisation_account_id`, `organisation_id`, `identity_id`, organisation-specific display name, state, optional language and time-zone preferences, invitation details, and activation/suspension/closure times. The pair `organisation_id` and `identity_id` is unique, so one identity cannot have two accounts in the same organisation. Access version is deliberately absent because the Access service owns one counter for the whole organisation.
 
 ### Team and membership
 
@@ -121,13 +121,15 @@ A team has `team_id`, organisation, key, label, state, creator, and creation/cha
 
 ### Invitation
 
-`invitation_id`, organisation, normalised invited email, proposed role assignments, one-way token fingerprint, created/invited/expiry/revocation/acceptance times, inviter organisation account, and accepted organisation account.
+`invitation_id`, organisation, normalised invited email, proposed role assignments, one-way token fingerprint, created/invited/expiry/revocation/acceptance times, inviter organisation account, and accepted organisation account. Before role and Team assignment work is delivered by [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33), proposed assignments must be an empty list; invitation acceptance cannot invent temporary authority.
 
 ### Session context
 
 The session context is a closed union by caller kind. A human or federated caller has a global identity and organisation account; a system caller has a system actor; an unauthenticated public caller has neither and uses `anonymous` authentication strength. Every variant carries tenant, organisation, optional application, session and issue times, expiry, access version and correlation identifier. Only the permitted variants may carry delegated or support context.
 
 The optional application value is the permanent application-root identifier. It is absent only when the operation legitimately occurs before application selection or belongs to an explicitly application-independent platform path. Its absence never means every application: an application-contained database policy, cache key, operation, page or interface refuses a context without the exact application root.
+
+Phase 2 organisation selection establishes an application-independent context and therefore carries no application identifier. An exact application root is added only after later application-installation and Access work can verify it for the selected organisation account.
 
 The database preserves the complete union as one transaction-local value. Structural validation and setting that value do not grant authority. The trusted server begins the transaction as `vortex_runtime`, executes the initializer available only to that role, and then enters `vortex_request` with `SET LOCAL ROLE`; only the request role may call the read-only context accessors used by protected service SQL. The server does this only after the owning identity and request boundaries verify their inputs, and later policies still check the current live tenant, organisation-account, session, role and access state they require. Commit, rollback or connection reuse cannot carry the role or value into another transaction.
 
@@ -146,6 +148,8 @@ A role contained in an application definition uses the same closed meaning in a 
 A role assignment has organisation, role, assignee kind (`organisation_account` or `team`), assignee identifier, optional application, start and expiry times, state, grantor organisation account, and activity link. A direct person assignment names an organisation account, never a global identity.
 
 The Access service owns an `access_version` per organisation. Every organisation-account, role, assignment, team, sharing, public-policy, or application-role publication change increases it in the same transaction.
+
+The stored access-version record contains `organisation_id`, positive `current_version`, `updated_at`, `updated_by`, and `correlation_id`. It begins at `1`, cannot exceed the JavaScript safe-integer request-context limit, and exposes no permission result. One narrow operation reads the live value; another atomically increments and returns it. Identity-owned records contain no copy or contribution column.
 
 ## Module and record-type contracts
 
@@ -338,7 +342,7 @@ A saved sharing condition belongs to one source record type and contains permane
 
 ## Definition publication storage contract
 
-A Definition root is an organisation-owned permanent Module or Application identity with one current editable draft and a nullable pointer to its latest immutable release. A draft stores the complete parsed authored source, its contract version, canonical source fingerprint, and the exact source-identity requirements derived from that current source. Permanent identity owners and every alias ever accepted remain append-only history, but publication preparation receives only aliases named by the current draft. Removing or renaming a source component therefore cannot make the next publication require an obsolete alias, while an immutable older release retains its own complete resolution snapshot. Every save names the expected draft revision; a stale save changes nothing.
+A Definition root is an organisation-owned permanent Module or Application identity with one current editable draft and a nullable pointer to its latest immutable release. A draft stores the complete parsed authored source, its contract version, canonical source fingerprint, and the exact source-identity requirements derived from that current source. A restored draft additionally stores `restored_from_release_revision`, `restored_from_source_fingerprint`, `restored_by`, `restored_at`, and `restore_correlation_id`; a later ordinary edit clears those restore-only fields. Permanent identity owners and every alias ever accepted remain append-only history, but publication preparation receives only aliases named by the current draft. Removing or renaming a source component therefore cannot make the next publication require an obsolete alias, while an immutable older release retains its own complete resolution snapshot. Every save names the expected draft revision; a stale save changes nothing.
 
 Publication preparation returns only a safe confirmation: root, expected draft revision, source/content/resolution/comparison fingerprints, assigned stable version, deterministic impact reasons and a sorted exact dependency manifest. Preparation writes nothing. Publication accepts that confirmation plus a non-empty release note, recomputes the same result while the root and draft are locked, and appends all release effects atomically.
 

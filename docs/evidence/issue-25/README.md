@@ -42,7 +42,9 @@ The hosted proof uses the exact Testing deployment and reads these values from t
 environment: `VORTEX_TESTING_AUTH_API_URL`, `VORTEX_TESTING_AUTH_PUBLISHABLE_KEY`,
 `VORTEX_TESTING_SITE_URL`, `VORTEX_TESTING_AUTH_EMAIL`,
 `VORTEX_TESTING_MAILTRAP_API_TOKEN`, `VORTEX_TESTING_MAILTRAP_ACCOUNT_ID`,
-`VORTEX_TESTING_MAILTRAP_INBOX_ID`, and `VORTEX_PRODUCTION_AUTH_API_URL`. The email setting may contain `{proof_id}`; otherwise the
+`VORTEX_TESTING_MAILTRAP_INBOX_ID`, `VORTEX_PRODUCTION_AUTH_API_URL`, and
+`VERCEL_AUTOMATION_BYPASS_SECRET`. The bypass value is sent only in Vercel's documented
+`x-vercel-protection-bypass` header; it never enters a request URL or output. The email setting may contain `{proof_id}`; otherwise the
 proof adds a unique plus-address component. The Mailtrap token is read-only and the Production inputs
 are public authority metadata used only for a local issuer comparison. The Testing token is never sent
 to Production. No Production email, Auth request or write occurs.

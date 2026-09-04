@@ -249,7 +249,6 @@ export const organizationAccountSchema = z
     activatedAt: timestampSchema.optional(),
     suspendedAt: timestampSchema.optional(),
     closedAt: timestampSchema.optional(),
-    accessVersionContribution: revisionSchema,
   })
   .strict();
 
