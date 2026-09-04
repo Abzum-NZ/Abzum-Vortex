@@ -11,7 +11,7 @@ readonly race_application_root_id='43000000-0000-4000-8000-000000000020'
 readonly pinned_application_root_id='43000000-0000-4000-8000-000000000021'
 readonly actor_id='49000000-0000-4000-8000-000000000019'
 
-psql_command=(psql --no-psqlrc --set=ON_ERROR_STOP=1)
+psql_command=(psql --no-psqlrc --quiet --tuples-only --no-align --set=ON_ERROR_STOP=1)
 if [ -n "$database_url" ]; then
   psql_command+=("$database_url")
 fi
@@ -68,24 +68,35 @@ wait_for_file() {
   return 1
 }
 
-wait_for_database_lock() {
-  local application_name="$1"
-  local attempt
-  local wait_type
-  for attempt in $(seq 1 200); do
-    wait_type="$(run_sql "
-      select coalesce(wait_event_type, '')
-      from pg_catalog.pg_stat_activity
-      where datname = current_database()
-        and application_name = '$application_name'
-        and state = 'active';
+read_backend_pid() {
+  local candidate="$1"
+  local backend_pid
+  wait_for_file "$candidate"
+  backend_pid="$(tr -d '[:space:]' <"$candidate")"
+  [[ "$backend_pid" =~ ^[1-9][0-9]*$ ]] || {
+    printf 'definition publication proof captured an invalid database backend identifier: %q\n' \
+      "$backend_pid" >&2
+    return 1
+  }
+  printf '%s\n' "$backend_pid"
+}
+
+wait_for_database_blocker() {
+  local blocked_pid="$1"
+  local blocking_pid="$2"
+  local blocker_deadline=$((SECONDS + 20))
+  local blocking_state
+  while ((SECONDS < blocker_deadline)); do
+    blocking_state="$(run_sql "
+      select case
+        when $blocking_pid = any(pg_catalog.pg_blocking_pids($blocked_pid)) then 'blocked'
+        else ''
+      end;
     ")"
-    if [ "$wait_type" = 'Lock' ]; then
-      return 0
-    fi
-    sleep 0.05
+    [ "$blocking_state" = 'blocked' ] && return 0
+    sleep 0.1
   done
-  echo "the second publication did not wait for the root lock" >&2
+  echo "the second publication did not wait on the first publication transaction" >&2
   return 1
 }
 
@@ -93,12 +104,17 @@ assert_failed_with_state() {
   local pid="$1"
   local log_file="$2"
   local state="$3"
+  local message="$4"
   if wait "$pid"; then
     echo "a conflicting publication unexpectedly committed" >&2
     return 1
   fi
   grep -q "$state" "$log_file" || {
     echo "the conflicting publication failed without SQLSTATE $state" >&2
+    return 1
+  }
+  grep -Fq "$message" "$log_file" || {
+    echo "the conflicting publication failed without its stable invariant message" >&2
     return 1
   }
 }
@@ -273,6 +289,8 @@ module_one_dependency="$(run_sql "
 PGAPPNAME='vortex-definition-publication-a' "${psql_command[@]}" >"$proof_root/publication-a.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/publication-a.pid'
 set local role vortex_runtime;
 select vortex_context.initialize(public.vortex_test_definition_context());
 set local role vortex_request;
@@ -289,10 +307,14 @@ commit;
 SQL
 publication_a_pid=$!
 wait_for_file "$proof_root/publication-a-ready"
+publication_a_backend_pid="$(read_backend_pid "$proof_root/publication-a.pid")"
 
 PGAPPNAME='vortex-definition-publication-b' "${psql_command[@]}" >"$proof_root/publication-b.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/publication-b.pid'
+set local lock_timeout = '30s';
 set local role vortex_runtime;
 select vortex_context.initialize(public.vortex_test_definition_context());
 set local role vortex_request;
@@ -306,10 +328,12 @@ select * from vortex_definition.append_release(
 commit;
 SQL
 publication_b_pid=$!
-wait_for_database_lock 'vortex-definition-publication-b'
+publication_b_backend_pid="$(read_backend_pid "$proof_root/publication-b.pid")"
+wait_for_database_blocker "$publication_b_backend_pid" "$publication_a_backend_pid"
 touch "$proof_root/publication-a-release"
 wait "$publication_a_pid"
-assert_failed_with_state "$publication_b_pid" "$proof_root/publication-b.log" '23505'
+assert_failed_with_state "$publication_b_pid" "$proof_root/publication-b.log" '23505' \
+  'Definition draft revision is already published'
 
 [ "$(run_sql "select count(*) from vortex_definition.releases where root_id = '$race_application_root_id';")" = '1' ] || {
   echo "the same-draft race did not leave exactly one immutable release" >&2

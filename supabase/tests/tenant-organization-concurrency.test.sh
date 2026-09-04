@@ -7,7 +7,7 @@ readonly database_url="${VORTEX_CONCURRENCY_DATABASE_URL:-}"
 readonly tenant_id='31000000-0000-4000-8000-000000000001'
 readonly actor_id='39000000-0000-4000-8000-000000000001'
 
-psql_command=(psql --no-psqlrc --set=ON_ERROR_STOP=1)
+psql_command=(psql --no-psqlrc --quiet --tuples-only --no-align --set=ON_ERROR_STOP=1)
 if [ -n "$database_url" ]; then
   psql_command+=("$database_url")
 fi
@@ -40,24 +40,36 @@ wait_for_file() {
   return 1
 }
 
-wait_for_database_lock() {
-  local application_name="$1"
-  local attempt
-  local wait_type
-  for attempt in $(seq 1 200); do
-    wait_type="$(run_sql "
-      select coalesce(wait_event_type, '')
-      from pg_catalog.pg_stat_activity
-      where datname = current_database()
-        and application_name = '$application_name'
-        and state = 'active';
+read_backend_pid() {
+  local candidate="$1"
+  local backend_pid
+  wait_for_file "$candidate"
+  backend_pid="$(tr -d '[:space:]' <"$candidate")"
+  [[ "$backend_pid" =~ ^[1-9][0-9]*$ ]] || {
+    printf 'concurrency proof captured an invalid database backend identifier: %q\n' \
+      "$backend_pid" >&2
+    return 1
+  }
+  printf '%s\n' "$backend_pid"
+}
+
+wait_for_database_blocker() {
+  local blocked_pid="$1"
+  local blocking_pid="$2"
+  local description="$3"
+  local blocker_deadline=$((SECONDS + 20))
+  local blocking_state
+  while ((SECONDS < blocker_deadline)); do
+    blocking_state="$(run_sql "
+      select case
+        when $blocking_pid = any(pg_catalog.pg_blocking_pids($blocked_pid)) then 'blocked'
+        else ''
+      end;
     ")"
-    if [ "$wait_type" = 'Lock' ]; then
-      return 0
-    fi
-    sleep 0.05
+    [ "$blocking_state" = 'blocked' ] && return 0
+    sleep 0.1
   done
-  echo "concurrent change did not wait on the tenant serialization lock" >&2
+  echo "$description did not wait on the expected database transaction" >&2
   return 1
 }
 
@@ -75,15 +87,22 @@ reset_fixture() {
   " >/dev/null
 }
 
-assert_failed_with_invariant() {
+assert_failed_with_state() {
   local pid="$1"
   local log_file="$2"
+  local state="$3"
+  local description="$4"
+  local message="$5"
   if wait "$pid"; then
-    echo "concurrent conflicting change unexpectedly committed" >&2
+    echo "$description unexpectedly committed" >&2
     return 1
   fi
-  grep -q '23514' "$log_file" || {
-    echo "concurrent conflict failed without the expected invariant code" >&2
+  grep -q "$state" "$log_file" || {
+    echo "$description failed without SQLSTATE $state" >&2
+    return 1
+  }
+  grep -Fq "$message" "$log_file" || {
+    echo "$description failed without its stable invariant message" >&2
     return 1
   }
 }
@@ -105,6 +124,8 @@ run_sql "
 PGAPPNAME='vortex-proof-cycle-a' "${psql_command[@]}" >"$proof_root/cycle-a.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/cycle-a.pid'
 update vortex_identity.organizations
 set parent_organization_id = '32000000-0000-4000-8000-000000000002', revision = revision + 1
 where organization_id = '32000000-0000-4000-8000-000000000001';
@@ -115,19 +136,27 @@ SQL
 cycle_a_pid=$!
 wait_for_file "$proof_root/cycle-a-ready"
 
+cycle_a_backend_pid="$(read_backend_pid "$proof_root/cycle-a.pid")"
+
 PGAPPNAME='vortex-proof-cycle-b' "${psql_command[@]}" >"$proof_root/cycle-b.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/cycle-b.pid'
+set local lock_timeout = '30s';
 update vortex_identity.organizations
 set parent_organization_id = '32000000-0000-4000-8000-000000000001', revision = revision + 1
 where organization_id = '32000000-0000-4000-8000-000000000002';
 commit;
 SQL
 cycle_b_pid=$!
-wait_for_database_lock 'vortex-proof-cycle-b'
+cycle_b_backend_pid="$(read_backend_pid "$proof_root/cycle-b.pid")"
+wait_for_database_blocker "$cycle_b_backend_pid" "$cycle_a_backend_pid" \
+  'the concurrent opposing hierarchy move'
 touch "$proof_root/cycle-a-release"
 wait "$cycle_a_pid"
-assert_failed_with_invariant "$cycle_b_pid" "$proof_root/cycle-b.log"
+assert_failed_with_state "$cycle_b_pid" "$proof_root/cycle-b.log" '23514' \
+  'the concurrent opposing hierarchy move' 'Organisation hierarchy cannot contain a cycle'
 [ "$(run_sql "
   select count(*)
   from vortex_identity.organizations
@@ -153,6 +182,8 @@ run_sql "
 PGAPPNAME='vortex-proof-tenant-a' "${psql_command[@]}" >"$proof_root/tenant-a.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/tenant-a.pid'
 update vortex_identity.tenants
 set state = 'archived', state_changed_at = clock_timestamp(), revision = revision + 1
 where tenant_id = '$tenant_id';
@@ -163,19 +194,27 @@ SQL
 tenant_a_pid=$!
 wait_for_file "$proof_root/tenant-a-ready"
 
+tenant_a_backend_pid="$(read_backend_pid "$proof_root/tenant-a.pid")"
+
 PGAPPNAME='vortex-proof-tenant-b' "${psql_command[@]}" >"$proof_root/tenant-b.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/tenant-b.pid'
+set local lock_timeout = '30s';
 update vortex_identity.organizations
 set state = 'active', state_changed_at = clock_timestamp(), revision = revision + 1
 where organization_id = '32000000-0000-4000-8000-000000000003';
 commit;
 SQL
 tenant_b_pid=$!
-wait_for_database_lock 'vortex-proof-tenant-b'
+tenant_b_backend_pid="$(read_backend_pid "$proof_root/tenant-b.pid")"
+wait_for_database_blocker "$tenant_b_backend_pid" "$tenant_a_backend_pid" \
+  'the concurrent organisation activation'
 touch "$proof_root/tenant-a-release"
 wait "$tenant_a_pid"
-assert_failed_with_invariant "$tenant_b_pid" "$proof_root/tenant-b.log"
+assert_failed_with_state "$tenant_b_pid" "$proof_root/tenant-b.log" '23514' \
+  'the concurrent organisation activation' 'An unresolved organisation requires a live tenant'
 
 # Parent archive versus direct-child activation.
 reset_fixture
@@ -194,6 +233,8 @@ run_sql "
 PGAPPNAME='vortex-proof-parent-a' "${psql_command[@]}" >"$proof_root/parent-a.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/parent-a.pid'
 update vortex_identity.organizations
 set state = 'archived', state_changed_at = clock_timestamp(), revision = revision + 1
 where organization_id = '32000000-0000-4000-8000-000000000004';
@@ -204,18 +245,26 @@ SQL
 parent_a_pid=$!
 wait_for_file "$proof_root/parent-a-ready"
 
+parent_a_backend_pid="$(read_backend_pid "$proof_root/parent-a.pid")"
+
 PGAPPNAME='vortex-proof-parent-b' "${psql_command[@]}" >"$proof_root/parent-b.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/parent-b.pid'
+set local lock_timeout = '30s';
 update vortex_identity.organizations
 set state = 'active', state_changed_at = clock_timestamp(), revision = revision + 1
 where organization_id = '32000000-0000-4000-8000-000000000005';
 commit;
 SQL
 parent_b_pid=$!
-wait_for_database_lock 'vortex-proof-parent-b'
+parent_b_backend_pid="$(read_backend_pid "$proof_root/parent-b.pid")"
+wait_for_database_blocker "$parent_b_backend_pid" "$parent_a_backend_pid" \
+  'the concurrent child activation'
 touch "$proof_root/parent-a-release"
 wait "$parent_a_pid"
-assert_failed_with_invariant "$parent_b_pid" "$proof_root/parent-b.log"
+assert_failed_with_state "$parent_b_pid" "$proof_root/parent-b.log" '23514' \
+  'the concurrent child activation' 'An unresolved organisation requires a live parent'
 
 echo 'tenant and organisation concurrency proof passed'
