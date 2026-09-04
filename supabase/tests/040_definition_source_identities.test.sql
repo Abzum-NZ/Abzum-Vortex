@@ -52,6 +52,54 @@ select has_fk(
 );
 select is(
   (
+    select array_agg(attribute.attname::text order by key_column.ordinality)
+    from pg_catalog.pg_index as index_definition
+    cross join lateral pg_catalog.unnest(index_definition.indkey)
+      with ordinality as key_column(attnum, ordinality)
+    join pg_catalog.pg_attribute as attribute
+      on attribute.attrelid = index_definition.indrelid
+      and attribute.attnum = key_column.attnum
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.source_identity_aliases_owner_idx'
+    )
+      and key_column.ordinality <= index_definition.indnkeyatts
+  ),
+  array[
+    'root_id',
+    'owner_scope',
+    'kind',
+    'component_owner',
+    'identity_id'
+  ]::text[],
+  'the source-alias owner index has the complete foreign-key columns in order'
+);
+select is(
+  (
+    select index_definition.indisvalid and index_definition.indisready
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.source_identity_aliases_owner_idx'
+    )
+  ),
+  true,
+  'the source-alias owner foreign-key index is valid and ready'
+);
+select is(
+  (
+    select pg_catalog.pg_get_expr(
+      index_definition.indpred,
+      index_definition.indrelid
+    )
+    from pg_catalog.pg_index as index_definition
+    where index_definition.indexrelid = pg_catalog.to_regclass(
+      'vortex_definition.source_identity_aliases_owner_idx'
+    )
+  ),
+  null::text,
+  'the source-alias owner index has no predicate that could exclude foreign-key rows'
+);
+select is(
+  (
     select relrowsecurity
     from pg_catalog.pg_class
     where oid = 'vortex_definition.source_identities'::regclass
