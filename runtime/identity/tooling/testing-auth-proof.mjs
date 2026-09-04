@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { URL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { createProtectedSiteFetch } from "./protected-site-request.mjs";
 
 const pnpmEntry = process.env.npm_execpath;
 if (!pnpmEntry) throw new Error("Run this proof through `pnpm auth:testing:proof`");
@@ -22,8 +23,9 @@ const mailtrapApiToken = requiredEnvironmentValue("VORTEX_TESTING_MAILTRAP_API_T
 const mailtrapAccountId = requiredEnvironmentValue("VORTEX_TESTING_MAILTRAP_ACCOUNT_ID");
 const mailtrapInboxId = requiredEnvironmentValue("VORTEX_TESTING_MAILTRAP_INBOX_ID");
 const productionApiUrl = requiredEnvironmentValue("VORTEX_PRODUCTION_AUTH_API_URL");
+const vercelAutomationBypassSecret = requiredEnvironmentValue("VERCEL_AUTOMATION_BYPASS_SECRET");
 const expectedTestingApiUrl = "https://abflfptnguasinoussws.supabase.co";
-const expectedTestingSiteUrl = "https://abzum-vortex-git-testing-abzumdevteam.vercel.app";
+const expectedTestingSiteUrl = "https://vortex-testing.abzum.com";
 const expectedProductionApiUrl = "https://nkvcbtwsjhkgqhosqeib.supabase.co";
 
 const uniqueEmail = (template) => {
@@ -44,7 +46,12 @@ if (apiUrl !== expectedTestingApiUrl)
 if (productionApiUrl !== expectedProductionApiUrl)
   throw new Error("The hosted proof is not using the exact Production authority metadata");
 
-const healthResponse = await globalThis.fetch(`${siteUrl}/health`).catch(() => undefined);
+const fetchTestingSite = createProtectedSiteFetch(
+  globalThis.fetch,
+  siteUrl,
+  vercelAutomationBypassSecret,
+);
+const healthResponse = await fetchTestingSite("/health").catch(() => undefined);
 if (!healthResponse?.ok) throw new Error("The hosted Testing Vortex application is unavailable");
 
 const jwksResponse = await globalThis.fetch(`${apiUrl}/auth/v1/.well-known/jwks.json`);
@@ -70,7 +77,7 @@ const password = `${randomUUID()}aA7!`;
 const replacementPassword = `${randomUUID()}bB8!`;
 
 const submitForm = async (pathname, values) => {
-  const pageResponse = await globalThis.fetch(`${siteUrl}${pathname}`);
+  const pageResponse = await fetchTestingSite(pathname);
   if (!pageResponse.ok) throw new Error("The hosted Testing identity journey page is unavailable");
   const page = await pageResponse.text();
   const actionName = page.match(/name="(\$ACTION_ID_[^"]+)"/)?.[1];
@@ -80,7 +87,7 @@ const submitForm = async (pathname, values) => {
   form.set(actionName, "");
   for (const [name, value] of Object.entries(values)) form.set(name, value);
 
-  const response = await globalThis.fetch(`${siteUrl}${pathname}`, {
+  const response = await fetchTestingSite(pathname, {
     method: "POST",
     body: form,
     headers: { origin: siteUrl },
