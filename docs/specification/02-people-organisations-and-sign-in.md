@@ -57,7 +57,7 @@ flowchart LR
 3. If exactly one organisation account is active, the platform may open it directly. Otherwise it shows the organisation launcher.
 4. After an organisation is chosen, every request carries the identity, tenant, organisation, and organisation-account identifiers.
 5. Leaving, suspending, or closing an organisation account affects only that organisation. Suspending or closing the cluster-local identity projection prevents entry to every account in that cluster. Environment-wide identity disablement and session revocation are protected Identity Authority operations delivered by [operational readiness](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not a meaning assigned to a cluster row.
-6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the organisation's access version.
+6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the Access service's one live version for that organisation. Account activation, reactivation, suspension and closure change Identity state and that version together or change neither.
 
 ## Identity across clusters
 

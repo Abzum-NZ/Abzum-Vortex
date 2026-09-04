@@ -2,8 +2,6 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 import {
-  acceptOrganizationInvitationCommandSchema,
-  changeOrganizationAccountStateCommandSchema,
   createOrganizationInvitationCommandSchema,
   ensureIdentityProjectionCommandSchema,
   identityProjectionSchema,
@@ -11,8 +9,6 @@ import {
   organizationAccountSchema,
   revokeOrganizationInvitationCommandSchema,
   verifiedIdentitySchema,
-  type AcceptOrganizationInvitationCommand,
-  type ChangeOrganizationAccountStateCommand,
   type CreateOrganizationInvitationCommand,
   type EnsureIdentityProjectionCommand,
   type IdentityProjection,
@@ -49,15 +45,6 @@ export class OrganizationAccountError extends Error {
     this.code = code;
   }
 }
-
-export type InvitationAcceptanceResult =
-  | Readonly<{
-      outcome: "accepted" | "already_accepted";
-      account: OrganizationAccount;
-    }>
-  | Readonly<{
-      outcome: "unavailable" | "identity_inactive";
-    }>;
 
 export interface CreatedOrganizationInvitation {
   readonly invitation: Invitation;
@@ -123,8 +110,6 @@ type InvitationRow = DatabaseRow & {
   changed_at: unknown;
   revision: unknown;
 };
-
-type AcceptanceRow = OrganizationAccountRow & { outcome: unknown };
 
 const timestamp = (value: unknown): unknown =>
   value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
@@ -303,43 +288,6 @@ export const createOrganizationAccountStore = (
       }
     },
 
-    async acceptInvitation(
-      verifiedIdentity: VerifiedIdentity,
-      command: AcceptOrganizationInvitationCommand,
-    ): Promise<InvitationAcceptanceResult> {
-      const verified = verifiedIdentitySchema.safeParse(verifiedIdentity);
-      const parsed = acceptOrganizationInvitationCommandSchema.safeParse(command);
-      if (!verified.success || !parsed.success)
-        throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-
-      const tokenFingerprint = fingerprintSecret(parsed.data.invitationSecret);
-      const verifiedEmail = normalizeEmail(verified.data.verifiedPrimaryEmail);
-
-      try {
-        return await runtimeTransaction(async (transaction) => {
-          const rows = await transaction.query<AcceptanceRow>`
-            select *
-            from vortex_identity.accept_organization_invitation(
-              ${tokenFingerprint}::text,
-              ${verified.data.identityId}::uuid,
-              ${verifiedEmail}::text,
-              ${parsed.data.displayName ?? null}::text,
-              ${parsed.data.correlationId}::uuid
-            )
-          `;
-          const row = requireOne(rows);
-          if (row.outcome === "unavailable" || row.outcome === "identity_inactive")
-            return { outcome: row.outcome };
-          if (row.outcome !== "accepted" && row.outcome !== "already_accepted")
-            throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT");
-          return { outcome: row.outcome, account: parseOrganizationAccount(row) };
-        });
-      } catch (error) {
-        if (error instanceof OrganizationAccountError) throw error;
-        throw mapStorageFailure(error);
-      }
-    },
-
     async revokeInvitationAfterAuthorization(
       context: SessionContext,
       command: RevokeOrganizationInvitationCommand,
@@ -362,30 +310,6 @@ export const createOrganizationAccountStore = (
         throw mapStorageFailure(error);
       }
     },
-
-    async changeAccountStateAfterAuthorization(
-      context: SessionContext,
-      command: ChangeOrganizationAccountStateCommand,
-    ): Promise<OrganizationAccount> {
-      const parsed = changeOrganizationAccountStateCommandSchema.safeParse(command);
-      if (!parsed.success)
-        throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-      try {
-        return await requestTransaction(context, async (transaction) => {
-          const rows = await transaction.query<OrganizationAccountRow>`
-            select * from vortex_identity.change_organization_account_state(
-              ${parsed.data.organizationAccountId}::uuid,
-              ${parsed.data.expectedRevision}::bigint,
-              ${parsed.data.state}::text
-            )
-          `;
-          return parseOrganizationAccount(requireOne(rows));
-        });
-      } catch (error) {
-        if (error instanceof OrganizationAccountError) throw error;
-        throw mapStorageFailure(error);
-      }
-    },
   });
 };
 
@@ -394,7 +318,4 @@ const defaultStore = createOrganizationAccountStore();
 export const ensureIdentityProjection = defaultStore.ensureIdentityProjection;
 export const listOrganizationAccounts = defaultStore.listOrganizationAccounts;
 export const createInvitationAfterAuthorization = defaultStore.createInvitationAfterAuthorization;
-export const acceptInvitation = defaultStore.acceptInvitation;
 export const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;
-export const changeAccountStateAfterAuthorization =
-  defaultStore.changeAccountStateAfterAuthorization;

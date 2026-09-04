@@ -168,6 +168,22 @@ Role, organisation-account, team, sharing, and public-policy changes increase an
 
 The Access service stores exactly one positive, monotonically increasing counter per organisation. The counter begins at `1`, is not an Identity or organisation-account field, and can be read or incremented only through narrow server-side Access operations. An access-affecting change and its increment commit in one transaction; a refused, rolled-back, or duplicate change does not advance it. Concurrent changes use an atomic database increment so neither update is lost. The request-context boundary reads the live value after it has verified the selected active organisation account; it never accepts a browser-supplied version.
 
+```mermaid
+flowchart LR
+    C[Authorised access-affecting command] --> T[One PostgreSQL transaction]
+    T --> I[Owning service changes its state]
+    I --> V[Access increments the organisation version]
+    V --> K{Both succeeded?}
+    K -- Yes --> M[Commit state and next version]
+    K -- No --> R[Roll back both]
+    Q[Next protected request] --> L[Read exact live version]
+    L --> D{Matches request context?}
+    D -- Yes --> P[Continue permission decision]
+    D -- No --> X[Refuse or rebuild context]
+```
+
+The Access relation records the organisation, current version, change time, changing actor, correlation identifier and one closed change reason. Initialisation is owner-only and idempotent. The general increment cannot claim the initialisation reason. Trusted pre-context runtime receives only the exact tenant-and-organisation read and the invitation-acceptance composition; browser roles, the request role and Supabase `service_role` receive no table or generic increment access. Permission-checked administration later calls the owner-only account-lifecycle composition rather than an Identity-only mutation.
+
 Access removal takes effect on the next request. Long-running work rechecks access before every protected side effect, and subscriptions close or re-authorise when their access version changes.
 
 The recipient interface must remove previously displayed shared values when that next check is refused. It may retain non-content routing and activity references, but it cannot keep a visible snapshot, stale search result, component cache, or offline copy after the grant ends. A completed, separately approved export is the only exception because a downloaded file cannot be recalled.
