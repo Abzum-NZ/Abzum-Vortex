@@ -143,7 +143,7 @@ The human organisation resolver, context initialization, `SET LOCAL ROLE`, live 
 
 ### Organisation launcher and selection contracts
 
-An **organisation launcher entry** contains only `organizationId`, `tenantDisplayName`, `organizationDisplayName`, and an optional organisation-account `displayName`. It is ordered by display names with permanent identifiers as deterministic tie-breakers. It contains no tenant identifier, organisation-account identifier, hierarchy, lifecycle state, application, logo, role, Team, permission, email, provider fact, access version or commercial value.
+An **organisation launcher entry** contains only `organizationId`, `tenantDisplayName`, `organizationDisplayName`, and an optional organisation-account `accountDisplayName`. It is ordered by display names with permanent identifiers as deterministic tie-breakers. It contains no tenant identifier, organisation-account identifier, hierarchy, lifecycle state, application, logo, role, Team, permission, email, provider fact, access version or commercial value.
 
 An **organisation launcher resolution** is exactly one of `available` with ordered entries, `temporarily_unavailable`, or `invalid_session_state`. Empty `available` entries means the verified identity currently has no active organisation account; a temporary data failure is never converted into that empty result.
 

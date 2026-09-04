@@ -193,8 +193,9 @@ suspension or version change cannot commit between resolution and use.
 
 The runtime then validates and initializes the complete closed [session-context
 contract](appendices/data-contracts.md#session-context), enters `vortex_request` with `SET LOCAL ROLE`,
-and runs protected service SQL without leaving that transaction. Only `vortex_runtime` may call the
-safe launcher, exact Identity scope resolver, Access scope composer and initializer. The request role
+and runs protected service SQL without leaving that transaction. `vortex_runtime` may call only the
+safe launcher, Access scope composer and initializer; the exact Identity scope resolver remains an
+owner-only helper callable through that Access composer. The request role
 has no Identity schema access and may execute only Access's exact live human-context validator. It
 cannot call the legacy rich account list or standalone Access-version read, both of which are revoked
 from runtime use. Only `vortex_request` may execute the read-only context accessors used by row
