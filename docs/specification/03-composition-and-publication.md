@@ -70,6 +70,29 @@ The platform calculates whether a proposed revision is patch, minor, or major fr
 
 The complete classification, identity, ordering, history-integrity, and stale-confirmation rules are normative in the [module and application version-impact policy](appendices/version-impact-policy.md). First publication is `1.0.0`; semantically unchanged content cannot create a new release.
 
+## Consumer reads of published definitions
+
+Every server-side platform service reads a published Module or Application through one Definition-service operation. Its strict command names the definition kind, the matching permanent root, and exactly one selector: `current`, or `revision` with a JavaScript-safe positive immutable release revision. There is no implicit selector.
+
+```mermaid
+flowchart LR
+    C[Authorised server consumer] --> R[Explicit current or exact revision command]
+    R --> D[Definition service]
+    D --> S[One consistent root and immutable release read]
+    S --> V[Release-integrity verification]
+    V --> P[Safe canonical release projection]
+    P --> C
+    X[Stored binding, workflow run or grant] --> E[Recorded exact release revision]
+    E --> D
+```
+
+- `current` is discovery-only: an owning operation may use it when deliberately preparing a new binding. An installed application, saved binding, workflow run, grant, or in-flight request uses its recorded exact revision.
+- A current read selects the root's current pointer and its immutable release together. An exact read selects only the named root and immutable revision; it never follows a dependency's current pointer or resolves a version range again.
+- The request context's organisation, root kind, root, stored key and release evidence must agree before content is returned. Unknown, foreign, wrong-kind, unpublished-current and unknown-revision selections have one indistinguishable release-not-found outcome.
+- The safe result contains only the kind, organisation, key, root, exact release revision and stable release version, validation-contract version, content and resolution fingerprints, complete canonical content, sorted complete exact dependency manifest, and copied correlation identifier. It excludes authored source, drafts, publication preparation, provenance, resolution-snapshot content, comparison evidence, notes, publisher information, times, cache state and persistence details.
+- The Definition service verifies the stored canonical envelope, compiled artifact, release row, content fingerprint, resolution fingerprint, own snapshot entry and exact dependency manifest before returning a result. A dependency remains pinned to its stored exact root, revision, version and fingerprints. Each platform-catalogue evidence fingerprint belongs to that exact connection-type or theme release, so adding an unrelated catalogue release cannot invalidate it; a missing exact release is unavailable rather than substituted.
+- Consumer reads are server-only and use the existing request transaction boundary. They implement no cache, browser or HTTP endpoint, token parsing, session creation, access decision, installation, upgrade, publication or consumer-specific rewriting.
+
 ## Validation before publication
 
 Shape and rule failures use one [generic, versioned safe validation-error contract](appendices/data-contracts.md#definition-validation-errors). Installed application, module, record-type, field, workflow, connection, and fixture names never appear in the catalogue or translator. A builder-visible key appears only when the authorised caller explicitly maps an internal path to that safe location; deeper evidence remains protected under the same correlation identifier.

@@ -198,6 +198,7 @@ select is(
     'append_release',
     'create_root',
     'list_module_releases',
+    'read_consumer_release',
     'read_module_release',
     'read_publication_state',
     'save_draft'
@@ -267,6 +268,7 @@ select is(
     'append_release',
     'create_root',
     'list_module_releases',
+    'read_consumer_release',
     'read_module_release',
     'read_publication_state',
     'save_draft'
@@ -280,7 +282,7 @@ select is(
     where function.pronamespace = 'vortex_definition'::regnamespace
       and function.proconfig @> array['search_path=""']
   ),
-  13,
+  14,
   'every Definition function fixes an empty search path'
 );
 select has_function(
