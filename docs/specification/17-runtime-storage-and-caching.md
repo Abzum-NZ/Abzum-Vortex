@@ -85,7 +85,7 @@ The codebase is divided into sixteen named services. These are package and owner
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
-The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives Identity schema usage and execution only for the exact pre-request operations that ensure a verified identity projection and list active organisations. Runtime invitation acceptance is available only through the private `vortex_access` schema. Access calls an owner-only Identity operation that classifies the result as first activation, reactivation or no access change; Access never reads Identity relations. The Identity transition and required organisation Access-version change then commit or roll back together. `vortex_runtime` may also read the current version for one exact active tenant/organisation pair; it receives no Access table, generic increment, initialisation or administrative lifecycle authority. Invitation administration and account lifecycle remain owner-only until protected administration composes their authorisation. `vortex_request` receives no Identity or Access schema usage in this phase. Trigger functions remain non-executable by runtime roles.
+The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives Identity schema usage and execution only for exact pre-request operations: ensure a verified identity projection during bootstrap, read that projection without mutation during normal session resolution, and list active organisations. Runtime invitation acceptance is available only through the private `vortex_access` schema. Access calls an owner-only Identity operation that classifies the result as first activation, reactivation or no access change; Access never reads Identity relations. The Identity transition and required organisation Access-version change then commit or roll back together. `vortex_runtime` may also read the current version for one exact active tenant/organisation pair; it receives no Access table, generic increment, initialisation or administrative lifecycle authority. Invitation administration and account lifecycle remain owner-only until protected administration composes their authorisation. `vortex_request` receives no Identity or Access schema usage in this phase. Trigger functions remain non-executable by runtime roles.
 
 ```mermaid
 flowchart LR
@@ -104,6 +104,8 @@ flowchart LR
     D -. no direct access .-> I
     D -. no direct access .-> AV
 ```
+
+The durable identity session remains in Supabase Auth; no Vortex database session relation exists. Next.js creates one server-only Supabase client per request. Proxy may refresh and optimistically verify with `getClaims()`, overwrites a private request-state marker and prevents a protected resolver from retrying provider refresh after Proxy failure. Only the protected Identity resolver verifies the current token through the closed Vortex boundary and performs the non-mutating projection read. A conclusive invalid/expired resolver result passes through the fixed cookie-writable cleanup route; temporary and cluster-inactive results do not destroy the jar. Proxy and cleanup responses for a present session are private and non-cacheable and preserve any provider-required refresh headers. Sign-in and ordinary sign-out use POST-only Server Actions, and their cookie-changing redirects are not cacheable. Protected pages are explicitly dynamic. No authenticated route participates in ISR or shared CDN caching, and no browser Auth client, service-role key or module-global cookie/client state is permitted.
 
 ## Database and storage rules
 
@@ -168,6 +170,13 @@ application request.
   privilege. Inside an explicit transaction it may initialize the closed request context and enter
   only the non-login `vortex_request` role, which has no ownership, schema or persistent-relation
   creation, replication, superuser, or row-security-bypass capability.
+- Migrations create `vortex_runtime` without a password. Before a hosted environment may serve a
+  protected request, an operator generates a different high-entropy password for that environment,
+  assigns it to that exact role through the Supabase administrative path, and builds the restricted
+  transaction-pooler URL. The database credential enters the matching Vercel-synchronised Doppler
+  root config only inside that complete URL, alongside the public root certificate and required
+  non-database application settings. The role password is never committed, shared
+  with another environment, exposed as a second Vercel variable, or reused by Kestra.
 - `vortex_request` receives only the exact operations required on each relation. It never receives
   `TRUNCATE`, `REFERENCES`, `TRIGGER`, schema creation, policy management, or table ownership.
 - `PUBLIC`, `anon`, `authenticated`, and `service_role` have no use or execution grant on private
@@ -194,8 +203,23 @@ service explicitly permits it; it never satisfies an organisation-record policy.
 Vercel's serverless database client disables prepared statements for transaction pooling and begins
 with one client connection per instance. A protected operation keeps all context setup and work
 inside one transaction; it never expects a later statement or request to receive the same physical
-connection. Both runtime and operational database connections require full certificate and hostname
-verification.
+connection. Testing and Production runtime and operational database connections require full
+certificate and hostname verification.
+
+A hosted runtime is not ready merely because its migrations and Vercel build succeeded. Its release
+proof verifies that the exact deployed revision received the matching restricted runtime URL,
+certificate, Supabase URL and publishable key, site URL, environment name and Identity Authority
+identifier; that no project-owner, migration,
+general `DATABASE_*`, or Kestra credential entered the Vercel target; and that one real protected
+journey succeeded through `vortex_runtime`. Production provisioning and proof remain separately
+gated from Testing.
+
+The Supabase CLI development database is the only exception to the hosted transport profile. Local
+uses its exact loopback endpoint on port 54322 and the same restricted `vortex_runtime` role, with a
+fixed disposable Local-only password assigned by the Local seed. The adapter permits this without
+TLS only when the declared environment is Local and refuses owner roles, non-loopback hosts, other
+ports and other databases. Testing and Production always require the Supavisor transaction pooler
+and verified TLS; a Local setting can never relax their address checks.
 
 Database functions use `SECURITY INVOKER` unless a documented invariant requires otherwise. A rare
 `SECURITY DEFINER` function belongs in a non-exposed schema, uses fully qualified names and a fixed

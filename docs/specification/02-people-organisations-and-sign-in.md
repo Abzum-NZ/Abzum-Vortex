@@ -98,6 +98,31 @@ Every key rotation follows the [Supabase rotation and cache windows](https://sup
 
 The Identity Authority produces the verified identity result. Safe failures are deliberately grouped into stable classes such as missing token, malformed token, verification failure, untrusted issuer, untrusted audience, inactive token, invalid identity claims, anonymous identity, unsupported authentication strength, and authority unavailable. They do not reveal whether the signature, key lookup, account or other provider detail caused the refusal. The organisation-account work consumes the verified identity identifier and email; the session work consumes the same result and owns durable cookies, refresh, sign-out, revocation and session lifecycle. Neither consumer reimplements token verification.
 
+### Server-only identity sessions
+
+A successful sign-in creates one Supabase Auth session. Vortex does not add a session table, copy refresh credentials into PostgreSQL, sign a second token, or trust the provider `user` object. The request-local sign-in pair enters a staged server-cookie adapter, the access token is verified through the same Identity Authority boundary, and the cluster projection is ensured and required to be active before the staged cookies are committed. If bootstrap fails, the new pair is not committed and its provider session is revoked where possible; a valid session that existed before that attempt is left alone.
+
+No Supabase Auth client runs in the browser. Every request creates its own `@supabase/ssr` server client and cookie adapter. This deliberate server-only profile uses `HttpOnly` cookies. Testing and Production use one host-only `__Host-vortex-session` family with `Secure`, `SameSite=Lax`, `Path=/`, high priority and no `Domain`. Exact HTTP loopback uses the separate non-prefixed `vortex-local-session` family, because a `__Host-` cookie without `Secure` is invalid. The supported Local command binds Next.js to `127.0.0.1`, and Proxy refuses a request origin that differs from the configured site origin, so the non-Secure Local cookie cannot be issued through a LAN hostname. Set, rotation and removal use identical scope. An unchunked base cookie or one gap-free decimal `.0` to `.N` sequence is valid; mixed, gapped, malformed, duplicate-generation or oversized state is refused.
+
+The Next.js 16 [Proxy](https://nextjs.org/docs/app/api-reference/file-conventions/proxy) at `apps/web/proxy.ts` follows Supabase's request-specific server-side pattern and calls `getClaims()` for supported refresh and optimistic cryptographic checking. It performs no database read and makes no final access decision. Proxy replaces any caller-supplied internal state marker and forwards its own closed result. A protected resolver retries no provider operation after Proxy reports a temporary failure, preventing a second refresh whose rotated pair could not be returned from a Server Component. After a verified Proxy result, each protected server operation obtains the current post-Proxy credentials inside the server boundary, verifies the access token through Identity, and uses a narrow non-mutating Identity read to require an active cluster projection. It returns only identity identifier, provider session identifier, authentication strength, access-token issue time and a still-future access-token expiry. Tenant, organisation, account, Access version, application and permissions begin later in the [request context](appendices/data-contracts.md#session-context).
+
+Supabase remains the durable session authority. Vortex checks provider liveness at sign-in, refresh, sign-out and later explicitly sensitive operations instead of making a repeated Auth-server call from every repository method. A remote provider revocation therefore takes effect at refresh or access-token expiry unless the operation performs an earlier live check; the operated environment-wide policy and proof belong to [issue #171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171). Provider credentials are bearer credentials, not device-bound. Supabase owns refresh-token lineage, rotation and reuse handling. Vortex verifies every resulting current or refreshed access token, but does not claim it can compare a pre-refresh token after the official client has rotated it or detect an attacker-spliced pair before refresh without adding forbidden duplicate parsing or durable binding state.
+
+Cookie mutations are staged. Same-request removal mutations delete stale request cookies instead of forwarding empty family members. Proxy removes the complete family for conclusive provider-invalid or corrupt state; a protected verifier's conclusive invalid or expired result passes through one fixed, private, cookie-writable cleanup route before returning to sign-in. Temporary provider, projection-store and cluster-inactive results preserve the original jar. A successfully verified provider rotation is committed even if the following local projection read is temporarily unavailable, so the valid rotated credential is not lost. Vortex accepts only a complete canonical mutation set from the official client; Supabase's single-use refresh tokens and configured reuse interval own parallel-refresh convergence. Local characterization proves that an ordinary refresh retains the verified identity and session identifier and that simultaneous use leaves at least one usable provider result. It does not claim control over browser response arrival order. Ordinary sign-out uses local scope, clears this browser even after a remote error, and does not end another browser session.
+
+```mermaid
+flowchart LR
+    B[Browser request] --> P[Next.js Proxy]
+    P -->|getClaims refresh and cookie headers| C[Request-specific Supabase server client]
+    C --> R[Protected server resolver]
+    R --> V[Verify current access token through Identity]
+    V --> L[Non-mutating active projection read]
+    L --> S[Closed identity session]
+    S --> N[Neutral signed-in page or later organisation selection]
+    P -. no database or permission decision .-> X[Refused shortcut]
+    S -. no organisation or application authority .-> X
+```
+
 ## Invitations and teams
 
 - An invitation names one organisation, one normalised verified email address, and an expiry. Phase 2 stores no proposed role or Team assignment; [roles and teams](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) add authorised assignment handling later.
@@ -125,7 +150,7 @@ Legal details, contacts, branding, business calendars, notices and privacy reque
 
 ## Required records
 
-The platform stores the tenant, tenant-administrator assignment, organisation and hierarchy, minimal cluster-local identity projection, organisation account, team and membership, invitation, application access assignment, minimum runtime localisation settings, and sign-in session described in the [data contracts](appendices/data-contracts.md#tenant-identity-and-organisation-account-records). Supabase Auth remains the environment-wide identity authority; Vortex does not copy its credentials, provider profile, MFA enrolment, or sign-in history. Other administrative data is stored as ordinary application records.
+The platform stores the tenant, tenant-administrator assignment, organisation and hierarchy, minimal cluster-local identity projection, organisation account, team and membership, invitation, application access assignment, and minimum runtime localisation settings described in the [data contracts](appendices/data-contracts.md#tenant-identity-and-organisation-account-records). Supabase Auth stores the durable sign-in session. Vortex keeps only the current provider credentials in server-managed browser cookies and does not add a session relation or copy provider credentials, profiles, MFA enrolment, or sign-in history. Other administrative data is stored as ordinary application records.
 
 ## Acceptance examples
 

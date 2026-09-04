@@ -21,7 +21,7 @@ export type IdentityJourneyResult =
   Readonly<{ ok: true }> | Readonly<{ ok: false; code: IdentityJourneyFailure }>;
 
 export type VerifiedSignInResult =
-  | Readonly<{ ok: true; accessToken: string }>
+  | Readonly<{ ok: true; accessToken: string; refreshToken: string }>
   | Readonly<{ ok: false; code: IdentityJourneyFailure }>;
 
 const validUrl = (value: string, allowLoopback: boolean): URL => {
@@ -137,11 +137,21 @@ export const signInWithPassword = async (
     const authority = createAuthorityClient(configuration);
     const { data, error } = await authority.auth.signInWithPassword({ email, password });
 
-    if (error || !data.session?.access_token) {
+    if (
+      error ||
+      !data.session?.access_token ||
+      !data.session.refresh_token ||
+      !validAccessToken(data.session.access_token) ||
+      !validRefreshToken(data.session.refresh_token)
+    ) {
       return { ok: false, code: "vortex.identity.invalid_credentials" };
     }
 
-    return { ok: true, accessToken: data.session.access_token };
+    return {
+      ok: true,
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+    };
   } catch {
     return { ok: false, code: "vortex.identity.authority_unavailable" };
   }

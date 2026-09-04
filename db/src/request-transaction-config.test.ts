@@ -8,6 +8,7 @@ import {
 vi.mock("postgres", () => ({ default: vi.fn(() => ({ kind: "test-client" })) }));
 
 const validEnvironment = {
+  VORTEX_ENVIRONMENT: "testing",
   VORTEX_RUNTIME_DATABASE_URL:
     "postgresql://vortex_runtime.abcdefghijklmnopqrst:encoded-password@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres",
   VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT: "test-root-certificate",
@@ -18,7 +19,7 @@ describe("runtime database configuration", () => {
     expect(parseRuntimeDatabaseConfiguration(validEnvironment)).toEqual({
       connectionString: validEnvironment.VORTEX_RUNTIME_DATABASE_URL,
       hostname: "aws-0-ap-southeast-2.pooler.supabase.com",
-      rootCertificate: "test-root-certificate",
+      transport: { kind: "hosted_tls", rootCertificate: "test-root-certificate" },
     });
   });
 
@@ -56,6 +57,34 @@ describe("runtime database configuration", () => {
     expect(() => parseRuntimeDatabaseConfiguration({})).toThrow("DATABASE_CONFIGURATION_MISSING");
   });
 
+  it("accepts only the restricted runtime role on the exact Local Supabase loopback endpoint", () => {
+    const connectionString =
+      "postgresql://vortex_runtime:local-only-password@127.0.0.1:54322/postgres";
+    expect(
+      parseRuntimeDatabaseConfiguration({
+        VORTEX_ENVIRONMENT: "local",
+        VORTEX_RUNTIME_DATABASE_URL: connectionString,
+      }),
+    ).toEqual({
+      connectionString,
+      hostname: "127.0.0.1",
+      transport: { kind: "local_loopback" },
+    });
+  });
+
+  it.each([
+    "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+    "postgresql://vortex_runtime:password@database.example.test:54322/postgres",
+    "postgresql://vortex_runtime:password@127.0.0.1:6543/postgres",
+  ])("refuses an unsafe Local database address", (connectionString) => {
+    expect(() =>
+      parseRuntimeDatabaseConfiguration({
+        VORTEX_ENVIRONMENT: "local",
+        VORTEX_RUNTIME_DATABASE_URL: connectionString,
+      }),
+    ).toThrow("DATABASE_CONFIGURATION_INVALID");
+  });
+
   it("disables prepared statements, limits the pool, and verifies TLS", () => {
     const configuration = parseRuntimeDatabaseConfiguration(validEnvironment);
 
@@ -68,11 +97,29 @@ describe("runtime database configuration", () => {
       connect_timeout: 10,
       max_lifetime: 300,
       ssl: {
-        ca: configuration.rootCertificate,
+        ca:
+          configuration.transport.kind === "hosted_tls"
+            ? configuration.transport.rootCertificate
+            : undefined,
         rejectUnauthorized: true,
         servername: configuration.hostname,
       },
       connection: { application_name: "vortex-runtime" },
     });
+  });
+
+  it("disables TLS only for the exact Local loopback profile", () => {
+    const configuration = parseRuntimeDatabaseConfiguration({
+      VORTEX_ENVIRONMENT: "local",
+      VORTEX_RUNTIME_DATABASE_URL:
+        "postgresql://vortex_runtime:local-only-password@127.0.0.1:54322/postgres",
+    });
+
+    createRuntimePostgresClient(configuration);
+
+    expect(postgres).toHaveBeenLastCalledWith(
+      configuration.connectionString,
+      expect.objectContaining({ ssl: false }),
+    );
   });
 });

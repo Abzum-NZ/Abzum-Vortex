@@ -14,12 +14,19 @@ export {
 } from "./auth-journeys";
 export { createIdentityVerifier, type IdentityVerifier } from "./identity-verifier";
 export {
+  createDefaultIdentitySessionService,
+  createIdentitySessionService,
+  type IdentitySessionServiceDependencies,
+} from "./identity-session";
+export {
   createOrganizationAccountStore,
   ensureIdentityProjection,
+  readIdentityProjection,
   listOrganizationAccounts,
   OrganizationAccountError,
   organizationAccountErrorCodes,
   type CreatedOrganizationInvitation,
+  type IdentityProjectionReader,
   type OrganizationAccountErrorCode,
 } from "./organization-accounts";
 

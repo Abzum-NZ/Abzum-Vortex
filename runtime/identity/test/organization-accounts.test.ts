@@ -163,6 +163,42 @@ describe("organisation-account service", () => {
     expect(runtimeTransaction).not.toHaveBeenCalled();
   });
 
+  it("reads an existing projection without using the ensuring operation", async () => {
+    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+    const store = createOrganizationAccountStore({
+      runtimeTransaction: runtimeRunner([projectionRow], calls),
+    });
+
+    await expect(store.readIdentityProjection(verifiedIdentity())).resolves.toEqual({
+      identityId: id(1),
+      state: "active",
+      createdAt: "2026-09-04T00:00:00.000Z",
+      stateChangedAt: "2026-09-04T00:00:00.000Z",
+      stateChangedBy: id(1),
+      stateChangeCorrelationId: id(9),
+      revision: 1,
+    });
+    expect(calls[0]?.text).toContain("read_identity_projection");
+    expect(calls[0]?.text).not.toContain("ensure_identity_projection");
+    expect(calls[0]?.values).toEqual([id(1)]);
+  });
+
+  it("returns no projection when the runtime read has no row", async () => {
+    const store = createOrganizationAccountStore({ runtimeTransaction: runtimeRunner([]) });
+
+    await expect(store.readIdentityProjection(verifiedIdentity())).resolves.toBeUndefined();
+  });
+
+  it("refuses duplicate projection rows from storage", async () => {
+    const store = createOrganizationAccountStore({
+      runtimeTransaction: runtimeRunner([projectionRow, projectionRow]),
+    });
+
+    await expect(store.readIdentityProjection(verifiedIdentity())).rejects.toMatchObject({
+      code: "INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT",
+    });
+  });
+
   it("lists only validated account rows for the supplied identity", async () => {
     const store = createOrganizationAccountStore({
       runtimeTransaction: runtimeRunner([accountRow]),

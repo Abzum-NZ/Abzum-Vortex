@@ -32,6 +32,11 @@ Mailpit confirmation, password sign-in, local `getClaims()` verification against
 ES256 JWKS, and password-recovery delivery. It does not configure Testing or Production and does not
 exercise durable application sessions.
 
+Identity-session delivery adds a narrow runtime-only, non-mutating projection read. Session bootstrap
+may call the existing idempotent ensure operation once; ordinary protected resolution must use the
+read operation so a missing projection is never recreated as a side effect of checking liveness.
+Supabase Auth remains the durable session store and Vortex adds no database session relation.
+
 `db:verify` rebuilds the local database from committed migrations and seed
 data, runs every pgTAP test, proves tenant hierarchy, invitation acceptance, Access-version increments,
 lifecycle and Definition publication races through two real database connections, and fails database lint on errors. It is separate
@@ -140,6 +145,15 @@ only in the unsynced `ops_stg` and `ops_prd` configs of the separate Doppler
 `Operations` environment.
 The migration URL never embeds a password; the separate raw password supports
 reserved characters without URL-encoding ambiguity.
+
+Migrations deliberately create `vortex_runtime` without a password. Hosted
+provisioning generates a different high-entropy password for each environment,
+assigns it through the Supabase administrative path, and stores it only inside
+that environment's complete `VORTEX_RUNTIME_DATABASE_URL`. After the exact
+Doppler-to-Vercel sync and redeployment, the operated proof must verify a real
+protected request. Never copy the project-owner password, a migration variable,
+a general `DATABASE_*` variable, or a Kestra credential into a Vercel-synchronised
+config.
 
 Never edit a migration after it has reached Testing or Production. Correct it
 with a later migration. Never place customer data, a database address, or a

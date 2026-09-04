@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import {
   identityAuthoritySchema,
   supabaseIdentityClaimsSchema,
@@ -159,12 +159,20 @@ export const createIdentityVerifierWithClient = (
         // SDK to skip only its zero-skew expiry check so this boundary can apply
         // one deterministic, bounded clock policy after signature verification.
         result = await client.auth.getClaims(accessToken, { allowExpired: true });
-      } catch {
-        return refuse("vortex.identity.token_verification_failed");
+      } catch (error) {
+        return refuse(
+          isAuthRetryableFetchError(error)
+            ? "vortex.identity.authority_unavailable"
+            : "vortex.identity.token_verification_failed",
+        );
       }
 
       if (result.error !== null || result.data === null)
-        return refuse("vortex.identity.token_verification_failed");
+        return refuse(
+          isAuthRetryableFetchError(result.error)
+            ? "vortex.identity.authority_unavailable"
+            : "vortex.identity.token_verification_failed",
+        );
       return projectVerifiedIdentity(authority, result.data, clock);
     },
   });
