@@ -264,6 +264,9 @@ Exit proof:
 
 ## Phase 6 — Application, Theme and Page
 
+Before adapting Fluid UI source, complete the [implementation handoff](../specification/07-applications-pages-and-themes.md#page-builder-implementation-handoff) in [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65). Keep the approved generic architecture and HR scope; record the file-by-file integration map and interface review. Contract corrections may proceed independently while UI dependencies remain incomplete.
+
+
 **Current project epic:** [#63](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63)
 
 **Needs:** Phase 5, page/shell contracts #249 and typed operation/data bindings #250.

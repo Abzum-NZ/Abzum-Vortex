@@ -19,6 +19,10 @@ flowchart TD
 
 All these application components are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
 
+## Page-builder implementation handoff
+
+The architecture review and approved HR example establish the intended generic builder scope. Before copying Fluid UI source in [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65), the delivery owner records the file-by-file **adapt, rewrite or discard** map and reviews the intended interface with Vijay. Check licences, supported dependencies, accessibility, package ownership and the semantic-operation boundary before importing code. This checkpoint applies to UI integration, not the independent [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258), [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) contract work. The detailed rules live in [Page builder contracts](appendices/page-builder-contracts.md#editing-preview-publication-and-activation); prototype persistence, sample data and parallel engines remain excluded.
+
 ## Application definition
 
 An application records:
