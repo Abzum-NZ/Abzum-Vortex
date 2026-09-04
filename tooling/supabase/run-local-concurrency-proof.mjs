@@ -12,6 +12,7 @@ const scripts = [
   "tenant-organization-concurrency.test.sh",
   "identity-invitation-concurrency.test.sh",
   "access-version-concurrency.test.sh",
+  "organization-request-context-concurrency.test.sh",
   "definition-publication-concurrency.test.sh",
   "definition-consumer-read-concurrency.test.sh",
   "definition-history-restore-concurrency.test.sh",

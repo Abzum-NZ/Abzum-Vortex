@@ -195,3 +195,7 @@ The comparison fingerprint covers the policy version, definition kind and root, 
 ## Boundary with later work
 
 Version impact does not prove installed dependant compatibility, resolve authored aliases, assess migrations, publish, restore, or query a database. [Validation ownership #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns full canonical/source validity, cross-definition resolution, dependency checks, and migration feasibility boundaries. Phase 2 owns persistence and atomic publication.
+
+## Page-representation completion
+
+[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) extends this policy together with source/canonical schemas, compiler and retained immutable-release readers. Shell/slot identity, binding context, typed operation input/output and access changes receive explicit classification. Pure presentation changes may remain patch; no structural migration may silently lower executable or access impact. Legacy releases remain immutable, and conversion occurs only in a new draft under [page-builder contracts](page-builder-contracts.md#compatibility-and-proof).

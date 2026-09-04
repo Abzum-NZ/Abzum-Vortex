@@ -268,3 +268,9 @@ The validator and later engine tests prove:
 - The storage-layout scenario proves one physical mapping per record-type lineage, stable field mappings, two same-named CRM applications isolated by organisation, application-contained row isolation, and a different table for an unrelated same-named definition.
 - Every visible screen has desktop and phone layouts and applicable normal, empty, loading, validation, refused, conflict, failure, recovery, and reduced-motion states.
 - The assertion count is generated from the current contract catalogue rather than maintained as a fixed marketing number.
+
+## HR example: editable application and workflow-only approvals
+
+[HR composition and approved policy](page-builder-contracts.md#hr-example-policy) add Employees, Departments, Positions and Leave Requests as a normal Vortex application. This does not replace existing CRM/Service Desk coverage. Employee/private, manager/direct-report and HR-administrator access are editable definitions. No self-approval is allowed; no eligible approver leaves the request pending.
+
+The HR workflow uses the existing human-input node, conditions and named actions; no custom code or privileged business approval mechanism is added. [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) writes the complete JSON dependency set before live UI work, then proves generic module/page editing. [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) verifies approval execution and later integrations when their executors exist.

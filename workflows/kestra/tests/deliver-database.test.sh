@@ -124,6 +124,16 @@ assert_partial_concurrency_release_refused \
   supabase/tests/access-version-concurrency.test.sh \
   supabase/tests/access-version-concurrency.test.sh \
   "Access version concurrency proof has no migration"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260905043000_organization_request_context.sql \
+  supabase/tests/organization-request-context-concurrency.test.sh \
+  supabase/migrations/20260905043000_organization_request_context.sql \
+  "Organisation request context migration has no concurrency proof"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260905043000_organization_request_context.sql \
+  supabase/tests/organization-request-context-concurrency.test.sh \
+  supabase/tests/organization-request-context-concurrency.test.sh \
+  "Organisation request context concurrency proof has no migration"
 
 migration_set_sha256="$(jq --raw-output '.migration_set_sha256' "$VORTEX_EVIDENCE_PATH")"
 export VORTEX_DELIVERY_OPERATION=apply
@@ -247,6 +257,9 @@ grep --fixed-strings --quiet \
   "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 grep --fixed-strings --quiet \
   "supabase/tests/access-version-concurrency.test.sh" \
+  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+grep --fixed-strings --quiet \
+  "supabase/tests/organization-request-context-concurrency.test.sh" \
   "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 grep --fixed-strings --quiet \
   "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access --level warning --fail-on error" \

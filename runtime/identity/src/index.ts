@@ -22,13 +22,17 @@ export {
   createOrganizationAccountStore,
   ensureIdentityProjection,
   readIdentityProjection,
-  listOrganizationAccounts,
   OrganizationAccountError,
   organizationAccountErrorCodes,
   type CreatedOrganizationInvitation,
   type IdentityProjectionReader,
   type OrganizationAccountErrorCode,
 } from "./organization-accounts";
+export {
+  createOrganizationLauncherService,
+  listOrganizationLauncher,
+  type OrganizationLauncherServiceDependencies,
+} from "./organization-launcher";
 
 export const IdentityService = Object.freeze({
   key: "identity",

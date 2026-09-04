@@ -19,6 +19,8 @@ readonly IDENTITY_INVITATION_MIGRATION="supabase/migrations/20260904094030_ident
 readonly IDENTITY_INVITATION_PROOF="supabase/tests/identity-invitation-concurrency.test.sh"
 readonly ACCESS_VERSION_MIGRATION="supabase/migrations/20260904112625_access_version_foundation.sql"
 readonly ACCESS_VERSION_PROOF="supabase/tests/access-version-concurrency.test.sh"
+readonly ORGANIZATION_REQUEST_MIGRATION="supabase/migrations/20260905043000_organization_request_context.sql"
+readonly ORGANIZATION_REQUEST_PROOF="supabase/tests/organization-request-context-concurrency.test.sh"
 readonly LINT_SCHEMAS="public,vortex_context,vortex_identity,vortex_definition,vortex_access"
 
 die() {
@@ -209,6 +211,10 @@ validate_concurrency_proof_pair \
   "$ACCESS_VERSION_MIGRATION" \
   "$ACCESS_VERSION_PROOF" \
   "Access version"
+validate_concurrency_proof_pair \
+  "$ORGANIZATION_REQUEST_MIGRATION" \
+  "$ORGANIZATION_REQUEST_PROOF" \
+  "Organisation request context"
 
 migration_set_sha256="$(migration_digest "$commit")"
 readonly migration_set_sha256
@@ -362,7 +368,8 @@ say "applying pending migrations through Supabase migration history"
     "$DEFINITION_CONSUMER_READ_PROOF" \
     "$DEFINITION_HISTORY_RESTORE_PROOF" \
     "$IDENTITY_INVITATION_PROOF" \
-    "$ACCESS_VERSION_PROOF"; do
+    "$ACCESS_VERSION_PROOF" \
+    "$ORGANIZATION_REQUEST_PROOF"; do
     if [ -f "$concurrency_proof" ]; then
       if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
         printf '%s\n' "$concurrency_proof" >>"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"

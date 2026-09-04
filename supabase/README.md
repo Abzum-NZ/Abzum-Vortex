@@ -39,7 +39,7 @@ Supabase Auth remains the durable session store and Vortex adds no database sess
 
 `db:verify` rebuilds the local database from committed migrations and seed
 data, runs every pgTAP test, proves tenant hierarchy, invitation acceptance, Access-version increments,
-lifecycle and Definition publication races through two real database connections, and fails database lint on errors. It is separate
+organisation-context suspension/version races, lifecycle and Definition publication races through two real database connections, and fails database lint on errors. It is separate
 from `pnpm verify`: Vercel previews and ordinary pull-request checks remain
 database-free.
 
@@ -61,6 +61,16 @@ Only `vortex_runtime` may execute the initializer; only `vortex_request` may
 execute the read-only context accessors used by policies and service SQL.
 Commit or rollback clears the role and context before a pooled connection can
 be reused.
+
+For a human organisation request, the browser supplies only one untrusted
+organisation identifier. The Identity service resolves the exact active identity,
+tenant, organisation and organisation account; Access composes that scope with
+its current version. Resolution, context initialisation, `SET LOCAL ROLE`, live
+validation and protected work remain in the same transaction. Shared locks keep
+the resolved Identity and Access rows stable until that work finishes. The
+`vortex_request` role has no Identity-schema access and receives only the exact
+Access validator needed to confirm the live scope. Rich account-list and
+standalone Access-version reads are not runtime grants.
 
 Local and pgTAP checks may connect as the local owner and switch to the request
 role to prove its restrictions. An owner-control assertion may prove that a

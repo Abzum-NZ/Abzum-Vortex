@@ -74,3 +74,14 @@ flowchart TD
 | Theme | Validated design values contained by an application or supplied by the platform catalogue under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#themes). |
 | Vortex Identity Authority | The environment-wide sign-in authority that gives one person a stable global identity across clusters while each cluster keeps its own organisation accounts under [Identity across clusters](../02-people-organisations-and-sign-in.md#identity-across-clusters). |
 | Workflow | Durable background work executed with Kestra under [Workflows and process pipelines](../09-workflows-and-pipelines.md). |
+
+## Page-builder additions
+
+| Term | Meaning |
+|---|---|
+| Shell | A reusable layout contained in an Application, with named page-content slots; never an independently published root. |
+| Slot | A registered, named, typed location containing one ordered list of child placements. |
+| Binding context | Explicit current page record, related-record/query context or row item against which fields and operation inputs resolve. |
+| Application-contained editable data module | An authoring group over the existing application-contained data definitions, released with its Application rather than as a new independent publication kind. |
+
+See [page-builder contracts](page-builder-contracts.md) for normative identity, validation and migration rules.

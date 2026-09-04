@@ -19,6 +19,10 @@ flowchart TD
 
 All these application components are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
 
+## Page-builder implementation handoff
+
+The architecture review and approved HR example establish the intended generic builder scope. Before copying Fluid UI source in [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65), the delivery owner records the file-by-file **adapt, rewrite or discard** map and reviews the intended interface with Vijay. Check licences, supported dependencies, accessibility, package ownership and the semantic-operation boundary before importing code. This checkpoint applies to UI integration, not the independent [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258), [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) contract work. The detailed rules live in [Page builder contracts](appendices/page-builder-contracts.md#editing-preview-publication-and-activation); prototype persistence, sample data and parallel engines remain excluded.
+
 ## Application definition
 
 An application records:
@@ -26,7 +30,7 @@ An application records:
 - Permanent key, display name, description, icon, and organisation-visible ownership.
 - The modules and version ranges it requires.
 - Module bindings and application-contained record types.
-- Navigation tree and pages.
+- Navigation tree, reusable shells with named content slots, and pages.
 - Application roles and assignments.
 - Actions, rules, events, workflows, and pipelines.
 - Theme and allowed organisation-level theme adjustments.
@@ -146,36 +150,34 @@ The ordinary list, detail, search-result, report, dashboard-block, and action co
 
 ## Page composition
 
+Pages compose registered blocks through reusable application-contained shells and declared named slots. The complete normative structure, setting schemas, responsive inheritance, related-record contexts, form/operation bindings and Fluid adapter are specified in [Page builder contracts](appendices/page-builder-contracts.md). [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) deliver the missing code contracts before the canvas.
+
 ```mermaid
 flowchart TD
-    PAGE[Page] --> LAYOUT[Responsive twelve-column layout]
-    LAYOUT --> ROW[Rows]
-    ROW --> BLOCK1[Field or form block]
-    ROW --> BLOCK2[List, chart or summary block]
-    ROW --> BLOCK3[Text, action or navigation block]
-    BLOCK1 --> SETTINGS[Validated registered settings]
-    BLOCK2 --> QUERY[Validated query]
-    BLOCK3 --> ACCESS[Visibility and use permissions]
+    APP[Application release] --> NAV[Navigation and theme]
+    APP --> SHELL[Reusable shell]
+    SHELL --> SLOT[Declared named slots]
+    APP --> PAGE[Page with subject and bindings]
+    PAGE --> SLOT
+    SLOT --> TREE[Ordered nested registered blocks]
+    TREE --> SETTINGS[Schema-validated values]
+    TREE --> DATA[Typed query and related-record contexts]
+    TREE --> OP[Typed form and operation bindings]
 ```
 
-- Pages use a twelve-column grid at wide widths and reflow into a deliberate phone order.
-- A block declares its desktop span, phone order, settings, data source, visibility rule, and use permission.
-- Block types come from a closed platform registry shipped with a platform release. Organisations cannot upload executable blocks.
-- Block settings are validated against the registered setting contract at publication and runtime. Every value is explicitly tagged as a literal or as a field, relationship, action, page, query, process-pipeline, record-type, or record reference. A reference control accepts only its matching reference kind; it never accepts an untyped JSON value.
-- A page can replace the standard list, detail, or create-form experience for one record type.
-- At most four blocks on one page may receive live updates; other blocks refresh deliberately or when their page is reopened.
+All page types use the same block composition model. Layouts may use a twelve-column grid, stack, row or shell. Height follows content unless a registered block permits bounded resizing. Desktop/tablet/phone overrides inherit explicitly; one validated ordering structure determines each slot's reading order.
 
-A block registration has a permanent identifier, name, icon, one palette group, zero to forty setting declarations, optional child-block allowance, phone behaviour, resizable-height flag, live-update flag, and public-page flag. The seven palette groups are data, figures, record, input, actions, layout, and content.
+A registration supplies typed properties, allowed child slots, sizing/responsive capabilities, access semantics, public-surface restrictions and a registered renderer. Literal values must satisfy the property schema. Typed pickers resolve stable references; text and number controls remain available for appropriate literal settings. Safe grouped/list values and rich text are supported without arbitrary executable JSON, CSS, JSX or scripts.
 
-Every record-scoped page forms one validation boundary. Its primary query, form or guided-form commit action, standard-page replacement, directly placed query, visibility condition, and field, relationship, action, page, query, pipeline, record-type, or record setting must resolve to that page's record type. A dashboard has no single record type and may deliberately compose several separately authorised sources. Publication refuses a record-scoped block that silently reaches into another record type even when the referenced item exists elsewhere in the same application.
+A record page keeps one primary subject and a matching main form commit action. Related panels may deliberately use other record types through declared, separately authorised relationships/queries. Validate each field and action against its explicit binding context, not a blanket same-record-type rule. Public-page and shared-source restrictions remain unchanged.
 
-The closed setting-control list is: text, long text, formatted text, number, switch, choice, theme colour, platform icon, stored image, data reading, record-type picker, record picker, field picker, relationship picker, action picker, page picker, and process-pipeline picker. Data reading stores a query reference. Each picker stores the corresponding typed reference; it never accepts free text or arbitrary JSON in place of an existing reference.
+Reuse application navigation and theme by reference. Pages and shells publish only with the application. Live updates coalesce bounded subscriptions and refresh affected components; there is no arbitrary four-live-block publication rule.
 
 An application role lists exact permission keys or uses the single value `*` as its whole permission list. `*` means every non-administrative permission declared by that application revision. It cannot be combined with exact keys, does not include a bound module's permissions, and never includes an administrative permission.
 
 ## Forms and guided forms
 
-- A form commits through one named [action](08-forms-actions-rules-and-events.md).
+- A form commits through one typed operation binding: a named [application action](08-forms-actions-rules-and-events.md), or a closed protected platform operation in an authorised administration application. [Binding contracts](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) define inputs, validation, confirmation and outcomes.
 - A guided form has two to twenty reachable steps, exactly one summary step, and one final commit action.
 - A guided-form draft is private to the person, form, subject, application, and organisation.
 - The browser and an authorised MCP client may update the same draft only through its current revision. A stale update is refused instead of overwriting newer person or agent input.

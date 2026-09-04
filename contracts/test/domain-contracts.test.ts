@@ -36,6 +36,9 @@ import {
   organizationAccountSetSchema,
   organizationAccountSchema,
   organizationAccessVersionSchema,
+  organizationLauncherEntrySchema,
+  organizationLauncherResolutionSchema,
+  organizationSelectionCandidateSchema,
   organizationSchema,
   pageTypeKeys,
   pageTypeSchema,
@@ -49,6 +52,7 @@ import {
   safeErrorResponseSchema,
   secretReferenceSchema,
   sessionContextSchema,
+  selectedOrganizationScopeSchema,
   workflowNodeSchema,
   workflowNodeTypeKeys,
   workflowNodeTypeSchema,
@@ -1045,6 +1049,91 @@ describe("identity, sharing and secret invariants", () => {
     expect(
       identitySessionResolutionSchema.safeParse({ kind: "temporarily_unavailable", detail: "db" })
         .success,
+    ).toBe(false);
+  });
+
+  test("keeps browser organisation selection and launcher data strict and presentation-only", () => {
+    const entry = {
+      organizationId: id(220),
+      tenantDisplayName: "Example tenant",
+      organizationDisplayName: "Example organisation",
+      accountDisplayName: "Example person",
+    };
+    expect(organizationLauncherEntrySchema.safeParse(entry).success).toBe(true);
+    expect(
+      organizationLauncherResolutionSchema.safeParse({ kind: "available", entries: [entry] })
+        .success,
+    ).toBe(true);
+    expect(organizationLauncherResolutionSchema.parse({ kind: "available", entries: [] })).toEqual({
+      kind: "available",
+      entries: [],
+    });
+    for (const forbidden of [
+      "tenantId",
+      "organizationAccountId",
+      "accessVersion",
+      "roleIds",
+      "applicationRootId",
+      "state",
+    ])
+      expect(
+        organizationLauncherEntrySchema.safeParse({ ...entry, [forbidden]: id(221) }).success,
+      ).toBe(false);
+
+    expect(
+      organizationSelectionCandidateSchema.safeParse({ organizationId: id(220) }).success,
+    ).toBe(true);
+    expect(
+      organizationSelectionCandidateSchema.safeParse({
+        organizationId: id(220),
+        tenantId: id(222),
+      }).success,
+    ).toBe(false);
+    expect(
+      selectedOrganizationScopeSchema.safeParse({
+        tenantId: id(222),
+        organizationId: id(220),
+        organizationAccountId: id(223),
+        accessVersion: 1,
+      }).success,
+    ).toBe(true);
+  });
+
+  test("requires Identity Authority only for human and federated request contexts", () => {
+    const common = {
+      tenantId: id(230),
+      organizationId: id(231),
+      sessionId: id(232),
+      issuedAt: "2026-09-02T01:00:00+00:00",
+      expiresAt: "2026-09-02T01:05:00+00:00",
+      accessVersion: 1,
+      correlationId: id(233),
+    };
+    const human = {
+      ...common,
+      callerKind: "human",
+      identityAuthorityId: id(234),
+      identityId: id(235),
+      organizationAccountId: id(236),
+      authenticationStrength: "single_factor",
+    };
+    expect(sessionContextSchema.safeParse(human).success).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({ ...human, identityAuthorityId: undefined }).success,
+    ).toBe(false);
+    expect(sessionContextSchema.safeParse({ ...human, callerKind: "federated" }).success).toBe(
+      true,
+    );
+
+    const system = {
+      ...common,
+      callerKind: "system",
+      systemActorId: id(237),
+      authenticationStrength: "service",
+    };
+    expect(sessionContextSchema.safeParse(system).success).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({ ...system, identityAuthorityId: id(234) }).success,
     ).toBe(false);
   });
 
