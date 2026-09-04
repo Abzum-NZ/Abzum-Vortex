@@ -19,6 +19,20 @@ flowchart TD
 
 All these application components are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
 
+## Page-builder implementation handoff
+
+Before any Phase 6 application, page, block, theme, or Studio user-interface implementation begins, the delivery owner and Vijay must review the separate Fluid page-designer prototype recorded in [the Page engine and canvas task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65). This is a required consultation checkpoint, not an instruction to import the prototype unchanged.
+
+The review must identify what can be adapted behind Vortex contracts and what must be replaced. In particular:
+
+- Puck remains behind a Vortex-owned adapter. Puck documents, component names, routes, files, and editor state never become application-definition or runtime contracts.
+- Reusable visual components, layout helpers, shell/outlet composition, responsive editing, theme-token work, and motion helpers may be brought into the official Vortex monorepo only after they conform to its package boundaries, licences, accessibility rules, design tokens, tests, and supported dependency versions.
+- Prototype JSON-file persistence, sample pages, sample records, hard-coded routes, templates, labels, themes, and business-specific behaviour are not copied into shipping runtime code. Page drafts and publication use the Definition service and the exact application/page contracts.
+- A prototype shell/outlet must be mapped deliberately to application shell, navigation, page regions, registered block nesting, and responsive layout. The review must resolve that mapping before code is moved.
+- Blocks receive data only through typed Page and Query service bindings. Forms, actions, permissions, workflows, pipelines, files, connections, and interfaces use their owning platform services; the page designer does not create parallel engines for them.
+- Every meaningful editor and rendered-page operation must bind to the same stable semantic control used by keyboard interaction and the governed [MCP surface](12-connections-and-interfaces.md#governed-mcp-access).
+- The integration plan must state which prototype files will be adapted, rewritten, or discarded, and must be agreed with Vijay in the linked task before implementation starts.
+
 ## Application definition
 
 An application records:

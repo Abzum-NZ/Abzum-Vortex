@@ -223,6 +223,8 @@ Exit proof:
 
 **Needs:** Phase 5.
 
+Before starting any Phase 6 user-interface code, pause and review the separate Fluid page-designer prototype with Vijay through [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65). Record an agreed file-by-file integration map before copying or adapting code. Reuse its Puck editor, blocks, shell/outlet composition, responsive behaviour, shadcn token work, and motion helpers only behind Vortex-owned contracts. Replace prototype persistence, routes, fixtures, hard-coded labels, data, actions, and publication behaviour with the Definition, Page, Query, Access, Record, Workflow, File, Connection, Interface, and semantic-control boundaries that own them. This consultation is a Phase 6 entry gate; do not begin the page or Studio implementation without it.
+
 **Outcome:** Builders can compose and publish complete applications that people can use on desktop and phone.
 
 Build:
