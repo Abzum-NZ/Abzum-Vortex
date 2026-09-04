@@ -6,7 +6,7 @@
     ".": "./src/foundation.ts"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 127.0.0.1",
     "build": "next build",
     "typecheck": "tsc --noEmit"
   },

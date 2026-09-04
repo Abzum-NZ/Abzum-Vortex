@@ -15,7 +15,11 @@ vi.mock("@vortex/identity", () => ({
 }));
 
 const cookieStore = vi.hoisted(() => ({ getAll: vi.fn(), set: vi.fn() }));
-vi.mock("next/headers", () => ({ cookies: vi.fn(async () => cookieStore) }));
+const requestHeaders = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(async () => cookieStore),
+  headers: vi.fn(async () => requestHeaders),
+}));
 
 const auth = vi.hoisted(() => ({
   setSession: vi.fn(),
@@ -61,6 +65,7 @@ describe("Next.js identity-session server boundary", () => {
     vi.stubEnv("VORTEX_ENVIRONMENT", "testing");
     vi.stubEnv("VORTEX_IDENTITY_AUTHORITY_ID", id(9));
     cookieStore.getAll.mockReturnValue([]);
+    requestHeaders.get.mockReturnValue("verified");
     auth.setSession.mockResolvedValue({
       data: { session: { access_token: accessToken, refresh_token: refreshToken } },
       error: null,
@@ -186,7 +191,20 @@ describe("Next.js identity-session server boundary", () => {
     ).resolves.toEqual({ kind: "temporarily_unavailable" });
 
     expect(cookieStore.set).not.toHaveBeenCalled();
-    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("uses an isolated cleanup client when provider liveness fails after sign-in", async () => {
+    cookieStore.getAll.mockReturnValue([{ name: "__Host-vortex-session", value: "prior-session" }]);
+    auth.getUser.mockResolvedValueOnce({ data: { user: null }, error: new Error("invalid") });
+
+    await expect(
+      bootstrapIdentitySession({ ok: true, accessToken, refreshToken }),
+    ).resolves.toEqual({ kind: "expired_or_revoked" });
+
+    expect(createServerClient).toHaveBeenCalledTimes(2);
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(cookieStore.set).not.toHaveBeenCalled();
   });
 
   it("resolves the post-Proxy access token without trusting the provider user", async () => {
@@ -209,6 +227,22 @@ describe("Next.js identity-session server boundary", () => {
 
     await expect(resolveIdentitySession()).resolves.toEqual({ kind: "temporarily_unavailable" });
     expect(cookieStore.set).not.toHaveBeenCalled();
+  });
+
+  it("does not retry provider handling after Proxy reports a temporary failure", async () => {
+    requestHeaders.get.mockReturnValue("temporarily_unavailable");
+
+    await expect(resolveIdentitySession()).resolves.toEqual({ kind: "temporarily_unavailable" });
+
+    expect(createServerClient).not.toHaveBeenCalled();
+    expect(auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it("does not trust a missing or caller-unvalidated Proxy marker", async () => {
+    requestHeaders.get.mockReturnValue("caller-supplied-value");
+
+    await expect(resolveIdentitySession()).resolves.toEqual({ kind: "temporarily_unavailable" });
+    expect(createServerClient).not.toHaveBeenCalled();
   });
 
   it("clears every local cookie chunk even when provider sign-out fails", async () => {

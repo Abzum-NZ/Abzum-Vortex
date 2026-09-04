@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 export default async function SignedInPage() {
   const result = await resolveIdentitySession();
   if (result.kind === "temporarily_unavailable") redirect("/auth/sign-in?status=unavailable");
+  if (result.kind === "invalid_session_state" || result.kind === "expired_or_revoked")
+    redirect("/auth/session-ended");
   if (result.kind !== "active") redirect("/auth/sign-in?status=session-ended");
 
   return (

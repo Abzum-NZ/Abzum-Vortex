@@ -12,13 +12,14 @@ import {
   type VerifiedSignInResult,
 } from "@vortex/identity";
 import { isAuthRefreshDiscardedError, isAuthRetryableFetchError } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import {
   identitySessionCookieDeletions,
   type SessionCookie,
   type SessionCookieMutation,
 } from "./session-cookie";
 import { createIdentitySessionClient, type IdentitySessionClient } from "./supabase-session-client";
+import { identitySessionProxyHeader } from "./session-request-state";
 import {
   getIdentityAuthorityConfiguration,
   getIdentityJourneyConfiguration,
@@ -53,6 +54,20 @@ const providerFailure = (error: unknown): IdentitySessionResolution =>
     ? unavailable()
     : revoked();
 
+const revokeIssuedProviderSession = async (
+  signedIn: Extract<VerifiedSignInResult, { ok: true }>,
+): Promise<void> => {
+  try {
+    const cleanup = createIdentitySessionClient([]);
+    await cleanup.client.auth
+      .setSession({ access_token: signedIn.accessToken, refresh_token: signedIn.refreshToken })
+      .catch(() => undefined);
+    await cleanup.client.auth.signOut({ scope: "local" }).catch(() => undefined);
+  } catch {
+    // Revocation is best effort; the failed pair is never committed to the browser.
+  }
+};
+
 export const bootstrapIdentitySession = async (
   signedIn: Extract<VerifiedSignInResult, { ok: true }>,
 ): Promise<IdentitySessionResolution> => {
@@ -63,16 +78,25 @@ export const bootstrapIdentitySession = async (
     return unavailable();
   }
 
-  if (boundary.stage.initialState.kind === "invalid") return invalid();
+  if (boundary.stage.initialState.kind === "invalid") {
+    await revokeIssuedProviderSession(signedIn);
+    return invalid();
+  }
   const setResult = await boundary.client.auth.setSession({
     access_token: signedIn.accessToken,
     refresh_token: signedIn.refreshToken,
   });
-  if (setResult.error || !setResult.data.session) return providerFailure(setResult.error);
+  if (setResult.error || !setResult.data.session) {
+    await revokeIssuedProviderSession(signedIn);
+    return providerFailure(setResult.error);
+  }
 
   const currentToken = setResult.data.session.access_token;
   const live = await boundary.client.auth.getUser(currentToken);
-  if (live.error || !live.data.user) return providerFailure(live.error);
+  if (live.error || !live.data.user) {
+    await revokeIssuedProviderSession(signedIn);
+    return providerFailure(live.error);
+  }
 
   const result = await sessionService().bootstrap(
     currentToken,
@@ -84,11 +108,16 @@ export const bootstrapIdentitySession = async (
     return result;
   }
 
-  await boundary.client.auth.signOut({ scope: "local" }).catch(() => undefined);
+  await revokeIssuedProviderSession(signedIn);
   return staged.refused ? invalid() : result;
 };
 
 export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> => {
+  const proxyState = (await headers()).get(identitySessionProxyHeader);
+  if (proxyState === "missing") return identitySessionResolutionSchema.parse({ kind: "missing" });
+  if (proxyState === "invalid") return invalid();
+  if (proxyState !== "verified") return unavailable();
+
   let boundary: IdentitySessionClient;
   try {
     boundary = createIdentitySessionClient(await requestCookies());

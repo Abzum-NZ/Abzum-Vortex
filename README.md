@@ -244,9 +244,11 @@ Identity sessions deliberately use no browser Supabase Auth client. Next.js crea
 server client from the same three validated values, and only server code reads or writes its
 `HttpOnly` cookie family. Testing and Production use `__Host-vortex-session` with `Secure`,
 `SameSite=Lax`, `Path=/` and no `Domain`; exact HTTP loopback uses the separate
-`vortex-local-session` name without `Secure`. Proxy refreshes through `getClaims()`, while protected
-server operations independently verify the current access token and read the local identity
-projection without mutating it.
+`vortex-local-session` name without `Secure`. The supported Local command listens only on
+`127.0.0.1`, and the request host/protocol must match the configured site. Proxy refreshes through
+`getClaims()` and forwards its own closed request-state marker; a protected resolver retries no
+provider refresh after a Proxy failure. Protected server operations independently verify the current
+access token and read the local identity projection without mutating it.
 
 **No Supabase service-role key exists anywhere, deliberately.** The application connects as the
 application database account over PostgreSQL, which the
