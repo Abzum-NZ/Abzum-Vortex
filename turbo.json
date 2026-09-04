@@ -3,7 +3,16 @@
   "tasks": {
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": [
+        "VORTEX_ENVIRONMENT",
+        "VORTEX_IDENTITY_AUTHORITY_ID",
+        "VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT",
+        "VORTEX_RUNTIME_DATABASE_URL",
+        "VORTEX_SITE_URL",
+        "VORTEX_SUPABASE_PUBLISHABLE_KEY",
+        "VORTEX_SUPABASE_URL"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],

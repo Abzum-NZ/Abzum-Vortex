@@ -8,7 +8,8 @@ packages:
   - modules
   - testing
 catalog:
-  "@supabase/supabase-js": 2.114.0
+  "@supabase/ssr": 0.12.6
+  "@supabase/supabase-js": 2.115.0
   "@types/semver": 7.7.1
   postgres: 3.4.9
   semver: 7.8.5

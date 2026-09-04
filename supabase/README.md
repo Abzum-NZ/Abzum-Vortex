@@ -32,6 +32,11 @@ Mailpit confirmation, password sign-in, local `getClaims()` verification against
 ES256 JWKS, and password-recovery delivery. It does not configure Testing or Production and does not
 exercise durable application sessions.
 
+Identity-session delivery adds a narrow runtime-only, non-mutating projection read. Session bootstrap
+may call the existing idempotent ensure operation once; ordinary protected resolution must use the
+read operation so a missing projection is never recreated as a side effect of checking liveness.
+Supabase Auth remains the durable session store and Vortex adds no database session relation.
+
 `db:verify` rebuilds the local database from committed migrations and seed
 data, runs every pgTAP test, proves tenant hierarchy, invitation acceptance, Access-version increments,
 lifecycle and Definition publication races through two real database connections, and fails database lint on errors. It is separate

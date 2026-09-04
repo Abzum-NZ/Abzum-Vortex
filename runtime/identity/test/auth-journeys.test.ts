@@ -35,7 +35,12 @@ describe("identity authority journeys", () => {
     vi.clearAllMocks();
     authority.signUp.mockResolvedValue({ data: {}, error: null });
     authority.signInWithPassword.mockResolvedValue({
-      data: { session: { access_token: "verified-access-token" } },
+      data: {
+        session: {
+          access_token: `${"a".repeat(32)}.${"b".repeat(32)}.${"c".repeat(32)}`,
+          refresh_token: "verified-refresh-token",
+        },
+      },
       error: null,
     });
     authority.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
@@ -71,10 +76,14 @@ describe("identity authority journeys", () => {
     });
   });
 
-  it("returns a transient access token only after password sign-in", async () => {
+  it("returns one request-local credential pair only after password sign-in", async () => {
     await expect(
       signInWithPassword(configuration, "person@example.test", "secure-pass-1"),
-    ).resolves.toEqual({ ok: true, accessToken: "verified-access-token" });
+    ).resolves.toEqual({
+      ok: true,
+      accessToken: `${"a".repeat(32)}.${"b".repeat(32)}.${"c".repeat(32)}`,
+      refreshToken: "verified-refresh-token",
+    });
 
     authority.signInWithPassword.mockResolvedValueOnce({
       data: { session: null },
@@ -99,7 +108,7 @@ describe("identity authority journeys", () => {
     ).resolves.toEqual({ ok: false, code: "vortex.identity.invalid_input" });
     await expect(
       signInWithPassword(configuration, "person@example.test", "legacy-pass"),
-    ).resolves.toEqual({ ok: true, accessToken: "verified-access-token" });
+    ).resolves.toMatchObject({ ok: true, refreshToken: "verified-refresh-token" });
 
     expect(authority.signUp).not.toHaveBeenCalled();
     expect(authority.setSession).not.toHaveBeenCalled();

@@ -3,6 +3,7 @@ export const identityVerificationRefusalCodes = Object.freeze([
   "vortex.identity.invalid_public_api_key",
   "vortex.identity.missing_access_token",
   "vortex.identity.token_verification_failed",
+  "vortex.identity.authority_unavailable",
   "vortex.identity.unsupported_signing_algorithm",
   "vortex.identity.missing_key_identifier",
   "vortex.identity.invalid_claims",

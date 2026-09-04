@@ -9,6 +9,7 @@ import {
 } from "@vortex/identity";
 import { redirect } from "next/navigation";
 import { getIdentityJourneyConfiguration } from "./_lib/authority-configuration";
+import { bootstrapIdentitySession, endIdentitySession } from "./_lib/session-server";
 
 const formValue = (formData: FormData, name: string, trim = true): string => {
   const value = formData.get(name);
@@ -56,12 +57,17 @@ export async function signIn(formData: FormData): Promise<never> {
     formValue(formData, "password", false),
   );
 
-  // The access token is deliberately discarded. Issue #26 owns persistent sessions.
+  const session = result.ok ? await bootstrapIdentitySession(result) : undefined;
   redirect(
-    result.ok
-      ? "/auth/success?state=signed-in"
-      : `/auth/sign-in?status=${failureStatus(result.code)}`,
+    result.ok && session?.kind === "active"
+      ? "/signed-in"
+      : `/auth/sign-in?status=${result.ok ? "unavailable" : failureStatus(result.code)}`,
   );
+}
+
+export async function signOut(): Promise<never> {
+  await endIdentitySession();
+  redirect("/auth/sign-in?status=signed-out");
 }
 
 export async function requestRecovery(formData: FormData): Promise<never> {

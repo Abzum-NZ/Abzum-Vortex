@@ -241,6 +241,33 @@ export const verifiedIdentitySchema = z
       });
   });
 
+export const identitySessionSchema = z
+  .object({
+    identityId: identityIdSchema,
+    sessionId: sessionIdSchema,
+    authenticationStrength: z.enum(["single_factor", "multi_factor"]),
+    accessTokenIssuedAt: timestampSchema,
+    accessTokenExpiresAt: timestampSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (Date.parse(value.accessTokenExpiresAt) <= Date.parse(value.accessTokenIssuedAt))
+      context.addIssue({
+        code: "custom",
+        path: ["accessTokenExpiresAt"],
+        message: "The access-token expiry must be later than its issue time",
+      });
+  });
+
+export const identitySessionResolutionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("active"), session: identitySessionSchema }).strict(),
+  z.object({ kind: z.literal("missing") }).strict(),
+  z.object({ kind: z.literal("expired_or_revoked") }).strict(),
+  z.object({ kind: z.literal("cluster_identity_inactive") }).strict(),
+  z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
+  z.object({ kind: z.literal("invalid_session_state") }).strict(),
+]);
+
 export const organizationAccountSchema = z
   .object({
     organizationAccountId: organizationAccountIdSchema,
@@ -956,6 +983,8 @@ export type IdentityAuthority = z.infer<typeof identityAuthoritySchema>;
 export type IdentityProjection = z.infer<typeof identityProjectionSchema>;
 export type SupabaseIdentityClaims = z.infer<typeof supabaseIdentityClaimsSchema>;
 export type VerifiedIdentity = z.infer<typeof verifiedIdentitySchema>;
+export type IdentitySession = z.infer<typeof identitySessionSchema>;
+export type IdentitySessionResolution = z.infer<typeof identitySessionResolutionSchema>;
 export type OrganizationAccount = z.infer<typeof organizationAccountSchema>;
 export type OrganizationAccountSet = z.infer<typeof organizationAccountSetSchema>;
 export type AccessVersionChangeReason = z.infer<typeof accessVersionChangeReasonSchema>;

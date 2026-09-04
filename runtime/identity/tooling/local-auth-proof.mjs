@@ -48,12 +48,34 @@ if (
 const client = createClient(apiUrl, publishableKey, {
   auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
 });
+const freshClient = () =>
+  createClient(apiUrl, publishableKey, {
+    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+  });
 const email = `local-proof-${randomUUID()}@example.test`;
 const password = `${randomUUID()}aA7!`;
 const replacementPassword = `${randomUUID()}bB8!`;
 
-const submitForm = async (pathname, values) => {
-  const pageResponse = await globalThis.fetch(`${siteUrl}${pathname}`);
+const sessionCookies = new Map();
+let lastSetCookieLines = [];
+const cookieHeader = (jar) =>
+  [...jar.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+const applySetCookies = (response, jar) => {
+  const lines = response.headers.getSetCookie();
+  for (const line of lines) {
+    const match = line.match(/^([^=;]+)=([^;]*)/u);
+    if (!match) throw new Error("The Local application returned a malformed session cookie");
+    if (/;\s*Max-Age=0(?:;|$)/iu.test(line)) jar.delete(match[1]);
+    else jar.set(match[1], match[2]);
+  }
+  return lines;
+};
+
+const submitForm = async (pathname, values, jar = new Map()) => {
+  const cookie = cookieHeader(jar);
+  const pageResponse = await globalThis.fetch(`${siteUrl}${pathname}`, {
+    headers: cookie ? { cookie } : undefined,
+  });
   if (!pageResponse.ok) throw new Error("The Local identity journey page is unavailable");
   const page = await pageResponse.text();
   const actionName = page.match(/name="(\$ACTION_ID_[^"]+)"/)?.[1];
@@ -66,9 +88,10 @@ const submitForm = async (pathname, values) => {
   const response = await globalThis.fetch(`${siteUrl}${pathname}`, {
     method: "POST",
     body: form,
-    headers: { origin: siteUrl },
+    headers: { origin: siteUrl, ...(cookie ? { cookie } : {}) },
     redirect: "manual",
   });
+  lastSetCookieLines = applySetCookies(response, jar);
   const location = response.headers.get("location");
   if (response.status !== 303 || !location)
     throw new Error("The Local identity journey did not complete with a safe redirect");
@@ -145,20 +168,63 @@ const confirmationLink = await verificationSession(
   "signup",
 );
 const confirmationFragment = new globalThis.URLSearchParams(confirmationLink.hash.slice(1));
+const confirmationCookies = new Map();
 expectRedirect(
-  await submitForm(confirmationLink.pathname, {
-    access_token: confirmationFragment.get("access_token"),
-    type: "signup",
-  }),
+  await submitForm(
+    confirmationLink.pathname,
+    {
+      access_token: confirmationFragment.get("access_token"),
+      type: "signup",
+    },
+    confirmationCookies,
+  ),
   "/auth/success",
   "?state=email-confirmed",
 );
+if (confirmationCookies.size !== 0)
+  throw new Error("Email confirmation persisted a Local browser session");
 
 expectRedirect(
-  await submitForm("/auth/sign-in", { email, password }),
-  "/auth/success",
-  "?state=signed-in",
+  await submitForm("/auth/sign-in", { email, password }, sessionCookies),
+  "/signed-in",
 );
+if (
+  lastSetCookieLines.length === 0 ||
+  !lastSetCookieLines.every(
+    (line) =>
+      line.startsWith("vortex-local-session") &&
+      /;\s*HttpOnly/iu.test(line) &&
+      /;\s*SameSite=Lax/iu.test(line) &&
+      /;\s*Path=\//iu.test(line) &&
+      !/;\s*Secure/iu.test(line) &&
+      !/;\s*Domain=/iu.test(line),
+  )
+)
+  throw new Error("The Local identity session did not use the exact server-cookie profile");
+
+const secondBrowserCookies = new Map();
+expectRedirect(
+  await submitForm("/auth/sign-in", { email, password }, secondBrowserCookies),
+  "/signed-in",
+);
+const signedInPage = await globalThis.fetch(`${siteUrl}/signed-in`, {
+  headers: { cookie: cookieHeader(sessionCookies) },
+});
+if (!signedInPage.ok || !(await signedInPage.text()).includes("You are signed in"))
+  throw new Error("The Local protected identity-session page was unavailable");
+
+expectRedirect(
+  await submitForm("/signed-in", {}, sessionCookies),
+  "/auth/sign-in",
+  "?status=signed-out",
+);
+if (sessionCookies.size !== 0)
+  throw new Error("Local sign-out did not clear the complete browser cookie family");
+const independentBrowser = await globalThis.fetch(`${siteUrl}/signed-in`, {
+  headers: { cookie: cookieHeader(secondBrowserCookies) },
+});
+if (!independentBrowser.ok || !(await independentBrowser.text()).includes("You are signed in"))
+  throw new Error("Signing out one Local browser ended an independent browser session");
 
 const signin = await client.auth.signInWithPassword({ email, password });
 if (signin.error || !signin.data.session?.access_token)
@@ -196,6 +262,38 @@ const verifierProof = spawnSync(
 if (verifierProof.status !== 0)
   throw new Error("The Vortex verifier did not accept the expected Local identity");
 
+const refreshed = await client.auth.refreshSession(signin.data.session);
+if (refreshed.error || !refreshed.data.session)
+  throw new Error("The Local authority did not rotate an ordinary session");
+const refreshedClaims = await client.auth.getClaims(refreshed.data.session.access_token);
+if (
+  refreshedClaims.error ||
+  !refreshedClaims.data ||
+  refreshedClaims.data.claims.sub !== verified.data.claims.sub ||
+  refreshedClaims.data.claims.session_id !== verified.data.claims.session_id
+)
+  throw new Error("Ordinary Local refresh changed the verified identity or session identifier");
+
+const parallelRefreshes = await Promise.all([
+  freshClient().auth.refreshSession(signin.data.session),
+  freshClient().auth.refreshSession(signin.data.session),
+]);
+const usableParallelSessions = parallelRefreshes
+  .filter((result) => !result.error && result.data.session)
+  .map((result) => result.data.session);
+if (usableParallelSessions.length === 0)
+  throw new Error("Concurrent Local refresh did not converge to any usable provider session");
+for (const session of usableParallelSessions) {
+  const claims = await freshClient().auth.getClaims(session.access_token);
+  if (
+    claims.error ||
+    !claims.data ||
+    claims.data.claims.sub !== verified.data.claims.sub ||
+    claims.data.claims.session_id !== verified.data.claims.session_id
+  )
+    throw new Error("Concurrent Local refresh crossed an identity or session boundary");
+}
+
 await delay(5_100);
 expectRedirect(
   await submitForm("/auth/recover", { email }),
@@ -209,20 +307,23 @@ const recoveryLink = await verificationSession(
   "recovery",
 );
 const recoveryFragment = new globalThis.URLSearchParams(recoveryLink.hash.slice(1));
+const recoveryCookies = new Map();
 expectRedirect(
-  await submitForm(recoveryLink.pathname, {
-    access_token: recoveryFragment.get("access_token"),
-    refresh_token: recoveryFragment.get("refresh_token"),
-    password: replacementPassword,
-  }),
+  await submitForm(
+    recoveryLink.pathname,
+    {
+      access_token: recoveryFragment.get("access_token"),
+      refresh_token: recoveryFragment.get("refresh_token"),
+      password: replacementPassword,
+    },
+    recoveryCookies,
+  ),
   "/auth/success",
   "?state=password-updated",
 );
+if (recoveryCookies.size !== 0)
+  throw new Error("Password recovery persisted a Local browser session");
 
-const freshClient = () =>
-  createClient(apiUrl, publishableKey, {
-    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
-  });
 const oldPasswordSignIn = await freshClient().auth.signInWithPassword({ email, password });
 if (!oldPasswordSignIn.error)
   throw new Error("The old Local password remained valid after recovery");
@@ -241,5 +342,5 @@ expectRedirect(
 );
 
 process.stdout.write(
-  "Local Auth proof passed through the App Router: ES256 JWKS, confirmation, Vortex verification, neutral recovery, password update, and old/new password checks.\n",
+  "Local Auth proof passed through the App Router: ES256 JWKS, confirmation, verified server-only sessions, ordinary and concurrent refresh continuity, browser-isolated sign-out, neutral recovery, password update, and old/new password checks.\n",
 );

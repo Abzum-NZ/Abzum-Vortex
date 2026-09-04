@@ -7,6 +7,8 @@ const messages: Readonly<Record<string, string>> = {
   invalid_credentials: "The email address or password was not accepted.",
   invalid_link: "This link is invalid or has expired. Request a new one and try again.",
   unavailable: "Sign-in is temporarily unavailable. Please try again shortly.",
+  "signed-out": "This browser session has ended.",
+  "session-ended": "Your session has ended. Sign in again to continue.",
 };
 
 export function StatusMessage({ status }: StatusMessageProps) {
