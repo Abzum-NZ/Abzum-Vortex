@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.4
+**Status:** Approved build plan 2.5
 
 **Date:** 4 September 2026
 
@@ -16,6 +16,7 @@ The [decision register](../specification/appendices/decisions.md) is clear. Vort
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.5 | Approved | 4 September 2026 | Added the strict server-only Definition consumer-read operation: explicit current-or-exact selection, one consistent current read, exact dependency pinning, safe output projection, release-integrity proof and no cache. |
 | 2.4 | Approved | 4 September 2026 | Added the Access-owned version foundation to Phase 2 sequencing; clarified stable Auth domains, protected Testing automation, application-free Phase 2 request context, restore evidence and Activity ownership; and reconciled the plan with the native GitHub dependency graph. |
 
 ## Planning rules
@@ -126,7 +127,7 @@ Exit proof:
 
 **Needs:** Phase 1.
 
-**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), private tenant/organisation storage invariants [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23), and Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) are complete. The identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) is the remaining dependency-critical foundation. Definition restore [#21](https://github.com/Abzum-NZ/Abzum-Vortex/issues/21) and consumer reads [#22](https://github.com/Abzum-NZ/Abzum-Vortex/issues/22) are independently ready. Organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) follow #23 and #25. Identity sessions [#26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26) and the minimal Access-owned version foundation [#224](https://github.com/Abzum-NZ/Abzum-Vortex/issues/224) follow #24 and may proceed independently. Request context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) follows both, and protected tenant/organisation operations [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) then consume #23 and #27. Native GitHub dependencies enforce the order.
+**Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), private tenant/organisation storage invariants [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23), and Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) are complete. The identity authority [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25) is the remaining dependency-critical foundation. Definition restore [#21](https://github.com/Abzum-NZ/Abzum-Vortex/issues/21) and consumer reads [#22](https://github.com/Abzum-NZ/Abzum-Vortex/issues/22) are independently ready; #22 exposes only explicit current-or-exact immutable release reads and has no cache. Organisation accounts [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) follow #23 and #25. Identity sessions [#26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26) and the minimal Access-owned version foundation [#224](https://github.com/Abzum-NZ/Abzum-Vortex/issues/224) follow #24 and may proceed independently. Request context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) follows both, and protected tenant/organisation operations [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) then consume #23 and #27. Native GitHub dependencies enforce the order.
 
 **Outcome:** A person can sign in, choose an organisation, tenant administrators can manage a safe organisation hierarchy, and authorised builders can draft, validate, publish and restore modules and applications independently.
 
@@ -149,6 +150,7 @@ Build:
 - Derive every saved sharing-condition revision from its permanent condition UUID and complete immutable Module history. Unchanged content retains its revision; changed content and reintroduction after an absent release increment it. A caller alias, mutable counter, grant or consumer never chooses or advances the revision.
 - Prepare publication without writing: resolve exact requirements exactly and allowed ranges to the highest compatible stable same-organisation Module release, resolve connection types and platform themes from the immutable platform catalogue, reject missing/ambiguous/substituted/cyclic evidence, and return one safe exact confirmation.
 - Publish through one locked transaction that rechecks the draft, current pointer, permanent identities, condition revisions, exact dependency evidence, compilation, validation, minimum version assignment and the 10,000-release per-root bound; append the canonical compilation output, its exact resolution snapshot and one-for-one manifest as one immutable release, then advance only that root's discovery pointer. A later alias or concurrently published dependency cannot change that release's evidence, and no existing consumer is retargeted.
+- Deliver [#22](https://github.com/Abzum-NZ/Abzum-Vortex/issues/22): one server-only Definition-service read accepts a kind-matched permanent root and explicit `current` or exact release revision. Its one consistent current read follows only that root pointer; its exact read follows no pointer. Before returning the fixed safe canonical-content projection, it verifies immutable release and exact manifest evidence, including exact platform-catalogue entries. It implements no cache, Data API or consumer-specific behavior.
 - No starter Module or Application root is seeded in Phase 2. Representative definitions remain test-only until an owning platform feature specifies a required platform definition.
 - One closed request context established for each protected transaction through a non-owning request role. Phase 2 contexts contain tenant, organisation, organisation account and Access-owned version but no application identifier; an absent application never grants application-wide scope. Vercel uses the Supabase transaction pooler with prepared statements disabled; Kestra keeps a separately credentialed session-pooler path for migrations and database verification.
 - The official Supabase CLI project, ordered migration history, local pgTAP/lint gate, and Kestra Testing/Production delivery path exist before a service schema is introduced. Kestra runs the same committed pgTAP files through a pinned in-image `pg_prove` harness, so operated verification does not require the host Docker socket.
@@ -159,6 +161,7 @@ Exit proof:
 - Two independently configured verifier instances accept the same Testing identity token, produce the same identity identifier and verified primary email, and refuse a token from another environment. This proof does not require or claim a second physical Testing cluster.
 - A stale draft cannot overwrite a later edit.
 - Publishing is atomic and a restored version becomes a new draft.
+- A current Definition read changes only when its named root publishes a later release; an earlier exact read remains unchanged. Unknown, foreign, wrong-kind, unpublished and unknown-exact selections are indistinguishable, malformed or public request contexts refuse before content returns, and integrity or exact-dependency failures refuse safely.
 - Two-session proofs show that one of two stale saves wins, one of two publications from the same draft wins, and an Application prepared against a compatible `1.x` Module remains pinned to that exact release while `2.0.0` publishes concurrently.
 - Definition and identity tables pass their database separation tests.
 - The delivery engine is bootstrapped from one exact reviewed commit, produces successful Testing evidence after that commit merges to `testing`, and returns Coolify to the same revision on protected `main` before ordinary automatic delivery begins.
