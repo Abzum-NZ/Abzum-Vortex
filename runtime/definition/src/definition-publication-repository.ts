@@ -36,6 +36,11 @@ import {
 import { z } from "zod";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
+  hasAuthenticResolutionFingerprint,
+  hasAuthenticStoredCustomerDefinitionRelease,
+  sameCanonicalJson,
+} from "./definition-release-integrity";
+import {
   DefinitionPublicationError,
   type DefinitionPublicationCandidate,
   type DefinitionPublicationReader,
@@ -191,19 +196,6 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
   if (!result.success) return invalidStorage();
   return result.data;
 };
-
-const sameJson = (left: unknown, right: unknown): boolean =>
-  canonicalJson(left) === canonicalJson(right);
-
-const hasAuthenticResolutionFingerprint = (
-  snapshot: z.infer<typeof definitionResolutionSnapshotSchema>,
-): boolean =>
-  snapshot.fingerprint ===
-  fingerprintCanonicalValue({
-    contractVersion: snapshot.contractVersion,
-    definitions: snapshot.definitions,
-    identities: snapshot.identities,
-  });
 
 const dependencyReferencesMatch = (
   output: Exclude<z.infer<typeof definitionCompilationOutputSchema>, { kind: "connection_type" }>,
@@ -380,7 +372,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           release.evidence.sourceContractVersion ||
         release.evidence.authoredSource.kind !== kind ||
         release.evidence.authoredSource.key !== key ||
-        !sameJson(output.canonical.content, release.content)
+        !sameCanonicalJson(output.canonical.content, release.content)
       )
         return invalidStorage();
       if (!dependencyReferencesMatch(output, release.dependencyManifest)) return invalidStorage();
@@ -439,8 +431,19 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       output.resolutionFingerprint !== release.resolutionFingerprint ||
       snapshot.fingerprint !== release.resolutionFingerprint ||
       !hasAuthenticResolutionFingerprint(snapshot) ||
-      !sameJson(snapshot.identities, release.identities) ||
-      !sameJson(output.canonical.content, release.published.content) ||
+      !hasAuthenticStoredCustomerDefinitionRelease({
+        organizationId: release.organizationId,
+        kind: "module",
+        key: release.key,
+        rootId: release.rootId,
+        releaseVersion: release.releaseVersion,
+        contentFingerprint: release.contentFingerprint,
+        resolutionFingerprint: release.resolutionFingerprint,
+        compilationOutput: output,
+        resolutionSnapshot: snapshot,
+      }) ||
+      !sameCanonicalJson(snapshot.identities, release.identities) ||
+      !sameCanonicalJson(output.canonical.content, release.published.content) ||
       !dependencyReferencesMatch(output, release.published.dependencyManifest)
     )
       return invalidStorage();

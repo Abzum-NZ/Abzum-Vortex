@@ -19,3 +19,10 @@ export * from "./definition-publication";
 export * from "./definition-publication-repository";
 export * from "./definition-publication-catalogue";
 export * from "./definition-publication-composition";
+export {
+  createDefinitionConsumerReadService,
+  DefinitionConsumerReadError,
+  definitionConsumerReadErrorCodes,
+  type DefinitionConsumerReadErrorCode,
+} from "./definition-consumer-read";
+export { createDatabaseDefinitionConsumerReadService } from "./definition-consumer-read-composition";

@@ -348,6 +348,22 @@ Publication preparation returns only a safe confirmation: root, expected draft r
 
 An immutable release stores the complete authored source, full canonical compilation output, exact resolution snapshot, published draft revision, assigned stable version, validation-contract version, source/content/resolution/comparison fingerprints, impact reasons, release note, actor and database time. The resolution snapshot is retained because its permanent identity assignments and aliases must not be rebuilt from later state. One dependency row is stored for every selected Module, connection type or platform theme. A Module dependency identifies its same-organisation root, published revision, exact version, content fingerprint and resolution fingerprint; platform catalogue dependencies retain their catalogue identity, exact version, content fingerprint and catalogue fingerprint. The release row, compilation output, resolution snapshot and manifest must be mutually consistent. One root may retain at most 10,000 releases; the database refuses the next append before any write, matching the bounded runtime history contract.
 
+### Definition consumer-read contract
+
+The exported [`definitionConsumerReadCommandSchema`](../../../contracts/src/definition-consumer-read.ts) is a strict discriminated command:
+
+| Field | Rule |
+|---|---|
+| `kind` | Exactly `module` or `application`. |
+| `rootId` | The matching permanent Module or Application root identifier. |
+| `selector` | Exactly `{ selection: current }` or `{ selection: revision, releaseRevision }`; an exact revision is a JavaScript-safe positive integer. |
+
+The exported result is a strict kind-discriminated safe projection containing only `kind`, `organizationId`, `definitionKey`, `rootId`, `releaseRevision`, stable `releaseVersion`, `validationContractVersion`, `contentFingerprint`, `resolutionFingerprint`, complete canonical `content`, sorted complete `dependencyManifest`, and `correlationId`. The manifest uses one exact dependency entry per Module, connection type or platform theme, in deterministic subject order. A connection-type or platform-theme `catalogueFingerprint` authenticates that exact immutable catalogue release rather than the catalogue as a whole; unrelated catalogue additions therefore do not change existing dependency evidence.
+
+It contains no authored source or source fingerprint, draft or pointer state, compilation output or artifact, provenance, resolution-snapshot content, comparison evidence, release note, publisher, time, cache metadata, database relation, row, query, or credential. A consumer cannot request a draft, omit the selector, pass a version range, or select a dependency indirectly.
+
+The Definition service receives the request only through a verified server request context. It returns release-not-found for unknown, foreign, wrong-kind, unpublished-current and unknown-exact selections; context refusal, unavailable exact dependency, stored-integrity failure and unexpected failure use their separate stable safe outcomes. It does not expose raw validation data, stored content on refusal, persistence details or another organisation's existence.
+
 ## Application, page and block contracts
 
 An application contains root identity and its own release version, exact resolved module/version bindings, application permission declarations and roles, navigation, pages, actions, rules, events, workflows, process pipelines, theme settings or platform-theme binding, version-pinned connection bindings, interfaces, public addresses, and default states.

@@ -84,6 +84,43 @@ describe("immutable Definition publication catalogue", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("keeps exact release evidence stable when unrelated catalogue releases are added", async () => {
+    const original = createImmutableDefinitionPublicationCatalogue({
+      connectionTypeReleases: [connectionRelease("1.0.0")],
+      platformThemeReleases: [
+        {
+          catalogueThemeId: themeId,
+          releaseVersion: "2.1.0",
+          contentFingerprint: themeContentFingerprint,
+        },
+      ],
+    });
+    const extended = createImmutableDefinitionPublicationCatalogue({
+      connectionTypeReleases: [connectionRelease("1.0.0"), connectionRelease("1.1.0")],
+      platformThemeReleases: [
+        {
+          catalogueThemeId: themeId,
+          releaseVersion: "2.1.0",
+          contentFingerprint: themeContentFingerprint,
+        },
+        {
+          catalogueThemeId: "70000000-0000-4000-8000-000000000002",
+          releaseVersion: "1.0.0",
+          contentFingerprint: `sha256:${"c".repeat(64)}`,
+        },
+      ],
+    });
+
+    await expect(original.readConnectionTypeRelease(rootId, "1.0.0")).resolves.toMatchObject({
+      catalogueFingerprint: (await extended.readConnectionTypeRelease(rootId, "1.0.0"))
+        ?.catalogueFingerprint,
+    });
+    await expect(original.readPlatformThemeRelease(themeId, "2.1.0")).resolves.toMatchObject({
+      catalogueFingerprint: (await extended.readPlatformThemeRelease(themeId, "2.1.0"))
+        ?.catalogueFingerprint,
+    });
+  });
+
   it("refuses ambiguous versions and connection-key substitutions at construction", () => {
     expect(() =>
       createImmutableDefinitionPublicationCatalogue({

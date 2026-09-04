@@ -105,7 +105,6 @@ const ensureUniquePlatformReleases = (
 
 const compileConnectionTypeRelease = (
   definition: PlatformConnectionTypeReleaseDefinition,
-  catalogueFingerprint: Fingerprint,
 ): ResolvableConnectionTypeRelease => {
   const definitions = [
     {
@@ -135,6 +134,13 @@ const compileConnectionTypeRelease = (
   )[0];
   const connectionOutput =
     compilationOutput?.kind === "connection_type" ? compilationOutput : duplicate();
+  const catalogueFingerprint = fingerprintCanonicalValue({
+    kind: "connection_type",
+    key: definition.source.key,
+    rootId: definition.rootId,
+    releaseVersion: definition.releaseVersion,
+    sourceFingerprint: fingerprintCanonicalValue(definition.source),
+  });
   return deepFreeze({
     key: definition.source.key,
     rootId: definition.rootId,
@@ -157,36 +163,24 @@ export const createImmutableDefinitionPublicationCatalogue = (
   const definition = parsed.success ? parsed.data : duplicate();
   ensureUniquePlatformReleases(definition.connectionTypeReleases, definition.platformThemeReleases);
 
-  const catalogueFingerprint = fingerprintCanonicalValue({
-    connectionTypeReleases: definition.connectionTypeReleases
-      .map((release) => ({
-        key: release.source.key,
-        rootId: release.rootId,
-        releaseVersion: release.releaseVersion,
-        sourceFingerprint: fingerprintCanonicalValue(release.source),
-      }))
-      .sort((left, right) =>
-        compareCanonicalStrings(
-          `${left.key}:${left.releaseVersion}`,
-          `${right.key}:${right.releaseVersion}`,
-        ),
-      ),
-    platformThemeReleases: [...definition.platformThemeReleases].sort((left, right) =>
-      compareCanonicalStrings(
-        `${left.catalogueThemeId}:${left.releaseVersion}`,
-        `${right.catalogueThemeId}:${right.releaseVersion}`,
-      ),
-    ),
-  });
   const connectionTypes = definition.connectionTypeReleases
-    .map((release) => compileConnectionTypeRelease(release, catalogueFingerprint))
+    .map((release) => compileConnectionTypeRelease(release))
     .sort((left, right) =>
       left.key === right.key
         ? compare(left.releaseVersion, right.releaseVersion)
         : compareCanonicalStrings(left.key, right.key),
     );
   const themes: readonly ResolvablePlatformThemeRelease[] = definition.platformThemeReleases.map(
-    (release) => deepFreeze({ ...release, catalogueFingerprint }),
+    (release) =>
+      deepFreeze({
+        ...release,
+        catalogueFingerprint: fingerprintCanonicalValue({
+          kind: "platform_theme",
+          catalogueThemeId: release.catalogueThemeId,
+          releaseVersion: release.releaseVersion,
+          contentFingerprint: release.contentFingerprint,
+        }),
+      }),
   );
   const connectionsByKey = new Map<string, readonly ResolvableConnectionTypeRelease[]>();
   for (const release of connectionTypes)
