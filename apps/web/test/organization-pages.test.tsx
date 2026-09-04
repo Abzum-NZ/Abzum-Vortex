@@ -101,7 +101,7 @@ describe("organisation pages", () => {
     const html = renderToStaticMarkup(
       await OrganizationPage({ params: Promise.resolve({ organizationId: id(3) }) }),
     );
-    expect(html).toContain("Organisation is temporarily unavailable");
+    expect(html).toContain("This organisation is temporarily unavailable");
     expect(html).toContain("Your sign-in is still active");
   });
 });
