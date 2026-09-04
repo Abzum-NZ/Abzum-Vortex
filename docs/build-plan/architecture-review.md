@@ -10,6 +10,16 @@ The inspected documentation baseline is Testing commit `f84fc46915f3d1f200d426b3
 
 ## Findings and owners
 
+### Specification 2.15 follow-up: organisation-managed access
+
+The later organisation-role review corrected an implicit dependency missed by the earlier phase map: #27 proves membership, while #30 also needs actual organisation management permissions. Shared #32/#33/#34 foundations therefore advance from completed #22/#28/#224 and #24/#27 before #30, then #29 completes the Phase 2 administration/isolation outcome. This does not remove any Phase 2 requirement or introduce a tenant-capability shortcut for organisation operations.
+
+All live role registrations, assignments and delegation are organisation-managed. Application templates are immutable published content; activation registers them without assigning access. One custom role may select exact scoped permissions across applications. Use rights and bounded assignment authority are separate, with explicit stewardship and no privilege expansion through application updates or reciprocal delegation. The [platform administration catalogue](../specification/appendices/platform-permission-catalogue.md) fixes the initial genuine platform permission identities without adding a business domain.
+
+The early #34 core is generic, not an administration-only evaluator. Every operation declares its required target policies; unavailable implementations refuse rather than treating permission eligibility as final record authority. Its existing row, ownership/condition, field/action, caller, sharing and consent obligations remain explicitly owned by #35/#36/#37/#104/#107/#153/#154/#156. #36 delivers the early condition-to-row restriction foundation; #57 reuses it for later rule/UI work, avoiding a reverse dependency on Phase 5. The exact retained acceptance text is recorded in those GitHub tasks before narrowing the early foundation's completion claim.
+
+### Earlier review findings
+
 | Finding | Required correction | Delivery owner |
 |---|---|---|
 | Tenant governance requires the active organisation context it must create or restore | Distinguish server-resolved tenant-administrator operations from organisation-local account/data operations; preserve #27's checks | [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) |

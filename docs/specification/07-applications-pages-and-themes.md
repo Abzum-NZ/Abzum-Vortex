@@ -31,7 +31,7 @@ An application records:
 - The modules and version ranges it requires.
 - Module bindings and application-contained record types.
 - Navigation tree, reusable shells with named content slots, and pages.
-- Application roles and assignments.
+- Application role templates. Live organisation assignments are managed separately through [Access](04-access-and-permissions.md#one-organisation-managed-catalogue).
 - Actions, rules, events, workflows, and pipelines.
 - Theme and allowed organisation-level theme adjustments.
 - Public addresses and programmable interfaces.
@@ -174,6 +174,8 @@ A record page keeps one primary subject and a matching main form commit action. 
 Reuse application navigation and theme by reference. Pages and shells publish only with the application. Live updates coalesce bounded subscriptions and refresh affected components; there is no arbitrary four-live-block publication rule.
 
 An application role lists exact permission keys or uses the single value `*` as its whole permission list. `*` means every non-administrative permission declared by that application revision. It cannot be combined with exact keys, does not include a bound module's permissions, and never includes an administrative permission.
+
+These published roles are reusable templates. Registering the application registers its permissions and templates in the selected organisation's [single permission and role catalogue](04-access-and-permissions.md#one-organisation-managed-catalogue), without assigning access to anyone. Organisation administrators manage application-specific assignments and organisation-owned roles, including roles covering selected permissions across applications. An update must not silently broaden existing access or overwrite an organisation's customised role; removed permissions and unavailable applications stop authorising requests. The application operation owns registration and version changes, while Access owns permission evaluation and assignments.
 
 ## Forms and guided forms
 

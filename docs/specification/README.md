@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.14
+**Status:** Approved specification 2.15
 **Date:** 5 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
@@ -13,6 +13,7 @@ This document is the approved product contract for the current build scope. The 
 
 ## Architecture review additions
 
+- [One organisation-managed role and permission catalogue](04-access-and-permissions.md#one-organisation-managed-catalogue): application registration supplies permission declarations and role templates; explicit organisation assignments control access, and application updates never silently broaden grants.
 - [Page-builder contracts and Fluid adaptation](appendices/page-builder-contracts.md): shells, slots, typed settings/data/forms, responsive layout, operation parity and immutable-release migration.
 - [Review findings, subject coverage and corrected delivery order](../build-plan/architecture-review.md).
 - [HR example and workflow-only approvals](appendices/page-builder-contracts.md#hr-example-policy), approved by the owner in this review. This is a normal Vortex application, never hardcoded runtime behavior.
