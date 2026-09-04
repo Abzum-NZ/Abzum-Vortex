@@ -25,9 +25,12 @@ import {
   grantConsentRequestSchema,
   interfaceOperationSchema,
   identityAuthoritySchema,
+  identityProjectionSchema,
+  invitationSchema,
   listArrangementKeys,
   listArrangementSchema,
   organizationAccountSetSchema,
+  organizationAccountSchema,
   organizationSchema,
   pageTypeKeys,
   pageTypeSchema,
@@ -61,6 +64,109 @@ import type {
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
 const fingerprint = `sha256:${"a".repeat(64)}`;
+
+describe("identity projection, organisation-account and invitation contracts", () => {
+  const projection = {
+    identityId: id(710),
+    state: "active",
+    createdAt: "2026-09-04T00:00:00.000Z",
+    stateChangedAt: "2026-09-04T00:00:00.000Z",
+    stateChangedBy: id(710),
+    stateChangeCorrelationId: id(711),
+    revision: 1,
+  } as const;
+  const account = {
+    organizationAccountId: id(712),
+    organizationId: id(713),
+    identityId: projection.identityId,
+    displayName: "Person",
+    state: "active",
+    activatedAt: "2026-09-04T00:01:00.000Z",
+    changedAt: "2026-09-04T00:01:00.000Z",
+    stateChangedAt: "2026-09-04T00:01:00.000Z",
+    stateChangedBy: projection.identityId,
+    stateChangeCorrelationId: id(714),
+    revision: 1,
+  } as const;
+  const invitation = {
+    invitationId: id(715),
+    organizationId: account.organizationId,
+    invitedEmail: "person@example.test",
+    invitedBy: id(716),
+    createdAt: "2026-09-04T00:02:00.000Z",
+    invitedAt: "2026-09-04T00:02:00.000Z",
+    expiresAt: "2026-09-05T00:02:00.000Z",
+    changedAt: "2026-09-04T00:02:00.000Z",
+    revision: 1,
+  } as const;
+
+  test("keeps provider and access authority out of the identity projection", () => {
+    expect(identityProjectionSchema.safeParse(projection).success).toBe(true);
+    expect(
+      identityProjectionSchema.safeParse({
+        ...projection,
+        verifiedPrimaryEmail: "person@example.test",
+      }).success,
+    ).toBe(false);
+    expect(
+      identityProjectionSchema.safeParse({ ...projection, secondFactorState: "enrolled" }).success,
+    ).toBe(false);
+    expect(identityProjectionSchema.safeParse({ ...projection, accessVersion: 1 }).success).toBe(
+      false,
+    );
+  });
+
+  test("has no placeholder invited account state and validates lifecycle evidence", () => {
+    expect(organizationAccountSchema.safeParse(account).success).toBe(true);
+    expect(organizationAccountSchema.safeParse({ ...account, state: "invited" }).success).toBe(
+      false,
+    );
+    expect(organizationAccountSchema.safeParse({ ...account, state: "suspended" }).success).toBe(
+      false,
+    );
+    expect(
+      organizationAccountSchema.safeParse({
+        ...account,
+        state: "suspended",
+        suspendedAt: "2026-09-04T00:03:00.000Z",
+      }).success,
+    ).toBe(true);
+    expect(
+      organizationAccountSchema.safeParse({
+        ...account,
+        state: "suspended",
+        suspendedAt: "2026-09-03T23:59:59.000Z",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("keeps Phase 2 invitations free of role and Team assignments", () => {
+    expect(invitationSchema.safeParse(invitation).success).toBe(true);
+    expect(invitationSchema.safeParse({ ...invitation, proposedRoleIds: [] }).success).toBe(false);
+    expect(invitationSchema.safeParse({ ...invitation, proposedAssignments: [] }).success).toBe(
+      false,
+    );
+    expect(
+      invitationSchema.safeParse({
+        ...invitation,
+        acceptedAt: "2026-09-04T00:03:00.000Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      invitationSchema.safeParse({
+        ...invitation,
+        changedAt: "2026-09-03T23:59:59.000Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      invitationSchema.safeParse({
+        ...invitation,
+        acceptedAt: "2026-09-03T23:59:59.000Z",
+        acceptedOrganizationAccountId: account.organizationAccountId,
+      }).success,
+    ).toBe(false);
+  });
+});
 
 describe("tenant and organisation persistence contracts", () => {
   const tenant = {
@@ -839,6 +945,12 @@ describe("identity, sharing and secret invariants", () => {
     identityId: id(100),
     displayName: "Example person",
     state: "active",
+    activatedAt: "2027-01-15T07:00:00.000Z",
+    changedAt: "2027-01-15T07:00:00.000Z",
+    stateChangedAt: "2027-01-15T07:00:00.000Z",
+    stateChangedBy: id(100),
+    stateChangeCorrelationId: id(105),
+    revision: 1,
   });
 
   test("allows one identity to have separately scoped accounts in several organisations", () => {

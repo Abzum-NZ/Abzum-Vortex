@@ -67,7 +67,7 @@ The codebase is divided into sixteen named services. These are package and owner
 | Service | Owns |
 |---|---|
 | Definition | Module and application drafts, validation, immutable published revisions, dependency graph, restore |
-| Identity | Tenants, tenant-administrator assignments, organisation hierarchy, global identities, organisation accounts, invitations, sessions, sign-in |
+| Identity | Identity Authority integration, cluster-local identity projections, tenants, tenant-administrator assignments, organisation hierarchy, organisation accounts, invitations, sessions, sign-in |
 | Access | Permissions, roles, assignments, sharing grants, access versions, allow/refuse decision, protected grant activation |
 | Module | Module installation, dependencies, generated storage changes |
 | Record | Record validation, storage, calculations, totals, concurrency, data versions |
@@ -85,7 +85,19 @@ The codebase is divided into sixteen named services. These are package and owner
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
-The Identity service begins with the private `vortex_identity` schema. Its tenant and organisation relations enable and force row-level security but expose no policy, table grant, schema usage, or trigger-function execution to `PUBLIC`, Supabase Data API roles, `vortex_runtime`, or `vortex_request`. This structural issue deliberately provides no application operation. Later Identity operations receive only the narrow entry points they require; they do not make the tables directly queryable.
+The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives schema usage and execution only for the exact pre-request operations that ensure a verified identity projection, list active organisations, and accept an invitation. Invitation administration and account-lifecycle helpers remain owner-only until Access and protected administration compose their authorisation. `vortex_request` receives no Identity schema usage in this phase. Trigger functions remain non-executable by runtime roles.
+
+```mermaid
+flowchart LR
+    A[Supabase Identity Authority] --> V[Closed verified identity result]
+    V --> R[Identity runtime operation]
+    R --> P[Minimal cluster identity projection]
+    R --> O[Active organisation accounts]
+    R --> I[Fingerprint-only invitation acceptance]
+    X[Data API or raw request role] -. no table or function access .-> P
+    X -. no table or function access .-> O
+    X -. no table or function access .-> I
+```
 
 ## Database and storage rules
 
@@ -94,7 +106,7 @@ The Identity service begins with the private `vortex_identity` schema. Its tenan
 - Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
 - The table-owner role is limited to migration and controlled verification work.
-- Every protected database transaction establishes one complete context containing the caller kind, global identity or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. Tenant-administrator context alone never satisfies an organisation record policy.
+- Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
 
@@ -248,7 +260,7 @@ Every cluster has a permanent `cluster_id` and a signed manifest registered in t
 
 Clusters cache a verified directory entry for a bounded time and fail closed when they cannot establish a currently approved route. Private signing keys remain in [Doppler](https://docs.doppler.com/docs), and rotation overlaps old and new public keys for a documented verification window.
 
-The shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) issues asymmetric identity tokens whose public keys are available for local verification. Each cluster stores and authorises its own organisation accounts; a global identity token alone never proves organisation membership or a recipient role.
+The shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) issues asymmetric identity tokens whose public keys are available for local verification. Each cluster stores a minimal local eligibility projection and authorises its own organisation accounts; a verified identity token alone never proves cluster eligibility, organisation membership, or a recipient role.
 
 ### Cross-cluster request
 

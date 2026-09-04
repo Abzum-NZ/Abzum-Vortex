@@ -216,6 +216,46 @@ describe("workspace boundaries", () => {
     expect(errors.some((error) => error.includes(definitionDirectory))).toBe(false);
   });
 
+  test("keeps private Identity schema names inside the Identity package", async () => {
+    const identityDirectory = await mkdtemp(path.join(tmpdir(), "vortex-identity-owner-"));
+    const consumerDirectory = await mkdtemp(path.join(tmpdir(), "vortex-identity-consumer-"));
+    temporaryDirectories.push(identityDirectory, consumerDirectory);
+    await mkdir(path.join(identityDirectory, "src"));
+    await mkdir(path.join(consumerDirectory, "src"));
+    await writeFile(
+      path.join(identityDirectory, "src", "index.ts"),
+      'export const operation = "vortex_identity.list_organization_accounts";\n',
+    );
+    await writeFile(
+      path.join(consumerDirectory, "src", "index.ts"),
+      'export const leakedRelation = "vortex_identity.organization_accounts";\n',
+    );
+    const errors = await validateImports([
+      {
+        directory: identityDirectory,
+        manifest: {
+          name: "@vortex/identity",
+          dependencies: {},
+          exports: { ".": "./src/index.ts" },
+          vortex: { tier: 2, environment: "server", ships: true },
+        },
+      },
+      {
+        directory: consumerDirectory,
+        manifest: {
+          name: "@vortex/consumer",
+          dependencies: {},
+          exports: { ".": "./src/index.ts" },
+          vortex: { tier: 2, environment: "server", ships: true },
+        },
+      },
+    ]);
+    expect(errors).toContain(
+      `${path.join(consumerDirectory, "src", "index.ts")} references private database schema vortex_identity owned by @vortex/identity`,
+    );
+    expect(errors.some((error) => error.includes(identityDirectory))).toBe(false);
+  });
+
   test("rejects undeclared external dependencies and relative package escapes", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "vortex-boundary-"));
     temporaryDirectories.push(directory);

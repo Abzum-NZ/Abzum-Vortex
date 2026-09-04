@@ -10,6 +10,7 @@ if (!projectId) throw new Error("Local Supabase project_id is missing or invalid
 
 const scripts = [
   "tenant-organization-concurrency.test.sh",
+  "identity-invitation-concurrency.test.sh",
   "definition-publication-concurrency.test.sh",
   "definition-consumer-read-concurrency.test.sh",
   "definition-history-restore-concurrency.test.sh",

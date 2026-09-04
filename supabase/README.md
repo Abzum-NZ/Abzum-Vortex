@@ -116,12 +116,13 @@ Later pgTAP suites include
 `pg_temp.vortex_private_schema_assertions(...)`. The reusable assertions prove
 the schema owner, direct Data API denial, public creation denial, and absence of
 future-object default grants without installing any permanent test function.
-Ordinary service schemas omit the helper's optional runtime-usage flag. Only
-`vortex_context` passes `true`, because its initializer is the one declared
-runtime exception; object execution remains explicitly granted. A structural
-schema with no request operation, such as the initial `vortex_identity` schema,
-also passes `false` for the request-usage flag. Later work grants a named service
-entry point rather than making its private tables directly queryable.
+Ordinary service schemas omit the helper's optional runtime-usage flag. The
+`vortex_context` and `vortex_identity` schemas pass `true` only where their
+named runtime functions require schema usage; object execution remains
+explicitly granted. `vortex_identity` gives `vortex_request` no schema usage or
+function grant in Phase 2. Its invitation and account-lifecycle helpers remain
+owner-only until the Access service composes and exposes an authorised command.
+Neither runtime role receives direct relation access.
 
 PostgreSQL grants temporary-relation capability through the database-wide
 `PUBLIC` role by default. This baseline leaves that Supabase-managed default
