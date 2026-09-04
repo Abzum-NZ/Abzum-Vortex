@@ -60,3 +60,10 @@ or durable Local schema state.
 No table, policy, grant, function, runtime result, API contract or business rule
 changed. Hosted Testing delivery, hosted advisers and independent review are
 separate protected steps and are not claimed by this local evidence.
+
+Testing execution `7w9iLE15hlvA9ii64ROry` is not the missing complete hosted
+proof. It passed the 13 SQL suites and 736 assertions, but the older image-baked
+runner selected only three concurrency proofs and omitted `vortex_access` from
+lint. [Issue #266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266) corrects
+that provenance boundary. #235 hosted evidence requires a fresh schema-2 receipt
+from the corrected gate; the partial historical run is not reinterpreted.

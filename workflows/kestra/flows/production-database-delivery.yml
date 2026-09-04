@@ -72,6 +72,9 @@ tasks:
       VORTEX_TESTING_EVIDENCE_STATUS: "{{ outputs.load_testing_evidence.value.status }}"
       VORTEX_TESTING_EVIDENCE_SUPABASE_CLI_VERSION: "{{ outputs.load_testing_evidence.value.supabase_cli_version }}"
       VORTEX_TESTING_EVIDENCE_POSTGRES_MAJOR: "{{ outputs.load_testing_evidence.value.postgres_major }}"
+      VORTEX_TESTING_EVIDENCE_RUNNER_SHA256: "{{ outputs.load_testing_evidence.value.runner.sha256 }}"
+      VORTEX_TESTING_EVIDENCE_MANIFEST_SHA256: "{{ outputs.load_testing_evidence.value.verification_manifest.sha256 }}"
+      VORTEX_TESTING_EVIDENCE_COVERAGE_SHA256: "{{ outputs.load_testing_evidence.value.verification_coverage_sha256 }}"
       VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_PRODUCTION_DOPPLER_TOKEN') }}"
       VORTEX_DOPPLER_PROJECT: abzum-vortex
       VORTEX_DOPPLER_CONFIG: ops_prd

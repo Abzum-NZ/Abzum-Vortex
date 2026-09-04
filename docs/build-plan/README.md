@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.15
+**Status:** Approved build plan 2.16
 
 **Date:** 5 September 2026
 
@@ -20,6 +20,7 @@ The [corrected dependency and coverage map](architecture-review.md) is part of t
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.16 | Approved | 5 September 2026 | Corrected hosted database verification provenance: the protected exact commit owns one Local/hosted proof and schema manifest through a fixed bootstrap; receipt version 2 records actual completed coverage, and older partial receipts cannot approve Production. |
 | 2.15 | Approved | 5 September 2026 | One organisation-managed role and permission catalogue; application registration supplies templates without automatic access; explicit review of expanded grants; shared Access foundations must precede organisation-local administration, correcting the earlier phase-order assumption. |
 | 2.14 | Approved | 5 September 2026 | Page/shell/binding contract completion, workflow-only HR example, corrected task dependencies and cross-cutting foundations. |
 | 2.13 | Approved | 5 September 2026 | Completed organisation selection and request context #27: a minimum safe launcher, address-scoped tab selection, browser-supplied identifier only, atomic Identity/Access scope resolution, trusted Identity Authority binding, live Access-version validation, capability-injected protected repositories with no caller-context transaction bypass, pooled transaction cleanup, 725 pgTAP assertions and seven real concurrency proofs. Protected tenant/organisation operations #30 are now dependency-unblocked; the separation suite #29 remains blocked on #30. |
@@ -149,7 +150,7 @@ Exit proof:
 
 **Foundation order:** migration and database-test delivery [#139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139), database guarantees [#28](https://github.com/Abzum-NZ/Abzum-Vortex/issues/28), private tenant/organisation storage invariants [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23), Definition storage [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19), history and restore [#21](https://github.com/Abzum-NZ/Abzum-Vortex/issues/21), consumer reads [#22](https://github.com/Abzum-NZ/Abzum-Vortex/issues/22), the Identity Authority with Local and hosted Testing proofs [#25](https://github.com/Abzum-NZ/Abzum-Vortex/issues/25), cluster-local identity projections, organisation accounts and invitations [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24), the Access-version foundation [#224](https://github.com/Abzum-NZ/Abzum-Vortex/issues/224), Identity sessions [#26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26), and organisation selection/request context [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) are complete. Membership alone does not authorise administration. Advance the shared [permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32), [roles and assignments #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) and [central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) from their actual completed prerequisites before exposing organisation-local operations in [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30). Do not make those foundations depend on this whole epic and thereby create a cycle. The separation suite [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29) follows #30 and [#235](https://github.com/Abzum-NZ/Abzum-Vortex/issues/235). Phase 2 remains open until its full administration and isolation outcomes are proved; this dependency correction does not remove them.
 
-**Phase exit and follow-ups:** the adviser cleanup in [#235](https://github.com/Abzum-NZ/Abzum-Vortex/issues/235) is Phase 2 exit hygiene and should land before the final #29 proof so the hosted performance-adviser result is clean. The bounded-publication work in [#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257) is an independent, non-gating scale follow-up and does not block closing the Phase 2 epic.
+**Phase exit and follow-ups:** the adviser cleanup in [#235](https://github.com/Abzum-NZ/Abzum-Vortex/issues/235) is Phase 2 exit hygiene and should land before the final #29 proof so the hosted performance-adviser result is clean. The corrected exact-commit verification gate [#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266) must produce a complete hosted Testing receipt before #235 or the final #29 evidence relies on hosted database delivery. The bounded-publication work in [#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257) is an independent, non-gating scale follow-up and does not block closing the Phase 2 epic.
 
 **Outcome:** A person can sign in, choose an organisation, tenant administrators can manage a safe organisation hierarchy, and authorised builders can draft, validate, publish and restore modules and applications independently.
 
