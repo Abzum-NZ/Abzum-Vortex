@@ -1,9 +1,4 @@
-import {
-  sessionContextSchema,
-  verifiedIdentitySchema,
-  type SessionContext,
-  type VerifiedIdentity,
-} from "@vortex/contracts";
+import { verifiedIdentitySchema, type VerifiedIdentity } from "@vortex/contracts";
 import type {
   DatabaseRow,
   DatabaseValue,
@@ -28,22 +23,6 @@ const verifiedIdentity = (): VerifiedIdentity =>
     expiresAt: "2026-09-04T01:00:00.000Z",
     authenticationStrength: "single_factor",
     keyId: "test-key",
-  });
-
-const context = (): SessionContext =>
-  sessionContextSchema.parse({
-    callerKind: "human",
-    identityAuthorityId: id(13),
-    tenantId: id(3),
-    organizationId: id(4),
-    identityId: id(5),
-    organizationAccountId: id(6),
-    sessionId: id(7),
-    issuedAt: new Date(Date.now() - 1_000).toISOString(),
-    expiresAt: new Date(Date.now() + 60_000).toISOString(),
-    accessVersion: 1,
-    correlationId: id(8),
-    authenticationStrength: "single_factor",
   });
 
 const projectionRow = {
@@ -92,24 +71,18 @@ const runtimeRunner =
       },
     });
 
-const requestRunner =
-  (
-    rows: readonly DatabaseRow[],
-    calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [],
-  ) =>
-  async <Result>(
-    _context: SessionContext,
-    operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-  ): Promise<Result> =>
-    operation({
-      query: async <Row extends DatabaseRow>(
-        strings: TemplateStringsArray,
-        ...values: readonly DatabaseValue[]
-      ) => {
-        calls.push({ text: statement(strings), values });
-        return rows as readonly Row[];
-      },
-    });
+const requestTransaction = (
+  rows: readonly DatabaseRow[],
+  calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [],
+): RequestDatabaseTransaction => ({
+  query: async <Row extends DatabaseRow>(
+    strings: TemplateStringsArray,
+    ...values: readonly DatabaseValue[]
+  ) => {
+    calls.push({ text: statement(strings), values });
+    return rows as readonly Row[];
+  },
+});
 
 describe("organisation-account service", () => {
   it("ensures a minimal projection from a closed verified identity", async () => {
@@ -184,15 +157,15 @@ describe("organisation-account service", () => {
   it("returns one secure invitation secret and sends only its fingerprint to storage", async () => {
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
     const secret = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
-    const store = createOrganizationAccountStore({
-      requestTransaction: requestRunner([invitationRow], calls),
-      generateInvitationSecret: () => secret,
-    });
+    const store = createOrganizationAccountStore({ generateInvitationSecret: () => secret });
 
-    const result = await store.createInvitationAfterAuthorization(context(), {
-      invitedEmail: "Person@Example.Test",
-      expiresAt: "2026-09-05T00:01:00.000Z",
-    });
+    const result = await store.createInvitationAfterAuthorization(
+      requestTransaction([invitationRow], calls),
+      {
+        invitedEmail: "Person@Example.Test",
+        expiresAt: "2026-09-05T00:01:00.000Z",
+      },
+    );
 
     expect(result.invitationSecret).toBe(secret);
     expect(result.invitation.invitedEmail).toBe("person@example.test");

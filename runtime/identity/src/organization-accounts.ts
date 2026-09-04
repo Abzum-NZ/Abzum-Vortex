@@ -13,11 +13,9 @@ import {
   type IdentityProjection,
   type Invitation,
   type RevokeOrganizationInvitationCommand,
-  type SessionContext,
   type VerifiedIdentity,
 } from "@vortex/contracts";
 import {
-  withRequestTransaction,
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
@@ -53,14 +51,8 @@ type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
-type RequestTransactionRunner = <Result>(
-  context: SessionContext,
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
-
 interface OrganizationAccountStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
-  readonly requestTransaction?: RequestTransactionRunner;
   readonly generateInvitationSecret?: () => string;
 }
 
@@ -173,7 +165,6 @@ export const createOrganizationAccountStore = (
   dependencies: OrganizationAccountStoreDependencies = {},
 ) => {
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
-  const requestTransaction = dependencies.requestTransaction ?? withRequestTransaction;
   const generateInvitationSecret =
     dependencies.generateInvitationSecret ?? (() => randomBytes(32).toString("base64url"));
 
@@ -227,7 +218,7 @@ export const createOrganizationAccountStore = (
     },
 
     async createInvitationAfterAuthorization(
-      context: SessionContext,
+      transaction: RequestDatabaseTransaction,
       command: CreateOrganizationInvitationCommand,
     ): Promise<CreatedOrganizationInvitation> {
       const parsed = createOrganizationInvitationCommandSchema.safeParse(command);
@@ -241,17 +232,15 @@ export const createOrganizationAccountStore = (
       const invitedEmail = normalizeEmail(parsed.data.invitedEmail);
 
       try {
-        const invitation = await requestTransaction(context, async (transaction) => {
-          const rows = await transaction.query<InvitationRow>`
-            select *
-            from vortex_identity.create_organization_invitation(
-              ${invitedEmail}::text,
-              ${tokenFingerprint}::text,
-              ${parsed.data.expiresAt}::timestamptz
-            )
-          `;
-          return parseInvitation(requireOne(rows));
-        });
+        const rows = await transaction.query<InvitationRow>`
+          select *
+          from vortex_identity.create_organization_invitation(
+            ${invitedEmail}::text,
+            ${tokenFingerprint}::text,
+            ${parsed.data.expiresAt}::timestamptz
+          )
+        `;
+        const invitation = parseInvitation(requireOne(rows));
         return { invitation, invitationSecret };
       } catch (error) {
         if (error instanceof OrganizationAccountError) throw error;
@@ -260,22 +249,20 @@ export const createOrganizationAccountStore = (
     },
 
     async revokeInvitationAfterAuthorization(
-      context: SessionContext,
+      transaction: RequestDatabaseTransaction,
       command: RevokeOrganizationInvitationCommand,
     ): Promise<Invitation> {
       const parsed = revokeOrganizationInvitationCommandSchema.safeParse(command);
       if (!parsed.success)
         throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
       try {
-        return await requestTransaction(context, async (transaction) => {
-          const rows = await transaction.query<InvitationRow>`
-            select * from vortex_identity.revoke_organization_invitation(
-              ${parsed.data.invitationId}::uuid,
-              ${parsed.data.expectedRevision}::bigint
-            )
-          `;
-          return parseInvitation(requireOne(rows));
-        });
+        const rows = await transaction.query<InvitationRow>`
+          select * from vortex_identity.revoke_organization_invitation(
+            ${parsed.data.invitationId}::uuid,
+            ${parsed.data.expectedRevision}::bigint
+          )
+        `;
+        return parseInvitation(requireOne(rows));
       } catch (error) {
         if (error instanceof OrganizationAccountError) throw error;
         throw mapStorageFailure(error);

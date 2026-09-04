@@ -15,10 +15,7 @@ import {
   createDefinitionPublicationService,
   type DefinitionPublicationCatalogue,
 } from "../src/definition-publication";
-import {
-  createDatabaseDefinitionPublicationRepository,
-  type DefinitionPublicationTransactionRunner,
-} from "../src/definition-publication-repository";
+import { createDatabaseDefinitionPublicationRepository } from "../src/definition-publication-repository";
 import { createDefinitionStore } from "../src/definition-store";
 import {
   extractSourceIdentityRequirements,
@@ -187,21 +184,17 @@ const runnerWith = (
   response: (text: string, values: readonly DatabaseValue[]) => readonly DatabaseRow[],
 ) => {
   const calls: Call[] = [];
-  const runner: DefinitionPublicationTransactionRunner = async <Result>(
-    _context: SessionContext,
-    operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-  ): Promise<Result> =>
-    operation({
-      query: async <ResultRow extends DatabaseRow>(
-        strings: TemplateStringsArray,
-        ...values: readonly DatabaseValue[]
-      ) => {
-        const text = strings.join("$value");
-        calls.push({ text, values });
-        return response(text, values) as readonly ResultRow[];
-      },
-    });
-  return { calls, runner };
+  const transaction: RequestDatabaseTransaction = {
+    query: async <ResultRow extends DatabaseRow>(
+      strings: TemplateStringsArray,
+      ...values: readonly DatabaseValue[]
+    ) => {
+      const text = strings.join("$value");
+      calls.push({ text, values });
+      return response(text, values) as readonly ResultRow[];
+    },
+  };
+  return { calls, transaction };
 };
 
 const responseFor = (text: string): readonly DatabaseRow[] => {
@@ -318,101 +311,97 @@ const lifecycleRunner = () => {
     history: { kind: "module", definitionKey: source.key, history },
   });
 
-  const runner: DefinitionPublicationTransactionRunner = async <Result>(
-    _context: SessionContext,
-    operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-  ): Promise<Result> =>
-    operation({
-      query: async <ResultRow extends DatabaseRow>(
-        strings: TemplateStringsArray,
-        ...values: readonly DatabaseValue[]
-      ) => {
-        const text = strings.join("$value");
-        if (text.includes("read_publication_state"))
-          return [{ publication_state: publicationStateForCurrentDraft() }] as readonly ResultRow[];
-        if (text.includes("save_draft")) {
-          if (
-            values[0] !== ownResolution.rootId ||
-            values[1] !== draftRevision ||
-            values[3] !== fingerprintCanonicalValue(JSON.parse(String(values[2])))
-          )
-            return [];
-          const nextSource = definitionSourceDocumentSchema.parse(JSON.parse(String(values[2])));
-          if (nextSource.kind !== "module") throw new Error("Module source required");
-          draftSource = nextSource;
-          identityRequirements = JSON.parse(String(values[4])) as SourceIdentityRequirement[];
-          draftRevision += 1;
-          return [storedRow()] as readonly ResultRow[];
-        }
-        if (text.includes("append_release")) {
-          const evidence = JSON.parse(String(values[3])) as {
-            releaseVersion: string;
-            compilationOutput: typeof compilationOutput;
-            resolutionSnapshot: typeof resolution;
-            contentFingerprint: string;
-            resolutionFingerprint: string;
-            validationContractVersion: string;
-            comparisonFingerprint: string;
-            impactReasons: unknown[];
-            releaseNote: string;
-          };
-          const operationAt = `2026-09-04T00:00:${String(draftRevision).padStart(2, "0")}.000Z`;
-          const nextPublication = {
-            kind: "module" as const,
-            rootId: ownResolution.rootId,
-            revision: draftRevision,
-            releaseVersion: evidence.releaseVersion,
-            contentFingerprint: evidence.contentFingerprint,
-            publishedAt: operationAt,
-            publishedBy: actorId,
-            validationContractVersion: evidence.validationContractVersion,
-          };
-          history.push({
-            publication: nextPublication,
-            content: evidence.compilationOutput.canonical.content,
-            dependencyManifest: [],
-            releaseNote: evidence.releaseNote,
-            evidence: {
-              authoredSource: draftSource,
-              authoredSourceFingerprint: fingerprintCanonicalValue(draftSource),
-              sourceContractVersion: draftSource.source_contract_version,
-              compilationOutput: evidence.compilationOutput,
-              resolutionSnapshot: evidence.resolutionSnapshot,
-              resolutionFingerprint: evidence.resolutionFingerprint,
-              comparisonFingerprint: evidence.comparisonFingerprint,
-              impactReasons: evidence.impactReasons,
-            },
-          });
-          appended.push({
+  const transaction: RequestDatabaseTransaction = {
+    query: async <ResultRow extends DatabaseRow>(
+      strings: TemplateStringsArray,
+      ...values: readonly DatabaseValue[]
+    ) => {
+      const text = strings.join("$value");
+      if (text.includes("read_publication_state"))
+        return [{ publication_state: publicationStateForCurrentDraft() }] as readonly ResultRow[];
+      if (text.includes("save_draft")) {
+        if (
+          values[0] !== ownResolution.rootId ||
+          values[1] !== draftRevision ||
+          values[3] !== fingerprintCanonicalValue(JSON.parse(String(values[2])))
+        )
+          return [];
+        const nextSource = definitionSourceDocumentSchema.parse(JSON.parse(String(values[2])));
+        if (nextSource.kind !== "module") throw new Error("Module source required");
+        draftSource = nextSource;
+        identityRequirements = JSON.parse(String(values[4])) as SourceIdentityRequirement[];
+        draftRevision += 1;
+        return [storedRow()] as readonly ResultRow[];
+      }
+      if (text.includes("append_release")) {
+        const evidence = JSON.parse(String(values[3])) as {
+          releaseVersion: string;
+          compilationOutput: typeof compilationOutput;
+          resolutionSnapshot: typeof resolution;
+          contentFingerprint: string;
+          resolutionFingerprint: string;
+          validationContractVersion: string;
+          comparisonFingerprint: string;
+          impactReasons: unknown[];
+          releaseNote: string;
+        };
+        const operationAt = `2026-09-04T00:00:${String(draftRevision).padStart(2, "0")}.000Z`;
+        const nextPublication = {
+          kind: "module" as const,
+          rootId: ownResolution.rootId,
+          revision: draftRevision,
+          releaseVersion: evidence.releaseVersion,
+          contentFingerprint: evidence.contentFingerprint,
+          publishedAt: operationAt,
+          publishedBy: actorId,
+          validationContractVersion: evidence.validationContractVersion,
+        };
+        history.push({
+          publication: nextPublication,
+          content: evidence.compilationOutput.canonical.content,
+          dependencyManifest: [],
+          releaseNote: evidence.releaseNote,
+          evidence: {
+            authoredSource: draftSource,
+            authoredSourceFingerprint: fingerprintCanonicalValue(draftSource),
+            sourceContractVersion: draftSource.source_contract_version,
             compilationOutput: evidence.compilationOutput,
             resolutionSnapshot: evidence.resolutionSnapshot,
-          });
-          publishedRevision = draftRevision;
-          return [
-            {
-              root_id: ownResolution.rootId,
-              release_revision: String(draftRevision),
-              release_version: evidence.releaseVersion,
-              content_fingerprint: evidence.contentFingerprint,
-              resolution_fingerprint: evidence.resolutionFingerprint,
-              comparison_fingerprint: evidence.comparisonFingerprint,
-              dependency_manifest: [],
-              published_at: new Date(operationAt),
-              published_by: actorId,
-            },
-          ] as readonly ResultRow[];
-        }
-        throw new Error("Unexpected lifecycle database operation");
-      },
-    });
+            resolutionFingerprint: evidence.resolutionFingerprint,
+            comparisonFingerprint: evidence.comparisonFingerprint,
+            impactReasons: evidence.impactReasons,
+          },
+        });
+        appended.push({
+          compilationOutput: evidence.compilationOutput,
+          resolutionSnapshot: evidence.resolutionSnapshot,
+        });
+        publishedRevision = draftRevision;
+        return [
+          {
+            root_id: ownResolution.rootId,
+            release_revision: String(draftRevision),
+            release_version: evidence.releaseVersion,
+            content_fingerprint: evidence.contentFingerprint,
+            resolution_fingerprint: evidence.resolutionFingerprint,
+            comparison_fingerprint: evidence.comparisonFingerprint,
+            dependency_manifest: [],
+            published_at: new Date(operationAt),
+            published_by: actorId,
+          },
+        ] as readonly ResultRow[];
+      }
+      throw new Error("Unexpected lifecycle database operation");
+    },
+  };
 
-  return { appended, runner };
+  return { appended, transaction };
 };
 
 describe("database Definition publication repository", () => {
   it("strictly reconstructs a candidate history from immutable stored evidence", async () => {
-    const { calls, runner } = runnerWith((text) => responseFor(text));
-    const repository = createDatabaseDefinitionPublicationRepository(runner);
+    const { calls, transaction } = runnerWith((text) => responseFor(text));
+    const repository = createDatabaseDefinitionPublicationRepository(transaction);
 
     const candidate = await repository.read(context(), (reader) =>
       reader.readCandidate(ownResolution.rootId),
@@ -429,7 +418,7 @@ describe("database Definition publication repository", () => {
 
   it("normalizes the database's explicit null pointer for an unpublished draft", async () => {
     const repository = createDatabaseDefinitionPublicationRepository(
-      runnerWith(() => [{ publication_state: initialPublicationState }]).runner,
+      runnerWith(() => [{ publication_state: initialPublicationState }]).transaction,
     );
 
     const candidate = await repository.read(context(), (reader) =>
@@ -441,8 +430,8 @@ describe("database Definition publication repository", () => {
   });
 
   it("lists and reads only strict immutable Module releases using stored snapshots", async () => {
-    const { calls, runner } = runnerWith((text) => responseFor(text));
-    const repository = createDatabaseDefinitionPublicationRepository(runner);
+    const { calls, transaction } = runnerWith((text) => responseFor(text));
+    const repository = createDatabaseDefinitionPublicationRepository(transaction);
 
     const result = await repository.read(context(), async (reader) => ({
       listed: await reader.listModuleReleases(context().organizationId, source.key),
@@ -458,8 +447,8 @@ describe("database Definition publication repository", () => {
   });
 
   it("passes exact compiled output and resolution evidence to the atomic append operation", async () => {
-    const { calls, runner } = runnerWith((text) => responseFor(text));
-    const repository = createDatabaseDefinitionPublicationRepository(runner);
+    const { calls, transaction } = runnerWith((text) => responseFor(text));
+    const repository = createDatabaseDefinitionPublicationRepository(transaction);
 
     const result = await repository.transaction(context(), (transaction) =>
       transaction.appendRelease({
@@ -495,7 +484,7 @@ describe("database Definition publication repository", () => {
   });
 
   it("maps zero-row stale appends and raw driver/storage failures to closed errors", async () => {
-    const stale = createDatabaseDefinitionPublicationRepository(runnerWith(() => []).runner);
+    const stale = createDatabaseDefinitionPublicationRepository(runnerWith(() => []).transaction);
     await expect(
       stale.transaction(context(), (transaction) =>
         transaction.appendRelease({
@@ -515,7 +504,7 @@ describe("database Definition publication repository", () => {
     const serializationFailure = createDatabaseDefinitionPublicationRepository(
       runnerWith(() => {
         throw { code: "40001", message: "sensitive conflict detail" };
-      }).runner,
+      }).transaction,
     );
     await expect(
       serializationFailure.read(context(), (reader) => reader.readCandidate(ownResolution.rootId)),
@@ -528,7 +517,7 @@ describe("database Definition publication repository", () => {
     const rawFailure = createDatabaseDefinitionPublicationRepository(
       runnerWith(() => {
         throw new Error("sensitive driver detail");
-      }).runner,
+      }).transaction,
     );
     await expect(
       rawFailure.read(context(), (reader) => reader.readCandidate(ownResolution.rootId)),
@@ -539,7 +528,8 @@ describe("database Definition publication repository", () => {
     });
 
     const invalidStorage = createDatabaseDefinitionPublicationRepository(
-      runnerWith(() => [{ publication_state: { ...publicationState, unexpected: true } }]).runner,
+      runnerWith(() => [{ publication_state: { ...publicationState, unexpected: true } }])
+        .transaction,
     );
     await expect(
       invalidStorage.read(context(), (reader) => reader.readCandidate(ownResolution.rootId)),
@@ -548,9 +538,9 @@ describe("database Definition publication repository", () => {
 
   it("publishes rename, removal and reintroduction with current aliases and one permanent ID", async () => {
     const lifecycle = lifecycleRunner();
-    const repository = createDatabaseDefinitionPublicationRepository(lifecycle.runner);
+    const repository = createDatabaseDefinitionPublicationRepository(lifecycle.transaction);
     const service = createDefinitionPublicationService(repository, lifecycleCatalogue);
-    const store = createDefinitionStore(lifecycle.runner);
+    const store = createDefinitionStore(lifecycle.transaction);
     let currentRevision = 1;
     const publishCurrent = async (releaseNote: string) => {
       const prepared = await service.prepare(context(), {
@@ -572,7 +562,7 @@ describe("database Definition publication repository", () => {
 
     const renamed = structuredClone(source);
     renamed.body.extension_points[0]!.key = "renamed_company_fields";
-    const renamedDraft = await store.saveDraft(context(), {
+    const renamedDraft = await store.saveDraft({
       rootId: ownResolution.rootId,
       expectedDraftRevision: currentRevision,
       source: renamed,
@@ -589,7 +579,7 @@ describe("database Definition publication repository", () => {
     removed.body.extension_points = removed.body.extension_points.filter(
       (point) => point.id !== "ext_company_fields",
     );
-    const removedDraft = await store.saveDraft(context(), {
+    const removedDraft = await store.saveDraft({
       rootId: ownResolution.rootId,
       expectedDraftRevision: currentRevision,
       source: removed,
@@ -604,7 +594,7 @@ describe("database Definition publication repository", () => {
 
     const restored = structuredClone(removed);
     restored.body.extension_points.push(structuredClone(renamed.body.extension_points[0]!));
-    const restoredDraft = await store.saveDraft(context(), {
+    const restoredDraft = await store.saveDraft({
       rootId: ownResolution.rootId,
       expectedDraftRevision: currentRevision,
       source: restored,

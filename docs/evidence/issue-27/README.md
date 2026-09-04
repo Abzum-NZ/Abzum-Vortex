@@ -27,5 +27,6 @@ Screenshots:
 - `pnpm verify`: formatting, lint, TypeScript, 23-package boundary enforcement, 635 passing unit tests with three intentional skips, eight complete-fixture checks, and the production Next.js build passed.
 - `pnpm db:verify`: 13 pgTAP files with 725 assertions, seven two-connection concurrency proofs, and Supabase database lint passed.
 - The organisation-context concurrency proof shows an account-state writer waits while protected work holds its live scope and that the next request refuses the suspended account.
+- Independent review found and blocked a legacy caller-context transaction path. The production path was removed, protected Definition and Identity adapters now require an already-initialized request transaction, and boundary enforcement reserves resolved human-context composition to Access.
 
 Hosted Testing evidence and the exact reviewed revision are added only after the protected feature-to-Testing delivery succeeds. Production database delivery is not part of this issue.

@@ -2,7 +2,6 @@ import { sessionContextSchema, type SessionContext } from "@vortex/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   createResolvedRequestTransactionRunner,
-  createRequestTransactionRunner,
   createRuntimeTransactionRunner,
   type DatabaseRow,
   type DatabaseValue,
@@ -58,45 +57,6 @@ describe("request database transaction", () => {
     expect(statements).not.toContain("set local role vortex_request");
   });
 
-  it("establishes context, enters the request role, and then runs the operation", async () => {
-    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
-    const driver = {
-      transaction: async <Result>(
-        operation: (transaction: {
-          query<Row extends DatabaseRow>(
-            strings: TemplateStringsArray,
-            ...values: readonly DatabaseValue[]
-          ): Promise<readonly Row[]>;
-        }) => Promise<Result>,
-      ): Promise<Result> =>
-        operation({
-          query: async <Row extends DatabaseRow>(
-            strings: TemplateStringsArray,
-            ...values: readonly DatabaseValue[]
-          ) => {
-            calls.push({ text: statementText(strings), values });
-            return [] as readonly Row[];
-          },
-        }),
-    };
-    const operation = vi.fn(async (transaction) => {
-      await transaction.query`select ${"safe-value"}::text as value`;
-      return "complete";
-    });
-
-    await expect(createRequestTransactionRunner(driver)(context(), operation)).resolves.toBe(
-      "complete",
-    );
-    expect(calls.map(({ text }) => text)).toEqual([
-      "select vortex_context.initialize($value::text::jsonb)",
-      "set local role vortex_request",
-      "select $value::text as value",
-    ]);
-    expect(JSON.parse(String(calls[0]?.values[0]))).toMatchObject({ callerKind: "human" });
-    expect(calls[2]?.values).toEqual(["safe-value"]);
-    expect(operation).toHaveBeenCalledOnce();
-  });
-
   it("resolves scope, establishes its context, and performs protected work in one transaction", async () => {
     const calls: string[] = [];
     const driver = {
@@ -136,18 +96,49 @@ describe("request database transaction", () => {
     ]);
   });
 
-  it("refuses an invalid context before opening a transaction", async () => {
-    const transaction = vi.fn();
+  it("refuses a resolver's invalid context before initialization or protected work", async () => {
+    const queries = vi.fn(async () => []);
+    let transactionCalls = 0;
+    const transaction = async <Result>(
+      operation: (transaction: {
+        query<Row extends DatabaseRow>(
+          strings: TemplateStringsArray,
+          ...values: readonly DatabaseValue[]
+        ): Promise<readonly Row[]>;
+      }) => Promise<Result>,
+    ): Promise<Result> => {
+      transactionCalls += 1;
+      return operation({ query: queries });
+    };
+    const protectedOperation = vi.fn();
     const invalid = { ...context(), organizationId: "browser-value" } as unknown as SessionContext;
 
     await expect(
-      createRequestTransactionRunner({ transaction })(invalid, async () => undefined),
+      createResolvedRequestTransactionRunner({ transaction })(
+        async () => ({ context: invalid, scope: undefined }),
+        protectedOperation,
+      ),
     ).rejects.toThrow("INVALID_REQUEST_CONTEXT");
-    expect(transaction).not.toHaveBeenCalled();
+    expect(transactionCalls).toBe(1);
+    expect(queries).not.toHaveBeenCalled();
+    expect(protectedOperation).not.toHaveBeenCalled();
   });
 
-  it("refuses an expired context before opening a transaction", async () => {
-    const transaction = vi.fn();
+  it("refuses a resolver's expired context before initialization or protected work", async () => {
+    const queries = vi.fn(async () => []);
+    let transactionCalls = 0;
+    const transaction = async <Result>(
+      operation: (transaction: {
+        query<Row extends DatabaseRow>(
+          strings: TemplateStringsArray,
+          ...values: readonly DatabaseValue[]
+        ): Promise<readonly Row[]>;
+      }) => Promise<Result>,
+    ): Promise<Result> => {
+      transactionCalls += 1;
+      return operation({ query: queries });
+    };
+    const protectedOperation = vi.fn();
     const expired = {
       ...context(),
       issuedAt: new Date(Date.now() - 2_000).toISOString(),
@@ -155,9 +146,14 @@ describe("request database transaction", () => {
     };
 
     await expect(
-      createRequestTransactionRunner({ transaction })(expired, async () => undefined),
+      createResolvedRequestTransactionRunner({ transaction })(
+        async () => ({ context: expired, scope: undefined }),
+        protectedOperation,
+      ),
     ).rejects.toThrow("EXPIRED_REQUEST_CONTEXT");
-    expect(transaction).not.toHaveBeenCalled();
+    expect(transactionCalls).toBe(1);
+    expect(queries).not.toHaveBeenCalled();
+    expect(protectedOperation).not.toHaveBeenCalled();
   });
 
   it("leaves rollback to the transaction driver when protected work fails", async () => {
@@ -167,7 +163,10 @@ describe("request database transaction", () => {
     });
 
     await expect(
-      createRequestTransactionRunner({ transaction })(context(), async () => undefined),
+      createResolvedRequestTransactionRunner({ transaction })(
+        async () => ({ context: context(), scope: undefined }),
+        async () => undefined,
+      ),
     ).rejects.toBe(failure);
     expect(transaction).toHaveBeenCalledOnce();
   });
@@ -201,15 +200,16 @@ describe("request database transaction", () => {
         }
       },
     };
-    const runner = createRequestTransactionRunner(driver);
+    const runner = createResolvedRequestTransactionRunner(driver);
+    const resolve = async () => ({ context: context(), scope: undefined });
 
     await expect(
-      runner(context(), async (transaction) => {
+      runner(resolve, async (transaction) => {
         await transaction.query`select ${"first"}::text`;
         throw new Error("OPERATION_FAILED");
       }),
     ).rejects.toThrow("OPERATION_FAILED");
-    await expect(runner(context(), async () => "second")).resolves.toBe("second");
+    await expect(runner(resolve, async () => "second")).resolves.toBe("second");
 
     expect(
       statements.filter((statement) => statement.startsWith("select vortex_context.initialize")),

@@ -36,7 +36,6 @@ interface RuntimeDatabaseConfiguration {
     | Readonly<{ kind: "hosted_tls"; rootCertificate: string }>;
 }
 
-type RequestOperation<Result> = (transaction: RequestDatabaseTransaction) => Promise<Result>;
 type RuntimeOperation<Result> = (transaction: RuntimeDatabaseTransaction) => Promise<Result>;
 export type ResolvedRequestContext<Scope> = Readonly<{
   context: SessionContext;
@@ -69,25 +68,6 @@ const validateContext = (candidate: SessionContext): SessionContext => {
 
   return parsed.data;
 };
-
-export const createRequestTransactionRunner =
-  (driver: DatabaseDriver) =>
-  async <Result>(context: SessionContext, operation: RequestOperation<Result>): Promise<Result> => {
-    const validated = validateContext(context);
-    const serialized = JSON.stringify(validated);
-
-    return driver.transaction(async (transaction) => {
-      await transaction.query`select vortex_context.initialize(${serialized}::text::jsonb)`;
-      await transaction.query`set local role vortex_request`;
-
-      return operation({
-        query: <ResultRow extends DatabaseRow>(
-          strings: TemplateStringsArray,
-          ...values: readonly DatabaseValue[]
-        ) => transaction.query<ResultRow>(strings, ...values),
-      });
-    });
-  };
 
 export const createRuntimeTransactionRunner =
   (driver: DatabaseDriver) =>
@@ -205,12 +185,6 @@ const loadClient = (): Sql =>
   createRuntimePostgresClient(parseRuntimeDatabaseConfiguration(process.env));
 
 let client: Sql | undefined;
-const defaultRunner = createRequestTransactionRunner({
-  transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
-    client ??= loadClient();
-    return createPostgresDriver(client).transaction(operation);
-  },
-});
 const defaultRuntimeRunner = createRuntimeTransactionRunner({
   transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
     client ??= loadClient();
@@ -223,11 +197,6 @@ const defaultResolvedRequestRunner = createResolvedRequestTransactionRunner({
     return createPostgresDriver(client).transaction(operation);
   },
 });
-
-export const withRequestTransaction = async <Result>(
-  context: SessionContext,
-  operation: RequestOperation<Result>,
-): Promise<Result> => defaultRunner(context, operation);
 
 export const withRuntimeTransaction = async <Result>(
   operation: RuntimeOperation<Result>,

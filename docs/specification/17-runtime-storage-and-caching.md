@@ -212,6 +212,12 @@ application-contained policy also refuses a Phase 2 context because it has no ap
 A tenant-administration operation may use tenant scope only where its owning service explicitly
 permits it; it never satisfies an organisation-record policy.
 
+The database package exposes no production operation that accepts a caller-assembled request context.
+Only Access may use the resolved-request transaction capability. Protected service adapters receive
+the already-initialized request transaction as a required capability and cannot open a second request
+transaction. Package-boundary checks reserve context initialization to the database package and
+resolved human-request composition to Access.
+
 Vercel's serverless database client disables prepared statements for transaction pooling and begins
 with one client connection per instance. A protected operation keeps all context setup and work
 inside one transaction; it never expects a later statement or request to receive the same physical
