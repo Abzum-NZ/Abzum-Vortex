@@ -358,7 +358,7 @@ say "applying pending migrations through Supabase migration history"
   done
   supabase db lint \
     --db-url "$database_url" \
-    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context,vortex_identity,vortex_definition}" \
+    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context,vortex_identity,vortex_definition,vortex_access}" \
     --level warning \
     --fail-on error
 )
