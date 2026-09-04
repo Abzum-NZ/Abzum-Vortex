@@ -3,6 +3,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getIdentityJourneyConfiguration } from "./app/auth/_lib/authority-configuration";
 import { createIdentitySessionClient } from "./app/auth/_lib/supabase-session-client";
 import { identitySessionCookieDeletions } from "./app/auth/_lib/session-cookie";
+import {
+  forwardedIdentitySessionHeaders,
+  requestMatchesConfiguredSite,
+  type IdentitySessionProxyState,
+} from "./app/auth/_lib/session-request-state";
 
 const privateResponse = (response: NextResponse): NextResponse => {
   response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
@@ -12,10 +17,17 @@ const privateResponse = (response: NextResponse): NextResponse => {
 };
 
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const responseFor = (state: IdentitySessionProxyState): NextResponse =>
+    NextResponse.next({
+      request: { headers: forwardedIdentitySessionHeaders(request.headers, state) },
+    });
+
+  let response = responseFor("temporarily_unavailable");
   let boundary: ReturnType<typeof createIdentitySessionClient>;
   try {
-    getIdentityJourneyConfiguration();
+    const configuration = getIdentityJourneyConfiguration();
+    if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, configuration.siteUrl))
+      return privateResponse(response);
     boundary = createIdentitySessionClient(
       request.cookies.getAll().map(({ name, value }) => ({ name, value })),
     );
@@ -24,15 +36,17 @@ export async function proxy(request: NextRequest) {
   }
 
   if (boundary.stage.initialState.kind === "invalid") {
+    response = responseFor("invalid");
     for (const mutation of identitySessionCookieDeletions(boundary.profile))
       response.cookies.set(mutation.name, mutation.value, mutation.options);
     return privateResponse(response);
   }
-  if (boundary.stage.initialState.kind === "missing") return response;
+  if (boundary.stage.initialState.kind === "missing") return responseFor("missing");
 
   const claims = await boundary.client.auth.getClaims();
   const staged = boundary.stage.snapshot();
   if (staged.refused) {
+    response = responseFor("invalid");
     for (const mutation of identitySessionCookieDeletions(boundary.profile))
       response.cookies.set(mutation.name, mutation.value, mutation.options);
     return privateResponse(response);
@@ -43,21 +57,27 @@ export async function proxy(request: NextRequest) {
       !isAuthRetryableFetchError(claims.error) &&
       !isAuthRefreshDiscardedError(claims.error))
   ) {
+    response = responseFor("invalid");
     for (const mutation of identitySessionCookieDeletions(boundary.profile))
       response.cookies.set(mutation.name, mutation.value, mutation.options);
     return privateResponse(response);
   }
+  if (claims.error) return privateResponse(responseFor("temporarily_unavailable"));
   if (staged.mutations.length > 0) {
     // Make the refreshed pair visible to Server Components in this same request,
     // then emit the identical mutations to the browser response.
-    for (const mutation of staged.mutations) request.cookies.set(mutation.name, mutation.value);
-    response = NextResponse.next({ request });
+    for (const mutation of staged.mutations) {
+      if (mutation.value.length === 0 || mutation.options.maxAge === 0)
+        request.cookies.delete(mutation.name);
+      else request.cookies.set(mutation.name, mutation.value);
+    }
+    response = responseFor("verified");
     for (const mutation of staged.mutations)
       response.cookies.set(mutation.name, mutation.value, mutation.options);
     for (const [name, value] of Object.entries(staged.headers)) response.headers.set(name, value);
     return privateResponse(response);
   }
-  return privateResponse(response);
+  return privateResponse(responseFor("verified"));
 }
 
 export const config = {

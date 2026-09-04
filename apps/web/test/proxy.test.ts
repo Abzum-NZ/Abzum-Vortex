@@ -9,6 +9,7 @@ const createIdentitySessionClient = vi.hoisted(() => vi.fn());
 vi.mock("../app/auth/_lib/supabase-session-client", () => ({ createIdentitySessionClient }));
 
 import { proxy } from "../proxy";
+import { identitySessionProxyHeader } from "../app/auth/_lib/session-request-state";
 
 const profile = {
   name: "__Host-vortex-session",
@@ -36,10 +37,17 @@ const boundary = (
   stage: { initialState, snapshot },
 });
 
-const request = () =>
+const request = (cookie = "__Host-vortex-session=original") =>
   new NextRequest("https://vortex.example.test/signed-in", {
-    headers: { cookie: "__Host-vortex-session=original" },
+    headers: {
+      host: "vortex.example.test",
+      cookie,
+      [identitySessionProxyHeader]: "verified",
+    },
   });
+
+const forwardedState = (response: Response): string | null =>
+  response.headers.get(`x-middleware-request-${identitySessionProxyHeader}`);
 
 describe("Next.js identity-session Proxy", () => {
   beforeEach(() => {
@@ -58,8 +66,39 @@ describe("Next.js identity-session Proxy", () => {
     const response = await proxy(request());
 
     expect(getClaims).toHaveBeenCalledOnce();
+    expect(forwardedState(response)).toBe("verified");
     expect(response.headers.get("cache-control")).toContain("private");
     expect(response.headers.get("cache-control")).toContain("no-store");
+  });
+
+  it("deletes stale chunks from the same request during a chunked-to-base rotation", async () => {
+    const incoming = request("__Host-vortex-session.0=old-0; __Host-vortex-session.1=old-1");
+    const options = {
+      secure: true,
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      priority: "high",
+    } as const;
+    getClaims.mockResolvedValue({ data: { claims: {} }, error: null });
+    createIdentitySessionClient.mockReturnValue(
+      boundary({ kind: "valid" }, () => ({
+        refused: false,
+        mutations: [
+          { name: profile.name, value: "rotated-base", options },
+          { name: `${profile.name}.0`, value: "", options: { ...options, maxAge: 0 } },
+          { name: `${profile.name}.1`, value: "", options: { ...options, maxAge: 0 } },
+        ],
+        headers: {},
+      })),
+    );
+
+    const response = await proxy(incoming);
+
+    expect(incoming.cookies.get(profile.name)?.value).toBe("rotated-base");
+    expect(incoming.cookies.get(`${profile.name}.0`)).toBeUndefined();
+    expect(incoming.cookies.get(`${profile.name}.1`)).toBeUndefined();
+    expect(forwardedState(response)).toBe("verified");
   });
 
   it("makes a provider rotation visible to this request and emits the same secure cookie", async () => {
@@ -105,6 +144,7 @@ describe("Next.js identity-session Proxy", () => {
     const response = await proxy(request());
 
     expect(response.headers.get("set-cookie")).toBeNull();
+    expect(forwardedState(response)).toBe("temporarily_unavailable");
     expect(response.headers.get("cache-control")).toContain("no-store");
   });
 
@@ -141,5 +181,18 @@ describe("Next.js identity-session Proxy", () => {
     expect(setCookie).toContain("Max-Age=0");
     expect(setCookie).toContain("Secure");
     expect(setCookie).toContain("HttpOnly");
+    expect(forwardedState(response)).toBe("invalid");
+  });
+
+  it("refuses an actual request origin outside the configured site", async () => {
+    vi.stubEnv("VORTEX_SITE_URL", "http://127.0.0.1:3000");
+    const response = await proxy(
+      new NextRequest("http://192.0.2.10:3000/signed-in", {
+        headers: { host: "192.0.2.10:3000", cookie: "vortex-local-session=credential" },
+      }),
+    );
+
+    expect(createIdentitySessionClient).not.toHaveBeenCalled();
+    expect(forwardedState(response)).toBe("temporarily_unavailable");
   });
 });
