@@ -13,6 +13,8 @@ export interface RequestDatabaseTransaction {
   ): Promise<readonly ResultRow[]>;
 }
 
+export type RuntimeDatabaseTransaction = RequestDatabaseTransaction;
+
 interface TransactionDriver {
   query<ResultRow extends DatabaseRow = DatabaseRow>(
     strings: TemplateStringsArray,
@@ -33,6 +35,7 @@ interface RuntimeDatabaseConfiguration {
 }
 
 type RequestOperation<Result> = (transaction: RequestDatabaseTransaction) => Promise<Result>;
+type RuntimeOperation<Result> = (transaction: RuntimeDatabaseTransaction) => Promise<Result>;
 
 const databaseError = (code: string): Error => {
   const error = new Error(code);
@@ -72,6 +75,11 @@ export const createRequestTransactionRunner =
       });
     });
   };
+
+export const createRuntimeTransactionRunner =
+  (driver: DatabaseDriver) =>
+  async <Result>(operation: RuntimeOperation<Result>): Promise<Result> =>
+    driver.transaction(async (transaction) => operation(transaction));
 
 const createTransactionDriver = (transaction: TransactionSql): TransactionDriver => ({
   query: async <ResultRow extends DatabaseRow>(
@@ -140,8 +148,18 @@ const defaultRunner = createRequestTransactionRunner({
     return createPostgresDriver(client).transaction(operation);
   },
 });
+const defaultRuntimeRunner = createRuntimeTransactionRunner({
+  transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
+    client ??= loadClient();
+    return createPostgresDriver(client).transaction(operation);
+  },
+});
 
 export const withRequestTransaction = async <Result>(
   context: SessionContext,
   operation: RequestOperation<Result>,
 ): Promise<Result> => defaultRunner(context, operation);
+
+export const withRuntimeTransaction = async <Result>(
+  operation: RuntimeOperation<Result>,
+): Promise<Result> => defaultRuntimeRunner(operation);

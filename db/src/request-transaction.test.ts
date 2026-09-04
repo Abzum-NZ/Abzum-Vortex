@@ -2,6 +2,7 @@ import { sessionContextSchema, type SessionContext } from "@vortex/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   createRequestTransactionRunner,
+  createRuntimeTransactionRunner,
   type DatabaseRow,
   type DatabaseValue,
 } from "./request-transaction";
@@ -25,6 +26,36 @@ const context = (): SessionContext =>
 const statementText = (strings: TemplateStringsArray): string => strings.join("$value");
 
 describe("request database transaction", () => {
+  it("runs pre-context trusted work in one transaction without inventing request context", async () => {
+    const statements: string[] = [];
+    const driver = {
+      transaction: async <Result>(
+        operation: (transaction: {
+          query<Row extends DatabaseRow>(
+            strings: TemplateStringsArray,
+            ...values: readonly DatabaseValue[]
+          ): Promise<readonly Row[]>;
+        }) => Promise<Result>,
+      ): Promise<Result> =>
+        operation({
+          query: async <Row extends DatabaseRow>(strings: TemplateStringsArray) => {
+            statements.push(statementText(strings));
+            return [] as readonly Row[];
+          },
+        }),
+    };
+
+    await expect(
+      createRuntimeTransactionRunner(driver)(async (transaction) => {
+        await transaction.query`select pg_catalog.current_role`;
+        return "complete";
+      }),
+    ).resolves.toBe("complete");
+
+    expect(statements).toEqual(["select pg_catalog.current_role"]);
+    expect(statements).not.toContain("set local role vortex_request");
+  });
+
   it("establishes context, enters the request role, and then runs the operation", async () => {
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
     const driver = {

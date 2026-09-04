@@ -13,6 +13,17 @@ export {
   type VerifiedSignInResult,
 } from "./auth-journeys";
 export { createIdentityVerifier, type IdentityVerifier } from "./identity-verifier";
+export {
+  acceptInvitation,
+  createOrganizationAccountStore,
+  ensureIdentityProjection,
+  listOrganizationAccounts,
+  OrganizationAccountError,
+  organizationAccountErrorCodes,
+  type CreatedOrganizationInvitation,
+  type InvitationAcceptanceResult,
+  type OrganizationAccountErrorCode,
+} from "./organization-accounts";
 
 export const IdentityService = Object.freeze({
   key: "identity",

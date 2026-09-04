@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.9
+**Status:** Approved specification 2.10
 **Date:** 4 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
@@ -94,6 +94,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.10 | Approved | 4 September 2026 | Defined the cluster-local identity projection, organisation-account and fingerprint-only invitation contracts: provider identity data remains in Supabase Auth, pending invitations create no account, verified-email acceptance is single-use and concurrency-safe, and only exact pre-request Identity functions receive runtime access. |
 | 2.9 | Approved | 4 September 2026 | Aligned identity email journeys with Supabase's supported verification and implicit redirect flow, including immediate fragment removal, minimum request-local credentials, no durable session before #26, isolated Testing Mailtrap evidence and a Production email-prefetch readiness control. |
 | 2.8 | Approved | 4 September 2026 | Defined bounded immutable definition history and safe draft restoration: newest-first revision pagination, exact metadata reads, source and release-integrity verification, no identity allocation, exact-source provenance, stale-draft refusal and unchanged consumer pinning. |
 | 2.7 | Approved | 4 September 2026 | Defined one server-only Definition-service consumer read: explicit current-or-exact revision selection, safe canonical release projection, exact manifest pinning, release-integrity verification and no cache. |

@@ -10,7 +10,9 @@ One identity may have accounts in several organisations, including organisations
 
 ```mermaid
 flowchart TD
-    I[One global identity] --> L[Neutral sign-in and organisation launcher]
+    I[One environment identity] --> V[Verified identity result]
+    V --> P[Cluster-local identity projection]
+    P --> L[Neutral organisation launcher]
     T1[Tenant A] --> O1[Parent organisation]
     O1 --> O2[Child organisation]
     T2[Tenant B] --> O3[Organisation]
@@ -53,17 +55,17 @@ flowchart LR
 1. A person proves control of a supported sign-in method.
 2. The platform loads the identity's active organisation accounts and tenant-administrator assignments.
 3. If exactly one organisation account is active, the platform may open it directly. Otherwise it shows the organisation launcher.
-4. After an organisation is chosen, every request carries the global identity, tenant, organisation, and organisation-account identifiers.
-5. Leaving or suspending an organisation account affects only that organisation. Suspending the global identity prevents every sign-in.
+4. After an organisation is chosen, every request carries the identity, tenant, organisation, and organisation-account identifiers.
+5. Leaving, suspending, or closing an organisation account affects only that organisation. Suspending or closing the cluster-local identity projection prevents entry to every account in that cluster. Environment-wide identity disablement and session revocation are protected Identity Authority operations delivered by [operational readiness](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not a meaning assigned to a cluster row.
 6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the organisation's access version.
 
 ## Identity across clusters
 
-Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It is implemented with [Supabase Auth](https://supabase.com/docs/guides/auth) and issues short-lived identity tokens using the managed P-256 `ES256` [asymmetric signing key and published key set](https://supabase.com/docs/guides/auth/signing-keys). A cluster verifies a token through the authority's standard JWKS endpoint, then loads only the tenant assignment and organisation account stored in its own cluster. Testing proves this boundary with two independently configured verifier instances; it does not pretend that a second physical Testing cluster exists.
+Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It is implemented with [Supabase Auth](https://supabase.com/docs/guides/auth) and issues short-lived identity tokens using the managed P-256 `ES256` [asymmetric signing key and published key set](https://supabase.com/docs/guides/auth/signing-keys). A cluster verifies a token through the authority's standard JWKS endpoint, ensures or loads its minimal cluster-local identity projection, and then loads only active organisation accounts stored in that cluster. Testing proves this boundary with two independently configured verifier instances; it does not pretend that a second physical Testing cluster exists.
 
 Supabase tokens retain the provider's [required standard claims](https://supabase.com/docs/guides/auth/jwt-fields). After signature verification, the Identity service validates the configured issuer, `authenticated` audience, issue time, not-before time and expiry. It allows no more than 60 seconds of clock difference between systems. It converts only `sub`, `email`, `session_id`, `aal`, `iat`, `exp`, issuer, audience, and the verified JWT key identifier into a closed Vortex result. `sub` becomes the permanent global identity identifier. The `email` claim is accepted only from a non-anonymous authenticated session issued while mandatory email confirmation is enforced; the token itself has no separate email-confirmed claim. The result never contains the Supabase `role`, phone, application metadata, user-editable metadata, tenant-administrator assignments, organisation roles, teams, application access, sharing grants, MCP capability approvals, or an access decision.
 
-No custom access-token hook is used for ordinary identity tokens because Supabase's standard claims contain every fact this result requires. A later owning issue may introduce a hook only after demonstrating that the deployed standard cannot express a required platform invariant. A delegated [MCP OAuth token](12-connections-and-interfaces.md#identity-consent-and-access) may identify its registered client and MCP-server audience under the Phase 9 interface work, but those values still cannot carry organisation or application authority.
+No custom access-token hook is used for identity tokens. Supabase's standard claims contain every identity fact Vortex needs, while tenant, organisation, application and capability authority must remain live platform data. A delegated [MCP OAuth token](12-connections-and-interfaces.md#identity-consent-and-access) may identify its registered client and MCP-server audience under the Phase 9 interface work, but those values still cannot carry organisation or application authority.
 
 ```mermaid
 flowchart LR
@@ -98,9 +100,10 @@ The Identity Authority produces the verified identity result. Safe failures are 
 
 ## Invitations and teams
 
-- An invitation names one organisation, one email address, an expiry, and proposed local roles or teams.
-- Accepting it requires control of that address and creates or reactivates the single organisation account for that identity and organisation.
-- An invitation can be used once, can be revoked, and cannot grant more authority than the inviter may assign.
+- An invitation names one organisation, one normalised verified email address, and an expiry. Phase 2 stores no proposed role or Team assignment; [roles and teams](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) add authorised assignment handling later.
+- The raw invitation secret is generated from 32 cryptographically secure random bytes and is returned only to the trusted delivery caller. The database stores only its SHA-256 fingerprint and never stores or returns the raw secret.
+- Accepting requires a current verified Identity Authority result with exactly the invited normalised email. It creates the one organisation account for that identity and organisation, or reactivates an inactive account only when the invitation was issued after that account became inactive.
+- A pending invitation creates no placeholder account. First acceptance is single-use, expiry-bound, and concurrency-safe. An exact replay by the identity that already accepted it may return the same still-active account after expiry without another mutation; it is no longer a grant operation. Wrong-address, wrong-identity, revoked, expired-first-use, inactive-account, and inactive-organisation or tenant attempts return the same unavailable result. Only the matching verified identity may receive the separate `identity_inactive` outcome for its own inactive cluster projection.
 - One organisation account may belong to several teams. Teams belong to one organisation and may receive roles, application access, and direct record shares.
 - Team membership changes affect the next request and appear in [activity history](14-activity-privacy-and-retention.md).
 
@@ -122,7 +125,7 @@ Legal details, contacts, branding, business calendars, notices and privacy reque
 
 ## Required records
 
-The platform stores the tenant, tenant-administrator assignment, organisation and hierarchy, global identity, organisation account, team and membership, invitation, application access assignment, minimum runtime localisation settings, and sign-in session described in the [data contracts](appendices/data-contracts.md#tenant-identity-and-organisation-account-records). Other administrative data is stored as ordinary application records.
+The platform stores the tenant, tenant-administrator assignment, organisation and hierarchy, minimal cluster-local identity projection, organisation account, team and membership, invitation, application access assignment, minimum runtime localisation settings, and sign-in session described in the [data contracts](appendices/data-contracts.md#tenant-identity-and-organisation-account-records). Supabase Auth remains the environment-wide identity authority; Vortex does not copy its credentials, provider profile, MFA enrolment, or sign-in history. Other administrative data is stored as ordinary application records.
 
 ## Acceptance examples
 
@@ -131,5 +134,7 @@ The platform stores the tenant, tenant-administrator assignment, organisation an
 - A tenant administrator creates a child organisation but cannot read its records without a local organisation account and local roles.
 - A hierarchy move across tenants and a move that creates a cycle are both refused.
 - Suspending one organisation account removes its access on the next request without affecting the identity's other accounts.
+- Suspending a cluster-local identity projection removes every organisation from that cluster's launcher without changing the person's authority record or accounts in another cluster.
+- An invitation with a different current verified email cannot be accepted, and two concurrent acceptances create exactly one organisation account.
 - Two independently configured verifier instances accept the same Testing identity token and produce the same closed identity result without requiring a second physical Testing cluster.
 - Rotating the Supabase signing key keeps the current and next public keys available through the overlap window, and neither key contains organisation authority.

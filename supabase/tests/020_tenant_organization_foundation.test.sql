@@ -7,17 +7,12 @@ begin;
 select * from pg_temp.vortex_private_schema_assertions(
   'vortex_identity',
   'postgres',
-  false,
+  true,
   false
 );
 
 select has_table('vortex_identity', 'tenants', 'tenant storage exists');
 select has_table('vortex_identity', 'organizations', 'organisation storage exists');
-select tables_are(
-  'vortex_identity',
-  array['organizations', 'tenants'],
-  'Identity storage contains only the two structural relations owned by this issue'
-);
 select columns_are(
   'vortex_identity',
   'tenants',
@@ -161,6 +156,11 @@ select is(
     ) as privilege
     left join pg_catalog.pg_roles as granted_role on granted_role.oid = privilege.grantee
     where function.pronamespace = 'vortex_identity'::regnamespace
+      and function.proname in (
+        'protect_tenant_identity', 'protect_organization_identity',
+        'refuse_organization_cycle', 'lock_organization_tenant',
+        'validate_tenant_lifecycle', 'validate_organization_lifecycle'
+      )
       and privilege.privilege_type = 'EXECUTE'
       and (
         privilege.grantee = 0
@@ -224,6 +224,11 @@ select is(
     select count(*)::integer
     from pg_catalog.pg_proc as function
     where function.pronamespace = 'vortex_identity'::regnamespace
+      and function.proname in (
+        'protect_tenant_identity', 'protect_organization_identity',
+        'refuse_organization_cycle', 'lock_organization_tenant',
+        'validate_tenant_lifecycle', 'validate_organization_lifecycle'
+      )
       and function.prosecdef
   ),
   0,
@@ -234,6 +239,11 @@ select is(
     select count(*)::integer
     from pg_catalog.pg_proc as function
     where function.pronamespace = 'vortex_identity'::regnamespace
+      and function.proname in (
+        'protect_tenant_identity', 'protect_organization_identity',
+        'refuse_organization_cycle', 'lock_organization_tenant',
+        'validate_tenant_lifecycle', 'validate_organization_lifecycle'
+      )
       and function.proconfig @> array['search_path=""']
   ),
   6,
