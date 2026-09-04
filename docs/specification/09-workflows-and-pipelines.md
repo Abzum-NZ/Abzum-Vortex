@@ -87,6 +87,8 @@ The generic form-request node pauses for one published form response with assign
 
 An application that needs a task list or approval queue defines ordinary task, request and decision record types and the pages that display them. Those records can trigger or complete the generic human-input step, but they cannot grant permissions or activate cross-organisation sharing. Grant activation uses the protected [grant-consent boundary](04-access-and-permissions.md#protected-grant-consent).
 
+The [IAM application](appendices/iam-application.md) uses this same human-input mechanism for role requests and approval history. Its workflow may apply an approved role change only through a verified published protected-operation binding and current Access checks. A mutable request status is never authority; changing a proposal invalidates earlier approval, and losing approver authority before application refuses the grant. IAM introduces no special workflow node or separate approval engine.
+
 ## Process pipelines
 
 A pipeline belongs to an application and one record type. Each stage has a stable key, user-facing label, and explicit entry/exit action and workflow lists. Each transition names source and target stages, optional permission and action, and an optional typed gate. A time target names its stage, date-time field, and escalation event. Publication resolves every reference and refuses duplicate or missing stages.

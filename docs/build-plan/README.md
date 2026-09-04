@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.15
+**Status:** Approved build plan 2.16
 
 **Date:** 5 September 2026
 
@@ -20,6 +20,7 @@ The [corrected dependency and coverage map](architecture-review.md) is part of t
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.16 | Approved | 5 September 2026 | Added the ordinary IAM application as the only role-grant journey: #72 owns definitions/views, #267 completes generic workflow approvals after #76/#81. Early Access/Identity operations remain private prerequisites, not a temporary granting portal. |
 | 2.15 | Approved | 5 September 2026 | One organisation-managed role and permission catalogue; application registration supplies templates without automatic access; explicit review of expanded grants; shared Access foundations must precede organisation-local administration, correcting the earlier phase-order assumption. |
 | 2.14 | Approved | 5 September 2026 | Page/shell/binding contract completion, workflow-only HR example, corrected task dependencies and cross-cutting foundations. |
 | 2.13 | Approved | 5 September 2026 | Completed organisation selection and request context #27: a minimum safe launcher, address-scoped tab selection, browser-supplied identifier only, atomic Identity/Access scope resolution, trusted Identity Authority binding, live Access-version validation, capability-injected protected repositories with no caller-context transaction bypass, pooled transaction cleanup, 725 pgTAP assertions and seven real concurrency proofs. Protected tenant/organisation operations #30 are now dependency-unblocked; the separation suite #29 remains blocked on #30. |
@@ -296,7 +297,7 @@ Build:
 - Forms, guided-form drafts, action buttons and public pages.
 - A permission-filtered [semantic interface map](../specification/07-applications-pages-and-themes.md#semantic-interface-map) for navigation, pages, queries, forms, drafts, choices, files, actions, Studio and administration. Web components bind to these stable semantic controls so Phase 9 can expose the same capabilities without describing the DOM or rebuilding application behaviour.
 - Process-pipeline definitions and presentation contracts. Real guarded transitions, entry/exit work and timed execution come in Phase 7; unavailable controls are not working-looking placeholders.
-- The protected sign-in and recovery shell, plus locked Tenant Administration and Organisation Administration application definitions built with the same application/page primitives as customer applications.
+- The protected sign-in and recovery shell, plus locked Tenant Administration, Organisation Administration and [IAM application](../specification/appendices/iam-application.md) definitions built with the same application/page primitives as customer applications. IAM owns all role-grant journeys; the other apps link to it. #72 validates its complete definitions and supplies available views, but may not claim working approvals or expose a direct-grant workaround before #267 completes the generic workflow journey after #76/#81.
 
 Exit proof:
 
@@ -308,6 +309,8 @@ Exit proof:
 - The published semantic map contains every meaningful discoverable interface control, omits view-refused controls, and marks a discoverable-unavailable control as non-invocable without exposing its permission key. It uses stable identifiers rather than labels, selectors or coordinates. Form-draft revisions prevent a later browser or future MCP client from overwriting newer input.
 
 ## Phase 7 — Workflow and pipeline execution
+
+The [IAM grant journey #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) consumes #72's validated application definitions and the generic workflow/human-input outcomes #76/#81. It completes user-linked access requests, approvals, effective assignment, stale-authority checks and retry/removal evidence. Do not move Workflow upstream of early Identity/Access foundations or mark IAM role granting complete with only Phase 6 views.
 
 **Current project epic:** [#75](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75)
 

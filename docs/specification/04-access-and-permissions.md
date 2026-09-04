@@ -38,6 +38,10 @@ The database function, permission vocabulary, and shared test cases are canonica
 
 ## Roles
 
+### IAM is the access-management application
+
+All user-facing role grants and access-expanding changes use the [IAM Vortex application](appendices/iam-application.md), including its user-linked request, review and assignment views and generic approval workflows. Organisation ownership remains unchanged. IAM calls the protected Access operations; editing an ordinary request or approval record cannot grant access. Other administration applications link to IAM instead of offering parallel role-grant forms. Its guided first-steward setup and immediate removal paths are defined in the same application contract.
+
 ### One organisation-managed catalogue
 
 All organisation roles, application-role registrations, permission availability, Teams and assignments are managed within one organisation. An application declares its permissions and reusable role templates; it does not operate an independent user or permission administration system. Organisation administrators manage both organisation-wide and application-specific access through the same [administration operations](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
