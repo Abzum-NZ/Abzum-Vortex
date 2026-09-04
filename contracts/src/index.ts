@@ -7,6 +7,7 @@ export * from "./definitions";
 export * from "./definition-source";
 export * from "./definition-compilation-contracts";
 export * from "./definition-consumer-read";
+export * from "./definition-history-contracts";
 export * from "./definition-store-contracts";
 export * from "./identifiers";
 export * from "./identity-access";

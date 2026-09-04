@@ -37,9 +37,11 @@ select columns_are(
   'drafts',
   array[
     'root_id', 'draft_revision', 'draft_source', 'source_contract_version',
-    'identity_requirements', 'source_fingerprint', 'updated_at', 'updated_by'
+    'identity_requirements', 'source_fingerprint', 'updated_at', 'updated_by',
+    'restored_from_release_revision', 'restored_from_source_fingerprint',
+    'restored_by', 'restored_at', 'restore_correlation_id'
   ],
-  'draft columns contain current authored source, current identity requirements and update evidence'
+  'draft columns contain current authored source, identity requirements, update evidence and optional restore provenance'
 );
 select col_type_is('vortex_definition', 'roots', 'root_id', 'uuid', 'root identifiers use UUID');
 select col_type_is(
@@ -198,9 +200,13 @@ select is(
     'append_release',
     'create_root',
     'list_module_releases',
+    'list_release_history',
     'read_consumer_release',
     'read_module_release',
     'read_publication_state',
+    'read_release_history_entry',
+    'read_restore_release_evidence',
+    'restore_release_draft',
     'save_draft'
   ],
   'request receives EXECUTE only on the narrow Definition entry points'
@@ -268,9 +274,13 @@ select is(
     'append_release',
     'create_root',
     'list_module_releases',
+    'list_release_history',
     'read_consumer_release',
     'read_module_release',
     'read_publication_state',
+    'read_release_history_entry',
+    'read_restore_release_evidence',
+    'restore_release_draft',
     'save_draft'
   ],
   'only table-isolating Definition entry points are security definer'
@@ -282,7 +292,7 @@ select is(
     where function.pronamespace = 'vortex_definition'::regnamespace
       and function.proconfig @> array['search_path=""']
   ),
-  14,
+  18,
   'every Definition function fixes an empty search path'
 );
 select has_function(

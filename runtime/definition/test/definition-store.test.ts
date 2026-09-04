@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import {
   createDefinitionRootCommandSchema,
   sessionContextSchema,
@@ -13,12 +11,54 @@ import { createDefinitionStore } from "../src/definition-store";
 import type { DefinitionStoreError } from "../src/definition-store";
 import { extractSourceIdentityRequirements } from "../src/source-identities";
 
-const source = JSON.parse(
-  fs.readFileSync(
-    path.resolve(import.meta.dirname, "../../../testing/fixtures/modules/crm.tags.json"),
-    "utf8",
-  ),
-);
+const source = {
+  source_contract_version: "1.0.0",
+  kind: "module",
+  root_alias: "module_alpha",
+  key: "vortex.example.records",
+  body: {
+    name: "Example records",
+    description: "A neutral definition used only to verify definition storage.",
+    dependencies: [],
+    record_types: [
+      {
+        id: "record_alpha",
+        storage_contract_id: "storage_alpha",
+        key: "entry",
+        name: "Entry",
+        plural_name: "Entries",
+        storage_scope: "organisation_shared",
+        ownership_mode: "none",
+        title_field: "label",
+        standard_actions: ["read"],
+        custom_actions: [],
+        fields: [
+          {
+            id: "field_alpha",
+            key: "label",
+            type: "text",
+            label: "Label",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { max_length: 120 },
+          },
+        ],
+        relationships: [],
+      },
+    ],
+    permissions: [],
+    actions: [],
+    events: [],
+    rules: [],
+    extension_points: [],
+    sharing_conditions: [],
+  },
+};
 const parsedSource = createDefinitionRootCommandSchema.parse({ source }).source;
 const context = (): SessionContext =>
   sessionContextSchema.parse({
@@ -109,6 +149,54 @@ describe("Definition store", () => {
       fingerprintCanonicalValue(source),
       JSON.stringify(extractSourceIdentityRequirements(parsedSource)),
     ]);
+  });
+
+  it("returns complete database-owned restore provenance when it is present", async () => {
+    const restored = {
+      ...row(2),
+      restored_from_release_revision: "1",
+      restored_from_source_fingerprint: fingerprintCanonicalValue(source),
+      restored_by: context().systemActorId,
+      restored_at: new Date("2026-09-04T00:00:01Z"),
+      restore_correlation_id: context().correlationId,
+    };
+    const store = createDefinitionStore(runnerReturning([restored]).runner);
+
+    await expect(
+      store.saveDraft(context(), {
+        rootId: row().root_id,
+        expectedDraftRevision: 1,
+        source,
+      }),
+    ).resolves.toMatchObject({
+      restoredFromReleaseRevision: 1,
+      restoredFromSourceFingerprint: fingerprintCanonicalValue(source),
+      restoredBy: context().systemActorId,
+      restoreCorrelationId: context().correlationId,
+    });
+  });
+
+  it("refuses partial or malformed non-null restore provenance instead of dropping it", async () => {
+    const invalidRows = [
+      { ...row(2), restored_from_release_revision: "not-a-revision" },
+      {
+        ...row(2),
+        restored_from_release_revision: "1",
+        restored_from_source_fingerprint: fingerprintCanonicalValue(source),
+        restored_by: context().systemActorId,
+        restored_at: new Date("2026-09-04T00:00:01Z"),
+      },
+    ];
+    for (const invalid of invalidRows) {
+      const store = createDefinitionStore(runnerReturning([invalid]).runner);
+      await expect(
+        store.saveDraft(context(), {
+          rootId: row().root_id,
+          expectedDraftRevision: 1,
+          source,
+        }),
+      ).rejects.toMatchObject({ code: "INVALID_DEFINITION_STORAGE_RESULT" });
+    }
   });
 
   it("maps a zero-row conditional save to one safe stale-or-missing error", async () => {

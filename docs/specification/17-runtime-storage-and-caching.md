@@ -105,7 +105,7 @@ The private `vortex_definition` schema uses six relations with one responsibilit
 | Relation | Stored responsibility |
 |---|---|
 | `roots` | Permanent organisation, kind and definition key, creation evidence, and a nullable current-release discovery pointer. |
-| `drafts` | Exactly one current parsed authored-source draft, its source-contract version, canonical source fingerprint and expected-save revision. |
+| `drafts` | Exactly one current parsed authored-source draft, its source-contract version, canonical source fingerprint, expected-save revision and optional all-or-none restore provenance bound to an exact immutable source snapshot. |
 | `source_identities` | One append-only UUID for each permanent root or contained-component owner. |
 | `source_identity_aliases` | Append-only historical and current compiler lookup aliases; an old alias cannot be reassigned. |
 | `releases` | Complete immutable authored source, canonical compilation output, the exact resolution snapshot used by that output, stable release version, published draft revision, source/content/resolution/comparison fingerprints, validation-contract version, deterministic impact reasons, release note, actor and database time. |
@@ -125,11 +125,16 @@ flowchart LR
     M --> X[Exact immutable Module release]
     M --> K[Immutable platform catalogue item]
     V -. remains inert .-> U[Existing consumers stay pinned]
+    V --> H[Bounded immutable history]
+    H --> Z[Verified source restore]
+    Z --> D
 ```
 
 Before Access operations exist, Definition create, save, prepare and publish accept only an explicit validated system context. Organisation, actor and time come from that context or PostgreSQL; callers cannot choose them. Direct table access is denied to request, runtime, browser and Supabase service roles. Every relation has forced row security with no browser policy, while narrowly granted empty-search-path functions perform organisation-scoped reads and writes.
 
 Preparation reads the draft, complete release history, permanent identities and available exact dependencies without writing. An allowed range selects the highest compatible stable release at that moment. The returned confirmation records that exact selection. Publication locks and rechecks the root and draft, current pointer, source fingerprint, identities, saved-condition revisions, exact dependency evidence, compilation, validation and version impact before appending one release and manifest and advancing only that root's discovery pointer. The release retains the complete canonical compilation output and its exact resolution snapshot, rather than rebuilding an old release from later identity aliases or catalogue state. Publication never re-resolves a range inside the commit and never modifies a consumer.
+
+History reads use the existing release primary-key order to return a bounded newest-first page or one exact metadata entry. They read the root discovery pointer and release rows in one statement, return no authored source, and add no history table, view or cache. Restore has a separate narrow evidence read and a conditional draft update. The update copies authored source only from the selected immutable release, stores all-or-none provenance with a composite foreign key to the exact source snapshot, and succeeds only at the caller's expected draft revision. It locks no root and creates no identity or alias. Ordinary draft save clears the restore provenance atomically. The existing release ordering is reused unless measured query evidence proves another index is needed.
 
 ### Database roles, connections and request context
 
