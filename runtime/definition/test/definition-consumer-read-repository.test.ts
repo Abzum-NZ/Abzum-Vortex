@@ -21,27 +21,23 @@ const rootId = "60000000-0000-4000-8000-000000000001";
 
 const runnerWith = (rows: readonly DatabaseRow[]) => {
   const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
-  const runner = async <Result>(
-    _context: SessionContext,
-    operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-  ): Promise<Result> =>
-    operation({
-      query: async <ResultRow extends DatabaseRow>(
-        strings: TemplateStringsArray,
-        ...values: readonly DatabaseValue[]
-      ) => {
-        calls.push({ text: strings.join("$value"), values });
-        return rows as readonly ResultRow[];
-      },
-    });
-  return { calls, runner };
+  const transaction: RequestDatabaseTransaction = {
+    query: async <ResultRow extends DatabaseRow>(
+      strings: TemplateStringsArray,
+      ...values: readonly DatabaseValue[]
+    ) => {
+      calls.push({ text: strings.join("$value"), values });
+      return rows as readonly ResultRow[];
+    },
+  };
+  return { calls, transaction };
 };
 
 describe("Definition consumer-read database repository", () => {
   it("uses one statement and maps current to a null revision", async () => {
     const evidence = { kind: "module", private: "evidence" };
-    const { calls, runner } = runnerWith([{ consumer_release: evidence }]);
-    const repository = createDatabaseDefinitionConsumerReadRepository(runner);
+    const { calls, transaction } = runnerWith([{ consumer_release: evidence }]);
+    const repository = createDatabaseDefinitionConsumerReadRepository(transaction);
 
     await expect(
       repository.read(context(), {
@@ -56,8 +52,8 @@ describe("Definition consumer-read database repository", () => {
   });
 
   it("passes an exact revision without following a pointer", async () => {
-    const { calls, runner } = runnerWith([{ consumer_release: {} }]);
-    const repository = createDatabaseDefinitionConsumerReadRepository(runner);
+    const { calls, transaction } = runnerWith([{ consumer_release: {} }]);
+    const repository = createDatabaseDefinitionConsumerReadRepository(transaction);
     await repository.read(context(), {
       kind: "module",
       rootId,
@@ -68,7 +64,7 @@ describe("Definition consumer-read database repository", () => {
 
   it("maps database absence to undefined and refuses an invalid row count", async () => {
     const absent = createDatabaseDefinitionConsumerReadRepository(
-      runnerWith([{ consumer_release: null }]).runner,
+      runnerWith([{ consumer_release: null }]).transaction,
     );
     await expect(
       absent.read(context(), {
@@ -78,7 +74,7 @@ describe("Definition consumer-read database repository", () => {
       }),
     ).resolves.toBeUndefined();
 
-    const invalid = createDatabaseDefinitionConsumerReadRepository(runnerWith([]).runner);
+    const invalid = createDatabaseDefinitionConsumerReadRepository(runnerWith([]).transaction);
     await expect(
       invalid.read(context(), {
         kind: "module",

@@ -6,20 +6,16 @@ import {
   ensureIdentityProjectionCommandSchema,
   identityProjectionSchema,
   invitationSchema,
-  organizationAccountSchema,
   revokeOrganizationInvitationCommandSchema,
   verifiedIdentitySchema,
   type CreateOrganizationInvitationCommand,
   type EnsureIdentityProjectionCommand,
   type IdentityProjection,
   type Invitation,
-  type OrganizationAccount,
   type RevokeOrganizationInvitationCommand,
-  type SessionContext,
   type VerifiedIdentity,
 } from "@vortex/contracts";
 import {
-  withRequestTransaction,
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
@@ -55,14 +51,8 @@ type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RuntimeDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
-type RequestTransactionRunner = <Result>(
-  context: SessionContext,
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
-
 interface OrganizationAccountStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
-  readonly requestTransaction?: RequestTransactionRunner;
   readonly generateInvitationSecret?: () => string;
 }
 
@@ -77,25 +67,6 @@ type IdentityProjectionRow = DatabaseRow & {
   identity_id: unknown;
   state: unknown;
   created_at: unknown;
-  state_changed_at: unknown;
-  state_changed_by: unknown;
-  state_change_correlation_id: unknown;
-  revision: unknown;
-};
-
-type OrganizationAccountRow = DatabaseRow & {
-  organization_account_id: unknown;
-  organization_id: unknown;
-  identity_id: unknown;
-  display_name: unknown;
-  state: unknown;
-  language: unknown;
-  time_zone: unknown;
-  invitation_id: unknown;
-  activated_at: unknown;
-  suspended_at: unknown;
-  closed_at: unknown;
-  changed_at: unknown;
   state_changed_at: unknown;
   state_changed_by: unknown;
   state_change_correlation_id: unknown;
@@ -140,28 +111,6 @@ const parseIdentityProjection = (row: IdentityProjectionRow): IdentityProjection
     stateChangeCorrelationId: row.state_change_correlation_id,
     revision: revision(row.revision),
   });
-
-const accountCandidate = (row: OrganizationAccountRow): unknown => ({
-  organizationAccountId: row.organization_account_id,
-  organizationId: row.organization_id,
-  identityId: row.identity_id,
-  displayName: optional(row.display_name),
-  state: row.state,
-  language: optional(row.language),
-  timeZone: optional(row.time_zone),
-  invitationId: optional(row.invitation_id),
-  activatedAt: timestamp(row.activated_at),
-  suspendedAt: optional(timestamp(row.suspended_at)),
-  closedAt: optional(timestamp(row.closed_at)),
-  changedAt: timestamp(row.changed_at),
-  stateChangedAt: timestamp(row.state_changed_at),
-  stateChangedBy: row.state_changed_by,
-  stateChangeCorrelationId: row.state_change_correlation_id,
-  revision: revision(row.revision),
-});
-
-const parseOrganizationAccount = (row: OrganizationAccountRow): OrganizationAccount =>
-  organizationAccountSchema.parse(accountCandidate(row));
 
 const parseInvitation = (row: InvitationRow): Invitation =>
   invitationSchema.parse({
@@ -216,7 +165,6 @@ export const createOrganizationAccountStore = (
   dependencies: OrganizationAccountStoreDependencies = {},
 ) => {
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
-  const requestTransaction = dependencies.requestTransaction ?? withRequestTransaction;
   const generateInvitationSecret =
     dependencies.generateInvitationSecret ?? (() => randomBytes(32).toString("base64url"));
 
@@ -269,29 +217,8 @@ export const createOrganizationAccountStore = (
       }
     },
 
-    async listOrganizationAccounts(
-      verifiedIdentity: VerifiedIdentity,
-    ): Promise<readonly OrganizationAccount[]> {
-      const verified = verifiedIdentitySchema.safeParse(verifiedIdentity);
-      if (!verified.success)
-        throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-
-      try {
-        return await runtimeTransaction(async (transaction) => {
-          const rows = await transaction.query<OrganizationAccountRow>`
-            select *
-            from vortex_identity.list_organization_accounts(${verified.data.identityId}::uuid)
-          `;
-          return rows.map(parseOrganizationAccount);
-        });
-      } catch (error) {
-        if (error instanceof OrganizationAccountError) throw error;
-        throw mapStorageFailure(error);
-      }
-    },
-
     async createInvitationAfterAuthorization(
-      context: SessionContext,
+      transaction: RequestDatabaseTransaction,
       command: CreateOrganizationInvitationCommand,
     ): Promise<CreatedOrganizationInvitation> {
       const parsed = createOrganizationInvitationCommandSchema.safeParse(command);
@@ -305,17 +232,15 @@ export const createOrganizationAccountStore = (
       const invitedEmail = normalizeEmail(parsed.data.invitedEmail);
 
       try {
-        const invitation = await requestTransaction(context, async (transaction) => {
-          const rows = await transaction.query<InvitationRow>`
-            select *
-            from vortex_identity.create_organization_invitation(
-              ${invitedEmail}::text,
-              ${tokenFingerprint}::text,
-              ${parsed.data.expiresAt}::timestamptz
-            )
-          `;
-          return parseInvitation(requireOne(rows));
-        });
+        const rows = await transaction.query<InvitationRow>`
+          select *
+          from vortex_identity.create_organization_invitation(
+            ${invitedEmail}::text,
+            ${tokenFingerprint}::text,
+            ${parsed.data.expiresAt}::timestamptz
+          )
+        `;
+        const invitation = parseInvitation(requireOne(rows));
         return { invitation, invitationSecret };
       } catch (error) {
         if (error instanceof OrganizationAccountError) throw error;
@@ -324,22 +249,20 @@ export const createOrganizationAccountStore = (
     },
 
     async revokeInvitationAfterAuthorization(
-      context: SessionContext,
+      transaction: RequestDatabaseTransaction,
       command: RevokeOrganizationInvitationCommand,
     ): Promise<Invitation> {
       const parsed = revokeOrganizationInvitationCommandSchema.safeParse(command);
       if (!parsed.success)
         throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
       try {
-        return await requestTransaction(context, async (transaction) => {
-          const rows = await transaction.query<InvitationRow>`
-            select * from vortex_identity.revoke_organization_invitation(
-              ${parsed.data.invitationId}::uuid,
-              ${parsed.data.expectedRevision}::bigint
-            )
-          `;
-          return parseInvitation(requireOne(rows));
-        });
+        const rows = await transaction.query<InvitationRow>`
+          select * from vortex_identity.revoke_organization_invitation(
+            ${parsed.data.invitationId}::uuid,
+            ${parsed.data.expectedRevision}::bigint
+          )
+        `;
+        return parseInvitation(requireOne(rows));
       } catch (error) {
         if (error instanceof OrganizationAccountError) throw error;
         throw mapStorageFailure(error);
@@ -352,6 +275,5 @@ const defaultStore = createOrganizationAccountStore();
 
 export const ensureIdentityProjection = defaultStore.ensureIdentityProjection;
 export const readIdentityProjection = defaultStore.readIdentityProjection;
-export const listOrganizationAccounts = defaultStore.listOrganizationAccounts;
 export const createInvitationAfterAuthorization = defaultStore.createInvitationAfterAuthorization;
 export const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;

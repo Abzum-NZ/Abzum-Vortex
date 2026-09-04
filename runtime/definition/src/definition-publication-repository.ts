@@ -28,11 +28,7 @@ import {
   type PublishDefinitionResult,
   type SessionContext,
 } from "@vortex/contracts";
-import {
-  withRequestTransaction,
-  type DatabaseRow,
-  type RequestDatabaseTransaction,
-} from "@vortex/db";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 import {
@@ -50,11 +46,6 @@ import {
   type ResolvableModuleRelease,
 } from "./definition-publication";
 import { extractSourceIdentityRequirements } from "./source-identities";
-
-export type DefinitionPublicationTransactionRunner = <Result>(
-  context: SessionContext,
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
@@ -553,21 +544,12 @@ const safeRepositoryOperation = async <Result>(
 };
 
 export const createDatabaseDefinitionPublicationRepository = (
-  runInTransaction: DefinitionPublicationTransactionRunner = withRequestTransaction,
+  transaction: RequestDatabaseTransaction,
 ): DefinitionPublicationRepository => ({
   read: (context, operation) =>
-    safeRepositoryOperation(() =>
-      runInTransaction(context, (transaction) =>
-        operation(new DatabasePublicationReader(transaction, context)),
-      ),
-    ),
+    safeRepositoryOperation(() => operation(new DatabasePublicationReader(transaction, context))),
   transaction: (context, operation) =>
     safeRepositoryOperation(() =>
-      runInTransaction(context, (transaction) =>
-        operation(new DatabasePublicationTransaction(transaction, context)),
-      ),
+      operation(new DatabasePublicationTransaction(transaction, context)),
     ),
 });
-
-export const databaseDefinitionPublicationRepository =
-  createDatabaseDefinitionPublicationRepository();

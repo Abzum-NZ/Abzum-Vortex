@@ -258,7 +258,7 @@ expectRedirect(
 const signedInPage = await fetchTestingSite("/signed-in", {
   headers: { cookie: cookieHeader(sessionCookies) },
 });
-if (!signedInPage.ok || !(await signedInPage.text()).includes("You are signed in"))
+if (!signedInPage.ok || !(await signedInPage.text()).includes("No organisations available"))
   throw new Error("The Testing protected identity-session page was unavailable");
 
 expectRedirect(
@@ -271,7 +271,10 @@ if ([...sessionCookies.keys()].some((name) => name.startsWith("__Host-vortex-ses
 const independentBrowser = await fetchTestingSite("/signed-in", {
   headers: { cookie: cookieHeader(secondBrowserCookies) },
 });
-if (!independentBrowser.ok || !(await independentBrowser.text()).includes("You are signed in"))
+if (
+  !independentBrowser.ok ||
+  !(await independentBrowser.text()).includes("No organisations available")
+)
   throw new Error("Signing out one Testing browser ended an independent browser session");
 
 const verifierProof = spawnSync(

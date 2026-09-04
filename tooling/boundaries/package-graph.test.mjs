@@ -256,6 +256,34 @@ describe("workspace boundaries", () => {
     expect(errors.some((error) => error.includes(identityDirectory))).toBe(false);
   });
 
+  test("reserves request-context composition for the database and Access packages", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "vortex-context-consumer-"));
+    temporaryDirectories.push(directory);
+    await mkdir(path.join(directory, "src"));
+    const source = path.join(directory, "src", "index.ts");
+    await writeFile(
+      source,
+      'export const composer = "withResolvedRequestTransaction";\nexport const initializer = "vortex_context.initialize";\n',
+    );
+    const errors = await validateImports([
+      {
+        directory,
+        manifest: {
+          name: "@vortex/consumer",
+          dependencies: {},
+          exports: { ".": "./src/index.ts" },
+          vortex: { tier: 2, environment: "server", ships: true },
+        },
+      },
+    ]);
+    expect(errors).toContain(
+      `${source} uses the Access-only resolved request transaction capability`,
+    );
+    expect(errors).toContain(
+      `${source} references private database schema vortex_context owned by @vortex/db`,
+    );
+  });
+
   test("rejects undeclared external dependencies and relative package escapes", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "vortex-boundary-"));
     temporaryDirectories.push(directory);
