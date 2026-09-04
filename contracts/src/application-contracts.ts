@@ -555,7 +555,9 @@ export const publishedApplicationDefinitionSchema = z
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(value.content, context, ["content"]),
+    requireResolvedRecordTypeReferences(applicationContentSchema, value.content, context, [
+      "content",
+    ]),
   )
   .transform(
     (

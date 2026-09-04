@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { validRange } from "semver";
+import { jsonValueSchema } from "./common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -123,29 +124,121 @@ export const recordTypeReferenceSchema = z.discriminatedUnion("state", [
   resolvedRecordTypeReferenceSchema,
 ]);
 
+/**
+ * Walk already-parsed contract data, not arbitrary JSON shapes.
+ * JSON payloads are opaque. See https://zod.dev/packages/core#internals.
+ * Unsupported structural schemas fail visibly rather than hide references.
+ */
+export const walkDefinitionContract = (
+  schema: z.core.$ZodType,
+  value: unknown,
+  visit: (schema: z.core.$ZodType, value: unknown, path: PropertyKey[]) => void,
+  path: PropertyKey[] = [],
+): void => {
+  visit(schema, value, path);
+  if (schema === jsonValueSchema) return;
+  if (value === null || value === undefined) return;
+  const definition = (schema as z.core.$ZodTypes)._zod.def;
+  const walk = (child: z.core.$ZodType, entry: unknown, childPath = path) =>
+    walkDefinitionContract(child, entry, visit, childPath);
+  switch (definition.type) {
+    case "object":
+      for (const [key, child] of Object.entries(definition.shape))
+        walk(child, (value as Record<string, unknown>)[key], [...path, key]);
+      return;
+    case "array":
+      (value as unknown[]).forEach((entry, index) =>
+        walk(definition.element, entry, [...path, index]),
+      );
+      return;
+    case "tuple":
+      (value as unknown[]).forEach((entry, index) => {
+        const child = definition.items[index] ?? definition.rest;
+        if (child) walk(child, entry, [...path, index]);
+      });
+      return;
+    case "record":
+      for (const [key, entry] of Object.entries(value as Record<string, unknown>))
+        walk(definition.valueType, entry, [...path, key]);
+      return;
+    case "union": {
+      const discriminator =
+        "discriminator" in definition && typeof definition.discriminator === "string"
+          ? definition.discriminator
+          : undefined;
+      const option = definition.options.find((child) => {
+        const childDefinition = (child as z.core.$ZodTypes)._zod.def;
+        if (discriminator && childDefinition.type === "object") {
+          const tag = childDefinition.shape[discriminator];
+          return (
+            tag !== undefined &&
+            z.core.safeParse(tag, (value as Record<string, unknown>)[discriminator]).success
+          );
+        }
+        return z.core.safeParse(child, value).success;
+      });
+      // The owning schema validator reports malformed branches. Never guess a
+      // reference position from a value that does not match a declared branch.
+      if (!option) return;
+      walk(option, value);
+      return;
+    }
+    case "lazy":
+      walk(definition.getter(), value);
+      return;
+    case "optional":
+    case "nullable":
+    case "default":
+    case "readonly":
+      walk(definition.innerType, value);
+      return;
+    case "string":
+    case "number":
+    case "boolean":
+    case "literal":
+    case "enum":
+    case "null":
+    case "undefined":
+    case "never":
+      return;
+    default:
+      throw new Error(`Unsupported definition traversal schema: ${definition.type}`);
+  }
+};
+
+export const unresolvedRecordTypeReferencePaths = (
+  schema: z.core.$ZodType,
+  value: unknown,
+  path: PropertyKey[] = [],
+): PropertyKey[][] => {
+  const paths: PropertyKey[][] = [];
+  walkDefinitionContract(
+    schema,
+    value,
+    (position, entry, entryPath) => {
+      if (
+        position === recordTypeReferenceSchema &&
+        (entry as RecordTypeReference).state === "unresolved"
+      )
+        paths.push(entryPath);
+    },
+    path,
+  );
+  return paths;
+};
+
 export const requireResolvedRecordTypeReferences = (
+  schema: z.core.$ZodType,
   value: unknown,
   context: z.RefinementCtx,
   path: PropertyKey[] = [],
 ): void => {
-  if (Array.isArray(value)) {
-    value.forEach((entry, index) =>
-      requireResolvedRecordTypeReferences(entry, context, [...path, index]),
-    );
-    return;
-  }
-  if (value === null || typeof value !== "object") return;
-  const record = value as Record<PropertyKey, unknown>;
-  if (record.state === "unresolved" && typeof record.qualifiedKey === "string") {
+  for (const referencePath of unresolvedRecordTypeReferencePaths(schema, value, path))
     context.addIssue({
       code: "custom",
-      path,
+      path: referencePath,
       message: "Published content cannot contain an unresolved record-type reference",
     });
-    return;
-  }
-  for (const key of Reflect.ownKeys(record))
-    requireResolvedRecordTypeReferences(record[key], context, [...path, key]);
 };
 
 export type DefinitionKind = z.infer<typeof definitionKindSchema>;

@@ -896,7 +896,7 @@ export const publishedModuleDefinitionSchema = z
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(value.content, context, ["content"]),
+    requireResolvedRecordTypeReferences(moduleContentSchema, value.content, context, ["content"]),
   )
   .transform(
     (
