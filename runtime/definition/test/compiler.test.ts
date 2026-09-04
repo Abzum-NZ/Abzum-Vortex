@@ -91,6 +91,44 @@ const leafPathKeys = (value: unknown, path: readonly (string | number)[] = []): 
       : [JSON.stringify(path)];
 
 describe("authored definition compiler", () => {
+  it("preserves reference-shaped workflow literals through compilation and publish validation", () => {
+    const amended = structuredClone(sources);
+    const source = amended.find(
+      (entry) =>
+        entry.kind === "application" &&
+        entry.body.workflows.some((flow) =>
+          flow.nodes.some(
+            (node) => node.type === "call_connection" && "variables" in node.config.inputs,
+          ),
+        ),
+    );
+    if (!source || source.kind !== "application")
+      throw new Error("Structured-input example required");
+    const node = source.body.workflows
+      .flatMap((flow) => flow.nodes)
+      .find((entry) => entry.type === "call_connection" && "variables" in entry.config.inputs);
+    if (!node || node.type !== "call_connection") throw new Error("Connection node required");
+    const payload = {
+      state: "unresolved",
+      qualifiedKey: "sample:item",
+      source: "node_output",
+      nodeId: "application data",
+      fieldId: "application data",
+      entries: [
+        { id: "same", key: "same" },
+        { id: "same", key: "same" },
+      ],
+      nested: [{ source: "field", fieldId: "not a dependency" }],
+    };
+    node.config.inputs.variables = { source: "literal", value: payload };
+    const requests = amended.map(requestFor);
+    const result = compileDefinitionSet(requests, publicationOptions);
+    expect(JSON.stringify(result)).toContain(JSON.stringify(payload));
+    const output = requests
+      .map(compileDefinition)
+      .find((entry) => entry.kind === "application" && entry.canonical.envelope.key === source.key);
+    expect(JSON.stringify(output)).toContain(JSON.stringify(payload));
+  });
   it("compiles all thirteen source definitions through the immutable snapshot", () => {
     const outputs = sources.map((source) => {
       try {

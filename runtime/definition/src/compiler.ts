@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import { satisfies } from "semver";
 import {
   applicationDraftSchema,
+  conditionNodeSchema,
+  jsonValueSchema,
+  walkDefinitionContract,
   connectionTypeSchema,
   definitionCompilationOutputSchema,
   definitionCompilationRequestSchema,
@@ -1913,18 +1916,13 @@ function fieldSettings(
       } else if (expression.operation === "condition") {
         const compiledCondition = condition(expression.condition, localField);
         const dependencySet = new Set<string>();
-        const collectFieldDependencies = (value: unknown): void => {
-          if (Array.isArray(value)) {
-            value.forEach(collectFieldDependencies);
-            return;
-          }
+        walkDefinitionContract(conditionNodeSchema, compiledCondition, (schema, value) => {
+          if (schema === jsonValueSchema) return;
           if (value === null || typeof value !== "object") return;
           const entry = value as JsonObject;
           if (entry.source === "field" && typeof entry.fieldId === "string")
             dependencySet.add(entry.fieldId);
-          Object.values(entry).forEach(collectFieldDependencies);
-        };
-        collectFieldDependencies(compiledCondition);
+        });
         dependencies = [...dependencySet];
         compiled = { kind: "condition", condition: compiledCondition };
       } else if (expression.operation === "date_offset") {
