@@ -85,6 +85,8 @@ The codebase is divided into sixteen named services. These are package and owner
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
+The Identity service begins with the private `vortex_identity` schema. Its tenant and organisation relations enable and force row-level security but expose no policy, table grant, schema usage, or trigger-function execution to `PUBLIC`, Supabase Data API roles, `vortex_runtime`, or `vortex_request`. This structural issue deliberately provides no application operation. Later Identity operations receive only the narrow entry points they require; they do not make the tables directly queryable.
+
 ## Database and storage rules
 
 - Every organisation-owned row carries its organisation identifier and is indexed with that identifier first where the access path requires it.
@@ -95,6 +97,39 @@ Each service owns its tables and public contract. Another service calls that con
 - Every protected database transaction establishes one complete context containing the caller kind, global identity or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
+
+### Definition storage and publication evidence
+
+The private `vortex_definition` schema uses six relations with one responsibility each. It stores no starter application, business record, consumer installation, grant, workflow run, or duplicate history document.
+
+| Relation | Stored responsibility |
+|---|---|
+| `roots` | Permanent organisation, kind and definition key, creation evidence, and a nullable current-release discovery pointer. |
+| `drafts` | Exactly one current parsed authored-source draft, its source-contract version, canonical source fingerprint and expected-save revision. |
+| `source_identities` | One append-only UUID for each permanent root or contained-component owner. |
+| `source_identity_aliases` | Append-only historical and current compiler lookup aliases; an old alias cannot be reassigned. |
+| `releases` | Complete immutable authored source, canonical compilation output, the exact resolution snapshot used by that output, stable release version, published draft revision, source/content/resolution/comparison fingerprints, validation-contract version, deterministic impact reasons, release note, actor and database time. |
+| `release_dependencies` | One exact Module, connection-type or platform-theme dependency per release subject, with its exact version, content fingerprint and separate resolution/catalogue evidence fingerprint. |
+
+```mermaid
+flowchart LR
+    R[Permanent definition root] --> D[One editable draft]
+    R --> I[Permanent source identities]
+    I --> A[Append-only aliases]
+    D --> P[Read-only publication preparation]
+    P --> C[Safe confirmation]
+    C --> T[One locked publication transaction]
+    T --> V[Immutable release]
+    V --> M[Exact dependency manifest]
+    T --> R
+    M --> X[Exact immutable Module release]
+    M --> K[Immutable platform catalogue item]
+    V -. remains inert .-> U[Existing consumers stay pinned]
+```
+
+Before Access operations exist, Definition create, save, prepare and publish accept only an explicit validated system context. Organisation, actor and time come from that context or PostgreSQL; callers cannot choose them. Direct table access is denied to request, runtime, browser and Supabase service roles. Every relation has forced row security with no browser policy, while narrowly granted empty-search-path functions perform organisation-scoped reads and writes.
+
+Preparation reads the draft, complete release history, permanent identities and available exact dependencies without writing. An allowed range selects the highest compatible stable release at that moment. The returned confirmation records that exact selection. Publication locks and rechecks the root and draft, current pointer, source fingerprint, identities, saved-condition revisions, exact dependency evidence, compilation, validation and version impact before appending one release and manifest and advancing only that root's discovery pointer. The release retains the complete canonical compilation output and its exact resolution snapshot, rather than rebuilding an old release from later identity aliases or catalogue state. Publication never re-resolves a range inside the commit and never modifies a consumer.
 
 ### Database roles, connections and request context
 
@@ -283,9 +318,9 @@ The allowed layers are:
 | Layer | Location and key | Rule |
 |---|---|---|
 | Built application assets | [Vercel CDN](https://vercel.com/docs/caching/cdn-cache), keyed by content hash | May be shared across organisations because the content is identical and contains no organisation data. This is the explicit exception to organisation-keyed caches. |
-| Request-local values | One server request | Session context, live pointers, access version, and repeated calculations may be reused only within that request. |
+| Request-local values | One server request | Session context, access version, explicitly requested discovery pointers, and repeated calculations may be reused only within that request. |
 | Immutable definition revisions | Shared [Vercel cache](https://vercel.com/docs/caching), keyed by organisation, root key, revision and content fingerprint | Revisions never change. Cross-organisation keys are structurally impossible. |
-| Resolved application and theme | Shared cache, keyed by organisation, published revisions, person where needed, and current access version | A request reads current pointers and access version before using the entry. |
+| Resolved application and theme | Shared cache, keyed by organisation, the exact releases pinned by the owning installation or operation, person where needed, and current access version | Existing consumers keep their pinned releases. A current pointer is read only during explicit discovery, installation, or upgrade. |
 | Initial data-block result | Shared cache only when explicitly allowed; keyed by organisation, person, access version, record-type data versions and query fingerprint | Never stores sensitive fields. A record save increments the owning Record service's data version, making old results unreachable. |
 
 Current published pointers, current organisation-account state, current access version, permission decisions, secrets, and responses containing sensitive fields are never served from a cross-request cache.
@@ -297,7 +332,7 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 - A cache-writing function requires an organisation identifier except for content-hashed application assets.
 - Cached values that differ by person require the person identifier and access version.
 - Data cache keys name every record-type data version used by the query.
-- Publication does not depend on eventual cache expiry because current pointers are read live.
+- Publication does not retarget an existing consumer. It invalidates discovery and Studio views of the root's current release; installed applications, grants, workflows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them.
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
 
@@ -312,7 +347,7 @@ The first release does not place cross-organisation shared-record results in the
 - The static application shell can be a cross-organisation cache hit because it contains no organisation state.
 - Priming every organisation-owned cache layer in Organisation A cannot create a hit in Organisation B.
 - Suspending an organisation account makes the next request refuse before any person-specific cache value is used.
-- Publishing a definition makes the next request read the new live pointer without waiting five minutes.
+- Publishing a definition makes explicit discovery and Studio views see the new current release without waiting for cache expiry, while existing consumers remain pinned to their previously selected exact releases.
 - Changing a record makes a cached data result under the old record-type data version unreachable.
 - A cross-organisation shared-record query bypasses the cross-request data-result cache.
 - A grant cannot expose an identity, connection, activity, grant-consent, entitlement-policy, or access-control row.

@@ -33,9 +33,11 @@ jq --exit-status \
    (.migrations | length) > 0' \
   "$VORTEX_EVIDENCE_PATH" >/dev/null
 
-assert_partial_hierarchy_release_refused() {
-  local artifact_path="$1"
-  local expected_message="$2"
+assert_partial_concurrency_release_refused() {
+  local migration_path="$1"
+  local proof_path="$2"
+  local artifact_path="$3"
+  local expected_message="$4"
   local partial_checkout="$test_root/partial-checkout"
   local partial_commit
 
@@ -43,9 +45,7 @@ assert_partial_hierarchy_release_refused() {
   git clone --quiet "$test_root/remote.git" "$partial_checkout"
   git -C "$partial_checkout" config user.name delivery-test
   git -C "$partial_checkout" config user.email delivery-test@example.invalid
-  rm -f \
-    "$partial_checkout/supabase/migrations/20260903174244_tenant_organization_foundation.sql" \
-    "$partial_checkout/supabase/tests/tenant-organization-concurrency.test.sh"
+  rm -f "$partial_checkout/$migration_path" "$partial_checkout/$proof_path"
   mkdir -p "$(dirname "${partial_checkout}/${artifact_path}")"
   : >"${partial_checkout}/${artifact_path}"
   git -C "$partial_checkout" add --all -- supabase/migrations supabase/tests
@@ -55,7 +55,7 @@ assert_partial_hierarchy_release_refused() {
   export VORTEX_GITHUB_COMMIT="$partial_commit"
 
   if "$delivery_script" >"$test_root/partial-release.log" 2>&1; then
-    echo "expected partial tenant and organisation release to be refused" >&2
+    echo "expected a partial migration/concurrency-proof release to be refused" >&2
     exit 1
   fi
   grep --fixed-strings --quiet "$expected_message" "$test_root/partial-release.log"
@@ -64,12 +64,26 @@ assert_partial_hierarchy_release_refused() {
   export VORTEX_GITHUB_COMMIT="$commit"
 }
 
-assert_partial_hierarchy_release_refused \
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260903174244_tenant_organization_foundation.sql \
+  supabase/tests/tenant-organization-concurrency.test.sh \
   supabase/migrations/20260903174244_tenant_organization_foundation.sql \
   "tenant and organisation migration has no concurrency proof"
-assert_partial_hierarchy_release_refused \
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260903174244_tenant_organization_foundation.sql \
+  supabase/tests/tenant-organization-concurrency.test.sh \
   supabase/tests/tenant-organization-concurrency.test.sh \
   "tenant and organisation concurrency proof has no migration"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260903231258_definition_publication_operations.sql \
+  supabase/tests/definition-publication-concurrency.test.sh \
+  supabase/migrations/20260903231258_definition_publication_operations.sql \
+  "Definition publication migration has no concurrency proof"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260903231258_definition_publication_operations.sql \
+  supabase/tests/definition-publication-concurrency.test.sh \
+  supabase/tests/definition-publication-concurrency.test.sh \
+  "Definition publication concurrency proof has no migration"
 
 migration_set_sha256="$(jq --raw-output '.migration_set_sha256' "$VORTEX_EVIDENCE_PATH")"
 export VORTEX_DELIVERY_OPERATION=apply
@@ -174,11 +188,13 @@ unset VORTEX_TEST_REMOTE_MIGRATION_MISMATCH
 export VORTEX_TEST_PG_PROVE_MARKER="$test_root/pg-prove-called"
 "$delivery_script"
 test -f "$VORTEX_TEST_PG_PROVE_MARKER"
-if [ -f "$source_repository/supabase/tests/tenant-organization-concurrency.test.sh" ]; then
-  test -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-else
-  test ! -e "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-fi
+test -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+grep --fixed-strings --quiet \
+  "supabase/tests/tenant-organization-concurrency.test.sh" \
+  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+grep --fixed-strings --quiet \
+  "supabase/tests/definition-publication-concurrency.test.sh" \
+  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 jq --exit-status \
   '.status == "succeeded" and
    .environment == "production" and

@@ -12,6 +12,7 @@ import {
   recordTypeReferenceSchema,
   revisionSchema,
   semanticVersionSchema,
+  sourceIdentityAssignmentSchema,
   storageCatalogEntrySchema,
   storageLineageDecisionSchema,
   timestampSchema,
@@ -211,6 +212,19 @@ describe("identifier and definition contracts", () => {
       recordTypeReferenceSchema.safeParse({ state: "resolved", qualifiedKey: "people:contact" })
         .success,
     ).toBe(false);
+  });
+
+  test("allows a complete public-address path as a permanent source alias", () => {
+    expect(
+      sourceIdentityAssignmentSchema.safeParse({
+        definitionKey: "example.application",
+        scope: "content",
+        kind: "public_address",
+        componentOwner: "public_address_owner",
+        alias: `/${"path-segment/".repeat(20)}entry`,
+        identifier: id("26"),
+      }).success,
+    ).toBe(true);
   });
 });
 

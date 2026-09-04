@@ -12,12 +12,10 @@ import {
 } from "../src/compilation-error";
 import { compileDefinition } from "../src/compiler";
 import { fingerprintCanonicalValue } from "../src/canonical-json";
-import { compareDefinitionVersionImpact } from "../src/version-impact";
 import {
   compileDefinitionSet,
   definitionSemanticRules,
   evaluateSavedSharingCondition,
-  fingerprintActiveDependantCheck,
   validateDefinitionSource,
   validateDefinitionSet,
   workflowValueCompatible,
@@ -50,8 +48,7 @@ const draftMetadata = {
 } as const;
 const savedConditionRevisions = [
   {
-    definitionKey: "vortex.service_desk.cases",
-    alias: "share_case_priority",
+    conditionId: "a4b5546d-8a54-4003-adc4-ddb8b0d7257d",
     revision: 1,
   },
 ] as const;
@@ -59,7 +56,6 @@ const publicationOptions = {
   publishedHistories: sources
     .filter((source) => source.kind === "module" || source.kind === "application")
     .map((source) => ({ kind: source.kind, definitionKey: source.key, history: [] })),
-  activeDependants: [],
 } as const;
 const requestFor = (source: (typeof sources)[number]) => ({
   source,
@@ -256,7 +252,7 @@ describe("authored definition compiler", () => {
     expect(() =>
       compileDefinitionSet(
         [{ source: { kind: "module" } }] as unknown as ReturnType<typeof requestFor>[],
-        { publishedHistories: [], activeDependants: [] },
+        { publishedHistories: [] },
       ),
     ).toThrowError("vortex.definition.invalid_compilation_request");
   });
@@ -1243,64 +1239,25 @@ describe("authored definition compiler", () => {
     ).toContain("vortex.definition.module_action_references");
   });
 
-  it("requires publication history and checks active dependants", () => {
+  it("requires publication history and refuses caller-supplied dependant state", () => {
     const requests = sources.map(requestFor);
-    const outputs = requests.map((request) => compileDefinition(request));
     expect(() =>
       compileDefinitionSet(requests, {
         publishedHistories: [
           ...publicationOptions.publishedHistories,
           publicationOptions.publishedHistories[0]!,
         ],
-        activeDependants: [],
       }),
     ).toThrowError("vortex.definition.invalid_publication_context");
-    expect(() =>
-      compileDefinitionSet(requests, { publishedHistories: [], activeDependants: [] }),
-    ).toThrowError("vortex.definition.prior_published_version_required");
-    const candidate = outputs.find(
-      (output) => output.kind === "module" && output.artifact.definitionKey === "vortex.crm.tags",
+    expect(() => compileDefinitionSet(requests, { publishedHistories: [] })).toThrowError(
+      "vortex.definition.prior_published_version_required",
     );
-    const dependant = outputs.find(
-      (output) =>
-        output.kind === "application" && output.artifact.definitionKey === "vortex.app.crm",
-    );
-    if (!candidate || candidate.kind !== "module" || !dependant)
-      throw new Error("Expected compiled candidate and dependant");
-    const comparison = compareDefinitionVersionImpact({
-      kind: "module",
-      history: [],
-      candidate: candidate.canonical,
-    });
-    const candidateExactVersion =
-      comparison.outcome === "no_change" ? comparison.currentVersion : comparison.assignedVersion;
-    const dependantCheck = {
-      definitionKind: "module" as const,
-      definitionKey: candidate.artifact.definitionKey,
-      definitionRootId: candidate.artifact.rootId,
-      candidateExactVersion,
-      candidateContentFingerprint: candidate.artifact.contentFingerprint,
-      candidateResolutionFingerprint: candidate.artifact.resolutionFingerprint,
-      dependantKey: dependant.artifact.definitionKey,
-      dependantKind: dependant.kind,
-      dependantRootId: dependant.artifact.rootId,
-      dependantExactVersion: dependant.artifact.exactVersion,
-      dependantContentFingerprint: dependant.artifact.contentFingerprint,
-      acceptedVersion: { selection: "exact" as const, version: "2.0.0" },
-      referencesValid: true,
-      comparisonFingerprint: comparison.comparisonFingerprint,
-    };
     expect(() =>
       compileDefinitionSet(requests, {
         publishedHistories: publicationOptions.publishedHistories,
-        activeDependants: [
-          {
-            ...dependantCheck,
-            referenceCheckFingerprint: fingerprintActiveDependantCheck(dependantCheck),
-          },
-        ],
-      }),
-    ).toThrowError("vortex.definition.active_dependants_compatible");
+        activeDependants: [],
+      } as never),
+    ).toThrowError("vortex.definition.invalid_publication_context");
   });
 
   it("publishes one application against already-compiled immutable dependencies", () => {
@@ -1311,7 +1268,6 @@ describe("authored definition compiler", () => {
     const outputs = compileDefinitionSet([requestFor(application)], {
       dependencyOutputs: dependencies,
       publishedHistories: [{ kind: "application", definitionKey: application.key, history: [] }],
-      activeDependants: [],
     });
     expect(outputs).toHaveLength(1);
     expect(outputs[0]?.dependencyOrder).toEqual(
@@ -1324,6 +1280,77 @@ describe("authored definition compiler", () => {
     expect(outputs[0]?.resolvedDependencies.every((dependency) => dependency.exactVersion)).toBe(
       true,
     );
+  });
+
+  it("publishes a breaking module release without retargeting an application pinned to 1.x", () => {
+    const moduleSource = structuredClone(
+      sources.find(
+        (source) => source.kind === "module" && source.key === "vortex.crm.organisations",
+      ),
+    );
+    const applicationSource = sources.find(
+      (source) => source.kind === "application" && source.key === "vortex.app.crm",
+    );
+    if (!moduleSource || moduleSource.kind !== "module" || !applicationSource)
+      throw new Error("Pinned-consumer fixtures missing");
+
+    const initialModule = compileDefinition(requestFor(moduleSource));
+    if (initialModule.kind !== "module") throw new Error("Module output expected");
+    const pinnedApplicationBefore = compileDefinition(requestFor(applicationSource));
+    if (pinnedApplicationBefore.kind !== "application")
+      throw new Error("Application output expected");
+
+    const company = moduleSource.body.record_types.find(
+      (recordType) => recordType.key === "company",
+    );
+    const companyName = company?.fields.find((field) => field.key === "name");
+    if (!companyName || companyName.type !== "text") throw new Error("Company name field missing");
+    companyName.settings.max_length = 100;
+
+    const breakingResolution = structuredClone(resolution);
+    const moduleEntry = breakingResolution.definitions.find(
+      (definition) => definition.key === moduleSource.key,
+    );
+    if (!moduleEntry || moduleEntry.kind !== "module")
+      throw new Error("Module resolution entry missing");
+    moduleEntry.exactVersion = "2.0.0";
+    const exactBreakingResolution = withResolutionFingerprint(breakingResolution);
+    const breakingRequest = {
+      source: moduleSource,
+      resolution: exactBreakingResolution,
+      draftMetadata: { ...draftMetadata, draftRevision: 2, publishedRevision: 1 },
+      savedConditionRevisions,
+    };
+    const publishedModule = {
+      publication: {
+        kind: "module" as const,
+        rootId: initialModule.canonical.envelope.rootId,
+        revision: 1,
+        releaseVersion: "1.0.0",
+        contentFingerprint: initialModule.artifact.contentFingerprint,
+        publishedAt: draftMetadata.updatedAt,
+        publishedBy: draftMetadata.updatedBy,
+        validationContractVersion: "1.0.0",
+      },
+      content: structuredClone(initialModule.canonical.content),
+      dependencyManifest: [],
+      releaseNote: "Initial release.",
+    };
+
+    const [breakingModule] = compileDefinitionSet([breakingRequest], {
+      publishedHistories: [
+        { kind: "module", definitionKey: moduleSource.key, history: [publishedModule] },
+      ],
+    });
+    expect(breakingModule?.artifact.exactVersion).toBe("2.0.0");
+
+    const pinnedApplicationAfter = compileDefinition(requestFor(applicationSource));
+    expect(pinnedApplicationAfter).toEqual(pinnedApplicationBefore);
+    expect(
+      pinnedApplicationAfter.resolvedDependencies.find(
+        (dependency) => dependency.key === moduleSource.key,
+      )?.exactVersion,
+    ).toBe("1.0.0");
   });
 
   it("refuses publication when provenance omits a source or canonical leaf", () => {
@@ -1389,7 +1416,6 @@ describe("authored definition compiler", () => {
       outputs: [compileDefinition(applicationRequest)],
       dependencyOutputs: staleDependency,
       publishedHistories: [{ kind: "application", definitionKey: application.key, history: [] }],
-      activeDependants: [],
     }).failures;
     expect(dependencyBindingFailures).toContainEqual(
       expect.objectContaining({ ruleCode: "vortex.definition.application_module_bindings" }),
@@ -2425,7 +2451,6 @@ describe("authored definition compiler", () => {
         outputs: [compileDefinition(callerRequest)],
         dependencyOutputs: dependencies,
         publishedHistories: [{ kind: "application", definitionKey: application.key, history: [] }],
-        activeDependants: [],
       }).failures;
       expect(callerSnapshotFailures).toContainEqual(
         expect.objectContaining({ ruleCode: "vortex.definition.application_module_bindings" }),

@@ -34,13 +34,7 @@ import {
   teamIdSchema,
   tenantIdSchema,
 } from "./identifiers";
-import {
-  correlationIdSchema,
-  descriptionSchema,
-  jsonValueSchema,
-  labelSchema,
-  safeHttpsUrlSchema,
-} from "./common";
+import { correlationIdSchema, descriptionSchema, jsonValueSchema, labelSchema } from "./common";
 import { permissionDeclarationSchema } from "./permissions";
 
 const administrativeStateSchema = z.enum(["active", "suspended", "archived", "removal_pending"]);
@@ -50,12 +44,18 @@ export const tenantSchema = z
   .object({
     tenantId: tenantIdSchema,
     shortName: builderKeySchema,
-    displayName: z.string().min(1).max(120),
+    displayName: z.string().trim().min(1).max(120),
     state: administrativeStateSchema,
     createdAt: timestampSchema,
+    createdBy: actorIdSchema,
     stateChangedAt: timestampSchema,
+    revision: revisionSchema,
   })
-  .strict();
+  .strict()
+  .refine((value) => Date.parse(value.stateChangedAt) >= Date.parse(value.createdAt), {
+    path: ["stateChangedAt"],
+    message: "The tenant state-change time cannot precede its creation time",
+  });
 
 export const tenantAdministratorAssignmentSchema = z
   .object({
@@ -79,45 +79,76 @@ export const organizationSchema = z
     tenantId: tenantIdSchema,
     parentOrganizationId: organizationIdSchema.optional(),
     shortName: builderKeySchema,
-    displayName: z.string().min(1).max(120),
+    displayName: z.string().trim().min(1).max(120),
     state: administrativeStateSchema,
     stateChangedAt: timestampSchema,
     createdAt: timestampSchema,
     createdBy: actorIdSchema,
+    revision: revisionSchema,
   })
   .strict()
   .refine((value) => value.parentOrganizationId !== value.organizationId, {
     path: ["parentOrganizationId"],
     message: "An organisation cannot be its own parent",
+  })
+  .refine((value) => Date.parse(value.stateChangedAt) >= Date.parse(value.createdAt), {
+    path: ["stateChangedAt"],
+    message: "The organisation state-change time cannot precede its creation time",
   });
 
 export const identityAuthoritySchema = z
   .object({
     authorityId: identityAuthorityIdSchema,
     environment: z.enum(["local", "testing", "production"]),
-    issuer: safeHttpsUrlSchema,
-    audiences: z.array(z.string().min(1).max(200)).min(1),
-    currentKey: z
-      .object({
-        keyId: z.string().min(1).max(120),
-        algorithm: z.enum(["ed25519", "rsa_pss_sha256"]),
-        publicKey: z.string().min(32).max(10_000),
-        activatesAt: timestampSchema,
-        retiresAt: timestampSchema.optional(),
-      })
-      .strict(),
-    nextKey: z
-      .object({
-        keyId: z.string().min(1).max(120),
-        algorithm: z.enum(["ed25519", "rsa_pss_sha256"]),
-        publicKey: z.string().min(32).max(10_000),
-        activatesAt: timestampSchema,
-      })
-      .strict()
-      .optional(),
-    supportedTokenContractVersions: z.array(semanticVersionSchema).min(1),
+    issuer: z.url().max(2_000),
+    jwksUrl: z.url().max(2_000),
+    audience: z.literal("authenticated"),
+    signingAlgorithm: z.literal("ES256"),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const issuer = new URL(value.issuer);
+    const jwks = new URL(value.jwksUrl);
+    const localLoopback =
+      value.environment === "local" &&
+      issuer.protocol === "http:" &&
+      ["127.0.0.1", "localhost", "[::1]"].includes(issuer.hostname);
+
+    if (issuer.pathname !== "/auth/v1")
+      context.addIssue({
+        code: "custom",
+        path: ["issuer"],
+        message: "The Supabase identity issuer must use the standard /auth/v1 path",
+      });
+
+    if (issuer.protocol !== "https:" && !localLoopback)
+      context.addIssue({
+        code: "custom",
+        path: ["issuer"],
+        message: "Identity authorities require HTTPS except for Local loopback development",
+      });
+
+    if (jwks.protocol !== issuer.protocol || jwks.origin !== issuer.origin)
+      context.addIssue({
+        code: "custom",
+        path: ["jwksUrl"],
+        message: "The identity key set must use the authority issuer origin",
+      });
+
+    const expectedJwksPath = `${issuer.pathname.replace(/\/$/, "")}/.well-known/jwks.json`;
+    if (
+      jwks.pathname !== expectedJwksPath ||
+      jwks.search.length > 0 ||
+      jwks.hash.length > 0 ||
+      issuer.search.length > 0 ||
+      issuer.hash.length > 0
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["jwksUrl"],
+        message: "The identity key set must be the issuer's standard JWKS endpoint",
+      });
+  });
 
 export const globalIdentitySchema = z
   .object({
@@ -130,17 +161,80 @@ export const globalIdentitySchema = z
   })
   .strict();
 
-export const identityTokenClaimSchema = z
+const jwtNumericDateSchema = z.number().int().nonnegative().max(253_402_300_799);
+
+export const supabaseIdentityClaimsSchema = z
+  .object({
+    iss: z.url().max(2_000),
+    aud: z.union([z.string().min(1).max(200), z.array(z.string().min(1).max(200)).min(1)]),
+    exp: jwtNumericDateSchema,
+    iat: jwtNumericDateSchema,
+    sub: identityIdSchema,
+    role: z.literal("authenticated"),
+    aal: z.enum(["aal1", "aal2"]),
+    session_id: sessionIdSchema,
+    email: z.email(),
+    phone: z.string(),
+    is_anonymous: z.literal(false),
+    jti: z.string().min(1).max(200).optional(),
+    nbf: jwtNumericDateSchema.optional(),
+    app_metadata: z.record(z.string(), jsonValueSchema).optional(),
+    user_metadata: z.record(z.string(), jsonValueSchema).optional(),
+    amr: z
+      .union([
+        z.array(z.string().min(1).max(120)),
+        z.array(
+          z
+            .object({
+              method: z.string().min(1).max(120),
+              timestamp: jwtNumericDateSchema,
+            })
+            .strict(),
+        ),
+      ])
+      .optional(),
+  })
+  .loose()
+  .superRefine((value, context) => {
+    if (value.exp <= value.iat)
+      context.addIssue({
+        code: "custom",
+        path: ["exp"],
+        message: "Token expiry must be later than token issue time",
+      });
+    if (value.nbf !== undefined && value.nbf >= value.exp)
+      context.addIssue({
+        code: "custom",
+        path: ["nbf"],
+        message: "Token not-before time must be earlier than token expiry",
+      });
+  });
+
+export const verifiedIdentitySchema = z
   .object({
     identityId: identityIdSchema,
-    issuer: safeHttpsUrlSchema,
-    audience: z.string().min(1).max(200),
+    verifiedPrimaryEmail: z.email(),
+    issuer: z.url().max(2_000),
+    audience: z.literal("authenticated"),
     sessionId: sessionIdSchema,
     issuedAt: timestampSchema,
     expiresAt: timestampSchema,
-    authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
+    authenticationStrength: z.enum(["single_factor", "multi_factor"]),
+    keyId: z
+      .string()
+      .min(1)
+      .max(200)
+      .refine((value) => value.trim().length > 0, "Verified JWT key identifier cannot be blank"),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (Date.parse(value.expiresAt) <= Date.parse(value.issuedAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Verified identity expiry must be later than issue time",
+      });
+  });
 
 export const organizationAccountSchema = z
   .object({
@@ -658,7 +752,8 @@ export type TenantAdministratorAssignment = z.infer<typeof tenantAdministratorAs
 export type Organization = z.infer<typeof organizationSchema>;
 export type IdentityAuthority = z.infer<typeof identityAuthoritySchema>;
 export type GlobalIdentity = z.infer<typeof globalIdentitySchema>;
-export type IdentityTokenClaim = z.infer<typeof identityTokenClaimSchema>;
+export type SupabaseIdentityClaims = z.infer<typeof supabaseIdentityClaimsSchema>;
+export type VerifiedIdentity = z.infer<typeof verifiedIdentitySchema>;
 export type OrganizationAccount = z.infer<typeof organizationAccountSchema>;
 export type OrganizationAccountSet = z.infer<typeof organizationAccountSetSchema>;
 export type OrganizationRuntimeSettings = z.infer<typeof organizationRuntimeSettingsSchema>;

@@ -9,6 +9,8 @@ readonly EXPECTED_PG_PROVE_VERSION="pg_prove 3.36"
 readonly EXPECTED_POSTGRES_MAJOR="17"
 readonly HIERARCHY_MIGRATION="supabase/migrations/20260903174244_tenant_organization_foundation.sql"
 readonly HIERARCHY_PROOF="supabase/tests/tenant-organization-concurrency.test.sh"
+readonly DEFINITION_PUBLICATION_MIGRATION="supabase/migrations/20260903231258_definition_publication_operations.sql"
+readonly DEFINITION_PUBLICATION_PROOF="supabase/tests/definition-publication-concurrency.test.sh"
 
 die() {
   echo "database-delivery: FAILED: $*" >&2
@@ -34,15 +36,17 @@ prepare_database_only_checkout() {
   mv "$temporary_config" "$config_path"
 }
 
-validate_hierarchy_proof_pair() {
-  if [ -e "${checkout}/${HIERARCHY_MIGRATION}" ] && [ ! -f "${checkout}/${HIERARCHY_PROOF}" ]; then
-    die "tenant and organisation migration has no concurrency proof"
+validate_concurrency_proof_pair() {
+  local migration="$1"
+  local proof="$2"
+  local label="$3"
+  if [ -e "${checkout}/${migration}" ] && [ ! -f "${checkout}/${proof}" ]; then
+    die "${label} migration has no concurrency proof"
   fi
-  if [ ! -e "${checkout}/${HIERARCHY_MIGRATION}" ] && [ -e "${checkout}/${HIERARCHY_PROOF}" ]; then
-    die "tenant and organisation concurrency proof has no migration"
+  if [ ! -e "${checkout}/${migration}" ] && [ -e "${checkout}/${proof}" ]; then
+    die "${label} concurrency proof has no migration"
   fi
 }
-
 require_variable() {
   local name="$1"
   [ -n "${!name:-}" ] || die "${name} is not set"
@@ -175,7 +179,11 @@ git -C "$checkout" fetch --quiet --no-tags origin \
 git -C "$checkout" merge-base --is-ancestor "$commit" "refs/remotes/origin/${branch_name}" ||
   die "webhook commit is not reachable from the expected protected branch"
 git -C "$checkout" checkout --quiet --detach "$commit"
-validate_hierarchy_proof_pair
+validate_concurrency_proof_pair "$HIERARCHY_MIGRATION" "$HIERARCHY_PROOF" "tenant and organisation"
+validate_concurrency_proof_pair \
+  "$DEFINITION_PUBLICATION_MIGRATION" \
+  "$DEFINITION_PUBLICATION_PROOF" \
+  "Definition publication"
 
 migration_set_sha256="$(migration_digest "$commit")"
 readonly migration_set_sha256
@@ -323,16 +331,18 @@ say "applying pending migrations through Supabase migration history"
     --ext .sql \
     --recurse \
     supabase/tests
-  if [ -f "$HIERARCHY_PROOF" ]; then
-    if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
-      : >"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-    else
-      VORTEX_CONCURRENCY_DATABASE_URL="$database_url" bash "$HIERARCHY_PROOF"
+  for concurrency_proof in "$HIERARCHY_PROOF" "$DEFINITION_PUBLICATION_PROOF"; do
+    if [ -f "$concurrency_proof" ]; then
+      if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
+        printf '%s\n' "$concurrency_proof" >>"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+      else
+        VORTEX_CONCURRENCY_DATABASE_URL="$database_url" bash "$concurrency_proof"
+      fi
     fi
-  fi
+  done
   supabase db lint \
     --db-url "$database_url" \
-    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context,vortex_identity}" \
+    --schema "${VORTEX_LINT_SCHEMAS:-public,vortex_context,vortex_identity,vortex_definition}" \
     --level warning \
     --fail-on error
 )

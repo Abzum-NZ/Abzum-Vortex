@@ -24,9 +24,11 @@ import {
   federatedResponseSchema,
   grantConsentRequestSchema,
   interfaceOperationSchema,
+  identityAuthoritySchema,
   listArrangementKeys,
   listArrangementSchema,
   organizationAccountSetSchema,
+  organizationSchema,
   pageTypeKeys,
   pageTypeSchema,
   pageDefinitionSchema,
@@ -47,6 +49,9 @@ import {
   sourceBlockSettingValueSchema,
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
+  supabaseIdentityClaimsSchema,
+  tenantSchema,
+  verifiedIdentitySchema,
 } from "../src";
 import type {
   PublishedApplicationDefinition,
@@ -56,6 +61,88 @@ import type {
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
 const fingerprint = `sha256:${"a".repeat(64)}`;
+
+describe("tenant and organisation persistence contracts", () => {
+  const tenant = {
+    tenantId: id(700),
+    shortName: "tenant_one",
+    displayName: "Tenant One",
+    state: "active",
+    createdAt: "2026-09-03T12:00:00.000Z",
+    createdBy: id(701),
+    stateChangedAt: "2026-09-03T12:00:00.000Z",
+    revision: 1,
+  } as const;
+
+  const organization = {
+    organizationId: id(702),
+    tenantId: tenant.tenantId,
+    parentOrganizationId: id(703),
+    shortName: "workspace_one",
+    displayName: "Workspace One",
+    state: "active",
+    createdAt: "2026-09-03T12:05:00.000Z",
+    createdBy: id(701),
+    stateChangedAt: "2026-09-03T12:05:00.000Z",
+    revision: 1,
+  } as const;
+
+  test("accepts complete neutral persistence records", () => {
+    expect(tenantSchema.safeParse(tenant).success).toBe(true);
+    expect(organizationSchema.safeParse(organization).success).toBe(true);
+    expect(tenantSchema.parse({ ...tenant, displayName: "  Tenant One  " }).displayName).toBe(
+      "Tenant One",
+    );
+  });
+
+  test("requires a creation actor and positive revision", () => {
+    const tenantWithoutCreator: Record<string, unknown> = { ...tenant };
+    const organizationWithoutRevision: Record<string, unknown> = { ...organization };
+    delete tenantWithoutCreator.createdBy;
+    delete organizationWithoutRevision.revision;
+
+    expect(tenantSchema.safeParse(tenantWithoutCreator).success).toBe(false);
+    expect(tenantSchema.safeParse({ ...tenant, revision: 0 }).success).toBe(false);
+    expect(organizationSchema.safeParse(organizationWithoutRevision).success).toBe(false);
+    expect(organizationSchema.safeParse({ ...organization, revision: -1 }).success).toBe(false);
+  });
+
+  test("refuses self-parenting and state changes before creation", () => {
+    expect(
+      organizationSchema.safeParse({
+        ...organization,
+        parentOrganizationId: organization.organizationId,
+      }).success,
+    ).toBe(false);
+    expect(
+      tenantSchema.safeParse({
+        ...tenant,
+        stateChangedAt: "2026-09-03T11:59:59.000Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      organizationSchema.safeParse({
+        ...organization,
+        stateChangedAt: "2026-09-03T12:04:59.000Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      tenantSchema.safeParse({
+        ...tenant,
+        createdAt: "2026-09-03T12:00:00.000+12:00",
+        stateChangedAt: "2026-09-03T00:00:01.000Z",
+      }).success,
+    ).toBe(true);
+    expect(
+      organizationSchema.safeParse({
+        ...organization,
+        createdAt: "2026-09-03T12:00:00.000+12:00",
+        stateChangedAt: "2026-09-02T23:59:59.000Z",
+      }).success,
+    ).toBe(false);
+  });
+});
+
 const fieldBase = {
   fieldId: id(1),
   key: "example",
@@ -635,6 +722,117 @@ describe("closed catalogues and discriminated contracts", () => {
 });
 
 describe("identity, sharing and secret invariants", () => {
+  const authority = {
+    authorityId: id(90),
+    environment: "testing",
+    issuer: "https://identity.example.test/auth/v1",
+    jwksUrl: "https://identity.example.test/auth/v1/.well-known/jwks.json",
+    audience: "authenticated",
+    signingAlgorithm: "ES256",
+  } as const;
+
+  const standardClaims = {
+    iss: authority.issuer,
+    aud: "authenticated",
+    exp: 1_800_000_000,
+    iat: 1_799_996_400,
+    sub: id(100),
+    role: "authenticated",
+    aal: "aal1",
+    session_id: id(101),
+    email: "person@example.test",
+    phone: "",
+    is_anonymous: false,
+    app_metadata: { provider: "email", organization_role: "administrator" },
+    user_metadata: { organization_id: id(102), permission: "all" },
+  } as const;
+
+  test("describes Supabase identity authority discovery without copying signing keys", () => {
+    expect(identityAuthoritySchema.safeParse(authority).success).toBe(true);
+    expect(
+      identityAuthoritySchema.safeParse({
+        ...authority,
+        environment: "local",
+        issuer: "http://127.0.0.1:54321/auth/v1",
+        jwksUrl: "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+      }).success,
+    ).toBe(true);
+    expect(
+      identityAuthoritySchema.safeParse({ ...authority, signingAlgorithm: "RS256" }).success,
+    ).toBe(false);
+    expect(
+      identityAuthoritySchema.safeParse({
+        ...authority,
+        issuer: "http://identity.example.test/auth/v1",
+        jwksUrl: "http://identity.example.test/auth/v1/.well-known/jwks.json",
+      }).success,
+    ).toBe(false);
+    expect(
+      identityAuthoritySchema.safeParse({
+        ...authority,
+        jwksUrl: "https://keys.example.test/auth/v1/.well-known/jwks.json",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("accepts standard Supabase identity claims but refuses an anonymous identity without email", () => {
+    expect(supabaseIdentityClaimsSchema.safeParse(standardClaims).success).toBe(true);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
+        aud: ["authenticated"],
+        amr: ["password"],
+        future_standard_claim: "accepted at the provider boundary",
+      }).success,
+    ).toBe(true);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
+        is_anonymous: true,
+        email: "",
+      }).success,
+    ).toBe(false);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({ ...standardClaims, exp: standardClaims.iat })
+        .success,
+    ).toBe(false);
+  });
+
+  test("keeps the verified identity result closed and free of organisation authority", () => {
+    const verifiedIdentity = {
+      identityId: standardClaims.sub,
+      verifiedPrimaryEmail: standardClaims.email,
+      issuer: standardClaims.iss,
+      audience: "authenticated",
+      sessionId: standardClaims.session_id,
+      issuedAt: "2027-01-15T07:00:00.000Z",
+      expiresAt: "2027-01-15T08:00:00.000Z",
+      authenticationStrength: "single_factor",
+      keyId: "testing-key",
+    } as const;
+
+    expect(verifiedIdentitySchema.safeParse(verifiedIdentity).success).toBe(true);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        organizationId: standardClaims.user_metadata.organization_id,
+        role: standardClaims.app_metadata.organization_role,
+      }).success,
+    ).toBe(false);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        verifiedPrimaryEmail: undefined,
+      }).success,
+    ).toBe(false);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        expiresAt: verifiedIdentity.issuedAt,
+      }).success,
+    ).toBe(false);
+  });
+
   const account = (accountId: number, organizationId: number) => ({
     organizationAccountId: id(accountId),
     organizationId: id(organizationId),
@@ -1717,27 +1915,18 @@ describe("complete definition-source fixture set", () => {
     expect(
       definitionPublicationContextSchema.safeParse({
         publishedHistories: [],
-        activeDependants: [],
       }).success,
     ).toBe(true);
     expect(
       definitionPublicationContextSchema.safeParse({
         publishedHistories: [],
-        activeDependants: [],
         inventedPublicationSwitch: true,
       }).success,
     ).toBe(false);
     expect(
       definitionPublicationContextSchema.safeParse({
         publishedHistories: [],
-        activeDependants: [
-          {
-            definitionKey: "vortex.example.module",
-            dependantKey: "vortex.example.application",
-            acceptedVersion: { selection: "allowed_range", expression: "not a range" },
-            referencesValid: true,
-          },
-        ],
+        activeDependants: [],
       }).success,
     ).toBe(false);
     expect(
@@ -1746,7 +1935,6 @@ describe("complete definition-source fixture set", () => {
           { kind: "module", definitionKey: "vortex.example.module", history: [] },
           { kind: "module", definitionKey: "vortex.example.module", history: [] },
         ],
-        activeDependants: [],
       }).success,
     ).toBe(false);
   });
@@ -1847,6 +2035,7 @@ describe("complete definition-source fixture set", () => {
       "configuration",
       "constraint",
       "description",
+      "email",
       "event",
       "export",
       "field",

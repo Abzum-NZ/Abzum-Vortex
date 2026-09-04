@@ -9,13 +9,19 @@ import {
   type DefinitionCompilationOutput,
   type DefinitionProvenanceEntry,
   type DefinitionResolutionSnapshot,
+  type DefinitionSourceDocument,
   type DefinitionValidationLocation,
 } from "@vortex/contracts";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
+import {
+  canonicalJson,
+  compareCanonicalStrings,
+  fingerprintCanonicalValue,
+} from "./canonical-json";
 import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
+import { extractSourceIdentityRequirements } from "./source-identities";
 
 type Path = (string | number)[];
 type JsonObject = Record<string, unknown>;
@@ -1432,87 +1438,6 @@ function provenanceFor(source: unknown, canonical: unknown): DefinitionProvenanc
   return entries;
 }
 
-function sourceIdentityOwnerIsAuthentic(
-  source: JsonObject,
-  alias: string,
-  componentOwner: string,
-  kind: string,
-  scope: string,
-): boolean {
-  if (kind === "root")
-    return (
-      [String(source.key), String(source.root_alias)].includes(alias) && componentOwner === "root"
-    );
-  const body = asObject(source.body);
-  const collection = (key: string): JsonObject[] =>
-    Array.isArray(body[key]) ? (body[key] as JsonObject[]) : [];
-  const topLevelCollectionByKind: Readonly<Record<string, string>> = {
-    record_type: "record_types",
-    permission: "permissions",
-    action: "actions",
-    event: "events",
-    extension_point: "extension_points",
-    rule: "rules",
-    sharing_condition: "sharing_conditions",
-    navigation_item: "navigation",
-    role: "roles",
-    query: "queries",
-    block: "block_registrations",
-    page: "pages",
-    workflow: "workflows",
-    pipeline: "pipelines",
-    connection_binding: "connection_bindings",
-    interface: "interfaces",
-    public_address: "public_addresses",
-  };
-  let candidates: JsonObject[] = [];
-  if (kind === "storage_contract" || kind === "field" || kind === "relationship") {
-    const recordKey = scope.startsWith("record:") ? scope.slice("record:".length) : "";
-    const record = collection("record_types").find((entry) => entry.key === recordKey);
-    if (kind === "storage_contract") candidates = record ? [record] : [];
-    else if (record) candidates = (record[`${kind}s`] as JsonObject[] | undefined) ?? [];
-  } else if (kind === "guided_step") {
-    const pageKey = scope.startsWith("page:") ? scope.slice("page:".length) : "";
-    const page = collection("pages").find((entry) => entry.key === pageKey);
-    candidates = page && Array.isArray(page.steps) ? (page.steps as JsonObject[]) : [];
-  } else if (kind === "workflow_node") {
-    const workflowKey = scope.startsWith("workflow:") ? scope.slice("workflow:".length) : "";
-    const workflow = collection("workflows").find((entry) => entry.key === workflowKey);
-    candidates = workflow && Array.isArray(workflow.nodes) ? (workflow.nodes as JsonObject[]) : [];
-  } else if (kind === "interface_operation") {
-    const interfaceKey = scope.startsWith("interface:") ? scope.slice("interface:".length) : "";
-    const definition = collection("interfaces").find((entry) => entry.key === interfaceKey);
-    candidates =
-      definition && Array.isArray(definition.operations)
-        ? (definition.operations as JsonObject[])
-        : [];
-  } else if (kind === "block_placement") {
-    candidates = collection("pages").flatMap((page) => [
-      ...((page.blocks as JsonObject[] | undefined) ?? []),
-      ...((page.steps as JsonObject[] | undefined) ?? []).flatMap(
-        (step) => (step.blocks as JsonObject[] | undefined) ?? [],
-      ),
-    ]);
-  } else if (kind === "navigation_item") {
-    const flattenNavigation = (items: readonly JsonObject[]): JsonObject[] =>
-      items.flatMap((item) => [
-        item,
-        ...flattenNavigation((item.children as JsonObject[] | undefined) ?? []),
-      ]);
-    candidates = flattenNavigation(collection("navigation"));
-  } else {
-    const collectionKey = topLevelCollectionByKind[kind];
-    candidates = collectionKey ? collection(collectionKey) : [];
-  }
-  for (const candidate of candidates) {
-    const owner = kind === "storage_contract" ? candidate.storage_contract_id : candidate.id;
-    if (typeof owner !== "string") continue;
-    const aliases = [owner, candidate.key, ...(kind === "public_address" ? [candidate.path] : [])];
-    if (aliases.includes(alias)) return componentOwner === owner;
-  }
-  return false;
-}
-
 class Resolution {
   readonly snapshot: DefinitionResolutionSnapshot;
   readonly sourceLocation: DefinitionValidationLocation;
@@ -1520,6 +1445,19 @@ class Resolution {
   constructor(snapshot: DefinitionResolutionSnapshot, source: JsonObject) {
     this.snapshot = snapshot;
     this.sourceLocation = compilerRootLocation(source);
+    const authenticSourceIdentities = new Set(
+      extractSourceIdentityRequirements(source as unknown as DefinitionSourceDocument).flatMap(
+        (requirement) =>
+          requirement.aliases.map((alias) =>
+            JSON.stringify([
+              requirement.scope,
+              requirement.kind,
+              requirement.componentOwner,
+              alias,
+            ]),
+          ),
+      ),
+    );
     const actualFingerprint = `sha256:${createHash("sha256")
       .update(
         canonicalJson({
@@ -1585,12 +1523,8 @@ class Resolution {
       identityOwnerGroups.set(ownerGroupKey, ownerGroup);
       if (
         identity.definitionKey === source.key &&
-        !sourceIdentityOwnerIsAuthentic(
-          source,
-          identity.alias,
-          identity.componentOwner,
-          identity.kind,
-          identity.scope,
+        !authenticSourceIdentities.has(
+          JSON.stringify([identity.scope, identity.kind, identity.componentOwner, identity.alias]),
         )
       ) {
         fail(
@@ -2256,14 +2190,19 @@ function compileModule(
     const record = qualifiedForRecord(String(saved.source_record_type));
     const localField = (alias: string) => resolution.field(record, alias);
     const compiledCondition = condition(saved.condition, localField);
+    const conditionId = resolution.id(
+      definitionKey,
+      "sharing_condition",
+      String(saved.id),
+      "content",
+    );
     const revisionMatches = savedConditionRevisions.filter(
-      (assignment) =>
-        assignment.definitionKey === definitionKey && assignment.alias === String(saved.id),
+      (assignment) => assignment.conditionId === conditionId,
     );
     if (revisionMatches.length !== 1)
       fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
     const resolved = {
-      conditionId: resolution.id(definitionKey, "sharing_condition", String(saved.id), "content"),
+      conditionId,
       sourceRecordTypeId: resolution.recordType(record).recordTypeId,
       key: saved.key,
       publishedRevision: revisionMatches[0]!.revision,
@@ -2945,7 +2884,7 @@ function compileApplication(source: JsonObject, resolution: Resolution, metadata
   }));
   const wildcardPermissions = permissions
     .filter((permission) => permission.administrative === false)
-    .sort((left, right) => String(left.key).localeCompare(String(right.key)));
+    .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
   const wildcardPermissionKeys = wildcardPermissions.map((permission) => permission.key);
   const wildcardCatalogueFingerprint = fingerprintCanonicalValue(wildcardPermissions);
   const canonical = applicationDraftSchema.parse({

@@ -29,6 +29,7 @@ const allowedEnvironmentDependencies = {
   shared: new Set(["shared"]),
   test: new Set(["app", "browser", "server", "shared", "test"]),
 };
+const privateDatabaseSchemaOwners = new Map([["vortex_definition", "@vortex/definition"]]);
 
 async function readJson(file) {
   return JSON.parse(await readFile(file, "utf8"));
@@ -158,6 +159,9 @@ export async function validateImports(packages) {
     );
     for (const file of files) {
       const source = await readFile(file, "utf8");
+      for (const [schema, owner] of privateDatabaseSchemaOwners)
+        if (manifest.name !== owner && source.includes(`${schema}.`))
+          errors.push(`${file} references private database schema ${schema} owned by ${owner}`);
       for (const match of source.matchAll(
         /(?:from\s+|import\s*(?:\(\s*)?|require\s*\(\s*)["']([^"']+)["']/g,
       )) {
