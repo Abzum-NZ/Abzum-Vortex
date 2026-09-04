@@ -115,7 +115,10 @@ would be a separate security decision and is refused by the current specificatio
 `testing_database_delivery` accepts the GitHub push webhook for `refs/heads/testing`, fetches the
 exact commit, proves that it remains reachable from that protected branch, and applies its ordered
 Supabase migrations. It then runs the remote pgTAP suite through the pinned `pg_prove` harness and
-runs Supabase database lint. `supabase test db` deliberately uses a Docker helper, so it remains the
+runs every migration-paired concurrency proof and Supabase database lint across the complete set of
+operated schemas. The checked-out delivery script owns both lists, so a stored older Kestra flow
+revision cannot silently omit a proof or override the schema scope for the commit being delivered.
+`supabase test db` deliberately uses a Docker helper, so it remains the
 local-development command and is not used by the operated flow: Kestra does not receive the host
 Docker socket. Only a completely successful run writes credential-free evidence to the
 `vortex.operations` key-value store under the exact commit identifier.

@@ -104,6 +104,26 @@ assert_partial_concurrency_release_refused \
   supabase/tests/definition-history-restore-concurrency.test.sh \
   supabase/tests/definition-history-restore-concurrency.test.sh \
   "Definition history and restore concurrency proof has no migration"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260904094030_identity_accounts_invitations.sql \
+  supabase/tests/identity-invitation-concurrency.test.sh \
+  supabase/migrations/20260904094030_identity_accounts_invitations.sql \
+  "Identity invitation migration has no concurrency proof"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260904094030_identity_accounts_invitations.sql \
+  supabase/tests/identity-invitation-concurrency.test.sh \
+  supabase/tests/identity-invitation-concurrency.test.sh \
+  "Identity invitation concurrency proof has no migration"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260904112625_access_version_foundation.sql \
+  supabase/tests/access-version-concurrency.test.sh \
+  supabase/migrations/20260904112625_access_version_foundation.sql \
+  "Access version migration has no concurrency proof"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260904112625_access_version_foundation.sql \
+  supabase/tests/access-version-concurrency.test.sh \
+  supabase/tests/access-version-concurrency.test.sh \
+  "Access version concurrency proof has no migration"
 
 migration_set_sha256="$(jq --raw-output '.migration_set_sha256' "$VORTEX_EVIDENCE_PATH")"
 export VORTEX_DELIVERY_OPERATION=apply
@@ -195,6 +215,7 @@ export VORTEX_TEST_SSL_ROOT_CERT="$(<"$test_root/test-root.crt")"
 export VORTEX_TEST_EXPECTED_DATABASE_URL='postgresql://postgres.abcdefghijklmnopqrst@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres?sslmode=verify-full'
 export VORTEX_DATABASE_URL='postgresql://attacker:password@attacker.invalid:5432/postgres?host=attacker.invalid&sslmode=disable'
 export VORTEX_TEST_CONCURRENCY_PROOF_MARKER="$test_root/concurrency-proof-called"
+export VORTEX_TEST_SUPABASE_CALL_MARKER="$test_root/supabase-called"
 export VORTEX_TEST_REMOTE_MIGRATION_MISMATCH=true
 if "$delivery_script" >"$test_root/history-mismatch.log" 2>&1; then
   echo "expected an unreviewed remote migration to be refused" >&2
@@ -221,6 +242,15 @@ grep --fixed-strings --quiet \
 grep --fixed-strings --quiet \
   "supabase/tests/definition-history-restore-concurrency.test.sh" \
   "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+grep --fixed-strings --quiet \
+  "supabase/tests/identity-invitation-concurrency.test.sh" \
+  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+grep --fixed-strings --quiet \
+  "supabase/tests/access-version-concurrency.test.sh" \
+  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+grep --fixed-strings --quiet \
+  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access --level warning --fail-on error" \
+  "$VORTEX_TEST_SUPABASE_CALL_MARKER"
 jq --exit-status \
   '.status == "succeeded" and
    .environment == "production" and
