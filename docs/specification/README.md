@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.12
+**Status:** Approved specification 2.13
 **Date:** 5 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 

@@ -38,6 +38,17 @@ interface RuntimeDatabaseConfiguration {
 
 type RequestOperation<Result> = (transaction: RequestDatabaseTransaction) => Promise<Result>;
 type RuntimeOperation<Result> = (transaction: RuntimeDatabaseTransaction) => Promise<Result>;
+export type ResolvedRequestContext<Scope> = Readonly<{
+  context: SessionContext;
+  scope: Scope;
+}>;
+type RequestContextResolver<Scope> = (
+  transaction: RuntimeDatabaseTransaction,
+) => Promise<ResolvedRequestContext<Scope>>;
+type ResolvedRequestOperation<Scope, Result> = (
+  transaction: RequestDatabaseTransaction,
+  scope: Scope,
+) => Promise<Result>;
 
 const databaseError = (code: string): Error => {
   const error = new Error(code);
@@ -66,7 +77,7 @@ export const createRequestTransactionRunner =
     const serialized = JSON.stringify(validated);
 
     return driver.transaction(async (transaction) => {
-      await transaction.query`select vortex_context.initialize(${serialized}::jsonb)`;
+      await transaction.query`select vortex_context.initialize(${serialized}::text::jsonb)`;
       await transaction.query`set local role vortex_request`;
 
       return operation({
@@ -82,6 +93,31 @@ export const createRuntimeTransactionRunner =
   (driver: DatabaseDriver) =>
   async <Result>(operation: RuntimeOperation<Result>): Promise<Result> =>
     driver.transaction(async (transaction) => operation(transaction));
+
+export const createResolvedRequestTransactionRunner =
+  (driver: DatabaseDriver) =>
+  async <Scope, Result>(
+    resolve: RequestContextResolver<Scope>,
+    operation: ResolvedRequestOperation<Scope, Result>,
+  ): Promise<Result> =>
+    driver.transaction(async (transaction) => {
+      const resolved = await resolve(transaction);
+      const validated = validateContext(resolved.context);
+      const serialized = JSON.stringify(validated);
+
+      await transaction.query`select vortex_context.initialize(${serialized}::text::jsonb)`;
+      await transaction.query`set local role vortex_request`;
+
+      return operation(
+        {
+          query: <ResultRow extends DatabaseRow>(
+            strings: TemplateStringsArray,
+            ...values: readonly DatabaseValue[]
+          ) => transaction.query<ResultRow>(strings, ...values),
+        },
+        resolved.scope,
+      );
+    });
 
 const createTransactionDriver = (transaction: TransactionSql): TransactionDriver => ({
   query: async <ResultRow extends DatabaseRow>(
@@ -181,6 +217,12 @@ const defaultRuntimeRunner = createRuntimeTransactionRunner({
     return createPostgresDriver(client).transaction(operation);
   },
 });
+const defaultResolvedRequestRunner = createResolvedRequestTransactionRunner({
+  transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
+    client ??= loadClient();
+    return createPostgresDriver(client).transaction(operation);
+  },
+});
 
 export const withRequestTransaction = async <Result>(
   context: SessionContext,
@@ -190,3 +232,8 @@ export const withRequestTransaction = async <Result>(
 export const withRuntimeTransaction = async <Result>(
   operation: RuntimeOperation<Result>,
 ): Promise<Result> => defaultRuntimeRunner(operation);
+
+export const withResolvedRequestTransaction = async <Scope, Result>(
+  resolve: RequestContextResolver<Scope>,
+  operation: ResolvedRequestOperation<Scope, Result>,
+): Promise<Result> => defaultResolvedRequestRunner(resolve, operation);

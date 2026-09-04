@@ -6,14 +6,12 @@ import {
   ensureIdentityProjectionCommandSchema,
   identityProjectionSchema,
   invitationSchema,
-  organizationAccountSchema,
   revokeOrganizationInvitationCommandSchema,
   verifiedIdentitySchema,
   type CreateOrganizationInvitationCommand,
   type EnsureIdentityProjectionCommand,
   type IdentityProjection,
   type Invitation,
-  type OrganizationAccount,
   type RevokeOrganizationInvitationCommand,
   type SessionContext,
   type VerifiedIdentity,
@@ -83,25 +81,6 @@ type IdentityProjectionRow = DatabaseRow & {
   revision: unknown;
 };
 
-type OrganizationAccountRow = DatabaseRow & {
-  organization_account_id: unknown;
-  organization_id: unknown;
-  identity_id: unknown;
-  display_name: unknown;
-  state: unknown;
-  language: unknown;
-  time_zone: unknown;
-  invitation_id: unknown;
-  activated_at: unknown;
-  suspended_at: unknown;
-  closed_at: unknown;
-  changed_at: unknown;
-  state_changed_at: unknown;
-  state_changed_by: unknown;
-  state_change_correlation_id: unknown;
-  revision: unknown;
-};
-
 type InvitationRow = DatabaseRow & {
   invitation_id: unknown;
   organization_id: unknown;
@@ -140,28 +119,6 @@ const parseIdentityProjection = (row: IdentityProjectionRow): IdentityProjection
     stateChangeCorrelationId: row.state_change_correlation_id,
     revision: revision(row.revision),
   });
-
-const accountCandidate = (row: OrganizationAccountRow): unknown => ({
-  organizationAccountId: row.organization_account_id,
-  organizationId: row.organization_id,
-  identityId: row.identity_id,
-  displayName: optional(row.display_name),
-  state: row.state,
-  language: optional(row.language),
-  timeZone: optional(row.time_zone),
-  invitationId: optional(row.invitation_id),
-  activatedAt: timestamp(row.activated_at),
-  suspendedAt: optional(timestamp(row.suspended_at)),
-  closedAt: optional(timestamp(row.closed_at)),
-  changedAt: timestamp(row.changed_at),
-  stateChangedAt: timestamp(row.state_changed_at),
-  stateChangedBy: row.state_changed_by,
-  stateChangeCorrelationId: row.state_change_correlation_id,
-  revision: revision(row.revision),
-});
-
-const parseOrganizationAccount = (row: OrganizationAccountRow): OrganizationAccount =>
-  organizationAccountSchema.parse(accountCandidate(row));
 
 const parseInvitation = (row: InvitationRow): Invitation =>
   invitationSchema.parse({
@@ -269,27 +226,6 @@ export const createOrganizationAccountStore = (
       }
     },
 
-    async listOrganizationAccounts(
-      verifiedIdentity: VerifiedIdentity,
-    ): Promise<readonly OrganizationAccount[]> {
-      const verified = verifiedIdentitySchema.safeParse(verifiedIdentity);
-      if (!verified.success)
-        throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-
-      try {
-        return await runtimeTransaction(async (transaction) => {
-          const rows = await transaction.query<OrganizationAccountRow>`
-            select *
-            from vortex_identity.list_organization_accounts(${verified.data.identityId}::uuid)
-          `;
-          return rows.map(parseOrganizationAccount);
-        });
-      } catch (error) {
-        if (error instanceof OrganizationAccountError) throw error;
-        throw mapStorageFailure(error);
-      }
-    },
-
     async createInvitationAfterAuthorization(
       context: SessionContext,
       command: CreateOrganizationInvitationCommand,
@@ -352,6 +288,5 @@ const defaultStore = createOrganizationAccountStore();
 
 export const ensureIdentityProjection = defaultStore.ensureIdentityProjection;
 export const readIdentityProjection = defaultStore.readIdentityProjection;
-export const listOrganizationAccounts = defaultStore.listOrganizationAccounts;
 export const createInvitationAfterAuthorization = defaultStore.createInvitationAfterAuthorization;
 export const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;

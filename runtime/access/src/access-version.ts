@@ -3,16 +3,12 @@ import "server-only";
 import { createHash } from "node:crypto";
 import {
   acceptOrganizationInvitationCommandSchema,
-  currentOrganizationAccessVersionSchema,
   invitationAcceptanceWithAccessVersionSchema,
   organizationAccountSchema,
-  readOrganizationAccessVersionCommandSchema,
   verifiedIdentitySchema,
   type AcceptOrganizationInvitationCommand,
-  type CurrentOrganizationAccessVersion,
   type InvitationAcceptanceWithAccessVersion,
   type OrganizationAccount,
-  type ReadOrganizationAccessVersionCommand,
   type VerifiedIdentity,
 } from "@vortex/contracts";
 import {
@@ -49,11 +45,6 @@ type RuntimeTransactionRunner = <Result>(
 interface AccessVersionStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
 }
-
-type CurrentVersionRow = DatabaseRow & {
-  organization_id: unknown;
-  current_version: unknown;
-};
 
 type AcceptanceRow = DatabaseRow & {
   outcome: unknown;
@@ -92,15 +83,6 @@ const requireOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   if (rows.length !== 1 || rows[0] === undefined)
     throw new AccessVersionError("INVALID_ACCESS_VERSION_STORAGE_RESULT");
   return rows[0];
-};
-
-const parseCurrentVersion = (row: CurrentVersionRow): CurrentOrganizationAccessVersion => {
-  const parsed = currentOrganizationAccessVersionSchema.safeParse({
-    organizationId: row.organization_id,
-    currentVersion: revision(row.current_version),
-  });
-  if (!parsed.success) throw new AccessVersionError("INVALID_ACCESS_VERSION_STORAGE_RESULT");
-  return parsed.data;
 };
 
 const parseAccount = (row: AcceptanceRow): OrganizationAccount => {
@@ -163,29 +145,6 @@ export const createAccessVersionStore = (dependencies: AccessVersionStoreDepende
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
 
   return Object.freeze({
-    async readCurrentOrganizationAccessVersion(
-      command: ReadOrganizationAccessVersionCommand,
-    ): Promise<CurrentOrganizationAccessVersion> {
-      const parsed = readOrganizationAccessVersionCommandSchema.safeParse(command);
-      if (!parsed.success) throw new AccessVersionError("INVALID_ACCESS_VERSION_COMMAND");
-
-      try {
-        return await runtimeTransaction(async (transaction) => {
-          const rows = await transaction.query<CurrentVersionRow>`
-            select *
-            from vortex_access.current_organization_access_version(
-              ${parsed.data.tenantId}::uuid,
-              ${parsed.data.organizationId}::uuid
-            )
-          `;
-          return parseCurrentVersion(requireOne(rows));
-        });
-      } catch (error) {
-        if (error instanceof AccessVersionError) throw error;
-        throw mapStorageFailure(error);
-      }
-    },
-
     async acceptOrganizationInvitation(
       verifiedIdentity: VerifiedIdentity,
       command: AcceptOrganizationInvitationCommand,
@@ -222,6 +181,4 @@ export const createAccessVersionStore = (dependencies: AccessVersionStoreDepende
 
 const defaultStore = createAccessVersionStore();
 
-export const readCurrentOrganizationAccessVersion =
-  defaultStore.readCurrentOrganizationAccessVersion;
 export const acceptOrganizationInvitation = defaultStore.acceptOrganizationInvitation;

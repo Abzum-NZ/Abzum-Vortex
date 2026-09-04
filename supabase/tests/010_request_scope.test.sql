@@ -1,6 +1,6 @@
 \ir helpers/private-schema-assertions.psql
 
-select plan(123);
+select plan(128);
 
 begin;
 
@@ -180,6 +180,7 @@ grant select, insert, update, delete on application_scope_probe to vortex_reques
 create temporary table context_candidate_probe (value jsonb not null);
 insert into context_candidate_probe values (jsonb_build_object(
   'callerKind', 'human',
+  'identityAuthorityId', '80000000-0000-4000-8000-000000000001',
   'tenantId', '10000000-0000-4000-8000-000000000001',
   'organizationId', '20000000-0000-4000-8000-000000000001',
   'applicationRootId', '30000000-0000-4000-8000-000000000001',
@@ -325,6 +326,24 @@ select throws_ok(
   '22023'::char(5),
   'Vortex request context is incomplete',
   'context missing a required field is refused'
+);
+select throws_ok(
+  $$select vortex_context.initialize((select value - 'identityAuthorityId' from context_candidate_probe))$$,
+  '22023'::char(5),
+  'Authenticated request context requires an Identity Authority',
+  'human context missing its Identity Authority is refused'
+);
+select throws_ok(
+  $$select vortex_context.initialize((select jsonb_set(value, '{identityAuthorityId}', 'null'::jsonb) from context_candidate_probe))$$,
+  '22023'::char(5),
+  'Authenticated request context requires an Identity Authority',
+  'JSON-null Identity Authority is refused'
+);
+select throws_ok(
+  $$select vortex_context.initialize((select jsonb_set(value, '{identityAuthorityId}', '"bad"') from context_candidate_probe))$$,
+  '22023'::char(5),
+  'Authenticated request context requires an Identity Authority',
+  'malformed Identity Authority is refused'
 );
 select throws_ok(
   $$select vortex_context.initialize((select jsonb_set(value, '{tenantId}', 'null'::jsonb) from context_candidate_probe))$$,
@@ -481,6 +500,24 @@ select lives_ok(
   ))$$,
   'valid system context is accepted'
 );
+select throws_ok(
+  $$select vortex_context.validated(jsonb_build_object(
+    'callerKind', 'system',
+    'identityAuthorityId', '80000000-0000-4000-8000-000000000001',
+    'tenantId', '10000000-0000-4000-8000-000000000001',
+    'organizationId', '20000000-0000-4000-8000-000000000001',
+    'sessionId', '60000000-0000-4000-8000-000000000001',
+    'issuedAt', clock_timestamp() - interval '1 minute',
+    'expiresAt', clock_timestamp() + interval '5 minutes',
+    'accessVersion', 1,
+    'correlationId', '70000000-0000-4000-8000-000000000001',
+    'systemActorId', '90000000-0000-4000-8000-000000000001',
+    'authenticationStrength', 'service'
+  ))$$,
+  '22023'::char(5),
+  'Vortex request context has an unknown field',
+  'system context refuses an Identity Authority'
+);
 select lives_ok(
   $$select vortex_context.validated((select jsonb_set(value, '{callerKind}', '"federated"') from context_candidate_probe))$$,
   'valid federated context is accepted'
@@ -515,6 +552,7 @@ set local search_path = pg_catalog, extensions, public;
 select lives_ok(
   $$select vortex_context.initialize(jsonb_build_object(
     'callerKind', 'human',
+    'identityAuthorityId', '80000000-0000-4000-8000-000000000001',
     'tenantId', '10000000-0000-4000-8000-000000000001',
     'organizationId', '20000000-0000-4000-8000-000000000001',
     'applicationRootId', '30000000-0000-4000-8000-000000000001',
@@ -548,6 +586,11 @@ select throws_ok(
 set local role vortex_request;
 set local search_path = pg_catalog, extensions, public;
 select is(vortex_context.organization_id(), '20000000-0000-4000-8000-000000000001'::uuid, 'request reads the active organisation');
+select is(
+  vortex_context.identity_authority_id(true),
+  '80000000-0000-4000-8000-000000000001'::uuid,
+  'request reads the trusted Identity Authority'
+);
 select is(vortex_context.application_root_id(true), '30000000-0000-4000-8000-000000000001'::uuid, 'request reads the required application');
 select results_eq(
   'select value from organization_scope_probe order by value',

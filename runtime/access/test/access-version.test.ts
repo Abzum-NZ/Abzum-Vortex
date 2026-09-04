@@ -1,7 +1,7 @@
 import { verifiedIdentitySchema, type VerifiedIdentity } from "@vortex/contracts";
 import type { DatabaseRow, DatabaseValue, RuntimeDatabaseTransaction } from "@vortex/db";
-import { describe, expect, it, vi } from "vitest";
-import { createAccessVersionStore, type AccessVersionError } from "../src/access-version";
+import { describe, expect, it } from "vitest";
+import { createAccessVersionStore } from "../src/access-version";
 
 const id = (suffix: number): string =>
   `00000000-0000-4000-8000-${String(suffix).padStart(12, "0")}`;
@@ -59,34 +59,6 @@ const runtimeRunner =
     });
 
 describe("Access-version service", () => {
-  it("reads only the current version for one validated tenant and organisation", async () => {
-    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
-    const store = createAccessVersionStore({
-      runtimeTransaction: runtimeRunner([{ organization_id: id(4), current_version: "7" }], calls),
-    });
-
-    await expect(
-      store.readCurrentOrganizationAccessVersion({ tenantId: id(3), organizationId: id(4) }),
-    ).resolves.toEqual({ organizationId: id(4), currentVersion: 7 });
-    expect(calls[0]?.text).toContain("vortex_access.current_organization_access_version");
-    expect(calls[0]?.values).toEqual([id(3), id(4)]);
-  });
-
-  it("refuses malformed scope before opening a transaction", async () => {
-    const runtimeTransaction = vi.fn();
-    const store = createAccessVersionStore({ runtimeTransaction });
-
-    await expect(
-      store.readCurrentOrganizationAccessVersion({
-        tenantId: "browser-value",
-        organizationId: id(4),
-      }),
-    ).rejects.toMatchObject({
-      code: "INVALID_ACCESS_VERSION_COMMAND",
-    } satisfies Partial<AccessVersionError>);
-    expect(runtimeTransaction).not.toHaveBeenCalled();
-  });
-
   it("hashes an invitation secret before the atomic Access database call", async () => {
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
     const secret = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
@@ -141,10 +113,15 @@ describe("Access-version service", () => {
 
   it("refuses malformed storage and maps database details to closed errors", async () => {
     const malformed = createAccessVersionStore({
-      runtimeTransaction: runtimeRunner([{ organization_id: id(4), current_version: "0" }]),
+      runtimeTransaction: runtimeRunner([
+        { outcome: "accepted", ...accountRow, access_version: "0" },
+      ]),
     });
     await expect(
-      malformed.readCurrentOrganizationAccessVersion({ tenantId: id(3), organizationId: id(4) }),
+      malformed.acceptOrganizationInvitation(verifiedIdentity(), {
+        invitationSecret: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+        correlationId: id(12),
+      }),
     ).rejects.toMatchObject({ code: "INVALID_ACCESS_VERSION_STORAGE_RESULT" });
 
     const failed = createAccessVersionStore({
@@ -153,7 +130,10 @@ describe("Access-version service", () => {
       },
     });
     await expect(
-      failed.readCurrentOrganizationAccessVersion({ tenantId: id(3), organizationId: id(4) }),
+      failed.acceptOrganizationInvitation(verifiedIdentity(), {
+        invitationSecret: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+        correlationId: id(12),
+      }),
     ).rejects.toEqual(
       expect.objectContaining({
         name: "AccessVersionError",

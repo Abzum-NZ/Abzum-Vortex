@@ -1,6 +1,7 @@
 import { sessionContextSchema, type SessionContext } from "@vortex/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createResolvedRequestTransactionRunner,
   createRequestTransactionRunner,
   createRuntimeTransactionRunner,
   type DatabaseRow,
@@ -10,6 +11,7 @@ import {
 const context = (): SessionContext =>
   sessionContextSchema.parse({
     callerKind: "human",
+    identityAuthorityId: "80000000-0000-4000-8000-000000000001",
     tenantId: "10000000-0000-4000-8000-000000000001",
     organizationId: "20000000-0000-4000-8000-000000000001",
     applicationRootId: "30000000-0000-4000-8000-000000000001",
@@ -86,13 +88,52 @@ describe("request database transaction", () => {
       "complete",
     );
     expect(calls.map(({ text }) => text)).toEqual([
-      "select vortex_context.initialize($value::jsonb)",
+      "select vortex_context.initialize($value::text::jsonb)",
       "set local role vortex_request",
       "select $value::text as value",
     ]);
     expect(JSON.parse(String(calls[0]?.values[0]))).toMatchObject({ callerKind: "human" });
     expect(calls[2]?.values).toEqual(["safe-value"]);
     expect(operation).toHaveBeenCalledOnce();
+  });
+
+  it("resolves scope, establishes its context, and performs protected work in one transaction", async () => {
+    const calls: string[] = [];
+    const driver = {
+      transaction: async <Result>(
+        operation: (transaction: {
+          query<Row extends DatabaseRow>(
+            strings: TemplateStringsArray,
+            ...values: readonly DatabaseValue[]
+          ): Promise<readonly Row[]>;
+        }) => Promise<Result>,
+      ): Promise<Result> =>
+        operation({
+          query: async <Row extends DatabaseRow>(strings: TemplateStringsArray) => {
+            calls.push(statementText(strings));
+            return [] as readonly Row[];
+          },
+        }),
+    };
+
+    const result = await createResolvedRequestTransactionRunner(driver)(
+      async (transaction) => {
+        await transaction.query`select ${"candidate"}::text`;
+        return { context: context(), scope: { organizationId: context().organizationId } };
+      },
+      async (transaction, scope) => {
+        await transaction.query`select vortex_context.current_context()`;
+        return scope.organizationId;
+      },
+    );
+
+    expect(result).toBe(context().organizationId);
+    expect(calls).toEqual([
+      "select $value::text",
+      "select vortex_context.initialize($value::text::jsonb)",
+      "set local role vortex_request",
+      "select vortex_context.current_context()",
+    ]);
   });
 
   it("refuses an invalid context before opening a transaction", async () => {

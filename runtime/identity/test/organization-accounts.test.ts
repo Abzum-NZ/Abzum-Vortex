@@ -33,6 +33,7 @@ const verifiedIdentity = (): VerifiedIdentity =>
 const context = (): SessionContext =>
   sessionContextSchema.parse({
     callerKind: "human",
+    identityAuthorityId: id(13),
     tenantId: id(3),
     organizationId: id(4),
     identityId: id(5),
@@ -52,25 +53,6 @@ const projectionRow = {
   state_changed_at: "2026-09-04T00:00:00.000Z",
   state_changed_by: id(1),
   state_change_correlation_id: id(9),
-  revision: "1",
-};
-
-const accountRow = {
-  organization_account_id: id(10),
-  organization_id: id(4),
-  identity_id: id(1),
-  display_name: "Person",
-  state: "active",
-  language: null,
-  time_zone: null,
-  invitation_id: id(11),
-  activated_at: "2026-09-04T00:02:00.000Z",
-  suspended_at: null,
-  closed_at: null,
-  changed_at: "2026-09-04T00:02:00.000Z",
-  state_changed_at: "2026-09-04T00:02:00.000Z",
-  state_changed_by: id(1),
-  state_change_correlation_id: id(12),
   revision: "1",
 };
 
@@ -199,22 +181,6 @@ describe("organisation-account service", () => {
     });
   });
 
-  it("lists only validated account rows for the supplied identity", async () => {
-    const store = createOrganizationAccountStore({
-      runtimeTransaction: runtimeRunner([accountRow]),
-    });
-
-    await expect(store.listOrganizationAccounts(verifiedIdentity())).resolves.toEqual([
-      expect.objectContaining({
-        organizationAccountId: id(10),
-        organizationId: id(4),
-        identityId: id(1),
-        state: "active",
-        revision: 1,
-      }),
-    ]);
-  });
-
   it("returns one secure invitation secret and sends only its fingerprint to storage", async () => {
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
     const secret = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
@@ -243,7 +209,7 @@ describe("organisation-account service", () => {
       },
     });
 
-    await expect(store.listOrganizationAccounts(verifiedIdentity())).rejects.toEqual(
+    await expect(store.readIdentityProjection(verifiedIdentity())).rejects.toEqual(
       expect.objectContaining({
         name: "OrganizationAccountError",
         code: "ORGANIZATION_ACCOUNT_OPERATION_FAILED",
@@ -254,10 +220,10 @@ describe("organisation-account service", () => {
 
   it("refuses invalid storage shapes", async () => {
     const store = createOrganizationAccountStore({
-      runtimeTransaction: runtimeRunner([{ ...accountRow, state: "invited" }]),
+      runtimeTransaction: runtimeRunner([{ ...projectionRow, state: "invited" }]),
     });
 
-    await expect(store.listOrganizationAccounts(verifiedIdentity())).rejects.toMatchObject({
+    await expect(store.readIdentityProjection(verifiedIdentity())).rejects.toMatchObject({
       code: "ORGANIZATION_ACCOUNT_OPERATION_FAILED",
     });
   });

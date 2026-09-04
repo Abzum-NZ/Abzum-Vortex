@@ -10,7 +10,7 @@ select * from pg_temp.vortex_private_schema_assertions(
   'vortex_access',
   'postgres',
   true,
-  false
+  true
 );
 
 select has_table(
@@ -64,12 +64,12 @@ select ok(
   'trusted runtime has no direct Access table privilege'
 );
 select ok(
-  pg_catalog.has_function_privilege(
+  not pg_catalog.has_function_privilege(
     'vortex_runtime',
     'vortex_access.current_organization_access_version(uuid,uuid)',
     'EXECUTE'
   ),
-  'trusted runtime may perform only the narrow current-version read'
+  'runtime cannot read an Access version outside atomic human-scope composition'
 );
 select ok(
   pg_catalog.has_function_privilege(
@@ -189,45 +189,6 @@ select is(
   1::bigint,
   'initialisation starts at one and exact replay is idempotent'
 );
-
-set local role vortex_runtime;
-create temporary table exact_version_read on commit drop as
-select * from vortex_access.current_organization_access_version(
-  '11000000-0000-4000-8000-000000000100',
-  '21000000-0000-4000-8000-000000000100'
-);
-reset role;
-select results_eq(
-  'select organization_id, current_version from exact_version_read',
-  $$values ('21000000-0000-4000-8000-000000000100'::uuid, 1::bigint)$$,
-  'the pre-context read returns only one exact current version'
-);
-select throws_ok(
-  $$
-    set local role vortex_runtime;
-    select * from vortex_access.current_organization_access_version(
-      '11000000-0000-4000-8000-000000000101',
-      '21000000-0000-4000-8000-000000000100'
-    )
-  $$,
-  '42501'::char(5),
-  null,
-  'a cross-tenant pair is refused without revealing another scope'
-);
-reset role;
-select throws_ok(
-  $$
-    set local role vortex_runtime;
-    select * from vortex_access.current_organization_access_version(
-      '11000000-0000-4000-8000-000000000100',
-      '21000000-0000-4000-8000-000000000102'
-    )
-  $$,
-  '42501'::char(5),
-  null,
-  'an inactive organisation is unavailable to the pre-context read'
-);
-reset role;
 
 create temporary table incremented_version on commit drop as
 select * from vortex_access.increment_organization_access_version(
@@ -359,6 +320,7 @@ insert into vortex_identity.organization_accounts (
 select vortex_context.initialize(
   pg_catalog.jsonb_build_object(
     'callerKind', 'human',
+    'identityAuthorityId', '81000000-0000-4000-8000-000000000100',
     'tenantId', '11000000-0000-4000-8000-000000000100',
     'organizationId', '21000000-0000-4000-8000-000000000100',
     'sessionId', '61000000-0000-4000-8000-000000000100',
@@ -445,6 +407,7 @@ select pg_catalog.set_config('vortex.request_context', '', true);
 select vortex_context.initialize(
   pg_catalog.jsonb_build_object(
     'callerKind', 'human',
+    'identityAuthorityId', '81000000-0000-4000-8000-000000000100',
     'tenantId', '11000000-0000-4000-8000-000000000100',
     'organizationId', '21000000-0000-4000-8000-000000000103',
     'sessionId', '61000000-0000-4000-8000-000000000103',
@@ -483,6 +446,7 @@ select pg_catalog.set_config('vortex.request_context', '', true);
 select vortex_context.initialize(
   pg_catalog.jsonb_build_object(
     'callerKind', 'human',
+    'identityAuthorityId', '81000000-0000-4000-8000-000000000100',
     'tenantId', '11000000-0000-4000-8000-000000000101',
     'organizationId', '21000000-0000-4000-8000-000000000101',
     'sessionId', '61000000-0000-4000-8000-000000000101',
