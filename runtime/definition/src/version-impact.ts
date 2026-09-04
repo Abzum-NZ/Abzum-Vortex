@@ -1,4 +1,7 @@
 import {
+  applicationContentSchema,
+  moduleContentSchema,
+  unresolvedRecordTypeReferencePaths,
   definitionVersionConfirmationSchema,
   definitionVersionImpactRequestSchema,
   definitionVersionImpactResultSchema,
@@ -21,14 +24,6 @@ import {
 } from "./comparison-policy";
 import { assignNextDefinitionVersion, compareStableVersions } from "./semantic-version";
 import { refuseVersionImpact } from "./version-impact-error";
-
-const containsUnresolvedReference = (value: unknown): boolean => {
-  if (Array.isArray(value)) return value.some(containsUnresolvedReference);
-  if (value === null || typeof value !== "object") return false;
-  const record = value as Record<string, unknown>;
-  if (record.state === "unresolved" && typeof record.qualifiedKey === "string") return true;
-  return Object.values(record).some(containsUnresolvedReference);
-};
 
 const subjectOf = (request: DefinitionVersionImpactRequest): DefinitionVersionSubject =>
   request.kind === "module"
@@ -118,7 +113,12 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
     );
   }
   const request = parsed.data;
-  if (containsUnresolvedReference(request.candidate.content))
+  if (
+    unresolvedRecordTypeReferencePaths(
+      request.kind === "module" ? moduleContentSchema : applicationContentSchema,
+      request.candidate.content,
+    ).length > 0
+  )
     refuseVersionImpact("unresolved_candidate");
   assertHistory(request);
 

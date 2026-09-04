@@ -2,9 +2,13 @@ import { createHash } from "node:crypto";
 import { satisfies } from "semver";
 import {
   applicationDraftSchema,
+  conditionNodeSchema,
+  jsonValueSchema,
+  walkDefinitionContract,
   connectionTypeSchema,
   definitionCompilationOutputSchema,
   definitionCompilationRequestSchema,
+  definitionSourceDocumentSchema,
   moduleDraftSchema,
   type DefinitionCompilationOutput,
   type DefinitionProvenanceEntry,
@@ -224,6 +228,33 @@ function valueAtPath(value: unknown, path: Path): unknown {
   return current;
 }
 
+type SourceContractPositions = {
+  opaqueDataRoots: readonly Path[];
+  recordRoots: readonly Path[];
+};
+
+const pathStartsWith = (path: Path, prefix: Path) =>
+  prefix.every((segment, index) => path[index] === segment);
+
+function sourceContractPositions(source: JsonObject): SourceContractPositions {
+  const opaqueDataRoots: Path[] = [];
+  const recordRoots: Path[] = [];
+  walkDefinitionContract(definitionSourceDocumentSchema, source, (schema, _value, path) => {
+    if (schema === jsonValueSchema) opaqueDataRoots.push(path as Path);
+    if (schema._zod.def.type === "record") recordRoots.push(path as Path);
+  });
+  return { opaqueDataRoots, recordRoots };
+}
+
+const isOpaqueDataPath = (positions: SourceContractPositions, path: Path) =>
+  positions.opaqueDataRoots.some((root) => path.length > root.length && pathStartsWith(path, root));
+
+const isDataProperty = (positions: SourceContractPositions, path: Path, propertyIndex: number) =>
+  positions.opaqueDataRoots.some(
+    (root) => propertyIndex >= root.length && pathStartsWith(path, root),
+  ) ||
+  positions.recordRoots.some((root) => propertyIndex === root.length && pathStartsWith(path, root));
+
 function dynamicMapKeyPosition(sourcePath: Path): number | undefined {
   const normalized = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment));
   const path = normalized.join("/");
@@ -267,7 +298,12 @@ function resolveDynamicMapPath(
   ];
 }
 
-function sourceToCanonicalPath(source: JsonObject, canonical: unknown, sourcePath: Path): Path {
+function sourceToCanonicalPath(
+  source: JsonObject,
+  canonical: unknown,
+  sourcePath: Path,
+  positions: SourceContractPositions,
+): Path {
   if (sourcePath.length === 1 && sourcePath[0] === "root_alias")
     return source.kind === "connection_type" ? ["connectionTypeId"] : ["envelope", "rootId"];
   if (sourcePath.length === 1 && sourcePath[0] === "key")
@@ -277,18 +313,22 @@ function sourceToCanonicalPath(source: JsonObject, canonical: unknown, sourcePat
   const mapped: Path = source.kind === "connection_type" ? [] : ["content"];
   const bodyIndex = sourcePath[0] === "body" ? 1 : 0;
   let collection: string | undefined;
-  for (const segment of sourcePath.slice(bodyIndex)) {
+  for (const [offset, segment] of sourcePath.slice(bodyIndex).entries()) {
     if (typeof segment === "number") {
       mapped.push(segment);
       continue;
     }
-    const mappedKey =
-      segment === "id" && collection
+    const sourceIndex = bodyIndex + offset;
+    const mappedKey = isDataProperty(positions, sourcePath, sourceIndex)
+      ? segment
+      : segment === "id" && collection
         ? (sourceCollectionIdKeys[collection] ?? "id")
         : (directSourceKeyMap[segment] ?? camelCase(segment));
     mapped.push(mappedKey);
     collection = segment;
   }
+  if (isOpaqueDataPath(positions, sourcePath))
+    return resolveDynamicMapPath(source, canonical, sourcePath, mapped);
   if (
     source.kind === "application" &&
     sourcePath.at(-2) === "target_binding" &&
@@ -576,6 +616,7 @@ function explicitSourceTargets(
   source: JsonObject,
   canonical: unknown,
   sourcePath: Path,
+  positions: SourceContractPositions,
 ): Path[] | undefined {
   const conditionTargets = conditionSourceTargets(source, sourcePath);
   if (conditionTargets) {
@@ -611,6 +652,7 @@ function explicitSourceTargets(
     }
     return conditionTargets;
   }
+  if (isOpaqueDataPath(positions, sourcePath)) return undefined;
   const roleTargets = applicationRolePermissionTargets(source, canonical, sourcePath);
   if (roleTargets) return roleTargets;
   if (
@@ -667,7 +709,7 @@ function explicitSourceTargets(
     };
     const mappedKey = connectionKeys[String(sourcePath.at(-1))];
     if (mappedKey) {
-      const proposed = sourceToCanonicalPath(source, canonical, sourcePath);
+      const proposed = sourceToCanonicalPath(source, canonical, sourcePath, positions);
       proposed[proposed.length - 1] = mappedKey;
       return [proposed];
     }
@@ -680,7 +722,7 @@ function explicitSourceTargets(
     sourcePath.at(-1) === "input" &&
     asObject(valueAtPath(source, sourcePath.slice(0, -1))).source === "trigger_input"
   ) {
-    const target = sourceToCanonicalPath(source, canonical, sourcePath);
+    const target = sourceToCanonicalPath(source, canonical, sourcePath, positions);
     target[target.length - 1] = "inputKey";
     return [target];
   }
@@ -1295,10 +1337,15 @@ function sourceTransformationApproved(source: JsonObject, sourcePath: Path): boo
   return patterns.some((pattern) => pattern.test(path));
 }
 
-function sourceResolvesIdentity(sourcePath: Path): boolean {
+function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPositions): boolean {
   const normalized = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment));
   const path = normalized.join("/");
   const last = sourcePath.at(-1);
+  const resolvesDynamicMapKey =
+    /\/(?:effects\/#\/values|sharing_conditions\/#\/publication_tests\/#\/field_values|workflows\/#\/nodes\/#\/config\/values)\/[^/]+\//.test(
+      path,
+    );
+  if (isOpaqueDataPath(positions, sourcePath)) return resolvesDynamicMapKey;
   return (
     path === "root_alias" ||
     (typeof last === "string" && ID_FIELDS.has(last)) ||
@@ -1309,9 +1356,7 @@ function sourceResolvesIdentity(sourcePath: Path): boolean {
       path,
     ) ||
     /\/expression\/fields\/#$/.test(path) ||
-    /\/(?:effects\/#\/values|sharing_conditions\/#\/publication_tests\/#\/field_values|workflows\/#\/nodes\/#\/config\/values)\/[^/]+\//.test(
-      path,
-    ) ||
+    resolvesDynamicMapKey ||
     (sourcePath.length === 6 &&
       sourcePath[0] === "body" &&
       sourcePath[1] === "workflows" &&
@@ -1354,6 +1399,7 @@ type SourceProvenanceMapping = {
 
 function provenanceFor(source: unknown, canonical: unknown): DefinitionProvenanceEntry[] {
   const sourceObject = asObject(source);
+  const positions = sourceContractPositions(sourceObject);
   const sourceLeafPaths = leafPaths(source).filter(
     (path) => !(path.length === 1 && (path[0] === "source_contract_version" || path[0] === "kind")),
   );
@@ -1362,11 +1408,11 @@ function provenanceFor(source: unknown, canonical: unknown): DefinitionProvenanc
   const entries: DefinitionProvenanceEntry[] = [];
 
   for (const sourcePath of sourceLeafPaths) {
-    const explicitTargets = explicitSourceTargets(sourceObject, canonical, sourcePath);
+    const explicitTargets = explicitSourceTargets(sourceObject, canonical, sourcePath, positions);
     const canonicalPath =
-      explicitTargets?.[0] ?? sourceToCanonicalPath(sourceObject, canonical, sourcePath);
+      explicitTargets?.[0] ?? sourceToCanonicalPath(sourceObject, canonical, sourcePath, positions);
     const mapsToCanonicalLeaf = canonicalLeafSet.has(pathKey(canonicalPath));
-    const resolved = sourceResolvesIdentity(sourcePath);
+    const resolved = sourceResolvesIdentity(sourcePath, positions);
     const transformTargets = explicitTargets ?? (mapsToCanonicalLeaf ? [canonicalPath] : []);
     if (transformTargets.length === 0)
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
@@ -1913,18 +1959,13 @@ function fieldSettings(
       } else if (expression.operation === "condition") {
         const compiledCondition = condition(expression.condition, localField);
         const dependencySet = new Set<string>();
-        const collectFieldDependencies = (value: unknown): void => {
-          if (Array.isArray(value)) {
-            value.forEach(collectFieldDependencies);
-            return;
-          }
+        walkDefinitionContract(conditionNodeSchema, compiledCondition, (schema, value) => {
+          if (schema === jsonValueSchema) return;
           if (value === null || typeof value !== "object") return;
           const entry = value as JsonObject;
           if (entry.source === "field" && typeof entry.fieldId === "string")
             dependencySet.add(entry.fieldId);
-          Object.values(entry).forEach(collectFieldDependencies);
-        };
-        collectFieldDependencies(compiledCondition);
+        });
         dependencies = [...dependencySet];
         compiled = { kind: "condition", condition: compiledCondition };
       } else if (expression.operation === "date_offset") {
