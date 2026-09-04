@@ -311,6 +311,55 @@ describe("Definition consumer reads", () => {
     ).rejects.toMatchObject({ code: "DEFINITION_RELEASE_INTEGRITY_FAILED" });
   });
 
+  it("refuses a platform-theme manifest version that differs from canonical content", async () => {
+    const themeId = "70000000-0000-4000-8000-000000000009";
+    const mismatchedVersion = "2.2.0";
+    const content = {
+      ...applicationOutput.canonical.content,
+      theme: { mode: "platform" as const, catalogueThemeId: themeId, version: "2.1.0" },
+    };
+    const contentFingerprint = fingerprintCanonicalValue(content);
+    const output = {
+      ...applicationOutput,
+      canonical: { ...applicationOutput.canonical, content },
+      artifact: { ...applicationOutput.artifact, contentFingerprint },
+    };
+    const themeDependency: ExactDefinitionDependency = {
+      kind: "platform_theme",
+      catalogueThemeId: themeId,
+      releaseVersion: mismatchedVersion,
+      contentFingerprint: dependencyFingerprint,
+      catalogueFingerprint,
+    };
+    const manifest = [...applicationManifest, themeDependency].sort((left, right) => {
+      const leftSubject = `${left.kind}:${"key" in left ? left.key : left.catalogueThemeId}`;
+      const rightSubject = `${right.kind}:${"key" in right ? right.key : right.catalogueThemeId}`;
+      return leftSubject.localeCompare(rightSubject);
+    });
+    const evidence = releaseEvidence(output, manifest);
+    const baseCatalogue = catalogueFor(manifest);
+    const catalogue: DefinitionPublicationCatalogue = {
+      ...baseCatalogue,
+      readPlatformThemeRelease: async (catalogueThemeId, releaseVersion) =>
+        catalogueThemeId === themeId && releaseVersion === mismatchedVersion
+          ? {
+              catalogueThemeId: themeId,
+              releaseVersion: mismatchedVersion,
+              contentFingerprint: dependencyFingerprint,
+              catalogueFingerprint,
+            }
+          : undefined,
+    };
+
+    await expect(
+      createDefinitionConsumerReadService(repositoryFor(evidence), catalogue).read(context(), {
+        kind: "application",
+        rootId: evidence.rootId,
+        selector: { selection: "current" },
+      }),
+    ).rejects.toMatchObject({ code: "DEFINITION_RELEASE_INTEGRITY_FAILED" });
+  });
+
   it("maps context and unexpected repository failures to stable safe outcomes", async () => {
     const command = {
       kind: "module" as const,
@@ -320,6 +369,16 @@ describe("Definition consumer reads", () => {
     await expect(
       createDefinitionConsumerReadService(
         { read: async () => Promise.reject(new Error("EXPIRED_REQUEST_CONTEXT")) },
+        catalogueFor(),
+      ).read(context(), command),
+    ).rejects.toMatchObject({ code: "DEFINITION_CONTEXT_REFUSED" });
+    const databaseExpiry = Object.assign(
+      new Error("Vortex request context is expired or inconsistent"),
+      { code: "22023" },
+    );
+    await expect(
+      createDefinitionConsumerReadService(
+        { read: async () => Promise.reject(databaseExpiry) },
         catalogueFor(),
       ).read(context(), command),
     ).rejects.toMatchObject({ code: "DEFINITION_CONTEXT_REFUSED" });

@@ -111,6 +111,10 @@ const manifestMatchesCanonicalContent = (release: StoredConsumerReleaseEvidence)
     (entry): entry is Extract<ExactDefinitionDependency, { kind: "connection_type" }> =>
       entry.kind === "connection_type",
   );
+  const themeEntries = release.dependencyManifest.filter(
+    (entry): entry is Extract<ExactDefinitionDependency, { kind: "platform_theme" }> =>
+      entry.kind === "platform_theme",
+  );
   let expected: string[];
 
   if (output.kind === "module") {
@@ -129,6 +133,16 @@ const manifestMatchesCanonicalContent = (release: StoredConsumerReleaseEvidence)
     )
       return false;
   } else {
+    const canonicalTheme = output.canonical.content.theme;
+    if (
+      canonicalTheme.mode === "platform" &&
+      !themeEntries.some(
+        (entry) =>
+          entry.catalogueThemeId === canonicalTheme.catalogueThemeId &&
+          entry.releaseVersion === canonicalTheme.version,
+      )
+    )
+      return false;
     expected = [
       ...output.canonical.content.moduleBindings.map(
         (binding) =>
@@ -150,8 +164,8 @@ const manifestMatchesCanonicalContent = (release: StoredConsumerReleaseEvidence)
             )?.key ?? ""
           }`,
       ),
-      ...(output.canonical.content.theme.mode === "platform"
-        ? [`platform_theme:${output.canonical.content.theme.catalogueThemeId}`]
+      ...(canonicalTheme.mode === "platform"
+        ? [`platform_theme:${canonicalTheme.catalogueThemeId}`]
         : []),
     ];
   }
@@ -239,6 +253,9 @@ const isContextFailure = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : "";
   return (
     code === "42501" ||
+    ((code === "22023" || code === "55000") &&
+      (message.startsWith("Vortex request context") ||
+        message.startsWith("Stored Vortex request context"))) ||
     ["INVALID_REQUEST_CONTEXT", "INVALID_REQUEST_CONTEXT_TIME", "EXPIRED_REQUEST_CONTEXT"].includes(
       message,
     )
