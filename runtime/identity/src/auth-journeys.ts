@@ -85,6 +85,14 @@ const validPasswordLength = (value: string): boolean =>
 const validNewPassword = (value: string): boolean =>
   validPasswordLength(value) && /[A-Za-z]/u.test(value) && /\d/u.test(value);
 
+const validAccessToken = (value: string): boolean =>
+  value.length >= 64 &&
+  value.length <= 8_192 &&
+  /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(value);
+
+const validRefreshToken = (value: string): boolean =>
+  value.length > 0 && value.length <= 2_048 && !/\s/u.test(value);
+
 const confirmationUrl = (configuration: IdentityJourneyConfiguration): string =>
   new URL("/auth/confirm", configuration.siteUrl).toString();
 
@@ -161,15 +169,15 @@ export const requestPasswordRecovery = async (
 
 export const confirmEmail = async (
   configuration: IdentityJourneyConfiguration,
-  tokenHash: string,
+  accessToken: string,
 ): Promise<IdentityJourneyResult> => {
-  if (tokenHash.length < 16 || tokenHash.length > 2_048) {
+  if (!validAccessToken(accessToken)) {
     return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
   }
 
   try {
     const authority = createAuthorityClient(configuration);
-    const { error } = await authority.auth.verifyOtp({ token_hash: tokenHash, type: "email" });
+    const { error } = await authority.auth.getUser(accessToken);
     return error ? { ok: false, code: "vortex.identity.invalid_or_expired_link" } : { ok: true };
   } catch {
     return { ok: false, code: "vortex.identity.authority_unavailable" };
@@ -178,21 +186,25 @@ export const confirmEmail = async (
 
 export const completePasswordRecovery = async (
   configuration: IdentityJourneyConfiguration,
-  tokenHash: string,
+  accessToken: string,
+  refreshToken: string,
   password: string,
 ): Promise<IdentityJourneyResult> => {
-  if (tokenHash.length < 16 || tokenHash.length > 2_048 || !validNewPassword(password)) {
+  if (!validAccessToken(accessToken) || !validRefreshToken(refreshToken)) {
+    return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
+  }
+  if (!validNewPassword(password)) {
     return { ok: false, code: "vortex.identity.invalid_input" };
   }
 
   try {
     const authority = createAuthorityClient(configuration);
-    const { error: verificationError } = await authority.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: "recovery",
+    const { error: sessionError } = await authority.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
     });
 
-    if (verificationError) {
+    if (sessionError) {
       return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
     }
 

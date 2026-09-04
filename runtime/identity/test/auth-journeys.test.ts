@@ -4,7 +4,8 @@ const authority = vi.hoisted(() => ({
   signUp: vi.fn(),
   signInWithPassword: vi.fn(),
   resetPasswordForEmail: vi.fn(),
-  verifyOtp: vi.fn(),
+  getUser: vi.fn(),
+  setSession: vi.fn(),
   updateUser: vi.fn(),
 }));
 
@@ -38,7 +39,8 @@ describe("identity authority journeys", () => {
       error: null,
     });
     authority.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
-    authority.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
+    authority.getUser.mockResolvedValue({ data: { user: { id: "identity-id" } }, error: null });
+    authority.setSession.mockResolvedValue({ data: { session: {} }, error: null });
     authority.updateUser.mockResolvedValue({ data: {}, error: null });
   });
 
@@ -88,31 +90,34 @@ describe("identity authority journeys", () => {
       requestRegistration(configuration, "person@example.test", "letters-only"),
     ).resolves.toEqual({ ok: false, code: "vortex.identity.invalid_input" });
     await expect(
-      completePasswordRecovery(configuration, "a".repeat(64), "12345678"),
+      completePasswordRecovery(
+        configuration,
+        `${"a".repeat(32)}.${"b".repeat(32)}.${"c".repeat(32)}`,
+        "refresh-token-value",
+        "12345678",
+      ),
     ).resolves.toEqual({ ok: false, code: "vortex.identity.invalid_input" });
     await expect(
       signInWithPassword(configuration, "person@example.test", "legacy-pass"),
     ).resolves.toEqual({ ok: true, accessToken: "verified-access-token" });
 
     expect(authority.signUp).not.toHaveBeenCalled();
-    expect(authority.verifyOtp).not.toHaveBeenCalled();
+    expect(authority.setSession).not.toHaveBeenCalled();
   });
 
   it("confirms email and completes recovery without persisting a session", async () => {
-    const tokenHash = "a".repeat(64);
+    const accessToken = `${"a".repeat(32)}.${"b".repeat(32)}.${"c".repeat(32)}`;
+    const refreshToken = "refresh-token-value";
 
-    await expect(confirmEmail(configuration, tokenHash)).resolves.toEqual({ ok: true });
+    await expect(confirmEmail(configuration, accessToken)).resolves.toEqual({ ok: true });
     await expect(
-      completePasswordRecovery(configuration, tokenHash, "new-secure-pass-2"),
+      completePasswordRecovery(configuration, accessToken, refreshToken, "new-secure-pass-2"),
     ).resolves.toEqual({ ok: true });
 
-    expect(authority.verifyOtp).toHaveBeenNthCalledWith(1, {
-      token_hash: tokenHash,
-      type: "email",
-    });
-    expect(authority.verifyOtp).toHaveBeenNthCalledWith(2, {
-      token_hash: tokenHash,
-      type: "recovery",
+    expect(authority.getUser).toHaveBeenCalledWith(accessToken);
+    expect(authority.setSession).toHaveBeenCalledWith({
+      access_token: accessToken,
+      refresh_token: refreshToken,
     });
     expect(authority.updateUser).toHaveBeenCalledWith({ password: "new-secure-pass-2" });
     expect(createClient).toHaveBeenCalledWith(
@@ -126,6 +131,33 @@ describe("identity authority journeys", () => {
         },
       }),
     );
+  });
+
+  it("refuses malformed or provider-refused callback credentials", async () => {
+    await expect(confirmEmail(configuration, "not-a-token")).resolves.toEqual({
+      ok: false,
+      code: "vortex.identity.invalid_or_expired_link",
+    });
+    expect(authority.getUser).not.toHaveBeenCalled();
+
+    const accessToken = `${"a".repeat(32)}.${"b".repeat(32)}.${"c".repeat(32)}`;
+    authority.getUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: "refused" },
+    });
+    authority.setSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: { message: "refused" },
+    });
+
+    await expect(confirmEmail(configuration, accessToken)).resolves.toEqual({
+      ok: false,
+      code: "vortex.identity.invalid_or_expired_link",
+    });
+    await expect(
+      completePasswordRecovery(configuration, accessToken, "refresh-token", "new-secure-pass-2"),
+    ).resolves.toEqual({ ok: false, code: "vortex.identity.invalid_or_expired_link" });
+    expect(authority.updateUser).not.toHaveBeenCalled();
   });
 
   it.each([
