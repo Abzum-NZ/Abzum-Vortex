@@ -135,3 +135,9 @@ flowchart LR
 ## Completion check
 
 All 33 earlier chapters, all five earlier appendices, all ten earlier phases, and every material review finding have a destination above. A future edit that introduces an uncovered requirement must add a row before the specification can be published.
+
+## September architecture-review coverage
+
+The [review map](../../build-plan/architecture-review.md) records findings across all specification subjects and the corrected phase boundaries. Page/shell/settings/responsive contracts are [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249); data/form/semantic-operation bindings are [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250). The [HR example](page-builder-contracts.md#hr-example-policy) is [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251), authored from ordinary definitions and workflows.
+
+Activity append [#252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252), early entitlement decisions [#118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) and file-removal eligibility [#253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) precede their first consumers. Full later-engine evidence is [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254); complete organisation archive/restore after privacy policy is [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255). Generated data-module UI [#52](https://github.com/Abzum-NZ/Abzum-Vortex/issues/52) belongs to Phase 6.

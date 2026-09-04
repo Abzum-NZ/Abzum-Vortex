@@ -161,3 +161,11 @@ Epics have completion criteria covering all children, cross-phase acceptance, un
 - A performance claim can be reproduced from its stated environment and data size.
 - A fixture validates every reference or clearly declares the unavailable platform fixture that blocks it.
 - A release cannot be called complete while a blocking [decision](appendices/decisions.md) remains open.
+
+## Page builder and application coverage
+
+Contract completion [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and typed bindings [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) must prove nested slots, safe property types, related contexts, form concurrency, semantic operations and immutable-release compatibility before canvas work. [HR #251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) is an ordinary editable application, not a core domain.
+
+Phase 6 proves available record/query/form/rendering behavior. [Complete application integration #254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) proves workflows, files, connections, sharing and MCP after their real executors exist. Stubs and contract tests are labelled as such and never counted as live end-to-end delivery.
+
+Private file evidence must test a copied download route, subsequent range request and revoked grant/account. Third-party call evidence must include unknown outcomes after timeout. A sequential query plan or missed performance target alone never fails a release; access, integrity and functional correctness still do.

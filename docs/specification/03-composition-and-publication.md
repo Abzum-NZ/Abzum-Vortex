@@ -172,7 +172,7 @@ Publication is refused unless:
 7. Required translation, accessibility, and phone-layout checks pass under [quality and acceptance](20-quality-and-acceptance.md).
 8. Any change affecting stored [records](06-records-and-lifecycle.md) is classified as breaking. Migration feasibility is checked only when an installation or application binding deliberately adopts that release.
 9. Every dependency selected for this new immutable release satisfies the new release's declared requirement. Existing sharing grants remain pinned and are checked only by an explicit grant migration or revocation operation.
-10. A record-scoped page, its query, commit action, replacement, blocks, and typed block references all target that page record; public pages additionally restrict every selected, filtered, grouped, aggregated, and sorted field, permission, action subject, and action effect to the approved public surface.
+10. A record-scoped page has a primary subject and matching main form commit action. Each related panel, query, row and action resolves against its explicit typed binding context under [page builder contracts](appendices/page-builder-contracts.md#data-context-and-related-records). Public pages additionally restrict every selected, filtered, grouped, aggregated and sorted field, permission, action subject and action effect to the approved public surface.
 
 ## Dependency graph
 
@@ -214,7 +214,7 @@ The source and recipient application bindings must use a compatible published re
 ## Acceptance examples
 
 - Publishing an application produces one consistent snapshot containing its pages, rules, workflows, and roles.
-- Editing a page after publication does not change the live application until the application is published again.
+- Editing a page changes only the draft. Publication creates a new immutable application release; the live installation changes only through deliberate activation of that release.
 - Removing a field referenced by content inside the same candidate release is refused. A breaking release may remove a field used by an older external dependant; that dependant remains on its prior exact release until a compatible migration is prepared.
 - Restoring a prior published version creates a reviewable draft and does not erase later history.
 - Installing or copying an application does not grant access to the publisher's records.

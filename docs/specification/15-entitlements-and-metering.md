@@ -69,3 +69,7 @@ A reusable banner block may show application-provided notices. Emergency service
 
 These exclusions do not prevent Abzum or a customer from building those capabilities as ordinary Vortex applications.
 
+
+## Delivery order
+
+The headless [entitlement decision and reservation service #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) is needed before the first limited consuming operation. It can follow Access without waiting for page or workflow engines. Initial operational limits come from explicit versioned deployment policy, never a silent unlimited fallback. Phase 12 completes metering/reconciliation and ordinary administration integration.

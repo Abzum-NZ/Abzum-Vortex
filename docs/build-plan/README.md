@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.12
+**Status:** Architecture review revision 2.13 (proposed through this pull request)
 
 **Date:** 5 September 2026
 
@@ -12,10 +12,15 @@ This plan replaces the sequencing of the earlier [Build Plan](https://claude.ai/
 
 The [decision register](../specification/appendices/decisions.md) is clear. Vortex assigns the minimum valid next module or application release version after structural comparison, and the builder confirms or cancels publication. A new unresolved business choice must be recorded before implementation assumes an answer.
 
+## Architecture review
+
+The [corrected dependency and coverage map](architecture-review.md) is part of this plan. It identifies contract gaps, the Fluid adaptation boundary, the ordinary HR example and the separation between early service proofs and later complete-application evidence. New contract work is #249/#250; HR is #251; reusable foundations are #252/#253; complete integration is #254; full archive/restore is #255.
+
 ## Version history
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.13 | Review proposed | 5 September 2026 | Page/shell/binding contract completion, workflow-only HR example, corrected task dependencies and cross-cutting foundations. |
 | 2.12 | Approved | 5 September 2026 | Made hosted runtime provisioning and proof explicit: migrations leave the restricted login passwordless; each environment receives a separate operator-generated password and exact transaction-pooler URL through its Vercel-synchronised Doppler target; forbidden owner, migration, general database and Kestra variables are checked; the intended deployment must then pass a real protected journey. |
 | 2.11 | Approved | 5 September 2026 | Settled Identity sessions #26 on the official server-only Supabase/Next.js pattern: request-specific clients, Proxy `getClaims()` refresh, strict `HttpOnly` hosted/loopback cookie profiles, staged writes, non-mutating cluster projection reads, closed temporary failures, realistic refresh/revocation guarantees and no Vortex session store. |
 | 2.10 | Approved | 5 September 2026 | Completed Access-version foundation #224 with private per-organisation storage, exact trusted reads, same-transaction invitation/account lifecycle invalidation, closed evidence, safe boundaries, 672 pgTAP assertions and six real concurrency proofs. Identity sessions #26 are the only remaining prerequisite before request context #27. |
@@ -199,14 +204,15 @@ Build:
 - The sole application-role `*` entry expanded only against that exact application's non-administrative permission catalogue and fingerprinted at publication; organisation roles and module permissions remain exact-only.
 - Multiple team memberships per organisation account and within-organisation direct record sharing to an account or team with field allowlists.
 - Reuse the Access-owned organisation version created in Phase 2 for role, Team, assignment, public-policy and sharing changes and next-request revocation.
-- Field-level response filtering where specified.
+- Configurable field-level read/write filtering and trusted actor-relative relationship/condition scopes; conditions are not UI-only filters.
+- Reusable transactional activity append #252 and headless entitlement policy/reservations #118 before their first consuming operations.
 - Source-authoritative grant evaluation that can be called through the same local or federated shared-record gateway contract.
 - Split database and end-to-end [organisation separation suite](../specification/20-quality-and-acceptance.md#organisation-separation-suite).
 
 Exit proof:
 
 - Every database case fails through the request role and succeeds through the matching owner control operation.
-- File, cache, subscription and server tests run through real product boundaries, not a table-owner fiction.
+- Access projection and boundary tests use actual non-owner request roles and controlled adapters here. File/subscription/UI/remote integration is completed by the respective later engine tasks; a mock is not presented as delivered runtime behavior.
 - Removing a role, membership, share, or account changes access on the next request.
 
 ## Phase 4 — Module and Record
@@ -223,14 +229,14 @@ Build:
 - Storage generation through ordered [database changes](../specification/18-delivery-and-testing.md#database-changes).
 - All 22 field types, relationships, closed calculations and typed totals through resolved module definitions.
 - Record save sequence, concurrency numbers, reference sequences, uniqueness, ownership and data versions.
-- Soft deletion, restoration, permanent-removal handoff and bounded bulk operations.
+- Soft deletion, restoration and permanent-removal handoff. Background bulk execution is #114; generated module/list/detail/form UI #52 belongs to Phase 6, not this phase.
 - Migration workflow for incompatible field changes; no arbitrary in-place retype.
 
 Exit proof:
 
 - Representative fixture records pass create/change/conflict/delete/restore tests without shipping fixture-specific behaviour.
 - Parent deletion is refused for unresolved required links except explicit dependent-child soft-delete; soft-deleted unique values remain reserved; mixed-currency totals refuse; and incompatible field changes follow add/migrate/switch/retire.
-- A failed save produces no record change, activity entry or event.
+- A failed save produces no record change, success activity entry or business event. Safe refusal evidence may be recorded outside the rolled-back mutation.
 
 ## Phase 5 — Query, Rule and Event
 
@@ -254,13 +260,13 @@ Exit proof:
 - Lists, summaries and exports agree on access and filter meaning.
 - Unsafe filters refuse rather than broaden.
 - Duplicate delivery is safe and a later record event never discards or overtakes an earlier blocked event.
-- Database-webhook wake-up and scheduled Kestra recovery both deliver from the durable queue without duplication.
+- Database-webhook wake-up and operational scheduled recovery deliver from the durable queue through a controlled registered consumer without duplicated effects. #77 integrates the real Workflow service later.
 
 ## Phase 6 — Application, Theme and Page
 
 **Current project epic:** [#63](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63)
 
-**Needs:** Phase 5.
+**Needs:** Phase 5, page/shell contracts #249 and typed operation/data bindings #250.
 
 **Outcome:** Builders can compose and publish complete applications that people can use on desktop and phone.
 
@@ -268,16 +274,18 @@ Build:
 
 - Version-pinned module and connection bindings, exact one-for-one resolved-dependency manifests, application roles, navigation and application resolution. Publication requires each declared version requirement to accept its resolved version and each connection binding to supply the exact caller-snapshot artifact and operation catalogue.
 - Application-contained theme settings, platform-theme binding, inheritance and legibility checking.
-- Six page types, four list arrangements, registered blocks, twelve-column responsive layout and page states.
+- Adapt Fluid through the [Vortex page-builder adapter](../specification/appendices/page-builder-contracts.md), after #249/#250 complete contracts and their immutable-release migration tests.
+- Six page types, four list arrangements, reusable shells/named slots, nested registered blocks, typed settings, flexible responsive layout and page states.
+- Generic data-module editing and generated default pages #52, plus the normal editable HR application fixture #251. Approvals are ordinary workflows; no HR-specific code.
 - [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, the six central semantic tokens, interruptible state-driven motion, and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.
 - Forms, guided-form drafts, action buttons and public pages.
 - A permission-filtered [semantic interface map](../specification/07-applications-pages-and-themes.md#semantic-interface-map) for navigation, pages, queries, forms, drafts, choices, files, actions, Studio and administration. Web components bind to these stable semantic controls so Phase 9 can expose the same capabilities without describing the DOM or rebuilding application behaviour.
-- Complete process-pipeline definition, transition gates and visible stage controls. Timed execution comes in Phase 7.
+- Process-pipeline definitions and presentation contracts. Real guarded transitions, entry/exit work and timed execution come in Phase 7; unavailable controls are not working-looking placeholders.
 - The protected sign-in and recovery shell, plus locked Tenant Administration and Organisation Administration application definitions built with the same application/page primitives as customer applications.
 
 Exit proof:
 
-- Complete CRM and Service Desk applications each publish as one root revision with exact module-version bindings.
+- CRM, Service Desk and HR fixture definitions compile/publish as appropriate with exact module dependencies; #74/#251 prove the available local record/query/form/rendering behavior. Later workflow/file/connection/grant/MCP execution is #254 and does not block Phase 6.
 - Every fixture page passes desktop, phone, keyboard, validation, empty, refused, conflict and failure checks that apply.
 - Internal navigation never performs a routine full document reload; slow routes and blocks show immediate local feedback, and refreshing data updates only affected components and dependent totals without losing unrelated state.
 - A delayed response or unfinished animation for an obsolete record, page, or access state never flashes or replaces the current authorised state; no feature defines its own motion timing or spring.
@@ -305,7 +313,7 @@ Build:
 
 Exit proof:
 
-- The qualification and deal-won workflows survive retry, callback duplication, web deployment and [Kestra](https://kestra.io/docs) restart.
+- Available record-only/human-input workflows survive retry, callback duplication, web deployment and [Kestra](https://kestra.io/docs) restart. External message delivery #82 waits for #100; complete business flows are proven in #254.
 - Every completed, waiting, cancelled and failed run displays Kestra's current state; Vortex's last-known snapshot is labelled unavailable rather than presented as current during an outage.
 - Phase 7 uses the Phase 6 action, form, page and pipeline contracts rather than inventing replacements.
 
@@ -319,7 +327,7 @@ Exit proof:
 
 Build in two streams:
 
-- **Core after Phase 4:** search documents, ranking, access recheck, file metadata, private Supabase Storage buckets, signed and resumable transfers, upload/download grants, detection, scanning, quarantine and lifecycle.
+- **Core after Phase 4:** search documents, ranking, access recheck, file metadata, private Supabase Storage buckets, restricted resumable uploads, authenticated private download/preview streams, detection, scanning, quarantine and lifecycle.
 - **Experience after Phases 5–7:** page blocks, attachment controls, previews, live search freshness, phone installation, generic capacity notices, scheduled purge and recovery.
 
 Exit proof:
@@ -327,7 +335,7 @@ Exit proof:
 - Search and file paths pass their end-to-end organisation-separation cases.
 - Sensitive fields never enter general search or file-derived search.
 - Attachment configuration uses one decided contract.
-- Deletion, retention, legal hold and restore paths are integrated, not deferred.
+- File deletion/recovery and current legal-hold eligibility #253 are integrated before purge #94. Phase 11 #117 extends policy administration and all-store removal; it is not a prerequisite that makes Phase 8 depend on itself through Phase 10.
 
 ## Phase 9 — Connections and Interfaces
 
@@ -396,7 +404,7 @@ Exit proof:
 - Exact sharing-code or signed-link discovery reveals only the approved organisation name and region; one shared request creates linked source/recipient metering without counting one category twice.
 - An approved export is generated at the source, leaves no recipient-cluster copy, includes only approved fields, and presents the non-recallable-download responsibility before transfer.
 - Import dry run matches execution.
-- Complete archive restore proves definitions, roles, records, files, workflow state and privacy-removal replay.
+- Full organisation archive/restore is explicitly delivered by #255 after #117 in Phase 11, then exercised by #170. Spreadsheet import/export here does not substitute for it.
 
 ## Phase 11 — Privacy and retention
 
@@ -413,6 +421,7 @@ Build:
 - Legal holds and protected operation authorisation.
 - Organisation-scoped person-data export and erasure across records, files, search, events, workflows, activity details, exports, caches and configured connected systems; global identity closure coordinates every organisation account.
 - Removal-receipt replay during restore.
+- Complete organisation archive/isolated restore #255 after policy and hold handling, distinct from provider PITR and tabular import.
 
 Exit proof:
 
@@ -424,7 +433,7 @@ Exit proof:
 
 **Project epic:** [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165)
 
-**Needs:** Identity plus the first resource-consuming services.
+**Needs:** Identity plus the first resource-consuming services. Headless enforcement #118 is implemented earlier after Access; this phase completes metering and integration.
 
 **Outcome:** Arbitrary platform services make one versioned allow/refuse entitlement decision and record duplicate-safe, tenant-scoped metering without understanding commercial products or payment state.
 
@@ -467,6 +476,7 @@ Exit proof:
 
 - Restore evidence meets the one-hour recovery-point and eight-hour recovery-time objectives.
 - No blocking decision, unresolved reference, critical alert, untested migration or failed acceptance case remains.
+- Full application and web/MCP proof #254 passes against real executors, including the HR workflow example.
 - The release candidate is traceable from specification and decision through issue, code, migration, evidence, deployment and runbook.
 
 ## Project-board operating structure
