@@ -205,6 +205,9 @@ grep --fixed-strings --quiet \
 grep --fixed-strings --quiet \
   "supabase/tests/definition-publication-concurrency.test.sh" \
   "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+grep --fixed-strings --quiet \
+  "supabase/tests/definition-consumer-read-concurrency.test.sh" \
+  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 jq --exit-status \
   '.status == "succeeded" and
    .environment == "production" and
