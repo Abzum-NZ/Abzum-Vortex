@@ -12,8 +12,8 @@ apart from every other organisation's.
 
 | Document | Where |
 |---|---|
-| Platform Specification 2.11 | [docs/specification/README.md](docs/specification/README.md) |
-| Build Plan 2.10 | [docs/build-plan/README.md](docs/build-plan/README.md) |
+| Platform Specification 2.12 | [docs/specification/README.md](docs/specification/README.md) |
+| Build Plan 2.11 | [docs/build-plan/README.md](docs/build-plan/README.md) |
 | Open business decisions | [docs/specification/appendices/decisions.md](docs/specification/appendices/decisions.md) |
 | Coverage of the earlier specification and plan | [docs/specification/appendices/traceability.md](docs/specification/appendices/traceability.md) |
 | Specification-to-GitHub task coverage | [docs/specification/appendices/github-delivery-map.md](docs/specification/appendices/github-delivery-map.md) |
@@ -21,7 +21,7 @@ apart from every other organisation's.
 | Earlier Platform Specification (superseded source) | [33 chapters and 5 appendices](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4) |
 | Earlier Build Plan (superseded source) | [Prerequisites, dependency map and ten phases](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef) |
 
-Platform Specification 2.11 and Build Plan 2.10 are authoritative. Change the specification before
+Platform Specification 2.12 and Build Plan 2.11 are authoritative. Change the specification before
 changing behaviour, never after.
 
 ## What runs
@@ -236,6 +236,18 @@ The publishable key remains public by design, but it does not need to be include
 browser bundle. A later browser feature such as Realtime may add separately reviewed
 `NEXT_PUBLIC_` variables when browser code genuinely needs those public values.
 
+Identity-session verification also reads the non-secret `VORTEX_ENVIRONMENT`
+(`local`, `testing` or `production`) and stable `VORTEX_IDENTITY_AUTHORITY_ID`. The configured
+environment must match the site's secure hosted or exact HTTP-loopback profile.
+
+Identity sessions deliberately use no browser Supabase Auth client. Next.js creates a request-specific
+server client from the same three validated values, and only server code reads or writes its
+`HttpOnly` cookie family. Testing and Production use `__Host-vortex-session` with `Secure`,
+`SameSite=Lax`, `Path=/` and no `Domain`; exact HTTP loopback uses the separate
+`vortex-local-session` name without `Secure`. Proxy refreshes through `getClaims()`, while protected
+server operations independently verify the current access token and read the local identity
+projection without mutating it.
+
 **No Supabase service-role key exists anywhere, deliberately.** The application connects as the
 application database account over PostgreSQL, which the
 [database rules](docs/specification/17-runtime-storage-and-caching.md#database-and-storage-rules) require. If a
@@ -257,6 +269,13 @@ SQL. Transaction mode keeps one physical connection for that complete transactio
 relies on state from an earlier transaction. Start with one client connection per serverless instance
 and raise it only from measured demand.
 
+Local development uses the same non-owning `vortex_runtime` login over the Supabase CLI database's
+exact loopback endpoint on port 54322. The disposable Local seed assigns that role a fixed
+Local-only password; the database adapter accepts it only when `VORTEX_ENVIRONMENT=local`, the host
+is loopback, the database is `postgres`, and the login is exactly `vortex_runtime`. Local PostgreSQL
+does not offer hosted TLS. Testing and Production continue to require the Supavisor transaction
+pooler, the environment-specific runtime login and full certificate and hostname verification.
+
 Session mode behaves like a direct connection for the migration and verification commands that need
 it. Its project-owner credential comes only from the unsynced operations config and never reaches a
 Vercel build, function, preview, or browser.
@@ -270,6 +289,8 @@ caret and no range on any of them.
 |---|---|---|
 | `next` | `16.3.3` | Newest stable 16.x. Every page renders through it. |
 | `react`, `react-dom` | `19.2.8` | Next.js and Puck each constrain React. We choose the version rather than let a resolver pick it. |
+| `@supabase/ssr` | `0.12.6` | Official server-side Auth/cookie adapter used only by request-specific Next.js server clients. |
+| `@supabase/supabase-js` | `2.115.0` | Exact compatible Supabase client used by Identity authority, journeys and sessions. |
 | `@puckeditor/core` | `0.23.0` | The page designer. |
 | Node | `24` | Next.js 16 requires `>= 20.9.0`. 24 is current long-term support and the version Vercel selects by default, so there is one less value to keep in step. |
 

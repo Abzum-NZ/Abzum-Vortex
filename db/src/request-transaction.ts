@@ -31,7 +31,9 @@ interface DatabaseDriver {
 interface RuntimeDatabaseConfiguration {
   readonly connectionString: string;
   readonly hostname: string;
-  readonly rootCertificate: string;
+  readonly transport:
+    | Readonly<{ kind: "local_loopback" }>
+    | Readonly<{ kind: "hosted_tls"; rootCertificate: string }>;
 }
 
 type RequestOperation<Result> = (transaction: RequestDatabaseTransaction) => Promise<Result>;
@@ -101,7 +103,8 @@ export const parseRuntimeDatabaseConfiguration = (
 ): RuntimeDatabaseConfiguration => {
   const connectionString = environment.VORTEX_RUNTIME_DATABASE_URL;
   const rootCertificate = environment.VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT;
-  if (!connectionString || !rootCertificate) throw databaseError("DATABASE_CONFIGURATION_MISSING");
+  const environmentName = environment.VORTEX_ENVIRONMENT;
+  if (!connectionString || !environmentName) throw databaseError("DATABASE_CONFIGURATION_MISSING");
 
   let address: URL;
   try {
@@ -111,16 +114,37 @@ export const parseRuntimeDatabaseConfiguration = (
   }
 
   const username = decodeURIComponent(address.username);
-  const validAddress =
+  const localLoopback =
+    environmentName === "local" &&
+    address.protocol === "postgresql:" &&
+    ["127.0.0.1", "localhost", "[::1]"].includes(address.hostname) &&
+    address.port === "54322" &&
+    address.pathname === "/postgres" &&
+    username === "vortex_runtime" &&
+    address.password.length > 0;
+  if (localLoopback)
+    return {
+      connectionString,
+      hostname: address.hostname,
+      transport: { kind: "local_loopback" },
+    };
+
+  const validHostedAddress =
+    (environmentName === "testing" || environmentName === "production") &&
     address.protocol === "postgresql:" &&
     /^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$/.test(address.hostname) &&
     address.port === "6543" &&
     address.pathname === "/postgres" &&
     /^vortex_runtime\.[a-z0-9]{20}$/.test(username) &&
     address.password.length > 0;
-  if (!validAddress) throw databaseError("DATABASE_CONFIGURATION_INVALID");
+  if (!validHostedAddress || !rootCertificate)
+    throw databaseError("DATABASE_CONFIGURATION_INVALID");
 
-  return { connectionString, hostname: address.hostname, rootCertificate };
+  return {
+    connectionString,
+    hostname: address.hostname,
+    transport: { kind: "hosted_tls", rootCertificate },
+  };
 };
 
 export const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration): Sql =>
@@ -130,11 +154,14 @@ export const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfig
     idle_timeout: 20,
     connect_timeout: 10,
     max_lifetime: 300,
-    ssl: {
-      ca: configuration.rootCertificate,
-      rejectUnauthorized: true,
-      servername: configuration.hostname,
-    },
+    ssl:
+      configuration.transport.kind === "hosted_tls"
+        ? {
+            ca: configuration.transport.rootCertificate,
+            rejectUnauthorized: true,
+            servername: configuration.hostname,
+          }
+        : false,
     connection: { application_name: "vortex-runtime" },
   });
 

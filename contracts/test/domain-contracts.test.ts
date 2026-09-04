@@ -27,6 +27,8 @@ import {
   interfaceOperationSchema,
   identityAuthoritySchema,
   identityProjectionSchema,
+  identitySessionResolutionSchema,
+  identitySessionSchema,
   invitationSchema,
   invitationAcceptanceWithAccessVersionSchema,
   listArrangementKeys,
@@ -1001,6 +1003,48 @@ describe("identity, sharing and secret invariants", () => {
         ...verifiedIdentity,
         expiresAt: verifiedIdentity.issuedAt,
       }).success,
+    ).toBe(false);
+  });
+
+  test("keeps the active identity session smaller than verified identity and free of scope", () => {
+    const session = {
+      identityId: standardClaims.sub,
+      sessionId: standardClaims.session_id,
+      authenticationStrength: "single_factor",
+      accessTokenIssuedAt: "2027-01-15T07:00:00.000Z",
+      accessTokenExpiresAt: "2027-01-15T08:00:00.000Z",
+    } as const;
+
+    expect(identitySessionSchema.safeParse(session).success).toBe(true);
+    expect(identitySessionResolutionSchema.parse({ kind: "active", session })).toEqual({
+      kind: "active",
+      session,
+    });
+    for (const forbidden of [
+      "accessToken",
+      "refreshToken",
+      "verifiedPrimaryEmail",
+      "organizationId",
+      "organizationAccountId",
+      "accessVersion",
+      "applicationId",
+      "role",
+      "permission",
+      "providerUser",
+    ]) {
+      expect(
+        identitySessionSchema.safeParse({ ...session, [forbidden]: "forbidden" }).success,
+      ).toBe(false);
+    }
+    expect(
+      identitySessionSchema.safeParse({
+        ...session,
+        accessTokenExpiresAt: session.accessTokenIssuedAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      identitySessionResolutionSchema.safeParse({ kind: "temporarily_unavailable", detail: "db" })
+        .success,
     ).toBe(false);
   });
 

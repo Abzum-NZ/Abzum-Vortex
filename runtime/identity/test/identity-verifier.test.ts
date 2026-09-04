@@ -1,5 +1,5 @@
 import { generateKeyPairSync, sign } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import { AuthRetryableFetchError, createClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 import { identityAuthoritySchema } from "@vortex/contracts";
 import {
@@ -391,6 +391,33 @@ describe("identity token verification", () => {
       await expect(verifier.verifyAccessToken("token")).rejects.toEqual(
         new IdentityVerificationError("vortex.identity.token_verification_failed"),
       );
+  });
+
+  it("classifies only the SDK's typed retryable fetch failure as authority unavailable", async () => {
+    const returned = {
+      auth: {
+        getClaims: vi.fn(async () => ({
+          data: null,
+          error: new AuthRetryableFetchError("temporary provider outage", 503),
+        })),
+      },
+    };
+    const thrown = {
+      auth: {
+        getClaims: vi.fn(async () => {
+          throw new AuthRetryableFetchError("temporary network outage", 0);
+        }),
+      },
+    };
+
+    for (const client of [returned, thrown])
+      await expect(
+        createIdentityVerifierWithClient(
+          testingAuthority,
+          client,
+          verifierOptions,
+        ).verifyAccessToken("token"),
+      ).rejects.toEqual(new IdentityVerificationError("vortex.identity.authority_unavailable"));
   });
 
   it.each([

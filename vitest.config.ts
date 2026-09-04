@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     include: [
       "contracts/test/**/*.test.ts",
+      "apps/web/test/**/*.test.ts",
       "db/src/**/*.test.ts",
       "runtime/**/test/**/*.test.ts",
       "testing/fixtures/**/*.test.ts",

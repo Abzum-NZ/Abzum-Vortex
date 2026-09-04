@@ -66,6 +66,13 @@ interface OrganizationAccountStoreDependencies {
   readonly generateInvitationSecret?: () => string;
 }
 
+/** A non-mutating eligibility lookup for protected-session resolution. */
+export interface IdentityProjectionReader {
+  readIdentityProjection(
+    verifiedIdentity: VerifiedIdentity,
+  ): Promise<IdentityProjection | undefined>;
+}
+
 type IdentityProjectionRow = DatabaseRow & {
   identity_id: unknown;
   state: unknown;
@@ -199,6 +206,12 @@ const requireOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
+const requireZeroOrOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row | undefined => {
+  if (rows.length > 1)
+    throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT");
+  return rows[0];
+};
+
 export const createOrganizationAccountStore = (
   dependencies: OrganizationAccountStoreDependencies = {},
 ) => {
@@ -227,6 +240,28 @@ export const createOrganizationAccountStore = (
             )
           `;
           return parseIdentityProjection(requireOne(rows));
+        });
+      } catch (error) {
+        if (error instanceof OrganizationAccountError) throw error;
+        throw mapStorageFailure(error);
+      }
+    },
+
+    async readIdentityProjection(
+      verifiedIdentity: VerifiedIdentity,
+    ): Promise<IdentityProjection | undefined> {
+      const verified = verifiedIdentitySchema.safeParse(verifiedIdentity);
+      if (!verified.success)
+        throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
+
+      try {
+        return await runtimeTransaction(async (transaction) => {
+          const rows = await transaction.query<IdentityProjectionRow>`
+            select *
+            from vortex_identity.read_identity_projection(${verified.data.identityId}::uuid)
+          `;
+          const row = requireZeroOrOne(rows);
+          return row === undefined ? undefined : parseIdentityProjection(row);
         });
       } catch (error) {
         if (error instanceof OrganizationAccountError) throw error;
@@ -316,6 +351,7 @@ export const createOrganizationAccountStore = (
 const defaultStore = createOrganizationAccountStore();
 
 export const ensureIdentityProjection = defaultStore.ensureIdentityProjection;
+export const readIdentityProjection = defaultStore.readIdentityProjection;
 export const listOrganizationAccounts = defaultStore.listOrganizationAccounts;
 export const createInvitationAfterAuthorization = defaultStore.createInvitationAfterAuthorization;
 export const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;

@@ -63,6 +63,7 @@ export const operationEvidenceSchema = z
   .strict();
 
 export type SecretReference = z.infer<typeof secretReferenceSchema>;
+export type CorrelationId = z.infer<typeof correlationIdSchema>;
 export type RetryPolicy = z.infer<typeof retryPolicySchema>;
 export type BoundedPage = z.infer<typeof boundedPageSchema>;
 export type OperationEvidence = z.infer<typeof operationEvidenceSchema>;

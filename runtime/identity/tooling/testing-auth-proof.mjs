@@ -77,8 +77,26 @@ const client = createClient(apiUrl, publishableKey, {
 const password = `${randomUUID()}aA7!`;
 const replacementPassword = `${randomUUID()}bB8!`;
 
-const submitForm = async (pathname, values) => {
-  const pageResponse = await fetchTestingSite(pathname);
+const sessionCookies = new Map();
+let lastSetCookieLines = [];
+const cookieHeader = (jar) =>
+  [...jar.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+const applySetCookies = (response, jar) => {
+  const lines = response.headers.getSetCookie();
+  for (const line of lines) {
+    const match = line.match(/^([^=;]+)=([^;]*)/u);
+    if (!match) throw new Error("The Testing application returned a malformed session cookie");
+    if (/;\s*Max-Age=0(?:;|$)/iu.test(line)) jar.delete(match[1]);
+    else jar.set(match[1], match[2]);
+  }
+  return lines;
+};
+
+const submitForm = async (pathname, values, jar = new Map()) => {
+  const cookie = cookieHeader(jar);
+  const pageResponse = await fetchTestingSite(pathname, {
+    headers: cookie ? { cookie } : undefined,
+  });
   if (!pageResponse.ok) throw new Error("The hosted Testing identity journey page is unavailable");
   const page = await pageResponse.text();
   const actionName = page.match(/name="(\$ACTION_ID_[^"]+)"/)?.[1];
@@ -91,9 +109,10 @@ const submitForm = async (pathname, values) => {
   const response = await fetchTestingSite(pathname, {
     method: "POST",
     body: form,
-    headers: { origin: siteUrl },
+    headers: { origin: siteUrl, ...(cookie ? { cookie } : {}) },
     redirect: "manual",
   });
+  lastSetCookieLines = applySetCookies(response, jar);
   const location = response.headers.get("location");
   if (response.status !== 303 || !location)
     throw new Error("The Testing identity journey did not complete with a safe redirect");
@@ -189,24 +208,69 @@ const confirmationLink = await verificationSession(
   "signup",
 );
 const confirmationFragment = new globalThis.URLSearchParams(confirmationLink.hash.slice(1));
+const confirmationCookies = new Map();
 expectRedirect(
-  await submitForm(confirmationLink.pathname, {
-    access_token: confirmationFragment.get("access_token"),
-    type: "signup",
-  }),
+  await submitForm(
+    confirmationLink.pathname,
+    {
+      access_token: confirmationFragment.get("access_token"),
+      type: "signup",
+    },
+    confirmationCookies,
+  ),
   "/auth/success",
   "?state=email-confirmed",
 );
+if ([...confirmationCookies.keys()].some((name) => name.startsWith("__Host-vortex-session")))
+  throw new Error("Email confirmation persisted a Testing browser session");
 
 const signin = await client.auth.signInWithPassword({ email, password });
 if (signin.error || !signin.data.session?.access_token)
   throw new Error("Testing password sign-in failed after email confirmation");
 
 expectRedirect(
-  await submitForm("/auth/sign-in", { email, password }),
-  "/auth/success",
-  "?state=signed-in",
+  await submitForm("/auth/sign-in", { email, password }, sessionCookies),
+  "/signed-in",
 );
+const sessionSetCookies = lastSetCookieLines.filter((line) =>
+  line.startsWith("__Host-vortex-session"),
+);
+if (
+  sessionSetCookies.length === 0 ||
+  !sessionSetCookies.every(
+    (line) =>
+      /;\s*Secure/iu.test(line) &&
+      /;\s*HttpOnly/iu.test(line) &&
+      /;\s*SameSite=Lax/iu.test(line) &&
+      /;\s*Path=\//iu.test(line) &&
+      !/;\s*Domain=/iu.test(line),
+  )
+)
+  throw new Error("The Testing identity session did not use the exact secure cookie profile");
+
+const secondBrowserCookies = new Map();
+expectRedirect(
+  await submitForm("/auth/sign-in", { email, password }, secondBrowserCookies),
+  "/signed-in",
+);
+const signedInPage = await fetchTestingSite("/signed-in", {
+  headers: { cookie: cookieHeader(sessionCookies) },
+});
+if (!signedInPage.ok || !(await signedInPage.text()).includes("You are signed in"))
+  throw new Error("The Testing protected identity-session page was unavailable");
+
+expectRedirect(
+  await submitForm("/signed-in", {}, sessionCookies),
+  "/auth/sign-in",
+  "?status=signed-out",
+);
+if ([...sessionCookies.keys()].some((name) => name.startsWith("__Host-vortex-session")))
+  throw new Error("Testing sign-out did not clear the complete browser cookie family");
+const independentBrowser = await fetchTestingSite("/signed-in", {
+  headers: { cookie: cookieHeader(secondBrowserCookies) },
+});
+if (!independentBrowser.ok || !(await independentBrowser.text()).includes("You are signed in"))
+  throw new Error("Signing out one Testing browser ended an independent browser session");
 
 const verifierProof = spawnSync(
   process.execPath,
@@ -246,15 +310,22 @@ const recoveryLink = await verificationSession(
   "recovery",
 );
 const recoveryFragment = new globalThis.URLSearchParams(recoveryLink.hash.slice(1));
+const recoveryCookies = new Map();
 expectRedirect(
-  await submitForm(recoveryLink.pathname, {
-    access_token: recoveryFragment.get("access_token"),
-    refresh_token: recoveryFragment.get("refresh_token"),
-    password: replacementPassword,
-  }),
+  await submitForm(
+    recoveryLink.pathname,
+    {
+      access_token: recoveryFragment.get("access_token"),
+      refresh_token: recoveryFragment.get("refresh_token"),
+      password: replacementPassword,
+    },
+    recoveryCookies,
+  ),
   "/auth/success",
   "?state=password-updated",
 );
+if ([...recoveryCookies.keys()].some((name) => name.startsWith("__Host-vortex-session")))
+  throw new Error("Password recovery persisted a Testing browser session");
 
 const freshClient = () =>
   createClient(apiUrl, publishableKey, {
@@ -273,5 +344,5 @@ expectRedirect(
 );
 
 process.stdout.write(
-  "Hosted Testing Auth proof passed: ES256 JWKS, Mailtrap confirmation and recovery, independent Vortex verification, cross-environment refusal, neutral recovery, and password replacement.\n",
+  "Hosted Testing Auth proof passed: ES256 JWKS, Mailtrap confirmation and recovery, verified server-only sessions, browser-isolated sign-out, independent Vortex verification, cross-environment refusal, neutral recovery, and password replacement.\n",
 );
