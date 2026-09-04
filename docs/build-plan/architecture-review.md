@@ -97,7 +97,7 @@ flowchart TD
 ```
 
 - The native graph initially had no cycles. Several **completion descriptions** nevertheless created implicit cycles; those are corrected above.
-- #249 can start after the already completed contract foundations. It does not require a database deployment.
+- #258 is the first independent contract correction. #249 follows it and the already completed contract foundations; neither requires a database deployment.
 - #250 follows Access #34 and defines common operation/binding semantics before UI. #102 extends it later for interfaces and the complete operation catalogue.
 - #252 and #118 follow Access and precede their first consuming mutations/limited work.
 - #52 moves to Phase 6; #42 must not wait for it.
@@ -114,3 +114,7 @@ Keep bounded declarative conditions, stable identities, immutable release eviden
 Do not add a third publication root, per-app runtime, duplicate form store, duplicate permission engine, hand-maintained agent-specific schema, per-button MCP tool, new HR approval node, filesystem shadow database or unrestricted expression language.
 
 The definition compiler's repeated traversal/provenance and comparison logic is a maintainability risk, not proof that integrity checks should be removed. As #249 extends it, use schema-directed typed traversal and exhaustive tests where practical. Do not start an unrelated compiler rewrite or remove fingerprint/provenance verification solely to reduce line count.
+
+## Completed-work and project follow-up
+
+The [completed-work review](completed-work-review.md) checks delivered foundations at the same immutable Testing baseline, explicitly excluding in-flight [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27). It confirms literal/reference confusion ([#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258)) and identifies the publication lifetime cap ([#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257)) as unnecessary product restriction. The revised [project views](README.md#project-board-operating-structure) show ordered phase completion, review-ready PRs and unresolved bugs without synthetic dates. The native graph and issue bodies are read back after every correction batch.

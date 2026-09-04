@@ -224,3 +224,7 @@ The source and recipient application bindings must use a compatible published re
 - Revoking a sharing grant immediately removes the target's ability to query shared records.
 - A cross-organisation grant never exposes fields classified as sensitive.
 - Removing or changing a field used by an active grant creates a breaking release without changing that grant. Moving the grant to the new release requires a separately approved grant migration or revocation.
+
+## Publication-history bounds
+
+Bound the work and input of each publication request, not the lifetime number of releases for an application or module. Exact history, stable identities and historical aliases remain available; pagination must not change deterministic version selection or permit alias reuse. The existing fixed 10,000-release implementation cap is tracked for removal in [#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257). This is not permission to weaken atomic publication or delete immutable releases.
