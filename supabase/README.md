@@ -146,6 +146,15 @@ only in the unsynced `ops_stg` and `ops_prd` configs of the separate Doppler
 The migration URL never embeds a password; the separate raw password supports
 reserved characters without URL-encoding ambiguity.
 
+Migrations deliberately create `vortex_runtime` without a password. Hosted
+provisioning generates a different high-entropy password for each environment,
+assigns it through the Supabase administrative path, and stores it only inside
+that environment's complete `VORTEX_RUNTIME_DATABASE_URL`. After the exact
+Doppler-to-Vercel sync and redeployment, the operated proof must verify a real
+protected request. Never copy the project-owner password, a migration variable,
+a general `DATABASE_*` variable, or a Kestra credential into a Vercel-synchronised
+config.
+
 Never edit a migration after it has reached Testing or Production. Correct it
 with a later migration. Never place customer data, a database address, or a
 credential in this directory.

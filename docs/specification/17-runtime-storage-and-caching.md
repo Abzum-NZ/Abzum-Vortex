@@ -170,6 +170,12 @@ application request.
   privilege. Inside an explicit transaction it may initialize the closed request context and enter
   only the non-login `vortex_request` role, which has no ownership, schema or persistent-relation
   creation, replication, superuser, or row-security-bypass capability.
+- Migrations create `vortex_runtime` without a password. Before a hosted environment may serve a
+  protected request, an operator generates a different high-entropy password for that environment,
+  assigns it to that exact role through the Supabase administrative path, and builds the restricted
+  transaction-pooler URL. Only that complete URL and the public Supabase root certificate enter the
+  matching Vercel-synchronised Doppler root config. The role password is never committed, shared
+  with another environment, exposed as a second Vercel variable, or reused by Kestra.
 - `vortex_request` receives only the exact operations required on each relation. It never receives
   `TRUNCATE`, `REFERENCES`, `TRIGGER`, schema creation, policy management, or table ownership.
 - `PUBLIC`, `anon`, `authenticated`, and `service_role` have no use or execution grant on private
@@ -198,6 +204,13 @@ with one client connection per instance. A protected operation keeps all context
 inside one transaction; it never expects a later statement or request to receive the same physical
 connection. Testing and Production runtime and operational database connections require full
 certificate and hostname verification.
+
+A hosted runtime is not ready merely because its migrations and Vercel build succeeded. Its release
+proof verifies that the exact deployed revision received the matching restricted runtime URL,
+certificate, environment name and Identity Authority identifier; that no project-owner, migration,
+general `DATABASE_*`, or Kestra credential entered the Vercel target; and that one real protected
+journey succeeded through `vortex_runtime`. Production provisioning and proof remain separately
+gated from Testing.
 
 The Supabase CLI development database is the only exception to the hosted transport profile. Local
 uses its exact loopback endpoint on port 54322 and the same restricted `vortex_runtime` role, with a
