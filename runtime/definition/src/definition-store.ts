@@ -62,6 +62,11 @@ type StoredDraftRow = DatabaseRow & {
   created_by: unknown;
   updated_at: unknown;
   updated_by: unknown;
+  restored_from_release_revision?: unknown;
+  restored_from_source_fingerprint?: unknown;
+  restored_by?: unknown;
+  restored_at?: unknown;
+  restore_correlation_id?: unknown;
 };
 
 const parseRevision = (value: unknown): number | undefined => {
@@ -76,6 +81,28 @@ const parseTimestamp = (value: unknown): string | undefined => {
 };
 
 const parseStoredDraft = (row: StoredDraftRow): StoredDefinitionDraft => {
+  const rawRestoreProvenance = [
+    row.restored_from_release_revision,
+    row.restored_from_source_fingerprint,
+    row.restored_by,
+    row.restored_at,
+    row.restore_correlation_id,
+  ];
+  const hasRestoreProvenance = rawRestoreProvenance.some(
+    (value) => value !== null && value !== undefined,
+  );
+  const restoredFromReleaseRevision = parseRevision(row.restored_from_release_revision);
+  const restoredFromSourceFingerprint = row.restored_from_source_fingerprint;
+  const restoredBy = row.restored_by;
+  const restoredAt = parseTimestamp(row.restored_at);
+  const restoreCorrelationId = row.restore_correlation_id;
+  if (
+    (row.restored_from_release_revision !== null &&
+      row.restored_from_release_revision !== undefined &&
+      restoredFromReleaseRevision === undefined) ||
+    (row.restored_at !== null && row.restored_at !== undefined && restoredAt === undefined)
+  )
+    throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
   const result = storedDefinitionDraftSchema.safeParse({
     rootId: row.root_id,
     organizationId: row.organization_id,
@@ -92,6 +119,15 @@ const parseStoredDraft = (row: StoredDraftRow): StoredDefinitionDraft => {
     createdBy: row.created_by,
     updatedAt: parseTimestamp(row.updated_at),
     updatedBy: row.updated_by,
+    ...(hasRestoreProvenance
+      ? {
+          restoredFromReleaseRevision,
+          restoredFromSourceFingerprint,
+          restoredBy,
+          restoredAt,
+          restoreCorrelationId,
+        }
+      : {}),
   });
   if (!result.success) throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
   return result.data;

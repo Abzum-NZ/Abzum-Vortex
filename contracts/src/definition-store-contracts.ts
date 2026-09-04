@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { correlationIdSchema } from "./common";
 import { applicationSourceDocumentSchema, moduleSourceDocumentSchema } from "./definition-source";
 import {
   actorIdSchema,
@@ -48,26 +49,55 @@ const storedDraftMetadata = {
   createdBy: actorIdSchema,
   updatedAt: timestampSchema,
   updatedBy: actorIdSchema,
+  restoredFromReleaseRevision: javascriptSafeRevisionSchema.optional(),
+  restoredFromSourceFingerprint: fingerprintSchema.optional(),
+  restoredBy: actorIdSchema.optional(),
+  restoredAt: timestampSchema.optional(),
+  restoreCorrelationId: correlationIdSchema.optional(),
 };
 
-export const storedDefinitionDraftSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("module"),
-      rootId: moduleRootIdSchema,
-      source: moduleSourceDocumentSchema,
-      ...storedDraftMetadata,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("application"),
-      rootId: applicationRootIdSchema,
-      source: applicationSourceDocumentSchema,
-      ...storedDraftMetadata,
-    })
-    .strict(),
-]);
+export const storedDefinitionDraftSchema = z
+  .discriminatedUnion("kind", [
+    z
+      .object({
+        kind: z.literal("module"),
+        rootId: moduleRootIdSchema,
+        source: moduleSourceDocumentSchema,
+        ...storedDraftMetadata,
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("application"),
+        rootId: applicationRootIdSchema,
+        source: applicationSourceDocumentSchema,
+        ...storedDraftMetadata,
+      })
+      .strict(),
+  ])
+  .superRefine((draft, context) => {
+    const provenance = [
+      draft.restoredFromReleaseRevision,
+      draft.restoredFromSourceFingerprint,
+      draft.restoredBy,
+      draft.restoredAt,
+      draft.restoreCorrelationId,
+    ];
+    const populatedCount = provenance.filter((value) => value !== undefined).length;
+    if (populatedCount !== 0 && populatedCount !== provenance.length)
+      context.addIssue({
+        code: "custom",
+        message: "Restore provenance must be either complete or absent",
+      });
+    if (
+      populatedCount === provenance.length &&
+      (draft.restoredBy !== draft.updatedBy || draft.restoredAt !== draft.updatedAt)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Restore provenance must match the draft update evidence",
+      });
+  });
 
 const exactDependencyCommon = {
   key: namespacedKeySchema,

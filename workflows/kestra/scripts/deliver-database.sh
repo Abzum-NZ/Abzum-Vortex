@@ -13,6 +13,8 @@ readonly DEFINITION_PUBLICATION_MIGRATION="supabase/migrations/20260903231258_de
 readonly DEFINITION_PUBLICATION_PROOF="supabase/tests/definition-publication-concurrency.test.sh"
 readonly DEFINITION_CONSUMER_READ_MIGRATION="supabase/migrations/20260904025500_definition_consumer_reads.sql"
 readonly DEFINITION_CONSUMER_READ_PROOF="supabase/tests/definition-consumer-read-concurrency.test.sh"
+readonly DEFINITION_HISTORY_RESTORE_MIGRATION="supabase/migrations/20260904040758_definition_history_restore.sql"
+readonly DEFINITION_HISTORY_RESTORE_PROOF="supabase/tests/definition-history-restore-concurrency.test.sh"
 
 die() {
   echo "database-delivery: FAILED: $*" >&2
@@ -190,6 +192,10 @@ validate_concurrency_proof_pair \
   "$DEFINITION_CONSUMER_READ_MIGRATION" \
   "$DEFINITION_CONSUMER_READ_PROOF" \
   "Definition consumer read"
+validate_concurrency_proof_pair \
+  "$DEFINITION_HISTORY_RESTORE_MIGRATION" \
+  "$DEFINITION_HISTORY_RESTORE_PROOF" \
+  "Definition history and restore"
 
 migration_set_sha256="$(migration_digest "$commit")"
 readonly migration_set_sha256
@@ -340,7 +346,8 @@ say "applying pending migrations through Supabase migration history"
   for concurrency_proof in \
     "$HIERARCHY_PROOF" \
     "$DEFINITION_PUBLICATION_PROOF" \
-    "$DEFINITION_CONSUMER_READ_PROOF"; do
+    "$DEFINITION_CONSUMER_READ_PROOF" \
+    "$DEFINITION_HISTORY_RESTORE_PROOF"; do
     if [ -f "$concurrency_proof" ]; then
       if [ -n "${VORTEX_TEST_CONCURRENCY_PROOF_MARKER:-}" ]; then
         printf '%s\n' "$concurrency_proof" >>"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"

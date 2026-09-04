@@ -54,7 +54,7 @@ const moduleDependencyTargetSchema = z
   })
   .strict();
 
-const storedConsumerReleaseEvidenceSchema = z
+export const storedConsumerReleaseEvidenceSchema = z
   .object({
     organizationId: organizationIdSchema,
     kind: z.enum(["module", "application"]),
@@ -72,7 +72,11 @@ const storedConsumerReleaseEvidenceSchema = z
   })
   .strict();
 
-type StoredConsumerReleaseEvidence = z.infer<typeof storedConsumerReleaseEvidenceSchema>;
+/**
+ * Internal immutable-release evidence shared by consumer reads and draft restore.
+ * It is deliberately not re-exported from the Definition package boundary.
+ */
+export type StoredConsumerReleaseEvidence = z.infer<typeof storedConsumerReleaseEvidenceSchema>;
 
 /** Internal persistence boundary. It is intentionally not exported from the package root. */
 export interface DefinitionConsumerReadRepository {
@@ -99,7 +103,9 @@ const sameStringSet = (left: readonly string[], right: readonly string[]): boole
     );
   })();
 
-const manifestMatchesCanonicalContent = (release: StoredConsumerReleaseEvidence): boolean => {
+export const definitionReleaseManifestMatchesCanonicalContent = (
+  release: StoredConsumerReleaseEvidence,
+): boolean => {
   const output = release.compilationOutput;
   if (output.kind === "connection_type") return false;
   const actual = release.dependencyManifest.map(manifestSubject);
@@ -173,7 +179,9 @@ const manifestMatchesCanonicalContent = (release: StoredConsumerReleaseEvidence)
   return sameStringSet(expected, actual);
 };
 
-const moduleTargetsMatch = (release: StoredConsumerReleaseEvidence): boolean => {
+export const definitionReleaseModuleTargetsMatch = (
+  release: StoredConsumerReleaseEvidence,
+): boolean => {
   const modules = release.dependencyManifest.filter((entry) => entry.kind === "module");
   if (modules.length !== release.moduleDependencyTargets.length) return false;
   const targetSubject = (target: (typeof release.moduleDependencyTargets)[number]): string =>
@@ -193,12 +201,12 @@ const moduleTargetsMatch = (release: StoredConsumerReleaseEvidence): boolean => 
   });
 };
 
-type CatalogueVerification = "valid" | "unavailable" | "invalid";
+export type DefinitionCatalogueVerification = "valid" | "unavailable" | "invalid";
 
-const verifyCatalogueDependencies = async (
+export const verifyDefinitionCatalogueDependencies = async (
   manifest: readonly ExactDefinitionDependency[],
   catalogue: DefinitionPublicationCatalogue,
-): Promise<CatalogueVerification> => {
+): Promise<DefinitionCatalogueVerification> => {
   for (const dependency of manifest) {
     if (dependency.kind === "module") continue;
     if (dependency.kind === "connection_type") {
@@ -233,7 +241,7 @@ const verifyCatalogueDependencies = async (
   return "valid";
 };
 
-const isLiveSystemContext = (context: SessionContext): boolean => {
+export const isLiveDefinitionSystemContext = (context: SessionContext): boolean => {
   if (context.callerKind !== "system") return false;
   const issuedAt = Date.parse(context.issuedAt);
   const expiresAt = Date.parse(context.expiresAt);
@@ -247,12 +255,13 @@ const isLiveSystemContext = (context: SessionContext): boolean => {
   );
 };
 
-const isContextFailure = (error: unknown): boolean => {
+export const isDefinitionContextFailure = (error: unknown): boolean => {
   const code =
     error !== null && typeof error === "object" && "code" in error ? String(error.code) : undefined;
   const message = error instanceof Error ? error.message : "";
   return (
     code === "42501" ||
+    (code === "23503" && message.startsWith("Vortex context organization")) ||
     ((code === "22023" || code === "55000") &&
       (message.startsWith("Vortex request context") ||
         message.startsWith("Stored Vortex request context"))) ||
@@ -273,7 +282,7 @@ export const createDefinitionConsumerReadService = (
     const command = definitionConsumerReadCommandSchema.safeParse(commandCandidate);
     if (!command.success) throw new DefinitionConsumerReadError("INVALID_DEFINITION_READ_COMMAND");
     const context = sessionContextSchema.safeParse(contextCandidate);
-    if (!context.success || !isLiveSystemContext(context.data))
+    if (!context.success || !isLiveDefinitionSystemContext(context.data))
       throw new DefinitionConsumerReadError("DEFINITION_CONTEXT_REFUSED");
 
     let candidate: unknown | undefined;
@@ -281,7 +290,7 @@ export const createDefinitionConsumerReadService = (
       candidate = await repository.read(context.data, command.data);
     } catch (error) {
       throw new DefinitionConsumerReadError(
-        isContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
+        isDefinitionContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
       );
     }
     if (candidate === undefined)
@@ -310,14 +319,14 @@ export const createDefinitionConsumerReadService = (
         compilationOutput: output,
         resolutionSnapshot: release.resolutionSnapshot,
       }) ||
-      !manifestMatchesCanonicalContent(release) ||
-      !moduleTargetsMatch(release)
+      !definitionReleaseManifestMatchesCanonicalContent(release) ||
+      !definitionReleaseModuleTargetsMatch(release)
     )
       throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
-    let catalogueVerification: CatalogueVerification;
+    let catalogueVerification: DefinitionCatalogueVerification;
     try {
-      catalogueVerification = await verifyCatalogueDependencies(
+      catalogueVerification = await verifyDefinitionCatalogueDependencies(
         release.dependencyManifest,
         catalogue,
       );

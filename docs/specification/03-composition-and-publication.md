@@ -70,6 +70,40 @@ The platform calculates whether a proposed revision is patch, minor, or major fr
 
 The complete classification, identity, ordering, history-integrity, and stale-confirmation rules are normative in the [module and application version-impact policy](appendices/version-impact-policy.md). First publication is `1.0.0`; semantically unchanged content cannot create a new release.
 
+## Publication history and draft restoration
+
+A trusted server caller can browse the immutable publication history of one Module or Application, inspect one exact history entry, and restore the authored source preserved in that release into the definition's one editable draft. History and restore use the same validated request context as other Phase 2 Definition operations. They expose no browser, public API or MCP route in this phase.
+
+```mermaid
+flowchart LR
+    H[Browse newest-first history] --> E[Choose one exact release]
+    E --> V[Verify stored source, release and identity evidence]
+    V --> D[Replace the editable draft]
+    D --> P[Record exact restore provenance]
+    P --> R[Builder reviews or edits the draft]
+    R --> N{Publish later?}
+    N -- No --> D
+    N -- Yes --> C[Run normal validation and version comparison]
+    C --> I[Append a new immutable release or refuse no change]
+    I -. never changes .-> E
+```
+
+History listing is bounded and newest first. The caller chooses a page size from 1 through 100 and may continue before an exact positive release revision. A continuation returns only lower revisions, so a release added after page one does not duplicate, omit or reorder entries in that traversal. A fresh traversal sees the newer release. The service also provides an exact-revision metadata read.
+
+Each history entry contains only the release revision and version, source and content fingerprints, required release note, publication actor and time, and whether that revision is the root's current discovery release. The enclosing result identifies the definition kind, organisation, key and permanent root, carries the current discovery revision when one exists, supplies a continuation only when more entries exist, and copies the request correlation identifier. The pointer and `isCurrent` values come from the same database statement. History does not return authored source, canonical content, compilation output, a resolution snapshot, dependency details or draft state.
+
+Restore follows these rules:
+
+- The command names the definition kind, matching permanent root, target release revision and expected current draft revision. It cannot supply source content, fingerprints, identities, actor, time, correlation evidence or release metadata.
+- The service reads the selected release's stored authored source and evidence. It verifies the organisation, kind, root, permanent key, source-contract version, source fingerprint, canonical compilation, exact resolution snapshot and dependency evidence before changing the draft.
+- The service derives the restored draft's current identity requirements from the verified authored source. Every required permanent identity and current alias must already exist, belong to the same source owner and agree with the immutable release snapshot. Restore never creates or repairs an identity or alias.
+- One conditional draft update copies the stored source, increments the draft revision once and records the selected release revision and source fingerprint together with the validated actor, database time and request correlation identifier. A stale or missing draft changes nothing.
+- The five restore-provenance values are all present or all absent and are bound by the database to that root's exact immutable source snapshot. A later successful ordinary draft save clears them together; a refused or stale save leaves them unchanged.
+- Restore never creates a release, moves the current pointer, changes immutable history or retargets a consumer. A consumer already bound to an exact release remains bound to it.
+- Later publication follows the ordinary publication rules. Content equal to the latest immutable release is refused as `no_change`; changed content receives the next governed version. Historical version, dependencies, publisher and time are not copied into the new release.
+
+The first implementation restores the existing `1.0.0` authored-source contract. Before a future source-contract version can publish, its retained reader or explicit migration must keep older releases restorable. Vortex does not build a speculative source-migration framework or a second history, activity or cache store for this operation.
+
 ## Consumer reads of published definitions
 
 Every server-side platform service reads a published Module or Application through one Definition-service operation. Its strict command names the definition kind, the matching permanent root, and exactly one selector: `current`, or `revision` with a JavaScript-safe positive immutable release revision. There is no implicit selector.

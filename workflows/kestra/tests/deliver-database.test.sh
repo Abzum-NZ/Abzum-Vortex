@@ -94,6 +94,16 @@ assert_partial_concurrency_release_refused \
   supabase/tests/definition-consumer-read-concurrency.test.sh \
   supabase/tests/definition-consumer-read-concurrency.test.sh \
   "Definition consumer read concurrency proof has no migration"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260904040758_definition_history_restore.sql \
+  supabase/tests/definition-history-restore-concurrency.test.sh \
+  supabase/migrations/20260904040758_definition_history_restore.sql \
+  "Definition history and restore migration has no concurrency proof"
+assert_partial_concurrency_release_refused \
+  supabase/migrations/20260904040758_definition_history_restore.sql \
+  supabase/tests/definition-history-restore-concurrency.test.sh \
+  supabase/tests/definition-history-restore-concurrency.test.sh \
+  "Definition history and restore concurrency proof has no migration"
 
 migration_set_sha256="$(jq --raw-output '.migration_set_sha256' "$VORTEX_EVIDENCE_PATH")"
 export VORTEX_DELIVERY_OPERATION=apply
@@ -207,6 +217,9 @@ grep --fixed-strings --quiet \
   "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 grep --fixed-strings --quiet \
   "supabase/tests/definition-consumer-read-concurrency.test.sh" \
+  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+grep --fixed-strings --quiet \
+  "supabase/tests/definition-history-restore-concurrency.test.sh" \
   "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 jq --exit-status \
   '.status == "succeeded" and
