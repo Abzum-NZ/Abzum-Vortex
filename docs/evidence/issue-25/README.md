@@ -65,7 +65,7 @@ pnpm verify
 
 The Local proof passed end to end. It drives the real App Router pages and server actions over HTTP, creates an isolated disposable identity, confirms it, verifies the issued ES256 token through Vortex, requests recovery without disclosing account existence, changes the password, proves the old password fails and proves the new password succeeds.
 
-The hosted proof passed against the exact Testing deployment and authority. It proved:
+The hosted proof and final source review together established:
 
 1. Vercel Deployment Protection refuses a Testing request without its bypass header and accepts the same request when the header is supplied.
 2. Registration reaches the neutral acknowledgement, and the unconfirmed identity cannot sign in.
@@ -85,4 +85,4 @@ The final independent review identified and resolved one low-risk proof-tooling 
 
 Generated credentials, session material and one-time links exist only in process memory and are never printed. Confirmation and recovery fragments are copied in memory, immediately removed from the visible address and history, and then submitted through same-origin request bodies. `persistSession`, automatic refresh and URL-session detection remain disabled; [issue #26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26) is the sole owner of durable session lifecycle.
 
-The full repository gate passed after the implementation change: formatting, lint, 23 package typechecks, boundary rules, 543 tests passed with 3 explicitly skipped, 8 fixture tests, 23 package builds and the Next.js production build.
+The full repository gate passed after the implementation change: formatting, lint, 23 package typechecks, boundary rules, 544 tests passed with 3 explicitly skipped, 8 fixture tests, 23 package builds and the Next.js production build.
