@@ -207,6 +207,77 @@ describe("Next.js identity-session server boundary", () => {
     expect(cookieStore.set).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      name: "request-client construction",
+      arrange: () =>
+        createServerClient.mockImplementationOnce(() => {
+          throw new Error("client unavailable");
+        }),
+    },
+    {
+      name: "provider session establishment",
+      arrange: () => auth.setSession.mockRejectedValueOnce(new Error("provider unavailable")),
+    },
+    {
+      name: "provider liveness",
+      arrange: () => auth.getUser.mockRejectedValueOnce(new Error("provider unavailable")),
+    },
+    {
+      name: "cluster projection bootstrap",
+      arrange: () => sessionService.bootstrap.mockRejectedValueOnce(new Error("store unavailable")),
+    },
+  ])("attempts isolated cleanup after thrown $name failure", async ({ arrange }) => {
+    cookieStore.getAll.mockReturnValue([{ name: "__Host-vortex-session", value: "prior-session" }]);
+    arrange();
+
+    await expect(
+      bootstrapIdentitySession({ ok: true, accessToken, refreshToken }),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(cookieStore.set).not.toHaveBeenCalled();
+  });
+
+  it("attempts isolated cleanup when the final cookie commit throws", async () => {
+    createServerClient.mockImplementationOnce((...arguments_: unknown[]) => {
+      const options = arguments_[2] as {
+        cookies: {
+          setAll: (
+            cookies: ReadonlyArray<{
+              name: string;
+              value: string;
+              options: Record<string, unknown>;
+            }>,
+          ) => void;
+        };
+      };
+      return {
+        auth: {
+          ...auth,
+          setSession: vi.fn(async () => {
+            await options.cookies.setAll([
+              { name: "__Host-vortex-session", value: "new-session", options: {} },
+            ]);
+            return {
+              data: { session: { access_token: accessToken, refresh_token: refreshToken } },
+              error: null,
+            };
+          }),
+        },
+      };
+    });
+    cookieStore.set.mockImplementationOnce(() => {
+      throw new Error("cookie store unavailable");
+    });
+
+    await expect(
+      bootstrapIdentitySession({ ok: true, accessToken, refreshToken }),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
   it("resolves the post-Proxy access token without trusting the provider user", async () => {
     cookieStore.getAll.mockReturnValue([
       { name: "__Host-vortex-session", value: "encoded-session" },

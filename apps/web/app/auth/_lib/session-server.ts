@@ -71,45 +71,45 @@ const revokeIssuedProviderSession = async (
 export const bootstrapIdentitySession = async (
   signedIn: Extract<VerifiedSignInResult, { ok: true }>,
 ): Promise<IdentitySessionResolution> => {
-  let boundary: IdentitySessionClient;
+  let outcome: IdentitySessionResolution = unavailable();
+  let committed = false;
   try {
-    boundary = createIdentitySessionClient(await requestCookies());
+    const boundary = createIdentitySessionClient(await requestCookies());
+    if (boundary.stage.initialState.kind === "invalid") {
+      outcome = invalid();
+    } else {
+      const setResult = await boundary.client.auth.setSession({
+        access_token: signedIn.accessToken,
+        refresh_token: signedIn.refreshToken,
+      });
+      if (setResult.error || !setResult.data.session) {
+        outcome = providerFailure(setResult.error);
+      } else {
+        const currentToken = setResult.data.session.access_token;
+        const live = await boundary.client.auth.getUser(currentToken);
+        if (live.error || !live.data.user) {
+          outcome = providerFailure(live.error);
+        } else {
+          outcome = await sessionService().bootstrap(
+            currentToken,
+            correlationIdSchema.parse(randomUUID()),
+          );
+          const staged = boundary.stage.snapshot();
+          if (outcome.kind === "active" && !staged.refused && staged.mutations.length > 0) {
+            await applyMutations(staged.mutations);
+            committed = true;
+          } else if (staged.refused || outcome.kind === "active") {
+            outcome = invalid();
+          }
+        }
+      }
+    }
   } catch {
-    return unavailable();
+    outcome = unavailable();
   }
 
-  if (boundary.stage.initialState.kind === "invalid") {
-    await revokeIssuedProviderSession(signedIn);
-    return invalid();
-  }
-  const setResult = await boundary.client.auth.setSession({
-    access_token: signedIn.accessToken,
-    refresh_token: signedIn.refreshToken,
-  });
-  if (setResult.error || !setResult.data.session) {
-    await revokeIssuedProviderSession(signedIn);
-    return providerFailure(setResult.error);
-  }
-
-  const currentToken = setResult.data.session.access_token;
-  const live = await boundary.client.auth.getUser(currentToken);
-  if (live.error || !live.data.user) {
-    await revokeIssuedProviderSession(signedIn);
-    return providerFailure(live.error);
-  }
-
-  const result = await sessionService().bootstrap(
-    currentToken,
-    correlationIdSchema.parse(randomUUID()),
-  );
-  const staged = boundary.stage.snapshot();
-  if (result.kind === "active" && !staged.refused) {
-    await applyMutations(staged.mutations);
-    return result;
-  }
-
-  await revokeIssuedProviderSession(signedIn);
-  return staged.refused ? invalid() : result;
+  if (!committed) await revokeIssuedProviderSession(signedIn);
+  return outcome;
 };
 
 export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> => {
