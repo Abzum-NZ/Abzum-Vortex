@@ -143,3 +143,9 @@ sequenceDiagram
 - Shared search, report, and dashboard results leave no recipient search document, materialised report result, or cross-request business-data cache entry.
 - Shared records do not enter workflow selections, connection messages, bulk changes, cross-source relationships, or offline storage in the first release.
 - Same-cluster and cross-cluster shared lists return the same fields and refusal meanings for the same grant; only measured latency and source-availability states may differ.
+
+## Page context and derived-value safety
+
+Use [explicit typed binding contexts](appendices/page-builder-contracts.md#data-context-and-related-records) for the page subject, related panels and row items. A valid employee-to-department example does not require every query on the page to target Employees. This is ordinary related-record querying, not permission to join different shared sources.
+
+Evaluate access before grouping, aggregation, counts and pagination. A cached or stored derived result must not expose inputs the reader cannot access. Caller-filtered totals are computed for that caller, not stored as one universal business value. Invalid predicates refuse the affected query rather than being silently dropped.

@@ -100,3 +100,9 @@ Privacy administrators act within one organisation. A tenant administrator may c
 - A recipient organisation cannot use a shared record to place a legal hold on the source organisation's data.
 - Shared search and reports leave no recipient index or materialised result; the next request reflects source correction, restriction, or erasure.
 - A downloaded approved export is recorded as an intentional transfer and is not presented as revocable live access.
+
+## Foundation before integration
+
+[Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is delivered before Access/Record operations require atomic success evidence. Failed mutations create no success activity; safe refusal evidence may be appended separately after rollback. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) adds permitted views and complete service coverage to the same boundary.
+
+[File-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) supplies current recovery/hold checks before automated purge. [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117) extends selection policies and all-store handling, not a duplicate deletion engine. Complete organisation archive/restore follows these policies in [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255).

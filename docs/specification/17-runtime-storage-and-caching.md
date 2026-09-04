@@ -35,7 +35,7 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 | [Queues](https://supabase.com/docs/guides/queues) | Logged, durable event delivery after a committed save | Queue client functions are server-only and the `pgmq_public` interface is not exposed to browsers. |
 | [Database Webhooks](https://supabase.com/docs/guides/database/webhooks) | Asynchronous low-latency wake-up after durable work exists | A webhook is a hint, not delivery proof; the queue and scheduled Kestra recovery remain authoritative. |
 | [Realtime Broadcast](https://supabase.com/docs/guides/realtime/authorization) | Private, content-free invalidation for open components | Clients reload through the authorised query path; business values are never broadcast. |
-| [Storage](https://supabase.com/docs/guides/storage) | Private objects, resumable uploads and short-lived signed transfers | Business files are never public; Storage row policies and File-service checks both apply. |
+| [Storage](https://supabase.com/docs/guides/storage) | Private objects, resumable uploads and authenticated private download streams | Business files are never public; Storage row policies and File-service checks both apply. |
 | [CLI, database tests and linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) | Reproducible local database, migration checks, pgTAP tests and database lint | The shared Testing project remains the authoritative platform and separation test. Kestra alone migrates Testing and Production. |
 | [Managed backups](https://supabase.com/docs/guides/platform/backups) and database advisers | Provider recovery layer and reviewed security/performance findings | Independent encrypted backups, restore drills and reviewed migrations remain required. Adviser suggestions never change production automatically. |
 
@@ -323,7 +323,7 @@ The first release exposes only bounded protected operations:
 - Source-owned approved export job and short-lived download instruction, with no recipient-cluster file copy.
 - Named record action with the expected concurrency number and a duplicate-protection key.
 - Grant proposal, acceptance, activation receipt, revocation notice, and authoritative status reconciliation.
-- Source-owned file upload admission, upload completion, preview, or download through a short-lived grant or bounded stream.
+- Source-owned upload admission/completion with current-authority recheck, and authenticated preview/download streams as specified by [Files](11-files-and-attachments.md#download-and-preview). A reusable bearer Storage URL cannot replace that check.
 - Content-free invalidation that tells an open recipient screen to re-run its authorised query.
 
 Raw SQL, cross-cluster joins, unbounded reads, arbitrary source URLs, database credentials, and distributed database transactions are not federation operations.
@@ -420,3 +420,9 @@ The first release does not place cross-organisation shared-record results in the
 - A remote request with an altered body, reused nonce, expired signature, unregistered cluster, or incompatible contract version is refused before record access.
 - Source revocation refuses a cross-cluster request even while the recipient mirror still says active.
 - No cross-cluster request requires a database password for another cluster.
+
+## Builder and cross-cutting delivery foundations
+
+The [page-builder adapter](appendices/page-builder-contracts.md) remains inside the existing Page/Definition/Query/Record/Access boundaries. It introduces no per-application service or separate renderer/database. [Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252), [entitlement decisions #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) and [file-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) precede their first consuming operation; later privacy/metering work extends those same boundaries.
+
+Realtime channel admission must use credentials accepted by the destination cluster. Do not assume a token issued by a separate Identity Authority project automatically authorises that cluster's Realtime service. [#56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56) proves access-change invalidation/reauthorisation for local subscriptions; [#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156) proves the cross-cluster path. Broadcast only the minimal permitted content-free signal and reload through current access checks.
