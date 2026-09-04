@@ -26,3 +26,10 @@ export {
   type DefinitionConsumerReadErrorCode,
 } from "./definition-consumer-read";
 export { createDatabaseDefinitionConsumerReadService } from "./definition-consumer-read-composition";
+export {
+  createDefinitionHistoryService,
+  DefinitionHistoryError,
+  definitionHistoryErrorCodes,
+  type DefinitionHistoryErrorCode,
+} from "./definition-history";
+export { createDatabaseDefinitionHistoryService } from "./definition-history-composition";

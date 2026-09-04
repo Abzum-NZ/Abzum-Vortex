@@ -83,4 +83,10 @@ export const contractIndex = [
     specification: "03-composition-and-publication.md#consumer-reads-of-published-definitions",
     owner: "#22",
   },
+  {
+    group: "bounded immutable Module and Application release history and draft restoration",
+    layer: "canonical_runtime",
+    specification: "03-composition-and-publication.md#publication-history-and-draft-restoration",
+    owner: "#21",
+  },
 ] as const;
