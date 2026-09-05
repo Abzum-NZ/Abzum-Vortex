@@ -2,16 +2,39 @@
 
 set -euo pipefail
 
-readonly proof_root="$(mktemp -d /tmp/vortex-permission-registry.XXXXXX)"
+run_uuid="${VORTEX_PERMISSION_REGISTRY_PROOF_RUN_ID:-}"
+if [ -z "$run_uuid" ]; then
+  [ -r /proc/sys/kernel/random/uuid ] || {
+    echo 'a Linux random UUID source is required for the permission-registry proof' >&2
+    exit 1
+  }
+  IFS= read -r run_uuid </proc/sys/kernel/random/uuid
+fi
+[[ "$run_uuid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]] || {
+  echo 'VORTEX_PERMISSION_REGISTRY_PROOF_RUN_ID must be a lowercase UUID v4' >&2
+  exit 1
+}
+
+readonly run_uuid
+readonly run_token="${run_uuid//-/}"
+readonly fixture_name_token="${run_token:0:28}"
+readonly fixture_short_name="permission_${fixture_name_token}"
+readonly application_key="proof.concurrent_application.run_${run_token}"
+proof_root="$(mktemp -d /tmp/vortex-permission-registry.XXXXXX)"
+readonly proof_root
 readonly database_url="${VORTEX_CONCURRENCY_DATABASE_URL:-}"
-readonly tenant_id='61000000-0000-4000-8000-000000000232'
-readonly organization_id='62000000-0000-4000-8000-000000000232'
-readonly application_root_id='63000000-0000-4000-8000-000000000232'
-readonly permission_id='64000000-0000-4000-8000-000000000232'
-readonly actor_id='69000000-0000-4000-8000-000000000232'
-readonly correlation_initial='67000000-0000-4000-8000-000000000232'
-readonly correlation_a='67000000-0000-4000-8000-000000000233'
-readonly correlation_b='67000000-0000-4000-8000-000000000234'
+readonly tenant_id="61${run_uuid:2}"
+readonly organization_id="62${run_uuid:2}"
+readonly application_root_id="63${run_uuid:2}"
+readonly permission_id="64${run_uuid:2}"
+readonly correlation_initial="65${run_uuid:2}"
+readonly correlation_a="66${run_uuid:2}"
+readonly correlation_b="67${run_uuid:2}"
+readonly actor_id="69${run_uuid:2}"
+
+fixture_claimed=0
+declare -a worker_pids=()
+declare -A reaped_worker_pids=()
 
 psql_command=(psql --no-psqlrc --quiet --tuples-only --no-align --set=ON_ERROR_STOP=1)
 if [ -n "$database_url" ]; then
@@ -22,20 +45,74 @@ run_sql() {
   "${psql_command[@]}" --command "$1"
 }
 
-cleanup() {
+wait_owned_worker() {
+  local pid="$1"
+  local status
+
+  if wait "$pid"; then
+    status=0
+  else
+    status=$?
+  fi
+  reaped_worker_pids["$pid"]=1
+  return "$status"
+}
+
+stop_owned_workers() {
   local pid
-  while read -r pid; do
-    kill "$pid" >/dev/null 2>&1 || true
-  done < <(jobs -pr)
+
+  for pid in "${worker_pids[@]}"; do
+    if [ "${reaped_worker_pids[$pid]:-0}" != 1 ] && kill -0 "$pid" >/dev/null 2>&1; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
+  done
+  for pid in "${worker_pids[@]}"; do
+    if [ "${reaped_worker_pids[$pid]:-0}" != 1 ]; then
+      wait "$pid" >/dev/null 2>&1 || true
+      reaped_worker_pids["$pid"]=1
+    fi
+  done
+}
+
+cleanup_fixture() {
+  [ "$fixture_claimed" = 1 ] || return 0
+
   run_sql "
     begin;
     set local session_replication_role = replica;
+    do \$proof\$
+    begin
+      if not exists (
+        select 1 from vortex_identity.tenants
+        where tenant_id = '$tenant_id'
+          and short_name = '$fixture_short_name'
+          and created_by = '$actor_id'
+      ) or not exists (
+        select 1 from vortex_identity.organizations
+        where organization_id = '$organization_id'
+          and tenant_id = '$tenant_id'
+          and short_name = '$fixture_short_name'
+          and created_by = '$actor_id'
+      ) or not exists (
+        select 1 from vortex_definition.roots
+        where root_id = '$application_root_id'
+          and organization_id = '$organization_id'
+          and key = '$application_key'
+          and created_by = '$actor_id'
+      ) then
+        raise exception 'Permission proof fixture ownership marker mismatch';
+      end if;
+    end
+    \$proof\$;
     delete from vortex_access.permission_catalogue_entries
-      where organization_id = '$organization_id';
+      where organization_id = '$organization_id'
+        and application_root_id = '$application_root_id';
     delete from vortex_access.permission_registrations
-      where organization_id = '$organization_id';
+      where organization_id = '$organization_id'
+        and registration_owner_id = '$application_root_id';
     delete from vortex_access.permission_registration_revisions
-      where organization_id = '$organization_id';
+      where organization_id = '$organization_id'
+        and registration_owner_id = '$application_root_id';
     delete from vortex_definition.releases where root_id = '$application_root_id';
     delete from vortex_definition.roots where root_id = '$application_root_id';
     delete from vortex_access.organization_access_versions
@@ -43,25 +120,96 @@ cleanup() {
     delete from vortex_identity.organizations where organization_id = '$organization_id';
     delete from vortex_identity.tenants where tenant_id = '$tenant_id';
     commit;
-  " >/dev/null 2>&1 || true
-  rm -rf "$proof_root"
+  " >/dev/null
 }
-trap cleanup EXIT
+
+finalize() {
+  local original_status=$?
+  local cleanup_status=0
+  local operation_status
+
+  trap - EXIT INT TERM
+  set +e
+  stop_owned_workers
+  cleanup_fixture
+  operation_status=$?
+  if [ "$operation_status" -ne 0 ]; then
+    echo "permission-registry proof fixture cleanup failed with status $operation_status" >&2
+    cleanup_status="$operation_status"
+  fi
+  case "$proof_root" in
+    /tmp/vortex-permission-registry.*)
+      rm -rf -- "$proof_root"
+      operation_status=$?
+      ;;
+    *)
+      echo "refusing to remove unexpected proof directory: $proof_root" >&2
+      operation_status=1
+      ;;
+  esac
+  if [ "$operation_status" -ne 0 ]; then
+    echo "permission-registry proof directory cleanup failed with status $operation_status" >&2
+    [ "$cleanup_status" -ne 0 ] || cleanup_status="$operation_status"
+  fi
+
+  if [ "$original_status" -ne 0 ]; then
+    [ "$cleanup_status" -eq 0 ] || echo 'cleanup also failed while preserving the proof failure' >&2
+    exit "$original_status"
+  fi
+  exit "$cleanup_status"
+}
+trap finalize EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 run_sql "
+  begin;
+  do \$proof\$
+  begin
+    if exists (
+      select 1 from vortex_identity.tenants
+      where tenant_id = '$tenant_id' or short_name = '$fixture_short_name'
+    ) or exists (
+      select 1 from vortex_identity.organizations
+      where organization_id = '$organization_id'
+         or (tenant_id = '$tenant_id' and short_name = '$fixture_short_name')
+    ) or exists (
+      select 1 from vortex_definition.roots
+      where root_id = '$application_root_id'
+         or (organization_id = '$organization_id' and key = '$application_key')
+    ) or exists (
+      select 1 from vortex_access.organization_access_versions
+      where organization_id = '$organization_id'
+    ) or exists (
+      select 1 from vortex_access.permission_registrations
+      where organization_id = '$organization_id'
+        and registration_owner_id = '$application_root_id'
+    ) or exists (
+      select 1 from vortex_access.permission_registration_revisions
+      where organization_id = '$organization_id'
+        and registration_owner_id = '$application_root_id'
+    ) or exists (
+      select 1 from vortex_access.permission_catalogue_entries
+      where organization_id = '$organization_id'
+        and application_root_id = '$application_root_id'
+    ) then
+      raise exception 'Permission proof fixture scope already exists';
+    end if;
+  end
+  \$proof\$;
   insert into vortex_identity.tenants (
     tenant_id, short_name, display_name, state, created_at, created_by,
     state_changed_at, revision
   ) values (
-    '$tenant_id', 'permission_concurrency', 'Permission concurrency', 'active',
+    '$tenant_id', '$fixture_short_name', 'Permission concurrency $fixture_name_token', 'active',
     clock_timestamp(), '$actor_id', clock_timestamp(), 1
   );
   insert into vortex_identity.organizations (
     organization_id, tenant_id, parent_organization_id, short_name, display_name,
     state, created_at, created_by, state_changed_at, revision
   ) values (
-    '$organization_id', '$tenant_id', null, 'permission_concurrency',
-    'Permission concurrency', 'active', clock_timestamp(), '$actor_id',
+    '$organization_id', '$tenant_id', null, '$fixture_short_name',
+    'Permission concurrency $fixture_name_token', 'active', clock_timestamp(), '$actor_id',
     clock_timestamp(), 1
   );
   select * from vortex_access.initialize_organization_access_version(
@@ -71,7 +219,7 @@ run_sql "
     root_id, organization_id, kind, key, created_at, created_by
   ) values (
     '$application_root_id', '$organization_id', 'application',
-    'proof.concurrent_application', clock_timestamp(), '$actor_id'
+    '$application_key', clock_timestamp(), '$actor_id'
   );
   insert into vortex_definition.releases (
     root_id, release_revision, release_version, authored_source,
@@ -118,7 +266,7 @@ run_sql "
       'contractVersion', '1.0.0', 'organizationId', '$organization_id',
       'applicationRootId', '$application_root_id',
       'applicationRelease', jsonb_build_object(
-        'kind', 'application', 'definitionKey', 'proof.concurrent_application',
+        'kind', 'application', 'definitionKey', '$application_key',
         'rootId', '$application_root_id', 'releaseRevision', 1,
         'releaseVersion', '1.0.0', 'validationContractVersion', '2.15.0',
         'contentFingerprint', 'sha256:' || repeat('3', 64),
@@ -135,7 +283,7 @@ run_sql "
           'actionKind', 'read', 'administrative', false
         ),
         'sourceRelease', jsonb_build_object(
-          'kind', 'application', 'definitionKey', 'proof.concurrent_application',
+          'kind', 'application', 'definitionKey', '$application_key',
           'rootId', '$application_root_id', 'releaseRevision', 1,
           'releaseVersion', '1.0.0', 'validationContractVersion', '2.15.0',
           'contentFingerprint', 'sha256:' || repeat('3', 64),
@@ -147,14 +295,16 @@ run_sql "
     ),
     '$actor_id', '$correlation_initial'
   );
+  commit;
 " >/dev/null
+fixture_claimed=1
 
 candidate_update="
   jsonb_build_object(
     'contractVersion', '1.0.0', 'organizationId', '$organization_id',
     'applicationRootId', '$application_root_id',
     'applicationRelease', jsonb_build_object(
-      'kind', 'application', 'definitionKey', 'proof.concurrent_application',
+      'kind', 'application', 'definitionKey', '$application_key',
       'rootId', '$application_root_id', 'releaseRevision', 2,
       'releaseVersion', '1.1.0', 'validationContractVersion', '2.15.0',
       'contentFingerprint', 'sha256:' || repeat('7', 64),
@@ -171,7 +321,7 @@ candidate_update="
         'actionKind', 'read', 'administrative', false
       ),
       'sourceRelease', jsonb_build_object(
-        'kind', 'application', 'definitionKey', 'proof.concurrent_application',
+        'kind', 'application', 'definitionKey', '$application_key',
         'rootId', '$application_root_id', 'releaseRevision', 2,
         'releaseVersion', '1.1.0', 'validationContractVersion', '2.15.0',
         'contentFingerprint', 'sha256:' || repeat('7', 64),
@@ -183,7 +333,7 @@ candidate_update="
   )
 "
 
-PGAPPNAME='vortex-permission-update-a' "${psql_command[@]}" >"$proof_root/a.log" 2>&1 <<SQL &
+PGAPPNAME="vortex-permission-update-a-$fixture_name_token" "${psql_command[@]}" >"$proof_root/a.log" 2>&1 <<SQL &
 begin;
 select registration_revision, access_version
 from vortex_access.apply_application_permission_registration(
@@ -194,6 +344,7 @@ select pg_catalog.pg_sleep(1);
 commit;
 SQL
 a_pid=$!
+worker_pids+=("$a_pid")
 
 for _ in $(seq 1 200); do
   [ -f "$proof_root/a.result" ] && break
@@ -204,7 +355,7 @@ done
   exit 1
 }
 
-PGAPPNAME='vortex-permission-update-b' "${psql_command[@]}" >"$proof_root/b.log" 2>&1 <<SQL &
+PGAPPNAME="vortex-permission-update-b-$fixture_name_token" "${psql_command[@]}" >"$proof_root/b.log" 2>&1 <<SQL &
 begin;
 select registration_revision, access_version
 from vortex_access.apply_application_permission_registration(
@@ -213,9 +364,17 @@ from vortex_access.apply_application_permission_registration(
 commit;
 SQL
 b_pid=$!
+worker_pids+=("$b_pid")
 
-wait "$a_pid"
-if wait "$b_pid"; then
+if wait_owned_worker "$a_pid"; then
+  a_status=0
+else
+  a_status=$?
+  echo 'winning permission update worker failed' >&2
+  sed -n '1,40p' "$proof_root/a.log" >&2
+  exit "$a_status"
+fi
+if wait_owned_worker "$b_pid"; then
   echo 'competing stale permission update unexpectedly succeeded' >&2
   exit 1
 fi
