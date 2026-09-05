@@ -27,6 +27,7 @@ as $function$
 $function$;
 
 grant execute on function pg_temp.human_context(jsonb, text) to vortex_request;
+grant usage on schema extensions to vortex_runtime, vortex_request;
 
 insert into vortex_identity.tenants (
   tenant_id, short_name, display_name, state, created_at, created_by, state_changed_at, revision
