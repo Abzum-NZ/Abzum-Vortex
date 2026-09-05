@@ -40,7 +40,7 @@ This map connects every current specification section to the work that delivers 
 | Phase 4 | [#42 · Module and Record](https://github.com/Abzum-NZ/Abzum-Vortex/issues/42) |
 | Phase 5 | [#53 · Query, Rule and Event](https://github.com/Abzum-NZ/Abzum-Vortex/issues/53) |
 | Phase 6 | [#63 · Application, Theme and Page](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63) |
-| Phase 7 | [#75 · Workflow and pipeline execution](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75), preceded by Kestra/state-database compatibility gate [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) |
+| Phase 7 | [#75 · Workflow and pipeline execution](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75), with generated-flow and current pinned-runtime compatibility evidence; [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) governs a future Kestra/state-database upgrade rather than gating current core delivery |
 | Phase 8 | [#87 · Search and File](https://github.com/Abzum-NZ/Abzum-Vortex/issues/87) |
 | Phase 9 | [#98 · Connections and Interfaces](https://github.com/Abzum-NZ/Abzum-Vortex/issues/98) |
 | Phase 10 | [#109 · Copy, gallery, sharing, import and export](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109) |
@@ -81,6 +81,8 @@ The project is considered consistent only when:
 - Implemented the generic, versioned safe definition-validation catalogue, public result, schema/rule translators, protected diagnostic handoff, author guide, adversarial tests, and fixture-name source guard under [#13](https://github.com/Abzum-NZ/Abzum-Vortex/issues/13); reconciled [#15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) as the sole owner of rule stages and execution.
 
 ## September architecture-review coverage
+
+The [IAM specification](iam-application.md) makes #72 the owner of ordinary IAM definitions and available views, with [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) owning complete role-request/approval/workflow journeys after #76/#81. #30/#33/#34/#40 supply protected generic foundations; #64 routes role-management journeys to IAM; #200 preserves the same governance over MCP. No parallel human grant portal or core business approval engine is permitted. [#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266) corrects exact-commit hosted verification coverage before final Phase 2 proof.
 
 The [review map](../../build-plan/architecture-review.md) records findings across all specification subjects and the corrected phase boundaries. Page/shell/settings/responsive contracts are [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249); data/form/semantic-operation bindings are [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250). The [HR example](page-builder-contracts.md#hr-example-policy) is [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251), authored from ordinary definitions and workflows.
 

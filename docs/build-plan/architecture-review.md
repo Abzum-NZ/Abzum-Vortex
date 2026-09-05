@@ -108,8 +108,9 @@ flowchart TD
 ```
 
 - The native graph initially had no cycles. Several **completion descriptions** nevertheless created implicit cycles; those are corrected above.
-- #258 is the first independent contract correction. #249 follows it and the already completed contract foundations; neither requires a database deployment.
+- #258 is the first independent contract correction and requires no database deployment. #249 follows it and the completed contract foundations, including Definition storage/read/restore #19/#21/#22. It needs a bounded additive Definition-store migration for permanent shell identities and exact platform-block dependency storage, publication and readback. Existing JSONB draft/release tables and immutable V1 rows remain unchanged. Its implementation can proceed independently, but completion requires the normal Local proof and corrected hosted Testing gate #266; it authorises no Production work and does not bypass the explicit hold on #30.
 - #250 follows Access #34 and defines common operation/binding semantics before UI. #102 extends it later for interfaces and the complete operation catalogue.
+- #249 first freezes V1 behavior, then implements the [exact representation selectors](../specification/appendices/page-builder-contracts.md#exact-representation-selection) across source, compilation, persistence, history and consumers before extending V2 composition. Use existing version columns rather than a parallel registry. Verify the additive migration against a confirmed Local baseline without resetting an existing or shared environment.
 - #252 and #118 follow Access and precede their first consuming mutations/limited work.
 - #52 moves to Phase 6; #42 must not wait for it.
 - #83 consumes #68 drafts; #89 no longer waits for #88; #96 explicitly consumes the renderer.

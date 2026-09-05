@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.15
+**Status:** Approved build plan 2.16
 
 **Date:** 5 September 2026
 
@@ -20,6 +20,7 @@ The [corrected dependency and coverage map](architecture-review.md) is part of t
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.16 | Approved | 5 September 2026 | Added the ordinary IAM application as the only role-grant journey: #72 owns definitions/views, #267 completes generic workflow approvals after #76/#81. Early Access/Identity operations remain private prerequisites, not a temporary granting portal. |
 | 2.15 | Approved | 5 September 2026 | One organisation-managed role and permission catalogue; application registration supplies templates without automatic access; explicit review of expanded grants; shared Access foundations must precede organisation-local administration, correcting the earlier phase-order assumption. |
 | 2.14 | Approved | 5 September 2026 | Page/shell/binding contract completion, workflow-only HR example, corrected task dependencies and cross-cutting foundations. |
 | 2.13 | Approved | 5 September 2026 | Completed organisation selection and request context #27: a minimum safe launcher, address-scoped tab selection, browser-supplied identifier only, atomic Identity/Access scope resolution, trusted Identity Authority binding, live Access-version validation, capability-injected protected repositories with no caller-context transaction bypass, pooled transaction cleanup, 725 pgTAP assertions and seven real concurrency proofs. Protected tenant/organisation operations #30 are now dependency-unblocked; the separation suite #29 remains blocked on #30. |
@@ -262,7 +263,7 @@ Build:
 
 - Filter, sort, grouping, total, pagination and saved-view contracts.
 - Safe database query compilation with no dropped predicates.
-- Client and server rule evaluation with server authority.
+- One pure declarative rule/action evaluation path for immediate client feedback and authoritative server execution. Client preview has no side effects; a successful save commits its event or exact background-start fact with the record, while a no-change authorised button persists its own start intent before returning.
 - Transactional event outbox, [Supabase Queue](https://supabase.com/docs/guides/queues), webhook wake-up, sequence barrier, retry, failed-event handling and recovery call.
 - Private Supabase Realtime Broadcast channels that send content-free invalidations and force an authorised reload.
 - Search/file data-version hooks needed by later phases.
@@ -271,6 +272,7 @@ Exit proof:
 
 - Lists, summaries and exports agree on access and filter meaning.
 - Unsafe filters refuse rather than broaden.
+- A refused or rolled-back save starts no background work; a committed save remains successful when Kestra is unavailable and its durable start fact stays pending for #77's duplicate-safe hand-off.
 - Duplicate delivery is safe and a later record event never discards or overtakes an earlier blocked event.
 - Database-webhook wake-up and operational scheduled recovery deliver from the durable queue through a controlled registered consumer without duplicated effects. #77 integrates the real Workflow service later.
 
@@ -296,7 +298,7 @@ Build:
 - Forms, guided-form drafts, action buttons and public pages.
 - A permission-filtered [semantic interface map](../specification/07-applications-pages-and-themes.md#semantic-interface-map) for navigation, pages, queries, forms, drafts, choices, files, actions, Studio and administration. Web components bind to these stable semantic controls so Phase 9 can expose the same capabilities without describing the DOM or rebuilding application behaviour.
 - Process-pipeline definitions and presentation contracts. Real guarded transitions, entry/exit work and timed execution come in Phase 7; unavailable controls are not working-looking placeholders.
-- The protected sign-in and recovery shell, plus locked Tenant Administration and Organisation Administration application definitions built with the same application/page primitives as customer applications.
+- The protected sign-in and recovery shell, plus locked Tenant Administration, Organisation Administration and [IAM application](../specification/appendices/iam-application.md) definitions built with the same application/page primitives as customer applications. IAM owns all role-grant journeys; the other apps link to it. #72 validates its complete definitions and supplies available views, but may not claim working approvals or expose a direct-grant workaround before #267 completes the generic workflow journey after #76/#81.
 
 Exit proof:
 
@@ -309,26 +311,32 @@ Exit proof:
 
 ## Phase 7 — Workflow and pipeline execution
 
+The [IAM grant journey #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) consumes #72's validated application definitions and the generic workflow/human-input outcomes #76/#81. It completes user-linked access requests, approvals, effective assignment, stale-authority checks and retry/removal evidence. Do not move Workflow upstream of early Identity/Access foundations or mark IAM role granting complete with only Phase 6 views.
+
 **Current project epic:** [#75](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75)
 
 **Needs:** Phases 5 and 6.
 
 **Outcome:** Durable workflows and pipeline time targets execute with [Kestra](https://kestra.io/docs) authoritative for execution status while Vortex remains authoritative for application records and access.
 
-**Foundation order:** Before application-workflow execution [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) must align the pinned Kestra release and its state-database major on an officially supported combination. The change requires a verified off-host backup, a disposable restore rehearsal and a forward migration; an existing PostgreSQL data directory is never opened by an older major.
+**Foundation order:** Development, Testing, and Production use one operated Kestra instance; the plan does not require separate instances or assume that a new Development credential has been provisioned. Application-execution flows use environment-scoped namespaces. Target-specific flow identities, webhook keys, Doppler configurations, credentials and approval gates provide logical separation rather than strong process isolation. Reviewed delivery flows may remain in the shared `vortex.operations` namespace with fixed flow and environment authority; the Production gate may narrowly read the credential-free Testing receipt required by the [delivery specification](../specification/18-delivery-and-testing.md#supabase-development-and-verification), but that receipt is neither a credential nor approval. Named operators may restart or redeploy the shared instance when needed. Core workflow delivery validates generated application flows and runtime compatibility against the selected existing pinned Kestra and state-store combination. [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) governs a future version or state-database upgrade, including its backup and restore evidence; it is not a prerequisite for using the current pinned runtime. An actual compatibility failure remains blocking evidence rather than being waived. Shared-instance operating authority does not approve Production database delivery, which retains its separate named approval and evidence gate.
 
 Build:
 
 - Workflow triggers and the governed 24-node catalogue: flow control, bounded queries and loops, record actions, generic human-input waits, files, and named connection operations.
 - Comments, tags, tasks, calendar entries, notifications, documents and ordinary approvals remain application records and actions. External delivery uses named connection operations instead of privileged business nodes.
 - Refusal of arbitrary SQL, JavaScript, shell, unrestricted expressions, arbitrary network/file operations, and builder-supplied executable nodes.
+- Private application-install/upgrade registration that generates only exact published typed flows, prepares them inactive in the shared Kestra instance, verifies all fingerprints, and then activates one Vortex installation revision. Registration identities use permanent environment, organisation, installation, application, workflow, and revision values; retries converge and never select by label.
 - Versioned signed protected-operation contract and duplicate-safe application side effects.
-- [Kestra](https://kestra.io/docs) flow generation, execution start, authoritative status reads, outage display, and operator correlation.
+- Post-commit event/start-intent hand-off from authoritative Vortex action and save paths. Preview never starts work; a rejected transaction produces no run; an outage leaves committed work pending. Initial acceptance and scheduled wake-ups require the current active installation; dispatch keeps the accepted exact revision across normal upgrade while rechecking current permission and withdrawal.
+- [Kestra](https://kestra.io/docs) flow generation, execution start, authoritative status reads, outage display, older-version support for in-flight runs, uninstall blocking of new starts, and operator correlation.
 - Pipeline stage-time targets, events and escalation workflows.
 
 Exit proof:
 
 - Available record-only/human-input workflows survive retry, callback duplication, web deployment and [Kestra](https://kestra.io/docs) restart. External message delivery #82 waits for #100; complete business flows are proven in #254.
+- Publishing alone changes no Kestra flow or live installation. A failed first registration is not ready, a failed upgrade leaves the old version active, and retrying or running two installation attempts creates no duplicate flow or partial live version.
+- A committed save or authorised no-change button produces one durable start intent and at most one workflow run. A record-free start remains unavailable until #250 and the Workflow work deliver a separately declared protected Workflow operation with explicit versioned descriptor, trigger, typed-input, and execution-reference contracts.
 - Every completed, waiting, cancelled and failed run displays Kestra's current state; Vortex's last-known snapshot is labelled unavailable rather than presented as current during an outage.
 - Phase 7 uses the Phase 6 action, form, page and pipeline contracts rather than inventing replacements.
 
@@ -390,7 +398,7 @@ Exit proof:
 
 Build:
 
-- Signed definition package manifest, dependency preview, identifier remapping, incomplete-draft handling and reviewed gallery.
+- Signed definition package manifest, dependency preview, identifier remapping, incomplete-draft handling and reviewed gallery. Installation and explicit upgrade invoke Phase 7's private exact-version workflow registration before one complete Vortex installation revision becomes ready; copying alone remains an inert draft.
 - Clear Organisation Administration application separation between installing definitions and sharing live records.
 - Access-owned sharing grants with one explicit scope, one recipient application, one or more recipient application roles, action/field allowlists, export defaulting off, required expiry, and source-authoritative revocation.
 - Inter-application collaborative grants that keep the source record authoritative while allowing only named fields and published shareable actions; the CRM and Service Desk fixture proves a limited case presentation with controlled changes and no copied summary record.
@@ -409,6 +417,7 @@ Build:
 Exit proof:
 
 - Cross-organisation copy removes or remaps organisation-specific state.
+- An application package with workflows is not ready until every exact flow is verified. Registration retry converges, upgrade failure leaves the current version active, rollback is explicit, and uninstall prevents new acceptance while retaining explicit outcomes for accepted work and preserving in-flight and historical evidence.
 - Installing a definition never grants record access, and a record grant never copies or installs a definition.
 - Ordinary record edits cannot activate grants; every grant proves source and recipient consent over one fingerprint; a changed condition, role, field, action, export choice, region, or expiry requires both consents again.
 - Source revocation takes effect on the next request; sensitive fields, inline conditions, live re-sharing, recipient indexing, materialised shared reports, persistent remote copies, and unapproved export are refused.

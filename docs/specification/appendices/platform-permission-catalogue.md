@@ -42,4 +42,6 @@ flowchart LR
 
 The initial steward handoff explicitly assigns this management snapshot plus the separate organisation-wide delegation authority in [stewardship](../04-access-and-permissions.md#initial-organisation-stewardship). Delegation permits governing future registered permissions in the same organisation, but neither it nor these thirteen permissions permits reading business records. Later catalogue additions do not enter the steward's personal use-permission snapshot automatically.
 
+The full [IAM setup](iam-application.md#setup-and-removal) separately accepts the exact application operating role needed to enter IAM and use its management journey. That permission declaration comes from the governed application release, not this core catalogue. It grants no rights to unrelated applications and must be included in the last-steward availability safeguard once IAM is active.
+
 Tenant structural capabilities remain separately scoped by [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and cannot satisfy these organisation permissions. Later genuine platform operations add reviewed catalogue entries under their owning tasks. Ordinary applications declare their own permissions through normal Vortex definitions.
