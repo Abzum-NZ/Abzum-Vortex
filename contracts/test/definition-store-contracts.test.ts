@@ -13,6 +13,12 @@ const moduleSource = JSON.parse(
     "utf8",
   ),
 );
+const applicationSource = JSON.parse(
+  fs.readFileSync(
+    path.resolve(import.meta.dirname, "../../testing/fixtures/applications/crm.json"),
+    "utf8",
+  ),
+);
 
 describe("definition-store contracts", () => {
   it("accepts authored Module source without a caller-supplied permanent root", () => {
@@ -55,6 +61,25 @@ describe("definition-store contracts", () => {
         sourceContractVersion: "1.0.0",
         sourceFingerprint: `sha256:${"a".repeat(64)}`,
         source: moduleSource,
+        createdAt: "2026-09-04T00:00:00Z",
+        createdBy: "30000000-0000-4000-8000-000000000001",
+        updatedAt: "2026-09-04T00:00:00Z",
+        updatedBy: "30000000-0000-4000-8000-000000000001",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("refuses Application source metadata that disagrees with the authored source", () => {
+    expect(
+      storedDefinitionDraftSchema.safeParse({
+        kind: "application",
+        rootId: "10000000-0000-4000-8000-000000000001",
+        organizationId: "20000000-0000-4000-8000-000000000001",
+        key: applicationSource.key,
+        draftRevision: 1,
+        sourceContractVersion: "1.0.1",
+        sourceFingerprint: `sha256:${"a".repeat(64)}`,
+        source: applicationSource,
         createdAt: "2026-09-04T00:00:00Z",
         createdBy: "30000000-0000-4000-8000-000000000001",
         updatedAt: "2026-09-04T00:00:00Z",

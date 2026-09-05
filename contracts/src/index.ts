@@ -1,4 +1,6 @@
 export * from "./application-contracts";
+export * from "./application-contract-versions";
+export * from "./application-composition-v2";
 export * from "./automation-contracts";
 export * from "./catalogues";
 export * from "./common";
