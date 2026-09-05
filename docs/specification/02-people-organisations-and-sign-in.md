@@ -133,6 +133,8 @@ The delivered session result above identifies authentication strength and token 
 
 Recent sign-in and recent MFA are distinct. A token refresh, request-context timestamp or an old multi-factor session cannot manufacture a recent confirmation. Missing or unsuitable evidence refuses only operations that require it, without inventing assurance or rejecting an otherwise valid ordinary session. No full authentication history, MFA enrollment details or extra durable session store is copied into Vortex. Operation-specific strength and maximum age remain part of [the central access requirement](04-access-and-permissions.md#where-access-is-enforced).
 
+The [verified recent-authentication contract](appendices/recent-authentication.md) specifies the minimum safe confirmation times, supported provider methods, exact propagation and compatibility checks. Token clock tolerance remains separate from authentication recency; a refresh does not reset either confirmation time.
+
 ## Invitations and groups
 
 - An invitation names one organisation, one normalised verified email address, and an expiry. Phase 2 stores no proposed role or Group assignment; [roles and groups](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) add authorised assignment handling later.

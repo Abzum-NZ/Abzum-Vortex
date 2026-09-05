@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.17
+**Status:** Approved build plan 2.18
 
 **Date:** 5 September 2026
 
@@ -20,6 +20,7 @@ The [corrected dependency and coverage map](architecture-review.md) is part of t
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.18 | Approved | 5 September 2026 | Defined #276's verified confirmation mapping and complete session/context compatibility proof before #34/#40 enforce protected-action recency; a token refresh, legacy strength label or pending PIM approval supplies no new confirmation. |
 | 2.17 | Approved | 5 September 2026 | Added #283 Groups compatibility before remaining #33 assignments; #33/#34/#40 must include protected role policies, eligibility and individual activation, with #276 authentication evidence and later #72/#267 IAM journeys. No PIM scheduler, second evaluator or early grant UI. |
 | 2.16 | Approved | 5 September 2026 | Added the ordinary IAM application as the only role-grant journey: #72 owns definitions/views, #267 completes generic workflow approvals after #76/#81. Early Access/Identity operations remain private prerequisites, not a temporary granting portal. |
 | 2.15 | Approved | 5 September 2026 | One organisation-managed role and permission catalogue; application registration supplies templates without automatic access; explicit review of expanded grants; shared Access foundations must precede organisation-local administration, correcting the earlier phase-order assumption. |
@@ -219,6 +220,8 @@ Exit proof:
 **Central decision delivery order:** [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) follows #33 with strict operation/target contracts, one database permission/delegation decision, its server adapter, and isolation/expiry/concurrency proof. Consume the verified #27 context and exact #32/#33 facts; do not build another TypeScript role evaluator. Bind each action to its actual permission and target, require declared authentication strength, and bound decision validity by the next relevant expiry as well as the Access version. Browser and MCP callers use the same boundary with any credential scope only narrowing authority. Unimplemented required row, field, sharing and public policies refuse final operations until their owning tasks land. No new registry, cache, activity store or administration-only bypass is needed.
 
 [Identity follow-up #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276), owned by Phase 2, supplies genuine verified authentication-method/time evidence before #34's recent-authentication runtime checks and final acceptance. It does not block #33 or #34 contract planning. Token/context issuance is not recent sign-in or MFA; missing qualifying evidence fails closed only for the protected operations that require it. This follow-up adds no hosted configuration, enrollment UI or duplicate session history.
+
+Its [exact evidence and compatibility requirements](../specification/appendices/recent-authentication.md) include the pinned provider mapping, unchanged ordinary-session behavior, token clock tolerance separate from zero-skew confirmation times, and strict human-only propagation. Complete focused verifier/session/context tests and additive database-validator proof before claiming #276 complete. Then #34/#40 must check required confirmation age at the protected action, including after any PIM approval wait; passing Identity tests alone does not prove a usable activation journey.
 
 Build:
 

@@ -45,9 +45,9 @@ flowchart TD
     DIRECT --> REQUEST[Request activation in IAM]
     GROUP --> REQUEST
     REQUEST --> CHECK[Check current role, policy and eligibility]
-    CHECK --> AUTH[Required recent authentication]
-    AUTH --> REVIEW[Independent approval when required]
-    REVIEW --> ACTIVE[Time-limited activation for this account]
+    CHECK --> REVIEW[Independent approval when required]
+    REVIEW --> AUTH[Recheck required recent authentication at activation]
+    AUTH --> ACTIVE[Time-limited activation for this account]
     ACTIVE --> ACCESS[Normal role, record and field access checks]
     ACTIVE --> END[Expiry, deactivation or revocation]
     END --> NONE[Role no longer contributes access]
