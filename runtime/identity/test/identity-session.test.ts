@@ -58,7 +58,7 @@ describe("identity-session service", () => {
       clock: () => now,
     });
 
-  it("bootstraps through ensure and returns only the closed five session facts", async () => {
+  it("bootstraps through ensure and keeps an evidence-free ordinary session shape", async () => {
     const result = await service().bootstrap("access-token", id(3) as CorrelationId);
 
     expect(result).toEqual({
@@ -74,6 +74,35 @@ describe("identity-session service", () => {
     expect(ensureProjection).toHaveBeenCalledWith(identity(), { correlationId: id(3) });
     expect(readProjection).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toContain("person@example.test");
+  });
+
+  it("propagates exact verified times without treating fresh token issuance as authentication", async () => {
+    verifyAccessToken.mockResolvedValueOnce(
+      identity({
+        issuedAt: "2026-09-05T00:59:00.000Z",
+        authenticationStrength: "multi_factor",
+        primaryAuthenticatedAt: "2026-09-04T23:00:00.000Z",
+        multiFactorAuthenticatedAt: "2026-09-05T00:10:00.000Z",
+      }),
+    );
+
+    const result = await service().resolve("freshly-refreshed-access-token");
+    expect(result).toEqual({
+      kind: "active",
+      session: {
+        identityId: id(1),
+        sessionId: id(2),
+        authenticationStrength: "multi_factor",
+        accessTokenIssuedAt: "2026-09-05T00:59:00.000Z",
+        accessTokenExpiresAt: "2026-09-05T01:30:00.000Z",
+        primaryAuthenticatedAt: "2026-09-04T23:00:00.000Z",
+        multiFactorAuthenticatedAt: "2026-09-05T00:10:00.000Z",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("person@example.test");
+    expect(result).not.toEqual(
+      expect.objectContaining({ multiFactorAuthenticatedAt: "2026-09-05T00:59:00.000Z" }),
+    );
   });
 
   it("resolves through the non-mutating projection read", async () => {
