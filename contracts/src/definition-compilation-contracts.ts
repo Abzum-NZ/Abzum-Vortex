@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { applicationDraftV1Schema } from "./application-contracts";
+import { applicationDraftV1Schema, applicationDraftV2Schema } from "./application-contracts";
+import { applicationCompositionCatalogueSnapshotV2Schema } from "./application-composition-v2";
+import { applicationSourceDocumentV2Schema } from "./application-source-contracts";
 import { publishedApplicationDefinitionSchema } from "./application-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
 import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-contracts";
@@ -49,11 +51,30 @@ export const sourceIdentityKindSchema = z.enum([
 ]);
 export type SourceIdentityKind = z.infer<typeof sourceIdentityKindSchema>;
 
+/** V2-only identity vocabulary. The legacy identity decoder remains intentionally closed. */
+export const sourceIdentityKindV2Schema = z.enum([
+  ...sourceIdentityKindSchema.options,
+  "shell",
+  "shell_content_slot",
+]);
+export type SourceIdentityKindV2 = z.infer<typeof sourceIdentityKindV2Schema>;
+
 export const sourceIdentityAssignmentSchema = z
   .object({
     definitionKey: namespacedKeySchema,
     scope: z.string().min(1).max(500),
     kind: sourceIdentityKindSchema,
+    componentOwner: z.string().min(1).max(240),
+    alias: z.string().min(1).max(500),
+    identifier: platformIdSchema,
+  })
+  .strict();
+
+export const sourceIdentityAssignmentV2Schema = z
+  .object({
+    definitionKey: namespacedKeySchema,
+    scope: z.string().min(1).max(500),
+    kind: sourceIdentityKindV2Schema,
     componentOwner: z.string().min(1).max(240),
     alias: z.string().min(1).max(500),
     identifier: platformIdSchema,
@@ -97,6 +118,15 @@ export const definitionResolutionSnapshotSchema = z
   })
   .strict();
 
+export const definitionResolutionSnapshotV2Schema = z
+  .object({
+    contractVersion: z.literal("2.0.0"),
+    fingerprint: fingerprintSchema,
+    definitions: z.array(resolvedDefinitionSchema).min(1),
+    identities: z.array(sourceIdentityAssignmentV2Schema),
+  })
+  .strict();
+
 export const definitionDraftMetadataSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -122,6 +152,18 @@ export const definitionCompilationRequestSchema = z
     resolution: definitionResolutionSnapshotSchema,
     draftMetadata: definitionDraftMetadataSchema.optional(),
     savedConditionRevisions: z.array(savedConditionRevisionAssignmentSchema).optional(),
+  })
+  .strict();
+
+/** Explicit V2-only request; it is not part of the legacy compilation request union yet. */
+export const applicationCompilationRequestV2Schema = z
+  .object({
+    sourceContractVersion: z.literal("2.0.0"),
+    validationContractVersion: z.literal("2.0.0"),
+    source: applicationSourceDocumentV2Schema,
+    resolution: definitionResolutionSnapshotV2Schema,
+    catalogueSnapshot: applicationCompositionCatalogueSnapshotV2Schema,
+    draftMetadata: definitionDraftMetadataSchema,
   })
   .strict();
 
@@ -184,6 +226,20 @@ export const applicationCompilationOutputV1Schema = z
   .object({
     kind: z.literal("application"),
     canonical: applicationDraftV1Schema,
+    artifact: compiledApplicationArtifactSchema,
+    provenance: z.array(definitionProvenanceEntrySchema),
+    dependencyOrder: z.array(namespacedKeySchema),
+    resolvedDependencies: z.array(resolvedDefinitionSchema),
+    resolutionFingerprint: fingerprintSchema,
+  })
+  .strict();
+
+/** Explicit V2-only output; generic Definition output decoding remains V1. */
+export const applicationCompilationOutputV2Schema = z
+  .object({
+    kind: z.literal("application"),
+    validationContractVersion: z.literal("2.0.0"),
+    canonical: applicationDraftV2Schema,
     artifact: compiledApplicationArtifactSchema,
     provenance: z.array(definitionProvenanceEntrySchema),
     dependencyOrder: z.array(namespacedKeySchema),
@@ -298,12 +354,15 @@ export const definitionRuntimeCheckResultSchema = z
   .strict();
 
 export type DefinitionResolutionSnapshot = z.infer<typeof definitionResolutionSnapshotSchema>;
+export type DefinitionResolutionSnapshotV2 = z.infer<typeof definitionResolutionSnapshotV2Schema>;
 export type DefinitionDraftMetadata = z.infer<typeof definitionDraftMetadataSchema>;
 export type SavedConditionRevisionAssignment = z.infer<
   typeof savedConditionRevisionAssignmentSchema
 >;
 export type DefinitionCompilationRequest = z.input<typeof definitionCompilationRequestSchema>;
+export type ApplicationCompilationRequestV2 = z.input<typeof applicationCompilationRequestV2Schema>;
 export type DefinitionCompilationOutput = z.infer<typeof definitionCompilationOutputSchema>;
+export type ApplicationCompilationOutputV2 = z.infer<typeof applicationCompilationOutputV2Schema>;
 export type CompiledDefinitionArtifact = z.infer<typeof compiledDefinitionArtifactSchema>;
 export type DefinitionProvenanceEntry = z.infer<typeof definitionProvenanceEntrySchema>;
 export type PublishedDefinitionHistory = z.infer<typeof publishedDefinitionHistorySchema>;
