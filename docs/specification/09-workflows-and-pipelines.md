@@ -10,6 +10,8 @@ A **workflow** performs durable background work that may branch, wait, retry, co
 
 Vortex remains authoritative for identities, tenant and organisation context, permissions, definitions, records, files, human-input references, connections, and every application side effect. Kestra receives no organisation database credential and cannot grant access or write organisation tables directly.
 
+One operated Kestra instance is shared by Development, Testing, and Production. Environment-specific namespaces, flow identities, signed endpoints, webhook keys, Doppler configurations, target credentials and approval gates prevent a flow from silently changing target authority; this is not a claim of separate process isolation, and no separate instance is required. The topology decision does not assume newly provisioned Development credentials. Named operators may restart or redeploy the shared service as needed after the consistent shared-state recovery prerequisite in [issue #271](https://github.com/Abzum-NZ/Abzum-Vortex/issues/271), while a version or state-database upgrade follows the independent backup, compatibility, disposable-restore and forward-migration proof in [issue #198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198). Operating the shared service never bypasses the separate Production database-delivery approval in [delivery and testing](18-delivery-and-testing.md#branch-flow).
+
 ```mermaid
 sequenceDiagram
     participant V as Vortex
