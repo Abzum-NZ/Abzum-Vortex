@@ -34,6 +34,14 @@ A privileged core concept is allowed only when all four answers are **yes**:
 
 If any answer is no, the concept is an ordinary application capability. A delivery task cannot create an exception implicitly; an exception requires a specification change, an explicit invariant and a review of affected contracts and dependencies.
 
+## Keep the implementation proportionate
+
+Use the smallest implementation that satisfies the documented behaviour. A new counter, fingerprint, state, abstraction or compatibility layer needs a concrete failure case that existing identities, revisions and transactions cannot handle. Reuse existing mechanisms; do not build speculative frameworks or turn every test case into a separate domain concept. Reviewers must identify unnecessary machinery as well as missing safeguards.
+
+For [role changes](groups-and-privileged-access.md#editing-a-role-versus-accepting-permissions), preserve three guarantees: changes are atomic and revision-checked; broadened or restored authority requires explicit fresh acceptance; competing role and assignment changes serialize or refuse as stale without partial effects. Supporting evidence is an implementation detail, not another user-facing approval process. Retain separate continuity checks only where they protect distinct behaviour; merge duplicates, not different safeguards merely because their names sound similar.
+
+The [Access version](data-contracts.md#permission-and-role-contracts) orders access changes. Its change timestamp is observation metadata, not an additional ordering or authorisation decision. Local clock faults belong to environment verification, not new permission semantics; genuine start and expiry checks still use current trusted time.
+
 ## Core inventory
 
 | Retained capability | Platform-level invariant | Owning boundary |

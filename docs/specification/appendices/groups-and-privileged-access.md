@@ -30,6 +30,30 @@ Each role also records a policy continuity number, beginning at one. Every later
 
 Changing privilege classification, weakening policy, granting eligibility or changing membership that supplies eligibility is an access-management operation. It requires current management permission, the grantor's delegated scope and the IAM journey; holding the role for personal use alone cannot authorise it. A lower-security clone is a new governed role and grant, never a shortcut around these checks.
 
+## Editing a role versus accepting permissions
+
+Changing a role's local name, description or activation policy is not permission acceptance. An application-role edit preserves its accepted permission entries, original acceptance evidence and current lifecycle, including a pending-review or unavailable state. It cannot make pending additions live or restore a withdrawn permission. A custom-role edit likewise preserves its selected entries unless the administrator explicitly chooses to replace or refresh that selection. A custom role copied from a template remains independent and retains its original template provenance. The copy may keep a nonempty exact subset of that template's currently assignable permissions, but cannot add unrelated permissions within the copy operation; those require explicit custom-role selection. Accepting a supplied application role uses the complete currently assignable template projection.
+
+Accepting the current application template is a separate operation. It uses the exact currently registered application release and template, not an arbitrary historical release. Replacing or refreshing custom-role permissions also uses exact current permission evidence. Both operations apply the [complete affected-assignment review](data-contracts.md#permission-and-role-contracts) whenever authority is broadened or restored. A standing/activation-required mode change requires that review even when no permission is added; a same-mode policy-detail change does not.
+
+Retirement preserves the role's accepted snapshot and permanently prevents further use or restoration. It must not depend on reading a currently available source application or accepting new permissions. A stale request, duplicate creation, repeated retirement or request that changes none of the stored configuration or acceptance evidence is refused without advancing the role or Access version. There is no separate successful-replay receipt.
+
+```mermaid
+flowchart TD
+    CHANGE[Choose a role change] --> EDIT[Edit local details or activation policy]
+    EDIT --> KEEP[Preserve accepted permissions and lifecycle]
+    CHANGE --> ACCEPT[Explicitly accept or refresh permissions]
+    ACCEPT --> CURRENT[Verify the exact current permission evidence]
+    CURRENT --> REVIEW[Review all affected assignments if access expands or returns]
+    KEEP --> MODE[Review all affected assignments if the access mode changes]
+    CHANGE --> RETIRE[Retire without accepting permissions]
+    REVIEW --> COMMIT[Commit one complete role change]
+    MODE --> COMMIT
+    RETIRE --> COMMIT
+```
+
+These are the required behaviours of the private [role-change composition #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33). The [protected operation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) and [IAM journey #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) must add current caller authority and the permanent-steward safeguard before users can perform them.
+
 ## Eligibility is not active access
 
 | Fact                              | Effect                                                                                                                                                                                 |

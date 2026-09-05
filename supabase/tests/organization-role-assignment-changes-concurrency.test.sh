@@ -767,7 +767,9 @@ begin;
 select pg_catalog.pg_backend_pid()
 \g '$proof_root/expiry-grant.pid'
 set local lock_timeout = '30s';
-select * from vortex_access.coordinate_organization_role_assignment_change(
+select outcome, operation, revision, access_version, starts_at, expires_at,
+  granted_at, changed_at
+from vortex_access.coordinate_organization_role_assignment_change(
   'grant', '$organization_id', '$assignment_expiry_id', null,
   '$role_a_id', 1, 'organization_account', '$account_id', null, 'standing',
   pg_catalog.clock_timestamp(), '$expiry_at'::timestamptz,
@@ -784,10 +786,17 @@ wait_for_database_blocker "$expiry_grant_backend_pid" "$expiry_holder_backend_pi
   exit 1
 }
 wait_for_database_time "$expiry_at"
+expiry_observer_at="$(run_sql "select pg_catalog.clock_timestamp()::text;")"
 touch "$proof_root/expiry-release"
 wait_owned_worker "$expiry_holder_pid"
 if wait_owned_worker "$expiry_grant_pid"; then
   echo 'a grant that expired during its governance wait unexpectedly committed' >&2
+  expiry_recheck_at="$(run_sql "select pg_catalog.clock_timestamp()::text;")"
+  expiry_committed_state="$(run_sql "select pg_catalog.concat_ws('|', starts_at, expires_at, granted_at, changed_at, revision, state) from vortex_access.organization_role_assignments where organization_id = '$organization_id' and role_assignment_id = '$assignment_expiry_id';")"
+  printf 'expiry target: %s\nobserver before release: %s\nobserver after commit: %s\ncommitted assignment: %s\n' \
+    "$expiry_at" "$expiry_observer_at" "$expiry_recheck_at" "$expiry_committed_state" >&2
+  echo 'expiry grant result follows' >&2
+  tail -n 80 -- "$proof_root/expiry-grant.log" >&2
   exit 1
 fi
 grep -q '40001' "$proof_root/expiry-grant.log" || {
