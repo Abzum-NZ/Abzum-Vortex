@@ -211,12 +211,16 @@ Exit proof:
 
 **Outcome:** One permission vocabulary and test catalogue protects database rows and every server surface.
 
+**Central decision delivery order:** [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) follows #33 with strict operation/target contracts, one database permission/delegation decision, its server adapter, and isolation/expiry/concurrency proof. Consume the verified #27 context and exact #32/#33 facts; do not build another TypeScript role evaluator. Bind each action to its actual permission and target, require declared authentication strength, and bound decision validity by the next relevant expiry as well as the Access version. Browser and MCP callers use the same boundary with any credential scope only narrowing authority. Unimplemented required row, field, sharing and public policies refuse final operations until their owning tasks land. No new registry, cache, activity store or administration-only bypass is needed.
+
+[Identity follow-up #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276), owned by Phase 2, supplies genuine verified authentication-method/time evidence before #34's recent-authentication runtime checks and final acceptance. It does not block #33 or #34 contract planning. Token/context issuance is not recent sign-in or MFA; missing qualifying evidence fails closed only for the protected operations that require it. This follow-up adds no hosted configuration, enrollment UI or duplicate session history.
+
 Build:
 
 - One organisation-managed permission, role, assignment, Team and application-access catalogue. Published applications supply immutable role templates; registration creates organisation-local version-pinned registrations without assigning access. Organisation-owned custom roles may select exact scoped permissions across several applications, and updates require explicit review before existing grants broaden. Actual application-engine registration/withdrawal and rendered administration journeys remain #64/#72, consuming the #32/#33/#40 operations.
 - Canonical PostgreSQL allow/refuse function for row operations.
 - Server Access library for files, caches, search, connections, workflows and interfaces.
-- The sole application-role `*` entry expanded only against that exact application's non-administrative permission catalogue and fingerprinted at publication; organisation roles and module permissions remain exact-only.
+- The sole application-role `*` entry expanded only against that exact application's non-administrative permission catalogue and fingerprinted at publication; organisation roles and module permissions remain exact-only. #33 preserves that immutable source evidence separately from the live accepted projection, which also excludes export actions. A shared pure projection handles exact owner scope without label heuristics; a fully excluded wildcard grants nothing.
 - Multiple team memberships per organisation account and within-organisation direct record sharing to an account or team with field allowlists.
 - Reuse the Access-owned organisation version created in Phase 2 for role, Team, assignment, public-policy and sharing changes and next-request revocation.
 - Configurable field-level read/write filtering and trusted actor-relative relationship/condition scopes; conditions are not UI-only filters.
@@ -521,6 +525,7 @@ The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follow
 ### Post-delivery correction track
 
 - [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) corrects literal/reference confusion in completed contract code; it precedes [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249). These are headless contract corrections, not permission to jump straight into a live UI engine.
+- [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) must preserve guided-form content per step under one page shell. Prove exact step-to-content ownership, required slots per step, cross-step identity/dependency validation and lossless V1 conversion before accepting the new representation; a single common page tree is insufficient. Compiler, persistence and adapter slices must all preserve that mapping.
 - [#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257) removes the publication lifetime cap using bounded history/dependency reads. It is a planned headless follow-up to [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) and [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14).
 - The historical Phase 1 delivery remains closed. Post-delivery page-contract defects are tracked under Phase 6's contract-readiness work; the Bugs view exposes them immediately.
 - Native parent/sub-issue membership follows delivery ownership, not a task's old number. [#52](https://github.com/Abzum-NZ/Abzum-Vortex/issues/52) and [#169](https://github.com/Abzum-NZ/Abzum-Vortex/issues/169) belong to Phase 6; [#118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) belongs to Phase 3. New correction and foundation tasks are attached to their owning epics.

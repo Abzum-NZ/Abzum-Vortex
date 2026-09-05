@@ -29,12 +29,22 @@ The result is either **allowed** or **refused**, with a stable reason code suita
 
 ## Where access is enforced
 
-The same rules are expressed through two coordinated implementations:
+The same decision is enforced through coordinated database and server boundaries:
 
 1. A database decision function is the final protection for organisation-owned database rows.
 2. A server access library calls the database decision for row operations and applies the same permission vocabulary to files, caches, search, workflows, connections, programmable interfaces, and the governed MCP surface.
 
 The database function, permission vocabulary, and shared test cases are canonical. The system does not claim that one TypeScript function runs inside PostgreSQL. Parity is proved by the [access test suite](20-quality-and-acceptance.md#organisation-separation-suite).
+
+The server consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. The operation's trusted declaration binds its action, target and exact required permission. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
+
+The database evaluates stored role, assignment and delegation facts once. The server calls that decision and composes the required target restrictions; it does not independently reimplement role evaluation in TypeScript. Browser, server and [MCP](12-connections-and-interfaces.md#governed-mcp-access) operations reach the same boundary. A credential's application or capability restrictions can only narrow current account authority. High-impact operations also require their declared verified authentication strength and recent-authentication evidence.
+
+[Identity evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276) supplies the verified authentication method and time through the existing session/context boundary. Token issue time, token refresh and request-context creation time do not prove recent sign-in or recent MFA. If genuine evidence satisfying the operation's declared strength and maximum age is absent, that protected action is refused; an otherwise valid ordinary session remains usable for operations without that requirement. Access never parses provider claims itself. This does not impose MFA on every operation: recent sign-in and specifically required recent MFA remain distinct requirements.
+
+An allow result is evidence for one operation and verified state, not a reusable permission token. Its private evidence binds the current Access version and an expiry/recheck bound no later than the earliest relevant session, context, account, membership, assignment, delegation or sharing transition. An unchanged Access version cannot keep an expired grant alive. The operation rechecks when that bound is reached. Concurrent changes must yield a decision from wholly old or wholly new valid facts, never a mixture of role, registration and assignment revisions.
+
+Every operation declares which lifecycle, row, field, sharing or public restrictions it needs. Missing or unavailable required policy refuses the final operation; a basic role match is not final authority over a record. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) establishes that closed composition boundary, while [row rules #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35), [scopes #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [fields #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) and the later sharing/interface tasks supply their actual policies. It adds no second operation registry, access-state store or activity writer. Internal evidence is not returned as role labels, permission keys or private record values in a user-facing refusal.
 
 ## Roles
 
@@ -64,6 +74,8 @@ flowchart TD
 When an application is registered for use in an organisation, its exact published permission declarations and supplied role templates become available in that organisation's catalogue. Registration validates the application and bound-module ownership and version evidence through [the permission registry](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32). It creates no user assignment and does not make the application available to every member.
 
 A supplied role template stays part of its immutable application release. Its organisation-local registration records the exact application root, release and catalogue fingerprint; assignments are live organisation data. An administrator may create a separate organisation-owned role from a template and adjust its exact permissions without rewriting the published template. Such a custom role may cover selected permissions across several registered applications, but each permission retains its exact owning application or module scope. A shared display name such as “Manager” never joins two roles or their authority.
+
+Published wildcard expansion and live assignable authority are separate evidence. Preserve the exact immutable source template and its fully resolved source permissions. The live wildcard projection excludes administrative permissions and explicit export actions and contains only permissions owned by that application; it never draws authority from bound modules. A module using the same key cannot make an application-only wildcard ambiguous, while an exact-key template still refuses ambiguous ownership. Exact selection may explicitly request export, subject to the administrator's separate current delegation and acceptance checks. An all-excluded wildcard can be represented as a prepared template with no live permissions, but cannot become an active assignable role. [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) uses one shared projection rule; it does not rewrite published V1 bytes or infer security meaning from permission labels or key text.
 
 Permission resolution uses the organisation and permanent owning definition and permission identities, not a display label or a bare key alone. This distinguishes independent applications with identical display names or authored permission keys; it does not relax Definition's rules for unique local application keys. Application access, record visibility and field restrictions remain separate requirements even when one organisation role contains permissions for several applications.
 
@@ -266,7 +278,7 @@ The recipient interface must remove previously displayed shared values when that
 - Organisation-account, invitation, role, Team and runtime-setting administration requires the exact organisation permission through the central Access decision as well as an active organisation context. Membership, application administration and tenant-administrator assignment are not substitutes. [Protected administration](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) must consume the shared role/permission foundation before exposing those operations; it must not introduce a temporary tenant-capability bypass.
 - A person may assign only permissions within their explicit delegation scope, and may grant management authority only within their own effective management scope. Holding a permission for personal use alone does not grant permission to assign it to others.
 - The last effective permanent tenant steward and the last effective permanent organisation steward cannot be removed, expired or stripped of the required powers by any actor until a replacement is active. The organisation invariant is defined above; tenant stewardship is separately scoped and grants no organisation-data access.
-- High-impact changes require recent sign-in confirmation.
+- High-impact changes require recent sign-in confirmation at the operation's declared authentication strength; specifically MFA-required operations need genuine recent MFA evidence under [the same Identity contract](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276).
 - Tenant-administrator, hierarchy, role, organisation-account, team, direct-share, public-access, connection-secret, export, retention, entitlement and grant-consent changes are written to [activity history](14-activity-privacy-and-retention.md).
 
 ## Acceptance examples
