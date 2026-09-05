@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { loadDatabaseVerificationManifest } from "./database-verification-manifest.mjs";
 
 const root = process.cwd();
 const config = await readFile(resolve(root, "supabase/config.toml"), "utf8");
@@ -8,18 +9,10 @@ const projectId = config.match(/^project_id\s*=\s*"([A-Za-z0-9_-]+)"/m)?.[1];
 
 if (!projectId) throw new Error("Local Supabase project_id is missing or invalid");
 
-const scripts = [
-  "tenant-organization-concurrency.test.sh",
-  "identity-invitation-concurrency.test.sh",
-  "access-version-concurrency.test.sh",
-  "organization-request-context-concurrency.test.sh",
-  "definition-publication-concurrency.test.sh",
-  "definition-consumer-read-concurrency.test.sh",
-  "definition-history-restore-concurrency.test.sh",
-];
+const manifest = await loadDatabaseVerificationManifest(root);
 
-for (const filename of scripts) {
-  const script = await readFile(resolve(root, "supabase/tests", filename), "utf8");
+for (const { proof } of manifest.concurrencyProofs) {
+  const script = await readFile(resolve(root, ...proof.split("/")), "utf8");
   const result = spawnSync(
     "docker",
     ["exec", "--interactive", "--user", "postgres", `supabase_db_${projectId}`, "bash", "-s"],

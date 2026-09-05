@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "concurrencyProofs": [
+    {
+      "migration": "supabase/migrations/20260903174244_tenant_organization_foundation.sql",
+      "proof": "supabase/tests/tenant-organization-concurrency.test.sh",
+      "label": "tenant and organisation"
+    },
+    {
+      "migration": "supabase/migrations/20260903231258_definition_publication_operations.sql",
+      "proof": "supabase/tests/definition-publication-concurrency.test.sh",
+      "label": "Definition publication"
+    },
+    {
+      "migration": "supabase/migrations/20260904025500_definition_consumer_reads.sql",
+      "proof": "supabase/tests/definition-consumer-read-concurrency.test.sh",
+      "label": "Definition consumer read"
+    },
+    {
+      "migration": "supabase/migrations/20260904040758_definition_history_restore.sql",
+      "proof": "supabase/tests/definition-history-restore-concurrency.test.sh",
+      "label": "Definition history and restore"
+    },
+    {
+      "migration": "supabase/migrations/20260904094030_identity_accounts_invitations.sql",
+      "proof": "supabase/tests/identity-invitation-concurrency.test.sh",
+      "label": "Identity invitation"
+    },
+    {
+      "migration": "supabase/migrations/20260904112625_access_version_foundation.sql",
+      "proof": "supabase/tests/access-version-concurrency.test.sh",
+      "label": "Access version"
+    },
+    {
+      "migration": "supabase/migrations/20260905043000_organization_request_context.sql",
+      "proof": "supabase/tests/organization-request-context-concurrency.test.sh",
+      "label": "Organisation request context"
+    }
+  ],
+  "lintSchemas": [
+    "public",
+    "vortex_context",
+    "vortex_identity",
+    "vortex_definition",
+    "vortex_access"
+  ]
+}

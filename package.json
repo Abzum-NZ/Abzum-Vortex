@@ -28,7 +28,7 @@
     "db:new": "pnpm auth:local:prepare && supabase migration new",
     "db:test": "pnpm auth:local:prepare && supabase test db",
     "db:concurrency": "node tooling/supabase/run-local-concurrency-proof.mjs",
-    "db:lint": "pnpm auth:local:prepare && supabase db lint --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access --level warning --fail-on error",
+    "db:lint": "pnpm auth:local:prepare && node tooling/supabase/run-local-database-lint.mjs",
     "db:verify": "pnpm db:reset && pnpm db:test && pnpm db:concurrency && pnpm db:lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
