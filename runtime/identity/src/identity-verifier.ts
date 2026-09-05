@@ -79,6 +79,43 @@ const parsePublishableKey = (input: string): string => {
 const audienceContains = (audience: string | string[], expected: string): boolean =>
   typeof audience === "string" ? audience === expected : audience.includes(expected);
 
+const primaryAuthenticationMethods = new Set(["password", "magiclink"]);
+const multiFactorAuthenticationMethods = new Set(["totp", "mfa/phone", "mfa/webauthn"]);
+
+const authenticationEvidence = (
+  claims: ReturnType<typeof supabaseIdentityClaimsSchema.parse>,
+  nowSeconds: number,
+): Readonly<{
+  primaryAuthenticatedAt?: string;
+  multiFactorAuthenticatedAt?: string;
+}> => {
+  if (claims.amr === undefined || claims.amr.every((entry) => typeof entry === "string")) return {};
+
+  let primaryAuthenticatedAt: number | undefined;
+  let multiFactorAuthenticatedAt: number | undefined;
+  for (const entry of claims.amr) {
+    if (typeof entry === "string") continue;
+    if (entry.timestamp > claims.iat || entry.timestamp > nowSeconds) continue;
+
+    if (primaryAuthenticationMethods.has(entry.method))
+      primaryAuthenticatedAt = Math.max(primaryAuthenticatedAt ?? 0, entry.timestamp);
+
+    if (claims.aal === "aal2" && multiFactorAuthenticationMethods.has(entry.method))
+      multiFactorAuthenticatedAt = Math.max(multiFactorAuthenticatedAt ?? 0, entry.timestamp);
+  }
+
+  return {
+    ...(primaryAuthenticatedAt === undefined
+      ? {}
+      : { primaryAuthenticatedAt: new Date(primaryAuthenticatedAt * 1_000).toISOString() }),
+    ...(multiFactorAuthenticatedAt === undefined
+      ? {}
+      : {
+          multiFactorAuthenticatedAt: new Date(multiFactorAuthenticatedAt * 1_000).toISOString(),
+        }),
+  };
+};
+
 const projectVerifiedIdentity = (
   authority: IdentityAuthority,
   result: NonNullable<ClaimsVerificationResult["data"]>,
@@ -128,6 +165,7 @@ const projectVerifiedIdentity = (
     issuedAt: new Date(parsedClaims.data.iat * 1_000).toISOString(),
     expiresAt: new Date(parsedClaims.data.exp * 1_000).toISOString(),
     authenticationStrength: parsedClaims.data.aal === "aal2" ? "multi_factor" : "single_factor",
+    ...authenticationEvidence(parsedClaims.data, nowSeconds),
     keyId: result.header.kid,
   });
   if (!verifiedIdentity.success) return refuse("vortex.identity.invalid_verified_identity");

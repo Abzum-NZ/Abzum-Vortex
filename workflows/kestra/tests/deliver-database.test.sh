@@ -17,6 +17,12 @@ git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
 git config --global \
   "url.file://${test_root}/remote.git.insteadOf" \
   https://github.com/Abzum-NZ/Abzum-Vortex.git
+verification_manifest="${source_repository}/workflows/kestra/database-verification.json"
+readonly verification_manifest
+verification_proof_count="$(jq '.concurrencyProofs | length' "$verification_manifest")"
+readonly verification_proof_count
+verification_lint_schema_count="$(jq '.lintSchemas | length' "$verification_manifest")"
+readonly verification_lint_schema_count
 
 export VORTEX_DELIVERY_ENVIRONMENT=production
 export VORTEX_EXPECTED_REF=refs/heads/main
@@ -29,6 +35,8 @@ export VORTEX_EVIDENCE_PATH=evidence.json
 export VORTEX_DELIVERY_OPERATION=prepare
 "$delivery_script"
 jq --exit-status \
+  --argjson expected_proof_count "$verification_proof_count" \
+  --argjson expected_lint_schema_count "$verification_lint_schema_count" \
   '.schema_version == 2 and
    .status == "prepared" and
    .environment == "production" and
@@ -36,8 +44,8 @@ jq --exit-status \
    .approval == null and
    (.runner.sha256 | test("^[0-9a-f]{64}$")) and
    (.verification_manifest.sha256 | test("^[0-9a-f]{64}$")) and
-   (.selected_concurrency_proofs | length) == 7 and
-   (.selected_lint_schemas | length) == 5 and
+   (.selected_concurrency_proofs | length) == $expected_proof_count and
+   (.selected_lint_schemas | length) == $expected_lint_schema_count and
    (.completed_concurrency_proofs | length) == 0 and
    (.completed_lint_schemas | length) == 0 and
    (.migrations | length) > 0' \
@@ -74,76 +82,20 @@ assert_partial_concurrency_release_refused() {
   export VORTEX_GITHUB_COMMIT="$commit"
 }
 
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260903174244_tenant_organization_foundation.sql \
-  supabase/tests/tenant-organization-concurrency.test.sh \
-  supabase/migrations/20260903174244_tenant_organization_foundation.sql \
-  "tenant and organisation migration has no concurrency proof"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260903174244_tenant_organization_foundation.sql \
-  supabase/tests/tenant-organization-concurrency.test.sh \
-  supabase/tests/tenant-organization-concurrency.test.sh \
-  "tenant and organisation concurrency proof has no migration"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260903231258_definition_publication_operations.sql \
-  supabase/tests/definition-publication-concurrency.test.sh \
-  supabase/migrations/20260903231258_definition_publication_operations.sql \
-  "Definition publication migration has no concurrency proof"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260903231258_definition_publication_operations.sql \
-  supabase/tests/definition-publication-concurrency.test.sh \
-  supabase/tests/definition-publication-concurrency.test.sh \
-  "Definition publication concurrency proof has no migration"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260904025500_definition_consumer_reads.sql \
-  supabase/tests/definition-consumer-read-concurrency.test.sh \
-  supabase/migrations/20260904025500_definition_consumer_reads.sql \
-  "Definition consumer read migration has no concurrency proof"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260904025500_definition_consumer_reads.sql \
-  supabase/tests/definition-consumer-read-concurrency.test.sh \
-  supabase/tests/definition-consumer-read-concurrency.test.sh \
-  "Definition consumer read concurrency proof has no migration"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260904040758_definition_history_restore.sql \
-  supabase/tests/definition-history-restore-concurrency.test.sh \
-  supabase/migrations/20260904040758_definition_history_restore.sql \
-  "Definition history and restore migration has no concurrency proof"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260904040758_definition_history_restore.sql \
-  supabase/tests/definition-history-restore-concurrency.test.sh \
-  supabase/tests/definition-history-restore-concurrency.test.sh \
-  "Definition history and restore concurrency proof has no migration"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260904094030_identity_accounts_invitations.sql \
-  supabase/tests/identity-invitation-concurrency.test.sh \
-  supabase/migrations/20260904094030_identity_accounts_invitations.sql \
-  "Identity invitation migration has no concurrency proof"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260904094030_identity_accounts_invitations.sql \
-  supabase/tests/identity-invitation-concurrency.test.sh \
-  supabase/tests/identity-invitation-concurrency.test.sh \
-  "Identity invitation concurrency proof has no migration"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260904112625_access_version_foundation.sql \
-  supabase/tests/access-version-concurrency.test.sh \
-  supabase/migrations/20260904112625_access_version_foundation.sql \
-  "Access version migration has no concurrency proof"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260904112625_access_version_foundation.sql \
-  supabase/tests/access-version-concurrency.test.sh \
-  supabase/tests/access-version-concurrency.test.sh \
-  "Access version concurrency proof has no migration"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260905043000_organization_request_context.sql \
-  supabase/tests/organization-request-context-concurrency.test.sh \
-  supabase/migrations/20260905043000_organization_request_context.sql \
-  "Organisation request context migration has no concurrency proof"
-assert_partial_concurrency_release_refused \
-  supabase/migrations/20260905043000_organization_request_context.sql \
-  supabase/tests/organization-request-context-concurrency.test.sh \
-  supabase/tests/organization-request-context-concurrency.test.sh \
-  "Organisation request context concurrency proof has no migration"
+while IFS=$'\t' read -r migration proof label; do
+  assert_partial_concurrency_release_refused \
+    "$migration" \
+    "$proof" \
+    "$migration" \
+    "${label} migration has no concurrency proof"
+  assert_partial_concurrency_release_refused \
+    "$migration" \
+    "$proof" \
+    "$proof" \
+    "${label} concurrency proof has no migration"
+done < <(jq --raw-output \
+  '.concurrencyProofs[] | [.migration, .proof, .label] | @tsv' \
+  "$verification_manifest")
 
 invalid_manifest_checkout="$test_root/invalid-manifest-checkout"
 git clone --quiet "$test_root/remote.git" "$invalid_manifest_checkout"
@@ -455,6 +407,10 @@ jq \
 mv \
   "$fixture_checkout/workflows/kestra/database-verification.json.next" \
   "$fixture_checkout/workflows/kestra/database-verification.json"
+parity_proof_count="$((verification_proof_count + 1))"
+readonly parity_proof_count
+parity_lint_schema_count="$((verification_lint_schema_count + 1))"
+readonly parity_lint_schema_count
 printf '%s\n' '# Disposable newer protected-commit runner.' \
   >>"$fixture_checkout/workflows/kestra/scripts/run-database-delivery.sh"
 git -C "$fixture_checkout" add --all -- \
@@ -475,11 +431,13 @@ jq --exit-status \
       "${fixture_commit}:workflows/kestra/scripts/run-database-delivery.sh" |
       sha256sum | cut -d' ' -f1
   )" \
+  --argjson expected_proof_count "$parity_proof_count" \
+  --argjson expected_lint_schema_count "$parity_lint_schema_count" \
   '.schema_version == 2 and
    .status == "prepared" and
    .runner.sha256 == $expected_runner and
-   (.selected_concurrency_proofs | length) == 8 and
-   (.selected_lint_schemas | length) == 6 and
+   (.selected_concurrency_proofs | length) == $expected_proof_count and
+   (.selected_lint_schemas | length) == $expected_lint_schema_count and
    (.selected_lint_schemas[-1]) == "vortex_runner_parity"' \
   "$VORTEX_EVIDENCE_PATH" >/dev/null
 
@@ -487,6 +445,16 @@ migration_set_sha256="$(jq --raw-output '.migration_set_sha256' "$VORTEX_EVIDENC
 runner_sha256="$(jq --raw-output '.runner.sha256' "$VORTEX_EVIDENCE_PATH")"
 manifest_sha256="$(jq --raw-output '.verification_manifest.sha256' "$VORTEX_EVIDENCE_PATH")"
 coverage_sha256="$(jq --raw-output '.verification_coverage_sha256' "$VORTEX_EVIDENCE_PATH")"
+selected_concurrency_proofs="$(
+  jq --compact-output '.selected_concurrency_proofs' "$VORTEX_EVIDENCE_PATH"
+)"
+selected_lint_schemas="$(jq --compact-output '.selected_lint_schemas' "$VORTEX_EVIDENCE_PATH")"
+prepared_completed_concurrency_proofs="$(
+  jq --compact-output '.completed_concurrency_proofs' "$VORTEX_EVIDENCE_PATH"
+)"
+prepared_completed_lint_schemas="$(
+  jq --compact-output '.completed_lint_schemas' "$VORTEX_EVIDENCE_PATH"
+)"
 export VORTEX_DELIVERY_OPERATION=apply
 export VORTEX_APPROVED=true
 export VORTEX_APPROVING_ACTOR=local-reviewer
@@ -503,6 +471,10 @@ export VORTEX_TESTING_EVIDENCE_POSTGRES_MAJOR=17
 export VORTEX_TESTING_EVIDENCE_RUNNER_SHA256="$runner_sha256"
 export VORTEX_TESTING_EVIDENCE_MANIFEST_SHA256="$manifest_sha256"
 export VORTEX_TESTING_EVIDENCE_COVERAGE_SHA256="$coverage_sha256"
+export VORTEX_TESTING_EVIDENCE_SELECTED_CONCURRENCY_PROOFS="$selected_concurrency_proofs"
+export VORTEX_TESTING_EVIDENCE_COMPLETED_CONCURRENCY_PROOFS="$prepared_completed_concurrency_proofs"
+export VORTEX_TESTING_EVIDENCE_SELECTED_LINT_SCHEMAS="$selected_lint_schemas"
+export VORTEX_TESTING_EVIDENCE_COMPLETED_LINT_SCHEMAS="$prepared_completed_lint_schemas"
 
 export VORTEX_TESTING_EVIDENCE_STATUS=failed
 if "$older_bootstrap" >"$test_root/refusal.log" 2>&1; then
@@ -514,6 +486,51 @@ grep --fixed-strings --quiet \
   "$test_root/refusal.log"
 
 export VORTEX_TESTING_EVIDENCE_STATUS=succeeded
+
+assert_testing_coverage_refused() {
+  local name="$1"
+  local expected_message="$2"
+  local log="$test_root/${name}.log"
+
+  if "$older_bootstrap" >"$log" 2>&1; then
+    echo "expected ${name} Testing coverage to be refused" >&2
+    exit 1
+  fi
+  grep --fixed-strings --quiet "$expected_message" "$log"
+  if grep --fixed-strings --quiet "VORTEX_DOPPLER_TOKEN is not set" "$log"; then
+    echo "expected ${name} Testing coverage to be refused before secret access" >&2
+    exit 1
+  fi
+}
+
+assert_testing_coverage_refused \
+  prepared-coverage \
+  "stored Testing evidence did not complete the current verification coverage"
+
+export VORTEX_TESTING_EVIDENCE_COMPLETED_CONCURRENCY_PROOFS="$(
+  jq --compact-output '.[0:-1]' <<<"$selected_concurrency_proofs"
+)"
+export VORTEX_TESTING_EVIDENCE_COMPLETED_LINT_SCHEMAS="$selected_lint_schemas"
+assert_testing_coverage_refused \
+  partial-coverage \
+  "stored Testing evidence did not complete the current verification coverage"
+
+export VORTEX_TESTING_EVIDENCE_COMPLETED_CONCURRENCY_PROOFS="$selected_concurrency_proofs"
+export VORTEX_TESTING_EVIDENCE_SELECTED_LINT_SCHEMAS="$(
+  jq --compact-output '. + ["vortex_extra"]' <<<"$selected_lint_schemas"
+)"
+assert_testing_coverage_refused \
+  extra-coverage \
+  "stored Testing evidence selected different verification coverage"
+
+export VORTEX_TESTING_EVIDENCE_SELECTED_LINT_SCHEMAS="$selected_lint_schemas"
+export VORTEX_TESTING_EVIDENCE_COMPLETED_LINT_SCHEMAS=not-json
+assert_testing_coverage_refused \
+  malformed-coverage \
+  "stored Testing evidence contains invalid verification coverage"
+
+export VORTEX_TESTING_EVIDENCE_COMPLETED_LINT_SCHEMAS="$selected_lint_schemas"
+
 export VORTEX_TESTING_EVIDENCE_SCHEMA_VERSION=1
 if "$older_bootstrap" >"$test_root/v1-evidence.log" 2>&1; then
   echo "expected a historical v1 receipt to be refused for Production approval" >&2
@@ -637,7 +654,8 @@ if "$older_bootstrap" >"$test_root/lint-failure.log" 2>&1; then
   exit 1
 fi
 test ! -e "$VORTEX_EVIDENCE_PATH"
-test "$(wc -l <"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER" | tr -d '[:space:]')" = "8"
+test "$(wc -l <"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER" | tr -d '[:space:]')" = \
+  "$parity_proof_count"
 unset VORTEX_TEST_FAIL_DATABASE_LINT
 
 rm -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
@@ -668,39 +686,20 @@ rm -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 "$older_bootstrap"
 test -f "$VORTEX_TEST_PG_PROVE_MARKER"
 test -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-grep --fixed-strings --quiet \
-  "supabase/tests/tenant-organization-concurrency.test.sh" \
-  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-grep --fixed-strings --quiet \
-  "supabase/tests/definition-publication-concurrency.test.sh" \
-  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-grep --fixed-strings --quiet \
-  "supabase/tests/definition-consumer-read-concurrency.test.sh" \
-  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-grep --fixed-strings --quiet \
-  "supabase/tests/definition-history-restore-concurrency.test.sh" \
-  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-grep --fixed-strings --quiet \
-  "supabase/tests/identity-invitation-concurrency.test.sh" \
-  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-grep --fixed-strings --quiet \
-  "supabase/tests/access-version-concurrency.test.sh" \
-  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-grep --fixed-strings --quiet \
-  "supabase/tests/organization-request-context-concurrency.test.sh" \
-  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-grep --fixed-strings --quiet \
-  "runner-parity-concurrency.test.sh" \
-  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+while read -r proof; do
+  grep --fixed-strings --quiet "$proof" "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+done < <(jq --raw-output '.concurrencyProofs[].proof' \
+  "$fixture_checkout/workflows/kestra/database-verification.json")
 grep --fixed-strings --quiet \
   "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access,vortex_runner_parity --level warning --fail-on error" \
   "$VORTEX_TEST_SUPABASE_CALL_MARKER"
 jq --exit-status \
+  --argjson expected_proof_count "$parity_proof_count" \
   '.status == "succeeded" and
    .environment == "production" and
    .schema_version == 2 and
    .applied_migration_count == (.migrations | length) and
-   (.completed_concurrency_proofs | length) == 8 and
+   (.completed_concurrency_proofs | length) == $expected_proof_count and
    .completed_concurrency_proofs == .selected_concurrency_proofs and
    .completed_lint_schemas == .selected_lint_schemas and
    .approval.approved_by == "local-reviewer" and

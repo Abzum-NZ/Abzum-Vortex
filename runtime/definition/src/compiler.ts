@@ -10,6 +10,8 @@ import {
   definitionCompilationRequestSchema,
   definitionSourceDocumentSchema,
   moduleDraftSchema,
+  readModuleSourceRecordOwnershipModeV1,
+  writeModuleRecordOwnershipModeV1,
   type DefinitionCompilationOutput,
   type DefinitionProvenanceEntry,
   type DefinitionResolutionSnapshot,
@@ -2099,10 +2101,9 @@ function compileModule(
         recordType.storage_scope === "organisation_shared"
           ? "organization_shared"
           : recordType.storage_scope,
-      ownershipMode:
-        recordType.ownership_mode === "organisation_account"
-          ? "organization_account"
-          : recordType.ownership_mode,
+      ownershipMode: writeModuleRecordOwnershipModeV1(
+        readModuleSourceRecordOwnershipModeV1(recordType.ownership_mode),
+      ),
       ...(recordType.ownership_relationship
         ? {
             ownershipRelationshipId: resolution.relationship(

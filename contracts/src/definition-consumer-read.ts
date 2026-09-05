@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { applicationContentSchema } from "./application-contracts";
+import { applicationContentV1Schema } from "./application-contracts";
 import { correlationIdSchema } from "./common";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
 import {
@@ -83,6 +83,15 @@ const definitionConsumerReadResultCommon = {
  * The only release projection exposed to Definition-service consumers.
  * It deliberately excludes authored source, publication evidence and persistence details.
  */
+export const applicationDefinitionConsumerReadResultV1Schema = z
+  .object({
+    kind: z.literal("application"),
+    rootId: applicationRootIdSchema,
+    content: applicationContentV1Schema,
+    ...definitionConsumerReadResultCommon,
+  })
+  .strict();
+
 export const definitionConsumerReadResultSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -92,14 +101,7 @@ export const definitionConsumerReadResultSchema = z.discriminatedUnion("kind", [
       ...definitionConsumerReadResultCommon,
     })
     .strict(),
-  z
-    .object({
-      kind: z.literal("application"),
-      rootId: applicationRootIdSchema,
-      content: applicationContentSchema,
-      ...definitionConsumerReadResultCommon,
-    })
-    .strict(),
+  applicationDefinitionConsumerReadResultV1Schema,
 ]);
 
 export type DefinitionConsumerReadCommand = z.infer<typeof definitionConsumerReadCommandSchema>;

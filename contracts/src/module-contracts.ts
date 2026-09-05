@@ -23,6 +23,7 @@ import {
   storageContractIdSchema,
   workflowIdSchema,
 } from "./identifiers";
+import { moduleRecordOwnershipModeV1Schema } from "./record-ownership-compatibility";
 import {
   moduleDefinitionEnvelopeSchema,
   publishedDefinitionReferenceSchema,
@@ -772,7 +773,7 @@ export const recordTypeDefinitionSchema = z
     titleFieldId: fieldIdSchema,
     storageContractId: storageContractIdSchema,
     storageScope: z.enum(["organization_shared", "application_contained"]),
-    ownershipMode: z.enum(["none", "organization_account", "team", "inherited"]),
+    ownershipMode: moduleRecordOwnershipModeV1Schema,
     ownershipRelationshipId: containedComponentIdSchema.optional(),
     fields: z.array(fieldDefinitionSchema).min(1).max(500),
     relationships: z.array(relationshipDefinitionSchema),

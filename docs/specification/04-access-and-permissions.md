@@ -4,6 +4,8 @@
 
 ## One access decision
 
+The current model is [Roles, Groups and privileged role activation](appendices/groups-and-privileged-access.md). Groups collect organisation accounts; roles define permissions. Eligibility for a PIM-protected role grants no use until that account completes its required activation. The same central decision enforces both ordinary and privileged access.
+
 Every protected operation asks one question: **May this person perform this action on this thing in this organisation?**
 
 ```mermaid
@@ -23,18 +25,28 @@ The decision receives:
 - The requested action.
 - The target definition, record, field, file, workflow, connection, or administration function.
 - The current [application](07-applications-pages-and-themes.md), when the operation occurs inside an application.
-- Record ownership, team, explicit sharing, and lifecycle state when a [record](06-records-and-lifecycle.md) is involved.
+- Record ownership, group, explicit sharing, and lifecycle state when a [record](06-records-and-lifecycle.md) is involved.
 
 The result is either **allowed** or **refused**, with a stable reason code suitable for [activity history](14-activity-privacy-and-retention.md). An error, missing value, unknown permission, or unavailable access service produces **refused**.
 
 ## Where access is enforced
 
-The same rules are expressed through two coordinated implementations:
+The same decision is enforced through coordinated database and server boundaries:
 
 1. A database decision function is the final protection for organisation-owned database rows.
 2. A server access library calls the database decision for row operations and applies the same permission vocabulary to files, caches, search, workflows, connections, programmable interfaces, and the governed MCP surface.
 
 The database function, permission vocabulary, and shared test cases are canonical. The system does not claim that one TypeScript function runs inside PostgreSQL. Parity is proved by the [access test suite](20-quality-and-acceptance.md#organisation-separation-suite).
+
+The server consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. The operation's trusted declaration binds its action, target and exact required permission. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
+
+The database evaluates stored role, assignment and delegation facts once. The server calls that decision and composes the required target restrictions; it does not independently reimplement role evaluation in TypeScript. Browser, server and [MCP](12-connections-and-interfaces.md#governed-mcp-access) operations reach the same boundary. A credential's application or capability restrictions can only narrow current account authority. High-impact operations also require their declared verified authentication strength and recent-authentication evidence.
+
+[Identity evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276) supplies the verified authentication method and time through the existing session/context boundary. Token issue time, token refresh and request-context creation time do not prove recent sign-in or recent MFA. If genuine evidence satisfying the operation's declared strength and maximum age is absent, that protected action is refused; an otherwise valid ordinary session remains usable for operations without that requirement. Access never parses provider claims itself. This does not impose MFA on every operation: recent sign-in and specifically required recent MFA remain distinct requirements.
+
+An allow result is evidence for one operation and verified state, not a reusable permission token. Its private evidence binds the current Access version and an expiry/recheck bound no later than the earliest relevant session, context, account, membership, assignment, delegation or sharing transition. An unchanged Access version cannot keep an expired grant alive. The operation rechecks when that bound is reached. Concurrent changes must yield a decision from wholly old or wholly new valid facts, never a mixture of role, registration and assignment revisions.
+
+Every operation declares which lifecycle, row, field, sharing or public restrictions it needs. Missing or unavailable required policy refuses the final operation; a basic role match is not final authority over a record. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) establishes that closed composition boundary, while [row rules #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35), [scopes #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [fields #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) and the later sharing/interface tasks supply their actual policies. It adds no second operation registry, access-state store or activity writer. Internal evidence is not returned as role labels, permission keys or private record values in a user-facing refusal.
 
 ## Roles
 
@@ -44,9 +56,9 @@ All user-facing role grants and access-expanding changes use the [IAM Vortex app
 
 ### One organisation-managed catalogue
 
-All organisation roles, application-role registrations, permission availability, Teams and assignments are managed within one organisation. An application declares its permissions and reusable role templates; it does not operate an independent user or permission administration system. Organisation administrators manage both organisation-wide and application-specific access through the same [administration operations](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
+All organisation roles, application-role registrations, permission availability, Groups and assignments are managed within one organisation. An application declares its permissions and reusable role templates; it does not operate an independent user or permission administration system. Organisation administrators manage both organisation-wide and application-specific access through the same [administration operations](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
 
-An organisation account, not the global identity, receives a direct assignment. Roles, Teams and assignments from another organisation or a parent organisation are never inherited implicitly. Tenant structure administration remains a separate authority and grants no organisation-management or application-data permission.
+An organisation account, not the global identity, receives a direct assignment. Roles, Groups and assignments from another organisation or a parent organisation are never inherited implicitly. Tenant structure administration remains a separate authority and grants no organisation-management or application-data permission.
 
 ```mermaid
 flowchart TD
@@ -54,7 +66,7 @@ flowchart TD
     REG --> CAT[One organisation permission and role catalogue]
     ADMIN[Authorised organisation administrator] --> CAT
     CAT --> ROLE[Organisation-wide or application-specific roles]
-    ROLE --> ASSIGN[Explicit assignments to organisation accounts or Teams]
+    ROLE --> ASSIGN[Explicit assignments to organisation accounts or Groups]
     ASSIGN --> CHECK[One access decision for the exact target]
     CHECK --> RESULT[Allowed pages, actions, records and fields]
 ```
@@ -65,15 +77,59 @@ When an application is registered for use in an organisation, its exact publishe
 
 A supplied role template stays part of its immutable application release. Its organisation-local registration records the exact application root, release and catalogue fingerprint; assignments are live organisation data. An administrator may create a separate organisation-owned role from a template and adjust its exact permissions without rewriting the published template. Such a custom role may cover selected permissions across several registered applications, but each permission retains its exact owning application or module scope. A shared display name such as “Manager” never joins two roles or their authority.
 
+Published wildcard expansion and live assignable authority are separate evidence. Preserve the exact immutable source template and its fully resolved source permissions. The live wildcard projection excludes administrative permissions and explicit export actions and contains only permissions owned by that application; it never draws authority from bound modules. A module using the same key cannot make an application-only wildcard ambiguous, while an exact-key template still refuses ambiguous ownership. Exact selection may explicitly request export, subject to the administrator's separate current delegation and acceptance checks. An all-excluded wildcard can be represented as a prepared template with no live permissions, but cannot become an active assignable role. [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) uses one shared projection rule; it does not rewrite published V1 bytes or infer security meaning from permission labels or key text.
+
 Permission resolution uses the organisation and permanent owning definition and permission identities, not a display label or a bare key alone. This distinguishes independent applications with identical display names or authored permission keys; it does not relax Definition's rules for unique local application keys. Application access, record visibility and field restrictions remain separate requirements even when one organisation role contains permissions for several applications.
 
 Publishing a new application release changes no live registration or assignment. Only an explicitly authorised registration upgrade or withdrawal changes the active organisation release and permission availability. That change and its Access-version invalidation commit together through the owning application operation.
+
+Registration makes templates available but creates no assignable local role or assignment. Accepting a template as a local role is a separate explicit catalogue operation; assigning that role is another protected grant. Withdrawal checks the exact current registration and expected revision inside the protected transaction. It does not need to reload the published definition or reconstruct a template being removed, so a Definition-read outage cannot prevent authorised withdrawal. Registering, upgrading or reactivating still requires verified exact release evidence.
 
 An activated application update cannot silently broaden an assigned role. Added permissions, changed permission meaning and changed role grants require explicit authorised review before existing assignments can use the expanded access. An organisation-owned custom role is not overwritten by an application update. Removed permissions and unavailable applications cannot remain usable through old role registrations or cached answers. Historical assignment and release evidence is retained without retaining authority.
 
 Bound-module permission availability records its active supplying registrations and exact module release evidence. Withdrawing one application does not remove a module permission still supplied by another active compatible registration in that organisation; withdrawing the last supplying registration makes it unavailable. This catalogue availability never supplies application-entry or record visibility by itself. In particular, an application-contained record scope remains bound to its own application even when another application supplies the same module permission.
 
 A withdrawn registration may be explicitly reactivated using its current revision and a validated target release. Reactivation creates new registration evidence; it is not an automatic retry or a resurrection of old grants. Existing use assignments and bounded delegation require fresh authorised acceptance before becoming effective again. The [application operation #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) coordinates that acceptance through [Access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
+
+The same protection applies when an otherwise active application removes a permission and later restores it, changes its meaning and later changes it back, or removes and restores a supplied role template. An unchanged name or permanent identifier does not restore the old authority. [Role storage #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) records whether each exact permission has remained continuously available with the same meaning in its application context. A break requires new acceptance; display-only changes do not. Another application's use of the same module cannot repair that break for this application.
+
+Fresh acceptance approves one exact role permission set for an explicitly listed set of existing account or Group assignments. The request binds their identifiers and current revisions; a changed, missing or additional assignment requires a refreshed request. [IAM](appendices/iam-application.md) presents those affected assignments, while [the protected operation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) rechecks the administrator's current authority before committing. Assignments reference the accepted role rather than storing duplicate permission lists. Revoked assignments are not restored, and a later assignment is a separately authorised grant. Bounded authority to grant permissions requires its own explicit acceptance and never follows a use-role approval automatically.
+
+Changing a role between standing and activation-required assignment modes, including returning to a previous mode, requires that same complete non-revoked assignment manifest. The change never converts assignments: only a matching-kind, otherwise valid assignment can be used after explicit review. Eligible assignments still need a fresh activation. Changing only activation duration or other requirements within activation-required mode leaves eligibility in place but invalidates old policy-bound requests and activations. These [policy compatibility rules](appendices/groups-and-privileged-access.md#privileged-classification-and-policy) avoid unnecessary regrants without permitting silent restoration.
+
+```mermaid
+flowchart LR
+    A[Permission accepted for a role] --> B[Permission removed or meaning changed]
+    B --> C[Old access no longer effective]
+    C --> D[Permission becomes available again]
+    D --> E[Access remains ineffective]
+    E --> F[Authorised review of exact role and affected assignments]
+    F --> G[New accepted role revision]
+```
+
+Application updates reduce an accepted application-role permission set when permissions or template entries disappear; returning entries count as additions requiring acceptance. Organisation-owned custom roles are not rewritten by those updates, but their old permission references remain ineffective after an availability break until explicitly refreshed. Historical evidence is retained in both cases.
+
+An application role awaiting acceptance of changes (`acceptance_required`) preserves only its continuously valid, previously accepted permissions for existing non-revoked assignments. Pending additions grant nothing. Each stored permission still passes the current availability, continuity and meaning checks in [the central decision](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34). Only an `active` role may receive a new assignment; `unavailable` and `retired` roles grant nothing. Explicit acceptance returns the role to `active` only after checking the exact candidate, complete affected-assignment list and current delegated authority. Adding a permission must not, by itself, remove existing valid permissions while review is pending.
+
+A currently active supplied role can stay active after an update that only removes permissions, provided at least one accepted permission remains and there are no added or restored permissions awaiting acceptance. An empty role cannot stay active. A role already awaiting acceptance never returns to active just because a later application update removes its pending additions. A missing template or withdrawn application makes the role unavailable; bringing it back requires acceptance. Retired roles stay retired. These automatic changes preserve the original acceptance evidence and the role's existing privileged classification and activation policy; they are not new approvals or activations.
+
+The same retained-access rule applies to already activated privileged roles. A separate [role-authority continuity number](appendices/groups-and-privileged-access.md#retained-permissions-during-role-review) preserves still-valid activation use across metadata changes, narrowing and pending additions. Accepting added or restored authority starts a new period and requires fresh activation, without silently revoking the underlying eligibility assignment. Existing eligibility may activate only the retained accepted remainder during review; pending additions grant nothing. A pending activation request still becomes stale if its exact proposed role revision changes.
+
+The [coordinated application-access change](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) applies registration, permission/template availability and supplied-role reductions together. Either all changes become visible, with one Access-version change, or none do. An update that already exactly matches the current registration and derived role state returns unchanged without creating history. A request based on an older registration revision is refused rather than applied again. A matching application fingerprint alone is not enough: the related permission, template and role state must also be consistent. See the [closed change contracts](appendices/data-contracts.md#permission-and-role-contracts).
+
+```mermaid
+flowchart LR
+    U[Authorised application update] --> T
+    subgraph T[One all-or-nothing change]
+        C[Update registration and permission/template availability] --> R[Keep only continuously valid accepted role permissions]
+        R --> V[Change the organisation Access version once]
+    end
+    T --> E[Existing assignments keep the accepted remainder]
+    T --> P[New or restored permissions await explicit acceptance]
+    P --> M[Check exact candidate and all affected assignments]
+    M --> A[Activate accepted role revision]
+    A --> N[New assignments may be granted separately]
+```
 
 ### Organisation roles
 
@@ -82,6 +138,8 @@ An organisation role grants exact permissions within one organisation, such as m
 ### Application roles
 
 An application role grants permissions inside one [application](07-applications-pages-and-themes.md), such as discovering the application, opening particular pages, performing named actions, or reading a record scope. It is registered and assigned within that application's organisation through the same organisation-managed catalogue described above.
+
+When accepting a supplied template as an assignable local role, the administrator supplies its organisation-local description alongside its local key and label. The current published template has no description field; Vortex neither invents one nor changes the published source contract to create local administrative metadata.
 
 ### Assignment
 
@@ -93,7 +151,7 @@ An administrator needs the exact role-management permission and an explicit scop
 
 The scope is either deliberately organisation-wide catalogue management or a fixed set of exact, accepted permission references and application contexts. Organisation-wide governance explicitly includes permissions registered by future applications in that same organisation, but does not assign their use to anyone. An application-scoped manager receives only the reviewed scope for that application; new permissions or changed meanings do not silently enlarge it.
 
-Every create, edit, assignment, template-upgrade approval or delegation change checks all affected before-and-after permission scopes through central Access. Application context is part of that check even for a permission supplied by a module shared with another application. Managing access in one application cannot become authority over another merely because both bind the same module. A person cannot delegate wider management authority than they hold, whether directly or through another account or Team. This also prevents two managers granting wider powers to each other and then receiving them back.
+Every create, edit, assignment, template-upgrade approval or delegation change checks all affected before-and-after permission scopes through central Access. Application context is part of that check even for a permission supplied by a module shared with another application. Managing access in one application cannot become authority over another merely because both bind the same module. A person cannot delegate wider management authority than they hold, whether directly or through another account or Group. This also prevents two managers granting wider powers to each other and then receiving them back.
 
 The delegation representation is a closed scope and subset check, not a user-authored policy language. Published role templates cannot create organisation-wide delegation authority. [Role persistence #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) stores the facts, [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) evaluates them and [access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) invokes protected changes.
 
@@ -101,7 +159,7 @@ The delegation representation is a closed scope and subset check, not a user-aut
 
 The trusted [organisation-provisioning operation #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) explicitly nominates the initial organisation steward and atomically establishes the active organisation account, minimum role/account-management permissions and direct, non-expiring organisation-wide delegation assignment. Those core permissions grant no application-data use. The complete [IAM setup](appendices/iam-application.md#setup-and-removal) separately and explicitly accepts only the exact application operating role needed to enter IAM and manage access, never rights to unrelated applications. The first person to sign in, a role label, an application installer and tenant-administrator status are never inferred to be the steward. Tenant and organisation stewards may be the same person only when both appointments are explicit.
 
-Every usable organisation retains at least one active organisation account with a current, direct, non-expiring assignment carrying those minimum stewardship powers. Once IAM is activated, the required management-application operating assignment and availability are also protected as specified in [IAM setup](appendices/iam-application.md#setup-and-removal). A Team assignment or expiring delegate does not fulfil that permanent safeguard. Account suspension, role edits, assignment changes and identity lifecycle changes must preserve it in one concurrency-safe transaction. Existing organisations must be explicitly adopted through the trusted provisioning boundary; a migration cannot guess an owner. Until adoption, protected administration is unavailable rather than silently selecting an account.
+Every usable organisation retains at least one active organisation account with a current, direct, non-expiring assignment carrying those minimum stewardship powers. Once IAM is activated, the required management-application operating assignment and availability are also protected as specified in [IAM setup](appendices/iam-application.md#setup-and-removal). A Group assignment or expiring delegate does not fulfil that permanent safeguard. Account suspension, role edits, assignment changes and identity lifecycle changes must preserve it in one concurrency-safe transaction. Existing organisations must be explicitly adopted through the trusted provisioning boundary; a migration cannot guess an owner. Until adoption, protected administration is unavailable rather than silently selecting an account.
 
 ## Permission names
 
@@ -128,8 +186,8 @@ A record scope may include:
 
 - All records the role can access.
 - Records owned by the person.
-- Records owned by a named team to which the person belongs.
-- Records explicitly shared with the organisation account or any of its teams.
+- Records owned by a named group to which the person belongs.
+- Records explicitly shared with the organisation account or any of its groups.
 - Records reachable through an approved relationship from another visible record.
 - A saved, validated condition defined by the application.
 
@@ -137,9 +195,9 @@ The scope is translated into database conditions. Records outside it must not be
 
 ### Direct record sharing inside one organisation
 
-An authorised person may share one record directly with one organisation account or one team in the same organisation. The share has explicit readable and changeable field allowlists, optional expiry, grantor, recipient, reason, state, and activity history. A changeable field must also be readable.
+An authorised person may share one record directly with one organisation account or one group in the same organisation. The share has explicit readable and changeable field allowlists, optional expiry, grantor, recipient, reason, state, and activity history. A changeable field must also be readable.
 
-The grantor must hold `record.share`, must be able to read every shared field, and must be able to change every changeable field. A direct share cannot grant delete, restore, export, re-share, ownership, role administration, or any permission the grantor does not hold. Team membership is evaluated on every request. Revocation, expiry, suspension, or team removal takes effect on the next request. Directly shared records appear in ordinary lists and search only where the receiving account also has application access and the page supports that record type.
+The grantor must hold `record.share`, must be able to read every shared field, and must be able to change every changeable field. A direct share cannot grant delete, restore, export, re-share, ownership, role administration, or any permission the grantor does not hold. Group membership is evaluated on every request. Revocation, expiry, suspension, or group removal takes effect on the next request. Directly shared records appear in ordinary lists and search only where the receiving account also has application access and the page supports that record type.
 
 ## Field access
 
@@ -219,7 +277,7 @@ Public create and update field lists are checked against the same `public_displa
 
 ## Access-change speed
 
-Role, organisation-account, team, sharing, and public-policy changes increase an organisation access version. Every cached access answer includes that version. A request with an old version is recalculated.
+Role, organisation-account, group, sharing, and public-policy changes increase an organisation access version. Every cached access answer includes that version. A request with an old version is recalculated.
 
 The Access service stores exactly one positive, monotonically increasing counter per organisation. The counter begins at `1`, is not an Identity or organisation-account field, and can be read or incremented only through narrow server-side Access operations. An access-affecting change and its increment commit in one transaction; a refused, rolled-back, or duplicate change does not advance it. Concurrent changes use an atomic database increment so neither update is lost. The request-context boundary reads the live value after it has verified the selected active organisation account; it never accepts a browser-supplied version.
 
@@ -241,20 +299,22 @@ The Access relation records the organisation, current version, change time, chan
 
 Access removal takes effect on the next request. Long-running work rechecks access before every protected side effect, and subscriptions close or re-authorise when their access version changes.
 
+Standalone role creation, revision or retirement uses `role_catalogue_changed`; assigning or revoking a role uses `role_assignment_changed`. A coordinated application registration, update, reactivation or withdrawal uses `application_access_changed` exactly once, including its permission, template and existing-role changes. Refusal or exact replay does not increment. These are change reasons, not separate permission evaluators or activity stores.
+
 The recipient interface must remove previously displayed shared values when that next check is refused. It may retain non-content routing and activity references, but it cannot keep a visible snapshot, stale search result, component cache, or offline copy after the grant ends. A completed, separately approved export is the only exception because a downloaded file cannot be recalled.
 
 ## Administration safeguards
 
-- Organisation-account, invitation, role, Team and runtime-setting administration requires the exact organisation permission through the central Access decision as well as an active organisation context. Membership, application administration and tenant-administrator assignment are not substitutes. [Protected administration](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) must consume the shared role/permission foundation before exposing those operations; it must not introduce a temporary tenant-capability bypass.
+- Organisation-account, invitation, role, Group and runtime-setting administration requires the exact organisation permission through the central Access decision as well as an active organisation context. Membership, application administration and tenant-administrator assignment are not substitutes. [Protected administration](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) must consume the shared role/permission foundation before exposing those operations; it must not introduce a temporary tenant-capability bypass.
 - A person may assign only permissions within their explicit delegation scope, and may grant management authority only within their own effective management scope. Holding a permission for personal use alone does not grant permission to assign it to others.
 - The last effective permanent tenant steward and the last effective permanent organisation steward cannot be removed, expired or stripped of the required powers by any actor until a replacement is active. The organisation invariant is defined above; tenant stewardship is separately scoped and grants no organisation-data access.
-- High-impact changes require recent sign-in confirmation.
-- Tenant-administrator, hierarchy, role, organisation-account, team, direct-share, public-access, connection-secret, export, retention, entitlement and grant-consent changes are written to [activity history](14-activity-privacy-and-retention.md).
+- High-impact changes require recent sign-in confirmation at the operation's declared authentication strength; specifically MFA-required operations need genuine recent MFA evidence under [the same Identity contract](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276).
+- Tenant-administrator, hierarchy, role, organisation-account, group, direct-share, public-access, connection-secret, export, retention, entitlement and grant-consent changes are written to [activity history](14-activity-privacy-and-retention.md).
 
 ## Acceptance examples
 
 - A person who can open a list but lacks record visibility never receives the hidden rows from the database.
-- A direct share to any one of an account's teams grants only the named fields, and removing the account from that team removes access on the next request.
+- A direct share to any one of an account's groups grants only the named fields, and removing the account from that group removes access on the next request.
 - A tenant administrator without a local organisation account and local role cannot read that organisation's records.
 - Removing a role makes previously cached permission answers unusable.
 - A page hidden in navigation remains protected when its address is entered directly.

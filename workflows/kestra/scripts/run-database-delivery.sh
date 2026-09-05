@@ -38,6 +38,13 @@ require_variable() {
   [ -n "${!name:-}" ] || die "${name} is not set"
 }
 
+normalize_string_array_variable() {
+  local name="$1"
+  jq --compact-output --exit-status \
+    'if type == "array" and all(.[]; type == "string") then . else empty end' \
+    <<<"${!name}" 2>/dev/null
+}
+
 require_commit_regular_file() {
   local path="$1"
   local label="$2"
@@ -329,6 +336,10 @@ if [ "$VORTEX_DELIVERY_ENVIRONMENT" = "production" ]; then
   require_variable VORTEX_TESTING_EVIDENCE_RUNNER_SHA256
   require_variable VORTEX_TESTING_EVIDENCE_MANIFEST_SHA256
   require_variable VORTEX_TESTING_EVIDENCE_COVERAGE_SHA256
+  require_variable VORTEX_TESTING_EVIDENCE_SELECTED_CONCURRENCY_PROOFS
+  require_variable VORTEX_TESTING_EVIDENCE_COMPLETED_CONCURRENCY_PROOFS
+  require_variable VORTEX_TESTING_EVIDENCE_SELECTED_LINT_SCHEMAS
+  require_variable VORTEX_TESTING_EVIDENCE_COMPLETED_LINT_SCHEMAS
   [ "$VORTEX_APPROVED" = "true" ] || die "production approval was not granted"
   is_commit "$VORTEX_TESTING_COMMIT" || die "approved Testing commit is invalid"
   [[ "$VORTEX_TESTING_MIGRATION_SET_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
@@ -363,6 +374,24 @@ if [ "$VORTEX_DELIVERY_ENVIRONMENT" = "production" ]; then
   [ "$VORTEX_TESTING_EVIDENCE_MANIFEST_SHA256" = "$verification_manifest_sha256" ] ||
     die "Production verification manifest differs from successful Testing"
   [ "$VORTEX_TESTING_EVIDENCE_COVERAGE_SHA256" = "$expected_coverage_sha256" ] ||
+    die "stored Testing evidence did not complete the current verification coverage"
+  testing_selected_concurrency_proofs_json="$(
+    normalize_string_array_variable VORTEX_TESTING_EVIDENCE_SELECTED_CONCURRENCY_PROOFS
+  )" || die "stored Testing evidence contains invalid verification coverage"
+  testing_completed_concurrency_proofs_json="$(
+    normalize_string_array_variable VORTEX_TESTING_EVIDENCE_COMPLETED_CONCURRENCY_PROOFS
+  )" || die "stored Testing evidence contains invalid verification coverage"
+  testing_selected_lint_schemas_json="$(
+    normalize_string_array_variable VORTEX_TESTING_EVIDENCE_SELECTED_LINT_SCHEMAS
+  )" || die "stored Testing evidence contains invalid verification coverage"
+  testing_completed_lint_schemas_json="$(
+    normalize_string_array_variable VORTEX_TESTING_EVIDENCE_COMPLETED_LINT_SCHEMAS
+  )" || die "stored Testing evidence contains invalid verification coverage"
+  [ "$testing_selected_concurrency_proofs_json" = "$selected_concurrency_proofs_json" ] &&
+    [ "$testing_selected_lint_schemas_json" = "$selected_lint_schemas_json" ] ||
+    die "stored Testing evidence selected different verification coverage"
+  [ "$testing_completed_concurrency_proofs_json" = "$selected_concurrency_proofs_json" ] &&
+    [ "$testing_completed_lint_schemas_json" = "$selected_lint_schemas_json" ] ||
     die "stored Testing evidence did not complete the current verification coverage"
 
   git -C "$checkout" fetch --quiet --no-tags origin "$VORTEX_TESTING_COMMIT"

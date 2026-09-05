@@ -35,6 +35,36 @@
       "migration": "supabase/migrations/20260905043000_organization_request_context.sql",
       "proof": "supabase/tests/organization-request-context-concurrency.test.sh",
       "label": "Organisation request context"
+    },
+    {
+      "migration": "supabase/migrations/20260905060000_permission_registry.sql",
+      "proof": "supabase/tests/permission-registry-concurrency.test.sh",
+      "label": "Permission registry"
+    },
+    {
+      "migration": "supabase/migrations/20260905060005_organization_role_storage.sql",
+      "proof": "supabase/tests/organization-role-seal-concurrency.test.sh",
+      "label": "Organization role seal"
+    },
+    {
+      "migration": "supabase/migrations/20260905060006_coordinate_application_access_changes.sql",
+      "proof": "supabase/tests/application-access-coordination-concurrency.test.sh",
+      "label": "Application access coordination"
+    },
+    {
+      "migration": "supabase/migrations/20260905130631_coordinate_organization_role_assignment_changes.sql",
+      "proof": "supabase/tests/organization-role-assignment-changes-concurrency.test.sh",
+      "label": "Organization role assignment changes"
+    },
+    {
+      "migration": "supabase/migrations/20260905141727_coordinate_organization_role_changes.sql",
+      "proof": "supabase/tests/organization-role-change-concurrency.test.sh",
+      "label": "Organization role changes"
+    },
+    {
+      "migration": "supabase/migrations/20260905224720_coordinate_organization_group_changes.sql",
+      "proof": "supabase/tests/organization-group-change-concurrency.test.sh",
+      "label": "Organization group changes"
     }
   ],
   "lintSchemas": [

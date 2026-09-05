@@ -14,6 +14,7 @@
   "dependencies": {
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
+    "@vortex/definition": "workspace:*",
     "server-only": "0.0.1"
   },
   "vortex": {

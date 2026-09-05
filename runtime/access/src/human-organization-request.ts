@@ -100,6 +100,16 @@ export const createHumanOrganizationRequestService = (
     }
     if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt))
       return { kind: "unavailable" };
+    const hasAuthenticationEvidence =
+      verifiedSession.data.primaryAuthenticatedAt !== undefined ||
+      verifiedSession.data.multiFactorAuthenticatedAt !== undefined;
+    if (
+      (verifiedSession.data.primaryAuthenticatedAt !== undefined &&
+        Date.parse(verifiedSession.data.primaryAuthenticatedAt) > Date.parse(issuedAt)) ||
+      (verifiedSession.data.multiFactorAuthenticatedAt !== undefined &&
+        Date.parse(verifiedSession.data.multiFactorAuthenticatedAt) > Date.parse(issuedAt))
+    )
+      return { kind: "unavailable" };
 
     try {
       const value = await runTransaction(async (transaction) => {
@@ -120,6 +130,19 @@ export const createHumanOrganizationRequestService = (
           identityId: verifiedSession.data.identityId,
           sessionId: verifiedSession.data.sessionId,
           authenticationStrength: verifiedSession.data.authenticationStrength,
+          ...(hasAuthenticationEvidence
+            ? {
+                accessTokenIssuedAt: verifiedSession.data.accessTokenIssuedAt,
+                ...(verifiedSession.data.primaryAuthenticatedAt === undefined
+                  ? {}
+                  : { primaryAuthenticatedAt: verifiedSession.data.primaryAuthenticatedAt }),
+                ...(verifiedSession.data.multiFactorAuthenticatedAt === undefined
+                  ? {}
+                  : {
+                      multiFactorAuthenticatedAt: verifiedSession.data.multiFactorAuthenticatedAt,
+                    }),
+              }
+            : {}),
           issuedAt,
           expiresAt: verifiedSession.data.accessTokenExpiresAt,
           accessVersion: scope.accessVersion,

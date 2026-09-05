@@ -8,6 +8,8 @@ import {
   definitionSourceDocumentSchema,
   fingerprintSchema,
   restoreDefinitionDraftCommandSchema,
+  selectApplicationContractPair,
+  selectStoredApplicationSourceContract,
   sessionContextSchema,
   sourceIdentityAssignmentSchema,
   storedDefinitionDraftSchema,
@@ -131,6 +133,45 @@ const withoutOptionalNulls = (candidate: unknown): unknown => {
         ].includes(key),
     ),
   );
+};
+
+const asString = (value: unknown): string | undefined =>
+  typeof value === "string" ? value : undefined;
+
+const selectApplicationRestoreContract = (candidate: unknown): void => {
+  const record = asCandidate(candidate);
+  if (record?.kind !== "application") return;
+  const source = asCandidate(record.authoredSource);
+  const sourceContractVersion = asString(record.sourceContractVersion);
+  const validationContractVersion = asString(record.validationContractVersion);
+  const intrinsicSourceContractVersion = asString(source?.source_contract_version);
+  if (
+    sourceContractVersion === undefined ||
+    validationContractVersion === undefined ||
+    intrinsicSourceContractVersion === undefined
+  )
+    throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  try {
+    selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
+    selectApplicationContractPair(sourceContractVersion, validationContractVersion);
+  } catch {
+    throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  }
+};
+
+const selectStoredApplicationDraftContract = (candidate: unknown): void => {
+  const record = asCandidate(candidate);
+  if (record?.kind !== "application") return;
+  const source = asCandidate(record.source);
+  const sourceContractVersion = asString(record.sourceContractVersion);
+  const intrinsicSourceContractVersion = asString(source?.source_contract_version);
+  if (sourceContractVersion === undefined || intrinsicSourceContractVersion === undefined)
+    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  try {
+    selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
+  } catch {
+    throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
+  }
 };
 
 const parseHistory = (
@@ -260,6 +301,8 @@ const identitiesMatchSource = (release: RestoreEvidence): boolean => {
 };
 
 const parseRestoreEvidence = (candidate: unknown): RestoreEvidence => {
+  // Select the Application source/canonical pair before either V1 payload is decoded.
+  selectApplicationRestoreContract(candidate);
   const parsed = restoreEvidenceSchema.safeParse(candidate);
   if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   return parsed.data;
@@ -326,7 +369,9 @@ const parseRestoredDraft = (
   command: RestoreDefinitionDraftCommand,
   verified: VerifiedRestoreInput,
 ): StoredDefinitionDraft => {
-  const parsed = storedDefinitionDraftSchema.safeParse(withoutOptionalNulls(candidate));
+  const withoutNulls = withoutOptionalNulls(candidate);
+  selectStoredApplicationDraftContract(withoutNulls);
+  const parsed = storedDefinitionDraftSchema.safeParse(withoutNulls);
   if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   const draft = parsed.data;
   const systemActorId = context.callerKind === "system" ? context.systemActorId : undefined;

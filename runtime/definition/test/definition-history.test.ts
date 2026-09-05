@@ -445,6 +445,54 @@ describe("Definition history and restore", () => {
     ).resolves.toEqual(restoredDraft());
   });
 
+  it("rejects unsupported Application version pairs before decoding restore evidence", async () => {
+    const command = {
+      kind: "application" as const,
+      rootId,
+      targetReleaseRevision: 1,
+      expectedDraftRevision: 1,
+    };
+    const invalidVersions = [
+      {
+        sourceContractVersion: "1.0.0",
+        validationContractVersion: "2.0.0",
+        intrinsicSourceContractVersion: "1.0.0",
+      },
+      {
+        sourceContractVersion: "2.0.0",
+        validationContractVersion: "2.0.0",
+        intrinsicSourceContractVersion: "2.0.0",
+      },
+      {
+        sourceContractVersion: "1.0.0",
+        validationContractVersion: "1.0.0",
+        intrinsicSourceContractVersion: "2.0.0",
+      },
+    ];
+
+    for (const versions of invalidVersions) {
+      const service = createDefinitionHistoryService(
+        repositoryFor({
+          restore: async (_context, _command, verify) => {
+            await verify({
+              kind: "application",
+              sourceContractVersion: versions.sourceContractVersion,
+              validationContractVersion: versions.validationContractVersion,
+              authoredSource: {
+                source_contract_version: versions.intrinsicSourceContractVersion,
+              },
+            });
+            return { outcome: "stale" };
+          },
+        }),
+        catalogue,
+      );
+      await expect(service.restoreDraft(context(), command)).rejects.toMatchObject({
+        code: "DEFINITION_RELEASE_INTEGRITY_FAILED",
+      });
+    }
+  });
+
   it("refuses substituted source, contradictory owner evidence, malformed evidence, and stale drafts", async () => {
     const command = {
       kind: "module" as const,

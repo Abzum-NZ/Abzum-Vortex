@@ -250,7 +250,7 @@ Revocation refuses the next source request even if recipient notification is del
 
 A tenant may contain a parent organisation and several child organisations. A tenant administrator can manage hierarchy and explicitly granted tenant operations without receiving record access. Reading a child organisation's example application records still requires a local organisation account and local role.
 
-Inside an organisation, an owner may directly share one record with an organisation account or team using readable and changeable field lists. Removing team membership ends that access on the next request.
+Inside an organisation, an owner may directly share one record with an organisation account or group using readable and changeable field lists. Removing group membership ends that access on the next request.
 
 ## Fixture acceptance
 

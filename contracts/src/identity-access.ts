@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   builderKeySchema,
   fingerprintSchema,
+  groupIdSchema,
   namespacedKeySchema,
   revisionSchema,
   semanticVersionSchema,
@@ -24,17 +25,14 @@ import {
   moduleRootIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
-  permissionIdSchema,
   platformIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  roleAssignmentIdSchema,
   roleIdSchema,
   sessionIdSchema,
-  teamIdSchema,
   tenantIdSchema,
 } from "./identifiers";
-import { correlationIdSchema, descriptionSchema, jsonValueSchema, labelSchema } from "./common";
+import { correlationIdSchema, jsonValueSchema } from "./common";
 import { permissionDeclarationSchema } from "./permissions";
 
 const administrativeStateSchema = z.enum(["active", "suspended", "archived", "removal_pending"]);
@@ -168,6 +166,26 @@ export const identityProjectionSchema = z
 
 const jwtNumericDateSchema = z.number().int().nonnegative().max(253_402_300_799);
 
+const supabaseAmrEntrySchema = z.union([
+  z
+    .object({
+      method: z.literal("sso/saml"),
+      timestamp: jwtNumericDateSchema,
+      provider: z.string().min(1).max(120).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      method: z
+        .string()
+        .min(1)
+        .max(120)
+        .refine((method) => method !== "sso/saml"),
+      timestamp: jwtNumericDateSchema,
+    })
+    .strict(),
+]);
+
 export const supabaseIdentityClaimsSchema = z
   .object({
     iss: z.url().max(2_000),
@@ -185,19 +203,7 @@ export const supabaseIdentityClaimsSchema = z
     nbf: jwtNumericDateSchema.optional(),
     app_metadata: z.record(z.string(), jsonValueSchema).optional(),
     user_metadata: z.record(z.string(), jsonValueSchema).optional(),
-    amr: z
-      .union([
-        z.array(z.string().min(1).max(120)),
-        z.array(
-          z
-            .object({
-              method: z.string().min(1).max(120),
-              timestamp: jwtNumericDateSchema,
-            })
-            .strict(),
-        ),
-      ])
-      .optional(),
+    amr: z.union([z.array(z.string().min(1).max(120)), z.array(supabaseAmrEntrySchema)]).optional(),
   })
   .loose()
   .superRefine((value, context) => {
@@ -225,6 +231,8 @@ export const verifiedIdentitySchema = z
     issuedAt: timestampSchema,
     expiresAt: timestampSchema,
     authenticationStrength: z.enum(["single_factor", "multi_factor"]),
+    primaryAuthenticatedAt: timestampSchema.optional(),
+    multiFactorAuthenticatedAt: timestampSchema.optional(),
     keyId: z
       .string()
       .min(1)
@@ -239,6 +247,22 @@ export const verifiedIdentitySchema = z
         path: ["expiresAt"],
         message: "Verified identity expiry must be later than issue time",
       });
+    for (const property of ["primaryAuthenticatedAt", "multiFactorAuthenticatedAt"] as const)
+      if (value[property] !== undefined && Date.parse(value[property]) > Date.parse(value.issuedAt))
+        context.addIssue({
+          code: "custom",
+          path: [property],
+          message: "Authentication evidence cannot postdate access-token issuance",
+        });
+    if (
+      value.multiFactorAuthenticatedAt !== undefined &&
+      value.authenticationStrength !== "multi_factor"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["multiFactorAuthenticatedAt"],
+        message: "Multi-factor evidence requires verified multi-factor strength",
+      });
   });
 
 export const identitySessionSchema = z
@@ -248,6 +272,8 @@ export const identitySessionSchema = z
     authenticationStrength: z.enum(["single_factor", "multi_factor"]),
     accessTokenIssuedAt: timestampSchema,
     accessTokenExpiresAt: timestampSchema,
+    primaryAuthenticatedAt: timestampSchema.optional(),
+    multiFactorAuthenticatedAt: timestampSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -256,6 +282,25 @@ export const identitySessionSchema = z
         code: "custom",
         path: ["accessTokenExpiresAt"],
         message: "The access-token expiry must be later than its issue time",
+      });
+    for (const property of ["primaryAuthenticatedAt", "multiFactorAuthenticatedAt"] as const)
+      if (
+        value[property] !== undefined &&
+        Date.parse(value[property]) > Date.parse(value.accessTokenIssuedAt)
+      )
+        context.addIssue({
+          code: "custom",
+          path: [property],
+          message: "Authentication evidence cannot postdate access-token issuance",
+        });
+    if (
+      value.multiFactorAuthenticatedAt !== undefined &&
+      value.authenticationStrength !== "multi_factor"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["multiFactorAuthenticatedAt"],
+        message: "Multi-factor evidence requires verified multi-factor strength",
       });
   });
 
@@ -377,13 +422,14 @@ export const organizationAccountSetSchema = z
     }
   });
 
-export const accessVersionChangeReasonKeys = [
+export const accessVersionChangeReasonV1Keys = [
   "organization_initialized",
   "organization_account_activated",
   "organization_account_reactivated",
   "organization_account_suspended",
   "organization_account_closed",
   "role_assignment_changed",
+  "role_catalogue_changed",
   "team_membership_changed",
   "application_access_changed",
   "direct_share_changed",
@@ -393,18 +439,66 @@ export const accessVersionChangeReasonKeys = [
   "mcp_authorization_changed",
 ] as const;
 
+export const accessVersionChangeReasonKeys = [
+  "organization_initialized",
+  "organization_account_activated",
+  "organization_account_reactivated",
+  "organization_account_suspended",
+  "organization_account_closed",
+  "role_assignment_changed",
+  "role_catalogue_changed",
+  "group_membership_changed",
+  "application_access_changed",
+  "direct_share_changed",
+  "access_grant_changed",
+  "public_policy_changed",
+  "federation_mirror_changed",
+  "mcp_authorization_changed",
+] as const;
+
+export const accessVersionChangeReasonV1Schema = z.enum(accessVersionChangeReasonV1Keys);
 export const accessVersionChangeReasonSchema = z.enum(accessVersionChangeReasonKeys);
 
+export const readAccessVersionChangeReasonV1 = (
+  candidate: unknown,
+): z.infer<typeof accessVersionChangeReasonSchema> => {
+  const reason = accessVersionChangeReasonV1Schema.parse(candidate);
+  return reason === "team_membership_changed" ? "group_membership_changed" : reason;
+};
+
+export const writeAccessVersionChangeReasonV1 = (
+  candidate: unknown,
+): z.infer<typeof accessVersionChangeReasonV1Schema> => {
+  const reason = accessVersionChangeReasonSchema.parse(candidate);
+  return reason === "group_membership_changed" ? "team_membership_changed" : reason;
+};
+
+const organizationAccessVersionFields = {
+  organizationId: organizationIdSchema,
+  currentVersion: revisionSchema,
+  changedAt: timestampSchema,
+  changedBy: actorIdSchema,
+  changeCorrelationId: correlationIdSchema,
+};
+
 export const organizationAccessVersionSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    currentVersion: revisionSchema,
-    changedAt: timestampSchema,
-    changedBy: actorIdSchema,
-    changeCorrelationId: correlationIdSchema,
-    changeReason: accessVersionChangeReasonSchema,
-  })
+  .object({ ...organizationAccessVersionFields, changeReason: accessVersionChangeReasonSchema })
   .strict();
+
+/** Exact reader for the applied V1 Access-version storage representation. */
+export const organizationAccessVersionV1Schema = z
+  .object({ ...organizationAccessVersionFields, changeReason: accessVersionChangeReasonV1Schema })
+  .strict();
+
+export const readOrganizationAccessVersionV1 = (
+  candidate: unknown,
+): z.infer<typeof organizationAccessVersionSchema> => {
+  const version = organizationAccessVersionV1Schema.parse(candidate);
+  return {
+    ...version,
+    changeReason: readAccessVersionChangeReasonV1(version.changeReason),
+  };
+};
 
 export const currentOrganizationAccessVersionSchema = organizationAccessVersionSchema.pick({
   organizationId: true,
@@ -446,32 +540,6 @@ export const organizationRuntimeSettingsSchema = z
     dateFormat: z.string().min(1).max(50),
     numberFormat: z.string().min(1).max(50),
     revision: revisionSchema,
-  })
-  .strict();
-
-export const teamSchema = z
-  .object({
-    teamId: teamIdSchema,
-    organizationId: organizationIdSchema,
-    key: builderKeySchema,
-    label: labelSchema,
-    state: z.enum(["active", "inactive"]),
-    createdBy: organizationAccountIdSchema,
-    createdAt: timestampSchema,
-    changedAt: timestampSchema,
-  })
-  .strict();
-
-export const teamMembershipSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    teamId: teamIdSchema,
-    organizationAccountId: organizationAccountIdSchema,
-    state: z.enum(["active", "revoked", "expired"]),
-    startsAt: timestampSchema,
-    expiresAt: timestampSchema.optional(),
-    grantedBy: organizationAccountIdSchema,
-    activityId: activityIdSchema,
   })
   .strict();
 
@@ -617,16 +685,62 @@ const authenticatedHumanContext = {
   organizationAccountId: organizationAccountIdSchema,
   authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
 };
+const humanSessionContextSchema = z
+  .object({
+    ...sessionContextCommon,
+    ...authenticatedHumanContext,
+    callerKind: z.literal("human"),
+    accessTokenIssuedAt: timestampSchema.optional(),
+    primaryAuthenticatedAt: timestampSchema.optional(),
+    multiFactorAuthenticatedAt: timestampSchema.optional(),
+    delegatedContext: delegatedContextSchema.optional(),
+    supportContext: supportContextSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const hasEvidence =
+      value.primaryAuthenticatedAt !== undefined || value.multiFactorAuthenticatedAt !== undefined;
+    if (hasEvidence !== (value.accessTokenIssuedAt !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["accessTokenIssuedAt"],
+        message: "Authentication evidence and its access-token issue time must travel together",
+      });
+    if (
+      value.multiFactorAuthenticatedAt !== undefined &&
+      value.authenticationStrength !== "multi_factor" &&
+      value.authenticationStrength !== "recent_multi_factor"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["multiFactorAuthenticatedAt"],
+        message: "Multi-factor evidence requires multi-factor authentication strength",
+      });
+    if (value.accessTokenIssuedAt === undefined) return;
+
+    const accessTokenIssuedAt = Date.parse(value.accessTokenIssuedAt);
+    if (accessTokenIssuedAt >= Date.parse(value.expiresAt))
+      context.addIssue({
+        code: "custom",
+        path: ["accessTokenIssuedAt"],
+        message: "Access-token issuance must precede request-context expiry",
+      });
+    if (accessTokenIssuedAt > Date.parse(value.issuedAt) + 60_000)
+      context.addIssue({
+        code: "custom",
+        path: ["accessTokenIssuedAt"],
+        message: "Access-token issuance exceeds the verified clock-skew boundary",
+      });
+    for (const property of ["primaryAuthenticatedAt", "multiFactorAuthenticatedAt"] as const)
+      if (value[property] !== undefined && Date.parse(value[property]) > accessTokenIssuedAt)
+        context.addIssue({
+          code: "custom",
+          path: [property],
+          message: "Authentication evidence cannot postdate access-token issuance",
+        });
+  });
 export const sessionContextSchema = z.discriminatedUnion("callerKind", [
-  z
-    .object({
-      ...sessionContextCommon,
-      ...authenticatedHumanContext,
-      callerKind: z.literal("human"),
-      delegatedContext: delegatedContextSchema.optional(),
-      supportContext: supportContextSchema.optional(),
-    })
-    .strict(),
+  humanSessionContextSchema,
   z
     .object({
       ...sessionContextCommon,
@@ -656,69 +770,6 @@ export const permissionSchema = permissionDeclarationSchema.safeExtend({
   ownerKind: z.enum(["platform", "tenant", "organization", "module", "application"]),
   ownerId: platformIdSchema,
 });
-
-const exactPermissionEntrySchema = z
-  .object({ kind: z.literal("exact"), permissionId: permissionIdSchema })
-  .strict();
-const wildcardPermissionEntrySchema = z
-  .object({
-    kind: z.literal("trailing_wildcard"),
-    ownerKind: z.enum(["module", "application"]),
-    ownerId: platformIdSchema,
-    prefix: namespacedKeySchema,
-    catalogueFingerprint: fingerprintSchema,
-    expandedPermissionIds: z.array(permissionIdSchema).min(1),
-  })
-  .strict();
-export const permissionEntrySchema = z.discriminatedUnion("kind", [
-  exactPermissionEntrySchema,
-  wildcardPermissionEntrySchema,
-]);
-
-export const roleSchema = z
-  .object({
-    roleId: roleIdSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema.optional(),
-    key: builderKeySchema,
-    label: labelSchema,
-    description: descriptionSchema,
-    kind: z.enum(["organization", "application"]),
-    liveRevision: revisionSchema,
-    permissions: z.array(permissionEntrySchema),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.kind === "application") !== (value.applicationRootId !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["applicationRootId"],
-        message: "Only application roles carry an application root",
-      });
-  });
-
-export const roleAssignmentSchema = z
-  .object({
-    roleAssignmentId: roleAssignmentIdSchema,
-    organizationId: organizationIdSchema,
-    roleId: roleIdSchema,
-    assignee: z.discriminatedUnion("kind", [
-      z
-        .object({
-          kind: z.literal("organization_account"),
-          organizationAccountId: organizationAccountIdSchema,
-        })
-        .strict(),
-      z.object({ kind: z.literal("team"), teamId: teamIdSchema }).strict(),
-    ]),
-    applicationRootId: applicationRootIdSchema.optional(),
-    startsAt: timestampSchema,
-    expiresAt: timestampSchema.optional(),
-    state: z.enum(["active", "revoked", "expired"]),
-    grantedBy: organizationAccountIdSchema,
-    activityId: activityIdSchema,
-  })
-  .strict();
 
 export const accessRequestSchema = z
   .object({
@@ -805,7 +856,7 @@ export const directRecordShareSchema = z
           organizationAccountId: organizationAccountIdSchema,
         })
         .strict(),
-      z.object({ kind: z.literal("team"), teamId: teamIdSchema }).strict(),
+      z.object({ kind: z.literal("group"), groupId: groupIdSchema }).strict(),
     ]),
     ...readableAndChangeable,
     startsAt: timestampSchema,
@@ -1026,7 +1077,9 @@ export type SelectedOrganizationScope = z.infer<typeof selectedOrganizationScope
 export type OrganizationAccount = z.infer<typeof organizationAccountSchema>;
 export type OrganizationAccountSet = z.infer<typeof organizationAccountSetSchema>;
 export type AccessVersionChangeReason = z.infer<typeof accessVersionChangeReasonSchema>;
+export type AccessVersionChangeReasonV1 = z.infer<typeof accessVersionChangeReasonV1Schema>;
 export type OrganizationAccessVersion = z.infer<typeof organizationAccessVersionSchema>;
+export type OrganizationAccessVersionV1 = z.infer<typeof organizationAccessVersionV1Schema>;
 export type CurrentOrganizationAccessVersion = z.infer<
   typeof currentOrganizationAccessVersionSchema
 >;
@@ -1037,8 +1090,6 @@ export type InvitationAcceptanceWithAccessVersion = z.infer<
   typeof invitationAcceptanceWithAccessVersionSchema
 >;
 export type OrganizationRuntimeSettings = z.infer<typeof organizationRuntimeSettingsSchema>;
-export type Team = z.infer<typeof teamSchema>;
-export type TeamMembership = z.infer<typeof teamMembershipSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
 export type StoredInvitation = z.infer<typeof storedInvitationSchema>;
 export type EnsureIdentityProjectionCommand = z.infer<typeof ensureIdentityProjectionCommandSchema>;
@@ -1056,9 +1107,6 @@ export type ChangeOrganizationAccountStateCommand = z.infer<
 >;
 export type SessionContext = z.infer<typeof sessionContextSchema>;
 export type Permission = z.infer<typeof permissionSchema>;
-export type PermissionEntry = z.infer<typeof permissionEntrySchema>;
-export type Role = z.infer<typeof roleSchema>;
-export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
 export type AccessRequest = z.infer<typeof accessRequestSchema>;
 export type AccessDecision = z.infer<typeof accessDecisionSchema>;
 export type FieldRestriction = z.infer<typeof fieldRestrictionSchema>;

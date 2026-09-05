@@ -76,6 +76,15 @@ export const storedDefinitionDraftSchema = z
       .strict(),
   ])
   .superRefine((draft, context) => {
+    if (
+      draft.kind === "application" &&
+      draft.source.source_contract_version !== draft.sourceContractVersion
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["sourceContractVersion"],
+        message: "Stored Application source metadata must match its authored source",
+      });
     const provenance = [
       draft.restoredFromReleaseRevision,
       draft.restoredFromSourceFingerprint,

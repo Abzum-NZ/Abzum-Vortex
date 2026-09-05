@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   accessGrantSchema,
+  accessVersionChangeReasonV1Schema,
   accessVersionChangeReasonSchema,
   actionInputDefinitionSchema,
   applicationConnectionBindingSchema,
@@ -47,7 +48,6 @@ import {
   permissionDeclarationSchema,
   publishedApplicationDefinitionSchema,
   publishedModuleDefinitionSchema,
-  roleSchema,
   savedSharingConditionSchema,
   safeErrorResponseSchema,
   secretReferenceSchema,
@@ -58,6 +58,7 @@ import {
   workflowNodeTypeSchema,
   definitionSourceDocumentSchema,
   definitionPublicationContextSchema,
+  directRecordShareSchema,
   sourceBlockSettingValueSchema,
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
@@ -65,6 +66,8 @@ import {
   tenantSchema,
   verifiedIdentitySchema,
   readOrganizationAccessVersionCommandSchema,
+  readOrganizationAccessVersionV1,
+  writeAccessVersionChangeReasonV1,
 } from "../src";
 import type {
   PublishedApplicationDefinition,
@@ -146,6 +149,40 @@ describe("identity projection, organisation-account and invitation contracts", (
     expect(accessVersionChangeReasonSchema.safeParse("organization_initialized").success).toBe(
       true,
     );
+    expect(accessVersionChangeReasonSchema.safeParse("group_membership_changed").success).toBe(
+      true,
+    );
+    expect(accessVersionChangeReasonSchema.safeParse("role_catalogue_changed").success).toBe(true);
+    expect(accessVersionChangeReasonSchema.safeParse("team_membership_changed").success).toBe(
+      false,
+    );
+    expect(accessVersionChangeReasonV1Schema.safeParse("team_membership_changed").success).toBe(
+      true,
+    );
+    expect(accessVersionChangeReasonV1Schema.safeParse("role_catalogue_changed").success).toBe(
+      true,
+    );
+    expect(accessVersionChangeReasonV1Schema.safeParse("group_membership_changed").success).toBe(
+      false,
+    );
+    expect(writeAccessVersionChangeReasonV1("group_membership_changed")).toBe(
+      "team_membership_changed",
+    );
+    expect(writeAccessVersionChangeReasonV1("role_catalogue_changed")).toBe(
+      "role_catalogue_changed",
+    );
+    expect(
+      readOrganizationAccessVersionV1({
+        ...version,
+        changeReason: "team_membership_changed",
+      }),
+    ).toEqual({ ...version, changeReason: "group_membership_changed" });
+    expect(
+      readOrganizationAccessVersionV1({
+        ...version,
+        changeReason: "role_catalogue_changed",
+      }),
+    ).toEqual({ ...version, changeReason: "role_catalogue_changed" });
     expect(accessVersionChangeReasonSchema.safeParse("business_record_changed").success).toBe(
       false,
     );
@@ -211,7 +248,7 @@ describe("identity projection, organisation-account and invitation contracts", (
     ).toBe(false);
   });
 
-  test("keeps Phase 2 invitations free of role and Team assignments", () => {
+  test("keeps Phase 2 invitations free of role and Group assignments", () => {
     expect(invitationSchema.safeParse(invitation).success).toBe(true);
     expect(invitationSchema.safeParse({ ...invitation, proposedRoleIds: [] }).success).toBe(false);
     expect(invitationSchema.safeParse({ ...invitation, proposedAssignments: [] }).success).toBe(
@@ -965,6 +1002,24 @@ describe("identity, sharing and secret invariants", () => {
     expect(
       supabaseIdentityClaimsSchema.safeParse({
         ...standardClaims,
+        amr: [{ method: "sso/saml", timestamp: standardClaims.iat, provider: "workforce" }],
+      }).success,
+    ).toBe(true);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
+        amr: [{ method: "password", timestamp: standardClaims.iat, provider: "email" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
+        amr: [{ method: "password", timestamp: standardClaims.iat }, "totp"],
+      }).success,
+    ).toBe(false);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
         is_anonymous: true,
         email: "",
       }).success,
@@ -989,6 +1044,24 @@ describe("identity, sharing and secret invariants", () => {
     } as const;
 
     expect(verifiedIdentitySchema.safeParse(verifiedIdentity).success).toBe(true);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        primaryAuthenticatedAt: verifiedIdentity.issuedAt,
+      }).success,
+    ).toBe(true);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        primaryAuthenticatedAt: verifiedIdentity.expiresAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        multiFactorAuthenticatedAt: verifiedIdentity.issuedAt,
+      }).success,
+    ).toBe(false);
     expect(
       verifiedIdentitySchema.safeParse({
         ...verifiedIdentity,
@@ -1020,6 +1093,24 @@ describe("identity, sharing and secret invariants", () => {
     } as const;
 
     expect(identitySessionSchema.safeParse(session).success).toBe(true);
+    expect(
+      identitySessionSchema.safeParse({
+        ...session,
+        primaryAuthenticatedAt: session.accessTokenIssuedAt,
+      }).success,
+    ).toBe(true);
+    expect(
+      identitySessionSchema.safeParse({
+        ...session,
+        primaryAuthenticatedAt: session.accessTokenExpiresAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      identitySessionSchema.safeParse({
+        ...session,
+        multiFactorAuthenticatedAt: session.accessTokenIssuedAt,
+      }).success,
+    ).toBe(false);
     expect(identitySessionResolutionSchema.parse({ kind: "active", session })).toEqual({
       kind: "active",
       session,
@@ -1118,6 +1209,66 @@ describe("identity, sharing and secret invariants", () => {
       authenticationStrength: "single_factor",
     };
     expect(sessionContextSchema.safeParse(human).success).toBe(true);
+    const evidenceBearingHuman = {
+      ...human,
+      accessTokenIssuedAt: "2026-09-02T01:00:30+00:00",
+      primaryAuthenticatedAt: "2026-09-02T01:00:00+00:00",
+    };
+    expect(sessionContextSchema.safeParse(evidenceBearingHuman).success).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({
+        ...human,
+        primaryAuthenticatedAt: "2026-09-02T01:00:00+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...human,
+        accessTokenIssuedAt: "2026-09-02T01:00:30+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...evidenceBearingHuman,
+        accessTokenIssuedAt: "2026-09-02T01:01:00+00:00",
+      }).success,
+    ).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({
+        ...evidenceBearingHuman,
+        accessTokenIssuedAt: "2026-09-02T01:01:00.001+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...evidenceBearingHuman,
+        callerKind: "federated",
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...human,
+        authenticationStrength: "recent_multi_factor",
+      }).data,
+    ).not.toHaveProperty("multiFactorAuthenticatedAt");
+    const multiFactorEvidence = {
+      ...human,
+      accessTokenIssuedAt: "2026-09-02T01:00:30+00:00",
+      multiFactorAuthenticatedAt: "2026-09-02T01:00:00+00:00",
+    };
+    expect(sessionContextSchema.safeParse(multiFactorEvidence).success).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...multiFactorEvidence,
+        authenticationStrength: "multi_factor",
+      }).success,
+    ).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({
+        ...multiFactorEvidence,
+        authenticationStrength: "recent_multi_factor",
+      }).success,
+    ).toBe(true);
     expect(
       sessionContextSchema.safeParse({ ...human, identityAuthorityId: undefined }).success,
     ).toBe(false);
@@ -1166,21 +1317,6 @@ describe("identity, sharing and secret invariants", () => {
       organizationAccountSetSchema.safeParse([{ ...account(1, 10), accessVersionContribution: 1 }])
         .success,
     ).toBe(false);
-  });
-
-  test("refuses roles without organisation scope", () => {
-    const role = {
-      roleId: id(120),
-      organizationId: id(121),
-      key: "case_reader",
-      label: "Case reader",
-      description: "Reads cases in one organisation.",
-      kind: "organization",
-      liveRevision: 1,
-      permissions: [],
-    };
-    expect(roleSchema.safeParse(role).success).toBe(true);
-    expect(roleSchema.safeParse({ ...role, organizationId: undefined }).success).toBe(false);
   });
 
   test("requires a shared record's changeable fields to be readable and cross-org approval to expire", () => {
@@ -1262,7 +1398,7 @@ describe("identity, sharing and secret invariants", () => {
     ).toBe(false);
   });
 
-  test("represents organisation-account and team record ownership without using names", () => {
+  test("represents organisation-account and Group record ownership without using names", () => {
     const record = {
       storageScope: "organization_shared" as const,
       organizationId: id(200),
@@ -1286,12 +1422,18 @@ describe("identity, sharing and secret invariants", () => {
       }).success,
     ).toBe(true);
     expect(
-      businessRecordSchema.safeParse({ ...record, owner: { kind: "team", teamId: id(207) } })
+      businessRecordSchema.safeParse({ ...record, owner: { kind: "group", groupId: id(207) } })
         .success,
     ).toBe(true);
     expect(
-      businessRecordSchema.safeParse({ ...record, owner: { kind: "team", teamName: "Support" } })
+      businessRecordSchema.safeParse({ ...record, owner: { kind: "group", groupName: "Support" } })
         .success,
+    ).toBe(false);
+    expect(
+      businessRecordSchema.safeParse({
+        ...record,
+        owner: { kind: "team", teamId: id(207) },
+      }).success,
     ).toBe(false);
     expect(
       businessRecordSchema.safeParse({
@@ -1314,6 +1456,36 @@ describe("identity, sharing and secret invariants", () => {
         deletedBy: id(205),
       }).success,
     ).toBe(true);
+  });
+
+  test("uses the current Group principal for direct record sharing", () => {
+    const share = {
+      directShareId: id(209),
+      organizationId: id(200),
+      recordTypeId: id(202),
+      recordId: id(204),
+      recipient: { kind: "group" as const, groupId: id(207) },
+      readableFieldIds: [id(210)],
+      changeableFieldIds: [],
+      startsAt: "2026-09-02T01:00:00+00:00",
+      status: "active" as const,
+      grantedBy: id(206),
+      grantedAt: "2026-09-02T01:00:00+00:00",
+      reason: "Coordinate the current case.",
+    };
+    expect(directRecordShareSchema.safeParse(share).success).toBe(true);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        recipient: { kind: "team", teamId: id(207) },
+      }).success,
+    ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        recipient: { kind: "group", groupId: id(207), teamId: id(207) },
+      }).success,
+    ).toBe(false);
   });
 
   test("accepts a genuinely anonymous public caller without inventing an actor", () => {
