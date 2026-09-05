@@ -24,17 +24,15 @@ import {
   moduleRootIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
-  permissionIdSchema,
   platformIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  roleAssignmentIdSchema,
   roleIdSchema,
   sessionIdSchema,
   teamIdSchema,
   tenantIdSchema,
 } from "./identifiers";
-import { correlationIdSchema, descriptionSchema, jsonValueSchema, labelSchema } from "./common";
+import { correlationIdSchema, jsonValueSchema } from "./common";
 import { permissionDeclarationSchema } from "./permissions";
 
 const administrativeStateSchema = z.enum(["active", "suspended", "archived", "removal_pending"]);
@@ -449,32 +447,6 @@ export const organizationRuntimeSettingsSchema = z
   })
   .strict();
 
-export const teamSchema = z
-  .object({
-    teamId: teamIdSchema,
-    organizationId: organizationIdSchema,
-    key: builderKeySchema,
-    label: labelSchema,
-    state: z.enum(["active", "inactive"]),
-    createdBy: organizationAccountIdSchema,
-    createdAt: timestampSchema,
-    changedAt: timestampSchema,
-  })
-  .strict();
-
-export const teamMembershipSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    teamId: teamIdSchema,
-    organizationAccountId: organizationAccountIdSchema,
-    state: z.enum(["active", "revoked", "expired"]),
-    startsAt: timestampSchema,
-    expiresAt: timestampSchema.optional(),
-    grantedBy: organizationAccountIdSchema,
-    activityId: activityIdSchema,
-  })
-  .strict();
-
 export const invitationSchema = z
   .object({
     invitationId: invitationIdSchema,
@@ -656,69 +628,6 @@ export const permissionSchema = permissionDeclarationSchema.safeExtend({
   ownerKind: z.enum(["platform", "tenant", "organization", "module", "application"]),
   ownerId: platformIdSchema,
 });
-
-const exactPermissionEntrySchema = z
-  .object({ kind: z.literal("exact"), permissionId: permissionIdSchema })
-  .strict();
-const wildcardPermissionEntrySchema = z
-  .object({
-    kind: z.literal("trailing_wildcard"),
-    ownerKind: z.enum(["module", "application"]),
-    ownerId: platformIdSchema,
-    prefix: namespacedKeySchema,
-    catalogueFingerprint: fingerprintSchema,
-    expandedPermissionIds: z.array(permissionIdSchema).min(1),
-  })
-  .strict();
-export const permissionEntrySchema = z.discriminatedUnion("kind", [
-  exactPermissionEntrySchema,
-  wildcardPermissionEntrySchema,
-]);
-
-export const roleSchema = z
-  .object({
-    roleId: roleIdSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema.optional(),
-    key: builderKeySchema,
-    label: labelSchema,
-    description: descriptionSchema,
-    kind: z.enum(["organization", "application"]),
-    liveRevision: revisionSchema,
-    permissions: z.array(permissionEntrySchema),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.kind === "application") !== (value.applicationRootId !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["applicationRootId"],
-        message: "Only application roles carry an application root",
-      });
-  });
-
-export const roleAssignmentSchema = z
-  .object({
-    roleAssignmentId: roleAssignmentIdSchema,
-    organizationId: organizationIdSchema,
-    roleId: roleIdSchema,
-    assignee: z.discriminatedUnion("kind", [
-      z
-        .object({
-          kind: z.literal("organization_account"),
-          organizationAccountId: organizationAccountIdSchema,
-        })
-        .strict(),
-      z.object({ kind: z.literal("team"), teamId: teamIdSchema }).strict(),
-    ]),
-    applicationRootId: applicationRootIdSchema.optional(),
-    startsAt: timestampSchema,
-    expiresAt: timestampSchema.optional(),
-    state: z.enum(["active", "revoked", "expired"]),
-    grantedBy: organizationAccountIdSchema,
-    activityId: activityIdSchema,
-  })
-  .strict();
 
 export const accessRequestSchema = z
   .object({
@@ -1037,8 +946,6 @@ export type InvitationAcceptanceWithAccessVersion = z.infer<
   typeof invitationAcceptanceWithAccessVersionSchema
 >;
 export type OrganizationRuntimeSettings = z.infer<typeof organizationRuntimeSettingsSchema>;
-export type Team = z.infer<typeof teamSchema>;
-export type TeamMembership = z.infer<typeof teamMembershipSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
 export type StoredInvitation = z.infer<typeof storedInvitationSchema>;
 export type EnsureIdentityProjectionCommand = z.infer<typeof ensureIdentityProjectionCommandSchema>;
@@ -1056,9 +963,6 @@ export type ChangeOrganizationAccountStateCommand = z.infer<
 >;
 export type SessionContext = z.infer<typeof sessionContextSchema>;
 export type Permission = z.infer<typeof permissionSchema>;
-export type PermissionEntry = z.infer<typeof permissionEntrySchema>;
-export type Role = z.infer<typeof roleSchema>;
-export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
 export type AccessRequest = z.infer<typeof accessRequestSchema>;
 export type AccessDecision = z.infer<typeof accessDecisionSchema>;
 export type FieldRestriction = z.infer<typeof fieldRestrictionSchema>;
