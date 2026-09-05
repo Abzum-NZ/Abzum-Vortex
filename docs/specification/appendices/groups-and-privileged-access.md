@@ -101,6 +101,20 @@ Removing the originating membership or revoking its eligibility ends that activa
 
 For the initial release, removing or suspending a membership means the same inactive membership state, stored as `revoked`; there is no separate suspension lifecycle. An authorised IAM restore may make that same membership identity live at a higher revision. It clears the current revocation fields, retains the original grant provenance and records the restoring actor, time and correlation as the current change. Earlier activation windows remain invalid because they name the old membership revision. By contrast, revoked role assignments and delegation are terminal: granting them again requires a new identity and an authorised grant. Group retirement is also terminal. Never simulate suspension by changing a start or expiry time.
 
+Membership, role-assignment and delegation time bounds stay fixed for each grant identity. Restore is possible only while the membership's original expiry is absent or still in the future. A restored future-start membership remains scheduled; a permanent membership can be restored without inventing an expiry. After natural expiry, renewal closes the old membership and creates a new membership identity and window through one authorised change. It does not extend the old window or make the gap look like continuous access. Only one non-revoked membership may occupy an organisation/Group/account pair, including a scheduled or naturally expired row; renewal must therefore close that predecessor before creating its replacement. None of these changes revives an old activation.
+
+```mermaid
+flowchart TD
+    MEMBERSHIP[Membership with fixed access window] --> REMOVE[Removed or suspended]
+    REMOVE --> RESTORE[Explicit restore before original expiry]
+    RESTORE --> SAME[Same membership identity, new revision]
+    MEMBERSHIP --> EXPIRE[Original window expires]
+    EXPIRE --> RENEW[Authorised renewal closes old membership]
+    RENEW --> NEW[New membership identity and window]
+    SAME --> FRESH[Privileged use requires a fresh activation]
+    NEW --> FRESH
+```
+
 Users can end their own activation; authorised administrators can revoke it immediately. These reductions do not wait for approval. Requests and review history remain visible as ordinary IAM records under their normal permissions, separately from whether access is effective now.
 
 ## Permanent management access

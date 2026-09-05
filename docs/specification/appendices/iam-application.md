@@ -81,6 +81,8 @@ Authorised revocation runs immediately through IAM's protected action; it does n
 
 The initial membership journey uses one inactive state for removal/suspension, with an explicit authorised restore that advances its revision. Restore never resumes an old privileged activation. Revoked role assignments or delegation instead need a new grant, and retired Groups cannot be restored. IAM follows these [protected lifecycle rules](groups-and-privileged-access.md#current-state-checks-and-revocation); its request records must not invent additional access states.
 
+Restore retains the original membership start and expiry: a future-start membership remains scheduled, and an expired membership cannot be restored by stretching its old window. Renewal after expiry closes the old membership and creates a fresh membership with the newly authorised window. Present restore and renewal as different actions, both requiring current authority; neither silently reactivates privileged access.
+
 ```mermaid
 flowchart LR
     SETUP[Explicit trusted appointment] --> IAM[IAM setup record and minimum steward rights]
