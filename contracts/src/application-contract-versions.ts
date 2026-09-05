@@ -3,9 +3,11 @@ import { definitionSourceContractVersion } from "./definition-source-common";
 export const applicationSourceContractVersionV1 = definitionSourceContractVersion;
 export const applicationValidationContractVersionV1 = "1.0.0" as const;
 
-/** Reserved by #249; no V2 source or validation decoder exists yet. */
-export const plannedApplicationSourceContractVersionV2 = "2.0.0" as const;
-export const plannedApplicationValidationContractVersionV2 = "2.0.0" as const;
+/** V2 schemas exist, but the pair remains unavailable until compiler/runtime support is complete. */
+export const applicationSourceContractVersionV2 = "2.0.0" as const;
+export const applicationValidationContractVersionV2 = "2.0.0" as const;
+export const plannedApplicationSourceContractVersionV2 = applicationSourceContractVersionV2;
+export const plannedApplicationValidationContractVersionV2 = applicationValidationContractVersionV2;
 
 export const applicationContractVersionErrorCodes = [
   "UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION",
