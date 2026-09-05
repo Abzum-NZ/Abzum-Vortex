@@ -10,6 +10,8 @@ Credentials, service access, environment health, one-time deployment or destruct
 
 The September architecture review resolved the HR example scope, workflow-based manager approval with HR fallback, and no self-approval. The permanent requirements are in [HR example policy](page-builder-contracts.md#hr-example-policy); implementation gaps remain in delivery tasks, not in this decision register.
 
+The 5 September Roles and Groups clarification and optional per-role PIM model are incorporated in [Groups and privileged access](groups-and-privileged-access.md) and their owning tasks. Organisation policy configuration (duration, authentication and required review) is not an unresolved universal product setting. There is no new open decision from that clarification.
+
 ## D38 — Immediate behaviour authoring surface
 
 **Question:** Should Studio author immediate rules and synchronous actions through one shared pure declarative rule/action designer, or introduce a separate front-end interaction designer in addition to the authoritative rule/action editor?

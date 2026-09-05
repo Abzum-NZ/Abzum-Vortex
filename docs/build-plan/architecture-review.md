@@ -44,7 +44,7 @@ The early #34 core is generic, not an administration-only evaluator. Every opera
 | Performance timings and sequential scans still block builds | Remove performance-only failure criteria; retain integrity/access and structural bounds | [#46](https://github.com/Abzum-NZ/Abzum-Vortex/issues/46), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58), [#77](https://github.com/Abzum-NZ/Abzum-Vortex/issues/77) |
 | Unsafe predicate is dropped; currency totals change shape | Refuse invalid queries; explicit currency grouping only; avoid derived-value access leaks | [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54), [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) |
 | Four-policy template incorrectly includes private service tables | Generated business tables use operation policies; private tables retain narrow owner-function access | [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) |
-| Single-Team/field-nonconfigurable leftovers contradict access spec | Multiple Teams, direct-share scopes and configurable field read/write contracts | [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) |
+| Single-Group/field-nonconfigurable leftovers contradict access spec | Multiple Groups, direct-share scopes and configurable field read/write contracts | [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) |
 | Extension publication checks installed consumers and can deadlock releases | Publish immutable breaking version; enforce compatibility at consumer adoption; no last-writer field/permission override | [#110](https://github.com/Abzum-NZ/Abzum-Vortex/issues/110), [#111](https://github.com/Abzum-NZ/Abzum-Vortex/issues/111) |
 | Full archive/restore has no explicit task and needs later privacy policy | Add separate Phase 11 task, distinct from tabular import and provider backup | [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255), [#170](https://github.com/Abzum-NZ/Abzum-Vortex/issues/170) |
 
@@ -55,7 +55,7 @@ The early #34 core is generic, not an administration-only evaluator. Every opera
 | 1 Purpose and core boundary | Retain generic primitives; HR and operational applications are consumers, not core domains. |
 | 2 Identity, tenants and organisations | Retain one identity/many separate accounts, tenant hierarchy and provider-owned sessions. Do not disturb current Phase 2 work. |
 | 3 Publication and compatibility | Retain immutable releases and explicit consumer adoption; correct page contexts and publish-versus-activate language. |
-| 4 Access | Complete actor-relative/relationship scope contracts; correct Teams, fields and private-table handling. |
+| 4 Access | Complete actor-relative/relationship scope contracts; correct Groups, fields and private-table handling. |
 | 5 Modules, fields and relationships | Retain storage-lineage identity and separate ownership scopes; correct unique-index readiness and mixed-currency task wording. |
 | 6 Record lifecycle | Require transactional evidence, concurrency and safe derived values; no HR-specific saves. |
 | 7 Applications/pages/themes | Substantial contract completion and Fluid adapter defined in the linked appendix. |
@@ -75,6 +75,8 @@ The early #34 core is generic, not an administration-only evaluator. Every opera
 | Decision register | HR scope, workflow approvals and no self-approval are resolved in the permanent example specification; no open business choice from this review. |
 
 ## Fluid reuse decision
+
+The [rechecked integration map](fluid-integration-map.md) records the 5 September inspection of the exact board editor, concrete source-to-service wiring, preservation requirements and dependency-led implementation proof.
 
 | Inspected area | Treatment |
 |---|---|

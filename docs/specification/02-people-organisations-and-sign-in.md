@@ -6,7 +6,7 @@
 
 A **tenant** is the customer-level governance and security boundary. One tenant owns one or more **organisations**. Organisations are private workspaces and may form a hierarchy inside their tenant. An **identity** is one human sign-in. An **organisation account** is that identity's separate account inside one organisation.
 
-One identity may have accounts in several organisations, including organisations in different tenants, but may have only one account in the same organisation. Each organisation account has its own state, profile, roles, teams, application access, preferences, and activity. No role or team membership carries from one organisation account to another.
+One identity may have accounts in several organisations, including organisations in different tenants, but may have only one account in the same organisation. Each organisation account has its own state, profile, roles, groups, application access, preferences, and activity. No role or group membership carries from one organisation account to another.
 
 ```mermaid
 flowchart TD
@@ -32,7 +32,7 @@ flowchart TD
 - Moving an organisation changes its parent link. Its descendants retain their links and therefore move as the same subtree. The move is refused if the destination is another tenant, it would create a cycle, or an active policy prevents it.
 - Archiving or marking a tenant or parent organisation for removal is refused while it retains an active or suspended child. A caller may complete an explicitly ordered subtree transition in one transaction; the database validates the final committed state.
 - Suspension does not rewrite descendant lifecycle states. Request-context establishment checks the selected tenant, organisation, and organisation account independently, so suspending a parent or tenant still prevents new entry where required without hiding descendant state changes.
-- Records, files, connections, roles, teams, applications, search, workflow work, and activity remain owned by an organisation. A parent organisation does not inherit access to a child organisation's data.
+- Records, files, connections, roles, groups, applications, search, workflow work, and activity remain owned by an organisation. A parent organisation does not inherit access to a child organisation's data.
 - The tenant owns customer-wide hierarchy, lifecycle and [entitlement](15-entitlements-and-metering.md) scope. Metering is attributed to the organisation that caused it where meaningful and can be rolled up to its tenant.
 
 ## Tenant administration
@@ -67,7 +67,7 @@ flowchart LR
 
 Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It is implemented with [Supabase Auth](https://supabase.com/docs/guides/auth) and issues short-lived identity tokens using the managed P-256 `ES256` [asymmetric signing key and published key set](https://supabase.com/docs/guides/auth/signing-keys). A cluster verifies a token through the authority's standard JWKS endpoint, ensures or loads its minimal cluster-local identity projection, and then loads only active organisation accounts stored in that cluster. Testing proves this boundary with two independently configured verifier instances; it does not pretend that a second physical Testing cluster exists.
 
-Supabase tokens retain the provider's [required standard claims](https://supabase.com/docs/guides/auth/jwt-fields). After signature verification, the Identity service validates the configured issuer, `authenticated` audience, issue time, not-before time and expiry. It allows no more than 60 seconds of clock difference between systems. It converts only `sub`, `email`, `session_id`, `aal`, `iat`, `exp`, issuer, audience, and the verified JWT key identifier into a closed Vortex result. `sub` becomes the permanent global identity identifier. The `email` claim is accepted only from a non-anonymous authenticated session issued while mandatory email confirmation is enforced; the token itself has no separate email-confirmed claim. The result never contains the Supabase `role`, phone, application metadata, user-editable metadata, tenant-administrator assignments, organisation roles, teams, application access, sharing grants, MCP capability approvals, or an access decision.
+Supabase tokens retain the provider's [required standard claims](https://supabase.com/docs/guides/auth/jwt-fields). After signature verification, the Identity service validates the configured issuer, `authenticated` audience, issue time, not-before time and expiry. It allows no more than 60 seconds of clock difference between systems. It converts only `sub`, `email`, `session_id`, `aal`, `iat`, `exp`, issuer, audience, and the verified JWT key identifier into a closed Vortex result. `sub` becomes the permanent global identity identifier. The `email` claim is accepted only from a non-anonymous authenticated session issued while mandatory email confirmation is enforced; the token itself has no separate email-confirmed claim. The result never contains the Supabase `role`, phone, application metadata, user-editable metadata, tenant-administrator assignments, organisation roles, groups, application access, sharing grants, MCP capability approvals, or an access decision.
 
 No custom access-token hook is used for identity tokens. Supabase's standard claims contain every identity fact Vortex needs, while tenant, organisation, application and capability authority must remain live platform data. A delegated [MCP OAuth token](12-connections-and-interfaces.md#identity-consent-and-access) may identify its registered client and MCP-server audience under the Phase 9 interface work, but those values still cannot carry organisation or application authority.
 
@@ -133,18 +133,20 @@ The delivered session result above identifies authentication strength and token 
 
 Recent sign-in and recent MFA are distinct. A token refresh, request-context timestamp or an old multi-factor session cannot manufacture a recent confirmation. Missing or unsuitable evidence refuses only operations that require it, without inventing assurance or rejecting an otherwise valid ordinary session. No full authentication history, MFA enrollment details or extra durable session store is copied into Vortex. Operation-specific strength and maximum age remain part of [the central access requirement](04-access-and-permissions.md#where-access-is-enforced).
 
-## Invitations and teams
+The [verified recent-authentication contract](appendices/recent-authentication.md) specifies the minimum safe confirmation times, supported provider methods, exact propagation and compatibility checks. Token clock tolerance remains separate from authentication recency; a refresh does not reset either confirmation time.
 
-- An invitation names one organisation, one normalised verified email address, and an expiry. Phase 2 stores no proposed role or Team assignment; [roles and teams](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) add authorised assignment handling later.
+## Invitations and groups
+
+- An invitation names one organisation, one normalised verified email address, and an expiry. Phase 2 stores no proposed role or Group assignment; [roles and groups](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) add authorised assignment handling later.
 - The raw invitation secret is generated from 32 cryptographically secure random bytes and is returned only to the trusted delivery caller. The database stores only its SHA-256 fingerprint and never stores or returns the raw secret.
 - Accepting requires a current verified Identity Authority result with exactly the invited normalised email. It creates the one organisation account for that identity and organisation, or reactivates an inactive account only when the invitation was issued after that account became inactive.
 - A pending invitation creates no placeholder account. First acceptance is single-use, expiry-bound, and concurrency-safe. An exact replay by the identity that already accepted it may return the same still-active account after expiry without another mutation; it is no longer a grant operation. Wrong-address, wrong-identity, revoked, expired-first-use, inactive-account, and inactive-organisation or tenant attempts return the same unavailable result. Only the matching verified identity may receive the separate `identity_inactive` outcome for its own inactive cluster projection.
-- One organisation account may belong to several teams. Teams belong to one organisation and may receive roles, application access, and direct record shares.
-- Team membership changes affect the next request and appear in [activity history](14-activity-privacy-and-retention.md).
+- One organisation account may belong to several groups. Groups belong to one organisation and may receive roles, application access, and direct record shares.
+- Group membership changes affect the next request and appear in [activity history](14-activity-privacy-and-retention.md).
 
 ## Organisation launcher and sign-in experience
 
-The neutral launcher is a minimum safe projection of the organisations the current verified identity may enter. Each entry contains only the tenant and organisation display names and permanent organisation identifier, plus the organisation-account display name when one exists. It does not expose tenant or account identifiers, hierarchy, lifecycle state, logos, applications, roles, teams, permissions, commercial details, or another identity's account. Entries use display-name ordering with permanent identifiers as stable tie-breakers.
+The neutral launcher is a minimum safe projection of the organisations the current verified identity may enter. Each entry contains only the tenant and organisation display names and permanent organisation identifier, plus the organisation-account display name when one exists. It does not expose tenant or account identifiers, hierarchy, lifecycle state, logos, applications, roles, groups, permissions, commercial details, or another identity's account. Entries use display-name ordering with permanent identifiers as stable tie-breakers.
 
 No active account shows a neutral empty state; one active account redirects directly to its organisation address; several active accounts show the launcher. Identity or storage unavailability shows a retryable neutral state and does not pretend the account list is empty. An unknown, foreign, suspended, closed, or otherwise unavailable selection has one indistinguishable unavailable result.
 
@@ -180,12 +182,12 @@ Legal details, contacts, branding, business calendars, notices and privacy reque
 
 ## Required records
 
-The platform stores the tenant, tenant-administrator assignment, organisation and hierarchy, minimal cluster-local identity projection, organisation account, team and membership, invitation, application access assignment, and minimum runtime localisation settings described in the [data contracts](appendices/data-contracts.md#tenant-identity-and-organisation-account-records). Supabase Auth stores the durable sign-in session. Vortex keeps only the current provider credentials in server-managed browser cookies and does not add a session relation or copy provider credentials, profiles, MFA enrolment, or sign-in history. Other administrative data is stored as ordinary application records.
+The platform stores the tenant, tenant-administrator assignment, organisation and hierarchy, minimal cluster-local identity projection, organisation account, group and membership, invitation, application access assignment, and minimum runtime localisation settings described in the [data contracts](appendices/data-contracts.md#tenant-identity-and-organisation-account-records). Supabase Auth stores the durable sign-in session. Vortex keeps only the current provider credentials in server-managed browser cookies and does not add a session relation or copy provider credentials, profiles, MFA enrolment, or sign-in history. Other administrative data is stored as ordinary application records.
 
 ## Acceptance examples
 
-- One identity uses separate accounts in several organisations without mixed roles, profiles, teams, search, files, pages, notifications, or cached values.
-- One organisation account belongs to several teams and receives the union of their currently valid non-conflicting grants.
+- One identity uses separate accounts in several organisations without mixed roles, profiles, groups, search, files, pages, notifications, or cached values.
+- One organisation account belongs to several groups and receives the union of their currently valid non-conflicting grants.
 - A tenant administrator creates a child organisation but cannot read its records without a local organisation account and local roles.
 - A hierarchy move across tenants and a move that creates a cycle are both refused.
 - Suspending one organisation account removes its access on the next request without affecting the identity's other accounts.
