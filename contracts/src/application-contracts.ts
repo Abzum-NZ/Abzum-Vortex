@@ -47,6 +47,14 @@ import {
 } from "./identifiers";
 import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "./common";
 import { permissionDeclarationSchema } from "./permissions";
+import {
+  applicationShellV2Schema,
+  applicationThemeV2Schema,
+  canonicalPlacementEntriesV2,
+  guidedFormPageCompositionV2Schema,
+  pageCompositionV2Schema,
+  platformBlockDependenciesV2Schema,
+} from "./application-composition-v2";
 
 export const moduleBindingSchema = z
   .object({
@@ -374,6 +382,120 @@ export const pageDefinitionSchema = z.discriminatedUnion("type", [
   publicPageSchema,
 ]);
 
+const pageV2Common = {
+  pageId: pageIdSchema,
+  key: builderKeySchema,
+  name: labelSchema,
+  accessPermissionKey: namespacedKeySchema,
+  states: z.array(pageStateSchema).min(1),
+  standardPageReplacement: standardPageReplacementSchema.optional(),
+};
+
+const pageV2Base = {
+  ...pageV2Common,
+  composition: pageCompositionV2Schema,
+};
+
+const listPageV2Schema = z
+  .object({
+    ...pageV2Base,
+    type: z.literal("list"),
+    recordType: recordTypeReferenceSchema,
+    queryId: queryIdSchema,
+    arrangements: z.array(listArrangementSchema).min(1),
+    calendarMapping: calendarMappingSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const usesCalendar = value.arrangements.includes("calendar");
+    if (usesCalendar !== (value.calendarMapping !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["calendarMapping"],
+        message: "Calendar mapping is required exactly when the calendar arrangement is enabled",
+      });
+  });
+
+const guidedFormStepV2Schema = z
+  .object({
+    id: containedComponentIdSchema,
+    name: labelSchema,
+    summary: z.boolean(),
+  })
+  .strict();
+
+export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
+  listPageV2Schema,
+  z
+    .object({ ...pageV2Base, type: z.literal("detail"), recordType: recordTypeReferenceSchema })
+    .strict(),
+  z.object({ ...pageV2Base, type: z.literal("dashboard") }).strict(),
+  z
+    .object({
+      ...pageV2Base,
+      type: z.literal("form"),
+      recordType: recordTypeReferenceSchema,
+      commitActionKey: namespacedKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...pageV2Common,
+      type: z.literal("guided_form"),
+      recordType: recordTypeReferenceSchema,
+      commitActionKey: namespacedKeySchema,
+      steps: z.array(guidedFormStepV2Schema).min(2).max(20),
+      composition: guidedFormPageCompositionV2Schema,
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const stepIds = value.steps.map((step) => String(step.id));
+      if (value.steps.filter((step) => step.summary).length !== 1)
+        context.addIssue({
+          code: "custom",
+          path: ["steps"],
+          message: "A guided form has exactly one summary step",
+        });
+      if (new Set(stepIds).size !== stepIds.length)
+        context.addIssue({
+          code: "custom",
+          path: ["steps"],
+          message: "Guided-form step identities must be unique",
+        });
+      const contentIds = Object.keys(value.composition.stepContent);
+      if (
+        contentIds.length !== stepIds.length ||
+        contentIds.some((stepId) => !stepIds.includes(stepId))
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["composition", "stepContent"],
+          message: "Guided-form step content must match every declared step exactly once",
+        });
+    }),
+  z
+    .object({
+      ...pageV2Base,
+      type: z.literal("public"),
+      recordType: recordTypeReferenceSchema.optional(),
+      publicFieldIds: z.array(fieldIdSchema),
+      publicActionKey: namespacedKeySchema.optional(),
+      rateLimitPerMinute: z.number().int().min(1).max(10_000),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      if (
+        value.recordType === undefined &&
+        (value.publicFieldIds.length > 0 || value.publicActionKey !== undefined)
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["recordType"],
+          message: "A public record field or action requires an explicit record type",
+        });
+    }),
+]);
+
 export const applicationRoleSchema = z
   .object({
     roleId: roleIdSchema,
@@ -515,7 +637,7 @@ export const pipelineSchema = z
         });
   });
 
-export const applicationContentSchema = z
+export const applicationContentV1Schema = z
   .object({
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(1_000),
@@ -543,19 +665,172 @@ export const applicationContentSchema = z
     homePageId: pageIdSchema,
   })
   .strict();
-export const applicationDraftSchema = z
-  .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentSchema })
+
+export const applicationContentV2Schema = applicationContentV1Schema
+  .omit({ pages: true, blockRegistrations: true, theme: true })
+  .extend({
+    platformBlockDependencies: platformBlockDependenciesV2Schema,
+    shells: z.array(applicationShellV2Schema),
+    pages: z.array(pageDefinitionV2Schema).min(1),
+    theme: applicationThemeV2Schema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const shellIds = value.shells.map((shell) => shell.shellId);
+    const shellKeys = value.shells.map((shell) => shell.key);
+    if (new Set(shellIds).size !== shellIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["shells"],
+        message: "Shell identities must be unique",
+      });
+    if (new Set(shellKeys).size !== shellKeys.length)
+      context.addIssue({ code: "custom", path: ["shells"], message: "Shell keys must be unique" });
+    const contentSlotIds = value.shells.flatMap((shell) =>
+      shell.contentSlots.map((slot) => slot.slotId),
+    );
+    if (new Set(contentSlotIds).size !== contentSlotIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["shells"],
+        message: "Shell content-slot identities must be unique across the application",
+      });
+
+    const placementEntries = value.shells.flatMap((shell) =>
+      canonicalPlacementEntriesV2(shell.layout),
+    );
+    const shellsById = new Map(value.shells.map((shell) => [String(shell.shellId), shell]));
+    const validateShellContent = (
+      content: Record<string, { placements: Record<string, unknown> }>,
+      shell: (typeof value.shells)[number],
+      path: (string | number)[],
+    ) => {
+      const allowed = new Set(shell.contentSlots.map((slot) => String(slot.slotId)));
+      const required = shell.contentSlots
+        .filter((slot) => slot.required)
+        .map((slot) => String(slot.slotId));
+      const supplied = Object.keys(content);
+      if (supplied.some((slotId) => !allowed.has(slotId)))
+        context.addIssue({
+          code: "custom",
+          path,
+          message: "Page content may bind only slots declared by its shell",
+        });
+      if (
+        required.some((slotId) => {
+          const slot = content[slotId];
+          return slot === undefined || Object.keys(slot.placements).length === 0;
+        })
+      )
+        context.addIssue({
+          code: "custom",
+          path,
+          message: "Page content must bind non-empty content to every required shell slot",
+        });
+    };
+    for (const [pageIndex, page] of value.pages.entries()) {
+      const composition = page.composition;
+      if ("stepContent" in composition) {
+        if (composition.shellKind === "default") {
+          for (const slot of Object.values(composition.stepContent))
+            placementEntries.push(...canonicalPlacementEntriesV2(slot));
+          continue;
+        }
+        const shell = shellsById.get(String(composition.shellId));
+        if (shell === undefined)
+          context.addIssue({
+            code: "custom",
+            path: ["pages", pageIndex, "composition", "shellId"],
+            message: "A page shell must resolve inside the same application",
+          });
+        for (const [stepId, content] of Object.entries(composition.stepContent)) {
+          if (shell !== undefined)
+            validateShellContent(content, shell, [
+              "pages",
+              pageIndex,
+              "composition",
+              "stepContent",
+              stepId,
+            ]);
+          for (const slot of Object.values(content))
+            placementEntries.push(...canonicalPlacementEntriesV2(slot));
+        }
+        continue;
+      }
+      if (composition.shellKind === "default")
+        placementEntries.push(...canonicalPlacementEntriesV2(composition.main));
+      else {
+        const shell = shellsById.get(String(composition.shellId));
+        if (shell === undefined)
+          context.addIssue({
+            code: "custom",
+            path: ["pages", pageIndex, "composition", "shellId"],
+            message: "A page shell must resolve inside the same application",
+          });
+        else
+          validateShellContent(composition.content, shell, [
+            "pages",
+            pageIndex,
+            "composition",
+            "content",
+          ]);
+        for (const slot of Object.values(composition.content))
+          placementEntries.push(...canonicalPlacementEntriesV2(slot));
+      }
+    }
+
+    const placementIds = placementEntries.map(([placementId]) => placementId);
+    if (new Set(placementIds).size !== placementIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["pages"],
+        message: "Placement identities must be unique across the application",
+      });
+
+    const manifest = new Map(
+      value.platformBlockDependencies.map((dependency) => [
+        String(dependency.blockId),
+        dependency.releaseVersion,
+      ]),
+    );
+    const used = new Set<string>();
+    for (const [, placement] of placementEntries) {
+      const blockId = String(placement.block.blockId);
+      used.add(blockId);
+      if (manifest.get(blockId) !== placement.block.releaseVersion)
+        context.addIssue({
+          code: "custom",
+          path: ["platformBlockDependencies"],
+          message: "Every placement must match one exact platform-block dependency",
+        });
+    }
+    if ([...manifest.keys()].some((blockId) => !used.has(blockId)))
+      context.addIssue({
+        code: "custom",
+        path: ["platformBlockDependencies"],
+        message: "The platform-block dependency list cannot contain unused releases",
+      });
+  });
+
+/** Backward-compatible name for the currently implemented canonical Application content. */
+export const applicationContentSchema = applicationContentV1Schema;
+
+export const applicationDraftV1Schema = z
+  .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentV1Schema })
   .strict();
-export const publishedApplicationDefinitionSchema = z
+/** Backward-compatible name for the currently implemented canonical Application draft. */
+export const applicationDraftSchema = applicationDraftV1Schema;
+
+export const publishedApplicationDefinitionV1Schema = z
   .object({
     publication: publishedApplicationReferenceSchema,
-    content: applicationContentSchema,
+    content: applicationContentV1Schema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(applicationContentSchema, value.content, context, [
+    requireResolvedRecordTypeReferences(applicationContentV1Schema, value.content, context, [
       "content",
     ]),
   )
@@ -569,6 +844,9 @@ export const publishedApplicationDefinitionSchema = z
         content: ResolveRecordTypeReferences<typeof value.content>;
       },
   );
+
+/** Backward-compatible name for the currently implemented published Application contract. */
+export const publishedApplicationDefinitionSchema = publishedApplicationDefinitionV1Schema;
 
 export const sharedRecordProjectionSchema = z
   .object({
@@ -590,7 +868,9 @@ export type ModuleBinding = z.infer<typeof moduleBindingSchema>;
 export type NavigationItem = z.infer<typeof navigationItemSchema>;
 export type CalendarMapping = z.infer<typeof calendarMappingSchema>;
 export type PageDefinition = z.infer<typeof pageDefinitionSchema>;
+export type PageDefinitionV2 = z.infer<typeof pageDefinitionV2Schema>;
 export type ApplicationContent = z.infer<typeof applicationContentSchema>;
+export type ApplicationContentV2 = z.infer<typeof applicationContentV2Schema>;
 export type ApplicationDraft = z.infer<typeof applicationDraftSchema>;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
 export type BlockSettingValue = z.infer<typeof blockSettingValueSchema>;
