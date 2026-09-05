@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   builderKeySchema,
   fingerprintSchema,
+  groupIdSchema,
   namespacedKeySchema,
   revisionSchema,
   semanticVersionSchema,
@@ -29,7 +30,6 @@ import {
   recordTypeIdSchema,
   roleIdSchema,
   sessionIdSchema,
-  teamIdSchema,
   tenantIdSchema,
 } from "./identifiers";
 import { correlationIdSchema, jsonValueSchema } from "./common";
@@ -422,7 +422,7 @@ export const organizationAccountSetSchema = z
     }
   });
 
-export const accessVersionChangeReasonKeys = [
+export const accessVersionChangeReasonV1Keys = [
   "organization_initialized",
   "organization_account_activated",
   "organization_account_reactivated",
@@ -438,18 +438,65 @@ export const accessVersionChangeReasonKeys = [
   "mcp_authorization_changed",
 ] as const;
 
+export const accessVersionChangeReasonKeys = [
+  "organization_initialized",
+  "organization_account_activated",
+  "organization_account_reactivated",
+  "organization_account_suspended",
+  "organization_account_closed",
+  "role_assignment_changed",
+  "group_membership_changed",
+  "application_access_changed",
+  "direct_share_changed",
+  "access_grant_changed",
+  "public_policy_changed",
+  "federation_mirror_changed",
+  "mcp_authorization_changed",
+] as const;
+
+export const accessVersionChangeReasonV1Schema = z.enum(accessVersionChangeReasonV1Keys);
 export const accessVersionChangeReasonSchema = z.enum(accessVersionChangeReasonKeys);
 
+export const readAccessVersionChangeReasonV1 = (
+  candidate: unknown,
+): z.infer<typeof accessVersionChangeReasonSchema> => {
+  const reason = accessVersionChangeReasonV1Schema.parse(candidate);
+  return reason === "team_membership_changed" ? "group_membership_changed" : reason;
+};
+
+export const writeAccessVersionChangeReasonV1 = (
+  candidate: unknown,
+): z.infer<typeof accessVersionChangeReasonV1Schema> => {
+  const reason = accessVersionChangeReasonSchema.parse(candidate);
+  return reason === "group_membership_changed" ? "team_membership_changed" : reason;
+};
+
+const organizationAccessVersionFields = {
+  organizationId: organizationIdSchema,
+  currentVersion: revisionSchema,
+  changedAt: timestampSchema,
+  changedBy: actorIdSchema,
+  changeCorrelationId: correlationIdSchema,
+};
+
 export const organizationAccessVersionSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    currentVersion: revisionSchema,
-    changedAt: timestampSchema,
-    changedBy: actorIdSchema,
-    changeCorrelationId: correlationIdSchema,
-    changeReason: accessVersionChangeReasonSchema,
-  })
+  .object({ ...organizationAccessVersionFields, changeReason: accessVersionChangeReasonSchema })
   .strict();
+
+/** Exact reader for the applied V1 Access-version storage representation. */
+export const organizationAccessVersionV1Schema = z
+  .object({ ...organizationAccessVersionFields, changeReason: accessVersionChangeReasonV1Schema })
+  .strict();
+
+export const readOrganizationAccessVersionV1 = (
+  candidate: unknown,
+): z.infer<typeof organizationAccessVersionSchema> => {
+  const version = organizationAccessVersionV1Schema.parse(candidate);
+  return {
+    ...version,
+    changeReason: readAccessVersionChangeReasonV1(version.changeReason),
+  };
+};
 
 export const currentOrganizationAccessVersionSchema = organizationAccessVersionSchema.pick({
   organizationId: true,
@@ -807,7 +854,7 @@ export const directRecordShareSchema = z
           organizationAccountId: organizationAccountIdSchema,
         })
         .strict(),
-      z.object({ kind: z.literal("team"), teamId: teamIdSchema }).strict(),
+      z.object({ kind: z.literal("group"), groupId: groupIdSchema }).strict(),
     ]),
     ...readableAndChangeable,
     startsAt: timestampSchema,
@@ -1028,7 +1075,9 @@ export type SelectedOrganizationScope = z.infer<typeof selectedOrganizationScope
 export type OrganizationAccount = z.infer<typeof organizationAccountSchema>;
 export type OrganizationAccountSet = z.infer<typeof organizationAccountSetSchema>;
 export type AccessVersionChangeReason = z.infer<typeof accessVersionChangeReasonSchema>;
+export type AccessVersionChangeReasonV1 = z.infer<typeof accessVersionChangeReasonV1Schema>;
 export type OrganizationAccessVersion = z.infer<typeof organizationAccessVersionSchema>;
+export type OrganizationAccessVersionV1 = z.infer<typeof organizationAccessVersionV1Schema>;
 export type CurrentOrganizationAccessVersion = z.infer<
   typeof currentOrganizationAccessVersionSchema
 >;

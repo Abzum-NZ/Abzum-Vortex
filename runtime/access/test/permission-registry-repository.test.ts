@@ -93,6 +93,44 @@ describe("permission registry private repository", () => {
     expect(calls[0]?.values).toEqual([id(1), id(2), id(3)]);
   });
 
+  it("keeps the Group metadata revision separate from historical platform initialisation", async () => {
+    const calls: QueryCall[] = [];
+    const repository = createPermissionRegistryPrivateRepository(
+      transactionFor(
+        () => [
+          {
+            organization_id: id(1),
+            source_catalogue_version: "1.0.0",
+            target_catalogue_version: "1.0.1",
+            registration_revision: "2",
+            access_version: 3n,
+          },
+        ],
+        calls,
+      ),
+    );
+
+    await expect(
+      repository.revisePlatformCatalogueMetadata({
+        organizationId: id(1),
+        expectedRegistrationRevision: 1,
+        sourceCatalogueVersion: "1.0.0",
+        targetCatalogueVersion: "1.0.1",
+        changedBy: id(2),
+        correlationId: id(3),
+      }),
+    ).resolves.toEqual({
+      organizationId: id(1),
+      sourceCatalogueVersion: "1.0.0",
+      targetCatalogueVersion: "1.0.1",
+      registrationRevision: 2,
+      accessVersion: 3,
+    });
+    expect(calls[0]?.text).toContain("vortex_access.revise_platform_permission_catalogue_metadata");
+    expect(calls[0]?.text).not.toContain("initialize_platform_permission_catalogue");
+    expect(calls[0]?.values).toEqual([id(1), 1, "1.0.0", "1.0.1", id(2), id(3)]);
+  });
+
   it("verifies a prepared candidate before calling the owner-only mutation handoff", async () => {
     const calls: QueryCall[] = [];
     const candidate = preparedCandidate();

@@ -7,9 +7,10 @@ import {
 import { fingerprintCanonicalValue } from "@vortex/definition";
 
 export const platformPermissionCatalogueOwnerId = "cabe121e-0baf-4084-9471-cce915d460a8";
-export const platformPermissionCatalogueVersion = "1.0.0";
+export const platformPermissionCatalogueVersionV1 = "1.0.0";
+export const platformPermissionCatalogueVersion = "1.0.1";
 
-const permissions = [
+const historicalPermissionsV1 = [
   {
     permissionId: "687d5649-62ee-43dd-b684-b8af3a5394c1",
     key: "platform.organization.permissions.read",
@@ -126,15 +127,47 @@ const permissions = [
   },
 ];
 
-const catalogueCore = {
-  catalogueVersion: platformPermissionCatalogueVersion,
-  ownerKind: "platform" as const,
-  ownerId: platformPermissionCatalogueOwnerId,
-  permissions,
-};
+const currentPermissions = historicalPermissionsV1.map((permission) => {
+  if (permission.key === "platform.organization.teams.read")
+    return {
+      ...permission,
+      label: "View groups",
+      description: "View the selected organisation's Groups and membership administration data.",
+    };
+  if (permission.key === "platform.organization.teams.manage")
+    return {
+      ...permission,
+      label: "Manage groups",
+      description:
+        "Manage Groups and memberships subject to delegated scope and permanent-steward safeguards.",
+    };
+  return permission;
+});
 
-export const platformPermissionCatalogue: PlatformPermissionCatalogue =
-  platformPermissionCatalogueSchema.parse({
+const buildCatalogue = (
+  catalogueVersion: string,
+  permissions: typeof historicalPermissionsV1,
+): PlatformPermissionCatalogue => {
+  const catalogueCore = {
+    catalogueVersion,
+    ownerKind: "platform" as const,
+    ownerId: platformPermissionCatalogueOwnerId,
+    permissions,
+  };
+  return platformPermissionCatalogueSchema.parse({
     ...catalogueCore,
     catalogueFingerprint: fingerprintCanonicalValue(catalogueCore),
   });
+};
+
+/** Immutable historical metadata installed by the original platform initializer. */
+export const platformPermissionCatalogueV1 = buildCatalogue(
+  platformPermissionCatalogueVersionV1,
+  historicalPermissionsV1,
+);
+
+/** Current display metadata. Permanent identities, keys and permission meaning remain unchanged. */
+export const platformPermissionCatalogue = buildCatalogue(
+  platformPermissionCatalogueVersion,
+  currentPermissions,
+);

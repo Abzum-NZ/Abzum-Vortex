@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   accessGrantSchema,
+  accessVersionChangeReasonV1Schema,
   accessVersionChangeReasonSchema,
   actionInputDefinitionSchema,
   applicationConnectionBindingSchema,
@@ -57,6 +58,7 @@ import {
   workflowNodeTypeSchema,
   definitionSourceDocumentSchema,
   definitionPublicationContextSchema,
+  directRecordShareSchema,
   sourceBlockSettingValueSchema,
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
@@ -64,6 +66,8 @@ import {
   tenantSchema,
   verifiedIdentitySchema,
   readOrganizationAccessVersionCommandSchema,
+  readOrganizationAccessVersionV1,
+  writeAccessVersionChangeReasonV1,
 } from "../src";
 import type {
   PublishedApplicationDefinition,
@@ -145,6 +149,27 @@ describe("identity projection, organisation-account and invitation contracts", (
     expect(accessVersionChangeReasonSchema.safeParse("organization_initialized").success).toBe(
       true,
     );
+    expect(accessVersionChangeReasonSchema.safeParse("group_membership_changed").success).toBe(
+      true,
+    );
+    expect(accessVersionChangeReasonSchema.safeParse("team_membership_changed").success).toBe(
+      false,
+    );
+    expect(accessVersionChangeReasonV1Schema.safeParse("team_membership_changed").success).toBe(
+      true,
+    );
+    expect(accessVersionChangeReasonV1Schema.safeParse("group_membership_changed").success).toBe(
+      false,
+    );
+    expect(writeAccessVersionChangeReasonV1("group_membership_changed")).toBe(
+      "team_membership_changed",
+    );
+    expect(
+      readOrganizationAccessVersionV1({
+        ...version,
+        changeReason: "team_membership_changed",
+      }),
+    ).toEqual({ ...version, changeReason: "group_membership_changed" });
     expect(accessVersionChangeReasonSchema.safeParse("business_record_changed").success).toBe(
       false,
     );
@@ -210,7 +235,7 @@ describe("identity projection, organisation-account and invitation contracts", (
     ).toBe(false);
   });
 
-  test("keeps Phase 2 invitations free of role and Team assignments", () => {
+  test("keeps Phase 2 invitations free of role and Group assignments", () => {
     expect(invitationSchema.safeParse(invitation).success).toBe(true);
     expect(invitationSchema.safeParse({ ...invitation, proposedRoleIds: [] }).success).toBe(false);
     expect(invitationSchema.safeParse({ ...invitation, proposedAssignments: [] }).success).toBe(
@@ -1360,7 +1385,7 @@ describe("identity, sharing and secret invariants", () => {
     ).toBe(false);
   });
 
-  test("represents organisation-account and team record ownership without using names", () => {
+  test("represents organisation-account and Group record ownership without using names", () => {
     const record = {
       storageScope: "organization_shared" as const,
       organizationId: id(200),
@@ -1384,12 +1409,18 @@ describe("identity, sharing and secret invariants", () => {
       }).success,
     ).toBe(true);
     expect(
-      businessRecordSchema.safeParse({ ...record, owner: { kind: "team", teamId: id(207) } })
+      businessRecordSchema.safeParse({ ...record, owner: { kind: "group", groupId: id(207) } })
         .success,
     ).toBe(true);
     expect(
-      businessRecordSchema.safeParse({ ...record, owner: { kind: "team", teamName: "Support" } })
+      businessRecordSchema.safeParse({ ...record, owner: { kind: "group", groupName: "Support" } })
         .success,
+    ).toBe(false);
+    expect(
+      businessRecordSchema.safeParse({
+        ...record,
+        owner: { kind: "team", teamId: id(207) },
+      }).success,
     ).toBe(false);
     expect(
       businessRecordSchema.safeParse({
@@ -1412,6 +1443,36 @@ describe("identity, sharing and secret invariants", () => {
         deletedBy: id(205),
       }).success,
     ).toBe(true);
+  });
+
+  test("uses the current Group principal for direct record sharing", () => {
+    const share = {
+      directShareId: id(209),
+      organizationId: id(200),
+      recordTypeId: id(202),
+      recordId: id(204),
+      recipient: { kind: "group" as const, groupId: id(207) },
+      readableFieldIds: [id(210)],
+      changeableFieldIds: [],
+      startsAt: "2026-09-02T01:00:00+00:00",
+      status: "active" as const,
+      grantedBy: id(206),
+      grantedAt: "2026-09-02T01:00:00+00:00",
+      reason: "Coordinate the current case.",
+    };
+    expect(directRecordShareSchema.safeParse(share).success).toBe(true);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        recipient: { kind: "team", teamId: id(207) },
+      }).success,
+    ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        recipient: { kind: "group", groupId: id(207), teamId: id(207) },
+      }).success,
+    ).toBe(false);
   });
 
   test("accepts a genuinely anonymous public caller without inventing an actor", () => {

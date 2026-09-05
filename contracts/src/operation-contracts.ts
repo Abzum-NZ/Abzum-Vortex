@@ -12,6 +12,7 @@ import {
   fieldIdSchema,
   fileIdSchema,
   fingerprintSchema,
+  groupIdSchema,
   meteringEventIdSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
@@ -25,7 +26,6 @@ import {
   revisionSchema,
   semanticVersionSchema,
   storageContractIdSchema,
-  teamIdSchema,
   tenantIdSchema,
   timestampSchema,
   workflowNodeIdSchema,
@@ -47,7 +47,7 @@ const businessRecordFields = {
           organizationAccountId: organizationAccountIdSchema,
         })
         .strict(),
-      z.object({ kind: z.literal("team"), teamId: teamIdSchema }).strict(),
+      z.object({ kind: z.literal("group"), groupId: groupIdSchema }).strict(),
     ])
     .optional(),
   lifecycleState: lifecycleStateSchema,

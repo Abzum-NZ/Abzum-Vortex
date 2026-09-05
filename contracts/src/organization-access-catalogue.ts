@@ -7,6 +7,7 @@ import {
   builderKeySchema,
   delegationAuthorityIdSchema,
   fingerprintSchema,
+  groupIdSchema,
   membershipIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
@@ -15,7 +16,6 @@ import {
   revisionSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
-  teamIdSchema,
   timestampSchema,
 } from "./identifiers";
 import {
@@ -212,9 +212,9 @@ export const roleSchema = z.discriminatedUnion("kind", [
   customRoleSchema,
 ]);
 
-export const teamSchema = z
+export const groupSchema = z
   .object({
-    teamId: teamIdSchema,
+    groupId: groupIdSchema,
     organizationId: organizationIdSchema,
     key: builderKeySchema,
     label: labelSchema,
@@ -232,7 +232,7 @@ export const accessAssigneeSchema = z.discriminatedUnion("kind", [
       organizationAccountId: organizationAccountIdSchema,
     })
     .strict(),
-  z.object({ kind: z.literal("team"), teamId: teamIdSchema }).strict(),
+  z.object({ kind: z.literal("group"), groupId: groupIdSchema }).strict(),
 ]);
 
 const effectiveGrantStateSchema = z.enum(["scheduled", "active", "expired", "revoked"]);
@@ -307,11 +307,11 @@ const addTemporalGrantIssues = (
     });
 };
 
-export const teamMembershipSchema = z
+export const groupMembershipSchema = z
   .object({
     membershipId: membershipIdSchema,
     organizationId: organizationIdSchema,
-    teamId: teamIdSchema,
+    groupId: groupIdSchema,
     organizationAccountId: organizationAccountIdSchema,
     revision: javascriptSafeRevisionSchema,
     ...temporalGrantFields,
@@ -319,9 +319,9 @@ export const teamMembershipSchema = z
   .strict()
   .superRefine(addTemporalGrantIssues);
 
-export const teamMembershipEffectiveStateSchema = z
+export const groupMembershipEffectiveStateSchema = z
   .object({
-    membership: teamMembershipSchema,
+    membership: groupMembershipSchema,
     effectiveState: effectiveGrantStateSchema,
   })
   .strict()
@@ -631,10 +631,10 @@ export type PermissionEntry = z.infer<typeof permissionEntrySchema>;
 export type ApplicationRoleSourceReference = z.infer<typeof applicationRoleSourceReferenceSchema>;
 export type CustomRoleTemplateProvenance = z.infer<typeof customRoleTemplateProvenanceSchema>;
 export type Role = z.infer<typeof roleSchema>;
-export type Team = z.infer<typeof teamSchema>;
+export type Group = z.infer<typeof groupSchema>;
 export type AccessAssignee = z.infer<typeof accessAssigneeSchema>;
-export type TeamMembership = z.infer<typeof teamMembershipSchema>;
-export type TeamMembershipEffectiveState = z.infer<typeof teamMembershipEffectiveStateSchema>;
+export type GroupMembership = z.infer<typeof groupMembershipSchema>;
+export type GroupMembershipEffectiveState = z.infer<typeof groupMembershipEffectiveStateSchema>;
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
 export type RoleAssignmentEffectiveState = z.infer<typeof roleAssignmentEffectiveStateSchema>;
 export type DelegationScope = z.infer<typeof delegationScopeSchema>;
