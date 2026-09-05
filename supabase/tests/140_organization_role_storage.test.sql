@@ -158,7 +158,7 @@ select ok(
   )
   and not pg_catalog.has_function_privilege(
     'service_role',
-    'vortex_access.validate_organization_role_permission_shape()', 'EXECUTE'
+    'vortex_access.validate_organization_role_revision_evidence()', 'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'vortex_request', 'vortex_access.protect_permission_continuity()', 'EXECUTE'
@@ -181,7 +181,7 @@ select is(
       values
         ('vortex_access.protect_organization_role_identity()'::regprocedure),
         ('vortex_access.refuse_organization_role_history_mutation()'::regprocedure),
-        ('vortex_access.validate_organization_role_permission_shape()'::regprocedure),
+        ('vortex_access.validate_organization_role_revision_evidence()'::regprocedure),
         ('vortex_access.protect_permission_continuity()'::regprocedure),
         ('vortex_access.validate_permission_continuity_evidence()'::regprocedure),
         ('vortex_access.protect_application_role_template_continuity()'::regprocedure),
@@ -728,6 +728,18 @@ select throws_ok(
 
 select throws_ok(
   $$
+    delete from vortex_access.organization_role_activation_policy_revisions
+    where organization_id = '21000000-0000-4000-8000-000000000140'
+      and role_id = '51000000-0000-4000-8000-000000000148'
+      and activation_policy_id = '61000000-0000-4000-8000-000000000140'
+      and revision = 2
+  $$,
+  '23514'::char(5), null,
+  'activation policy history cannot be erased'
+);
+
+select throws_ok(
+  $$
     insert into vortex_access.organization_role_activation_policy_revisions (
       organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
       maximum_activation_duration_seconds, reason_required,
@@ -826,6 +838,27 @@ select throws_ok(
   $$,
   '23514'::char(5), null,
   'authentication maximum age must remain JavaScript-safe'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_activation_policy_revisions (
+      organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+      maximum_activation_duration_seconds, reason_required,
+      authentication_requirement, authentication_maximum_age_seconds,
+      independent_approval_required, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148',
+      '61000000-0000-4000-8000-000000000148', 1,
+      'sha256:' || pg_catalog.repeat('5', 64), 3600, false,
+      'recent_multi_factor', 300, false,
+      '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+      '71000000-0000-4000-8000-000000000196'
+    )
+  $$,
+  '23514'::char(5), null,
+  'activation policy authentication requirements reject unknown and legacy labels'
 );
 
 select throws_ok(

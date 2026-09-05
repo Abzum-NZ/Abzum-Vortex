@@ -715,7 +715,7 @@ create trigger organization_role_permission_entries_immutable
 before update or delete on vortex_access.organization_role_permission_entries
 for each row execute function vortex_access.refuse_organization_role_history_mutation();
 
-create function vortex_access.validate_organization_role_permission_shape()
+create function vortex_access.validate_organization_role_revision_evidence()
 returns trigger
 language plpgsql
 set search_path = ''
@@ -931,15 +931,15 @@ begin
 end;
 $$;
 
-create constraint trigger organization_role_revisions_permission_shape
+create constraint trigger organization_role_revisions_evidence
 after insert on vortex_access.organization_role_revisions
 deferrable initially deferred
-for each row execute function vortex_access.validate_organization_role_permission_shape();
+for each row execute function vortex_access.validate_organization_role_revision_evidence();
 
-create constraint trigger organization_role_permission_entries_shape
+create constraint trigger organization_role_permission_entries_evidence
 after insert on vortex_access.organization_role_permission_entries
 deferrable initially deferred
-for each row execute function vortex_access.validate_organization_role_permission_shape();
+for each row execute function vortex_access.validate_organization_role_revision_evidence();
 
 create function vortex_access.protect_permission_continuity()
 returns trigger
@@ -1105,7 +1105,7 @@ revoke all on table vortex_access.organization_roles,
 
 revoke execute on function vortex_access.protect_organization_role_identity(),
   vortex_access.refuse_organization_role_history_mutation(),
-  vortex_access.validate_organization_role_permission_shape(),
+  vortex_access.validate_organization_role_revision_evidence(),
   vortex_access.protect_permission_continuity(),
   vortex_access.validate_permission_continuity_evidence(),
   vortex_access.protect_application_role_template_continuity(),

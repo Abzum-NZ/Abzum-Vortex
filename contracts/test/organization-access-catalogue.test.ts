@@ -232,6 +232,18 @@ describe("organisation access catalogue contracts", () => {
         recentAuthentication: { kind: "primary" },
       }).success,
     ).toBe(false);
+    expect(
+      roleActivationPolicyRevisionSchema.safeParse({
+        ...policy,
+        recentAuthentication: { kind: "recent_multi_factor", maximumAgeSeconds: 300 },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationPolicyRevisionSchema.safeParse({
+        ...policy,
+        activationPolicyId: "00000000-0000-0000-0000-000000000000",
+      }).success,
+    ).toBe(false);
     expect(roleActivationPolicyRevisionSchema.safeParse({ ...policy, reviewers: [] }).success).toBe(
       false,
     );
