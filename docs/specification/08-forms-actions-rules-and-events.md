@@ -110,7 +110,7 @@ A Kestra outage after commit leaves the event or start intent pending for retry.
 ## Delivery guarantees
 
 - An event is written in the same database transaction as the record change.
-- Delivery is at least once; consumers use the event identifier as their duplicate-protection key.
+- Delivery is at least once; each consumer scopes duplicate protection to its own identity and the event identifier. Workflow acceptance additionally includes the exact installation revision, workflow, and trigger, so one event can start different workflows without suppressing either one.
 - Events for the same record are handed to consumers in sequence order.
 - A later event cannot cause an earlier undelivered event to be discarded. The dispatcher waits, retries, or moves the blocked sequence to an operator-visible failure state.
 - A permanently failed event remains available for authorised retry and investigation.
