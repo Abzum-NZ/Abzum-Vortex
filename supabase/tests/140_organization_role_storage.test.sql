@@ -1194,6 +1194,13 @@ insert into vortex_access.organization_roles (
     '31000000-0000-4000-8000-000000000140',
     '52000000-0000-4000-8000-000000000142', 1,
     '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000147', 'application', 'empty_acceptance_required',
+    '31000000-0000-4000-8000-000000000140',
+    '52000000-0000-4000-8000-000000000147', 1,
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
   );
 
 insert into vortex_access.organization_role_revisions (
@@ -1235,6 +1242,21 @@ insert into vortex_access.organization_role_revisions (
     'sha256:' || pg_catalog.repeat('4', 64),
     '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
     '71000000-0000-4000-8000-000000000162'
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000147', 1, 'application',
+    '31000000-0000-4000-8000-000000000140', 'acceptance_required',
+    'standard', 'standing', 1, 'empty_acceptance_required',
+    'Acceptance-required application role', 'No continuously accepted permissions remain.',
+    'example.role_storage', 1, '1.0.0', '1.0.0',
+    'sha256:' || pg_catalog.repeat('a', 64),
+    'sha256:' || pg_catalog.repeat('b', 64),
+    'sha256:' || pg_catalog.repeat('5', 64),
+    'sha256:' || pg_catalog.repeat('c', 64), 1, 1,
+    'sha256:' || pg_catalog.repeat('6', 64),
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000198'
   );
 
 set constraints all immediate;
@@ -1247,12 +1269,46 @@ select is(
     where organization_id = '21000000-0000-4000-8000-000000000140'
       and role_id in (
         '51000000-0000-4000-8000-000000000141'::uuid,
-        '51000000-0000-4000-8000-000000000142'::uuid
+        '51000000-0000-4000-8000-000000000142'::uuid,
+        '51000000-0000-4000-8000-000000000147'::uuid
       )
   ),
   0,
-  'unavailable and retired application roles may retain an empty effective snapshot'
+  'non-active application roles may retain an empty effective snapshot'
 );
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      insert into vortex_access.organization_roles (
+        organization_id, role_id, role_kind, role_key, live_revision,
+        created_by, created_at
+      ) values (
+        '21000000-0000-4000-8000-000000000140',
+        '51000000-0000-4000-8000-000000000146', 'custom', 'empty_retired_custom', 1,
+        '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
+      );
+      insert into vortex_access.organization_role_revisions (
+        organization_id, role_id, revision, role_kind, lifecycle,
+        privilege_classification, assignment_policy, policy_continuity_revision,
+        role_key, label, description, changed_by, changed_at, change_correlation_id
+      ) values (
+        '21000000-0000-4000-8000-000000000140',
+        '51000000-0000-4000-8000-000000000146', 1, 'custom', 'retired',
+        'standard', 'standing', 1, 'empty_retired_custom', 'Empty retired custom role',
+        'Custom roles retain at least one exact accepted permission in every lifecycle.',
+        '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+        '71000000-0000-4000-8000-000000000199'
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23514'::char(5), null,
+  'a retired custom role cannot commit an empty accepted snapshot'
+);
+set constraints all deferred;
 
 insert into vortex_access.organization_roles (
   organization_id, role_id, role_kind, role_key, application_root_id,

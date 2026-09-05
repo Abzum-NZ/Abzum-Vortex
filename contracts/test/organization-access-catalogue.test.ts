@@ -376,6 +376,9 @@ describe("organisation access catalogue contracts", () => {
       roleSchema.safeParse({ ...role, permissions: [exactPermission(), exactPermission()] })
         .success,
     ).toBe(false);
+    expect(roleSchema.safeParse({ ...role, lifecycle: "retired", permissions: [] }).success).toBe(
+      false,
+    );
     expect(roleSchema.safeParse({ ...role, organizationId: undefined }).success).toBe(false);
     expect(roleSchema.safeParse({ ...role, lifecycle: "acceptance_required" }).success).toBe(false);
     expect(roleSchema.safeParse({ ...role, roleId: id(15), organizationId: id(14) }).success).toBe(
@@ -418,6 +421,9 @@ describe("organisation access catalogue contracts", () => {
     expect(roleSchema.safeParse({ ...role, sourceTemplate: {} }).success).toBe(false);
     expect(roleSchema.safeParse({ ...role, description: "" }).success).toBe(false);
     expect(roleSchema.safeParse({ ...role, permissions: [] }).success).toBe(false);
+    expect(
+      roleSchema.safeParse({ ...role, lifecycle: "acceptance_required", permissions: [] }).success,
+    ).toBe(true);
     expect(
       roleSchema.safeParse({ ...role, lifecycle: "unavailable", permissions: [] }).success,
     ).toBe(true);
