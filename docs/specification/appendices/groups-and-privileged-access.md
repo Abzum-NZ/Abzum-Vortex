@@ -61,11 +61,37 @@ Activation is requested by the beneficiary through the currently authenticated o
 
 Pending, refused, cancelled or stale requests grant nothing. Approval is not activation until the protected operation succeeds. Check recent-authentication evidence at activation, after any approval wait, using [verified evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276); token refresh, token issue time or an authentication-strength label alone is not recent MFA. A policy without independent approval still uses the governed IAM action and protected checks, not a fabricated approval record.
 
-Protected activation evidence identifies one account, role, exact eligibility and policy evidence, originating membership when applicable, start, finite expiry and revocation. The end cannot exceed the requested/policy duration or known eligibility and membership end times. Do not copy the permission set into every activation; bind the accepted role authority so newly added permissions cannot enter an existing activation silently.
+Protected activation evidence identifies one account, role, the historical role revision used at activation, its authority continuity number, exact eligibility and policy evidence, originating membership when applicable, start, finite expiry and revocation. Eligibility and originating membership are pinned by exact identity and current revision. The end cannot exceed the requested/policy duration or known eligibility and membership end times. Do not copy the permission set into every activation; bind the accepted role authority so newly added permissions cannot enter an existing activation silently.
+
+### Retained permissions during role review
+
+Every role has an authority continuity number, starting at one, separate from its policy continuity number. An immediate successor retains the authority number only when its accepted permission set is a subset of the predecessor's set and it is not restoring a non-granting role (`unavailable` or `retired`) to `active` or `acceptance_required`. Otherwise the number advances exactly once. Restoration advances it even when the sets are equal or empty. Exhaustion refuses the change; it never wraps or resets.
+
+This defensive calculation does not authorise a lifecycle transition: retired roles cannot be restored, and automatic application changes leave them untouched. Returning an unavailable role to an empty pending-review state and later accepting actual permissions are two distinct transitions, each advancing the number under the same rule.
+
+Compare exact application context, permission owner kind and identity, permission identity, permission continuity number and meaning fingerprint. Labels, entry order and original acceptance/source fingerprints are provenance, not permission identity. Compare only the sealed immediate predecessor, not a complete history on every access request. The [role contracts](data-contracts.md#permission-and-role-contracts) name this field `authorityContinuityRevision`.
+
+An existing activation checks the current authority number and policy number, then uses the role's current retained accepted entries and current permission availability/continuity. It does not require the historical role revision to equal the latest revision. Display changes, pure narrowing and pending additions therefore preserve still-valid use; removed permissions stop contributing immediately. Explicit acceptance of added, restored or changed authority advances the number and makes old activation windows ineffective. A fresh activation is required; permissions never silently enter an existing window.
+
+This number binds activation windows, not the lifetime of the underlying standing or eligible assignment. Broader role acceptance still checks the complete affected-assignment manifest. Existing eligibility may request a fresh activation of the retained, nonempty accepted remainder while the role is `acceptance_required`; that is not a new assignment and cannot include pending additions. New assignments still require an active role. A pending activation request pins the exact proposed role revision and must be refreshed after a role change, even when an already active window can retain reduced access.
+
+```mermaid
+flowchart TD
+    CURRENT[Active window using accepted permissions] --> CHANGE[Role changes]
+    CHANGE --> RETAIN[Display change, narrowing or pending additions]
+    RETAIN --> SAME[Same authority period: only current retained permissions]
+    CHANGE --> ACCEPT[Added or restored authority is accepted]
+    ACCEPT --> NEW[New authority period: old window no longer works]
+    NEW --> FRESH[Existing eligibility can request fresh activation]
+    SAME --> POLICY[Current policy and source checks still apply]
+    FRESH --> POLICY
+```
+
+### Current-state checks and revocation
 
 Every access check requires the activation, originating eligibility, membership, account, role and relevant permission continuity to remain valid. Expiry uses current database time; it does not wait for Kestra, a scheduled cleanup or a notification. Cache validity ends no later than the next relevant transition. Explicit changes use the existing atomic Access-version mechanism and governance lock.
 
-Removing or suspending the originating membership or eligibility ends that activation, even if another eligibility path exists. Restoration or a new membership cannot resurrect it. The person may make a fresh request using a currently valid path. Revocation of a role or application, loss of accepted permission continuity, or tightening activation policy cannot preserve broader old access. Role/policy changes invalidate pending requests; protected invalidation and reactivation rules must prevent an active window from gaining new authority after reacceptance. Display-only changes may preserve authority only where its exact authority evidence is unchanged.
+Removing or suspending the originating membership or eligibility ends that activation, even if another eligibility path exists. Restoration or a new membership cannot resurrect it. The person may make a fresh request using a currently valid path. Revocation of a role or application, loss of accepted permission continuity, or changing activation policy cannot preserve broader old access. Role/policy changes invalidate pending requests; the separate authority and policy continuity rules prevent active windows from gaining new authority after reacceptance while preserving the valid remainder during pending review.
 
 Users can end their own activation; authorised administrators can revoke it immediately. These reductions do not wait for approval. Requests and review history remain visible as ordinary IAM records under their normal permissions, separately from whether access is effective now.
 
