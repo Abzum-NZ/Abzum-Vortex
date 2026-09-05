@@ -14,6 +14,7 @@ import {
   permissionIdSchema,
   platformIdSchema,
   revisionSchema,
+  roleActivationIdSchema,
   roleActivationPolicyIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
@@ -400,18 +401,22 @@ export const groupMembershipEffectiveStateSchema = z
     },
   );
 
+export const roleAssignmentKindSchema = z.enum(["standing", "eligible"]);
+
 export const roleAssignmentSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
     organizationId: organizationIdSchema,
     roleId: roleIdSchema,
     assignee: accessAssigneeSchema,
+    assignmentKind: roleAssignmentKindSchema,
     revision: javascriptSafeRevisionSchema,
     ...temporalGrantFields,
   })
   .strict()
   .superRefine(addTemporalGrantIssues);
 
+/** Timing-only validity; an active eligible assignment is not effective permission. */
 export const roleAssignmentEffectiveStateSchema = z
   .object({
     assignment: roleAssignmentSchema,
@@ -423,6 +428,135 @@ export const roleAssignmentEffectiveStateSchema = z
     {
       path: ["effectiveState"],
       message: "Only a revoked assignment has revoked effective state",
+    },
+  );
+
+const exactEligibilityAssignmentReferenceSchema = z
+  .object({
+    roleAssignmentId: roleAssignmentIdSchema,
+    revision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+const exactOriginatingMembershipReferenceSchema = z
+  .object({
+    membershipId: membershipIdSchema,
+    revision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const roleActivationEligibilitySourceSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("direct"),
+      eligibilityAssignment: exactEligibilityAssignmentReferenceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("group"),
+      eligibilityAssignment: exactEligibilityAssignmentReferenceSchema,
+      originatingMembership: exactOriginatingMembershipReferenceSchema,
+    })
+    .strict(),
+]);
+
+const addRoleActivationIssues = (
+  value: {
+    state: "live" | "revoked";
+    activatedAt: string;
+    expiresAt: string;
+    changedAt: string;
+    revokedByActorId?: string | undefined;
+    revokedAt?: string | undefined;
+    revocationCorrelationId?: string | undefined;
+  },
+  context: z.RefinementCtx,
+) => {
+  if (Date.parse(value.expiresAt) <= Date.parse(value.activatedAt))
+    context.addIssue({
+      code: "custom",
+      path: ["expiresAt"],
+      message: "Activation expiry must be later than activation",
+    });
+
+  const hasAnyRevocation =
+    value.revokedByActorId !== undefined ||
+    value.revokedAt !== undefined ||
+    value.revocationCorrelationId !== undefined;
+  const hasCompleteRevocation =
+    value.revokedByActorId !== undefined &&
+    value.revokedAt !== undefined &&
+    value.revocationCorrelationId !== undefined;
+  if (
+    (value.state === "live" && hasAnyRevocation) ||
+    (value.state === "revoked" && !hasCompleteRevocation)
+  )
+    context.addIssue({
+      code: "custom",
+      path: ["revokedAt"],
+      message: "Revocation evidence is present exactly when the activation is revoked",
+    });
+  if (value.revokedAt !== undefined && Date.parse(value.revokedAt) < Date.parse(value.activatedAt))
+    context.addIssue({
+      code: "custom",
+      path: ["revokedAt"],
+      message: "Revocation cannot precede activation",
+    });
+  if (Date.parse(value.changedAt) < Date.parse(value.activatedAt))
+    context.addIssue({
+      code: "custom",
+      path: ["changedAt"],
+      message: "The last change cannot precede activation",
+    });
+  if (value.revokedAt !== undefined && Date.parse(value.changedAt) < Date.parse(value.revokedAt))
+    context.addIssue({
+      code: "custom",
+      path: ["changedAt"],
+      message: "The last change cannot precede revocation",
+    });
+};
+
+/** Protected activation evidence only; #34 remains the sole effective-access decision boundary. */
+export const roleActivationSchema = z
+  .object({
+    roleActivationId: roleActivationIdSchema,
+    organizationId: organizationIdSchema,
+    organizationAccountId: organizationAccountIdSchema,
+    roleId: roleIdSchema,
+    revision: javascriptSafeRevisionSchema,
+    historicalRoleRevision: javascriptSafeRevisionSchema,
+    authorityContinuityRevision: javascriptSafeRevisionSchema,
+    policyContinuityRevision: javascriptSafeRevisionSchema,
+    activationPolicy: roleActivationPolicyReferenceSchema,
+    eligibilitySource: roleActivationEligibilitySourceSchema,
+    state: z.enum(["live", "revoked"]),
+    activatedByActorId: actorIdSchema,
+    activatedAt: timestampSchema,
+    expiresAt: timestampSchema,
+    activationCorrelationId: correlationIdSchema,
+    changedByActorId: actorIdSchema,
+    changedAt: timestampSchema,
+    changeCorrelationId: correlationIdSchema,
+    revokedByActorId: actorIdSchema.optional(),
+    revokedAt: timestampSchema.optional(),
+    revocationCorrelationId: correlationIdSchema.optional(),
+  })
+  .strict()
+  .superRefine(addRoleActivationIssues);
+
+/** Timing-only status; successful parsing does not establish current eligibility or permission. */
+export const roleActivationTemporalStateSchema = z
+  .object({
+    activation: roleActivationSchema,
+    temporalState: z.enum(["active", "expired", "revoked"]),
+  })
+  .strict()
+  .refine(
+    (value) => (value.activation.state === "revoked") === (value.temporalState === "revoked"),
+    {
+      path: ["temporalState"],
+      message: "Only a revoked activation has revoked temporal state",
     },
   );
 
@@ -710,7 +844,11 @@ export type AccessAssignee = z.infer<typeof accessAssigneeSchema>;
 export type GroupMembership = z.infer<typeof groupMembershipSchema>;
 export type GroupMembershipEffectiveState = z.infer<typeof groupMembershipEffectiveStateSchema>;
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
+export type RoleAssignmentKind = z.infer<typeof roleAssignmentKindSchema>;
 export type RoleAssignmentEffectiveState = z.infer<typeof roleAssignmentEffectiveStateSchema>;
+export type RoleActivationEligibilitySource = z.infer<typeof roleActivationEligibilitySourceSchema>;
+export type RoleActivation = z.infer<typeof roleActivationSchema>;
+export type RoleActivationTemporalState = z.infer<typeof roleActivationTemporalStateSchema>;
 export type DelegationScope = z.infer<typeof delegationScopeSchema>;
 export type DelegationAuthority = z.infer<typeof delegationAuthoritySchema>;
 export type DelegationAuthorityEffectiveState = z.infer<
