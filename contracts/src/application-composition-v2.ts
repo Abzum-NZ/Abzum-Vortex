@@ -986,10 +986,10 @@ export const sourceShellContentSlotV2Schema = z
 
 const collectCanonicalPlacementSlots = (
   slot: PlacementSlotV2,
-  result = new Map<string, Set<string>>(),
-): Map<string, Set<string>> => {
+  result = new Map<string, Record<string, PlacementSlotV2>>(),
+): Map<string, Record<string, PlacementSlotV2>> => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
-    result.set(placementId, new Set(Object.keys(placement.slots)));
+    result.set(placementId, placement.slots);
     for (const child of Object.values(placement.slots))
       collectCanonicalPlacementSlots(child, result);
   }
@@ -998,10 +998,10 @@ const collectCanonicalPlacementSlots = (
 
 const collectSourcePlacementSlots = (
   slot: SourcePlacementSlotV2,
-  result = new Map<string, Set<string>>(),
-): Map<string, Set<string>> => {
+  result = new Map<string, Record<string, SourcePlacementSlotV2>>(),
+): Map<string, Record<string, SourcePlacementSlotV2>> => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
-    result.set(placementId, new Set(Object.keys(placement.slots)));
+    result.set(placementId, placement.slots);
     for (const child of Object.values(placement.slots)) collectSourcePlacementSlots(child, result);
   }
   return result;
@@ -1063,13 +1063,26 @@ export const applicationShellV2Schema = z
         message: "A shell location can expose only one content slot",
       });
     const placements = collectCanonicalPlacementSlots(value.layout);
-    for (const [index, slot] of value.contentSlots.entries())
-      if (!placements.get(slot.parentPlacementId)?.has(slot.parentSlotKey))
+    for (const [index, slot] of value.contentSlots.entries()) {
+      const target = placements.get(slot.parentPlacementId)?.[slot.parentSlotKey];
+      if (target === undefined)
         context.addIssue({
           code: "custom",
           path: ["contentSlots", index, "parentSlotKey"],
           message: "A shell content slot must target a declared slot on one shell placement",
         });
+      else if (
+        Object.keys(target.placements).length > 0 ||
+        target.order.desktop.length > 0 ||
+        target.order.tablet.length > 0 ||
+        target.order.phone.length > 0
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["contentSlots", index, "parentSlotKey"],
+          message: "An exposed shell content slot must reserve an empty target for page content",
+        });
+    }
   });
 
 export const sourceApplicationShellV2Schema = z
@@ -1106,13 +1119,26 @@ export const sourceApplicationShellV2Schema = z
         message: "A shell location can expose only one content slot",
       });
     const placements = collectSourcePlacementSlots(value.layout);
-    for (const [index, slot] of value.content_slots.entries())
-      if (!placements.get(slot.parent_placement)?.has(slot.parent_slot))
+    for (const [index, slot] of value.content_slots.entries()) {
+      const target = placements.get(slot.parent_placement)?.[slot.parent_slot];
+      if (target === undefined)
         context.addIssue({
           code: "custom",
           path: ["content_slots", index, "parent_slot"],
           message: "A shell content slot must target a declared slot on one shell placement",
         });
+      else if (
+        Object.keys(target.placements).length > 0 ||
+        target.order.desktop.length > 0 ||
+        (target.order.tablet?.length ?? 0) > 0 ||
+        (target.order.phone?.length ?? 0) > 0
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["content_slots", index, "parent_slot"],
+          message: "An exposed shell content slot must reserve an empty target for page content",
+        });
+    }
   });
 
 export const pageCompositionV2Schema = z.discriminatedUnion("shellKind", [

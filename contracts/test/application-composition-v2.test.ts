@@ -425,6 +425,31 @@ describe("Application V2 composition contracts", () => {
     expect(applicationContentV2Schema.safeParse(fixture.value).success).toBe(false);
   });
 
+  it("reserves exposed shell targets exclusively for page-owned content", () => {
+    const canonical = parsedCanonical();
+    const canonicalRoot = Object.values(canonical.value.shells[0]!.layout.placements)[0]!;
+    const canonicalTarget = canonicalRoot.slots.primary!;
+    const canonicalFallbackId = id(627);
+    Object.assign(canonicalTarget.placements, {
+      [canonicalFallbackId]: canonicalPlacement(blockOne),
+    });
+    canonicalTarget.order = {
+      desktop: [canonicalFallbackId],
+      tablet: [canonicalFallbackId],
+      phone: [canonicalFallbackId],
+    };
+    expect(applicationContentV2Schema.safeParse(canonical.value).success).toBe(false);
+
+    const source = applicationSourceDocumentV2Schema.parse(sourceApplication);
+    const sourceRoot = Object.values(source.body.shells[0]!.layout.placements)[0]!;
+    const sourceTarget = sourceRoot.slots.primary!;
+    Object.assign(sourceTarget.placements, {
+      shell_fallback: sourcePlacement(sourceBlockOne),
+    });
+    sourceTarget.order = { desktop: ["shell_fallback"] };
+    expect(applicationSourceDocumentV2Schema.safeParse(source).success).toBe(false);
+  });
+
   it("rejects authored contract extras rather than treating them as editor-private data", () => {
     const invalid = structuredClone(sourceApplication) as typeof sourceApplication & {
       editor_state?: unknown;
