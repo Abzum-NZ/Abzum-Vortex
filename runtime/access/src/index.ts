@@ -1,6 +1,16 @@
 import "server-only";
 
 export {
+  applicationRoleTemplatePreparationErrorCodes,
+  ApplicationRoleTemplatePreparationError,
+  createApplicationRoleTemplateAdapter,
+  verifyPreparedApplicationRoleTemplates,
+  type ApplicationRoleTemplateAdapterDependencies,
+  type ApplicationRoleTemplatePreparationErrorCode,
+  type PrepareApplicationRoleRegistrationCandidateCommand,
+  type PrepareCurrentApplicationRoleTemplatesCommand,
+} from "./application-role-template-adapter";
+export {
   acceptOrganizationInvitation,
   AccessVersionError,
   accessVersionErrorCodes,

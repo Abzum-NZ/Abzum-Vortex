@@ -23,6 +23,7 @@ import {
   fingerprintCanonicalValue,
 } from "@vortex/definition";
 import { fingerprintPermissionMeaning } from "./permission-fingerprints";
+import { isLiveSystemContext } from "./private-system-context";
 
 export const permissionRegistryPreparationErrorCodes = [
   "INVALID_PERMISSION_REGISTRY_PREPARATION_COMMAND",
@@ -175,20 +176,6 @@ const exactRead = async (
   if (!parsed.success)
     throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
   return parsed.data;
-};
-
-const isLiveSystemContext = (context: SessionContext): boolean => {
-  if (context.callerKind !== "system") return false;
-  const issuedAt = Date.parse(context.issuedAt);
-  const expiresAt = Date.parse(context.expiresAt);
-  const now = Date.now();
-  return (
-    Number.isFinite(issuedAt) &&
-    Number.isFinite(expiresAt) &&
-    issuedAt <= now &&
-    expiresAt > now &&
-    issuedAt < expiresAt
-  );
 };
 
 export const verifyPreparedApplicationPermissionRegistration = (
