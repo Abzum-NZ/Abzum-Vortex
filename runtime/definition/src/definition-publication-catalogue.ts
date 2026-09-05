@@ -391,10 +391,10 @@ export const createImmutableDefinitionPublicationCatalogue = (
         .strict()
         .safeParse(selection);
       if (!parsedSelection.success) return undefined;
-      const selectedBlockSubjects = parsedSelection.data.platformBlocks.map(
-        (reference) => `${reference.blockId}:${reference.releaseVersion}`,
+      const selectedBlockIds = parsedSelection.data.platformBlocks.map((reference) =>
+        String(reference.blockId),
       );
-      if (new Set(selectedBlockSubjects).size !== selectedBlockSubjects.length) return undefined;
+      if (new Set(selectedBlockIds).size !== selectedBlockIds.length) return undefined;
       const selectedBlocks = await Promise.all(
         parsedSelection.data.platformBlocks.map((reference) =>
           readPlatformBlockReleaseV2(reference.blockId, reference.releaseVersion),

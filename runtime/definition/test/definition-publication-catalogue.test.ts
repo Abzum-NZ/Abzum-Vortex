@@ -215,6 +215,27 @@ describe("immutable Definition publication catalogue", () => {
         platformTheme: { catalogueThemeId: themeId, releaseVersion: "2.1.0" },
       }),
     ).resolves.toBeUndefined();
+
+    const multipleVersions = createImmutableDefinitionPublicationCatalogue({
+      connectionTypeReleases: [],
+      platformThemeReleases: [],
+      applicationCompositionV2: {
+        ...applicationCompositionV2,
+        platformBlockReleases: [
+          ...applicationCompositionV2.platformBlockReleases,
+          { ...blockDefinition(), releaseVersion: "2.0.0" as const },
+        ],
+      },
+    });
+    await expect(
+      multipleVersions.readApplicationCompositionCatalogueSnapshotV2({
+        platformBlocks: [
+          { blockId, releaseVersion: "1.0.0" },
+          { blockId, releaseVersion: "2.0.0" },
+        ],
+        platformTheme: { catalogueThemeId: themeId, releaseVersion: "2.1.0" },
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("keeps V2 catalogue methods unavailable without governed V2 definitions", async () => {
