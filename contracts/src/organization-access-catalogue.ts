@@ -14,6 +14,7 @@ import {
   permissionIdSchema,
   platformIdSchema,
   revisionSchema,
+  roleActivationPolicyIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
@@ -25,6 +26,12 @@ import {
 } from "./permission-registry";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
+const javascriptSafeDurationSecondsSchema = z
+  .number()
+  .finite()
+  .int()
+  .positive()
+  .max(Number.MAX_SAFE_INTEGER);
 const applicationReleaseEvidenceSchema = permissionRegistryDefinitionReleaseSchema.and(
   z.object({ kind: z.literal("application") }),
 );
@@ -107,6 +114,62 @@ const addCreationTimeIssue = (
     });
 };
 
+/** Protected classification is independent from whether assignments are standing or activated. */
+export const rolePrivilegeClassificationSchema = z.enum(["standard", "privileged"]);
+
+export const roleRecentAuthenticationRequirementSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }).strict(),
+  z
+    .object({
+      kind: z.literal("primary"),
+      maximumAgeSeconds: javascriptSafeDurationSecondsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("multi_factor"),
+      maximumAgeSeconds: javascriptSafeDurationSecondsSchema,
+    })
+    .strict(),
+]);
+
+/** Exact immutable policy evidence pinned by an activation-required role revision. */
+export const roleActivationPolicyReferenceSchema = z
+  .object({
+    activationPolicyId: roleActivationPolicyIdSchema,
+    revision: javascriptSafeRevisionSchema,
+    fingerprint: fingerprintSchema,
+  })
+  .strict();
+
+export const roleAssignmentPolicySchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("standing") }).strict(),
+  z
+    .object({
+      kind: z.literal("activation_required"),
+      activationPolicy: roleActivationPolicyReferenceSchema,
+    })
+    .strict(),
+]);
+
+/** Role-scoped immutable activation-policy revision; #34 remains the sole decision boundary. */
+export const roleActivationPolicyRevisionSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    roleId: roleIdSchema,
+    activationPolicyId: roleActivationPolicyIdSchema,
+    revision: javascriptSafeRevisionSchema,
+    fingerprint: fingerprintSchema,
+    maximumActivationDurationSeconds: javascriptSafeDurationSecondsSchema,
+    reasonRequired: z.boolean(),
+    recentAuthentication: roleRecentAuthenticationRequirementSchema,
+    independentApprovalRequired: z.boolean(),
+    changedByActorId: actorIdSchema,
+    changedAt: timestampSchema,
+    changeCorrelationId: correlationIdSchema,
+  })
+  .strict();
+
 export const applicationRoleSourceReferenceSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
@@ -152,6 +215,9 @@ const liveRoleFields = {
   label: labelSchema,
   description: descriptionSchema,
   liveRevision: javascriptSafeRevisionSchema,
+  privilegeClassification: rolePrivilegeClassificationSchema,
+  assignmentPolicy: roleAssignmentPolicySchema,
+  policyContinuityRevision: javascriptSafeRevisionSchema,
   permissions: rolePermissionSetSchema,
   ...creationAndChangeEvidenceFields,
 };
@@ -628,6 +694,13 @@ export const preparedApplicationRoleTemplatesSchema = z
 
 export type RolePermissionEntry = z.infer<typeof rolePermissionEntrySchema>;
 export type PermissionEntry = z.infer<typeof permissionEntrySchema>;
+export type RolePrivilegeClassification = z.infer<typeof rolePrivilegeClassificationSchema>;
+export type RoleRecentAuthenticationRequirement = z.infer<
+  typeof roleRecentAuthenticationRequirementSchema
+>;
+export type RoleActivationPolicyReference = z.infer<typeof roleActivationPolicyReferenceSchema>;
+export type RoleAssignmentPolicy = z.infer<typeof roleAssignmentPolicySchema>;
+export type RoleActivationPolicyRevision = z.infer<typeof roleActivationPolicyRevisionSchema>;
 export type ApplicationRoleSourceReference = z.infer<typeof applicationRoleSourceReferenceSchema>;
 export type CustomRoleTemplateProvenance = z.infer<typeof customRoleTemplateProvenanceSchema>;
 export type Role = z.infer<typeof roleSchema>;
