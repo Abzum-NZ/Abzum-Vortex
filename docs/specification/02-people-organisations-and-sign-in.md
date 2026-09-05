@@ -127,6 +127,12 @@ flowchart LR
     S -. no organisation or application authority .-> X
 ```
 
+### Recent-authentication evidence
+
+The delivered session result above identifies authentication strength and token lifetime, not when the person last confirmed their identity. [Identity follow-up #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276) adds the minimum verified method/time evidence to that existing server session and organisation-context handoff. [Supabase's JWT reference](https://supabase.com/docs/guides/auth/jwt-fields) distinguishes token issuance (`iat`) from optional authentication-method timestamps (`amr`); the [MFA guidance](https://supabase.com/docs/guides/auth/auth-mfa) describes assurance strength. Identity interprets verified provider evidence; Access does not parse provider claims.
+
+Recent sign-in and recent MFA are distinct. A token refresh, request-context timestamp or an old multi-factor session cannot manufacture a recent confirmation. Missing or unsuitable evidence refuses only operations that require it, without inventing assurance or rejecting an otherwise valid ordinary session. No full authentication history, MFA enrollment details or extra durable session store is copied into Vortex. Operation-specific strength and maximum age remain part of [the central access requirement](04-access-and-permissions.md#where-access-is-enforced).
+
 ## Invitations and teams
 
 - An invitation names one organisation, one normalised verified email address, and an expiry. Phase 2 stores no proposed role or Team assignment; [roles and teams](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) add authorised assignment handling later.

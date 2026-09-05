@@ -169,6 +169,8 @@ flowchart TD
 
 All page types use the same block composition model. Layouts may use a twelve-column grid, stack, row or shell. Height follows content unless a registered block permits bounded resizing. Desktop/tablet/phone overrides inherit explicitly; one validated ordering structure determines each slot's reading order.
 
+A guided form uses one shell and gives each ordered step its own block content within that shell's slots. Step identity determines which content belongs to it; moving or renaming a step cannot move its content to another step. The [exact step-content mapping](appendices/page-builder-contracts.md#one-canonical-page-document) also preserves existing guided forms during an explicitly confirmed format conversion.
+
 A registration supplies typed properties, allowed child slots, sizing/responsive capabilities, access semantics, public-surface restrictions and a registered renderer. Literal values must satisfy the property schema. Typed pickers resolve stable references; text and number controls remain available for appropriate literal settings. Safe grouped/list values and rich text are supported without arbitrary executable JSON, CSS, JSX or scripts.
 
 A record page keeps one primary subject and a matching main form commit action. Related panels may deliberately use other record types through declared, separately authorised relationships/queries. Validate each field and action against its explicit binding context, not a blanket same-record-type rule. Public-page and shared-source restrictions remain unchanged.
