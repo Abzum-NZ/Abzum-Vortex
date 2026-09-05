@@ -465,6 +465,16 @@ export const preparedApplicationRoleTemplateSchema = z
   })
   .strict();
 
+export const applicationRoleTemplatePreparationBasisSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("registration_candidate") }).strict(),
+  z
+    .object({
+      kind: z.literal("current_active_registration"),
+      registrationRevision: javascriptSafeRevisionSchema,
+    })
+    .strict(),
+]);
+
 const permissionCandidateEvidenceKey = (
   entry: z.infer<typeof permissionRegistryEntryCandidateSchema>,
 ) =>
@@ -515,6 +525,7 @@ export const projectLiveApplicationRolePermissions = (
 export const preparedApplicationRoleTemplatesSchema = z
   .object({
     contractVersion: z.literal("1.0.0"),
+    preparationBasis: applicationRoleTemplatePreparationBasisSchema,
     permissionRegistration: preparedApplicationPermissionRegistrationSchema,
     templates: z.array(preparedApplicationRoleTemplateSchema).min(1),
     candidateFingerprint: fingerprintSchema,
@@ -638,6 +649,9 @@ export type ApplicationRoleTemplateContinuity = z.infer<
 export type AffectedRoleAssignment = z.infer<typeof affectedRoleAssignmentSchema>;
 export type AffectedRoleAssignmentManifest = z.infer<typeof affectedRoleAssignmentManifestSchema>;
 export type PreparedApplicationRoleTemplate = z.infer<typeof preparedApplicationRoleTemplateSchema>;
+export type ApplicationRoleTemplatePreparationBasis = z.infer<
+  typeof applicationRoleTemplatePreparationBasisSchema
+>;
 export type PreparedApplicationRoleTemplates = z.infer<
   typeof preparedApplicationRoleTemplatesSchema
 >;
