@@ -21,6 +21,7 @@ const scripts = [
   "application-access-coordination-concurrency.test.sh",
   "organization-role-assignment-changes-concurrency.test.sh",
   "organization-role-change-concurrency.test.sh",
+  "organization-group-change-concurrency.test.sh",
 ];
 
 for (const filename of scripts) {

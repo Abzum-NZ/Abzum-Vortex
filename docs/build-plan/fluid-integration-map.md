@@ -73,4 +73,4 @@ An independent Sol reviewer inspected the prototype source against the current b
 
 The review did not change either repository or exercise saving/publishing. These are implementation requirements, not claims that the future Vortex builder already passes them.
 
-This map satisfies the current analysis request; it does not start the dependent editor implementation, clear its user-facing design checkpoint, or authorise changes in the separate Fluid repository. Kestra maintenance and [held #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) remain outside this work.
+This map satisfies the current analysis request; it does not start the dependent editor implementation, clear its user-facing design checkpoint, or authorise changes in the separate Fluid repository. Unrelated Kestra maintenance remains deferred. [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) has no user hold and proceeds after its technical prerequisites; it is not part of this editor-analysis task.
