@@ -10,6 +10,7 @@ import {
   moduleRootIdSchema,
   organizationIdSchema,
   revisionSchema,
+  selectApplicationValidationContract,
   semanticVersionSchema,
   sessionContextSchema,
   stableDefinitionReleaseVersionSchema,
@@ -102,6 +103,19 @@ const sameStringSet = (left: readonly string[], right: readonly string[]): boole
       left.every((subject) => rightSet.has(subject))
     );
   })();
+
+const selectApplicationReleaseContract = (candidate: unknown): void => {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return;
+  const record = candidate as Record<string, unknown>;
+  if (record.kind !== "application") return;
+  if (typeof record.validationContractVersion !== "string")
+    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  try {
+    selectApplicationValidationContract(record.validationContractVersion);
+  } catch {
+    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  }
+};
 
 export const definitionReleaseManifestMatchesCanonicalContent = (
   release: StoredConsumerReleaseEvidence,
@@ -296,6 +310,8 @@ export const createDefinitionConsumerReadService = (
     if (candidate === undefined)
       throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
 
+    // Dispatch on trusted outer metadata before parsing canonical Application content.
+    selectApplicationReleaseContract(candidate);
     const parsed = storedConsumerReleaseEvidenceSchema.safeParse(candidate);
     if (!parsed.success)
       throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");

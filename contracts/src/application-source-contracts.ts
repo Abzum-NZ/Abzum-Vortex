@@ -23,6 +23,14 @@ import {
 } from "./definition-source-common";
 import { actionInputSchema } from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "./permissions";
+import {
+  sourceGuidedFormPageCompositionV2Schema,
+  sourceApplicationShellV2Schema,
+  sourceApplicationThemeV2Schema,
+  sourcePageCompositionV2Schema,
+  sourcePlacementEntriesV2,
+  sourcePlatformBlockDependenciesV2Schema,
+} from "./application-composition-v2";
 
 const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
 export const sourceBlockSettingValueSchema = z.discriminatedUnion("kind", [
@@ -224,6 +232,129 @@ const sourcePageSchema = z.discriminatedUnion("type", [
       rate_limit_per_minute: z.number().int().min(1).max(10_000),
     })
     .strict(),
+]);
+
+const sourcePageV2Common = {
+  id: sourceAliasSchema,
+  key: builderKeySchema,
+  name: z.string().min(1).max(120),
+  states: z.array(pageStateSchema).min(1),
+  standard_page_replacement: sourceStandardPageReplacementSchema.optional(),
+};
+
+const sourcePageV2Base = {
+  ...sourcePageV2Common,
+  composition: sourcePageCompositionV2Schema,
+};
+
+const sourceListPageV2Schema = z
+  .object({
+    ...sourcePageV2Base,
+    type: z.literal("list"),
+    record_type: sourceQualifiedRecordTypeSchema,
+    permission: namespacedKeySchema,
+    query: builderKeySchema,
+    arrangements: z.array(z.enum(listArrangementKeys)).min(1),
+    calendar_mapping: sourceCalendarMappingSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.arrangements.includes("calendar") !== (value.calendar_mapping !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["calendar_mapping"],
+        message: "Calendar mapping is required exactly for a calendar arrangement",
+      });
+  });
+
+const sourceGuidedFormStepV2Schema = z
+  .object({ id: sourceAliasSchema, name: z.string().min(1).max(60), summary: z.boolean() })
+  .strict();
+
+export const sourcePageDefinitionV2Schema = z.discriminatedUnion("type", [
+  sourceListPageV2Schema,
+  z
+    .object({
+      ...sourcePageV2Base,
+      type: z.literal("detail"),
+      record_type: sourceQualifiedRecordTypeSchema,
+      permission: namespacedKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...sourcePageV2Base,
+      type: z.literal("dashboard"),
+      permission: namespacedKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...sourcePageV2Base,
+      type: z.literal("form"),
+      record_type: sourceQualifiedRecordTypeSchema,
+      permission: namespacedKeySchema,
+      commit_action: namespacedKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...sourcePageV2Common,
+      type: z.literal("guided_form"),
+      record_type: sourceQualifiedRecordTypeSchema,
+      permission: namespacedKeySchema,
+      commit_action: namespacedKeySchema,
+      steps: z.array(sourceGuidedFormStepV2Schema).min(2).max(20),
+      composition: sourceGuidedFormPageCompositionV2Schema,
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const stepIds = value.steps.map((step) => step.id);
+      if (value.steps.filter((step) => step.summary).length !== 1)
+        context.addIssue({
+          code: "custom",
+          path: ["steps"],
+          message: "A guided form has exactly one summary step",
+        });
+      if (new Set(stepIds).size !== stepIds.length)
+        context.addIssue({
+          code: "custom",
+          path: ["steps"],
+          message: "Guided-form step aliases must be unique",
+        });
+      const contentIds = Object.keys(value.composition.step_content);
+      if (
+        contentIds.length !== stepIds.length ||
+        contentIds.some((stepId) => !stepIds.includes(stepId))
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["composition", "step_content"],
+          message: "Guided-form step content must match every declared step exactly once",
+        });
+    }),
+  z
+    .object({
+      ...sourcePageV2Base,
+      type: z.literal("public"),
+      permission: namespacedKeySchema,
+      record_type: sourceQualifiedRecordTypeSchema.optional(),
+      public_fields: z.array(builderKeySchema),
+      public_action: namespacedKeySchema.optional(),
+      rate_limit_per_minute: z.number().int().min(1).max(10_000),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      if (
+        value.record_type === undefined &&
+        (value.public_fields.length > 0 || value.public_action !== undefined)
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["record_type"],
+          message: "A public record field or action requires an explicit record type",
+        });
+    }),
 ]);
 const sourceWorkflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
@@ -890,10 +1021,171 @@ const sourceApplicationBodySchema = z
     ),
   })
   .strict();
-export const applicationSourceDocumentSchema = z
+export const applicationSourceDocumentV1Schema = z
   .object({
     ...authoredSourceBase,
     kind: z.literal("application"),
     body: sourceApplicationBodySchema,
   })
   .strict();
+
+export const sourceApplicationBodyV2Schema = sourceApplicationBodySchema
+  .omit({ pages: true, block_registrations: true, theme: true })
+  .extend({
+    platform_block_dependencies: sourcePlatformBlockDependenciesV2Schema,
+    shells: z.array(sourceApplicationShellV2Schema),
+    pages: z.array(sourcePageDefinitionV2Schema).min(1),
+    theme: sourceApplicationThemeV2Schema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const shellAliases = value.shells.map((shell) => shell.id);
+    const shellKeys = value.shells.map((shell) => shell.key);
+    if (new Set(shellAliases).size !== shellAliases.length)
+      context.addIssue({
+        code: "custom",
+        path: ["shells"],
+        message: "Shell aliases must be unique",
+      });
+    if (new Set(shellKeys).size !== shellKeys.length)
+      context.addIssue({ code: "custom", path: ["shells"], message: "Shell keys must be unique" });
+    const contentSlotAliases = value.shells.flatMap((shell) =>
+      shell.content_slots.map((slot) => slot.id),
+    );
+    if (new Set(contentSlotAliases).size !== contentSlotAliases.length)
+      context.addIssue({
+        code: "custom",
+        path: ["shells"],
+        message: "Shell content-slot aliases must be unique across the application",
+      });
+
+    const placementEntries = value.shells.flatMap((shell) =>
+      sourcePlacementEntriesV2(shell.layout),
+    );
+    const shellsByAlias = new Map(value.shells.map((shell) => [shell.id, shell]));
+    const validateShellContent = (
+      content: Record<string, { placements: Record<string, unknown> }>,
+      shell: (typeof value.shells)[number],
+      path: (string | number)[],
+    ) => {
+      const allowed = new Set(shell.content_slots.map((slot) => slot.id));
+      const required = shell.content_slots.filter((slot) => slot.required).map((slot) => slot.id);
+      const supplied = Object.keys(content);
+      if (supplied.some((slotId) => !allowed.has(slotId)))
+        context.addIssue({
+          code: "custom",
+          path,
+          message: "Page content may bind only slots declared by its shell",
+        });
+      if (
+        required.some((slotId) => {
+          const slot = content[slotId];
+          return slot === undefined || Object.keys(slot.placements).length === 0;
+        })
+      )
+        context.addIssue({
+          code: "custom",
+          path,
+          message: "Page content must bind non-empty content to every required shell slot",
+        });
+    };
+    for (const [pageIndex, page] of value.pages.entries()) {
+      const composition = page.composition;
+      if ("step_content" in composition) {
+        if (composition.shell_kind === "default") {
+          for (const slot of Object.values(composition.step_content))
+            placementEntries.push(...sourcePlacementEntriesV2(slot));
+          continue;
+        }
+        const shell = shellsByAlias.get(composition.shell);
+        if (shell === undefined)
+          context.addIssue({
+            code: "custom",
+            path: ["pages", pageIndex, "composition", "shell"],
+            message: "A page shell must resolve inside the same application",
+          });
+        for (const [stepId, content] of Object.entries(composition.step_content)) {
+          if (shell !== undefined)
+            validateShellContent(content, shell, [
+              "pages",
+              pageIndex,
+              "composition",
+              "step_content",
+              stepId,
+            ]);
+          for (const slot of Object.values(content))
+            placementEntries.push(...sourcePlacementEntriesV2(slot));
+        }
+        continue;
+      }
+      if (composition.shell_kind === "default")
+        placementEntries.push(...sourcePlacementEntriesV2(composition.main));
+      else {
+        const shell = shellsByAlias.get(composition.shell);
+        if (shell === undefined)
+          context.addIssue({
+            code: "custom",
+            path: ["pages", pageIndex, "composition", "shell"],
+            message: "A page shell must resolve inside the same application",
+          });
+        else
+          validateShellContent(composition.content, shell, [
+            "pages",
+            pageIndex,
+            "composition",
+            "content",
+          ]);
+        for (const slot of Object.values(composition.content))
+          placementEntries.push(...sourcePlacementEntriesV2(slot));
+      }
+    }
+
+    const placementAliases = placementEntries.map(([placementId]) => placementId);
+    if (new Set(placementAliases).size !== placementAliases.length)
+      context.addIssue({
+        code: "custom",
+        path: ["pages"],
+        message: "Placement aliases must be unique across the application",
+      });
+
+    const manifest = new Map(
+      value.platform_block_dependencies.map((dependency) => [
+        String(dependency.block_id),
+        dependency.release_version,
+      ]),
+    );
+    const used = new Set<string>();
+    for (const [, placement] of placementEntries) {
+      const blockId = String(placement.block.block_id);
+      used.add(blockId);
+      if (manifest.get(blockId) !== placement.block.release_version)
+        context.addIssue({
+          code: "custom",
+          path: ["platform_block_dependencies"],
+          message: "Every placement must match one exact platform-block dependency",
+        });
+    }
+    if ([...manifest.keys()].some((blockId) => !used.has(blockId)))
+      context.addIssue({
+        code: "custom",
+        path: ["platform_block_dependencies"],
+        message: "The platform-block dependency list cannot contain unused releases",
+      });
+  });
+
+export const applicationSourceDocumentV2Schema = z
+  .object({
+    source_contract_version: z.literal("2.0.0"),
+    root_alias: sourceAliasSchema,
+    key: namespacedKeySchema,
+    kind: z.literal("application"),
+    body: sourceApplicationBodyV2Schema,
+  })
+  .strict();
+
+/** Backward-compatible name for the currently implemented Application source contract. */
+export const applicationSourceDocumentSchema = applicationSourceDocumentV1Schema;
+
+export type ApplicationSourceDocumentV2 = z.infer<typeof applicationSourceDocumentV2Schema>;
+export type SourceApplicationBodyV2 = z.infer<typeof sourceApplicationBodyV2Schema>;
+export type SourcePageDefinitionV2 = z.infer<typeof sourcePageDefinitionV2Schema>;
