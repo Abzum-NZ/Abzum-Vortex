@@ -13,9 +13,9 @@ import {
   roleAssignmentSchema,
   rolePermissionEntrySchema,
   roleSchema,
-  teamMembershipEffectiveStateSchema,
-  teamMembershipSchema,
-  teamSchema,
+  groupMembershipEffectiveStateSchema,
+  groupMembershipSchema,
+  groupSchema,
 } from "../src";
 import type {
   AffectedRoleAssignmentManifest,
@@ -27,8 +27,8 @@ import type {
   RoleAssignmentPolicy,
   RoleAssignment,
   RolePermissionEntry,
-  Team,
-  TeamMembership,
+  Group,
+  GroupMembership,
 } from "../src";
 
 const id = (suffix: number): string =>
@@ -150,8 +150,8 @@ describe("organisation access catalogue contracts", () => {
     expectTypeOf<RoleActivationPolicyRevision>().toBeObject();
     expectTypeOf<RoleAssignmentPolicy>().toBeObject();
     expectTypeOf<RolePermissionEntry>().toBeObject();
-    expectTypeOf<Team>().toBeObject();
-    expectTypeOf<TeamMembership>().toBeObject();
+    expectTypeOf<Group>().toBeObject();
+    expectTypeOf<GroupMembership>().toBeObject();
     expectTypeOf<RoleAssignment>().toBeObject();
     expectTypeOf<DelegationAuthority>().toBeObject();
     expectTypeOf<PermissionContinuity>().toBeObject();
@@ -748,9 +748,9 @@ describe("organisation access catalogue contracts", () => {
     ).toBe(false);
   });
 
-  it("stores Team membership and role assignment without caller-supplied app scope or Activity", () => {
-    const team = {
-      teamId: id(40),
+  it("stores Group membership and role assignment without caller-supplied app scope or Activity", () => {
+    const group = {
+      groupId: id(40),
       organizationId: id(1),
       key: "case_workers",
       label: "Case workers",
@@ -761,7 +761,7 @@ describe("organisation access catalogue contracts", () => {
     const membership = {
       membershipId: id(41),
       organizationId: id(1),
-      teamId: id(40),
+      groupId: id(40),
       organizationAccountId: id(42),
       revision: 1,
       ...temporalGrant,
@@ -770,13 +770,35 @@ describe("organisation access catalogue contracts", () => {
       roleAssignmentId: id(43),
       organizationId: id(1),
       roleId: id(10),
-      assignee: { kind: "team" as const, teamId: id(40) },
+      assignee: { kind: "group" as const, groupId: id(40) },
       revision: 1,
       ...temporalGrant,
     };
-    expect(teamSchema.safeParse(team).success).toBe(true);
-    expect(teamMembershipSchema.safeParse(membership).success).toBe(true);
+    expect(groupSchema.safeParse(group).success).toBe(true);
+    expect(groupMembershipSchema.safeParse(membership).success).toBe(true);
     expect(roleAssignmentSchema.safeParse(assignment).success).toBe(true);
+    expect(
+      groupSchema.safeParse({ ...group, teamId: group.groupId, groupId: undefined }).success,
+    ).toBe(false);
+    expect(
+      groupMembershipSchema.safeParse({
+        ...membership,
+        identityId: membership.organizationAccountId,
+        organizationAccountId: undefined,
+      }).success,
+    ).toBe(false);
+    expect(
+      roleAssignmentSchema.safeParse({
+        ...assignment,
+        assignee: { kind: "team", teamId: id(40) },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleAssignmentSchema.safeParse({
+        ...assignment,
+        assignee: { kind: "group", groupId: id(40), teamId: id(40) },
+      }).success,
+    ).toBe(false);
     expect(
       roleAssignmentSchema.safeParse({
         ...assignment,
@@ -785,7 +807,7 @@ describe("organisation access catalogue contracts", () => {
       }).success,
     ).toBe(false);
     expect(
-      teamMembershipEffectiveStateSchema.safeParse({
+      groupMembershipEffectiveStateSchema.safeParse({
         membership,
         effectiveState: "scheduled",
       }).success,
@@ -804,23 +826,25 @@ describe("organisation access catalogue contracts", () => {
     const membership = {
       membershipId: id(41),
       organizationId: id(1),
-      teamId: id(40),
+      groupId: id(40),
       organizationAccountId: id(42),
       revision: 1,
       ...temporalGrant,
     };
-    expect(teamMembershipSchema.safeParse({ ...membership, state: "revoked" }).success).toBe(false);
-    expect(teamMembershipSchema.safeParse({ ...membership, revokedAt: changedAt }).success).toBe(
+    expect(groupMembershipSchema.safeParse({ ...membership, state: "revoked" }).success).toBe(
+      false,
+    );
+    expect(groupMembershipSchema.safeParse({ ...membership, revokedAt: changedAt }).success).toBe(
       false,
     );
     expect(
-      teamMembershipSchema.safeParse({ ...membership, revokedByActorId: id(80) }).success,
+      groupMembershipSchema.safeParse({ ...membership, revokedByActorId: id(80) }).success,
     ).toBe(false);
     expect(
-      teamMembershipSchema.safeParse({ ...membership, revocationCorrelationId: id(83) }).success,
+      groupMembershipSchema.safeParse({ ...membership, revocationCorrelationId: id(83) }).success,
     ).toBe(false);
     expect(
-      teamMembershipSchema.safeParse({
+      groupMembershipSchema.safeParse({
         ...membership,
         state: "revoked",
         revokedByActorId: id(80),
@@ -830,16 +854,16 @@ describe("organisation access catalogue contracts", () => {
       }).success,
     ).toBe(false);
     expect(
-      teamMembershipSchema.safeParse({ ...membership, changedByActorId: undefined }).success,
+      groupMembershipSchema.safeParse({ ...membership, changedByActorId: undefined }).success,
     ).toBe(false);
     expect(
-      teamMembershipSchema.safeParse({ ...membership, changeCorrelationId: undefined }).success,
+      groupMembershipSchema.safeParse({ ...membership, changeCorrelationId: undefined }).success,
     ).toBe(false);
     expect(
-      teamMembershipSchema.safeParse({ ...membership, expiresAt: membership.startsAt }).success,
+      groupMembershipSchema.safeParse({ ...membership, expiresAt: membership.startsAt }).success,
     ).toBe(false);
     expect(
-      teamMembershipSchema.safeParse({ ...membership, revision: Number.MAX_SAFE_INTEGER + 1 })
+      groupMembershipSchema.safeParse({ ...membership, revision: Number.MAX_SAFE_INTEGER + 1 })
         .success,
     ).toBe(false);
   });
@@ -863,6 +887,18 @@ describe("organisation access catalogue contracts", () => {
       },
     };
     expect(delegationAuthoritySchema.safeParse(organizationWide).success).toBe(true);
+    expect(
+      delegationAuthoritySchema.safeParse({
+        ...organizationWide,
+        holder: { kind: "group", groupId: id(40) },
+      }).success,
+    ).toBe(true);
+    expect(
+      delegationAuthoritySchema.safeParse({
+        ...organizationWide,
+        holder: { kind: "team", teamId: id(40) },
+      }).success,
+    ).toBe(false);
     expect(delegationAuthoritySchema.safeParse(bounded).success).toBe(true);
     expect(
       delegationAuthoritySchema.safeParse({

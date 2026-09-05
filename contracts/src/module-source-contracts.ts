@@ -11,6 +11,7 @@ import {
   sourceQualifiedRelationshipSchema,
   sourceQualifiedRecordTypeSchema,
 } from "./definition-source-common";
+import { moduleSourceRecordOwnershipModeV1Schema } from "./record-ownership-compatibility";
 
 const sourceOptionSchema = z
   .object({ value: z.string().min(1).max(120), label: z.string().min(1).max(60) })
@@ -519,7 +520,7 @@ const moduleFixtureRecordTypeSchema = z
     title_field: builderKeySchema,
     storage_contract_id: sourceAliasSchema,
     storage_scope: z.enum(["organisation_shared", "application_contained"]),
-    ownership_mode: z.enum(["none", "organisation_account", "team", "inherited"]),
+    ownership_mode: moduleSourceRecordOwnershipModeV1Schema,
     ownership_relationship: builderKeySchema.optional(),
     standard_actions: z
       .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))

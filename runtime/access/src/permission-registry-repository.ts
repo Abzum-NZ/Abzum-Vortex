@@ -9,6 +9,8 @@ import {
   permissionCatalogueLookupCommandSchema,
   permissionRegistryMutationCommandSchema,
   permissionRegistryMutationResultSchema,
+  revisePlatformPermissionCatalogueMetadataCommandSchema,
+  revisePlatformPermissionCatalogueMetadataResultSchema,
   type ApplicationPermissionCatalogueSnapshot,
   type ApplicationPermissionCatalogueSnapshotCommand,
   type InitializePlatformPermissionCatalogueCommand,
@@ -17,6 +19,8 @@ import {
   type PermissionCatalogueLookupResult,
   type PermissionRegistryMutationCommand,
   type PermissionRegistryMutationResult,
+  type RevisePlatformPermissionCatalogueMetadataCommand,
+  type RevisePlatformPermissionCatalogueMetadataResult,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { verifyPreparedApplicationPermissionRegistration } from "./permission-registry-definition-adapter";
@@ -47,6 +51,9 @@ export interface PermissionRegistryPrivateRepository {
   initializePlatformCatalogue(
     command: InitializePlatformPermissionCatalogueCommand,
   ): Promise<InitializePlatformPermissionCatalogueResult>;
+  revisePlatformCatalogueMetadata(
+    command: RevisePlatformPermissionCatalogueMetadataCommand,
+  ): Promise<RevisePlatformPermissionCatalogueMetadataResult>;
   mutate(command: PermissionRegistryMutationCommand): Promise<PermissionRegistryMutationResult>;
   lookup(command: PermissionCatalogueLookupCommand): Promise<PermissionCatalogueLookupResult>;
   readApplicationSnapshot(
@@ -56,6 +63,14 @@ export interface PermissionRegistryPrivateRepository {
 
 type PlatformInitializationRow = DatabaseRow & {
   organization_id: unknown;
+  registration_revision: unknown;
+  access_version: unknown;
+};
+
+type PlatformMetadataRevisionRow = DatabaseRow & {
+  organization_id: unknown;
+  source_catalogue_version: unknown;
+  target_catalogue_version: unknown;
   registration_revision: unknown;
   access_version: unknown;
 };
@@ -134,6 +149,19 @@ const parsePlatformInitialization = (
 ): InitializePlatformPermissionCatalogueResult => {
   const parsed = initializePlatformPermissionCatalogueResultSchema.safeParse({
     organizationId: row.organization_id,
+    registrationRevision: revision(row.registration_revision),
+    accessVersion: revision(row.access_version),
+  });
+  return parsed.success ? parsed.data : invalidStorage();
+};
+
+const parsePlatformMetadataRevision = (
+  row: PlatformMetadataRevisionRow,
+): RevisePlatformPermissionCatalogueMetadataResult => {
+  const parsed = revisePlatformPermissionCatalogueMetadataResultSchema.safeParse({
+    organizationId: row.organization_id,
+    sourceCatalogueVersion: row.source_catalogue_version,
+    targetCatalogueVersion: row.target_catalogue_version,
     registrationRevision: revision(row.registration_revision),
     accessVersion: revision(row.access_version),
   });
@@ -265,6 +293,27 @@ export const createPermissionRegistryPrivateRepository = (
           )
         `;
         return parsePlatformInitialization(requireOne(rows));
+      });
+    },
+
+    async revisePlatformCatalogueMetadata(commandCandidate) {
+      const command =
+        revisePlatformPermissionCatalogueMetadataCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND");
+      return execute(async () => {
+        const rows = await transaction.query<PlatformMetadataRevisionRow>`
+          select *
+          from vortex_access.revise_platform_permission_catalogue_metadata(
+            ${command.data.organizationId}::uuid,
+            ${command.data.expectedRegistrationRevision}::bigint,
+            ${command.data.sourceCatalogueVersion}::text,
+            ${command.data.targetCatalogueVersion}::text,
+            ${command.data.changedBy}::uuid,
+            ${command.data.correlationId}::uuid
+          )
+        `;
+        return parsePlatformMetadataRevision(requireOne(rows));
       });
     },
 
