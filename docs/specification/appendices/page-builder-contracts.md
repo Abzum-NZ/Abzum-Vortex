@@ -40,6 +40,24 @@ A page has its existing permanent identity, route key, type, optional subject, a
 
 A shell is a reusable application-contained layout with its own permanent identity, registered layout blocks and uniquely named content slots. It publishes with the application, never independently. A page binds one shell in the same application or uses the default main-content slot without a custom shell. Navigation and theme are inherited by reference from the application; do not copy them into every page.
 
+A guided form selects one shell for the whole page, but each step owns distinct content. Its ordered `steps` list is the sole navigation order. Canonical composition contains a `stepContent` map keyed by exact permanent step identities. Authored `step_content` instead uses source aliases, which compilation resolves through the existing permanent-identity mapping. With the default shell, each step maps to its main-content placement slot; with an application shell, each step maps to that shell's named content slots. The map must contain exactly the unique declared steps: no missing, extra or duplicate step identity is accepted. Required slots and permitted child categories are checked independently for every step. Step content is not copied into a common page tree or selected by display labels.
+
+```mermaid
+flowchart TD
+    PAGE[Guided form: one shell selection] --> ORDER[Ordered steps]
+    PAGE --> CONTENT[Content keyed by exact step identity]
+    ORDER --> FIRST[First step]
+    ORDER --> SECOND[Next step]
+    CONTENT --> FIRSTSLOTS[First step's shell slots]
+    CONTENT --> SECONDSLOTS[Next step's shell slots]
+    FIRST --> FIRSTSLOTS
+    SECOND --> SECONDSLOTS
+    FIRSTSLOTS --> FIRSTBLOCKS[Distinct ordered blocks]
+    SECONDSLOTS --> SECONDBLOCKS[Distinct ordered blocks]
+```
+
+Validation, identity extraction, dependency discovery, fingerprints and the editor adapter traverse every step's content. Placement identities remain unique across the application, including shell content and different steps. V1-to-V2 conversion preserves every existing step identity, its blocks and their authored order in that step's default main slot; selecting a custom shell requires an explicit complete slot mapping. Guided forms retain the existing two-to-twenty-step, one-summary and one-commit rules from [forms and guided forms](../07-applications-pages-and-themes.md#forms-and-guided-forms).
+
 A placement has a permanent identity, registered block and version, schema-validated settings, named child slots, optional binding context, visibility/use constraints and layout overrides. The ordered children of each declared slot are the one source of sibling order. Do not duplicate order in a second page-wide array and a third phone-order field.
 
 Validation rejects duplicate IDs, cycles, unreachable placements, undefined or multiply assigned slots, disallowed children, excessive depth/size and incompatible block versions. Slot declarations define required/optional content and allowed child categories. Unknown or orphan content produces a repairable error; it is never silently appended elsewhere or discarded. Shell locking is enforced on the server against the permitted draft editing scope.
