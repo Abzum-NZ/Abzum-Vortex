@@ -20,6 +20,7 @@ export * from "./module-contracts";
 export * from "./operation-contracts";
 export * from "./organization-access-catalogue";
 export * from "./organization-role-assignment-changes";
+export * from "./organization-role-changes";
 export * from "./permissions";
 export * from "./permission-registry";
 export * from "./record-ownership-compatibility";

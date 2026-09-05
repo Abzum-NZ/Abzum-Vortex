@@ -118,6 +118,21 @@ stop_owned_workers() {
   done
 }
 
+emit_owned_failure_diagnostics() {
+  local log_path
+  local found=0
+  echo 'application-access proof failed; bounded owned worker diagnostics follow' >&2
+  for log_path in "$proof_root"/*.log; do
+    [ -f "$log_path" ] || continue
+    found=1
+    printf '%s\n' "--- ${log_path##*/} (last 120 lines) ---" >&2
+    tail -n 120 -- "$log_path" >&2
+  done
+  if [ "$found" -eq 0 ]; then
+    echo 'no owned worker logs were created before failure' >&2
+  fi
+}
+
 cleanup_fixture() {
   [ "$fixture_claimed" = 1 ] || return 0
   run_sql "
@@ -189,6 +204,7 @@ finalize() {
   set +e
   touch "$proof_root/update-release" "$proof_root/update-a-release"
   stop_owned_workers
+  if [ "$original_status" -ne 0 ]; then emit_owned_failure_diagnostics; fi
   cleanup_fixture
   operation_status=$?
   if [ "$operation_status" -ne 0 ]; then

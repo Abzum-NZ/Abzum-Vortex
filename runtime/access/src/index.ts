@@ -24,6 +24,13 @@ export {
 } from "./human-organization-request";
 export { fingerprintPermissionMeaning } from "./permission-fingerprints";
 export {
+  organizationRoleChangeEvidenceErrorCodes,
+  OrganizationRoleChangeEvidenceError,
+  prepareOrganizationRoleChangeEvidence,
+  verifyPreparedOrganizationRoleChangeEvidence,
+  type OrganizationRoleChangeEvidenceErrorCode,
+} from "./organization-role-change-evidence";
+export {
   createPermissionRegistryDefinitionAdapter,
   PermissionRegistryPreparationError,
   permissionRegistryPreparationErrorCodes,

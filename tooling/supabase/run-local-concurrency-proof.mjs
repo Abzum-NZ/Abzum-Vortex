@@ -20,6 +20,7 @@ const scripts = [
   "organization-role-seal-concurrency.test.sh",
   "application-access-coordination-concurrency.test.sh",
   "organization-role-assignment-changes-concurrency.test.sh",
+  "organization-role-change-concurrency.test.sh",
 ];
 
 for (const filename of scripts) {
