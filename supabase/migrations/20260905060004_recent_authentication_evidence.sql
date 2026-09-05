@@ -181,6 +181,9 @@ begin
     end if;
 
     if candidate ? 'multiFactorAuthenticatedAt' then
+      if authentication_strength not in ('multi_factor', 'recent_multi_factor') then
+        raise exception using errcode = '22023', message = 'Vortex human multi-factor evidence conflicts with authentication strength';
+      end if;
       if pg_catalog.jsonb_typeof(candidate -> 'multiFactorAuthenticatedAt') <> 'string'
         or (candidate ->> 'multiFactorAuthenticatedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
         raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';

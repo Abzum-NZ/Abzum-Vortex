@@ -1213,6 +1213,24 @@ describe("identity, sharing and secret invariants", () => {
         authenticationStrength: "recent_multi_factor",
       }).data,
     ).not.toHaveProperty("multiFactorAuthenticatedAt");
+    const multiFactorEvidence = {
+      ...human,
+      accessTokenIssuedAt: "2026-09-02T01:00:30+00:00",
+      multiFactorAuthenticatedAt: "2026-09-02T01:00:00+00:00",
+    };
+    expect(sessionContextSchema.safeParse(multiFactorEvidence).success).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...multiFactorEvidence,
+        authenticationStrength: "multi_factor",
+      }).success,
+    ).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({
+        ...multiFactorEvidence,
+        authenticationStrength: "recent_multi_factor",
+      }).success,
+    ).toBe(true);
     expect(
       sessionContextSchema.safeParse({ ...human, identityAuthorityId: undefined }).success,
     ).toBe(false);

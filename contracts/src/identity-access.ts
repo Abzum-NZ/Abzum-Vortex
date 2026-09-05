@@ -657,6 +657,16 @@ const humanSessionContextSchema = z
         path: ["accessTokenIssuedAt"],
         message: "Authentication evidence and its access-token issue time must travel together",
       });
+    if (
+      value.multiFactorAuthenticatedAt !== undefined &&
+      value.authenticationStrength !== "multi_factor" &&
+      value.authenticationStrength !== "recent_multi_factor"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["multiFactorAuthenticatedAt"],
+        message: "Multi-factor evidence requires multi-factor authentication strength",
+      });
     if (value.accessTokenIssuedAt === undefined) return;
 
     const accessTokenIssuedAt = Date.parse(value.accessTokenIssuedAt);
