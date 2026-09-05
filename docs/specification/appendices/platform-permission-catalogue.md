@@ -6,11 +6,13 @@
 
 This initial closed catalogue contains only genuine platform administration permissions needed by [protected administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30), [roles #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) and [access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). The platform invariant is protecting organisation account, role and runtime administration before an application-specific catalogue exists. It contains no business-application permissions, customer roles or business-record grants.
 
-Catalogue version: `1.0.0`. Permanent owner kind: `platform`. Permanent owner identifier: `cabe121e-0baf-4084-9471-cce915d460a8`. This identifies a permission-catalogue owner, not a customer Module/Application root or global administrator role. Registering it in one organisation creates availability there only and assigns no person or Team.
+Catalogue version: `1.0.0`. Permanent owner kind: `platform`. Permanent owner identifier: `cabe121e-0baf-4084-9471-cce915d460a8`. This identifies a permission-catalogue owner, not a customer Module/Application root or global administrator role. Registering it in one organisation creates availability there only and assigns no person or Group.
 
 The UUIDs below are newly allocated permanent identities, not derived from labels. Do not regenerate them during deployment. All entries have `administrative: true`, no `recordTypeId` and no `namedAction`; `actionKind` is the final `read` or `manage` key segment. The exact initial labels and descriptions follow. Display metadata can change through a catalogue version without changing identity or silently expanding permission meaning.
 
 ## Initial catalogue
+
+This is the immutable initial `1.0.0` metadata, including its historical terminology. The current user-facing concept is **Groups**. [Compatibility #283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283) publishes Group-facing display metadata in a forward catalogue revision while preserving the UUIDs, permanent internal keys and authority meaning below. Do not rewrite this historical snapshot or manufacture a permission-continuity break for a terminology-only change. [Privileged role policy](groups-and-privileged-access.md) is separately governed organisation role state, not a changed permission meaning.
 
 | Permanent permission identifier | Key | Label | Description |
 | --- | --- | --- | --- |

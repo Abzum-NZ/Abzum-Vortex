@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.16
+**Status:** Approved specification 2.17
 **Date:** 5 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
@@ -12,6 +12,8 @@ This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum
 This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) contains one explicitly non-blocking Studio authoring-surface choice; confirmed runtime requirements do not depend on it. A future material uncertainty must be recorded there before implementation assumes an answer.
 
 ## Architecture review additions
+
+- [Groups and privileged role activation](appendices/groups-and-privileged-access.md): Roles and Groups terminology, separate eligibility and activation, optional role-governed PIM, IAM journeys and explicit compatibility for historical access references.
 
 - [IAM application](appendices/iam-application.md): all role grants use user-linked requests, reviews and workflows in an ordinary Vortex application, with protected effective assignment and no parallel granting surface.
 - [One organisation-managed role and permission catalogue](04-access-and-permissions.md#one-organisation-managed-catalogue): application registration supplies permission declarations and role templates; explicit organisation assignments control access, and application updates never silently broaden grants.
@@ -102,6 +104,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status | Date | Summary |
 |---|---|---|---|
+| 2.17 | Approved | 5 September 2026 | Roles and Groups replace access-Team terminology. Privileged roles may require account-specific, time-limited activation; eligibility alone grants no use. IAM owns conditional review journeys, Access enforces current policy and expiry, and historical identifiers have an explicit compatibility task. |
 | 2.16 | Approved | 5 September 2026 | IAM is the single role-grant management application. Ordinary user-linked request/review records and workflows orchestrate protected Access changes; indirect access expansion, explicit setup, immediate removal and UI/MCP parity are included. Full workflow delivery remains separate from early service foundations. |
 | 2.13 | Approved | 5 September 2026 | Defined organisation selection and request-context composition: a minimum safe launcher, address-scoped tab selection, browser-supplied organisation identifier only, trusted Identity Authority binding, atomic Identity/Access scope resolution, live Access-version validation, shared row locks, transaction-local request authority and neutral unavailable outcomes. |
 | 2.12 | Approved | 5 September 2026 | Defined the server-only Supabase identity-session boundary: request-specific SSR clients, `getClaims()` Proxy refresh, independent protected-operation verification, non-mutating cluster projection reads, closed temporary failures, secure hosted and loopback cookie profiles, staged writes, local sign-out, realistic refresh/revocation guarantees and no Vortex session store. |
