@@ -138,6 +138,60 @@ create unique index organization_roles_application_source_unique
   on vortex_access.organization_roles (organization_id, application_root_id, source_role_id)
   where role_kind = 'application';
 
+create table vortex_access.organization_role_activation_policy_revisions (
+  organization_id uuid not null,
+  role_id uuid not null,
+  activation_policy_id uuid not null,
+  revision bigint not null,
+  policy_fingerprint text not null,
+  maximum_activation_duration_seconds bigint not null,
+  reason_required boolean not null,
+  authentication_requirement text not null,
+  authentication_maximum_age_seconds bigint,
+  independent_approval_required boolean not null,
+  changed_by uuid not null,
+  changed_at timestamptz not null,
+  change_correlation_id uuid not null,
+  constraint organization_role_activation_policy_revisions_pk primary key (
+    organization_id, role_id, activation_policy_id, revision
+  ),
+  constraint organization_role_activation_policy_revisions_exact_unique unique (
+    organization_id, role_id, activation_policy_id, revision, policy_fingerprint
+  ),
+  constraint organization_role_activation_policy_revisions_ids_non_nil check (
+    role_id <> '00000000-0000-0000-0000-000000000000'::uuid
+    and activation_policy_id <> '00000000-0000-0000-0000-000000000000'::uuid
+    and changed_by <> '00000000-0000-0000-0000-000000000000'::uuid
+    and change_correlation_id <> '00000000-0000-0000-0000-000000000000'::uuid
+  ),
+  constraint organization_role_activation_policy_revisions_ranges_valid check (
+    revision between 1 and 9007199254740991
+    and maximum_activation_duration_seconds between 1 and 9007199254740991
+    and (
+      authentication_maximum_age_seconds is null
+      or authentication_maximum_age_seconds between 1 and 9007199254740991
+    )
+  ),
+  constraint organization_role_activation_policy_revisions_fingerprint_valid check (
+    policy_fingerprint ~ '^sha256:[a-f0-9]{64}$'
+  ),
+  constraint organization_role_activation_policy_revisions_authentication_shape check (
+    (authentication_requirement = 'none' and authentication_maximum_age_seconds is null)
+    or (
+      authentication_requirement in ('primary', 'multi_factor')
+      and authentication_maximum_age_seconds is not null
+    )
+  ),
+  constraint organization_role_activation_policy_revisions_changed_at_finite check (
+    changed_at <> '-infinity'::timestamptz and changed_at <> 'infinity'::timestamptz
+  ),
+  constraint organization_role_activation_policy_revisions_role_fk foreign key (
+    organization_id, role_id
+  ) references vortex_access.organization_roles (
+    organization_id, role_id
+  ) deferrable initially deferred
+);
+
 create table vortex_access.organization_role_revisions (
   organization_id uuid not null,
   role_id uuid not null,
@@ -151,6 +205,12 @@ create table vortex_access.organization_role_revisions (
     )
   ) stored,
   lifecycle text not null,
+  privilege_classification text not null,
+  assignment_policy text not null,
+  policy_continuity_revision bigint not null,
+  activation_policy_id uuid,
+  activation_policy_revision bigint,
+  activation_policy_fingerprint text,
   role_key text not null,
   label text not null,
   description text not null,
@@ -188,6 +248,12 @@ create table vortex_access.organization_role_revisions (
       and lifecycle in ('active', 'acceptance_required', 'unavailable', 'retired'))
     or (role_kind = 'custom' and lifecycle in ('active', 'retired'))
   ),
+  constraint organization_role_revisions_privilege_classification_valid check (
+    privilege_classification in ('standard', 'privileged')
+  ),
+  constraint organization_role_revisions_assignment_policy_valid check (
+    assignment_policy in ('standing', 'activation_required')
+  ),
   constraint organization_role_revisions_key_format check (
     pg_catalog.char_length(role_key) between 1 and 40
     and role_key ~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
@@ -196,11 +262,18 @@ create table vortex_access.organization_role_revisions (
     role_id <> '00000000-0000-0000-0000-000000000000'::uuid
     and (application_root_id is null
       or application_root_id <> '00000000-0000-0000-0000-000000000000'::uuid)
+    and (activation_policy_id is null
+      or activation_policy_id <> '00000000-0000-0000-0000-000000000000'::uuid)
     and changed_by <> '00000000-0000-0000-0000-000000000000'::uuid
     and change_correlation_id <> '00000000-0000-0000-0000-000000000000'::uuid
   ),
   constraint organization_role_revisions_revision_range check (
     revision between 1 and 9007199254740991
+    and policy_continuity_revision between 1 and 9007199254740991
+    and (
+      activation_policy_revision is null
+      or activation_policy_revision between 1 and 9007199254740991
+    )
     and (
       source_release_revision is null
       or source_release_revision between 1 and 9007199254740991
@@ -251,6 +324,22 @@ create table vortex_access.organization_role_revisions (
       or source_catalogue_fingerprint ~ '^sha256:[a-f0-9]{64}$')
     and (accepted_grant_fingerprint is null
       or accepted_grant_fingerprint ~ '^sha256:[a-f0-9]{64}$')
+    and (activation_policy_fingerprint is null
+      or activation_policy_fingerprint ~ '^sha256:[a-f0-9]{64}$')
+  ),
+  constraint organization_role_revisions_assignment_policy_shape check (
+    (
+      assignment_policy = 'standing'
+      and activation_policy_id is null
+      and activation_policy_revision is null
+      and activation_policy_fingerprint is null
+    )
+    or (
+      assignment_policy = 'activation_required'
+      and activation_policy_id is not null
+      and activation_policy_revision is not null
+      and activation_policy_fingerprint is not null
+    )
   ),
   constraint organization_role_revisions_source_shape check (
     (
@@ -292,6 +381,12 @@ create table vortex_access.organization_role_revisions (
   ) references vortex_access.organization_roles (
     organization_id, role_id, role_kind, application_scope_id
   ) deferrable initially deferred,
+  constraint organization_role_revisions_activation_policy_fk foreign key (
+    organization_id, role_id, activation_policy_id,
+    activation_policy_revision, activation_policy_fingerprint
+  ) references vortex_access.organization_role_activation_policy_revisions (
+    organization_id, role_id, activation_policy_id, revision, policy_fingerprint
+  ) deferrable initially deferred,
   constraint organization_role_revisions_source_registration_fk foreign key (
     organization_id, source_registration_kind, application_root_id,
     accepted_registration_revision
@@ -312,6 +407,12 @@ create index organization_role_revisions_source_registration_idx
     organization_id, source_registration_kind, application_root_id,
     accepted_registration_revision
   ) where role_kind = 'application';
+
+create index organization_role_revisions_activation_policy_idx
+  on vortex_access.organization_role_revisions (
+    organization_id, role_id, activation_policy_id,
+    activation_policy_revision, activation_policy_fingerprint
+  ) where activation_policy_id is not null;
 
 create table vortex_access.organization_role_permission_entries (
   organization_id uuid not null,
@@ -535,6 +636,10 @@ create index application_role_template_continuities_registration_revision_idx
 
 alter table vortex_access.organization_roles enable row level security;
 alter table vortex_access.organization_roles force row level security;
+alter table vortex_access.organization_role_activation_policy_revisions
+  enable row level security;
+alter table vortex_access.organization_role_activation_policy_revisions
+  force row level security;
 alter table vortex_access.organization_role_revisions enable row level security;
 alter table vortex_access.organization_role_revisions force row level security;
 alter table vortex_access.organization_role_permission_entries enable row level security;
@@ -602,6 +707,10 @@ create trigger organization_role_revisions_immutable
 before update or delete on vortex_access.organization_role_revisions
 for each row execute function vortex_access.refuse_organization_role_history_mutation();
 
+create trigger organization_role_activation_policy_revisions_immutable
+before update or delete on vortex_access.organization_role_activation_policy_revisions
+for each row execute function vortex_access.refuse_organization_role_history_mutation();
+
 create trigger organization_role_permission_entries_immutable
 before update or delete on vortex_access.organization_role_permission_entries
 for each row execute function vortex_access.refuse_organization_role_history_mutation();
@@ -617,10 +726,23 @@ declare
   target_role_revision bigint;
   target_role_kind text;
   target_lifecycle text;
+  target_privilege_classification text;
+  target_assignment_policy text;
+  target_policy_continuity_revision bigint;
+  target_activation_policy_id uuid;
+  target_activation_policy_revision bigint;
+  target_activation_policy_fingerprint text;
   target_application_root_id uuid;
   target_catalogue_fingerprint text;
   target_registration_revision bigint;
+  previous_assignment_policy text;
+  previous_policy_continuity_revision bigint;
+  previous_activation_policy_id uuid;
+  previous_activation_policy_revision bigint;
+  previous_activation_policy_fingerprint text;
+  policy_unchanged boolean;
   permission_count bigint;
+  administrative_permission_count bigint;
   inconsistent_permission_count bigint;
   inconsistent_source_count bigint;
 begin
@@ -634,9 +756,15 @@ begin
     target_role_revision := new.role_revision;
   end if;
 
-  select revision.role_kind, revision.lifecycle, revision.application_root_id,
+  select revision.role_kind, revision.lifecycle, revision.privilege_classification,
+    revision.assignment_policy, revision.policy_continuity_revision,
+    revision.activation_policy_id, revision.activation_policy_revision,
+    revision.activation_policy_fingerprint, revision.application_root_id,
     revision.source_catalogue_fingerprint, revision.accepted_registration_revision
-  into target_role_kind, target_lifecycle, target_application_root_id,
+  into target_role_kind, target_lifecycle, target_privilege_classification,
+    target_assignment_policy, target_policy_continuity_revision,
+    target_activation_policy_id, target_activation_policy_revision,
+    target_activation_policy_fingerprint, target_application_root_id,
     target_catalogue_fingerprint, target_registration_revision
   from vortex_access.organization_role_revisions as revision
   where revision.organization_id = target_organization_id
@@ -645,6 +773,51 @@ begin
 
   if not found then
     return null;
+  end if;
+
+  if target_role_revision = 1 then
+    if target_policy_continuity_revision <> 1 then
+      raise exception using errcode = '23514',
+        message = 'An initial organization role policy continuity revision must be one';
+    end if;
+  else
+    select revision.assignment_policy, revision.policy_continuity_revision,
+      revision.activation_policy_id, revision.activation_policy_revision,
+      revision.activation_policy_fingerprint
+    into previous_assignment_policy, previous_policy_continuity_revision,
+      previous_activation_policy_id, previous_activation_policy_revision,
+      previous_activation_policy_fingerprint
+    from vortex_access.organization_role_revisions as revision
+    where revision.organization_id = target_organization_id
+      and revision.role_id = target_role_id
+      and revision.revision = target_role_revision - 1;
+
+    if not found then
+      raise exception using errcode = '23514',
+        message = 'An organization role revision requires its immediate predecessor';
+    end if;
+
+    policy_unchanged :=
+      target_assignment_policy = previous_assignment_policy
+      and target_activation_policy_id is not distinct from previous_activation_policy_id
+      and target_activation_policy_revision is not distinct
+        from previous_activation_policy_revision
+      and target_activation_policy_fingerprint is not distinct
+        from previous_activation_policy_fingerprint;
+
+    if policy_unchanged and
+      target_policy_continuity_revision <> previous_policy_continuity_revision then
+      raise exception using errcode = '23514',
+        message = 'Unchanged role policy must preserve policy continuity';
+    end if;
+
+    if not policy_unchanged and (
+      previous_policy_continuity_revision = 9007199254740991
+      or target_policy_continuity_revision <> previous_policy_continuity_revision + 1
+    ) then
+      raise exception using errcode = '23514',
+        message = 'Changed role policy must advance policy continuity exactly once';
+    end if;
   end if;
 
   select pg_catalog.count(*) into permission_count
@@ -685,6 +858,27 @@ begin
   if inconsistent_source_count <> 0 then
     raise exception using errcode = '23514',
       message = 'Role permissions must retain exact catalogue and meaning evidence';
+  end if;
+
+  select pg_catalog.count(*) into administrative_permission_count
+  from vortex_access.organization_role_permission_entries as permission
+  join vortex_access.permission_catalogue_entries as catalogue
+    on catalogue.organization_id = permission.organization_id
+    and catalogue.registration_kind = permission.registration_kind
+    and catalogue.registration_owner_id = permission.registration_owner_id
+    and catalogue.registration_revision = permission.accepted_registration_revision
+    and catalogue.owner_kind = permission.owner_kind
+    and catalogue.owner_id = permission.owner_id
+    and catalogue.permission_id = permission.permission_id
+  where permission.organization_id = target_organization_id
+    and permission.role_id = target_role_id
+    and permission.role_revision = target_role_revision
+    and catalogue.administrative;
+
+  if target_privilege_classification = 'standard'
+    and administrative_permission_count <> 0 then
+    raise exception using errcode = '23514',
+      message = 'Administrative permissions require privileged role classification';
   end if;
 
   if target_role_kind = 'application' then
@@ -902,6 +1096,7 @@ for each row execute function
   vortex_access.validate_application_role_template_continuity_evidence();
 
 revoke all on table vortex_access.organization_roles,
+  vortex_access.organization_role_activation_policy_revisions,
   vortex_access.organization_role_revisions,
   vortex_access.organization_role_permission_entries,
   vortex_access.permission_continuities,
@@ -919,8 +1114,10 @@ revoke execute on function vortex_access.protect_organization_role_identity(),
 
 comment on table vortex_access.organization_roles is
   'Private current pointer and permanent identity for one organisation-owned assignable role.';
+comment on table vortex_access.organization_role_activation_policy_revisions is
+  'Immutable role-scoped activation requirements; policy rows grant no authority by themselves.';
 comment on table vortex_access.organization_role_revisions is
-  'Immutable role lifecycle snapshots and exact accepted source evidence.';
+  'Immutable role lifecycle, classification, assignment policy and exact accepted source evidence.';
 comment on table vortex_access.organization_role_permission_entries is
   'Immutable exact owner-qualified permissions accepted for one role revision.';
 comment on table vortex_access.permission_continuities is

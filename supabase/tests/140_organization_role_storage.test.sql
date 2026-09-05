@@ -15,6 +15,10 @@ select has_table(
   'Access has one private current pointer per organisation-owned role'
 );
 select has_table(
+  'vortex_access', 'organization_role_activation_policy_revisions',
+  'Access preserves immutable role-scoped activation policy revisions'
+);
+select has_table(
   'vortex_access', 'organization_role_revisions',
   'Access preserves immutable role revisions'
 );
@@ -34,6 +38,10 @@ select has_table(
 select has_pk(
   'vortex_access', 'organization_roles',
   'role current pointers are organisation qualified'
+);
+select has_pk(
+  'vortex_access', 'organization_role_activation_policy_revisions',
+  'activation policy revisions are organisation and role qualified'
 );
 select has_pk(
   'vortex_access', 'organization_role_revisions',
@@ -58,6 +66,7 @@ select is(
     from pg_catalog.pg_class
     where oid in (
       'vortex_access.organization_roles'::regclass,
+      'vortex_access.organization_role_activation_policy_revisions'::regclass,
       'vortex_access.organization_role_revisions'::regclass,
       'vortex_access.organization_role_permission_entries'::regclass,
       'vortex_access.permission_continuities'::regclass,
@@ -66,7 +75,7 @@ select is(
       and relrowsecurity
       and relforcerowsecurity
   ),
-  5,
+  6,
   'all role-catalogue relations enable and force row security'
 );
 
@@ -77,6 +86,7 @@ select is(
     where schemaname = 'vortex_access'
       and tablename in (
         'organization_roles',
+        'organization_role_activation_policy_revisions',
         'organization_role_revisions',
         'organization_role_permission_entries',
         'permission_continuities',
@@ -90,6 +100,10 @@ select is(
 select ok(
   not pg_catalog.has_table_privilege(
     'anon', 'vortex_access.organization_roles', 'SELECT,INSERT,UPDATE,DELETE'
+  )
+  and not pg_catalog.has_table_privilege(
+    'authenticated', 'vortex_access.organization_role_activation_policy_revisions',
+    'SELECT,INSERT,UPDATE,DELETE'
   )
   and not pg_catalog.has_table_privilege(
     'authenticated', 'vortex_access.organization_role_revisions',
@@ -124,6 +138,7 @@ select is(
     cross join (
       values
         ('vortex_access.organization_roles'::regclass),
+        ('vortex_access.organization_role_activation_policy_revisions'::regclass),
         ('vortex_access.organization_role_revisions'::regclass),
         ('vortex_access.organization_role_permission_entries'::regclass),
         ('vortex_access.permission_continuities'::regclass),
@@ -187,6 +202,15 @@ select is(
   ),
   0,
   'the storage migration creates no implicit role'
+);
+
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from vortex_access.organization_role_activation_policy_revisions
+  ),
+  0,
+  'the storage migration creates no activation policy authority'
 );
 
 insert into vortex_identity.tenants (
@@ -334,6 +358,7 @@ insert into vortex_access.organization_roles (
 
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, application_root_id, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
   role_key, label, description, source_definition_key, source_release_revision,
   source_release_version, source_validation_contract_version,
   source_content_fingerprint, source_resolution_fingerprint,
@@ -343,7 +368,8 @@ insert into vortex_access.organization_role_revisions (
 ) values (
   '21000000-0000-4000-8000-000000000140',
   '51000000-0000-4000-8000-000000000140', 1, 'application',
-  '31000000-0000-4000-8000-000000000140', 'active', 'records_reader', 'Records reader',
+  '31000000-0000-4000-8000-000000000140', 'active',
+  'standard', 'standing', 1, 'records_reader', 'Records reader',
   'Read records in this organisation.', 'example.role_storage', 1, '1.0.0',
   '1.0.0', 'sha256:' || pg_catalog.repeat('a', 64),
   'sha256:' || pg_catalog.repeat('b', 64),
@@ -389,6 +415,7 @@ select is(
 
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, application_root_id, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
   role_key, label, description, source_definition_key, source_release_revision,
   source_release_version, source_validation_contract_version,
   source_content_fingerprint, source_resolution_fingerprint,
@@ -398,7 +425,8 @@ insert into vortex_access.organization_role_revisions (
 )
 select
   organization_id, role_id, 2, role_kind, application_root_id,
-  'acceptance_required', role_key, label, description, source_definition_key,
+  'acceptance_required', privilege_classification, assignment_policy,
+  policy_continuity_revision, role_key, label, description, source_definition_key,
   source_release_revision, source_release_version,
   source_validation_contract_version, source_content_fingerprint,
   source_resolution_fingerprint, source_template_fingerprint,
@@ -466,11 +494,13 @@ insert into vortex_access.organization_roles (
 
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, lifecycle, role_key, label, description,
+  privilege_classification, assignment_policy, policy_continuity_revision,
   changed_by, changed_at, change_correlation_id
 ) values (
   '21000000-0000-4000-8000-000000000140',
   '51000000-0000-4000-8000-000000000149', 1, 'custom', 'active',
   'platform_reader', 'Platform reader', 'Read organisation access metadata.',
+  'privileged', 'standing', 1,
   '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
   '71000000-0000-4000-8000-000000000169'
 );
@@ -502,14 +532,617 @@ set constraints all deferred;
 
 select is(
   (
-    select role_kind
+    select role_kind || ':' || privilege_classification || ':' || assignment_policy
     from vortex_access.organization_role_revisions
     where organization_id = '21000000-0000-4000-8000-000000000140'
       and role_id = '51000000-0000-4000-8000-000000000149'
   ),
-  'custom',
-  'a custom role stores exact platform permission evidence without app ownership'
+  'custom:privileged:standing',
+  'an administrative platform permission forces explicit privileged standing policy'
 );
+
+insert into vortex_access.organization_roles (
+  organization_id, role_id, role_kind, role_key, live_revision,
+  created_by, created_at
+) values (
+  '21000000-0000-4000-8000-000000000140',
+  '51000000-0000-4000-8000-000000000148', 'custom', 'activation_reader', 1,
+  '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
+);
+
+insert into vortex_access.organization_role_activation_policy_revisions (
+  organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+  maximum_activation_duration_seconds, reason_required,
+  authentication_requirement, authentication_maximum_age_seconds,
+  independent_approval_required, changed_by, changed_at, change_correlation_id
+) values
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148',
+    '61000000-0000-4000-8000-000000000140', 1,
+    'sha256:' || pg_catalog.repeat('7', 64), 3600, true, 'primary', 300, false,
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000174'
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148',
+    '61000000-0000-4000-8000-000000000140', 2,
+    'sha256:' || pg_catalog.repeat('8', 64), 1800, true, 'multi_factor', 600, true,
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000175'
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148',
+    '61000000-0000-4000-8000-000000000141', 1,
+    'sha256:' || pg_catalog.repeat('6', 64), 9007199254740991, false, 'none', null, false,
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000176'
+  );
+
+insert into vortex_access.organization_role_revisions (
+  organization_id, role_id, revision, role_kind, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
+  activation_policy_id, activation_policy_revision, activation_policy_fingerprint,
+  role_key, label, description, changed_by, changed_at, change_correlation_id
+) values
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148', 1, 'custom', 'active',
+    'standard', 'standing', 1, null, null, null,
+    'activation_reader', 'Activation reader', 'A standard role with explicit policy history.',
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000177'
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148', 2, 'custom', 'active',
+    'standard', 'activation_required', 2,
+    '61000000-0000-4000-8000-000000000140', 1,
+    'sha256:' || pg_catalog.repeat('7', 64),
+    'activation_reader', 'Activation reader', 'Standard roles may require activation.',
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000178'
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148', 3, 'custom', 'active',
+    'privileged', 'activation_required', 2,
+    '61000000-0000-4000-8000-000000000140', 1,
+    'sha256:' || pg_catalog.repeat('7', 64),
+    'activation_reader', 'Privileged activation reader',
+    'Classification alone does not invent a new policy epoch.',
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000179'
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148', 4, 'custom', 'active',
+    'privileged', 'activation_required', 3,
+    '61000000-0000-4000-8000-000000000140', 2,
+    'sha256:' || pg_catalog.repeat('8', 64),
+    'activation_reader', 'Privileged activation reader', 'The exact policy revision changed.',
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000180'
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148', 5, 'custom', 'active',
+    'privileged', 'standing', 4, null, null, null,
+    'activation_reader', 'Privileged standing reader', 'Standing policy carries no policy reference.',
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000181'
+  ),
+  (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148', 6, 'custom', 'active',
+    'privileged', 'activation_required', 5,
+    '61000000-0000-4000-8000-000000000140', 1,
+    'sha256:' || pg_catalog.repeat('7', 64),
+    'activation_reader', 'Privileged activation reader',
+    'Returning to old policy bytes still advances continuity.',
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000182'
+  );
+
+insert into vortex_access.organization_role_permission_entries (
+  organization_id, role_id, role_revision, entry_ordinal, role_kind,
+  application_root_id, owner_kind, owner_id, permission_id, registration_kind,
+  registration_owner_id, accepted_registration_revision, catalogue_fingerprint,
+  continuity_revision, meaning_fingerprint
+)
+select
+  '21000000-0000-4000-8000-000000000140'::uuid,
+  '51000000-0000-4000-8000-000000000148'::uuid,
+  target_revision.revision, 1, 'custom', entry.application_root_id,
+  entry.owner_kind, entry.owner_id, entry.permission_id, entry.registration_kind,
+  entry.registration_owner_id, entry.registration_revision,
+  registration.permission_catalogue_fingerprint, 1, entry.meaning_fingerprint
+from pg_catalog.generate_series(1, 6) as target_revision(revision)
+cross join vortex_access.permission_catalogue_entries as entry
+join vortex_access.permission_registration_revisions as registration
+  on registration.organization_id = entry.organization_id
+  and registration.registration_kind = entry.registration_kind
+  and registration.registration_owner_id = entry.registration_owner_id
+  and registration.revision = entry.registration_revision
+where entry.organization_id = '21000000-0000-4000-8000-000000000140'
+  and entry.registration_kind = 'application'
+  and entry.registration_revision = 1
+  and entry.permission_id = '41000000-0000-4000-8000-000000000140';
+
+set constraints all immediate;
+set constraints all deferred;
+
+update vortex_access.organization_roles set live_revision = 2
+where organization_id = '21000000-0000-4000-8000-000000000140'
+  and role_id = '51000000-0000-4000-8000-000000000148';
+update vortex_access.organization_roles set live_revision = 3
+where organization_id = '21000000-0000-4000-8000-000000000140'
+  and role_id = '51000000-0000-4000-8000-000000000148';
+update vortex_access.organization_roles set live_revision = 4
+where organization_id = '21000000-0000-4000-8000-000000000140'
+  and role_id = '51000000-0000-4000-8000-000000000148';
+update vortex_access.organization_roles set live_revision = 5
+where organization_id = '21000000-0000-4000-8000-000000000140'
+  and role_id = '51000000-0000-4000-8000-000000000148';
+update vortex_access.organization_roles set live_revision = 6
+where organization_id = '21000000-0000-4000-8000-000000000140'
+  and role_id = '51000000-0000-4000-8000-000000000148';
+
+set constraints all immediate;
+set constraints all deferred;
+
+select results_eq(
+  $$
+    select revision, privilege_classification, assignment_policy,
+      policy_continuity_revision, activation_policy_revision
+    from vortex_access.organization_role_revisions
+    where organization_id = '21000000-0000-4000-8000-000000000140'
+      and role_id = '51000000-0000-4000-8000-000000000148'
+    order by revision
+  $$,
+  $$ values
+    (1::bigint, 'standard'::text, 'standing'::text, 1::bigint, null::bigint),
+    (2::bigint, 'standard'::text, 'activation_required'::text, 2::bigint, 1::bigint),
+    (3::bigint, 'privileged'::text, 'activation_required'::text, 2::bigint, 1::bigint),
+    (4::bigint, 'privileged'::text, 'activation_required'::text, 3::bigint, 2::bigint),
+    (5::bigint, 'privileged'::text, 'standing'::text, 4::bigint, null::bigint),
+    (6::bigint, 'privileged'::text, 'activation_required'::text, 5::bigint, 1::bigint)
+  $$,
+  'classification, assignment policy, exact policy evidence and ABA continuity are independent'
+);
+
+select throws_ok(
+  $$
+    update vortex_access.organization_role_activation_policy_revisions
+    set maximum_activation_duration_seconds = 7200
+    where organization_id = '21000000-0000-4000-8000-000000000140'
+      and role_id = '51000000-0000-4000-8000-000000000148'
+      and activation_policy_id = '61000000-0000-4000-8000-000000000140'
+      and revision = 1
+  $$,
+  '23514'::char(5), null,
+  'activation policy history cannot be rewritten'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_activation_policy_revisions (
+      organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+      maximum_activation_duration_seconds, reason_required,
+      authentication_requirement, authentication_maximum_age_seconds,
+      independent_approval_required, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148',
+      '61000000-0000-4000-8000-000000000142', 1,
+      'sha256:' || pg_catalog.repeat('1', 64), 0, false, 'none', null, false,
+      '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+      '71000000-0000-4000-8000-000000000183'
+    )
+  $$,
+  '23514'::char(5), null,
+  'activation duration must be positive'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_activation_policy_revisions (
+      organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+      maximum_activation_duration_seconds, reason_required,
+      authentication_requirement, authentication_maximum_age_seconds,
+      independent_approval_required, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148',
+      '61000000-0000-4000-8000-000000000143', 1,
+      'sha256:' || pg_catalog.repeat('2', 64), 9007199254740992, false,
+      'none', null, false,
+      '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+      '71000000-0000-4000-8000-000000000184'
+    )
+  $$,
+  '23514'::char(5), null,
+  'activation duration must remain JavaScript-safe'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_activation_policy_revisions (
+      organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+      maximum_activation_duration_seconds, reason_required,
+      authentication_requirement, authentication_maximum_age_seconds,
+      independent_approval_required, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148',
+      '61000000-0000-4000-8000-000000000144', 1,
+      'sha256:' || pg_catalog.repeat('3', 64), 3600, false, 'none', 300, false,
+      '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+      '71000000-0000-4000-8000-000000000185'
+    )
+  $$,
+  '23514'::char(5), null,
+  'no recent-authentication requirement forbids an age'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_activation_policy_revisions (
+      organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+      maximum_activation_duration_seconds, reason_required,
+      authentication_requirement, authentication_maximum_age_seconds,
+      independent_approval_required, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148',
+      '61000000-0000-4000-8000-000000000145', 1,
+      'sha256:' || pg_catalog.repeat('4', 64), 3600, false, 'primary', null, false,
+      '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+      '71000000-0000-4000-8000-000000000186'
+    )
+  $$,
+  '23514'::char(5), null,
+  'required recent authentication requires a maximum age'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_activation_policy_revisions (
+      organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+      maximum_activation_duration_seconds, reason_required,
+      authentication_requirement, authentication_maximum_age_seconds,
+      independent_approval_required, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148',
+      '61000000-0000-4000-8000-000000000146', 1,
+      'sha256:' || pg_catalog.repeat('5', 64), 3600, false,
+      'multi_factor', 9007199254740992, false,
+      '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+      '71000000-0000-4000-8000-000000000187'
+    )
+  $$,
+  '23514'::char(5), null,
+  'authentication maximum age must remain JavaScript-safe'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_activation_policy_revisions (
+      organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+      maximum_activation_duration_seconds, reason_required,
+      authentication_requirement, authentication_maximum_age_seconds,
+      independent_approval_required, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148',
+      '61000000-0000-4000-8000-000000000147', 1,
+      'sha256:' || pg_catalog.repeat('6', 64), 3600, false, 'none', null, false,
+      '91000000-0000-4000-8000-000000000140', 'infinity'::timestamptz,
+      '71000000-0000-4000-8000-000000000188'
+    )
+  $$,
+  '23514'::char(5), null,
+  'activation policy evidence time must be finite'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_revisions (
+      organization_id, role_id, revision, role_kind, lifecycle,
+      privilege_classification, assignment_policy, policy_continuity_revision,
+      activation_policy_id, activation_policy_revision, activation_policy_fingerprint,
+      role_key, label, description, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148', 7, 'custom', 'active',
+      'privileged', 'standing', 6,
+      '61000000-0000-4000-8000-000000000140', 1,
+      'sha256:' || pg_catalog.repeat('7', 64),
+      'activation_reader', 'Invalid standing reader', 'Standing must not pin policy evidence.',
+      '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+      '71000000-0000-4000-8000-000000000189'
+    )
+  $$,
+  '23514'::char(5), null,
+  'standing assignment policy forbids an activation policy reference'
+);
+
+select throws_ok(
+  $$
+    insert into vortex_access.organization_role_revisions (
+      organization_id, role_id, revision, role_kind, lifecycle,
+      privilege_classification, assignment_policy, policy_continuity_revision,
+      activation_policy_id, activation_policy_revision, activation_policy_fingerprint,
+      role_key, label, description, changed_by, changed_at, change_correlation_id
+    ) values (
+      '21000000-0000-4000-8000-000000000140',
+      '51000000-0000-4000-8000-000000000148', 7, 'custom', 'active',
+      'privileged', 'activation_required', 6,
+      '61000000-0000-4000-8000-000000000140', null, null,
+      'activation_reader', 'Incomplete activation reader',
+      'Activation-required policy evidence must be complete.',
+      '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+      '71000000-0000-4000-8000-000000000190'
+    )
+  $$,
+  '23514'::char(5), null,
+  'activation-required assignment policy rejects partial policy evidence'
+);
+
+create function pg_temp.add_activation_reader_candidate(
+  p_revision bigint,
+  p_policy_continuity_revision bigint,
+  p_activation_policy_id uuid,
+  p_activation_policy_revision bigint,
+  p_activation_policy_fingerprint text
+)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  insert into vortex_access.organization_role_revisions (
+    organization_id, role_id, revision, role_kind, lifecycle,
+    privilege_classification, assignment_policy, policy_continuity_revision,
+    activation_policy_id, activation_policy_revision, activation_policy_fingerprint,
+    role_key, label, description, changed_by, changed_at, change_correlation_id
+  ) values (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148', p_revision, 'custom', 'active',
+    'privileged', 'activation_required', p_policy_continuity_revision,
+    p_activation_policy_id, p_activation_policy_revision, p_activation_policy_fingerprint,
+    'activation_reader', 'Activation reader', 'Candidate policy continuity revision.',
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000191'
+  );
+
+  insert into vortex_access.organization_role_permission_entries (
+    organization_id, role_id, role_revision, entry_ordinal, role_kind,
+    role_application_root_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id,
+    accepted_registration_revision, catalogue_fingerprint,
+    continuity_revision, meaning_fingerprint
+  )
+  select
+    organization_id, role_id, p_revision, entry_ordinal, role_kind,
+    role_application_root_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id,
+    accepted_registration_revision, catalogue_fingerprint,
+    continuity_revision, meaning_fingerprint
+  from vortex_access.organization_role_permission_entries
+  where organization_id = '21000000-0000-4000-8000-000000000140'
+    and role_id = '51000000-0000-4000-8000-000000000148'
+    and role_revision = 6;
+end;
+$$;
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      perform pg_temp.add_activation_reader_candidate(
+        7, 6, '61000000-0000-4000-8000-000000000140', 1,
+        'sha256:' || pg_catalog.repeat('7', 64)
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23514'::char(5), null,
+  'unchanged exact activation policy cannot invent a new continuity epoch'
+);
+set constraints all deferred;
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      perform pg_temp.add_activation_reader_candidate(
+        7, 5, '61000000-0000-4000-8000-000000000140', 2,
+        'sha256:' || pg_catalog.repeat('8', 64)
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23514'::char(5), null,
+  'changed exact activation policy cannot reuse an old continuity epoch'
+);
+set constraints all deferred;
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      perform pg_temp.add_activation_reader_candidate(
+        8, 6, '61000000-0000-4000-8000-000000000140', 2,
+        'sha256:' || pg_catalog.repeat('8', 64)
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23514'::char(5), null,
+  'a later role revision cannot skip its immediate predecessor'
+);
+set constraints all deferred;
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      perform pg_temp.add_activation_reader_candidate(
+        7, 6, '61000000-0000-4000-8000-000000000140', 1,
+        'sha256:' || pg_catalog.repeat('0', 64)
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23503'::char(5), null,
+  'an activation-required role pins the exact policy fingerprint'
+);
+set constraints all deferred;
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      perform pg_temp.add_activation_reader_candidate(
+        7, 6, '61000000-0000-4000-8000-000000000140', 99,
+        'sha256:' || pg_catalog.repeat('7', 64)
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23503'::char(5), null,
+  'an activation-required role pins the exact policy revision'
+);
+set constraints all deferred;
+
+insert into vortex_access.organization_role_activation_policy_revisions (
+  organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+  maximum_activation_duration_seconds, reason_required,
+  authentication_requirement, authentication_maximum_age_seconds,
+  independent_approval_required, changed_by, changed_at, change_correlation_id
+) values (
+  '21000000-0000-4000-8000-000000000140',
+  '51000000-0000-4000-8000-000000000149',
+  '61000000-0000-4000-8000-000000000149', 1,
+  'sha256:' || pg_catalog.repeat('1', 64), 3600, false, 'none', null, false,
+  '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+  '71000000-0000-4000-8000-000000000194'
+);
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      perform pg_temp.add_activation_reader_candidate(
+        7, 6, '61000000-0000-4000-8000-000000000149', 1,
+        'sha256:' || pg_catalog.repeat('1', 64)
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23503'::char(5), null,
+  'an activation-required role cannot borrow policy evidence from another role'
+);
+set constraints all deferred;
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      insert into vortex_access.organization_roles (
+        organization_id, role_id, role_kind, role_key, live_revision,
+        created_by, created_at
+      ) values (
+        '21000000-0000-4000-8000-000000000140',
+        '51000000-0000-4000-8000-000000000146', 'custom', 'invalid_initial_epoch', 1,
+        '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
+      );
+      insert into vortex_access.organization_role_revisions (
+        organization_id, role_id, revision, role_kind, lifecycle,
+        privilege_classification, assignment_policy, policy_continuity_revision,
+        role_key, label, description, changed_by, changed_at, change_correlation_id
+      ) values (
+        '21000000-0000-4000-8000-000000000140',
+        '51000000-0000-4000-8000-000000000146', 1, 'custom', 'active',
+        'standard', 'standing', 2, 'invalid_initial_epoch', 'Invalid initial epoch',
+        'Initial role and policy continuity revisions must both start at one.',
+        '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+        '71000000-0000-4000-8000-000000000192'
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23514'::char(5), null,
+  'an initial role revision must start at policy continuity revision one'
+);
+set constraints all deferred;
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      insert into vortex_access.organization_roles (
+        organization_id, role_id, role_kind, role_key, live_revision,
+        created_by, created_at
+      ) values (
+        '21000000-0000-4000-8000-000000000140',
+        '51000000-0000-4000-8000-000000000146', 'custom', 'standard_admin', 1,
+        '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
+      );
+      insert into vortex_access.organization_role_revisions (
+        organization_id, role_id, revision, role_kind, lifecycle,
+        privilege_classification, assignment_policy, policy_continuity_revision,
+        role_key, label, description, changed_by, changed_at, change_correlation_id
+      ) values (
+        '21000000-0000-4000-8000-000000000140',
+        '51000000-0000-4000-8000-000000000146', 1, 'custom', 'active',
+        'standard', 'standing', 1, 'standard_admin', 'Standard administrator',
+        'Administrative accepted permissions cannot remain standard.',
+        '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+        '71000000-0000-4000-8000-000000000193'
+      );
+      insert into vortex_access.organization_role_permission_entries (
+        organization_id, role_id, role_revision, entry_ordinal, role_kind,
+        application_root_id, owner_kind, owner_id, permission_id, registration_kind,
+        registration_owner_id, accepted_registration_revision, catalogue_fingerprint,
+        continuity_revision, meaning_fingerprint
+      )
+      select
+        entry.organization_id,
+        '51000000-0000-4000-8000-000000000146'::uuid, 1, 1, 'custom', null,
+        entry.owner_kind, entry.owner_id, entry.permission_id, entry.registration_kind,
+        entry.registration_owner_id, entry.registration_revision,
+        registration.permission_catalogue_fingerprint, 1, entry.meaning_fingerprint
+      from vortex_access.permission_catalogue_entries as entry
+      join vortex_access.permission_registration_revisions as registration
+        on registration.organization_id = entry.organization_id
+        and registration.registration_kind = entry.registration_kind
+        and registration.registration_owner_id = entry.registration_owner_id
+        and registration.revision = entry.registration_revision
+      where entry.organization_id = '21000000-0000-4000-8000-000000000140'
+        and entry.registration_kind = 'platform'
+        and entry.administrative
+      order by entry.permission_id
+      limit 1;
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23514'::char(5), null,
+  'canonical administrative permission evidence imposes the privileged classification floor'
+);
+set constraints all deferred;
 
 insert into vortex_access.organization_roles (
   organization_id, role_id, role_kind, role_key, application_root_id,
@@ -532,6 +1165,7 @@ insert into vortex_access.organization_roles (
 
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, application_root_id, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
   role_key, label, description, source_definition_key, source_release_revision,
   source_release_version, source_validation_contract_version,
   source_content_fingerprint, source_resolution_fingerprint,
@@ -542,7 +1176,8 @@ insert into vortex_access.organization_role_revisions (
   (
     '21000000-0000-4000-8000-000000000140',
     '51000000-0000-4000-8000-000000000141', 1, 'application',
-    '31000000-0000-4000-8000-000000000140', 'unavailable', 'empty_unavailable',
+    '31000000-0000-4000-8000-000000000140', 'unavailable',
+    'standard', 'standing', 1, 'empty_unavailable',
     'Unavailable wildcard', 'No live permissions survived the projection.',
     'example.role_storage', 1, '1.0.0', '1.0.0',
     'sha256:' || pg_catalog.repeat('a', 64),
@@ -556,7 +1191,8 @@ insert into vortex_access.organization_role_revisions (
   (
     '21000000-0000-4000-8000-000000000140',
     '51000000-0000-4000-8000-000000000142', 1, 'application',
-    '31000000-0000-4000-8000-000000000140', 'retired', 'empty_retired',
+    '31000000-0000-4000-8000-000000000140', 'retired',
+    'standard', 'standing', 1, 'empty_retired',
     'Retired application role', 'Retired without effective permissions.',
     'example.role_storage', 1, '1.0.0', '1.0.0',
     'sha256:' || pg_catalog.repeat('a', 64),
@@ -598,6 +1234,7 @@ insert into vortex_access.organization_roles (
 
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, application_root_id, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
   role_key, label, description, source_definition_key, source_release_revision,
   source_release_version, source_validation_contract_version,
   source_content_fingerprint, source_resolution_fingerprint,
@@ -607,7 +1244,8 @@ insert into vortex_access.organization_role_revisions (
 ) values (
   '21000000-0000-4000-8000-000000000141',
   '51000000-0000-4000-8000-000000000140', 1, 'application',
-  '31000000-0000-4000-8000-000000000140', 'unavailable', 'records_reader', 'Records reader',
+  '31000000-0000-4000-8000-000000000140', 'unavailable',
+  'standard', 'standing', 1, 'records_reader', 'Records reader',
   'Same local key in another organisation.', 'example.role_storage', 1, '1.0.0',
   '1.0.0', 'sha256:' || pg_catalog.repeat('a', 64),
   'sha256:' || pg_catalog.repeat('b', 64),
@@ -632,6 +1270,37 @@ select is(
   'matching role identity, key and template source remain organisation qualified'
 );
 
+insert into vortex_access.organization_role_activation_policy_revisions (
+  organization_id, role_id, activation_policy_id, revision, policy_fingerprint,
+  maximum_activation_duration_seconds, reason_required,
+  authentication_requirement, authentication_maximum_age_seconds,
+  independent_approval_required, changed_by, changed_at, change_correlation_id
+) values (
+  '21000000-0000-4000-8000-000000000141',
+  '51000000-0000-4000-8000-000000000140',
+  '61000000-0000-4000-8000-000000000150', 1,
+  'sha256:' || pg_catalog.repeat('2', 64), 3600, false, 'none', null, false,
+  '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+  '71000000-0000-4000-8000-000000000195'
+);
+
+select throws_ok(
+  $test$
+    do $body$
+    begin
+      perform pg_temp.add_activation_reader_candidate(
+        7, 6, '61000000-0000-4000-8000-000000000150', 1,
+        'sha256:' || pg_catalog.repeat('2', 64)
+      );
+      set constraints all immediate;
+    end;
+    $body$
+  $test$,
+  '23503'::char(5), null,
+  'an activation-required role cannot borrow policy evidence from another organisation'
+);
+set constraints all deferred;
+
 select throws_ok(
   $test$
     do $body$
@@ -648,6 +1317,7 @@ select throws_ok(
     );
       insert into vortex_access.organization_role_revisions (
       organization_id, role_id, revision, role_kind, application_root_id, lifecycle,
+      privilege_classification, assignment_policy, policy_continuity_revision,
       role_key, label, description, source_definition_key, source_release_revision,
       source_release_version, source_validation_contract_version,
       source_content_fingerprint, source_resolution_fingerprint,
@@ -657,7 +1327,8 @@ select throws_ok(
     ) values (
       '21000000-0000-4000-8000-000000000140',
       '51000000-0000-4000-8000-000000000143', 1, 'application',
-      '31000000-0000-4000-8000-000000000140', 'active', 'empty_active', 'Empty active',
+      '31000000-0000-4000-8000-000000000140', 'active',
+      'standard', 'standing', 1, 'empty_active', 'Empty active',
       'An invalid active role without permissions.', 'example.role_storage', 1,
       '1.0.0', '1.0.0', 'sha256:' || pg_catalog.repeat('a', 64),
       'sha256:' || pg_catalog.repeat('b', 64),
@@ -692,7 +1363,8 @@ select throws_ok(
     );
       insert into vortex_access.organization_role_revisions (
       organization_id, role_id, revision, role_kind, application_root_id,
-      lifecycle, role_key, label, description, source_definition_key,
+      lifecycle, privilege_classification, assignment_policy,
+      policy_continuity_revision, role_key, label, description, source_definition_key,
       source_release_revision, source_release_version,
       source_validation_contract_version, source_content_fingerprint,
       source_resolution_fingerprint, source_template_fingerprint,
@@ -702,7 +1374,8 @@ select throws_ok(
     ) values (
       '21000000-0000-4000-8000-000000000140',
       '51000000-0000-4000-8000-000000000144', 1, 'application',
-      '31000000-0000-4000-8000-000000000141', 'unavailable', 'foreign_source',
+      '31000000-0000-4000-8000-000000000141', 'unavailable',
+      'standard', 'standing', 1, 'foreign_source',
       'Foreign source', 'Must not borrow another organisation registration.',
       'example.role_storage', 1, '1.0.0', '1.0.0',
       'sha256:' || pg_catalog.repeat('a', 64),
@@ -738,7 +1411,8 @@ select throws_ok(
     );
       insert into vortex_access.organization_role_revisions (
       organization_id, role_id, revision, role_kind, application_root_id,
-      lifecycle, role_key, label, description, source_definition_key,
+      lifecycle, privilege_classification, assignment_policy,
+      policy_continuity_revision, role_key, label, description, source_definition_key,
       source_release_revision, source_release_version,
       source_validation_contract_version, source_content_fingerprint,
       source_resolution_fingerprint, source_template_fingerprint,
@@ -748,7 +1422,8 @@ select throws_ok(
     ) values (
       '21000000-0000-4000-8000-000000000140',
       '51000000-0000-4000-8000-000000000145', 1, 'application',
-      '31000000-0000-4000-8000-000000000140', 'unavailable', 'changed_source',
+      '31000000-0000-4000-8000-000000000140', 'unavailable',
+      'standard', 'standing', 1, 'changed_source',
       'Changed source', 'Must preserve exact registration source evidence.',
       'example.role_storage', 1, '1.0.0', '1.0.0',
       'sha256:' || pg_catalog.repeat('9', 64),
@@ -772,12 +1447,13 @@ select throws_ok(
   $$
     insert into vortex_access.organization_role_revisions (
       organization_id, role_id, revision, role_kind, application_root_id,
-      lifecycle, role_key, label, description, changed_by, changed_at,
+      lifecycle, privilege_classification, assignment_policy,
+      policy_continuity_revision, role_key, label, description, changed_by, changed_at,
       change_correlation_id
     ) values (
       '21000000-0000-4000-8000-000000000140',
       '51000000-0000-4000-8000-000000000140', 2, 'custom', null,
-      'acceptance_required', 'wrong_kind', 'Wrong kind',
+      'acceptance_required', 'standard', 'standing', 1, 'wrong_kind', 'Wrong kind',
       'Custom roles do not use this state.',
       '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
       '71000000-0000-4000-8000-000000000164'
@@ -828,7 +1504,8 @@ select throws_ok(
     begin
       insert into vortex_access.organization_role_revisions (
         organization_id, role_id, revision, role_kind, application_root_id,
-        lifecycle, role_key, label, description, source_definition_key,
+        lifecycle, privilege_classification, assignment_policy,
+        policy_continuity_revision, role_key, label, description, source_definition_key,
         source_release_revision, source_release_version,
         source_validation_contract_version, source_content_fingerprint,
         source_resolution_fingerprint, source_template_fingerprint,
@@ -838,7 +1515,8 @@ select throws_ok(
       )
       select
         organization_id, role_id, 3, role_kind, application_root_id,
-        'unavailable', role_key, label, description, source_definition_key,
+        'unavailable', privilege_classification, assignment_policy,
+        policy_continuity_revision, role_key, label, description, source_definition_key,
         source_release_revision, source_release_version,
         source_validation_contract_version, source_content_fingerprint,
         source_resolution_fingerprint, source_template_fingerprint,

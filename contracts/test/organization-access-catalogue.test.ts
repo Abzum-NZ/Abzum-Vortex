@@ -8,6 +8,7 @@ import {
   permissionContinuitySchema,
   preparedApplicationRoleTemplatesSchema,
   projectLiveApplicationRolePermissions,
+  roleActivationPolicyRevisionSchema,
   roleAssignmentEffectiveStateSchema,
   roleAssignmentSchema,
   rolePermissionEntrySchema,
@@ -22,6 +23,8 @@ import type {
   PermissionContinuity,
   PreparedApplicationRoleTemplates,
   Role,
+  RoleActivationPolicyRevision,
+  RoleAssignmentPolicy,
   RoleAssignment,
   RolePermissionEntry,
   Team,
@@ -118,6 +121,18 @@ const changeEvidence = {
   changeCorrelationId: id(82),
 };
 
+const standingRoleProtection = {
+  privilegeClassification: "standard" as const,
+  assignmentPolicy: { kind: "standing" as const },
+  policyContinuityRevision: 1,
+};
+
+const activationPolicyReference = {
+  activationPolicyId: id(90),
+  revision: 2,
+  fingerprint: fingerprint("9"),
+};
+
 const temporalGrant = {
   startsAt: "2026-09-06T01:00:00+00:00",
   state: "live" as const,
@@ -132,6 +147,8 @@ const temporalGrant = {
 describe("organisation access catalogue contracts", () => {
   it("exports the corrected live contract types from the package entry point", () => {
     expectTypeOf<Role>().toBeObject();
+    expectTypeOf<RoleActivationPolicyRevision>().toBeObject();
+    expectTypeOf<RoleAssignmentPolicy>().toBeObject();
     expectTypeOf<RolePermissionEntry>().toBeObject();
     expectTypeOf<Team>().toBeObject();
     expectTypeOf<TeamMembership>().toBeObject();
@@ -140,6 +157,158 @@ describe("organisation access catalogue contracts", () => {
     expectTypeOf<PermissionContinuity>().toBeObject();
     expectTypeOf<AffectedRoleAssignmentManifest>().toBeObject();
     expectTypeOf<PreparedApplicationRoleTemplates>().toBeObject();
+  });
+
+  it("models complete immutable role-scoped activation policy revisions", () => {
+    const policy = {
+      organizationId: id(1),
+      roleId: id(10),
+      activationPolicyId: id(90),
+      revision: 2,
+      fingerprint: fingerprint("9"),
+      maximumActivationDurationSeconds: 3_600,
+      reasonRequired: true,
+      recentAuthentication: { kind: "multi_factor" as const, maximumAgeSeconds: 900 },
+      independentApprovalRequired: true,
+      changedByActorId: id(80),
+      changedAt,
+      changeCorrelationId: id(82),
+    };
+
+    expect(roleActivationPolicyRevisionSchema.safeParse(policy).success).toBe(true);
+    expect(
+      roleActivationPolicyRevisionSchema.safeParse({
+        ...policy,
+        recentAuthentication: { kind: "none" },
+      }).success,
+    ).toBe(true);
+    expect(
+      roleActivationPolicyRevisionSchema.safeParse({
+        ...policy,
+        recentAuthentication: { kind: "primary", maximumAgeSeconds: 300 },
+      }).success,
+    ).toBe(true);
+
+    for (const invalidDuration of [
+      0,
+      -1,
+      1.5,
+      Number.POSITIVE_INFINITY,
+      Number.MAX_SAFE_INTEGER + 1,
+    ])
+      expect(
+        roleActivationPolicyRevisionSchema.safeParse({
+          ...policy,
+          maximumActivationDurationSeconds: invalidDuration,
+        }).success,
+      ).toBe(false);
+
+    for (const invalidMaximumAge of [
+      0,
+      -1,
+      1.5,
+      Number.POSITIVE_INFINITY,
+      Number.MAX_SAFE_INTEGER + 1,
+    ])
+      expect(
+        roleActivationPolicyRevisionSchema.safeParse({
+          ...policy,
+          recentAuthentication: {
+            kind: "primary",
+            maximumAgeSeconds: invalidMaximumAge,
+          },
+        }).success,
+      ).toBe(false);
+
+    expect(
+      roleActivationPolicyRevisionSchema.safeParse({
+        ...policy,
+        recentAuthentication: { kind: "none", maximumAgeSeconds: 300 },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationPolicyRevisionSchema.safeParse({
+        ...policy,
+        recentAuthentication: { kind: "primary" },
+      }).success,
+    ).toBe(false);
+    expect(roleActivationPolicyRevisionSchema.safeParse({ ...policy, reviewers: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it("keeps privilege classification independent from the closed assignment policy", () => {
+    const role = {
+      roleId: id(10),
+      organizationId: id(1),
+      key: "protected_reader",
+      label: "Protected reader",
+      description: "Exercises protected classification and assignment policy combinations.",
+      kind: "custom" as const,
+      liveRevision: 1,
+      lifecycle: "active" as const,
+      permissions: [exactPermission()],
+      ...changeEvidence,
+    };
+    const standing = { kind: "standing" as const };
+    const activationRequired = {
+      kind: "activation_required" as const,
+      activationPolicy: activationPolicyReference,
+    };
+
+    for (const privilegeClassification of ["standard", "privileged"] as const)
+      for (const assignmentPolicy of [standing, activationRequired])
+        expect(
+          roleSchema.safeParse({
+            ...role,
+            privilegeClassification,
+            assignmentPolicy,
+            policyContinuityRevision: 1,
+          }).success,
+        ).toBe(true);
+
+    expect(
+      roleSchema.safeParse({
+        ...role,
+        privilegeClassification: "standard",
+        policyContinuityRevision: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      roleSchema.safeParse({
+        ...role,
+        privilegeClassification: "standard",
+        assignmentPolicy: { ...standing, activationPolicy: activationPolicyReference },
+        policyContinuityRevision: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      roleSchema.safeParse({
+        ...role,
+        privilegeClassification: "standard",
+        assignmentPolicy: { kind: "activation_required" },
+        policyContinuityRevision: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      roleSchema.safeParse({
+        ...role,
+        privilegeClassification: "standard",
+        assignmentPolicy: {
+          kind: "activation_required",
+          activationPolicy: { ...activationPolicyReference, organizationId: id(1) },
+        },
+        policyContinuityRevision: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      roleSchema.safeParse({
+        ...role,
+        privilegeClassification: "standard",
+        assignmentPolicy: activationRequired,
+        policyContinuityRevision: Number.MAX_SAFE_INTEGER + 1,
+      }).success,
+    ).toBe(false);
   });
 
   it("requires exact owner-qualified permission identity and application context", () => {
@@ -178,6 +347,7 @@ describe("organisation access catalogue contracts", () => {
       description: "Reads the selected areas in two independently registered applications.",
       kind: "custom" as const,
       liveRevision: 1,
+      ...standingRoleProtection,
       lifecycle: "active" as const,
       permissions: [
         exactPermission(),
@@ -211,6 +381,7 @@ describe("organisation access catalogue contracts", () => {
       description: "Uses the accepted application functions.",
       kind: "application" as const,
       liveRevision: 1,
+      ...standingRoleProtection,
       lifecycle: "active" as const,
       permissions: [exactPermission()],
       source: {
@@ -780,6 +951,7 @@ describe("organisation access catalogue contracts", () => {
       description: "Exercises valid catalogue growth without an artificial contract cap.",
       kind: "custom" as const,
       liveRevision: 1,
+      ...standingRoleProtection,
       lifecycle: "active" as const,
       permissions: Array.from({ length: 1_001 }, (_, index) =>
         exactPermission({ permissionId: id(1_000 + index) }),
