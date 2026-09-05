@@ -76,6 +76,8 @@ The early #34 core is generic, not an administration-only evaluator. Every opera
 
 ## Fluid reuse decision
 
+The [rechecked integration map](fluid-integration-map.md) records the 5 September inspection of the exact board editor, concrete source-to-service wiring, preservation requirements and dependency-led implementation proof.
+
 | Inspected area | Treatment |
 |---|---|
 | [Fluid editor](http://localhost:3001/builder/edit/projects), source at `C:/Apps/fluid/apps/web/components/builder/puck-editor.tsx` | Adapt canvas, outline, palette and responsive-preview interaction. The reference source belongs to a separate local repository. |
