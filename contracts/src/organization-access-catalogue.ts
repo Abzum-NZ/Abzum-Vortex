@@ -218,6 +218,7 @@ const liveRoleFields = {
   privilegeClassification: rolePrivilegeClassificationSchema,
   assignmentPolicy: roleAssignmentPolicySchema,
   policyContinuityRevision: javascriptSafeRevisionSchema,
+  authorityContinuityRevision: javascriptSafeRevisionSchema,
   permissions: rolePermissionSetSchema,
   ...creationAndChangeEvidenceFields,
 };

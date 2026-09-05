@@ -95,6 +95,8 @@ The same protection applies when an otherwise active application removes a permi
 
 Fresh acceptance approves one exact role permission set for an explicitly listed set of existing account or Group assignments. The request binds their identifiers and current revisions; a changed, missing or additional assignment requires a refreshed request. [IAM](appendices/iam-application.md) presents those affected assignments, while [the protected operation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) rechecks the administrator's current authority before committing. Assignments reference the accepted role rather than storing duplicate permission lists. Revoked assignments are not restored, and a later assignment is a separately authorised grant. Bounded authority to grant permissions requires its own explicit acceptance and never follows a use-role approval automatically.
 
+Changing a role between standing and activation-required assignment modes, including returning to a previous mode, requires that same complete non-revoked assignment manifest. The change never converts assignments: only a matching-kind, otherwise valid assignment can be used after explicit review. Eligible assignments still need a fresh activation. Changing only activation duration or other requirements within activation-required mode leaves eligibility in place but invalidates old policy-bound requests and activations. These [policy compatibility rules](appendices/groups-and-privileged-access.md#privileged-classification-and-policy) avoid unnecessary regrants without permitting silent restoration.
+
 ```mermaid
 flowchart LR
     A[Permission accepted for a role] --> B[Permission removed or meaning changed]
@@ -109,11 +111,21 @@ Application updates reduce an accepted application-role permission set when perm
 
 An application role awaiting acceptance of changes (`acceptance_required`) preserves only its continuously valid, previously accepted permissions for existing non-revoked assignments. Pending additions grant nothing. Each stored permission still passes the current availability, continuity and meaning checks in [the central decision](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34). Only an `active` role may receive a new assignment; `unavailable` and `retired` roles grant nothing. Explicit acceptance returns the role to `active` only after checking the exact candidate, complete affected-assignment list and current delegated authority. Adding a permission must not, by itself, remove existing valid permissions while review is pending.
 
+A currently active supplied role can stay active after an update that only removes permissions, provided at least one accepted permission remains and there are no added or restored permissions awaiting acceptance. An empty role cannot stay active. A role already awaiting acceptance never returns to active just because a later application update removes its pending additions. A missing template or withdrawn application makes the role unavailable; bringing it back requires acceptance. Retired roles stay retired. These automatic changes preserve the original acceptance evidence and the role's existing privileged classification and activation policy; they are not new approvals or activations.
+
+The same retained-access rule applies to already activated privileged roles. A separate [role-authority continuity number](appendices/groups-and-privileged-access.md#retained-permissions-during-role-review) preserves still-valid activation use across metadata changes, narrowing and pending additions. Accepting added or restored authority starts a new period and requires fresh activation, without silently revoking the underlying eligibility assignment. Existing eligibility may activate only the retained accepted remainder during review; pending additions grant nothing. A pending activation request still becomes stale if its exact proposed role revision changes.
+
+The [coordinated application-access change](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) applies registration, permission/template availability and supplied-role reductions together. Either all changes become visible, with one Access-version change, or none do. An update that already exactly matches the current registration and derived role state returns unchanged without creating history. A request based on an older registration revision is refused rather than applied again. A matching application fingerprint alone is not enough: the related permission, template and role state must also be consistent. See the [closed change contracts](appendices/data-contracts.md#permission-and-role-contracts).
+
 ```mermaid
 flowchart LR
-    U[Application update] --> R[Remove permissions no longer continuously valid]
-    R --> E[Existing assignments keep the accepted remainder]
-    R --> P[New permissions await explicit acceptance]
+    U[Authorised application update] --> T
+    subgraph T[One all-or-nothing change]
+        C[Update registration and permission/template availability] --> R[Keep only continuously valid accepted role permissions]
+        R --> V[Change the organisation Access version once]
+    end
+    T --> E[Existing assignments keep the accepted remainder]
+    T --> P[New or restored permissions await explicit acceptance]
     P --> M[Check exact candidate and all affected assignments]
     M --> A[Activate accepted role revision]
     A --> N[New assignments may be granted separately]

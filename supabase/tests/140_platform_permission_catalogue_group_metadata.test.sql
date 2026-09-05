@@ -275,17 +275,23 @@ where organization_id = '21000000-0000-4000-8000-000000000140'
 set local session_replication_role = origin;
 
 create temporary table historical_evidence_before on commit drop as
-select 'registration'::text as evidence_kind, pg_catalog.to_jsonb(revision) as evidence
+select 'registration'::text as evidence_kind, pg_catalog.to_jsonb(revision.*) as evidence
 from vortex_access.permission_registration_revisions as revision
 where revision.organization_id = '21000000-0000-4000-8000-000000000140'
   and revision.registration_kind = 'platform'
   and revision.revision = 1
 union all
-select 'permission'::text, pg_catalog.to_jsonb(entry)
+select 'permission'::text, pg_catalog.to_jsonb(entry.*)
 from vortex_access.permission_catalogue_entries as entry
 where entry.organization_id = '21000000-0000-4000-8000-000000000140'
   and entry.registration_kind = 'platform'
   and entry.registration_revision = 1;
+
+select ok(
+  (select pg_catalog.bool_and(pg_catalog.jsonb_typeof(evidence) = 'object')
+   from historical_evidence_before),
+  'historical preservation snapshots contain complete rows rather than scalar revision numbers'
+);
 
 create temporary table metadata_revision on commit drop as
 select * from vortex_access.revise_platform_permission_catalogue_metadata(
@@ -374,13 +380,13 @@ select is(
       select evidence_kind, evidence from historical_evidence_before
       except all
       (
-        select 'registration', pg_catalog.to_jsonb(revision)
+        select 'registration', pg_catalog.to_jsonb(revision.*)
         from vortex_access.permission_registration_revisions as revision
         where revision.organization_id = '21000000-0000-4000-8000-000000000140'
           and revision.registration_kind = 'platform'
           and revision.revision = 1
         union all
-        select 'permission', pg_catalog.to_jsonb(entry)
+        select 'permission', pg_catalog.to_jsonb(entry.*)
         from vortex_access.permission_catalogue_entries as entry
         where entry.organization_id = '21000000-0000-4000-8000-000000000140'
           and entry.registration_kind = 'platform'

@@ -7,8 +7,6 @@ import {
   initializePlatformPermissionCatalogueResultSchema,
   permissionCatalogueEntrySchema,
   permissionCatalogueLookupCommandSchema,
-  permissionRegistryMutationCommandSchema,
-  permissionRegistryMutationResultSchema,
   revisePlatformPermissionCatalogueMetadataCommandSchema,
   revisePlatformPermissionCatalogueMetadataResultSchema,
   type ApplicationPermissionCatalogueSnapshot,
@@ -17,13 +15,10 @@ import {
   type InitializePlatformPermissionCatalogueResult,
   type PermissionCatalogueLookupCommand,
   type PermissionCatalogueLookupResult,
-  type PermissionRegistryMutationCommand,
-  type PermissionRegistryMutationResult,
   type RevisePlatformPermissionCatalogueMetadataCommand,
   type RevisePlatformPermissionCatalogueMetadataResult,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import { verifyPreparedApplicationPermissionRegistration } from "./permission-registry-definition-adapter";
 
 export const permissionRegistryRepositoryErrorCodes = [
   "INVALID_PERMISSION_REGISTRY_COMMAND",
@@ -54,7 +49,6 @@ export interface PermissionRegistryPrivateRepository {
   revisePlatformCatalogueMetadata(
     command: RevisePlatformPermissionCatalogueMetadataCommand,
   ): Promise<RevisePlatformPermissionCatalogueMetadataResult>;
-  mutate(command: PermissionRegistryMutationCommand): Promise<PermissionRegistryMutationResult>;
   lookup(command: PermissionCatalogueLookupCommand): Promise<PermissionCatalogueLookupResult>;
   readApplicationSnapshot(
     command: ApplicationPermissionCatalogueSnapshotCommand,
@@ -73,16 +67,6 @@ type PlatformMetadataRevisionRow = DatabaseRow & {
   target_catalogue_version: unknown;
   registration_revision: unknown;
   access_version: unknown;
-};
-
-type MutationRow = DatabaseRow & {
-  operation: unknown;
-  organization_id: unknown;
-  application_root_id: unknown;
-  registration_state: unknown;
-  registration_revision: unknown;
-  access_version: unknown;
-  correlation_id: unknown;
 };
 
 type PermissionEntryRow = DatabaseRow & {
@@ -164,19 +148,6 @@ const parsePlatformMetadataRevision = (
     targetCatalogueVersion: row.target_catalogue_version,
     registrationRevision: revision(row.registration_revision),
     accessVersion: revision(row.access_version),
-  });
-  return parsed.success ? parsed.data : invalidStorage();
-};
-
-const parseMutation = (row: MutationRow): PermissionRegistryMutationResult => {
-  const parsed = permissionRegistryMutationResultSchema.safeParse({
-    operation: row.operation,
-    organizationId: row.organization_id,
-    applicationRootId: row.application_root_id,
-    registrationState: row.registration_state,
-    registrationRevision: revision(row.registration_revision),
-    accessVersion: revision(row.access_version),
-    correlationId: row.correlation_id,
   });
   return parsed.success ? parsed.data : invalidStorage();
 };
@@ -314,47 +285,6 @@ export const createPermissionRegistryPrivateRepository = (
           )
         `;
         return parsePlatformMetadataRevision(requireOne(rows));
-      });
-    },
-
-    async mutate(commandCandidate: PermissionRegistryMutationCommand) {
-      const command = permissionRegistryMutationCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND");
-      if (command.data.operation !== "withdraw") {
-        try {
-          verifyPreparedApplicationPermissionRegistration(command.data.candidate);
-        } catch (error) {
-          throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND", {
-            cause: error,
-          });
-        }
-      }
-
-      return execute(async () => {
-        const rows =
-          command.data.operation === "withdraw"
-            ? await transaction.query<MutationRow>`
-                select *
-                from vortex_access.withdraw_application_permission_registration(
-                  ${command.data.organizationId}::uuid,
-                  ${command.data.applicationRootId}::uuid,
-                  ${command.data.expectedRevision}::bigint,
-                  ${command.data.changedBy}::uuid,
-                  ${command.data.correlationId}::uuid
-                )
-              `
-            : await transaction.query<MutationRow>`
-                select *
-                from vortex_access.apply_application_permission_registration(
-                  ${command.data.operation}::text,
-                  ${command.data.operation === "register" ? null : command.data.expectedRevision}::bigint,
-                  ${JSON.stringify(command.data.candidate)}::text::jsonb,
-                  ${command.data.changedBy}::uuid,
-                  ${command.data.correlationId}::uuid
-                )
-              `;
-        return parseMutation(requireOne(rows));
       });
     },
 

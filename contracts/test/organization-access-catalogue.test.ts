@@ -125,6 +125,7 @@ const standingRoleProtection = {
   privilegeClassification: "standard" as const,
   assignmentPolicy: { kind: "standing" as const },
   policyContinuityRevision: 1,
+  authorityContinuityRevision: 1,
 };
 
 const activationPolicyReference = {
@@ -260,6 +261,7 @@ describe("organisation access catalogue contracts", () => {
       liveRevision: 1,
       lifecycle: "active" as const,
       permissions: [exactPermission()],
+      authorityContinuityRevision: 1,
       ...changeEvidence,
     };
     const standing = { kind: "standing" as const };
@@ -319,6 +321,15 @@ describe("organisation access catalogue contracts", () => {
         privilegeClassification: "standard",
         assignmentPolicy: activationRequired,
         policyContinuityRevision: Number.MAX_SAFE_INTEGER + 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      roleSchema.safeParse({
+        ...role,
+        privilegeClassification: "standard",
+        assignmentPolicy: standing,
+        policyContinuityRevision: 1,
+        authorityContinuityRevision: Number.MAX_SAFE_INTEGER + 1,
       }).success,
     ).toBe(false);
   });
