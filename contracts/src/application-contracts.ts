@@ -51,6 +51,7 @@ import {
   applicationShellV2Schema,
   applicationThemeV2Schema,
   canonicalPlacementEntriesV2,
+  guidedFormPageCompositionV2Schema,
   pageCompositionV2Schema,
   platformBlockDependenciesV2Schema,
 } from "./application-composition-v2";
@@ -381,14 +382,18 @@ export const pageDefinitionSchema = z.discriminatedUnion("type", [
   publicPageSchema,
 ]);
 
-const pageV2Base = {
+const pageV2Common = {
   pageId: pageIdSchema,
   key: builderKeySchema,
   name: labelSchema,
   accessPermissionKey: namespacedKeySchema,
   states: z.array(pageStateSchema).min(1),
-  composition: pageCompositionV2Schema,
   standardPageReplacement: standardPageReplacementSchema.optional(),
+};
+
+const pageV2Base = {
+  ...pageV2Common,
+  composition: pageCompositionV2Schema,
 };
 
 const listPageV2Schema = z
@@ -435,16 +440,38 @@ export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
-      ...pageV2Base,
+      ...pageV2Common,
       type: z.literal("guided_form"),
       recordType: recordTypeReferenceSchema,
       commitActionKey: namespacedKeySchema,
       steps: z.array(guidedFormStepV2Schema).min(2).max(20),
+      composition: guidedFormPageCompositionV2Schema,
     })
     .strict()
-    .refine((value) => value.steps.filter((step) => step.summary).length === 1, {
-      path: ["steps"],
-      message: "A guided form has exactly one summary step",
+    .superRefine((value, context) => {
+      const stepIds = value.steps.map((step) => String(step.id));
+      if (value.steps.filter((step) => step.summary).length !== 1)
+        context.addIssue({
+          code: "custom",
+          path: ["steps"],
+          message: "A guided form has exactly one summary step",
+        });
+      if (new Set(stepIds).size !== stepIds.length)
+        context.addIssue({
+          code: "custom",
+          path: ["steps"],
+          message: "Guided-form step identities must be unique",
+        });
+      const contentIds = Object.keys(value.composition.stepContent);
+      if (
+        contentIds.length !== stepIds.length ||
+        contentIds.some((stepId) => !stepIds.includes(stepId))
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["composition", "stepContent"],
+          message: "Guided-form step content must match every declared step exactly once",
+        });
     }),
   z
     .object({
@@ -673,8 +700,63 @@ export const applicationContentV2Schema = applicationContentV1Schema
       canonicalPlacementEntriesV2(shell.layout),
     );
     const shellsById = new Map(value.shells.map((shell) => [String(shell.shellId), shell]));
+    const validateShellContent = (
+      content: Record<string, { placements: Record<string, unknown> }>,
+      shell: (typeof value.shells)[number],
+      path: (string | number)[],
+    ) => {
+      const allowed = new Set(shell.contentSlots.map((slot) => String(slot.slotId)));
+      const required = shell.contentSlots
+        .filter((slot) => slot.required)
+        .map((slot) => String(slot.slotId));
+      const supplied = Object.keys(content);
+      if (supplied.some((slotId) => !allowed.has(slotId)))
+        context.addIssue({
+          code: "custom",
+          path,
+          message: "Page content may bind only slots declared by its shell",
+        });
+      if (
+        required.some((slotId) => {
+          const slot = content[slotId];
+          return slot === undefined || Object.keys(slot.placements).length === 0;
+        })
+      )
+        context.addIssue({
+          code: "custom",
+          path,
+          message: "Page content must bind non-empty content to every required shell slot",
+        });
+    };
     for (const [pageIndex, page] of value.pages.entries()) {
       const composition = page.composition;
+      if ("stepContent" in composition) {
+        if (composition.shellKind === "default") {
+          for (const slot of Object.values(composition.stepContent))
+            placementEntries.push(...canonicalPlacementEntriesV2(slot));
+          continue;
+        }
+        const shell = shellsById.get(String(composition.shellId));
+        if (shell === undefined)
+          context.addIssue({
+            code: "custom",
+            path: ["pages", pageIndex, "composition", "shellId"],
+            message: "A page shell must resolve inside the same application",
+          });
+        for (const [stepId, content] of Object.entries(composition.stepContent)) {
+          if (shell !== undefined)
+            validateShellContent(content, shell, [
+              "pages",
+              pageIndex,
+              "composition",
+              "stepContent",
+              stepId,
+            ]);
+          for (const slot of Object.values(content))
+            placementEntries.push(...canonicalPlacementEntriesV2(slot));
+        }
+        continue;
+      }
       if (composition.shellKind === "default")
         placementEntries.push(...canonicalPlacementEntriesV2(composition.main));
       else {
@@ -685,32 +767,13 @@ export const applicationContentV2Schema = applicationContentV1Schema
             path: ["pages", pageIndex, "composition", "shellId"],
             message: "A page shell must resolve inside the same application",
           });
-        else {
-          const allowed = new Set(shell.contentSlots.map((slot) => String(slot.slotId)));
-          const required = shell.contentSlots
-            .filter((slot) => slot.required)
-            .map((slot) => String(slot.slotId));
-          const supplied = Object.keys(composition.content);
-          if (supplied.some((slotId) => !allowed.has(slotId)))
-            context.addIssue({
-              code: "custom",
-              path: ["pages", pageIndex, "composition", "content"],
-              message: "Page content may bind only slots declared by its shell",
-            });
-          if (
-            required.some((slotId) => {
-              const content = Object.entries(composition.content).find(
-                ([suppliedSlotId]) => suppliedSlotId === slotId,
-              )?.[1];
-              return content === undefined || Object.keys(content.placements).length === 0;
-            })
-          )
-            context.addIssue({
-              code: "custom",
-              path: ["pages", pageIndex, "composition", "content"],
-              message: "Page content must bind non-empty content to every required shell slot",
-            });
-        }
+        else
+          validateShellContent(composition.content, shell, [
+            "pages",
+            pageIndex,
+            "composition",
+            "content",
+          ]);
         for (const slot of Object.values(composition.content))
           placementEntries.push(...canonicalPlacementEntriesV2(slot));
       }
