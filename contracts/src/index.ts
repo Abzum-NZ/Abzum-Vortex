@@ -20,6 +20,7 @@ export * from "./operation-contracts";
 export * from "./organization-access-catalogue";
 export * from "./permissions";
 export * from "./permission-registry";
+export * from "./record-ownership-compatibility";
 export * from "./records";
 export * from "./storage";
 export * from "./validation-errors";

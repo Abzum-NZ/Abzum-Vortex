@@ -34,8 +34,10 @@ export {
 } from "./permission-registry-definition-adapter";
 export {
   platformPermissionCatalogue,
+  platformPermissionCatalogueV1,
   platformPermissionCatalogueOwnerId,
   platformPermissionCatalogueVersion,
+  platformPermissionCatalogueVersionV1,
 } from "./platform-permission-catalogue";
 export {
   createPermissionRegistryPrivateRepository,

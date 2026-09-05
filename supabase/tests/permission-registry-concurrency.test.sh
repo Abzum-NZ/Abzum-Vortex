@@ -31,6 +31,9 @@ readonly correlation_initial="65${run_uuid:2}"
 readonly correlation_a="66${run_uuid:2}"
 readonly correlation_b="67${run_uuid:2}"
 readonly actor_id="69${run_uuid:2}"
+readonly correlation_platform_initialize="6a${run_uuid:2}"
+readonly correlation_platform_revision="6b${run_uuid:2}"
+readonly correlation_platform_replay="6c${run_uuid:2}"
 
 fixture_claimed=0
 declare -a worker_pids=()
@@ -104,6 +107,18 @@ cleanup_fixture() {
       end if;
     end
     \$proof\$;
+    delete from vortex_access.permission_catalogue_entries
+      where organization_id = '$organization_id'
+        and registration_kind = 'platform'
+        and registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8';
+    delete from vortex_access.permission_registrations
+      where organization_id = '$organization_id'
+        and registration_kind = 'platform'
+        and registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8';
+    delete from vortex_access.permission_registration_revisions
+      where organization_id = '$organization_id'
+        and registration_kind = 'platform'
+        and registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8';
     delete from vortex_access.permission_catalogue_entries
       where organization_id = '$organization_id'
         and application_root_id = '$application_root_id';
@@ -192,6 +207,18 @@ run_sql "
       select 1 from vortex_access.permission_catalogue_entries
       where organization_id = '$organization_id'
         and application_root_id = '$application_root_id'
+    ) or exists (
+      select 1 from vortex_access.permission_registrations
+      where organization_id = '$organization_id'
+        and registration_kind = 'platform'
+    ) or exists (
+      select 1 from vortex_access.permission_registration_revisions
+      where organization_id = '$organization_id'
+        and registration_kind = 'platform'
+    ) or exists (
+      select 1 from vortex_access.permission_catalogue_entries
+      where organization_id = '$organization_id'
+        and registration_kind = 'platform'
     ) then
       raise exception 'Permission proof fixture scope already exists';
     end if;
@@ -407,6 +434,101 @@ grep -q 'Application permission registration revision is stale or unavailable' "
 }
 [ "$(run_sql "select count(*) from vortex_access.permission_registration_revisions where organization_id = '$organization_id' and registration_owner_id = '$application_root_id';")" = '2' ] || {
   echo 'losing permission update left partial history' >&2
+  exit 1
+}
+
+[ "$(run_sql "select registration_revision::text || '|' || access_version::text from vortex_access.initialize_platform_permission_catalogue('$organization_id', '$actor_id', '$correlation_platform_initialize');")" = '1|4' ] || {
+  echo 'platform catalogue initialization did not create exact revision one and one Access increment' >&2
+  exit 1
+}
+
+PGAPPNAME="vortex-platform-metadata-$fixture_name_token" "${psql_command[@]}" >"$proof_root/platform-metadata.log" 2>&1 <<SQL &
+begin;
+select registration_revision, access_version
+from vortex_access.revise_platform_permission_catalogue_metadata(
+  '$organization_id', 1, '1.0.0', '1.0.1',
+  '$actor_id', '$correlation_platform_revision'
+)
+\g '$proof_root/platform-metadata.result'
+select pg_catalog.pg_sleep(10);
+commit;
+SQL
+platform_metadata_pid=$!
+worker_pids+=("$platform_metadata_pid")
+
+for _ in $(seq 1 200); do
+  [ -f "$proof_root/platform-metadata.result" ] && break
+  sleep 0.05
+done
+[ -f "$proof_root/platform-metadata.result" ] || {
+  echo 'platform metadata revision did not reach its transaction barrier' >&2
+  exit 1
+}
+
+PGAPPNAME="vortex-platform-initialize-$fixture_name_token" "${psql_command[@]}" >"$proof_root/platform-initialize.log" 2>&1 <<SQL &
+begin;
+select registration_revision, access_version
+from vortex_access.initialize_platform_permission_catalogue(
+  '$organization_id', '$actor_id', '$correlation_platform_replay'
+)
+\g '$proof_root/platform-initialize.result'
+commit;
+SQL
+platform_initialize_pid=$!
+worker_pids+=("$platform_initialize_pid")
+
+platform_initializer_blocked=0
+for _ in $(seq 1 200); do
+  if [ "$(run_sql "select count(*) from pg_catalog.pg_stat_activity where application_name = 'vortex-platform-initialize-$fixture_name_token' and wait_event_type = 'Lock';")" = '1' ]; then
+    platform_initializer_blocked=1
+    break
+  fi
+  sleep 0.05
+done
+[ "$platform_initializer_blocked" = 1 ] || {
+  echo 'concurrent platform initializer did not wait behind the metadata revision lock' >&2
+  exit 1
+}
+
+if wait_owned_worker "$platform_metadata_pid"; then
+  platform_metadata_status=0
+else
+  platform_metadata_status=$?
+  echo 'platform metadata revision worker failed' >&2
+  sed -n '1,40p' "$proof_root/platform-metadata.log" >&2
+  exit "$platform_metadata_status"
+fi
+if wait_owned_worker "$platform_initialize_pid"; then
+  platform_initialize_status=0
+else
+  platform_initialize_status=$?
+  echo 'concurrent platform initializer replay failed to converge' >&2
+  sed -n '1,40p' "$proof_root/platform-initialize.log" >&2
+  exit "$platform_initialize_status"
+fi
+
+[ "$(tr -d '[:space:]' <"$proof_root/platform-metadata.result")" = '2|5' ] || {
+  echo 'platform metadata revision did not append exactly one revision and Access version' >&2
+  exit 1
+}
+[ "$(tr -d '[:space:]' <"$proof_root/platform-initialize.result")" = '2|5' ] || {
+  echo 'concurrent platform initializer did not return the converged revision and Access version' >&2
+  exit 1
+}
+[ "$(run_sql "select revision::text || '|' || source_version from vortex_access.permission_registrations where organization_id = '$organization_id' and registration_kind = 'platform' and registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8';")" = '2|1.0.1' ] || {
+  echo 'platform initializer and metadata revision did not converge on exact revision two' >&2
+  exit 1
+}
+[ "$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id = '$organization_id';")" = '5' ] || {
+  echo 'platform initializer replay incorrectly added another Access increment' >&2
+  exit 1
+}
+[ "$(run_sql "select count(*) from vortex_access.permission_registration_revisions where organization_id = '$organization_id' and registration_kind = 'platform' and registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8';")" = '2' ] || {
+  echo 'platform convergence left duplicate or missing registration history' >&2
+  exit 1
+}
+[ "$(run_sql "select count(*) from vortex_access.permission_catalogue_entries where organization_id = '$organization_id' and registration_kind = 'platform' and registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8';")" = '26' ] || {
+  echo 'platform convergence left duplicate or incomplete catalogue snapshots' >&2
   exit 1
 }
 
