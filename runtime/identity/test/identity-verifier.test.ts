@@ -165,6 +165,138 @@ describe("identity token verification", () => {
     expect(secondClient.customFetch).not.toHaveBeenCalled();
   });
 
+  it("derives the newest supported primary and MFA times through the official verifier regardless of AMR order", async () => {
+    const signingKey = generateSigningKey("recent-authentication-key");
+    const amr = [
+      { method: "totp", timestamp: nowSeconds - 50 },
+      { method: "password", timestamp: nowSeconds - 90 },
+      { method: "mfa/totp", timestamp: nowSeconds - 10 },
+      { method: "magiclink", timestamp: nowSeconds - 80 },
+      { method: "mfa/phone", timestamp: nowSeconds - 40 },
+      { method: "mfa/webauthn", timestamp: nowSeconds - 30 },
+    ];
+    const verify = async (entries: typeof amr) => {
+      const { claimsClient } = createOfficialClaimsClient([signingKey.publicJwk]);
+      return createIdentityVerifierWithClient(
+        testingAuthority,
+        claimsClient,
+        verifierOptions,
+      ).verifyAccessToken(
+        signAccessToken(signingKey, {
+          aal: "aal2",
+          iat: nowSeconds,
+          amr: entries,
+        }),
+      );
+    };
+
+    const [forward, reversed] = await Promise.all([verify(amr), verify(amr.toReversed())]);
+    expect(forward).toEqual(reversed);
+    expect(forward).toMatchObject({
+      authenticationStrength: "multi_factor",
+      primaryAuthenticatedAt: new Date((nowSeconds - 80) * 1_000).toISOString(),
+      multiFactorAuthenticatedAt: new Date((nowSeconds - 30) * 1_000).toISOString(),
+    });
+    expect(JSON.stringify(forward)).not.toContain("amr");
+    expect(JSON.stringify(forward)).not.toContain("mfa/webauthn");
+  });
+
+  it("keeps implicit OTP and unsupported methods ordinary while accepting bounded SSO provider detail", async () => {
+    const verifier = createIdentityVerifierWithClient(
+      testingAuthority,
+      clientReturning(
+        accepted({
+          iat: nowSeconds,
+          amr: [
+            { method: "otp", timestamp: nowSeconds },
+            { method: "recovery", timestamp: nowSeconds },
+            { method: "invite", timestamp: nowSeconds },
+            { method: "email_change", timestamp: nowSeconds },
+            { method: "sso/saml", timestamp: nowSeconds, provider: "workforce" },
+          ],
+        }),
+      ),
+      verifierOptions,
+    );
+
+    const verified = await verifier.verifyAccessToken("verified-token");
+    expect(verified).not.toHaveProperty("primaryAuthenticatedAt");
+    expect(verified).not.toHaveProperty("multiFactorAuthenticatedAt");
+    expect(JSON.stringify(verified)).not.toContain("workforce");
+  });
+
+  it("retains magic-link primary time after a separate MFA step-up", async () => {
+    const verified = await createIdentityVerifierWithClient(
+      testingAuthority,
+      clientReturning(
+        accepted({
+          aal: "aal2",
+          iat: nowSeconds,
+          amr: [
+            { method: "magiclink", timestamp: nowSeconds - 600 },
+            { method: "totp", timestamp: nowSeconds - 30 },
+          ],
+        }),
+      ),
+      verifierOptions,
+    ).verifyAccessToken("verified-token");
+
+    expect(verified).toMatchObject({
+      primaryAuthenticatedAt: new Date((nowSeconds - 600) * 1_000).toISOString(),
+      multiFactorAuthenticatedAt: new Date((nowSeconds - 30) * 1_000).toISOString(),
+    });
+  });
+
+  it("does not derive times from string-only, future, post-issuance, or strength-inconsistent evidence", async () => {
+    const cases = [
+      { amr: ["password", "totp"] },
+      {
+        iat: nowSeconds + identityVerifierMaximumClockSkewSeconds,
+        amr: [{ method: "password", timestamp: nowSeconds + 1 }],
+      },
+      {
+        iat: nowSeconds - 10,
+        amr: [{ method: "password", timestamp: nowSeconds - 9 }],
+      },
+      { aal: "aal1", amr: [{ method: "totp", timestamp: nowSeconds - 50 }] },
+    ];
+
+    for (const overrides of cases) {
+      const verified = await createIdentityVerifierWithClient(
+        testingAuthority,
+        clientReturning(accepted(overrides)),
+        verifierOptions,
+      ).verifyAccessToken("verified-token");
+      expect(verified).not.toHaveProperty("primaryAuthenticatedAt");
+      expect(verified).not.toHaveProperty("multiFactorAuthenticatedAt");
+    }
+  });
+
+  it("keeps the 60-second token skew boundary separate from zero-skew authentication evidence", async () => {
+    const signingKey = generateSigningKey("evidence-clock-boundary-key");
+    const { claimsClient } = createOfficialClaimsClient([signingKey.publicJwk]);
+    const verified = await createIdentityVerifierWithClient(
+      testingAuthority,
+      claimsClient,
+      verifierOptions,
+    ).verifyAccessToken(
+      signAccessToken(signingKey, {
+        aal: "aal2",
+        iat: nowSeconds + identityVerifierMaximumClockSkewSeconds,
+        amr: [
+          { method: "password", timestamp: nowSeconds },
+          { method: "totp", timestamp: nowSeconds + 1 },
+        ],
+      }),
+    );
+
+    expect(verified.primaryAuthenticatedAt).toBe(new Date(nowSeconds * 1_000).toISOString());
+    expect(verified).not.toHaveProperty("multiFactorAuthenticatedAt");
+    expect(verified.issuedAt).toBe(
+      new Date((nowSeconds + identityVerifierMaximumClockSkewSeconds) * 1_000).toISOString(),
+    );
+  });
+
   it("pairwise refuses generated tokens issued by every other configured environment", async () => {
     const signingKey = generateSigningKey("shared-test-key");
     const authorities = [
@@ -351,6 +483,20 @@ describe("identity token verification", () => {
     ["vortex.identity.missing_key_identifier", "token", accepted({}, { kid: "   " })],
     ["vortex.identity.verified_primary_email_unavailable", "token", accepted({ email: undefined })],
     ["vortex.identity.invalid_claims", "token", accepted({ is_anonymous: true })],
+    [
+      "vortex.identity.invalid_claims",
+      "token",
+      accepted({
+        amr: [{ method: "password", timestamp: nowSeconds - 1 }, "totp"],
+      }),
+    ],
+    [
+      "vortex.identity.invalid_claims",
+      "token",
+      accepted({
+        amr: [{ method: "password", timestamp: nowSeconds - 1, provider: "email" }],
+      }),
+    ],
     ["vortex.identity.untrusted_audience", "token", accepted({ aud: "another-audience" })],
   ] as const)("returns the safe refusal %s", async (refusalCode, token, response) => {
     const client = clientReturning(response);

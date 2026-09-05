@@ -166,6 +166,26 @@ export const identityProjectionSchema = z
 
 const jwtNumericDateSchema = z.number().int().nonnegative().max(253_402_300_799);
 
+const supabaseAmrEntrySchema = z.union([
+  z
+    .object({
+      method: z.literal("sso/saml"),
+      timestamp: jwtNumericDateSchema,
+      provider: z.string().min(1).max(120).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      method: z
+        .string()
+        .min(1)
+        .max(120)
+        .refine((method) => method !== "sso/saml"),
+      timestamp: jwtNumericDateSchema,
+    })
+    .strict(),
+]);
+
 export const supabaseIdentityClaimsSchema = z
   .object({
     iss: z.url().max(2_000),
@@ -183,19 +203,7 @@ export const supabaseIdentityClaimsSchema = z
     nbf: jwtNumericDateSchema.optional(),
     app_metadata: z.record(z.string(), jsonValueSchema).optional(),
     user_metadata: z.record(z.string(), jsonValueSchema).optional(),
-    amr: z
-      .union([
-        z.array(z.string().min(1).max(120)),
-        z.array(
-          z
-            .object({
-              method: z.string().min(1).max(120),
-              timestamp: jwtNumericDateSchema,
-            })
-            .strict(),
-        ),
-      ])
-      .optional(),
+    amr: z.union([z.array(z.string().min(1).max(120)), z.array(supabaseAmrEntrySchema)]).optional(),
   })
   .loose()
   .superRefine((value, context) => {
@@ -223,6 +231,8 @@ export const verifiedIdentitySchema = z
     issuedAt: timestampSchema,
     expiresAt: timestampSchema,
     authenticationStrength: z.enum(["single_factor", "multi_factor"]),
+    primaryAuthenticatedAt: timestampSchema.optional(),
+    multiFactorAuthenticatedAt: timestampSchema.optional(),
     keyId: z
       .string()
       .min(1)
@@ -237,6 +247,22 @@ export const verifiedIdentitySchema = z
         path: ["expiresAt"],
         message: "Verified identity expiry must be later than issue time",
       });
+    for (const property of ["primaryAuthenticatedAt", "multiFactorAuthenticatedAt"] as const)
+      if (value[property] !== undefined && Date.parse(value[property]) > Date.parse(value.issuedAt))
+        context.addIssue({
+          code: "custom",
+          path: [property],
+          message: "Authentication evidence cannot postdate access-token issuance",
+        });
+    if (
+      value.multiFactorAuthenticatedAt !== undefined &&
+      value.authenticationStrength !== "multi_factor"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["multiFactorAuthenticatedAt"],
+        message: "Multi-factor evidence requires verified multi-factor strength",
+      });
   });
 
 export const identitySessionSchema = z
@@ -246,6 +272,8 @@ export const identitySessionSchema = z
     authenticationStrength: z.enum(["single_factor", "multi_factor"]),
     accessTokenIssuedAt: timestampSchema,
     accessTokenExpiresAt: timestampSchema,
+    primaryAuthenticatedAt: timestampSchema.optional(),
+    multiFactorAuthenticatedAt: timestampSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -254,6 +282,25 @@ export const identitySessionSchema = z
         code: "custom",
         path: ["accessTokenExpiresAt"],
         message: "The access-token expiry must be later than its issue time",
+      });
+    for (const property of ["primaryAuthenticatedAt", "multiFactorAuthenticatedAt"] as const)
+      if (
+        value[property] !== undefined &&
+        Date.parse(value[property]) > Date.parse(value.accessTokenIssuedAt)
+      )
+        context.addIssue({
+          code: "custom",
+          path: [property],
+          message: "Authentication evidence cannot postdate access-token issuance",
+        });
+    if (
+      value.multiFactorAuthenticatedAt !== undefined &&
+      value.authenticationStrength !== "multi_factor"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["multiFactorAuthenticatedAt"],
+        message: "Multi-factor evidence requires verified multi-factor strength",
       });
   });
 
@@ -636,16 +683,62 @@ const authenticatedHumanContext = {
   organizationAccountId: organizationAccountIdSchema,
   authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
 };
+const humanSessionContextSchema = z
+  .object({
+    ...sessionContextCommon,
+    ...authenticatedHumanContext,
+    callerKind: z.literal("human"),
+    accessTokenIssuedAt: timestampSchema.optional(),
+    primaryAuthenticatedAt: timestampSchema.optional(),
+    multiFactorAuthenticatedAt: timestampSchema.optional(),
+    delegatedContext: delegatedContextSchema.optional(),
+    supportContext: supportContextSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const hasEvidence =
+      value.primaryAuthenticatedAt !== undefined || value.multiFactorAuthenticatedAt !== undefined;
+    if (hasEvidence !== (value.accessTokenIssuedAt !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["accessTokenIssuedAt"],
+        message: "Authentication evidence and its access-token issue time must travel together",
+      });
+    if (
+      value.multiFactorAuthenticatedAt !== undefined &&
+      value.authenticationStrength !== "multi_factor" &&
+      value.authenticationStrength !== "recent_multi_factor"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["multiFactorAuthenticatedAt"],
+        message: "Multi-factor evidence requires multi-factor authentication strength",
+      });
+    if (value.accessTokenIssuedAt === undefined) return;
+
+    const accessTokenIssuedAt = Date.parse(value.accessTokenIssuedAt);
+    if (accessTokenIssuedAt >= Date.parse(value.expiresAt))
+      context.addIssue({
+        code: "custom",
+        path: ["accessTokenIssuedAt"],
+        message: "Access-token issuance must precede request-context expiry",
+      });
+    if (accessTokenIssuedAt > Date.parse(value.issuedAt) + 60_000)
+      context.addIssue({
+        code: "custom",
+        path: ["accessTokenIssuedAt"],
+        message: "Access-token issuance exceeds the verified clock-skew boundary",
+      });
+    for (const property of ["primaryAuthenticatedAt", "multiFactorAuthenticatedAt"] as const)
+      if (value[property] !== undefined && Date.parse(value[property]) > accessTokenIssuedAt)
+        context.addIssue({
+          code: "custom",
+          path: [property],
+          message: "Authentication evidence cannot postdate access-token issuance",
+        });
+  });
 export const sessionContextSchema = z.discriminatedUnion("callerKind", [
-  z
-    .object({
-      ...sessionContextCommon,
-      ...authenticatedHumanContext,
-      callerKind: z.literal("human"),
-      delegatedContext: delegatedContextSchema.optional(),
-      supportContext: supportContextSchema.optional(),
-    })
-    .strict(),
+  humanSessionContextSchema,
   z
     .object({
       ...sessionContextCommon,

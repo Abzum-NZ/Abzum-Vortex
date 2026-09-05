@@ -27,6 +27,8 @@ The human organisation context copies those exact derived times. Only when at le
 
 Identity owns provider interpretation; the [single access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) owns whether the evidence meets an action's policy. The legacy `recent_multi_factor` strength label is compatibility data, never a confirmation timestamp or proof of recency. Neither a label nor context creation time can manufacture missing evidence.
 
+The final human context rejects a multi-factor confirmation timestamp paired with `single_factor` strength, matching the verified Identity and session boundaries. A legacy `recent_multi_factor` context may coexist with genuine validated MFA evidence for compatibility, but the label supplies none; the current Identity producer emits `multi_factor`, not that legacy value. TypeScript and database validation must enforce the same rule.
+
 ## Supported provider mapping
 
 The first mapping is pinned to Supabase Auth `v2.196.0`, selected by the repository's Supabase CLI `2.116.0`. Review the [pinned provider method evidence](https://github.com/supabase/auth/blob/v2.196.0/internal/models/amr.go) and [official claim reference](https://supabase.com/docs/guides/auth/jwt-fields) when changing that dependency; an unfamiliar provider method does not acquire privileged meaning automatically.
