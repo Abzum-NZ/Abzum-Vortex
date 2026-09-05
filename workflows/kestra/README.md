@@ -200,8 +200,11 @@ changing any pin.
 A fresh disposable startup with the pinned PostgreSQL 18.4 image succeeds, applies all Kestra
 migrations and loads the two reviewed operational flows. Its bundled Flyway nevertheless warns that
 PostgreSQL 18 is newer than its tested maximum of 17. Operational database delivery can use this
-verified combination, but application-workflow execution [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76)
-is blocked by the forward-only compatibility gate [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198).
+verified combination. Application-workflow execution [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76)
+must validate its generated flows, execution and restart behaviour against the existing pinned
+runtime; a real compatibility failure is not waived. The user has deferred engine upgrades and
+backup work for now. [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) governs a later
+forward upgrade, not a mandatory engine-version change before core workflow implementation.
 The existing PostgreSQL 18 data directory must never be opened by PostgreSQL 17.
 
 **No password is written down.** Kestra's file publishes `POSTGRES_PASSWORD: k3str4` in its own

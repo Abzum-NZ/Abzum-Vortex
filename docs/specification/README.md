@@ -9,7 +9,7 @@
 
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
 
-This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) is clear; a future material uncertainty must be recorded there before implementation assumes an answer.
+This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) contains one explicitly non-blocking Studio authoring-surface choice; confirmed runtime requirements do not depend on it. A future material uncertainty must be recorded there before implementation assumes an answer.
 
 ## Architecture review additions
 

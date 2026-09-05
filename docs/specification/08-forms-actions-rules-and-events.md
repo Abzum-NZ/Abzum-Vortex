@@ -56,6 +56,8 @@ Allowed effects are:
 
 Server validation is authoritative. Client-side rule evaluation may provide immediate feedback, but the server re-evaluates the rule against current data before saving.
 
+The client evaluator is pure: it may show the same predicted field changes, warnings, refusals, and background-work request as the server, but it never writes a record, event, workflow-start intent, or external effect. Only the authoritative Vortex action or save path may accept the request after checking the current organisation, active application installation, permission, exact published action or rule, subject revision, and typed inputs.
+
 Rules must declare their read fields and write fields. Publication refuses cycles, conflicting writes without a declared order, and a rule that reads information unavailable to its execution context.
 
 ## Conditions
@@ -97,6 +99,14 @@ Every event envelope includes:
 - Per-record sequence number.
 - Declared carried values.
 
+## Starting durable work
+
+A synchronous action or rule may request a published [workflow](09-workflows-and-pipelines.md), but it never calls Kestra while the record transaction is open. If the operation saves a record, the record changes, declared event, and exact durable workflow-start intent or event are written in the same transaction. A refusal, stale revision, validation failure, or rollback writes none of them. After commit, the dispatcher hands the recorded fact to the private workflow adapter with duplicate protection.
+
+An authorised button that uses the published button/action trigger but makes no record change still opens a short Vortex transaction and persists its exact start intent before returning success. A browser preview or direct call to Kestra cannot substitute for that transaction. The current first-release trigger contract is action- and subject-record-bound. A future record-free start requires a separately declared protected Workflow operation plus explicit versioned descriptor, trigger, input, and execution-reference contracts; until those exist, it is unavailable rather than represented by a fabricated action, placeholder record, or arbitrary payload.
+
+A Kestra outage after commit leaves the event or start intent pending for retry. Vortex reports the record save as committed and the background start as pending; it never turns a committed save into a false failure. Conversely, a rejected or rolled-back save can never produce a workflow run.
+
 ## Delivery guarantees
 
 - An event is written in the same database transaction as the record change.
@@ -123,6 +133,9 @@ sequenceDiagram
 ## Acceptance examples
 
 - A refused save does not emit an event or start background work.
+- Client preview produces no durable intent or side effect; authoritative execution rechecks current permission, installation, definition, subject, and typed inputs.
+- A committed save and its workflow-start fact are atomic, while an authorised no-change button persists its start intent in a separate Vortex transaction before post-commit dispatch.
+- A Kestra outage leaves committed background work pending without losing it or reporting the committed save as failed.
 - Re-delivering an event does not create a second workflow run for the same trigger.
 - A later change cannot overtake an earlier failed event for the same record.
 - A rule that drops an unsafe condition cannot publish; it must express a safe condition or refuse the operation.

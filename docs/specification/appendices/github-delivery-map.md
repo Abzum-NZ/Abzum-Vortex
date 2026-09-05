@@ -40,7 +40,7 @@ This map connects every current specification section to the work that delivers 
 | Phase 4 | [#42 · Module and Record](https://github.com/Abzum-NZ/Abzum-Vortex/issues/42) |
 | Phase 5 | [#53 · Query, Rule and Event](https://github.com/Abzum-NZ/Abzum-Vortex/issues/53) |
 | Phase 6 | [#63 · Application, Theme and Page](https://github.com/Abzum-NZ/Abzum-Vortex/issues/63) |
-| Phase 7 | [#75 · Workflow and pipeline execution](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75), preceded by Kestra/state-database compatibility gate [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) |
+| Phase 7 | [#75 · Workflow and pipeline execution](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75), with generated-flow and current pinned-runtime compatibility evidence; [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) governs a future Kestra/state-database upgrade rather than gating current core delivery |
 | Phase 8 | [#87 · Search and File](https://github.com/Abzum-NZ/Abzum-Vortex/issues/87) |
 | Phase 9 | [#98 · Connections and Interfaces](https://github.com/Abzum-NZ/Abzum-Vortex/issues/98) |
 | Phase 10 | [#109 · Copy, gallery, sharing, import and export](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109) |
