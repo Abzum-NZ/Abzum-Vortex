@@ -322,7 +322,8 @@ insert into vortex_definition.releases (
   release_note, published_at, published_by
 ) values
   (
-    '31000000-0000-4000-8000-000000000130', 1, '1.0.0', '{}',
+    '31000000-0000-4000-8000-000000000130', 1, '1.0.0',
+    '{"source_contract_version":"1.0.0","kind":"module","key":"example.shared_module","body":{}}'::jsonb,
     'sha256:' || pg_catalog.repeat('0', 64), '1.0.0',
     pg_catalog.jsonb_build_object(
       'kind', 'module', 'canonical', pg_catalog.jsonb_build_object(
@@ -342,7 +343,8 @@ insert into vortex_definition.releases (
     pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
   ),
   (
-    '31000000-0000-4000-8000-000000000131', 1, '1.0.0', '{}',
+    '31000000-0000-4000-8000-000000000131', 1, '1.0.0',
+    '{"source_contract_version":"1.0.0","kind":"application","key":"example.application_one","body":{}}'::jsonb,
     'sha256:' || pg_catalog.repeat('4', 64), '1.0.0',
     pg_catalog.jsonb_build_object(
       'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(
@@ -367,7 +369,8 @@ insert into vortex_definition.releases (
     pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
   ),
   (
-    '31000000-0000-4000-8000-000000000131', 2, '2.0.0', '{}',
+    '31000000-0000-4000-8000-000000000131', 2, '2.0.0',
+    '{"source_contract_version":"1.0.0","kind":"application","key":"example.application_one","body":{}}'::jsonb,
     'sha256:' || pg_catalog.repeat('8', 64), '1.0.0',
     pg_catalog.jsonb_build_object(
       'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(
@@ -392,7 +395,8 @@ insert into vortex_definition.releases (
     pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
   ),
   (
-    '31000000-0000-4000-8000-000000000132', 1, '1.0.0', '{}',
+    '31000000-0000-4000-8000-000000000132', 1, '1.0.0',
+    '{"source_contract_version":"1.0.0","kind":"application","key":"example.application_two","body":{}}'::jsonb,
     'sha256:' || pg_catalog.repeat('c', 64), '1.0.0',
     pg_catalog.jsonb_build_object(
       'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(
@@ -423,7 +427,8 @@ insert into vortex_definition.releases (
     pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
   ),
   (
-    '31000000-0000-4000-8000-000000000133', 1, '1.0.0', '{}',
+    '31000000-0000-4000-8000-000000000133', 1, '1.0.0',
+    '{"source_contract_version":"1.0.0","kind":"application","key":"example.application_one","body":{}}'::jsonb,
     'sha256:' || pg_catalog.repeat('0', 64), '1.0.0',
     pg_catalog.jsonb_build_object(
       'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(

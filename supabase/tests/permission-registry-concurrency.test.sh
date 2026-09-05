@@ -229,7 +229,12 @@ run_sql "
     release_note, published_at, published_by
   ) values
   (
-    '$application_root_id', 1, '1.0.0', '{}', 'sha256:' || repeat('1', 64), '1.0.0',
+    '$application_root_id', 1, '1.0.0',
+    jsonb_build_object(
+      'source_contract_version', '1.0.0', 'kind', 'application',
+      'key', '$application_key', 'body', '{}'::jsonb
+    ),
+    'sha256:' || repeat('1', 64), '1.0.0',
     jsonb_build_object(
       'kind', 'application', 'canonical', jsonb_build_object(
         'content', jsonb_build_object('permissions', jsonb_build_array(jsonb_build_object(
@@ -244,7 +249,12 @@ run_sql "
     'sha256:' || repeat('4', 64), '[]', 'Initial proof release', clock_timestamp(), '$actor_id'
   ),
   (
-    '$application_root_id', 2, '1.1.0', '{}', 'sha256:' || repeat('5', 64), '1.0.0',
+    '$application_root_id', 2, '1.1.0',
+    jsonb_build_object(
+      'source_contract_version', '1.0.0', 'kind', 'application',
+      'key', '$application_key', 'body', '{}'::jsonb
+    ),
+    'sha256:' || repeat('5', 64), '1.0.0',
     jsonb_build_object(
       'kind', 'application', 'canonical', jsonb_build_object(
         'content', jsonb_build_object('permissions', jsonb_build_array(jsonb_build_object(
