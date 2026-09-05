@@ -115,7 +115,26 @@ Before copying source, inventory Fluid-owned code, third-party licenses and asse
 
 Version the new representation explicitly. Legacy flat pages migrate into the default main slot in a new draft through a deterministic documented conversion. Previously published releases remain immutable and retain a supported reader; never reinterpret them silently with new defaults.
 
+[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) retains the existing application source and canonical representation as V1 and introduces explicitly selected V2 contracts. Restoring a V1 release restores its exact V1 authored content; conversion is a separate revision-checked prepare-and-confirm action with explicit exact platform-block mappings. Missing or ambiguous mappings are refused, never guessed from display names. V2 requires only a bounded additive Definition-store migration: add permanent shell identities and exact platform-block dependency shapes to existing constraints, publication, manifest storage and integrity readback. Keep the existing JSONB draft/release tables and every immutable V1 row unchanged. This contract/persistence work precedes dedicated editor UI; its hosted proof follows [#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266).
+
 Update source schemas, canonical schemas, registry, compiler/reference traversal, provenance, version comparison, catalogue snapshots, Definition-service reads/restores and fixtures together. Presentation-only layout changes are patch impact; access, operation or data-meaning changes follow the existing major/minor rules.
+
+### Exact representation selection
+
+For Application definitions, support only the exact source/validation version pairs `1.0.0 / 1.0.0` (V1) and `2.0.0 / 2.0.0` (V2). The source version selects authored-source decoding; the validation version selects canonical and compiled content. Reject unknown versions, unsupported pairs and disagreement between JSON and trusted enclosing metadata before decoding nested content. Never infer a version from content shape or a semantic-version major number. Module and connection-type contracts remain unchanged.
+
+| Boundary | Version authority and required behavior |
+|---|---|
+| Authored source and draft | Check intrinsic `source_contract_version` against the existing stored `sourceContractVersion`; require exact agreement. |
+| Compilation | Map the exact source version to its validation version through an explicit supported-pair table. Legacy V1 output remains unchanged and requires trusted V1 compile context. V2 output carries `validationContractVersion: "2.0.0"` as outer metadata. |
+| Standalone canonical content | Require an outer `validationContractVersion` envelope that is not part of the canonical fingerprint. Missing metadata is not permission to guess V1. |
+| Publication and release storage | Persist and verify the exact pair using existing source/validation version columns; check source JSON agreement before publication. No new representation column is needed. |
+| Published and consumer reads | Select canonical content using existing `validationContractVersion` metadata; do not add source metadata where no authored source is returned. |
+| History and restore | Expose both stored versions in history metadata. Restore verifies both and restores the original authored content without conversion. A V1-to-V2 conversion creates a separately confirmed new draft revision. |
+
+Existing V1 source, canonical JSON, compilation payloads, release rows and fingerprints remain unchanged: do not add tags or default V2 properties to them. History projections and transport envelopes do not change immutable release content or fingerprint inputs.
+
+#249 performs no reset of an existing or shared Local, Testing or Production database. Prove its additive migration incrementally against a separately verified Local baseline. A fresh disposable database may be created or reset only under a separately validated delivery target; no such target grants authority over an existing environment.
 
 Required evidence includes positive and negative contract cases, lossless adapter round trips, old-release reads, two-organisation isolation, simultaneous draft edits, related panels, private form state, safe public pages, desktop/tablet/phone rendering, keyboard/focus behavior and web-independent semantic operation tests.
 
