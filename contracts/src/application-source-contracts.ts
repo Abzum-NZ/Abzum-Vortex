@@ -890,10 +890,13 @@ const sourceApplicationBodySchema = z
     ),
   })
   .strict();
-export const applicationSourceDocumentSchema = z
+export const applicationSourceDocumentV1Schema = z
   .object({
     ...authoredSourceBase,
     kind: z.literal("application"),
     body: sourceApplicationBodySchema,
   })
   .strict();
+
+/** Backward-compatible name for the currently implemented Application source contract. */
+export const applicationSourceDocumentSchema = applicationSourceDocumentV1Schema;

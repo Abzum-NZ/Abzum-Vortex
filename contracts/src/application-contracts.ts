@@ -515,7 +515,7 @@ export const pipelineSchema = z
         });
   });
 
-export const applicationContentSchema = z
+export const applicationContentV1Schema = z
   .object({
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(1_000),
@@ -543,19 +543,25 @@ export const applicationContentSchema = z
     homePageId: pageIdSchema,
   })
   .strict();
-export const applicationDraftSchema = z
-  .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentSchema })
+/** Backward-compatible name for the currently implemented canonical Application content. */
+export const applicationContentSchema = applicationContentV1Schema;
+
+export const applicationDraftV1Schema = z
+  .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentV1Schema })
   .strict();
-export const publishedApplicationDefinitionSchema = z
+/** Backward-compatible name for the currently implemented canonical Application draft. */
+export const applicationDraftSchema = applicationDraftV1Schema;
+
+export const publishedApplicationDefinitionV1Schema = z
   .object({
     publication: publishedApplicationReferenceSchema,
-    content: applicationContentSchema,
+    content: applicationContentV1Schema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(applicationContentSchema, value.content, context, [
+    requireResolvedRecordTypeReferences(applicationContentV1Schema, value.content, context, [
       "content",
     ]),
   )
@@ -569,6 +575,9 @@ export const publishedApplicationDefinitionSchema = z
         content: ResolveRecordTypeReferences<typeof value.content>;
       },
   );
+
+/** Backward-compatible name for the currently implemented published Application contract. */
+export const publishedApplicationDefinitionSchema = publishedApplicationDefinitionV1Schema;
 
 export const sharedRecordProjectionSchema = z
   .object({

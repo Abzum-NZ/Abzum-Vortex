@@ -255,6 +255,23 @@ describe("Definition consumer reads", () => {
     });
   });
 
+  it("rejects unknown and reserved Application validation versions before decoding V1 content", async () => {
+    const command = {
+      kind: "application" as const,
+      rootId: applicationEvidence.rootId,
+      selector: { selection: "current" as const },
+    };
+    for (const validationContractVersion of ["1.0.1", "2.0.0"]) {
+      const candidate = { ...applicationEvidence, validationContractVersion };
+      await expect(
+        createDefinitionConsumerReadService(repositoryFor(candidate), catalogueFor()).read(
+          context(),
+          command,
+        ),
+      ).rejects.toMatchObject({ code: "DEFINITION_RELEASE_INTEGRITY_FAILED" });
+    }
+  });
+
   it("refuses invalid commands and non-live or non-system contexts before storage", async () => {
     const repository = repositoryFor(moduleEvidence);
     const service = createDefinitionConsumerReadService(repository, catalogueFor());

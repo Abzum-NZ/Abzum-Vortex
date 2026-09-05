@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   applicationSourceDocumentSchema,
+  applicationSourceDocumentV1Schema,
   sourceBlockSettingValueSchema,
 } from "./application-source-contracts";
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
@@ -9,6 +10,7 @@ import { sourceConditionSchema, sourceQualifiedConditionSchema } from "./definit
 
 export {
   applicationSourceDocumentSchema,
+  applicationSourceDocumentV1Schema,
   connectionTypeSourceDocumentSchema,
   moduleSourceDocumentSchema,
   sourceBlockSettingValueSchema,

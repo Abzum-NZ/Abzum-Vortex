@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { applicationDraftSchema } from "./application-contracts";
+import { applicationDraftV1Schema } from "./application-contracts";
 import { publishedApplicationDefinitionSchema } from "./application-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
 import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-contracts";
@@ -180,6 +180,18 @@ export const compiledDefinitionArtifactSchema = z.discriminatedUnion("kind", [
   compiledConnectionArtifactSchema,
 ]);
 
+export const applicationCompilationOutputV1Schema = z
+  .object({
+    kind: z.literal("application"),
+    canonical: applicationDraftV1Schema,
+    artifact: compiledApplicationArtifactSchema,
+    provenance: z.array(definitionProvenanceEntrySchema),
+    dependencyOrder: z.array(namespacedKeySchema),
+    resolvedDependencies: z.array(resolvedDefinitionSchema),
+    resolutionFingerprint: fingerprintSchema,
+  })
+  .strict();
+
 export const definitionCompilationOutputSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -192,17 +204,7 @@ export const definitionCompilationOutputSchema = z.discriminatedUnion("kind", [
       resolutionFingerprint: fingerprintSchema,
     })
     .strict(),
-  z
-    .object({
-      kind: z.literal("application"),
-      canonical: applicationDraftSchema,
-      artifact: compiledApplicationArtifactSchema,
-      provenance: z.array(definitionProvenanceEntrySchema),
-      dependencyOrder: z.array(namespacedKeySchema),
-      resolvedDependencies: z.array(resolvedDefinitionSchema),
-      resolutionFingerprint: fingerprintSchema,
-    })
-    .strict(),
+  applicationCompilationOutputV1Schema,
   z
     .object({
       kind: z.literal("connection_type"),
