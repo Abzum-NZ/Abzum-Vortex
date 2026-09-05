@@ -320,6 +320,62 @@ describe("source identity requirements", () => {
               },
             },
           },
+          {
+            id: "guided_page_owner",
+            key: "guided_page",
+            steps: [{ id: "guided_step_one_owner" }, { id: "guided_step_two_owner" }],
+            composition: {
+              shell_kind: "application",
+              shell: "main_shell",
+              step_content: {
+                guided_step_one_owner: {
+                  slot_owner: {
+                    placements: {
+                      guided_step_one_placement_owner: {
+                        slots: {
+                          body: {
+                            placements: {
+                              guided_step_one_nested_placement_owner: { slots: {} },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                guided_step_two_owner: {
+                  slot_owner: {
+                    placements: {
+                      guided_step_two_placement_owner: { slots: {} },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            id: "guided_default_page_owner",
+            key: "guided_default_page",
+            steps: [
+              { id: "guided_default_step_one_owner" },
+              { id: "guided_default_step_two_owner" },
+            ],
+            composition: {
+              shell_kind: "default",
+              step_content: {
+                guided_default_step_one_owner: {
+                  placements: {
+                    guided_default_step_one_placement_owner: { slots: {} },
+                  },
+                },
+                guided_default_step_two_owner: {
+                  placements: {
+                    guided_default_step_two_placement_owner: { slots: {} },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     });
@@ -337,6 +393,29 @@ describe("source identity requirements", () => {
       ["block_placement", "page_placement_owner", ["page_placement_owner"]],
       ["page", "default_page_owner", ["default_page_owner", "default_page"]],
       ["block_placement", "default_placement_owner", ["default_placement_owner"]],
+      ["page", "guided_page_owner", ["guided_page_owner", "guided_page"]],
+      ["guided_step", "guided_step_one_owner", ["guided_step_one_owner"]],
+      ["guided_step", "guided_step_two_owner", ["guided_step_two_owner"]],
+      ["block_placement", "guided_step_one_placement_owner", ["guided_step_one_placement_owner"]],
+      [
+        "block_placement",
+        "guided_step_one_nested_placement_owner",
+        ["guided_step_one_nested_placement_owner"],
+      ],
+      ["block_placement", "guided_step_two_placement_owner", ["guided_step_two_placement_owner"]],
+      ["page", "guided_default_page_owner", ["guided_default_page_owner", "guided_default_page"]],
+      ["guided_step", "guided_default_step_one_owner", ["guided_default_step_one_owner"]],
+      ["guided_step", "guided_default_step_two_owner", ["guided_default_step_two_owner"]],
+      [
+        "block_placement",
+        "guided_default_step_one_placement_owner",
+        ["guided_default_step_one_placement_owner"],
+      ],
+      [
+        "block_placement",
+        "guided_default_step_two_placement_owner",
+        ["guided_default_step_two_placement_owner"],
+      ],
     ]);
     expect(requirements.some(({ kind }) => kind === "block")).toBe(false);
     expect(

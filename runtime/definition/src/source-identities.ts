@@ -270,7 +270,18 @@ export function extractApplicationSourceIdentityRequirementsV2(
       if (pageKey !== undefined && pageOwner !== undefined)
         addIdentified("guided_step", `page_owner:${pageOwner}`, `page:${pageKey}`, step);
     const composition = objectValue(page.composition);
-    if (composition?.shell_kind === "default") addPlacementSlot(composition.main);
+    const stepContent = objectValue(composition?.step_content);
+    if (stepContent !== undefined) {
+      if (composition?.shell_kind === "default") {
+        for (const slot of Object.values(stepContent)) addPlacementSlot(slot);
+      } else {
+        for (const stepSlotsValue of Object.values(stepContent)) {
+          const stepSlots = objectValue(stepSlotsValue);
+          if (stepSlots !== undefined)
+            for (const slot of Object.values(stepSlots)) addPlacementSlot(slot);
+        }
+      }
+    } else if (composition?.shell_kind === "default") addPlacementSlot(composition.main);
     else {
       const content = objectValue(composition?.content);
       if (content !== undefined) for (const slot of Object.values(content)) addPlacementSlot(slot);

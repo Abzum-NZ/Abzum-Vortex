@@ -17,6 +17,7 @@ import {
   type ConnectionTypeId,
   type ConnectionTypeSourceDocument,
   type Fingerprint,
+  type PlatformId,
   type PlatformBlockReleaseV2,
   type PlatformThemeReleaseV2,
   type SemanticVersion,
@@ -71,7 +72,7 @@ export type ApplicationCompositionCatalogueSelectionV2 = Readonly<{
     releaseVersion: SemanticVersion;
   }>[];
   platformTheme: Readonly<{
-    catalogueThemeId: string;
+    catalogueThemeId: PlatformId;
     releaseVersion: SemanticVersion;
   }>;
 }>;
@@ -82,7 +83,7 @@ export interface ApplicationCompositionCatalogueV2 {
     releaseVersion: string,
   ): Promise<PlatformBlockReleaseV2 | undefined>;
   readPlatformThemeReleaseV2(
-    catalogueThemeId: string,
+    catalogueThemeId: PlatformId,
     releaseVersion: string,
   ): Promise<PlatformThemeReleaseV2 | undefined>;
   readApplicationCompositionCatalogueSnapshotV2(
@@ -362,7 +363,7 @@ export const createImmutableDefinitionPublicationCatalogue = (
 
   const readPlatformBlockReleaseV2 = async (blockId: BlockId, releaseVersion: string) =>
     blocksV2ByIdentity.get(`${blockId}:${releaseVersion}`);
-  const readPlatformThemeReleaseV2 = async (catalogueThemeId: string, releaseVersion: string) =>
+  const readPlatformThemeReleaseV2 = async (catalogueThemeId: PlatformId, releaseVersion: string) =>
     themesV2ByIdentity.get(`${catalogueThemeId}:${releaseVersion}`);
 
   return Object.freeze({

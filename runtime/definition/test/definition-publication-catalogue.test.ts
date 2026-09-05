@@ -5,6 +5,7 @@ import {
   definitionResolutionSnapshotSchema,
   type BlockId,
   type ConnectionTypeId,
+  type PlatformId,
   type SemanticVersion,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
@@ -25,7 +26,7 @@ const resolvedConnection = fixtureResolution.definitions.find(
 );
 if (resolvedConnection?.kind !== "connection_type") throw new Error("Connection fixture missing");
 const rootId = resolvedConnection.rootId;
-const themeId = "70000000-0000-4000-8000-000000000001";
+const themeId = "70000000-0000-4000-8000-000000000001" as PlatformId;
 const themeContentFingerprint = `sha256:${"b".repeat(64)}`;
 const connectionRelease = (releaseVersion: SemanticVersion) => ({
   source,
