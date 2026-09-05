@@ -141,6 +141,21 @@ flowchart TD
 
 Users can end their own activation; authorised administrators can revoke it immediately. These reductions do not wait for approval. Requests and review history remain visible as ordinary IAM records under their normal permissions, separately from whether access is effective now.
 
+## Creating, renaming and retiring Groups
+
+An organisation creates a Group with a permanent identity and key plus an editable display label. Renaming does not change its memberships or assigned roles. Retirement is permanent: the Group stops supplying access, but its related membership, assignment, activation and delegation records remain available as evidence under their normal read permissions. It cannot be restored by reusing its key or changing its label. Removing retained grants remains possible after retirement.
+
+Creation, rename and retirement each commit one complete revisioned change and one Access-version increment. Rename and retirement require the revision the administrator reviewed; a competing change requires refresh rather than silently overwriting it. A role assignment racing retirement either commits first and then becomes ineffective through the retired Group, or is refused after retirement. The private [#33 composition](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) does not itself expose administration: [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) evaluates current access, [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) invokes protected changes with #33's stewardship safeguards, and [IAM](iam-application.md) presents the authorised journey. Membership changes are separate operations.
+
+```mermaid
+flowchart LR
+    CREATE[Create organisation Group] --> ACTIVE[Active Group]
+    ACTIVE --> RENAME[Rename: same Group and grants]
+    RENAME --> ACTIVE
+    ACTIVE --> RETIRE[Retire permanently]
+    RETIRE --> RETAIN[Related facts retained; no Group-derived access]
+```
+
 ## Permanent management access
 
 The existing [permanent-steward invariant](../04-access-and-permissions.md#initial-organisation-stewardship) remains explicit. At least one nominated active account retains the exact direct, non-expiring minimum management role and delegation, plus the required IAM operating role after setup. Those narrowly scoped recovery/management roles permit standing access. They grant no unrelated business-data use.
@@ -165,6 +180,6 @@ The [platform catalogue's `1.0.1` display revision](platform-permission-catalogu
 | [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267)                                                                                                                       | Complete IAM activation journeys, required authentication, conditional independent approval, effective-state display and expiry/revocation proof using generic workflows.                                                        |
 | [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29), [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) | Isolation, group-based visibility and the same governed agent operations; no group/share/MCP path supplies missing active-role authority.                                                                                        |
 
-This extends the existing Access and IAM tasks, not a separate role evaluator or business approval service. Early Access remains independently testable before the later IAM workflow experience. Neither private tests nor ordinary approval records count as completed user-facing PIM. Held [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) is documented for compatibility but is not authorised to start.
+This extends the existing Access and IAM tasks, not a separate role evaluator or business approval service. Early Access remains independently testable before the later IAM workflow experience. Neither private tests nor ordinary approval records count as completed user-facing PIM. [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) has no user hold. It proceeds automatically after its real technical prerequisites, particularly #33 and #34, are complete; this does not allow it to bypass them.
 
 Acceptance must prove direct and group eligibility without active access; individual activation without elevating fellow members; required authentication and independent approval; no self-approval; exact request/role/policy binding; expiry without workflow availability; group removal/readdition without revival; role/policy broadening without silent gains; concurrent revocation; separate accounts across organisations; and permanent management availability.
