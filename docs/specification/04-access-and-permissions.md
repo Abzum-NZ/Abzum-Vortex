@@ -81,6 +81,8 @@ Permission resolution uses the organisation and permanent owning definition and 
 
 Publishing a new application release changes no live registration or assignment. Only an explicitly authorised registration upgrade or withdrawal changes the active organisation release and permission availability. That change and its Access-version invalidation commit together through the owning application operation.
 
+Registration makes templates available but creates no assignable local role or assignment. Accepting a template as a local role is a separate explicit catalogue operation; assigning that role is another protected grant. Withdrawal checks the exact current registration and expected revision inside the protected transaction. It does not need to reload the published definition or reconstruct a template being removed, so a Definition-read outage cannot prevent authorised withdrawal. Registering, upgrading or reactivating still requires verified exact release evidence.
+
 An activated application update cannot silently broaden an assigned role. Added permissions, changed permission meaning and changed role grants require explicit authorised review before existing assignments can use the expanded access. An organisation-owned custom role is not overwritten by an application update. Removed permissions and unavailable applications cannot remain usable through old role registrations or cached answers. Historical assignment and release evidence is retained without retaining authority.
 
 Bound-module permission availability records its active supplying registrations and exact module release evidence. Withdrawing one application does not remove a module permission still supplied by another active compatible registration in that organisation; withdrawing the last supplying registration makes it unavailable. This catalogue availability never supplies application-entry or record visibility by itself. In particular, an application-contained record scope remains bound to its own application even when another application supplies the same module permission.
@@ -102,6 +104,18 @@ flowchart LR
 ```
 
 Application updates reduce an accepted application-role permission set when permissions or template entries disappear; returning entries count as additions requiring acceptance. Organisation-owned custom roles are not rewritten by those updates, but their old permission references remain ineffective after an availability break until explicitly refreshed. Historical evidence is retained in both cases.
+
+An application role awaiting acceptance of changes (`acceptance_required`) preserves only its continuously valid, previously accepted permissions for existing non-revoked assignments. Pending additions grant nothing. Each stored permission still passes the current availability, continuity and meaning checks in [the central decision](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34). Only an `active` role may receive a new assignment; `unavailable` and `retired` roles grant nothing. Explicit acceptance returns the role to `active` only after checking the exact candidate, complete affected-assignment list and current delegated authority. Adding a permission must not, by itself, remove existing valid permissions while review is pending.
+
+```mermaid
+flowchart LR
+    U[Application update] --> R[Remove permissions no longer continuously valid]
+    R --> E[Existing assignments keep the accepted remainder]
+    R --> P[New permissions await explicit acceptance]
+    P --> M[Check exact candidate and all affected assignments]
+    M --> A[Activate accepted role revision]
+    A --> N[New assignments may be granted separately]
+```
 
 ### Organisation roles
 
@@ -270,6 +284,8 @@ flowchart LR
 The Access relation records the organisation, current version, change time, changing actor, correlation identifier and one closed change reason. Initialisation is owner-only and idempotent. The general increment cannot claim the initialisation reason. Trusted pre-context runtime receives only the exact tenant-and-organisation read and the invitation-acceptance composition; browser roles, the request role and Supabase `service_role` receive no table or generic increment access. Permission-checked administration later calls the owner-only account-lifecycle composition rather than an Identity-only mutation.
 
 Access removal takes effect on the next request. Long-running work rechecks access before every protected side effect, and subscriptions close or re-authorise when their access version changes.
+
+Standalone role creation, revision or retirement uses `role_catalogue_changed`; assigning or revoking a role uses `role_assignment_changed`. A coordinated application registration, update, reactivation or withdrawal uses `application_access_changed` exactly once, including its permission, template and existing-role changes. Refusal or exact replay does not increment. These are change reasons, not separate permission evaluators or activity stores.
 
 The recipient interface must remove previously displayed shared values when that next check is refused. It may retain non-content routing and activity references, but it cannot keep a visible snapshot, stale search result, component cache, or offline copy after the grant ends. A completed, separately approved export is the only exception because a downloaded file cannot be recalled.
 
