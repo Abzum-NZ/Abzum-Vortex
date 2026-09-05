@@ -50,7 +50,7 @@ const blockDefinition = (id: BlockId = blockId) => ({
     responsiveOrder: true,
     gridWidth: true,
     height: "content_or_bounded" as const,
-    accessibleName: "not_applicable" as const,
+    accessibleName: { requirement: "not_applicable" as const },
     publicSurface: "allowed" as const,
   },
 });

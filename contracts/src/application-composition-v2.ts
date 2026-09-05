@@ -517,7 +517,15 @@ const blockCapabilitiesV2Schema = z
     responsiveOrder: z.boolean(),
     gridWidth: z.boolean(),
     height: z.enum(["content", "content_or_bounded"]),
-    accessibleName: z.enum(["required", "optional", "not_applicable"]),
+    accessibleName: z.discriminatedUnion("requirement", [
+      z.object({ requirement: z.literal("not_applicable") }).strict(),
+      z
+        .object({
+          requirement: z.enum(["required", "optional"]),
+          propertyPath: z.array(builderKeySchema).min(1),
+        })
+        .strict(),
+    ]),
     publicSurface: z.enum(["refused", "allowed"]),
   })
   .strict();
@@ -548,6 +556,52 @@ export const platformBlockReleaseV2Schema = z
       });
     if (new Set(value.slots.map((slot) => slot.key)).size !== value.slots.length)
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });
+    const accessibleName = value.capabilities.accessibleName;
+    if (accessibleName.requirement !== "not_applicable") {
+      let properties: readonly BlockPropertySchemaV2Contract[] = value.properties;
+      let declaration: BlockPropertySchemaV2Contract | undefined;
+      for (const [index, key] of accessibleName.propertyPath.entries()) {
+        declaration = properties.find((property) => property.key === key);
+        const last = index === accessibleName.propertyPath.length - 1;
+        if (declaration === undefined) {
+          context.addIssue({
+            code: "custom",
+            path: ["capabilities", "accessibleName", "propertyPath", index],
+            message: "Accessible-name paths must traverse declared groups to one text property",
+          });
+          return;
+        }
+        if (last && declaration.kind !== "text") {
+          context.addIssue({
+            code: "custom",
+            path: ["capabilities", "accessibleName", "propertyPath", index],
+            message: "Accessible-name paths must traverse declared groups to one text property",
+          });
+          return;
+        }
+        if (!last) {
+          if (declaration.kind !== "group") {
+            context.addIssue({
+              code: "custom",
+              path: ["capabilities", "accessibleName", "propertyPath", index],
+              message: "Accessible-name paths must traverse declared groups to one text property",
+            });
+            return;
+          }
+          properties = declaration.properties;
+        }
+      }
+      if (
+        declaration?.kind === "text" &&
+        declaration.defaultValue?.kind === "text" &&
+        declaration.defaultValue.value.trim().length === 0
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["capabilities", "accessibleName", "propertyPath"],
+          message: "An accessible-name default must not be blank",
+        });
+    }
   });
 
 export const applicationCompositionPolicyV2Schema = z

@@ -422,7 +422,7 @@ const catalogueSnapshotV2 = {
           responsiveOrder: true,
           gridWidth: true,
           height: "content_or_bounded",
-          accessibleName: "not_applicable",
+          accessibleName: { requirement: "not_applicable" },
           publicSurface: "allowed",
         },
       },
@@ -443,7 +443,7 @@ const catalogueSnapshotV2 = {
           responsiveOrder: false,
           gridWidth: true,
           height: "content_or_bounded",
-          accessibleName: "optional",
+          accessibleName: { requirement: "not_applicable" },
           publicSurface: "allowed",
         },
       },
@@ -1111,7 +1111,7 @@ describe("V2 property and immutable block catalogue contracts", () => {
       responsiveOrder: true,
       gridWidth: true,
       height: "content_or_bounded",
-      accessibleName: "optional",
+      accessibleName: { requirement: "optional", propertyPath: ["title"] },
       publicSurface: "allowed",
     },
   } as const;
@@ -1120,6 +1120,38 @@ describe("V2 property and immutable block catalogue contracts", () => {
     for (const property of properties)
       expect(blockPropertySchemaV2Schema.safeParse(property).success, property.kind).toBe(true);
     expect(platformBlockReleaseV2Schema.safeParse(registration).success).toBe(true);
+  });
+
+  it("binds accessible names only through declared groups to one text property", () => {
+    expect(
+      platformBlockReleaseV2Schema.safeParse({
+        ...registration,
+        capabilities: {
+          ...registration.capabilities,
+          accessibleName: { requirement: "required", propertyPath: ["caption", "text"] },
+        },
+      }).success,
+    ).toBe(true);
+    for (const accessibleName of [
+      { requirement: "required", propertyPath: ["missing"] },
+      { requirement: "required", propertyPath: ["columns"] },
+      { requirement: "required", propertyPath: ["items", "item"] },
+      { requirement: "not_applicable", propertyPath: ["title"] },
+    ])
+      expect(
+        platformBlockReleaseV2Schema.safeParse({
+          ...registration,
+          capabilities: { ...registration.capabilities, accessibleName },
+        }).success,
+      ).toBe(false);
+
+    const blankDefault = structuredClone(registration) as Record<string, unknown>;
+    const blankProperties = blankDefault.properties as Array<Record<string, unknown>>;
+    blankProperties[0] = {
+      ...blankProperties[0],
+      defaultValue: { kind: "text", value: " " },
+    };
+    expect(platformBlockReleaseV2Schema.safeParse(blankDefault).success).toBe(false);
   });
 
   it("rejects malformed bounds, defaults, duplicate options and unknown declaration keys", () => {

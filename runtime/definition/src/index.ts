@@ -19,6 +19,8 @@ export * from "./definition-publication";
 export * from "./definition-publication-repository";
 export * from "./definition-publication-catalogue";
 export * from "./definition-publication-composition";
+export * from "./application-v2-resolution";
+export * from "./application-v2-composition";
 export {
   createDefinitionConsumerReadService,
   DefinitionConsumerReadError,
