@@ -460,7 +460,8 @@ export const preparedApplicationRoleTemplateSchema = z
   .object({
     template: applicationRoleSchema,
     sourceTemplateFingerprint: fingerprintSchema,
-    resolvedPermissions: z.array(permissionRegistryEntryCandidateSchema).min(1),
+    sourcePermissions: z.array(permissionRegistryEntryCandidateSchema).min(1),
+    livePermissions: z.array(permissionRegistryEntryCandidateSchema),
   })
   .strict();
 
@@ -490,6 +491,26 @@ const permissionCandidateEvidenceKey = (
     entry.meaningFingerprint,
   ]);
 
+/**
+ * Projects immutable Definition intent into permissions eligible for one live role candidate.
+ * Exact selections remain unchanged; the source-only wildcard is narrower at the live boundary.
+ */
+export const projectLiveApplicationRolePermissions = (
+  permissionSelection: z.infer<typeof applicationRoleSchema>["permissionSelection"],
+  applicationRootId: z.infer<typeof applicationRootIdSchema>,
+  sourcePermissions: readonly z.infer<typeof permissionRegistryEntryCandidateSchema>[],
+) =>
+  permissionSelection.kind === "exact"
+    ? sourcePermissions
+    : sourcePermissions.filter(
+        (entry) =>
+          entry.ownerKind === "application" &&
+          String(entry.applicationRootId) === String(applicationRootId) &&
+          String(entry.ownerId) === String(applicationRootId) &&
+          entry.permission.administrative === false &&
+          entry.permission.actionKind !== "export",
+      );
+
 /** Immutable server-prepared #22/#32 handoff. It contains evidence, never an authority decision. */
 export const preparedApplicationRoleTemplatesSchema = z
   .object({
@@ -511,40 +532,54 @@ export const preparedApplicationRoleTemplatesSchema = z
 
     for (const [templateIndex, prepared] of value.templates.entries()) {
       const expectedKeys = prepared.template.permissionKeys;
-      const resolvedKeys = prepared.resolvedPermissions.map((entry) => entry.permission.key);
+      const sourceKeys = prepared.sourcePermissions.map((entry) => entry.permission.key);
       if (
-        expectedKeys.length !== resolvedKeys.length ||
-        expectedKeys.some((key, index) => key !== resolvedKeys[index])
+        expectedKeys.length !== sourceKeys.length ||
+        expectedKeys.some((key, index) => key !== sourceKeys[index])
       )
         context.addIssue({
           code: "custom",
-          path: ["templates", templateIndex, "resolvedPermissions"],
-          message: "Resolved permissions must retain the template's exact deterministic key order",
+          path: ["templates", templateIndex, "sourcePermissions"],
+          message: "Source permissions must retain the template's exact deterministic key order",
         });
 
-      for (const [permissionIndex, resolved] of prepared.resolvedPermissions.entries()) {
-        const matches = value.permissionRegistration.entries.filter(
-          (candidate) => candidate.permission.key === resolved.permission.key,
-        );
+      const permissionSelection = prepared.template.permissionSelection;
+      const wildcard = permissionSelection.kind === "application_wildcard";
+      for (const [permissionIndex, source] of prepared.sourcePermissions.entries()) {
+        const matches = value.permissionRegistration.entries.filter((candidate) => {
+          if (candidate.permission.key !== source.permission.key) return false;
+          if (!wildcard) return true;
+          return (
+            candidate.ownerKind === "application" &&
+            String(candidate.applicationRootId) ===
+              String(value.permissionRegistration.applicationRootId) &&
+            String(candidate.ownerId) === String(value.permissionRegistration.applicationRootId) &&
+            value.permissionRegistration.applicationPermissionIds.includes(
+              candidate.permission.permissionId,
+            )
+          );
+        });
         if (
           matches.length !== 1 ||
-          permissionCandidateEvidenceKey(matches[0]!) !== permissionCandidateEvidenceKey(resolved)
+          permissionCandidateEvidenceKey(matches[0]!) !== permissionCandidateEvidenceKey(source)
         )
           context.addIssue({
             code: "custom",
-            path: ["templates", templateIndex, "resolvedPermissions", permissionIndex],
+            path: ["templates", templateIndex, "sourcePermissions", permissionIndex],
             message:
               "Each template key must resolve to exactly one registered owner-qualified permission",
           });
       }
 
-      if (prepared.template.permissionSelection.kind === "application_wildcard") {
+      if (permissionSelection.kind === "application_wildcard") {
         if (
-          prepared.template.permissionSelection.catalogueFingerprint !==
+          permissionSelection.catalogueFingerprint !==
             value.permissionRegistration.applicationCatalogueFingerprint ||
-          prepared.resolvedPermissions.some(
+          prepared.sourcePermissions.some(
             (entry) =>
               entry.ownerKind !== "application" ||
+              String(entry.applicationRootId) !==
+                String(value.permissionRegistration.applicationRootId) ||
               String(entry.ownerId) !== String(value.permissionRegistration.applicationRootId) ||
               !value.permissionRegistration.applicationPermissionIds.includes(
                 entry.permission.permissionId,
@@ -553,11 +588,30 @@ export const preparedApplicationRoleTemplatesSchema = z
         )
           context.addIssue({
             code: "custom",
-            path: ["templates", templateIndex, "resolvedPermissions"],
+            path: ["templates", templateIndex, "sourcePermissions"],
             message:
               "Application wildcard evidence must use its verified application-only catalogue snapshot",
           });
       }
+
+      const projected = projectLiveApplicationRolePermissions(
+        permissionSelection,
+        value.permissionRegistration.applicationRootId,
+        prepared.sourcePermissions,
+      );
+      if (
+        projected.length !== prepared.livePermissions.length ||
+        projected.some(
+          (entry, index) =>
+            permissionCandidateEvidenceKey(entry) !==
+            permissionCandidateEvidenceKey(prepared.livePermissions[index]!),
+        )
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["templates", templateIndex, "livePermissions"],
+          message: "Live permissions must equal the deterministic projection of source intent",
+        });
     }
   });
 

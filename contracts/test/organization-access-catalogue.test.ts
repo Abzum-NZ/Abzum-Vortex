@@ -7,6 +7,7 @@ import {
   permissionEntrySchema,
   permissionContinuitySchema,
   preparedApplicationRoleTemplatesSchema,
+  projectLiveApplicationRolePermissions,
   roleAssignmentEffectiveStateSchema,
   roleAssignmentSchema,
   rolePermissionEntrySchema,
@@ -284,7 +285,8 @@ describe("organisation access catalogue contracts", () => {
         {
           template,
           sourceTemplateFingerprint: fingerprint("3"),
-          resolvedPermissions: [applicationPermissionCandidate(), modulePermissionCandidate],
+          sourcePermissions: [applicationPermissionCandidate(), modulePermissionCandidate],
+          livePermissions: [applicationPermissionCandidate(), modulePermissionCandidate],
         },
       ],
       candidateFingerprint: fingerprint("4"),
@@ -299,7 +301,7 @@ describe("organisation access catalogue contracts", () => {
         templates: [
           {
             ...prepared.templates[0],
-            resolvedPermissions: [modulePermissionCandidate, applicationPermissionCandidate()],
+            sourcePermissions: [modulePermissionCandidate, applicationPermissionCandidate()],
           },
         ],
       }).success,
@@ -310,7 +312,7 @@ describe("organisation access catalogue contracts", () => {
         templates: [
           {
             ...prepared.templates[0],
-            resolvedPermissions: [
+            sourcePermissions: [
               {
                 ...applicationPermissionCandidate(),
                 applicationRootId: id(20),
@@ -329,7 +331,7 @@ describe("organisation access catalogue contracts", () => {
         templates: [
           {
             ...prepared.templates[0],
-            resolvedPermissions: [
+            sourcePermissions: [
               {
                 ...applicationPermissionCandidate(),
                 sourceRelease: {
@@ -349,7 +351,7 @@ describe("organisation access catalogue contracts", () => {
         templates: [
           {
             ...prepared.templates[0],
-            resolvedPermissions: [
+            sourcePermissions: [
               {
                 ...applicationPermissionCandidate(),
                 meaningFingerprint: fingerprint("9"),
@@ -380,7 +382,7 @@ describe("organisation access catalogue contracts", () => {
     ).toBe(false);
   });
 
-  it("keeps the Definition wildcard but prepares only the exact safe application snapshot", () => {
+  it("keeps full Definition wildcard intent but projects only eligible live permissions", () => {
     const administrative = {
       ...applicationPermissionCandidate(id(30)),
       permission: {
@@ -402,7 +404,7 @@ describe("organisation access catalogue contracts", () => {
     };
     const registration = {
       ...permissionRegistration,
-      applicationPermissionIds: [id(3), id(30), id(31)],
+      applicationPermissionIds: [id(31), id(3)],
       entries: [
         applicationPermissionCandidate(),
         administrative,
@@ -415,7 +417,7 @@ describe("organisation access catalogue contracts", () => {
       key: "application_user",
       name: "Application user",
       homePageId: id(12),
-      permissionKeys: ["example.application.open"],
+      permissionKeys: ["example.application.data_export", "example.application.open"],
       permissionSelection: {
         kind: "application_wildcard" as const,
         catalogueFingerprint: fingerprint("1"),
@@ -429,19 +431,132 @@ describe("organisation access catalogue contracts", () => {
         {
           template: wildcardTemplate,
           sourceTemplateFingerprint: fingerprint("3"),
-          resolvedPermissions: [applicationPermissionCandidate()],
+          sourcePermissions: [exportPermission, applicationPermissionCandidate()],
+          livePermissions: [applicationPermissionCandidate()],
         },
       ],
       candidateFingerprint: fingerprint("4"),
     };
-    expect(preparedApplicationRoleTemplatesSchema.safeParse(candidate).success).toBe(true);
+    const parsed = preparedApplicationRoleTemplatesSchema.parse(candidate);
+    expect(
+      projectLiveApplicationRolePermissions(
+        parsed.templates[0]!.template.permissionSelection,
+        parsed.permissionRegistration.applicationRootId,
+        parsed.templates[0]!.sourcePermissions,
+      ),
+    ).toEqual([applicationPermissionCandidate()]);
     expect(
       preparedApplicationRoleTemplatesSchema.safeParse({
         ...candidate,
         templates: [
           {
             ...candidate.templates[0],
-            resolvedPermissions: [applicationPermissionCandidate(), modulePermissionCandidate],
+            livePermissions: [exportPermission, applicationPermissionCandidate()],
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      preparedApplicationRoleTemplatesSchema.safeParse({
+        ...candidate,
+        templates: [
+          {
+            ...candidate.templates[0],
+            livePermissions: [applicationPermissionCandidate(), administrative],
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      preparedApplicationRoleTemplatesSchema.safeParse({
+        ...candidate,
+        templates: [
+          {
+            ...candidate.templates[0],
+            livePermissions: [applicationPermissionCandidate(), modulePermissionCandidate],
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      preparedApplicationRoleTemplatesSchema.safeParse({
+        ...candidate,
+        templates: [
+          {
+            ...candidate.templates[0],
+            template: {
+              ...wildcardTemplate,
+              permissionKeys: ["example.application.data_export"],
+            },
+            sourcePermissions: [exportPermission],
+            livePermissions: [],
+          },
+        ],
+      }).success,
+    ).toBe(true);
+
+    expect(
+      preparedApplicationRoleTemplatesSchema.safeParse({
+        ...candidate,
+        templates: [
+          {
+            ...candidate.templates[0],
+            template: {
+              ...wildcardTemplate,
+              permissionKeys: ["example.application.data_export"],
+              permissionSelection: { kind: "exact" as const },
+            },
+            sourcePermissions: [exportPermission],
+            livePermissions: [exportPermission],
+          },
+        ],
+      }).success,
+    ).toBe(true);
+
+    const collidingModulePermission = {
+      ...modulePermissionCandidate,
+      permission: {
+        ...modulePermissionCandidate.permission,
+        key: "example.application.open",
+      },
+    };
+    expect(
+      preparedApplicationRoleTemplatesSchema.safeParse({
+        ...candidate,
+        permissionRegistration: {
+          ...registration,
+          entries: [
+            applicationPermissionCandidate(),
+            administrative,
+            exportPermission,
+            collidingModulePermission,
+          ],
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      preparedApplicationRoleTemplatesSchema.safeParse({
+        ...candidate,
+        permissionRegistration: {
+          ...registration,
+          entries: [
+            applicationPermissionCandidate(),
+            administrative,
+            exportPermission,
+            collidingModulePermission,
+          ],
+        },
+        templates: [
+          {
+            ...candidate.templates[0],
+            template: {
+              ...wildcardTemplate,
+              permissionKeys: ["example.application.open"],
+              permissionSelection: { kind: "exact" as const },
+            },
+            sourcePermissions: [applicationPermissionCandidate()],
+            livePermissions: [applicationPermissionCandidate()],
           },
         ],
       }).success,
