@@ -75,6 +75,22 @@ Bound-module permission availability records its active supplying registrations 
 
 A withdrawn registration may be explicitly reactivated using its current revision and a validated target release. Reactivation creates new registration evidence; it is not an automatic retry or a resurrection of old grants. Existing use assignments and bounded delegation require fresh authorised acceptance before becoming effective again. The [application operation #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) coordinates that acceptance through [Access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
 
+The same protection applies when an otherwise active application removes a permission and later restores it, changes its meaning and later changes it back, or removes and restores a supplied role template. An unchanged name or permanent identifier does not restore the old authority. [Role storage #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) records whether each exact permission has remained continuously available with the same meaning in its application context. A break requires new acceptance; display-only changes do not. Another application's use of the same module cannot repair that break for this application.
+
+Fresh acceptance approves one exact role permission set for an explicitly listed set of existing account or Team assignments. The request binds their identifiers and current revisions; a changed, missing or additional assignment requires a refreshed request. [IAM](appendices/iam-application.md) presents those affected assignments, while [the protected operation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) rechecks the administrator's current authority before committing. Assignments reference the accepted role rather than storing duplicate permission lists. Revoked assignments are not restored, and a later assignment is a separately authorised grant. Bounded authority to grant permissions requires its own explicit acceptance and never follows a use-role approval automatically.
+
+```mermaid
+flowchart LR
+    A[Permission accepted for a role] --> B[Permission removed or meaning changed]
+    B --> C[Old access no longer effective]
+    C --> D[Permission becomes available again]
+    D --> E[Access remains ineffective]
+    E --> F[Authorised review of exact role and affected assignments]
+    F --> G[New accepted role revision]
+```
+
+Application updates reduce an accepted application-role permission set when permissions or template entries disappear; returning entries count as additions requiring acceptance. Organisation-owned custom roles are not rewritten by those updates, but their old permission references remain ineffective after an availability break until explicitly refreshed. Historical evidence is retained in both cases.
+
 ### Organisation roles
 
 An organisation role grants exact permissions within one organisation, such as managing members, definitions, connections, protected data handling, or selected actions in one or more applications. Its name or organisation-wide ownership never implies all applications or all records. Tenant structure and entitlement administration use separate tenant permissions and never arrive through an organisation role.
@@ -82,6 +98,8 @@ An organisation role grants exact permissions within one organisation, such as m
 ### Application roles
 
 An application role grants permissions inside one [application](07-applications-pages-and-themes.md), such as discovering the application, opening particular pages, performing named actions, or reading a record scope. It is registered and assigned within that application's organisation through the same organisation-managed catalogue described above.
+
+When accepting a supplied template as an assignable local role, the administrator supplies its organisation-local description alongside its local key and label. The current published template has no description field; Vortex neither invents one nor changes the published source contract to create local administrative metadata.
 
 ### Assignment
 
