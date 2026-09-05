@@ -17,6 +17,8 @@ const scripts = [
   "definition-consumer-read-concurrency.test.sh",
   "definition-history-restore-concurrency.test.sh",
   "permission-registry-concurrency.test.sh",
+  "organization-role-seal-concurrency.test.sh",
+  "application-access-coordination-concurrency.test.sh",
 ];
 
 for (const filename of scripts) {

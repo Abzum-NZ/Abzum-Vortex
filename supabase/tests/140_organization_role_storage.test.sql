@@ -6,6 +6,11 @@ begin;
 
 set local search_path = pg_catalog, extensions, public;
 
+-- B1 fixtures predate the required B2 authority epoch. Every history below is
+-- authority-preserving, so make that explicit without weakening its validator.
+alter table vortex_access.organization_role_revisions
+  alter column authority_continuity_revision set default 1;
+
 select * from pg_temp.vortex_private_schema_assertions(
   'vortex_access', 'postgres', true, true
 );
@@ -356,6 +361,24 @@ insert into vortex_access.organization_roles (
   '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
 );
 
+insert into vortex_access.organization_role_permission_entries (
+  organization_id, role_id, role_revision, entry_ordinal, role_kind,
+  role_application_root_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id,
+  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
+  meaning_fingerprint
+) values (
+  '21000000-0000-4000-8000-000000000140',
+  '51000000-0000-4000-8000-000000000140', 1, 1, 'application',
+  '31000000-0000-4000-8000-000000000140',
+  '31000000-0000-4000-8000-000000000140', 'application',
+  '31000000-0000-4000-8000-000000000140',
+  '41000000-0000-4000-8000-000000000140', 'application',
+  '31000000-0000-4000-8000-000000000140', 1,
+  'sha256:' || pg_catalog.repeat('c', 64), 1,
+  'sha256:' || pg_catalog.repeat('e', 64)
+);
+
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, application_root_id, lifecycle,
   privilege_classification, assignment_policy, policy_continuity_revision,
@@ -380,24 +403,6 @@ insert into vortex_access.organization_role_revisions (
   '71000000-0000-4000-8000-000000000160'
 );
 
-insert into vortex_access.organization_role_permission_entries (
-  organization_id, role_id, role_revision, entry_ordinal, role_kind,
-  role_application_root_id, application_root_id, owner_kind, owner_id,
-  permission_id, registration_kind, registration_owner_id,
-  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
-  meaning_fingerprint
-) values (
-  '21000000-0000-4000-8000-000000000140',
-  '51000000-0000-4000-8000-000000000140', 1, 1, 'application',
-  '31000000-0000-4000-8000-000000000140',
-  '31000000-0000-4000-8000-000000000140', 'application',
-  '31000000-0000-4000-8000-000000000140',
-  '41000000-0000-4000-8000-000000000140', 'application',
-  '31000000-0000-4000-8000-000000000140', 1,
-  'sha256:' || pg_catalog.repeat('c', 64), 1,
-  'sha256:' || pg_catalog.repeat('e', 64)
-);
-
 set constraints all immediate;
 set constraints all deferred;
 
@@ -412,6 +417,24 @@ select is(
   'active',
   'an application role preserves exact accepted source and permission evidence'
 );
+
+insert into vortex_access.organization_role_permission_entries (
+  organization_id, role_id, role_revision, entry_ordinal, role_kind,
+  role_application_root_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id,
+  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
+  meaning_fingerprint
+)
+select
+  organization_id, role_id, 2, entry_ordinal, role_kind,
+  role_application_root_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id,
+  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
+  meaning_fingerprint
+from vortex_access.organization_role_permission_entries
+where organization_id = '21000000-0000-4000-8000-000000000140'
+  and role_id = '51000000-0000-4000-8000-000000000140'
+  and role_revision = 1;
 
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, application_root_id, lifecycle,
@@ -439,24 +462,6 @@ from vortex_access.organization_role_revisions
 where organization_id = '21000000-0000-4000-8000-000000000140'
   and role_id = '51000000-0000-4000-8000-000000000140'
   and revision = 1;
-
-insert into vortex_access.organization_role_permission_entries (
-  organization_id, role_id, role_revision, entry_ordinal, role_kind,
-  role_application_root_id, application_root_id, owner_kind, owner_id,
-  permission_id, registration_kind, registration_owner_id,
-  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
-  meaning_fingerprint
-)
-select
-  organization_id, role_id, 2, entry_ordinal, role_kind,
-  role_application_root_id, application_root_id, owner_kind, owner_id,
-  permission_id, registration_kind, registration_owner_id,
-  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
-  meaning_fingerprint
-from vortex_access.organization_role_permission_entries
-where organization_id = '21000000-0000-4000-8000-000000000140'
-  and role_id = '51000000-0000-4000-8000-000000000140'
-  and role_revision = 1;
 
 update vortex_access.organization_roles
 set live_revision = 2
@@ -492,19 +497,6 @@ insert into vortex_access.organization_roles (
   '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
 );
 
-insert into vortex_access.organization_role_revisions (
-  organization_id, role_id, revision, role_kind, lifecycle, role_key, label, description,
-  privilege_classification, assignment_policy, policy_continuity_revision,
-  changed_by, changed_at, change_correlation_id
-) values (
-  '21000000-0000-4000-8000-000000000140',
-  '51000000-0000-4000-8000-000000000149', 1, 'custom', 'active',
-  'platform_reader', 'Platform reader', 'Read organisation access metadata.',
-  'privileged', 'standing', 1,
-  '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
-  '71000000-0000-4000-8000-000000000169'
-);
-
 insert into vortex_access.organization_role_permission_entries (
   organization_id, role_id, role_revision, entry_ordinal, role_kind,
   application_root_id, owner_kind, owner_id, permission_id, registration_kind,
@@ -526,6 +518,19 @@ join vortex_access.permission_registration_revisions as registration
 where entry.organization_id = '21000000-0000-4000-8000-000000000140'
   and entry.registration_kind = 'platform'
   and entry.permission_id = '687d5649-62ee-43dd-b684-b8af3a5394c1';
+
+insert into vortex_access.organization_role_revisions (
+  organization_id, role_id, revision, role_kind, lifecycle, role_key, label, description,
+  privilege_classification, assignment_policy, policy_continuity_revision,
+  changed_by, changed_at, change_correlation_id
+) values (
+  '21000000-0000-4000-8000-000000000140',
+  '51000000-0000-4000-8000-000000000149', 1, 'custom', 'active',
+  'platform_reader', 'Platform reader', 'Read organisation access metadata.',
+  'privileged', 'standing', 1,
+  '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+  '71000000-0000-4000-8000-000000000169'
+);
 
 set constraints all immediate;
 set constraints all deferred;
@@ -580,6 +585,31 @@ insert into vortex_access.organization_role_activation_policy_revisions (
     '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
     '71000000-0000-4000-8000-000000000176'
   );
+
+insert into vortex_access.organization_role_permission_entries (
+  organization_id, role_id, role_revision, entry_ordinal, role_kind,
+  application_root_id, owner_kind, owner_id, permission_id, registration_kind,
+  registration_owner_id, accepted_registration_revision, catalogue_fingerprint,
+  continuity_revision, meaning_fingerprint
+)
+select
+  '21000000-0000-4000-8000-000000000140'::uuid,
+  '51000000-0000-4000-8000-000000000148'::uuid,
+  target_revision.revision, 1, 'custom', entry.application_root_id,
+  entry.owner_kind, entry.owner_id, entry.permission_id, entry.registration_kind,
+  entry.registration_owner_id, entry.registration_revision,
+  registration.permission_catalogue_fingerprint, 1, entry.meaning_fingerprint
+from pg_catalog.generate_series(1, 6) as target_revision(revision)
+cross join vortex_access.permission_catalogue_entries as entry
+join vortex_access.permission_registration_revisions as registration
+  on registration.organization_id = entry.organization_id
+  and registration.registration_kind = entry.registration_kind
+  and registration.registration_owner_id = entry.registration_owner_id
+  and registration.revision = entry.registration_revision
+where entry.organization_id = '21000000-0000-4000-8000-000000000140'
+  and entry.registration_kind = 'application'
+  and entry.registration_revision = 1
+  and entry.permission_id = '41000000-0000-4000-8000-000000000140';
 
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, lifecycle,
@@ -645,31 +675,6 @@ insert into vortex_access.organization_role_revisions (
     '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
     '71000000-0000-4000-8000-000000000182'
   );
-
-insert into vortex_access.organization_role_permission_entries (
-  organization_id, role_id, role_revision, entry_ordinal, role_kind,
-  application_root_id, owner_kind, owner_id, permission_id, registration_kind,
-  registration_owner_id, accepted_registration_revision, catalogue_fingerprint,
-  continuity_revision, meaning_fingerprint
-)
-select
-  '21000000-0000-4000-8000-000000000140'::uuid,
-  '51000000-0000-4000-8000-000000000148'::uuid,
-  target_revision.revision, 1, 'custom', entry.application_root_id,
-  entry.owner_kind, entry.owner_id, entry.permission_id, entry.registration_kind,
-  entry.registration_owner_id, entry.registration_revision,
-  registration.permission_catalogue_fingerprint, 1, entry.meaning_fingerprint
-from pg_catalog.generate_series(1, 6) as target_revision(revision)
-cross join vortex_access.permission_catalogue_entries as entry
-join vortex_access.permission_registration_revisions as registration
-  on registration.organization_id = entry.organization_id
-  and registration.registration_kind = entry.registration_kind
-  and registration.registration_owner_id = entry.registration_owner_id
-  and registration.revision = entry.registration_revision
-where entry.organization_id = '21000000-0000-4000-8000-000000000140'
-  and entry.registration_kind = 'application'
-  and entry.registration_revision = 1
-  and entry.permission_id = '41000000-0000-4000-8000-000000000140';
 
 set constraints all immediate;
 set constraints all deferred;
@@ -937,21 +942,6 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  insert into vortex_access.organization_role_revisions (
-    organization_id, role_id, revision, role_kind, lifecycle,
-    privilege_classification, assignment_policy, policy_continuity_revision,
-    activation_policy_id, activation_policy_revision, activation_policy_fingerprint,
-    role_key, label, description, changed_by, changed_at, change_correlation_id
-  ) values (
-    '21000000-0000-4000-8000-000000000140',
-    '51000000-0000-4000-8000-000000000148', p_revision, 'custom', 'active',
-    'privileged', 'activation_required', p_policy_continuity_revision,
-    p_activation_policy_id, p_activation_policy_revision, p_activation_policy_fingerprint,
-    'activation_reader', 'Activation reader', 'Candidate policy continuity revision.',
-    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
-    '71000000-0000-4000-8000-000000000191'
-  );
-
   insert into vortex_access.organization_role_permission_entries (
     organization_id, role_id, role_revision, entry_ordinal, role_kind,
     role_application_root_id, application_root_id, owner_kind, owner_id,
@@ -969,6 +959,21 @@ begin
   where organization_id = '21000000-0000-4000-8000-000000000140'
     and role_id = '51000000-0000-4000-8000-000000000148'
     and role_revision = 6;
+
+  insert into vortex_access.organization_role_revisions (
+    organization_id, role_id, revision, role_kind, lifecycle,
+    privilege_classification, assignment_policy, policy_continuity_revision,
+    activation_policy_id, activation_policy_revision, activation_policy_fingerprint,
+    role_key, label, description, changed_by, changed_at, change_correlation_id
+  ) values (
+    '21000000-0000-4000-8000-000000000140',
+    '51000000-0000-4000-8000-000000000148', p_revision, 'custom', 'active',
+    'privileged', 'activation_required', p_policy_continuity_revision,
+    p_activation_policy_id, p_activation_policy_revision, p_activation_policy_fingerprint,
+    'activation_reader', 'Activation reader', 'Candidate policy continuity revision.',
+    '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+    '71000000-0000-4000-8000-000000000191'
+  );
 end;
 $$;
 
@@ -1133,18 +1138,6 @@ select throws_ok(
         '51000000-0000-4000-8000-000000000146', 'custom', 'standard_admin', 1,
         '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp()
       );
-      insert into vortex_access.organization_role_revisions (
-        organization_id, role_id, revision, role_kind, lifecycle,
-        privilege_classification, assignment_policy, policy_continuity_revision,
-        role_key, label, description, changed_by, changed_at, change_correlation_id
-      ) values (
-        '21000000-0000-4000-8000-000000000140',
-        '51000000-0000-4000-8000-000000000146', 1, 'custom', 'active',
-        'standard', 'standing', 1, 'standard_admin', 'Standard administrator',
-        'Administrative accepted permissions cannot remain standard.',
-        '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
-        '71000000-0000-4000-8000-000000000193'
-      );
       insert into vortex_access.organization_role_permission_entries (
         organization_id, role_id, role_revision, entry_ordinal, role_kind,
         application_root_id, owner_kind, owner_id, permission_id, registration_kind,
@@ -1168,6 +1161,18 @@ select throws_ok(
         and entry.administrative
       order by entry.permission_id
       limit 1;
+      insert into vortex_access.organization_role_revisions (
+        organization_id, role_id, revision, role_kind, lifecycle,
+        privilege_classification, assignment_policy, policy_continuity_revision,
+        role_key, label, description, changed_by, changed_at, change_correlation_id
+      ) values (
+        '21000000-0000-4000-8000-000000000140',
+        '51000000-0000-4000-8000-000000000146', 1, 'custom', 'active',
+        'standard', 'standing', 1, 'standard_admin', 'Standard administrator',
+        'Administrative accepted permissions cannot remain standard.',
+        '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(),
+        '71000000-0000-4000-8000-000000000193'
+      );
       set constraints all immediate;
     end;
     $body$
@@ -1591,6 +1596,23 @@ select throws_ok(
   $test$
     do $body$
     begin
+      insert into vortex_access.organization_role_permission_entries (
+        organization_id, role_id, role_revision, entry_ordinal, role_kind,
+        role_application_root_id, application_root_id, owner_kind, owner_id,
+        permission_id, registration_kind, registration_owner_id,
+        accepted_registration_revision, catalogue_fingerprint,
+        continuity_revision, meaning_fingerprint
+      ) values (
+        '21000000-0000-4000-8000-000000000140',
+        '51000000-0000-4000-8000-000000000140', 3, 1, 'application',
+        '31000000-0000-4000-8000-000000000140',
+        '31000000-0000-4000-8000-000000000140', 'application',
+        '31000000-0000-4000-8000-000000000140',
+        '41000000-0000-4000-8000-000000000140', 'application',
+        '31000000-0000-4000-8000-000000000140', 1,
+        'sha256:' || pg_catalog.repeat('9', 64), 1,
+        'sha256:' || pg_catalog.repeat('e', 64)
+      );
       insert into vortex_access.organization_role_revisions (
         organization_id, role_id, revision, role_kind, application_root_id,
         lifecycle, privilege_classification, assignment_policy,
@@ -1618,24 +1640,6 @@ select throws_ok(
       where organization_id = '21000000-0000-4000-8000-000000000140'
         and role_id = '51000000-0000-4000-8000-000000000140'
         and revision = 2;
-
-      insert into vortex_access.organization_role_permission_entries (
-      organization_id, role_id, role_revision, entry_ordinal, role_kind,
-      role_application_root_id, application_root_id, owner_kind, owner_id,
-      permission_id, registration_kind, registration_owner_id,
-      accepted_registration_revision, catalogue_fingerprint,
-      continuity_revision, meaning_fingerprint
-    ) values (
-      '21000000-0000-4000-8000-000000000140',
-      '51000000-0000-4000-8000-000000000140', 3, 1, 'application',
-      '31000000-0000-4000-8000-000000000140',
-      '31000000-0000-4000-8000-000000000140', 'application',
-      '31000000-0000-4000-8000-000000000140',
-      '41000000-0000-4000-8000-000000000140', 'application',
-      '31000000-0000-4000-8000-000000000140', 1,
-      'sha256:' || pg_catalog.repeat('9', 64), 1,
-      'sha256:' || pg_catalog.repeat('e', 64)
-    );
       set constraints all immediate;
     end;
     $body$

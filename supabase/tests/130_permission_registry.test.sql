@@ -72,7 +72,7 @@ select ok(
   )
   and not pg_catalog.has_function_privilege(
     'service_role',
-    'vortex_access.apply_application_permission_registration(text,bigint,jsonb,uuid,uuid)',
+    'vortex_access.apply_application_permission_registration_v1_internal(text,bigint,jsonb,uuid,uuid)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
@@ -104,8 +104,8 @@ select is(
     from pg_catalog.pg_proc
     where oid in (
       'vortex_access.initialize_platform_permission_catalogue(uuid,uuid,uuid)'::regprocedure,
-      'vortex_access.apply_application_permission_registration(text,bigint,jsonb,uuid,uuid)'::regprocedure,
-      'vortex_access.withdraw_application_permission_registration(uuid,uuid,bigint,uuid,uuid)'::regprocedure,
+      'vortex_access.apply_application_permission_registration_v1_internal(text,bigint,jsonb,uuid,uuid)'::regprocedure,
+      'vortex_access.withdraw_application_permission_registration_v1_internal(uuid,uuid,bigint,uuid,uuid)'::regprocedure,
       'vortex_access.read_available_permission(uuid,uuid,text,uuid,uuid)'::regprocedure,
       'vortex_access.read_application_permission_snapshot(uuid,uuid)'::regprocedure
     )
@@ -569,7 +569,7 @@ select is(
 );
 
 create temporary table application_one_registration on commit drop as
-select * from vortex_access.apply_application_permission_registration(
+select * from vortex_access.apply_application_permission_registration_v1_internal(
   'register', null,
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000130',
@@ -640,7 +640,7 @@ select is(
   'one application registration cannot manufacture another application context'
 );
 
-select * from vortex_access.apply_application_permission_registration(
+select * from vortex_access.apply_application_permission_registration_v1_internal(
   'register', null,
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000130',
@@ -696,7 +696,7 @@ select is(
   'punctuation-valid keys use the same locale-independent byte order as TypeScript'
 );
 
-select * from vortex_access.apply_application_permission_registration(
+select * from vortex_access.apply_application_permission_registration_v1_internal(
   'register', null,
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000131',
@@ -732,7 +732,7 @@ select is(
   'identical permission identities, keys and labels remain organisation and owner qualified'
 );
 
-select * from vortex_access.withdraw_application_permission_registration(
+select * from vortex_access.withdraw_application_permission_registration_v1_internal(
   '21000000-0000-4000-8000-000000000130',
   '31000000-0000-4000-8000-000000000131', 1,
   '91000000-0000-4000-8000-000000000130',
@@ -777,7 +777,7 @@ select is(
 );
 
 create temporary table application_one_reactivation on commit drop as
-select * from vortex_access.apply_application_permission_registration(
+select * from vortex_access.apply_application_permission_registration_v1_internal(
   'reactivate', 2,
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000130',
@@ -828,7 +828,7 @@ select is(
 
 select throws_ok(
   pg_catalog.format(
-    'select * from vortex_access.apply_application_permission_registration(%L, %s, %L::jsonb, %L, %L)',
+    'select * from vortex_access.apply_application_permission_registration_v1_internal(%L, %s, %L::jsonb, %L, %L)',
     'update', 2,
     pg_temp.registry_candidate(
       '21000000-0000-4000-8000-000000000130',
@@ -863,7 +863,7 @@ select is(
 );
 
 create temporary table application_one_update on commit drop as
-select * from vortex_access.apply_application_permission_registration(
+select * from vortex_access.apply_application_permission_registration_v1_internal(
   'update', 3,
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000130',
@@ -929,7 +929,7 @@ select is(
 
 select throws_ok(
   pg_catalog.format(
-    'select * from vortex_access.apply_application_permission_registration(%L, null, %L::jsonb, %L, %L)',
+    'select * from vortex_access.apply_application_permission_registration_v1_internal(%L, null, %L::jsonb, %L, %L)',
     'register',
     pg_catalog.jsonb_set(
       pg_temp.registry_candidate(
@@ -954,7 +954,7 @@ select throws_ok(
 
 select throws_ok(
   pg_catalog.format(
-    'select * from vortex_access.apply_application_permission_registration(%L, %s, %L::jsonb, %L, %L)',
+    'select * from vortex_access.apply_application_permission_registration_v1_internal(%L, %s, %L::jsonb, %L, %L)',
     'update', 4,
     pg_catalog.jsonb_set(
       pg_temp.registry_candidate(

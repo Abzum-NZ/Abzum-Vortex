@@ -297,7 +297,7 @@ run_sql "
   );
   update vortex_definition.roots set current_release_revision = 2
     where root_id = '$application_root_id';
-  select * from vortex_access.apply_application_permission_registration(
+  select * from vortex_access.apply_application_permission_registration_v1_internal(
     'register', null,
     jsonb_build_object(
       'contractVersion', '1.0.0', 'organizationId', '$organization_id',
@@ -373,7 +373,7 @@ candidate_update="
 PGAPPNAME="vortex-permission-update-a-$fixture_name_token" "${psql_command[@]}" >"$proof_root/a.log" 2>&1 <<SQL &
 begin;
 select registration_revision, access_version
-from vortex_access.apply_application_permission_registration(
+from vortex_access.apply_application_permission_registration_v1_internal(
   'update', 1, $candidate_update, '$actor_id', '$correlation_a'
 )
 \g '$proof_root/a.result'
@@ -395,7 +395,7 @@ done
 PGAPPNAME="vortex-permission-update-b-$fixture_name_token" "${psql_command[@]}" >"$proof_root/b.log" 2>&1 <<SQL &
 begin;
 select registration_revision, access_version
-from vortex_access.apply_application_permission_registration(
+from vortex_access.apply_application_permission_registration_v1_internal(
   'update', 1, $candidate_update, '$actor_id', '$correlation_b'
 );
 commit;

@@ -1,7 +1,4 @@
-import type {
-  PermissionDeclaration,
-  PreparedApplicationPermissionRegistration,
-} from "@vortex/contracts";
+import type { PermissionDeclaration } from "@vortex/contracts";
 import type { DatabaseRow, DatabaseValue, RequestDatabaseTransaction } from "@vortex/db";
 import { fingerprintCanonicalValue } from "@vortex/definition";
 import { describe, expect, it } from "vitest";
@@ -32,28 +29,6 @@ const applicationRelease = {
   validationContractVersion: "2.15.0",
   contentFingerprint: `sha256:${"1".repeat(64)}`,
   resolutionFingerprint: `sha256:${"2".repeat(64)}`,
-};
-
-const preparedCandidate = (): PreparedApplicationPermissionRegistration => {
-  const applicationCatalogueFingerprint = fingerprintCanonicalValue([permission]);
-  const entry = {
-    applicationRootId,
-    ownerKind: "application" as const,
-    ownerId: applicationRootId,
-    permission,
-    sourceRelease: applicationRelease,
-    meaningFingerprint: fingerprintPermissionMeaning("application", applicationRootId, permission),
-  };
-  const core = {
-    contractVersion: "1.0.0" as const,
-    organizationId: id(1),
-    applicationRootId,
-    applicationRelease,
-    applicationCatalogueFingerprint,
-    applicationPermissionIds: [permission.permissionId],
-    entries: [entry],
-  };
-  return { ...core, candidateFingerprint: fingerprintCanonicalValue(core) };
 };
 
 type QueryCall = Readonly<{ text: string; values: readonly DatabaseValue[] }>;
@@ -129,54 +104,6 @@ describe("permission registry private repository", () => {
     expect(calls[0]?.text).toContain("vortex_access.revise_platform_permission_catalogue_metadata");
     expect(calls[0]?.text).not.toContain("initialize_platform_permission_catalogue");
     expect(calls[0]?.values).toEqual([id(1), 1, "1.0.0", "1.0.1", id(2), id(3)]);
-  });
-
-  it("verifies a prepared candidate before calling the owner-only mutation handoff", async () => {
-    const calls: QueryCall[] = [];
-    const candidate = preparedCandidate();
-    const repository = createPermissionRegistryPrivateRepository(
-      transactionFor(
-        () => [
-          {
-            operation: "register",
-            organization_id: id(1),
-            application_root_id: applicationRootId,
-            registration_state: "active",
-            registration_revision: "1",
-            access_version: "3",
-            correlation_id: id(3),
-          },
-        ],
-        calls,
-      ),
-    );
-
-    await expect(
-      repository.mutate({
-        operation: "register",
-        candidate,
-        changedBy: id(2),
-        correlationId: id(3),
-      }),
-    ).resolves.toMatchObject({ operation: "register", registrationRevision: 1, accessVersion: 3 });
-    expect(calls[0]?.text).toContain("vortex_access.apply_application_permission_registration");
-    expect(calls[0]?.values[0]).toBe("register");
-    expect(calls[0]?.values[1]).toBeNull();
-    expect(JSON.parse(String(calls[0]?.values[2]))).toEqual(candidate);
-
-    const invalid = {
-      ...candidate,
-      candidateFingerprint: `sha256:${"0".repeat(64)}`,
-    };
-    await expect(
-      repository.mutate({
-        operation: "register",
-        candidate: invalid,
-        changedBy: id(2),
-        correlationId: id(3),
-      }),
-    ).rejects.toMatchObject({ code: "INVALID_PERMISSION_REGISTRY_COMMAND" });
-    expect(calls).toHaveLength(1);
   });
 
   it("maps exact permission rows and preserves application context", async () => {
@@ -319,18 +246,6 @@ describe("permission registry private repository", () => {
   });
 
   it("rejects malformed storage and maps database details to closed errors", async () => {
-    const malformed = createPermissionRegistryPrivateRepository(
-      transactionFor(() => [{ operation: "register" }]),
-    );
-    await expect(
-      malformed.mutate({
-        operation: "register",
-        candidate: preparedCandidate(),
-        changedBy: id(2),
-        correlationId: id(3),
-      }),
-    ).rejects.toMatchObject({ code: "INVALID_PERMISSION_REGISTRY_STORAGE_RESULT" });
-
     const failed = createPermissionRegistryPrivateRepository({
       query: async () => {
         throw { code: "40001", message: "sensitive database detail" };
