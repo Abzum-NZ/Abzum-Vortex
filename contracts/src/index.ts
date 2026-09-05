@@ -18,6 +18,7 @@ export * from "./lineage";
 export * from "./module-contracts";
 export * from "./operation-contracts";
 export * from "./permissions";
+export * from "./permission-registry";
 export * from "./records";
 export * from "./storage";
 export * from "./validation-errors";
