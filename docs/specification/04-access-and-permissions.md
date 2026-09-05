@@ -95,6 +95,8 @@ The same protection applies when an otherwise active application removes a permi
 
 Fresh acceptance approves one exact role permission set for an explicitly listed set of existing account or Group assignments. The request binds their identifiers and current revisions; a changed, missing or additional assignment requires a refreshed request. [IAM](appendices/iam-application.md) presents those affected assignments, while [the protected operation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) rechecks the administrator's current authority before committing. Assignments reference the accepted role rather than storing duplicate permission lists. Revoked assignments are not restored, and a later assignment is a separately authorised grant. Bounded authority to grant permissions requires its own explicit acceptance and never follows a use-role approval automatically.
 
+Changing a role between standing and activation-required assignment modes, including returning to a previous mode, requires that same complete non-revoked assignment manifest. The change never converts assignments: only a matching-kind, otherwise valid assignment can be used after explicit review. Eligible assignments still need a fresh activation. Changing only activation duration or other requirements within activation-required mode leaves eligibility in place but invalidates old policy-bound requests and activations. These [policy compatibility rules](appendices/groups-and-privileged-access.md#privileged-classification-and-policy) avoid unnecessary regrants without permitting silent restoration.
+
 ```mermaid
 flowchart LR
     A[Permission accepted for a role] --> B[Permission removed or meaning changed]
