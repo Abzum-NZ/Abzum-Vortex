@@ -755,6 +755,19 @@ export const applicationContentSchema = applicationContentV1Schema;
 export const applicationDraftV1Schema = z
   .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentV1Schema })
   .strict();
+
+export const applicationDraftV2Schema = z
+  .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentV2Schema })
+  .strict();
+
+/** Standalone V2 canonical content is decoded only with its explicit validation version. */
+export const applicationCanonicalDocumentV2Schema = z
+  .object({
+    validationContractVersion: z.literal("2.0.0"),
+    canonical: applicationDraftV2Schema,
+  })
+  .strict();
+
 /** Backward-compatible name for the currently implemented canonical Application draft. */
 export const applicationDraftSchema = applicationDraftV1Schema;
 
@@ -808,6 +821,8 @@ export type PageDefinition = z.infer<typeof pageDefinitionSchema>;
 export type PageDefinitionV2 = z.infer<typeof pageDefinitionV2Schema>;
 export type ApplicationContent = z.infer<typeof applicationContentSchema>;
 export type ApplicationContentV2 = z.infer<typeof applicationContentV2Schema>;
+export type ApplicationDraftV2 = z.infer<typeof applicationDraftV2Schema>;
+export type ApplicationCanonicalDocumentV2 = z.infer<typeof applicationCanonicalDocumentV2Schema>;
 export type ApplicationDraft = z.infer<typeof applicationDraftSchema>;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
 export type BlockSettingValue = z.infer<typeof blockSettingValueSchema>;

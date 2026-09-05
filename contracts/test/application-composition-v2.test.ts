@@ -1,15 +1,28 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  applicationCanonicalDocumentV2Schema,
+  applicationCompilationOutputV2Schema,
+  applicationCompilationRequestV2Schema,
   applicationContentV2Schema,
+  applicationDraftSchema,
+  applicationDraftV2Schema,
   applicationSourceDocumentV2Schema,
   blockPropertySchemaV2Schema,
   blockPropertyValueV2Schema,
+  definitionCompilationOutputSchema,
+  definitionCompilationRequestSchema,
+  definitionResolutionSnapshotSchema,
+  definitionResolutionSnapshotV2Schema,
   immutablePlatformBlockCatalogueV2Schema,
   platformBlockReleaseV2Schema,
   platformBlockDependenciesV2SchemaForCatalogue,
   selectApplicationContractPair,
   sourceBlockPropertyValueV2Schema,
+  sourceIdentityAssignmentSchema,
+  sourceIdentityAssignmentV2Schema,
+  sourceIdentityKindSchema,
+  sourceIdentityKindV2Schema,
 } from "../src";
 import { describe, expect, it, test } from "vitest";
 
@@ -343,6 +356,82 @@ const sourceApplication = (() => {
   } as const;
 })();
 
+const canonicalDraftV2 = {
+  envelope: {
+    kind: "application",
+    rootId: id(650),
+    organizationId: id(651),
+    key: "example.application",
+    draftRevision: 3,
+    createdAt: "2026-09-05T00:00:00.000Z",
+    createdBy: id(652),
+    updatedAt: "2026-09-05T00:01:00.000Z",
+    updatedBy: id(653),
+  },
+  content: canonicalApplication,
+} as const;
+
+const resolutionV2 = {
+  contractVersion: "2.0.0",
+  fingerprint: fingerprint("9"),
+  definitions: [
+    {
+      kind: "application",
+      key: "example.application",
+      rootId: id(650),
+      exactVersion: "1.0.0",
+    },
+  ],
+  identities: [
+    {
+      definitionKey: "example.application",
+      scope: "content",
+      kind: "shell",
+      componentOwner: "standard_shell",
+      alias: "standard_shell",
+      identifier: canonicalShell.shellId,
+    },
+  ],
+} as const;
+
+const catalogueSnapshotV2 = {
+  contractVersion: "2.0.0",
+  fingerprint: fingerprint("8"),
+  platformBlocks: {
+    compositionPolicy: { maximumDepth: 12, maximumPlacements: 1_000 },
+    releases: [
+      {
+        blockId: blockOne.blockId,
+        key: "vortex.block.layout",
+        releaseVersion: blockOne.releaseVersion,
+        contentFingerprint: blockOne.contentFingerprint,
+        catalogueFingerprint: blockOne.catalogueFingerprint,
+        name: "Layout",
+        icon: "layout-template",
+        paletteGroup: "layout",
+        rendererKey: "vortex.renderer.layout",
+        properties: [],
+        slots: [],
+        capabilities: {
+          responsiveVisibility: true,
+          responsiveOrder: true,
+          gridWidth: true,
+          height: "content_or_bounded",
+          accessibleName: "not_applicable",
+          publicSurface: "allowed",
+        },
+      },
+    ],
+  },
+  platformTheme: {
+    catalogueThemeId: id(643),
+    releaseVersion: "1.4.0",
+    contentFingerprint: fingerprint("e"),
+    catalogueFingerprint: fingerprint("f"),
+    tokens: canonicalApplication.theme.tokens,
+  },
+} as const;
+
 describe("Application V2 composition contracts", () => {
   type MutableTestSlot = {
     placements: Record<
@@ -365,6 +454,135 @@ describe("Application V2 composition contracts", () => {
   it("parses strict authored and canonical V2 application documents", () => {
     expect(applicationSourceDocumentV2Schema.safeParse(sourceApplication).success).toBe(true);
     expect(applicationContentV2Schema.safeParse(canonicalApplication).success).toBe(true);
+  });
+
+  it("exposes V2-only canonical, resolution, compilation request and output envelopes", () => {
+    const request = {
+      sourceContractVersion: "2.0.0",
+      validationContractVersion: "2.0.0",
+      source: sourceApplication,
+      resolution: resolutionV2,
+      catalogueSnapshot: catalogueSnapshotV2,
+      draftMetadata: {
+        organizationId: id(651),
+        draftRevision: 3,
+        createdAt: "2026-09-05T00:00:00.000Z",
+        createdBy: id(652),
+        updatedAt: "2026-09-05T00:01:00.000Z",
+        updatedBy: id(653),
+      },
+    } as const;
+    const output = {
+      kind: "application",
+      validationContractVersion: "2.0.0",
+      canonical: canonicalDraftV2,
+      artifact: {
+        kind: "application",
+        definitionKey: "example.application",
+        rootId: id(650),
+        exactVersion: "1.0.0",
+        contentFingerprint: fingerprint("7"),
+        resolutionFingerprint: resolutionV2.fingerprint,
+      },
+      provenance: [],
+      dependencyOrder: ["example.application"],
+      resolvedDependencies: [],
+      resolutionFingerprint: resolutionV2.fingerprint,
+    } as const;
+
+    expect(applicationDraftV2Schema.safeParse(canonicalDraftV2).success).toBe(true);
+    expect(
+      applicationCanonicalDocumentV2Schema.safeParse({
+        validationContractVersion: "2.0.0",
+        canonical: canonicalDraftV2,
+      }).success,
+    ).toBe(true);
+    expect(definitionResolutionSnapshotV2Schema.safeParse(resolutionV2).success).toBe(true);
+    expect(applicationCompilationRequestV2Schema.safeParse(request).success).toBe(true);
+    expect(applicationCompilationOutputV2Schema.safeParse(output).success).toBe(true);
+  });
+
+  it("keeps every generic V1 decoder closed to V2-only envelopes and identity kinds", () => {
+    expect(sourceIdentityKindV2Schema.safeParse("shell").success).toBe(true);
+    expect(sourceIdentityKindSchema.safeParse("shell").success).toBe(false);
+    expect(sourceIdentityKindSchema.safeParse("shell_content_slot").success).toBe(false);
+    expect(sourceIdentityAssignmentV2Schema.safeParse(resolutionV2.identities[0]).success).toBe(
+      true,
+    );
+    expect(sourceIdentityAssignmentSchema.safeParse(resolutionV2.identities[0]).success).toBe(
+      false,
+    );
+    expect(definitionResolutionSnapshotSchema.safeParse(resolutionV2).success).toBe(false);
+    expect(applicationDraftSchema.safeParse(canonicalDraftV2).success).toBe(false);
+    expect(
+      definitionCompilationRequestSchema.safeParse({
+        source: sourceApplication,
+        resolution: resolutionV2,
+        draftMetadata: {
+          organizationId: id(651),
+          draftRevision: 3,
+          createdAt: "2026-09-05T00:00:00.000Z",
+          createdBy: id(652),
+          updatedAt: "2026-09-05T00:01:00.000Z",
+          updatedBy: id(653),
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      definitionCompilationOutputSchema.safeParse({
+        kind: "application",
+        validationContractVersion: "2.0.0",
+        canonical: canonicalDraftV2,
+        artifact: {
+          kind: "application",
+          definitionKey: "example.application",
+          rootId: id(650),
+          exactVersion: "1.0.0",
+          contentFingerprint: fingerprint("7"),
+          resolutionFingerprint: resolutionV2.fingerprint,
+        },
+        provenance: [],
+        dependencyOrder: ["example.application"],
+        resolvedDependencies: [],
+        resolutionFingerprint: resolutionV2.fingerprint,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires exact trusted V2 request metadata without inferring from source shape", () => {
+    const request = {
+      sourceContractVersion: "2.0.0",
+      validationContractVersion: "2.0.0",
+      source: sourceApplication,
+      resolution: resolutionV2,
+      catalogueSnapshot: catalogueSnapshotV2,
+      draftMetadata: {
+        organizationId: id(651),
+        draftRevision: 3,
+        createdAt: "2026-09-05T00:00:00.000Z",
+        createdBy: id(652),
+        updatedAt: "2026-09-05T00:01:00.000Z",
+        updatedBy: id(653),
+      },
+    } as const;
+    expect(
+      applicationCompilationRequestV2Schema.safeParse({
+        ...request,
+        sourceContractVersion: "1.0.0",
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationCompilationRequestV2Schema.safeParse({
+        ...request,
+        validationContractVersion: "1.0.0",
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationCompilationRequestV2Schema.safeParse({
+        ...request,
+        source: { ...sourceApplication, source_contract_version: "1.0.0" },
+      }).success,
+    ).toBe(false);
   });
 
   it("does not enable the V2 selector before compiler and runtime support exist", () => {

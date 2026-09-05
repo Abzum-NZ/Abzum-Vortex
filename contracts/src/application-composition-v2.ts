@@ -550,14 +550,16 @@ export const platformBlockReleaseV2Schema = z
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });
   });
 
+export const applicationCompositionPolicyV2Schema = z
+  .object({
+    maximumDepth: z.number().int().positive(),
+    maximumPlacements: z.number().int().positive(),
+  })
+  .strict();
+
 export const immutablePlatformBlockCatalogueV2Schema = z
   .object({
-    compositionPolicy: z
-      .object({
-        maximumDepth: z.number().int().positive(),
-        maximumPlacements: z.number().int().positive(),
-      })
-      .strict(),
+    compositionPolicy: applicationCompositionPolicyV2Schema,
     releases: z.array(platformBlockReleaseV2Schema),
   })
   .strict()
@@ -854,6 +856,45 @@ export const sourceApplicationThemeV2Schema = z
     token_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
   })
   .strict();
+
+/** Complete immutable platform-theme content needed to materialise one V2 Application theme. */
+export const platformThemeReleaseV2Schema = z
+  .object({
+    catalogueThemeId: platformIdSchema,
+    releaseVersion: semanticVersionSchema,
+    contentFingerprint: fingerprintSchema,
+    catalogueFingerprint: fingerprintSchema,
+    tokens: z.record(builderKeySchema, themeTokenValueV2Schema),
+  })
+  .strict();
+
+/**
+ * Exact catalogue evidence locked by a trusted caller before pure V2 compilation.
+ * Its fingerprint covers every field except the fingerprint itself.
+ */
+export const applicationCompositionCatalogueSnapshotV2Schema = z
+  .object({
+    contractVersion: z.literal("2.0.0"),
+    fingerprint: fingerprintSchema,
+    platformBlocks: immutablePlatformBlockCatalogueV2Schema,
+    platformTheme: platformThemeReleaseV2Schema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const blockIds = value.platformBlocks.releases.map((release) => String(release.blockId));
+    if (new Set(blockIds).size !== blockIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["platformBlocks", "releases"],
+        message: "A compile snapshot may contain only one exact release per platform block",
+      });
+    if (blockIds.some((blockId, index) => index > 0 && blockIds[index - 1]! >= blockId))
+      context.addIssue({
+        code: "custom",
+        path: ["platformBlocks", "releases"],
+        message: "Compile snapshot block releases must use permanent-identity order",
+      });
+  });
 
 type BlockPlacementV2 = {
   block: z.infer<typeof platformBlockReferenceV2Schema>;
@@ -1165,6 +1206,11 @@ export const sourcePageCompositionV2Schema = z.discriminatedUnion("shell_kind", 
 
 export type PlatformBlockReleaseV2 = z.infer<typeof platformBlockReleaseV2Schema>;
 export type PlatformBlockDependencyV2 = z.infer<typeof platformBlockDependencyV2Schema>;
+export type PlatformThemeReleaseV2 = z.infer<typeof platformThemeReleaseV2Schema>;
+export type ApplicationCompositionPolicyV2 = z.infer<typeof applicationCompositionPolicyV2Schema>;
+export type ApplicationCompositionCatalogueSnapshotV2 = z.infer<
+  typeof applicationCompositionCatalogueSnapshotV2Schema
+>;
 export type BlockPlacementV2Contract = z.infer<typeof blockPlacementV2Schema>;
 export type ApplicationShellV2 = z.infer<typeof applicationShellV2Schema>;
 export type PageCompositionV2 = z.infer<typeof pageCompositionV2Schema>;

@@ -1,8 +1,13 @@
-import type { DefinitionSourceDocument } from "@vortex/contracts";
+import type { ApplicationSourceDocumentV2, DefinitionSourceDocument } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
-import { extractSourceIdentityRequirements } from "../src/source-identities";
+import {
+  extractApplicationSourceIdentityRequirementsV2,
+  extractSourceIdentityRequirements,
+} from "../src/source-identities";
 
 const asSource = (value: unknown): DefinitionSourceDocument => value as DefinitionSourceDocument;
+const asApplicationV2Source = (value: unknown): ApplicationSourceDocumentV2 =>
+  value as ApplicationSourceDocumentV2;
 
 describe("source identity requirements", () => {
   it("extracts every Module identity owner with record-scoped contents", () => {
@@ -237,5 +242,106 @@ describe("source identity requirements", () => {
       aliases: ["example.module", "module_root"],
     });
     expect(requirements[0]?.aliases).not.toContain("invented");
+  });
+
+  it("extracts exact V2 shell, content-slot and recursive placement owners", () => {
+    const source = asApplicationV2Source({
+      source_contract_version: "2.0.0",
+      root_alias: "application_root",
+      key: "example.application",
+      kind: "application",
+      body: {
+        permissions: [],
+        actions: [],
+        rules: [],
+        events: [],
+        roles: [],
+        navigation: [],
+        queries: [],
+        pipelines: [],
+        connection_bindings: [],
+        public_addresses: [],
+        workflows: [],
+        interfaces: [],
+        shells: [
+          {
+            id: "shell_owner",
+            key: "main_shell",
+            content_slots: [
+              {
+                id: "slot_owner",
+                key: "main",
+              },
+            ],
+            layout: {
+              placements: {
+                shell_placement_owner: {
+                  block: { block_id: "catalogue-block-id", release_version: "1.0.0" },
+                  slots: {
+                    chrome: {
+                      placements: {
+                        nested_shell_placement_owner: { slots: {} },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+        pages: [
+          {
+            id: "page_owner",
+            key: "home",
+            composition: {
+              shell_kind: "application",
+              shell: "main_shell",
+              content: {
+                slot_owner: {
+                  placements: {
+                    page_placement_owner: {
+                      block: { block_id: "other-catalogue-block-id", release_version: "1.0.0" },
+                      slots: {},
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            id: "default_page_owner",
+            key: "default_page",
+            composition: {
+              shell_kind: "default",
+              main: {
+                placements: {
+                  default_placement_owner: { slots: {} },
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    const requirements = extractApplicationSourceIdentityRequirementsV2(source);
+    expect(
+      requirements.map(({ kind, componentOwner, aliases }) => [kind, componentOwner, aliases]),
+    ).toEqual([
+      ["root", "root", ["example.application", "application_root"]],
+      ["shell", "shell_owner", ["shell_owner", "main_shell"]],
+      ["shell_content_slot", "slot_owner", ["slot_owner", "main"]],
+      ["block_placement", "shell_placement_owner", ["shell_placement_owner"]],
+      ["block_placement", "nested_shell_placement_owner", ["nested_shell_placement_owner"]],
+      ["page", "page_owner", ["page_owner", "home"]],
+      ["block_placement", "page_placement_owner", ["page_placement_owner"]],
+      ["page", "default_page_owner", ["default_page_owner", "default_page"]],
+      ["block_placement", "default_placement_owner", ["default_placement_owner"]],
+    ]);
+    expect(requirements.some(({ kind }) => kind === "block")).toBe(false);
+    expect(
+      requirements.some(({ componentOwner }) => componentOwner.includes("catalogue-block")),
+    ).toBe(false);
+    expect(requirements.some(({ componentOwner }) => componentOwner === "slot_owner")).toBe(true);
   });
 });

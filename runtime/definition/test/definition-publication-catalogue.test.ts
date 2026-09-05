@@ -3,10 +3,12 @@ import path from "node:path";
 import {
   connectionTypeSourceDocumentSchema,
   definitionResolutionSnapshotSchema,
+  type BlockId,
   type ConnectionTypeId,
   type SemanticVersion,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
+import { fingerprintCanonicalValue } from "../src/canonical-json";
 import { createImmutableDefinitionPublicationCatalogue } from "../src/definition-publication-catalogue";
 
 const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
@@ -30,6 +32,40 @@ const connectionRelease = (releaseVersion: SemanticVersion) => ({
   rootId,
   releaseVersion,
 });
+const blockId = "70000000-0000-4000-8000-000000000010" as BlockId;
+const secondBlockId = "70000000-0000-4000-8000-000000000011" as BlockId;
+const blockDefinition = (id: BlockId = blockId) => ({
+  blockId: id,
+  key: id === blockId ? "vortex.block.content" : "vortex.block.layout",
+  releaseVersion: "1.0.0" as const,
+  name: id === blockId ? "Content" : "Layout",
+  icon: "layout-template",
+  paletteGroup: id === blockId ? ("content" as const) : ("layout" as const),
+  rendererKey: id === blockId ? "vortex.renderer.content" : "vortex.renderer.layout",
+  properties: [],
+  slots: [],
+  capabilities: {
+    responsiveVisibility: true,
+    responsiveOrder: true,
+    gridWidth: true,
+    height: "content_or_bounded" as const,
+    accessibleName: "not_applicable" as const,
+    publicSurface: "allowed" as const,
+  },
+});
+const themeDefinitionV2 = {
+  catalogueThemeId: themeId,
+  releaseVersion: "2.1.0" as const,
+  tokens: {
+    brand: { kind: "color_pair" as const, light: "#123456", dark: "#abcdef" },
+    density: { kind: "density" as const, value: "comfortable" as const },
+  },
+};
+const applicationCompositionV2 = {
+  compositionPolicy: { maximumDepth: 12, maximumPlacements: 1_000 },
+  platformBlockReleases: [blockDefinition(), blockDefinition(secondBlockId)],
+  platformThemeReleases: [themeDefinitionV2],
+};
 
 describe("immutable Definition publication catalogue", () => {
   it("lists governed connection releases deterministically and reads only an exact identity", async () => {
@@ -121,6 +157,80 @@ describe("immutable Definition publication catalogue", () => {
     });
   });
 
+  it("reads exact V2 composition releases and locks a deterministic fingerprinted snapshot", async () => {
+    const catalogue = createImmutableDefinitionPublicationCatalogue({
+      connectionTypeReleases: [],
+      platformThemeReleases: [],
+      applicationCompositionV2,
+    });
+    const content = await catalogue.readPlatformBlockReleaseV2(blockId, "1.0.0");
+    const theme = await catalogue.readPlatformThemeReleaseV2(themeId, "2.1.0");
+    expect(content).toMatchObject({
+      blockId,
+      key: "vortex.block.content",
+      releaseVersion: "1.0.0",
+    });
+    expect(content?.contentFingerprint).toBe(
+      fingerprintCanonicalValue({
+        name: "Content",
+        icon: "layout-template",
+        paletteGroup: "content",
+        rendererKey: "vortex.renderer.content",
+        properties: [],
+        slots: [],
+        capabilities: blockDefinition().capabilities,
+      }),
+    );
+    expect(theme?.contentFingerprint).toBe(fingerprintCanonicalValue(themeDefinitionV2.tokens));
+
+    const snapshot = await catalogue.readApplicationCompositionCatalogueSnapshotV2({
+      platformBlocks: [
+        { blockId: secondBlockId, releaseVersion: "1.0.0" },
+        { blockId, releaseVersion: "1.0.0" },
+      ],
+      platformTheme: { catalogueThemeId: themeId, releaseVersion: "2.1.0" },
+    });
+    expect(snapshot?.platformBlocks.releases.map((release) => release.blockId)).toEqual([
+      blockId,
+      secondBlockId,
+    ]);
+    if (snapshot === undefined) throw new Error("V2 snapshot missing");
+    const { fingerprint, ...evidence } = snapshot;
+    expect(fingerprint).toBe(fingerprintCanonicalValue(evidence));
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot.platformBlocks.releases[0])).toBe(true);
+    await expect(
+      catalogue.readApplicationCompositionCatalogueSnapshotV2({
+        platformBlocks: [{ blockId, releaseVersion: "9.0.0" }],
+        platformTheme: { catalogueThemeId: themeId, releaseVersion: "2.1.0" },
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      catalogue.readApplicationCompositionCatalogueSnapshotV2({
+        platformBlocks: [
+          { blockId, releaseVersion: "1.0.0" },
+          { blockId, releaseVersion: "1.0.0" },
+        ],
+        platformTheme: { catalogueThemeId: themeId, releaseVersion: "2.1.0" },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps V2 catalogue methods unavailable without governed V2 definitions", async () => {
+    const catalogue = createImmutableDefinitionPublicationCatalogue({
+      connectionTypeReleases: [],
+      platformThemeReleases: [],
+    });
+    await expect(catalogue.readPlatformBlockReleaseV2(blockId, "1.0.0")).resolves.toBeUndefined();
+    await expect(catalogue.readPlatformThemeReleaseV2(themeId, "2.1.0")).resolves.toBeUndefined();
+    await expect(
+      catalogue.readApplicationCompositionCatalogueSnapshotV2({
+        platformBlocks: [{ blockId, releaseVersion: "1.0.0" }],
+        platformTheme: { catalogueThemeId: themeId, releaseVersion: "2.1.0" },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it("refuses ambiguous versions and connection-key substitutions at construction", () => {
     expect(() =>
       createImmutableDefinitionPublicationCatalogue({
@@ -140,6 +250,17 @@ describe("immutable Definition publication catalogue", () => {
           },
         ],
         platformThemeReleases: [],
+      }),
+    ).toThrow("INVALID_PLATFORM_RELEASE_CATALOGUE");
+
+    expect(() =>
+      createImmutableDefinitionPublicationCatalogue({
+        connectionTypeReleases: [],
+        platformThemeReleases: [],
+        applicationCompositionV2: {
+          ...applicationCompositionV2,
+          platformBlockReleases: [blockDefinition(), blockDefinition()],
+        },
       }),
     ).toThrow("INVALID_PLATFORM_RELEASE_CATALOGUE");
   });
