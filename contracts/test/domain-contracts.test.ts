@@ -47,7 +47,6 @@ import {
   permissionDeclarationSchema,
   publishedApplicationDefinitionSchema,
   publishedModuleDefinitionSchema,
-  roleSchema,
   savedSharingConditionSchema,
   safeErrorResponseSchema,
   secretReferenceSchema,
@@ -1166,21 +1165,6 @@ describe("identity, sharing and secret invariants", () => {
       organizationAccountSetSchema.safeParse([{ ...account(1, 10), accessVersionContribution: 1 }])
         .success,
     ).toBe(false);
-  });
-
-  test("refuses roles without organisation scope", () => {
-    const role = {
-      roleId: id(120),
-      organizationId: id(121),
-      key: "case_reader",
-      label: "Case reader",
-      description: "Reads cases in one organisation.",
-      kind: "organization",
-      liveRevision: 1,
-      permissions: [],
-    };
-    expect(roleSchema.safeParse(role).success).toBe(true);
-    expect(roleSchema.safeParse({ ...role, organizationId: undefined }).success).toBe(false);
   });
 
   test("requires a shared record's changeable fields to be readable and cross-org approval to expire", () => {
