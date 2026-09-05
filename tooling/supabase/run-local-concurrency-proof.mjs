@@ -19,6 +19,7 @@ const scripts = [
   "permission-registry-concurrency.test.sh",
   "organization-role-seal-concurrency.test.sh",
   "application-access-coordination-concurrency.test.sh",
+  "organization-role-assignment-changes-concurrency.test.sh",
 ];
 
 for (const filename of scripts) {
