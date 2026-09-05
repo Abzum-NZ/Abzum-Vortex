@@ -76,6 +76,12 @@ const activeResult = (
       authenticationStrength: verifiedIdentity.authenticationStrength,
       accessTokenIssuedAt: verifiedIdentity.issuedAt,
       accessTokenExpiresAt: verifiedIdentity.expiresAt,
+      ...(verifiedIdentity.primaryAuthenticatedAt === undefined
+        ? {}
+        : { primaryAuthenticatedAt: verifiedIdentity.primaryAuthenticatedAt }),
+      ...(verifiedIdentity.multiFactorAuthenticatedAt === undefined
+        ? {}
+        : { multiFactorAuthenticatedAt: verifiedIdentity.multiFactorAuthenticatedAt }),
     },
   });
 };

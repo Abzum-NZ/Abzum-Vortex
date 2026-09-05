@@ -989,6 +989,24 @@ describe("identity, sharing and secret invariants", () => {
     expect(
       supabaseIdentityClaimsSchema.safeParse({
         ...standardClaims,
+        amr: [{ method: "sso/saml", timestamp: standardClaims.iat, provider: "workforce" }],
+      }).success,
+    ).toBe(true);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
+        amr: [{ method: "password", timestamp: standardClaims.iat, provider: "email" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
+        amr: [{ method: "password", timestamp: standardClaims.iat }, "totp"],
+      }).success,
+    ).toBe(false);
+    expect(
+      supabaseIdentityClaimsSchema.safeParse({
+        ...standardClaims,
         is_anonymous: true,
         email: "",
       }).success,
@@ -1013,6 +1031,24 @@ describe("identity, sharing and secret invariants", () => {
     } as const;
 
     expect(verifiedIdentitySchema.safeParse(verifiedIdentity).success).toBe(true);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        primaryAuthenticatedAt: verifiedIdentity.issuedAt,
+      }).success,
+    ).toBe(true);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        primaryAuthenticatedAt: verifiedIdentity.expiresAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      verifiedIdentitySchema.safeParse({
+        ...verifiedIdentity,
+        multiFactorAuthenticatedAt: verifiedIdentity.issuedAt,
+      }).success,
+    ).toBe(false);
     expect(
       verifiedIdentitySchema.safeParse({
         ...verifiedIdentity,
@@ -1044,6 +1080,24 @@ describe("identity, sharing and secret invariants", () => {
     } as const;
 
     expect(identitySessionSchema.safeParse(session).success).toBe(true);
+    expect(
+      identitySessionSchema.safeParse({
+        ...session,
+        primaryAuthenticatedAt: session.accessTokenIssuedAt,
+      }).success,
+    ).toBe(true);
+    expect(
+      identitySessionSchema.safeParse({
+        ...session,
+        primaryAuthenticatedAt: session.accessTokenExpiresAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      identitySessionSchema.safeParse({
+        ...session,
+        multiFactorAuthenticatedAt: session.accessTokenIssuedAt,
+      }).success,
+    ).toBe(false);
     expect(identitySessionResolutionSchema.parse({ kind: "active", session })).toEqual({
       kind: "active",
       session,
@@ -1142,6 +1196,66 @@ describe("identity, sharing and secret invariants", () => {
       authenticationStrength: "single_factor",
     };
     expect(sessionContextSchema.safeParse(human).success).toBe(true);
+    const evidenceBearingHuman = {
+      ...human,
+      accessTokenIssuedAt: "2026-09-02T01:00:30+00:00",
+      primaryAuthenticatedAt: "2026-09-02T01:00:00+00:00",
+    };
+    expect(sessionContextSchema.safeParse(evidenceBearingHuman).success).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({
+        ...human,
+        primaryAuthenticatedAt: "2026-09-02T01:00:00+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...human,
+        accessTokenIssuedAt: "2026-09-02T01:00:30+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...evidenceBearingHuman,
+        accessTokenIssuedAt: "2026-09-02T01:01:00+00:00",
+      }).success,
+    ).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({
+        ...evidenceBearingHuman,
+        accessTokenIssuedAt: "2026-09-02T01:01:00.001+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...evidenceBearingHuman,
+        callerKind: "federated",
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...human,
+        authenticationStrength: "recent_multi_factor",
+      }).data,
+    ).not.toHaveProperty("multiFactorAuthenticatedAt");
+    const multiFactorEvidence = {
+      ...human,
+      accessTokenIssuedAt: "2026-09-02T01:00:30+00:00",
+      multiFactorAuthenticatedAt: "2026-09-02T01:00:00+00:00",
+    };
+    expect(sessionContextSchema.safeParse(multiFactorEvidence).success).toBe(false);
+    expect(
+      sessionContextSchema.safeParse({
+        ...multiFactorEvidence,
+        authenticationStrength: "multi_factor",
+      }).success,
+    ).toBe(true);
+    expect(
+      sessionContextSchema.safeParse({
+        ...multiFactorEvidence,
+        authenticationStrength: "recent_multi_factor",
+      }).success,
+    ).toBe(true);
     expect(
       sessionContextSchema.safeParse({ ...human, identityAuthorityId: undefined }).success,
     ).toBe(false);
