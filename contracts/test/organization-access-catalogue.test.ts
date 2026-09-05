@@ -280,6 +280,7 @@ describe("organisation access catalogue contracts", () => {
     };
     const prepared = {
       contractVersion: "1.0.0" as const,
+      preparationBasis: { kind: "registration_candidate" as const },
       permissionRegistration,
       templates: [
         {
@@ -294,6 +295,15 @@ describe("organisation access catalogue contracts", () => {
     expect(preparedApplicationRoleTemplatesSchema.safeParse(prepared).success).toBe(true);
     expect(
       preparedApplicationRoleTemplatesSchema.safeParse({ ...prepared, allowed: true }).success,
+    ).toBe(false);
+    expect(
+      preparedApplicationRoleTemplatesSchema.safeParse({
+        ...prepared,
+        preparationBasis: {
+          kind: "current_active_registration",
+          registrationRevision: Number.MAX_SAFE_INTEGER + 1,
+        },
+      }).success,
     ).toBe(false);
     expect(
       preparedApplicationRoleTemplatesSchema.safeParse({
@@ -426,6 +436,10 @@ describe("organisation access catalogue contracts", () => {
     expect(applicationRoleSchema.safeParse(wildcardTemplate).success).toBe(true);
     const candidate = {
       contractVersion: "1.0.0" as const,
+      preparationBasis: {
+        kind: "current_active_registration" as const,
+        registrationRevision: 4,
+      },
       permissionRegistration: registration,
       templates: [
         {
