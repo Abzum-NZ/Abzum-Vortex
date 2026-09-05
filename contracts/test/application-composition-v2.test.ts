@@ -88,6 +88,11 @@ const pageId = id(623);
 const mainPlacementId = id(624);
 const nestedPlacementId = id(625);
 const asidePlacementId = id(626);
+const guidedPageId = id(627);
+const guidedStepOneId = id(628);
+const guidedStepTwoId = id(629);
+const guidedStepOnePlacementId = id(631);
+const guidedStepTwoPlacementId = id(632);
 
 const canonicalShell = {
   shellId: id(630),
@@ -343,6 +348,84 @@ const sourceApplication = (() => {
   } as const;
 })();
 
+const canonicalGuidedPage = {
+  pageId: guidedPageId,
+  key: "guided_entry",
+  name: "Guided entry",
+  type: "guided_form",
+  accessPermissionKey: "example.application.open",
+  states: ["normal"],
+  recordType: { state: "unresolved", qualifiedKey: "example_module:entry" },
+  commitActionKey: "example.action.submit",
+  steps: [
+    { id: guidedStepOneId, name: "Details", summary: false },
+    { id: guidedStepTwoId, name: "Summary", summary: true },
+  ],
+  composition: {
+    shellKind: "application",
+    shellId: canonicalShell.shellId,
+    stepContent: {
+      [guidedStepOneId]: {
+        [shellPrimarySlotId]: {
+          placements: {
+            [guidedStepOnePlacementId]: canonicalPlacement(blockOne),
+          },
+          order: {
+            desktop: [guidedStepOnePlacementId],
+            tablet: [guidedStepOnePlacementId],
+            phone: [guidedStepOnePlacementId],
+          },
+        },
+      },
+      [guidedStepTwoId]: {
+        [shellPrimarySlotId]: {
+          placements: {
+            [guidedStepTwoPlacementId]: canonicalPlacement(blockTwo),
+          },
+          order: {
+            desktop: [guidedStepTwoPlacementId],
+            tablet: [guidedStepTwoPlacementId],
+            phone: [guidedStepTwoPlacementId],
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+const sourceGuidedPage = {
+  id: "guided_page",
+  key: "guided_entry",
+  name: "Guided entry",
+  type: "guided_form",
+  permission: "example.application.open",
+  states: ["normal"],
+  record_type: "example_module:entry",
+  commit_action: "example.action.submit",
+  steps: [
+    { id: "details_step", name: "Details", summary: false },
+    { id: "summary_step", name: "Summary", summary: true },
+  ],
+  composition: {
+    shell_kind: "application",
+    shell: "standard_shell",
+    step_content: {
+      details_step: {
+        shell_primary: {
+          placements: { details_placement: sourcePlacement(sourceBlockOne) },
+          order: { desktop: ["details_placement"] },
+        },
+      },
+      summary_step: {
+        shell_primary: {
+          placements: { summary_placement: sourcePlacement(sourceBlockTwo) },
+          order: { desktop: ["summary_placement"] },
+        },
+      },
+    },
+  },
+} as const;
+
 describe("Application V2 composition contracts", () => {
   type MutableTestSlot = {
     placements: Record<
@@ -355,16 +438,228 @@ describe("Application V2 composition contracts", () => {
   const parsedCanonical = () => {
     const value = applicationContentV2Schema.parse(canonicalApplication);
     const page = value.pages[0]!;
-    if (page.composition.shellKind !== "application") throw new Error("Shell fixture required");
+    if (page.composition.shellKind !== "application" || !("content" in page.composition))
+      throw new Error("Shell fixture required");
     return {
       value,
       content: page.composition.content as unknown as Record<string, MutableTestSlot>,
     };
   };
+  const sourceWithPage = (page: unknown) => ({
+    ...sourceApplication,
+    body: { ...sourceApplication.body, pages: [...sourceApplication.body.pages, page] },
+  });
+  const canonicalWithPage = (page: unknown) => ({
+    ...canonicalApplication,
+    pages: [...canonicalApplication.pages, page],
+  });
 
   it("parses strict authored and canonical V2 application documents", () => {
     expect(applicationSourceDocumentV2Schema.safeParse(sourceApplication).success).toBe(true);
     expect(applicationContentV2Schema.safeParse(canonicalApplication).success).toBe(true);
+  });
+
+  it("represents every guided step through one page shell and its own ordered content tree", () => {
+    expect(
+      applicationSourceDocumentV2Schema.safeParse(sourceWithPage(sourceGuidedPage)).success,
+    ).toBe(true);
+    expect(
+      applicationContentV2Schema.safeParse(canonicalWithPage(canonicalGuidedPage)).success,
+    ).toBe(true);
+    expect(Object.keys(sourceGuidedPage.composition.step_content)).toEqual(
+      sourceGuidedPage.steps.map((step) => step.id),
+    );
+    expect(Object.keys(canonicalGuidedPage.composition.stepContent)).toEqual(
+      canonicalGuidedPage.steps.map((step) => step.id),
+    );
+  });
+
+  it("preserves every legacy guided-step and placement owner in the V2 step-content shape", () => {
+    const legacy = (sourceV1.body.pages as Record<string, unknown>[]).find(
+      (page) => page.type === "guided_form",
+    );
+    if (legacy === undefined) throw new Error("Legacy guided-form fixture missing");
+    const legacySteps = legacy.steps as {
+      id: string;
+      blocks: { id: string }[];
+    }[];
+    const represented = {
+      ...sourceGuidedPage,
+      id: legacy.id,
+      key: legacy.key,
+      name: legacy.name,
+      permission: legacy.permission,
+      record_type: legacy.record_type,
+      commit_action: legacy.commit_action,
+      states: legacy.states,
+      steps: legacySteps.map((step, index) => ({
+        id: step.id,
+        name: `Step ${index + 1}`,
+        summary: index === legacySteps.length - 1,
+      })),
+      composition: {
+        shell_kind: "default" as const,
+        step_content: Object.fromEntries(
+          legacySteps.map((step) => [
+            step.id,
+            {
+              placements: Object.fromEntries(
+                step.blocks.map((block) => [block.id, sourcePlacement(sourceBlockOne)]),
+              ),
+              order: { desktop: step.blocks.map((block) => block.id) },
+            },
+          ]),
+        ),
+      },
+    };
+    const parsed = applicationSourceDocumentV2Schema.safeParse(sourceWithPage(represented));
+
+    expect(parsed.success).toBe(true);
+    expect(Object.keys(represented.composition.step_content)).toEqual(
+      legacySteps.map((step) => step.id),
+    );
+    expect(
+      Object.values(represented.composition.step_content).flatMap((slot) =>
+        Object.keys(slot.placements),
+      ),
+    ).toEqual(legacySteps.flatMap((step) => step.blocks.map((block) => block.id)));
+  });
+
+  it("rejects duplicate, missing or extra guided-step ownership", () => {
+    const duplicatePage = {
+      ...sourceGuidedPage,
+      steps: [sourceGuidedPage.steps[0], { ...sourceGuidedPage.steps[1], id: "details_step" }],
+    };
+    expect(applicationSourceDocumentV2Schema.safeParse(sourceWithPage(duplicatePage)).success).toBe(
+      false,
+    );
+
+    const remainingStepContent = Object.fromEntries(
+      Object.entries(canonicalGuidedPage.composition.stepContent).filter(
+        ([stepId]) => stepId !== guidedStepTwoId,
+      ),
+    );
+    const missingPage = {
+      ...canonicalGuidedPage,
+      composition: { ...canonicalGuidedPage.composition, stepContent: remainingStepContent },
+    };
+    expect(applicationContentV2Schema.safeParse(canonicalWithPage(missingPage)).success).toBe(
+      false,
+    );
+
+    const extraPage = {
+      ...sourceGuidedPage,
+      composition: {
+        ...sourceGuidedPage.composition,
+        step_content: {
+          ...sourceGuidedPage.composition.step_content,
+          undeclared_step: sourceEmptySlot,
+        },
+      },
+    };
+    expect(applicationSourceDocumentV2Schema.safeParse(sourceWithPage(extraPage)).success).toBe(
+      false,
+    );
+  });
+
+  it("validates application-shell slots independently for every guided step", () => {
+    const missingRequiredPage = {
+      ...canonicalGuidedPage,
+      composition: {
+        ...canonicalGuidedPage.composition,
+        stepContent: {
+          ...canonicalGuidedPage.composition.stepContent,
+          [guidedStepTwoId]: { [shellPrimarySlotId]: canonicalEmptySlot },
+        },
+      },
+    };
+    expect(
+      applicationContentV2Schema.safeParse(canonicalWithPage(missingRequiredPage)).success,
+    ).toBe(false);
+
+    const extraSlotPage = {
+      ...sourceGuidedPage,
+      composition: {
+        ...sourceGuidedPage.composition,
+        step_content: {
+          ...sourceGuidedPage.composition.step_content,
+          details_step: {
+            ...sourceGuidedPage.composition.step_content.details_step,
+            unknown_slot: sourceEmptySlot,
+          },
+        },
+      },
+    };
+    expect(applicationSourceDocumentV2Schema.safeParse(sourceWithPage(extraSlotPage)).success).toBe(
+      false,
+    );
+  });
+
+  it("includes every guided-step tree in global identity and dependency validation", () => {
+    const duplicatePlacementPage = {
+      ...canonicalGuidedPage,
+      composition: {
+        ...canonicalGuidedPage.composition,
+        stepContent: {
+          ...canonicalGuidedPage.composition.stepContent,
+          [guidedStepTwoId]: {
+            [shellPrimarySlotId]: {
+              placements: {
+                [guidedStepOnePlacementId]: canonicalPlacement(blockTwo),
+              },
+              order: {
+                desktop: [guidedStepOnePlacementId],
+                tablet: [guidedStepOnePlacementId],
+                phone: [guidedStepOnePlacementId],
+              },
+            },
+          },
+        },
+      },
+    };
+    expect(
+      applicationContentV2Schema.safeParse(canonicalWithPage(duplicatePlacementPage)).success,
+    ).toBe(false);
+
+    const wrongDependencyPage = {
+      ...sourceGuidedPage,
+      composition: {
+        ...sourceGuidedPage.composition,
+        step_content: {
+          ...sourceGuidedPage.composition.step_content,
+          summary_step: {
+            shell_primary: {
+              placements: {
+                summary_placement: {
+                  ...sourcePlacement(sourceBlockTwo),
+                  block: { block_id: sourceBlockTwo.block_id, release_version: "9.0.0" },
+                },
+              },
+              order: { desktop: ["summary_placement"] },
+            },
+          },
+        },
+      },
+    };
+    expect(
+      applicationSourceDocumentV2Schema.safeParse(sourceWithPage(wrongDependencyPage)).success,
+    ).toBe(false);
+  });
+
+  it("does not permit a second root-level content authority on guided pages", () => {
+    const page = {
+      ...sourceGuidedPage,
+      composition: { ...sourceGuidedPage.composition, content: {} },
+    };
+    expect(applicationSourceDocumentV2Schema.safeParse(sourceWithPage(page)).success).toBe(false);
+
+    const canonicalPage = {
+      ...canonicalGuidedPage,
+      composition: { ...canonicalGuidedPage.composition, main: canonicalEmptySlot },
+    };
+    expect(applicationContentV2Schema.safeParse(canonicalWithPage(canonicalPage)).success).toBe(
+      false,
+    );
   });
 
   it("does not enable the V2 selector before compiler and runtime support exist", () => {

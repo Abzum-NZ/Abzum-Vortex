@@ -1163,8 +1163,48 @@ export const sourcePageCompositionV2Schema = z.discriminatedUnion("shell_kind", 
     .strict(),
 ]);
 
+/** One page shell with an exact, separately ordered content tree for every guided step. */
+export const guidedFormPageCompositionV2Schema = z.discriminatedUnion("shellKind", [
+  z
+    .object({
+      shellKind: z.literal("default"),
+      stepContent: z.record(containedComponentIdSchema, placementSlotV2Schema),
+    })
+    .strict(),
+  z
+    .object({
+      shellKind: z.literal("application"),
+      shellId: shellIdSchema,
+      stepContent: z.record(
+        containedComponentIdSchema,
+        z.record(containedComponentIdSchema, placementSlotV2Schema),
+      ),
+    })
+    .strict(),
+]);
+
+export const sourceGuidedFormPageCompositionV2Schema = z.discriminatedUnion("shell_kind", [
+  z
+    .object({
+      shell_kind: z.literal("default"),
+      step_content: z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
+    })
+    .strict(),
+  z
+    .object({
+      shell_kind: z.literal("application"),
+      shell: sourceAliasSchema,
+      step_content: z.record(
+        sourceAliasSchema,
+        z.record(sourceAliasSchema, sourcePlacementSlotV2Schema),
+      ),
+    })
+    .strict(),
+]);
+
 export type PlatformBlockReleaseV2 = z.infer<typeof platformBlockReleaseV2Schema>;
 export type PlatformBlockDependencyV2 = z.infer<typeof platformBlockDependencyV2Schema>;
 export type BlockPlacementV2Contract = z.infer<typeof blockPlacementV2Schema>;
 export type ApplicationShellV2 = z.infer<typeof applicationShellV2Schema>;
 export type PageCompositionV2 = z.infer<typeof pageCompositionV2Schema>;
+export type GuidedFormPageCompositionV2 = z.infer<typeof guidedFormPageCompositionV2Schema>;
