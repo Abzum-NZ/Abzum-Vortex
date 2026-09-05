@@ -16,6 +16,7 @@ const scripts = [
   "definition-publication-concurrency.test.sh",
   "definition-consumer-read-concurrency.test.sh",
   "definition-history-restore-concurrency.test.sh",
+  "permission-registry-concurrency.test.sh",
 ];
 
 for (const filename of scripts) {
