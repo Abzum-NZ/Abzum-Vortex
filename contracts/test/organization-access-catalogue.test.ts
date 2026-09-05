@@ -8,6 +8,8 @@ import {
   permissionContinuitySchema,
   preparedApplicationRoleTemplatesSchema,
   projectLiveApplicationRolePermissions,
+  roleActivationTemporalStateSchema,
+  roleActivationSchema,
   roleActivationPolicyRevisionSchema,
   roleAssignmentEffectiveStateSchema,
   roleAssignmentSchema,
@@ -23,9 +25,14 @@ import type {
   PermissionContinuity,
   PreparedApplicationRoleTemplates,
   Role,
+  RoleActivation,
+  RoleActivationTemporalState,
+  RoleActivationEligibilitySource,
+  RoleActivationId,
   RoleActivationPolicyRevision,
   RoleAssignmentPolicy,
   RoleAssignment,
+  RoleAssignmentKind,
   RolePermissionEntry,
   Group,
   GroupMembership,
@@ -145,11 +152,45 @@ const temporalGrant = {
   changedAt,
 };
 
+const directEligibilitySource = {
+  kind: "direct" as const,
+  eligibilityAssignment: {
+    roleAssignmentId: id(43),
+    revision: 4,
+  },
+};
+
+const roleActivation = {
+  roleActivationId: id(44),
+  organizationId: id(1),
+  organizationAccountId: id(42),
+  roleId: id(10),
+  revision: 1,
+  historicalRoleRevision: 7,
+  authorityContinuityRevision: 3,
+  policyContinuityRevision: 2,
+  activationPolicy: activationPolicyReference,
+  eligibilitySource: directEligibilitySource,
+  state: "live" as const,
+  activatedByActorId: id(80),
+  activatedAt: changedAt,
+  expiresAt: "2026-09-05T03:00:00+00:00",
+  activationCorrelationId: id(84),
+  changedByActorId: id(81),
+  changedAt,
+  changeCorrelationId: id(85),
+};
+
 describe("organisation access catalogue contracts", () => {
   it("exports the corrected live contract types from the package entry point", () => {
     expectTypeOf<Role>().toBeObject();
     expectTypeOf<RoleActivationPolicyRevision>().toBeObject();
+    expectTypeOf<RoleActivationId>().toBeString();
+    expectTypeOf<RoleActivation>().toBeObject();
+    expectTypeOf<RoleActivationEligibilitySource>().toBeObject();
+    expectTypeOf<RoleActivationTemporalState>().toBeObject();
     expectTypeOf<RoleAssignmentPolicy>().toBeObject();
+    expectTypeOf<RoleAssignmentKind>().toBeString();
     expectTypeOf<RolePermissionEntry>().toBeObject();
     expectTypeOf<Group>().toBeObject();
     expectTypeOf<GroupMembership>().toBeObject();
@@ -800,6 +841,7 @@ describe("organisation access catalogue contracts", () => {
       organizationId: id(1),
       roleId: id(10),
       assignee: { kind: "group" as const, groupId: id(40) },
+      assignmentKind: "eligible" as const,
       revision: 1,
       ...temporalGrant,
     };
@@ -849,6 +891,305 @@ describe("organisation access catalogue contracts", () => {
       roleAssignmentEffectiveStateSchema.safeParse({ assignment, effectiveState: "revoked" })
         .success,
     ).toBe(false);
+  });
+
+  it("requires explicit assignment kind across direct and Group assignees", () => {
+    const assignment = {
+      roleAssignmentId: id(43),
+      organizationId: id(1),
+      roleId: id(10),
+      assignee: { kind: "organization_account" as const, organizationAccountId: id(42) },
+      assignmentKind: "standing" as const,
+      revision: 1,
+      ...temporalGrant,
+    };
+
+    for (const assignee of [
+      { kind: "organization_account" as const, organizationAccountId: id(42) },
+      { kind: "group" as const, groupId: id(40) },
+    ])
+      for (const assignmentKind of ["standing", "eligible"] as const)
+        expect(
+          roleAssignmentSchema.safeParse({ ...assignment, assignee, assignmentKind }).success,
+        ).toBe(true);
+
+    expect(
+      roleAssignmentSchema.safeParse({ ...assignment, assignmentKind: undefined }).success,
+    ).toBe(false);
+    expect(
+      roleAssignmentSchema.safeParse({ ...assignment, assignmentKind: "temporary" }).success,
+    ).toBe(false);
+    expect(
+      roleAssignmentSchema.safeParse({
+        ...assignment,
+        assignmentKind: "eligible",
+        policyContinuityRevision: 2,
+      }).success,
+    ).toBe(false);
+
+    const eligible = { ...assignment, assignmentKind: "eligible" as const };
+    expect(
+      roleAssignmentEffectiveStateSchema.safeParse({
+        assignment: eligible,
+        effectiveState: "active",
+      }).success,
+    ).toBe(true);
+    expect(
+      roleAssignmentEffectiveStateSchema.safeParse({
+        assignment: eligible,
+        effectiveState: "active",
+        permissions: [exactPermission()],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("records direct and Group-derived activations with exact source evidence", () => {
+    expect(roleActivationSchema.safeParse(roleActivation).success).toBe(true);
+
+    const groupSource = {
+      kind: "group" as const,
+      eligibilityAssignment: {
+        roleAssignmentId: id(43),
+        revision: 4,
+      },
+      originatingMembership: {
+        membershipId: id(41),
+        revision: 2,
+      },
+    };
+    expect(
+      roleActivationSchema.safeParse({ ...roleActivation, eligibilitySource: groupSource }).success,
+    ).toBe(true);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        eligibilitySource: {
+          ...directEligibilitySource,
+          originatingMembership: groupSource.originatingMembership,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        eligibilitySource: {
+          kind: "group",
+          eligibilityAssignment: groupSource.eligibilityAssignment,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        eligibilitySource: {
+          ...groupSource,
+          groupId: id(40),
+          organizationAccountId: id(42),
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        eligibilitySource: {
+          ...groupSource,
+          eligibilityAssignment: {
+            ...groupSource.eligibilityAssignment,
+            roleAssignmentId: "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        eligibilitySource: {
+          ...groupSource,
+          eligibilityAssignment: {
+            ...groupSource.eligibilityAssignment,
+            revision: Number.MAX_SAFE_INTEGER + 1,
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        eligibilitySource: {
+          ...groupSource,
+          originatingMembership: {
+            ...groupSource.originatingMembership,
+            revision: Number.MAX_SAFE_INTEGER + 1,
+          },
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires finite immediate activation bounds and safe exact policy periods", () => {
+    for (const field of [
+      "revision",
+      "historicalRoleRevision",
+      "authorityContinuityRevision",
+      "policyContinuityRevision",
+    ] as const)
+      for (const invalidRevision of [0, Number.MAX_SAFE_INTEGER + 1])
+        expect(
+          roleActivationSchema.safeParse({
+            ...roleActivation,
+            [field]: invalidRevision,
+          }).success,
+        ).toBe(false);
+
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        roleActivationId: "00000000-0000-0000-0000-000000000000",
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        activationPolicy: { ...activationPolicyReference, fingerprint: undefined },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        activationPolicy: {
+          ...activationPolicyReference,
+          revision: Number.MAX_SAFE_INTEGER + 1,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({ ...roleActivation, expiresAt: undefined }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({ ...roleActivation, expiresAt: roleActivation.activatedAt })
+        .success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        expiresAt: "2026-09-05T01:59:59+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({ ...roleActivation, expiresAt: "not-a-time" }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        changedAt: "2026-09-05T01:59:59+00:00",
+      }).success,
+    ).toBe(false);
+    for (const field of [
+      "activatedByActorId",
+      "activatedAt",
+      "activationCorrelationId",
+      "changedByActorId",
+      "changedAt",
+      "changeCorrelationId",
+    ] as const)
+      expect(
+        roleActivationSchema.safeParse({ ...roleActivation, [field]: undefined }).success,
+      ).toBe(false);
+  });
+
+  it("requires coherent activation revocation evidence and exposes timing-only status", () => {
+    expect(roleActivationSchema.safeParse({ ...roleActivation, state: "revoked" }).success).toBe(
+      false,
+    );
+    expect(
+      roleActivationSchema.safeParse({ ...roleActivation, revokedAt: roleActivation.activatedAt })
+        .success,
+    ).toBe(false);
+
+    const revoked = {
+      ...roleActivation,
+      state: "revoked" as const,
+      revokedByActorId: id(86),
+      revokedAt: "2026-09-05T02:30:00+00:00",
+      revocationCorrelationId: id(87),
+      changedAt: "2026-09-05T02:30:00+00:00",
+    };
+    expect(roleActivationSchema.safeParse(revoked).success).toBe(true);
+    expect(
+      roleActivationSchema.safeParse({
+        ...roleActivation,
+        revokedByActorId: revoked.revokedByActorId,
+        revokedAt: revoked.revokedAt,
+        revocationCorrelationId: revoked.revocationCorrelationId,
+        changedAt: revoked.changedAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({
+        ...revoked,
+        revokedAt: "2026-09-05T01:59:59+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationSchema.safeParse({ ...revoked, changedAt: roleActivation.activatedAt }).success,
+    ).toBe(false);
+    for (const field of ["revokedByActorId", "revokedAt", "revocationCorrelationId"] as const)
+      expect(roleActivationSchema.safeParse({ ...revoked, [field]: undefined }).success).toBe(
+        false,
+      );
+
+    expect(
+      roleActivationTemporalStateSchema.safeParse({
+        activation: roleActivation,
+        temporalState: "active",
+      }).success,
+    ).toBe(true);
+    expect(
+      roleActivationTemporalStateSchema.safeParse({
+        activation: roleActivation,
+        temporalState: "expired",
+      }).success,
+    ).toBe(true);
+    expect(
+      roleActivationTemporalStateSchema.safeParse({
+        activation: roleActivation,
+        temporalState: "scheduled",
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationTemporalStateSchema.safeParse({
+        activation: roleActivation,
+        temporalState: "revoked",
+      }).success,
+    ).toBe(false);
+    expect(
+      roleActivationTemporalStateSchema.safeParse({
+        activation: revoked,
+        temporalState: "revoked",
+      }).success,
+    ).toBe(true);
+    expect(
+      roleActivationTemporalStateSchema.safeParse({
+        activation: revoked,
+        temporalState: "active",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps activation facts free of evaluator, workflow, authentication, and permission payloads", () => {
+    for (const [field, value] of [
+      ["permissions", [exactPermission()]],
+      ["requestId", id(91)],
+      ["approval", { approved: true }],
+      ["reason", "Emergency support"],
+      ["authentication", { kind: "multi_factor" }],
+      ["accessVersion", 12],
+      ["beneficiaryOrganizationAccountId", id(42)],
+      ["startsAt", roleActivation.activatedAt],
+    ] as const)
+      expect(roleActivationSchema.safeParse({ ...roleActivation, [field]: value }).success).toBe(
+        false,
+      );
   });
 
   it("requires complete revocation evidence and JavaScript-safe revisions", () => {

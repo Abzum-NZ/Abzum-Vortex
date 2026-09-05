@@ -79,6 +79,8 @@ Once IAM is active, its necessary operating permissions form part of the permane
 
 Authorised revocation runs immediately through IAM's protected action; it does not wait in a grant-approval queue. Expiry, suspension and loss of Group membership are enforced on the next protected request even if workflow execution is unavailable. History and notification workflows may follow removal but cannot delay it. The final permanent steward cannot be removed without an active replacement.
 
+The initial membership journey uses one inactive state for removal/suspension, with an explicit authorised restore that advances its revision. Restore never resumes an old privileged activation. Revoked role assignments or delegation instead need a new grant, and retired Groups cannot be restored. IAM follows these [protected lifecycle rules](groups-and-privileged-access.md#current-state-checks-and-revocation); its request records must not invent additional access states.
+
 ```mermaid
 flowchart LR
     SETUP[Explicit trusted appointment] --> IAM[IAM setup record and minimum steward rights]
