@@ -42,6 +42,16 @@ A gallery listing references a reviewed package version and displays publisher, 
 
 Removing a gallery listing does not remove installed definitions. A security withdrawal can prevent new installs and warn affected organisation owners without silently changing their live applications.
 
+## Installing and updating an application package
+
+Copying and installation are distinct. Copying produces an incomplete editable draft. Installing selects one exact immutable package and dependency set for one organisation, records one installation identity, and prepares every required runtime integration before that installation becomes ready. Publication alone never installs, updates, or deploys the package.
+
+When the application contains durable workflows, installation or explicit upgrade uses the private [workflow registration protocol](09-workflows-and-pipelines.md#installation-registration-and-activation). The adapter generates only the published typed flows, registers their exact application and workflow versions into the shared Kestra instance, and verifies every fingerprint while the candidate is inactive. Vortex activates the installation revision only after definitions, dependencies, permissions, storage changes, and all workflow registrations are ready. No browser-supplied YAML, mutable label, Kestra identifier, or customer-held workflow credential is accepted.
+
+This is all-or-nothing Vortex readiness, not a claim that Vortex and Kestra share a database transaction. Stable environment, organisation, installation, application, workflow, and revision identities make retry converge without duplicate flows. If first installation fails, it remains not ready. If an upgrade fails, the existing active version remains current. Prepared but unactivated flows cannot start because runtime and schedule paths recheck the current active installation.
+
+Older registered versions remain available to explain accepted starts and complete in-flight runs. An explicit rollback activates a previously verified compatible package through the same review and checks. Uninstall blocks new acceptance through Vortex immediately, records a refusal or cancellation for accepted work that has not begun, preserves installed, intent, and execution history, and reconciles external schedule deactivation without pretending that deleting a Kestra flow reverses completed work.
+
 ## Record sharing
 
 Record sharing makes records owned by one organisation or application available to an approved recipient without copying or transferring ownership. It is distinct from definition copying, gallery distribution, record import/export, and whole-organisation restore.
@@ -151,6 +161,8 @@ Restore is an operator-controlled disaster-recovery or migration process with co
 ## Acceptance examples
 
 - Copying an application never copies a usable connection secret or private file address.
+- Publishing a package deploys no workflow; installing or explicitly upgrading it verifies every exact flow before activating one complete installation revision.
+- Retrying workflow registration creates no duplicate flow, a failed upgrade leaves the existing version active, and an uninstalled application cannot begin a new event, button, interface, child, message, or scheduled run.
 - An unresolved required dependency prevents publication of the copied draft.
 - Sharing records with another organisation does not create copies in the target's storage.
 - A saved-condition grant automatically includes new records that match the condition and excludes records that no longer match.

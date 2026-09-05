@@ -10,6 +10,8 @@ A **workflow** performs durable background work that may branch, wait, retry, co
 
 Vortex remains authoritative for identities, tenant and organisation context, permissions, definitions, records, files, human-input references, connections, and every application side effect. Kestra receives no organisation database credential and cannot grant access or write organisation tables directly.
 
+One operated Kestra instance is shared by Development, Testing, and Production. Application-execution flows use environment-scoped namespaces; target-specific flow identities, webhook keys, Doppler configurations, credentials and approval gates prevent them from silently changing authority. Reviewed delivery flows may remain in the shared `vortex.operations` namespace with fixed flow and target-environment authority. Its Production gate may read only the credential-free Testing receipt required by the [delivery rules](18-delivery-and-testing.md#supabase-development-and-verification); the receipt supplies evidence, not a credential or approval. This is not a claim of separate process isolation, and no separate instance or newly provisioned Development credential is required. Named operators may restart or redeploy the shared service as needed. A future version or state-database upgrade remains separately governed by [issue #198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198). Operating the shared service never bypasses the separate Production database-delivery approval in the [branch flow](18-delivery-and-testing.md#branch-flow).
+
 ```mermaid
 sequenceDiagram
     participant V as Vortex
@@ -28,13 +30,65 @@ sequenceDiagram
 
 ## Ownership and versioning
 
-Workflows are contained in an [application version](03-composition-and-publication.md#definition-ownership-and-versions). Publishing an application produces the immutable workflow definition and generated Kestra flow used by new runs. A run remains pinned to the application and workflow version from which it started unless an authorised, tested migration moves it.
+Workflows are contained in an [application version](03-composition-and-publication.md#definition-ownership-and-versions). Publishing an application produces the immutable workflow definition and deterministic input from which its Kestra flow can be generated. Publication is inert: it neither registers a flow nor changes a live installation. An explicit application install or upgrade registers and activates the exact published application and workflow versions used by new runs. A run remains pinned to the application and workflow version from which it started unless an authorised, tested migration moves it.
+
+### Installation registration and activation
+
+One private workflow adapter deploys every installed application's durable flows into the shared Kestra instance without redeploying the engine. The adapter accepts only an immutable candidate prepared from the exact published application release and its resolved dependencies. It never accepts browser-supplied YAML, namespaces, flow identifiers, credentials, or claims that registration succeeded.
+
+```mermaid
+sequenceDiagram
+    participant Install as Application install or upgrade
+    participant V as Vortex
+    participant K as Shared Kestra
+    Install->>V: Authorise exact immutable candidate
+    V->>K: Prepare versioned flows inactive
+    K-->>V: Verify every identity and fingerprint
+    V->>V: Activate installation revision
+    V->>K: Enable current schedules and disable superseded schedules
+    Note over V,K: Starts and schedules recheck current activation
+```
+
+The generated namespace and flow identity are scoped by permanent environment, organisation, installation, application, and workflow identifiers plus exact revisions. Labels and mutable keys are diagnostic only and never select or authorise a flow. A schedule is registered disabled or otherwise unable to start application work while its candidate is being prepared.
+
+Preparation registers every workflow version and verifies its exact generated fingerprint before Vortex activates the installation revision. The activation is one Vortex transaction after external preparation; Vortex never claims that its database and Kestra share a transaction. An interactive start request and every scheduled wake-up must therefore verify that the exact installation revision is still current and active before Vortex durably accepts a new start. Once accepted, that intent is pinned to the exact application and workflow revision like an in-flight run: a normal upgrade neither retargets nor drops it. Post-commit dispatch rechecks current permission and withdrawal state and verifies that the accepted exact revision remains retained; it does not require that revision to remain the installation's current pointer. A prepared but unactivated flow cannot pass initial acceptance.
+
+Registration is duplicate-safe. Repeating the same installation, workflow version, and fingerprint converges on the same prepared flow; the same identity with different content is refused. A failed first registration leaves the installation not ready. A failed upgrade leaves the existing active revision unchanged. Only after every new flow is verified does Vortex switch the active revision, so partial external registration cannot create a partly upgraded live application.
+
+After activation, an idempotent reconciliation enables the current revision's prepared schedules and disables superseded schedules. Failed or interrupted synchronisation remains visible and retryable; it cannot leave an enabled old schedule authorised to start new work, because Vortex still checks the active revision. Vortex distinguishes an active installation from pending schedule synchronisation and does not claim that a schedule is running until its enablement is verified.
+
+Older flow versions and their private mappings remain available for accepted starts and runs already in flight. Explicit rollback activates a previously verified exact application revision through the same checks; it does not mutate history. Uninstalling or withdrawing the installation first blocks new acceptance in Vortex, including scheduled starts. An accepted start that has not begun execution is explicitly refused or cancelled with a retained status rather than discarded; an already running execution follows the published cancellation policy. Execution, mapping, intent, and activity history remain available to explain each outcome. Later external deactivation and retention cleanup are reconciled operations, not the authority for whether a new start may be accepted.
 
 The public Vortex execution reference stores the Vortex run identifier, workflow and application versions, tenant and organisation references, trigger, start actor, duplicate-protection key, human-input links, safe activity links, and a non-authoritative last-known state snapshot. The workflow adapter privately maps that run to Kestra's execution identifier and namespace; provider-specific fields are not part of the core application contract. Kestra stores the executable state, current step, retries, waits, and final execution outcome.
 
 ## Triggers
 
 A workflow may start from a committed [event](08-forms-actions-rules-and-events.md), its own published schedule contract, a verified incoming [connection](12-connections-and-interfaces.md) message, an authorised button, a versioned interface operation, or another workflow. An authored event trigger names both the event and its record type explicitly; publication proves that the event exists, belongs to that record type, and carries every declared record-field input the workflow reads. A scheduled trigger owns a closed recurrence value: cadence (`hourly`, `daily`, `weekly`, or `monthly`), positive interval, time zone, minute, and only the hour, weekday, or month-day values required by that cadence. It does not refer to an unverified schedule name. Each input has a unique key and declared value type. Other trigger kinds may declare only typed payload inputs supplied by their exact owning contract; publication matches every payload key, type and allowed record target and refuses missing, extra or invented inputs. A connection message uses its named workflow-trigger mapping and input shape. An interface trigger must be the operation whose target is that same workflow. Schedules and parent-workflow calls accept no separate payload in the first release, and interface-triggered workflows use the interface's currently empty workflow input shape. No trigger may pretend to read an event field, and no record type is guessed from a key. Every trigger declares its input list, nullable condition, and duplicate-protection rule. The first release requires duplicate protection for every durable trigger. A condition may reference only fields on the actual event or button subject record. Declared event fields are read through the trigger-field value source; declared non-event payload values are read through the trigger-input value source by their local key.
+
+### Interactive and save hand-off
+
+A browser may use the shared pure evaluator for immediate rule and action feedback, but preview has no authority and creates no workflow run. On execution, Vortex reloads the current active installation and exact published trigger/action, checks the caller's current permission and subject revision, validates only the trigger's declared typed inputs, and persists the durable start fact before acknowledging it. The browser cannot name an arbitrary flow, submit Kestra YAML, or hold workflow-engine credentials.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant V as Vortex action or save
+    participant DB as Vortex transaction
+    participant D as Dispatcher
+    participant K as Shared Kestra
+    B->>B: Pure preview
+    B->>V: Invoke published action or button
+    V->>V: Recheck access, revision and typed inputs
+    V->>DB: Save plus event or start intent
+    DB-->>V: Commit or refuse together
+    V-->>B: Committed, refused, or background pending
+    D->>K: Start accepted pinned workflow, duplicate-safe
+    K-->>D: Accepted or already accepted
+```
+
+For a record save, its changes and durable event or workflow-start intent commit together. A rejected or rolled-back save never starts a workflow. An authorised button that changes no record still persists its start intent in its own Vortex transaction; dispatch occurs only after that commit. The current first-release button trigger remains bound to its published action and subject record. Supporting a record-free start requires a separately declared protected Workflow operation and versioned descriptor, trigger, typed-input, and execution-reference contracts; until those exist, the runtime refuses the unsupported shape rather than inventing an action or record or accepting an arbitrary payload.
+
+Post-commit dispatch scopes the hand-off duplicate key to the source event or start-intent identity together with the exact accepted installation revision, workflow, and trigger. One event may legitimately start multiple different workflows; each has its own duplicate-safe acceptance. Repeating that same acceptance returns the existing Vortex run mapping instead of creating another Kestra execution. Dispatch validates the retained accepted revision and rechecks current permission and withdrawal without following a newer installation pointer; normal upgrade therefore cannot retarget or strand committed work. Withdrawal explicitly refuses or cancels an accepted start that has not begun and retains that outcome. If Kestra is unavailable, the committed intent remains pending and recoverable; the application does not report a committed record save as failed or discard the request. The existing first-release input restrictions for schedules, child workflows, interfaces, messages, events, and buttons remain unchanged unless their owning contracts are explicitly versioned.
 
 ## Safe workflow node catalogue
 
@@ -115,6 +169,10 @@ The record's current stage is Vortex business data. Stage movement is a named [a
 
 ## Acceptance examples
 
+- Publishing an application registers no Kestra flow. Installation prepares and verifies its complete exact workflow set without an engine redeploy before Vortex activates the installation.
+- Repeating registration converges on the same flows; a failed first install is not ready, and a failed upgrade leaves the current installation unchanged.
+- A start accepted before a normal upgrade remains pinned to its accepted revision. Withdrawal blocks new acceptance and records an explicit refusal or cancellation for accepted work that has not begun, without erasing intent or execution history.
+- Preview, refusal, or rollback starts nothing; a committed save or no-change authorised button retains one duplicate-safe start even while Kestra is unavailable.
 - Repeated delivery performs a Vortex transactional change once through its effect receipt. External calls use provider idempotency when supported; an uncertain non-idempotent outcome requires reconciliation before another attempt.
 - Removing a role before the next node runs causes that protected operation to be refused.
 - A workflow cannot call an unapproved connection, arbitrary address, SQL statement, or uploaded script.
