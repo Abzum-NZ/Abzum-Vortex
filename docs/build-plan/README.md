@@ -207,6 +207,8 @@ Exit proof:
 
 **Needs:** The permission/role/decision foundations consume the actual completed Definition, Identity and Access-version prerequisites and precede #30's organisation-local administration. The remaining Phase 3 work consumes those foundations and the completed Phase 2 isolation proof. Native issue dependencies express this order instead of a blanket whole-phase blocker on #32.
 
+**Role delivery order:** [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) first corrects the unused legacy role contracts and prepares exact immutable templates through #22/#32, then adds role storage and coordinated application registration, Teams/assignments/delegation, permanent-steward safeguards and invitation acceptance. Each slice is reviewed against the full task; a contract slice is not task completion. Prove that permission removal/readdition, changed meaning returning to its original value, and template removal/readdition never revive old access. Explicit acceptance binds the exact role and affected assignment revisions; custom roles are not overwritten, and bounded delegation is separately accepted. Use the existing transaction boundary and one private application-access composition, not a second evaluator or a new general-purpose approval/receipt framework. [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) remains the human granting journey. Hosted verification remains outstanding where required, and #30 remains held until the user explicitly releases it.
+
 **Outcome:** One permission vocabulary and test catalogue protects database rows and every server surface.
 
 Build:
