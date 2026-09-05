@@ -203,6 +203,8 @@ Exit proof:
 
 ## Phase 3 — Access
 
+**Role-update continuity:** Existing assignments keep only continuously valid accepted permissions while an application role is `acceptance_required`; pending additions grant nothing and only `active` roles receive new assignments. Registration makes exact published templates available, but creates no assignable role or grant. Explicit role acceptance remains separate. Withdrawal uses locked current registration facts without a Definition-read dependency. Standalone role changes use `role_catalogue_changed`; coordinated application changes use `application_access_changed` once. Add regression proof for retained access during pending review, no new assignments before acceptance, outage-independent withdrawal and exact version reasons in [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) and [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34).
+
 **Current project epic:** [#31](https://github.com/Abzum-NZ/Abzum-Vortex/issues/31)
 
 **Needs:** The permission/role/decision foundations consume the actual completed Definition, Identity and Access-version prerequisites and precede #30's organisation-local administration. The remaining Phase 3 work consumes those foundations and the completed Phase 2 isolation proof. Native issue dependencies express this order instead of a blanket whole-phase blocker on #32.
