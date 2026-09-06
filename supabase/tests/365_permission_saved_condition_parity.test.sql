@@ -204,6 +204,21 @@ select $typed_condition_vectors$
       "declaredFieldIds":["f3650000-0000-4000-8000-000000000009"],"fieldValues":{"f3650000-0000-4000-8000-000000000009":"53650000-0000-4000-8000-000000000001"},"parameters":[{"key":"actor","type":"text"}],"bindings":[{"key":"actor","source":"current_organization_account_id"}],"actorId":"53650000-0000-4000-8000-000000000001","expected":"error:22023"
     },
     {
+      "name":"current_account_reference_matches_person",
+      "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000009"},"right":{"source":"parameter","key":"actor"}},
+      "declaredFieldIds":["f3650000-0000-4000-8000-000000000009"],"fieldValues":{"f3650000-0000-4000-8000-000000000009":"53650000-0000-4000-8000-000000000001"},"parameters":[{"key":"actor","type":"organization_account_reference"}],"bindings":[{"key":"actor","source":"current_organization_account_id"}],"actorId":"53650000-0000-4000-8000-000000000001","expected":"true"
+    },
+    {
+      "name":"invalid_account_reference_literal_refuses",
+      "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000009"},"right":{"source":"parameter","key":"actor"}},
+      "declaredFieldIds":["f3650000-0000-4000-8000-000000000009"],"fieldValues":{"f3650000-0000-4000-8000-000000000009":"53650000-0000-4000-8000-000000000001"},"parameters":[{"key":"actor","type":"organization_account_reference"}],"bindings":[{"key":"actor","source":"literal","value":"not-an-account-id"}],"expected":"error:22023"
+    },
+    {
+      "name":"nil_current_account_reference_refuses",
+      "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000009"},"right":{"source":"parameter","key":"actor"}},
+      "declaredFieldIds":["f3650000-0000-4000-8000-000000000009"],"fieldValues":{"f3650000-0000-4000-8000-000000000009":"53650000-0000-4000-8000-000000000001"},"parameters":[{"key":"actor","type":"organization_account_reference"}],"bindings":[{"key":"actor","source":"current_organization_account_id"}],"actorId":"00000000-0000-0000-0000-000000000000","expected":"error:22023"
+    },
+    {
       "name":"hidden_invalid_any_branch_refuses",
       "condition":{"kind":"any","conditions":[{"kind":"comparison","operator":"equals","left":{"source":"value","value":1},"right":{"source":"value","value":1}},{"kind":"comparison","operator":"greater_than","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000003"},"right":{"source":"value","value":false}}]},
       "declaredFieldIds":["f3650000-0000-4000-8000-000000000003"],"fieldValues":{"f3650000-0000-4000-8000-000000000003":true},"parameters":[],"bindings":[],"expected":"error:22023"
@@ -299,7 +314,7 @@ $typed_condition_vectors$::jsonb as payload;
 
 select is(
   (select pg_catalog.jsonb_array_length(payload -> 'vectors') from typed_condition_corpus),
-  40,
+  43,
   'the shared parity corpus contains the intended bounded vector set'
 );
 

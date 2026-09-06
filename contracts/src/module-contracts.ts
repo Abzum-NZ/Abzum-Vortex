@@ -840,7 +840,14 @@ export const savedSharingConditionSchema = z
       z
         .object({
           key: builderKeySchema,
-          type: z.enum(["text", "number", "boolean", "date", "date_time"]),
+          type: z.enum([
+            "text",
+            "number",
+            "boolean",
+            "date",
+            "date_time",
+            "organization_account_reference",
+          ]),
         })
         .strict(),
     ),

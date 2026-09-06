@@ -6,14 +6,23 @@ import {
   listOrganizationAdministrationGroupsResultSchema,
   listOrganizationAdministrationMembershipsCommandSchema,
   listOrganizationAdministrationMembershipsResultSchema,
+  listOrganizationAdministrationApplicationRoleTemplatesCommandSchema,
+  listOrganizationAdministrationApplicationRoleTemplatesResultSchema,
   listOrganizationAdministrationPermissionsCommandSchema,
   listOrganizationAdministrationPermissionsResultSchema,
+  listOrganizationAdministrationRolesCommandSchema,
+  listOrganizationAdministrationRolesResultSchema,
+  organizationAdministrationApplicationRoleTemplateSchema,
   organizationAdministrationGroupSchema,
   organizationAdministrationMembershipSchema,
   organizationAdministrationPermissionSchema,
+  organizationAdministrationRoleDetailSchema,
+  organizationAdministrationRoleSummarySchema,
+  readOrganizationAdministrationApplicationRoleTemplateResultSchema,
   readOrganizationAdministrationGroupResultSchema,
   readOrganizationAdministrationMembershipResultSchema,
   readOrganizationAdministrationPermissionResultSchema,
+  readOrganizationAdministrationRoleResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
 } from "../src/organization-access-administration";
 
@@ -53,6 +62,44 @@ const permission = {
   recordTypeId: id(23),
   action: { actionKind: "read" as const },
   administrative: false,
+};
+
+const roleSummary = {
+  roleId: id(40),
+  key: "review_operator",
+  label: "Review operator",
+  roleKind: "application" as const,
+  lifecycle: "acceptance_required" as const,
+  liveRevision: 3,
+  privilegeClassification: "privileged" as const,
+  assignmentPolicy: {
+    kind: "activation_required" as const,
+    maximumActivationDurationSeconds: 3600,
+    reasonRequired: true,
+    recentAuthentication: { kind: "multi_factor" as const, maximumAgeSeconds: 900 },
+    independentApprovalRequired: true,
+  },
+  source: {
+    kind: "application" as const,
+    applicationRootId: id(41),
+    sourceRoleId: id(42),
+  },
+  acceptedPermissionCount: 1,
+};
+
+const roleDetail = {
+  ...roleSummary,
+  description: "Operate reviewed records.",
+  acceptedPermissions: [permission],
+};
+
+const templateReference = { applicationRootId: id(41), sourceRoleId: id(42) };
+const roleTemplate = {
+  reference: templateReference,
+  key: "review_operator",
+  label: "Review operator",
+  permissionSelectionKind: "application_wildcard" as const,
+  publishedPermissionKeys: ["review.records.read", "review.records.update"],
 };
 
 describe("organization Access administration contracts", () => {
@@ -315,5 +362,122 @@ describe("organization Access administration contracts", () => {
         accessVersion: 8,
       }).success,
     ).toBe(false);
+  });
+
+  it("accepts bounded current-role pages and exact detail outcomes", () => {
+    expect(
+      listOrganizationAdministrationRolesCommandSchema.parse({
+        pageSize: 25,
+        afterRoleId: id(39).toUpperCase(),
+      }),
+    ).toMatchObject({ pageSize: 25 });
+    expect(
+      listOrganizationAdministrationRolesResultSchema.parse({
+        roles: [roleSummary],
+        nextAfterRoleId: id(40),
+        accessVersion: 9,
+      }),
+    ).toMatchObject({ roles: [roleSummary], accessVersion: 9 });
+    expect(
+      readOrganizationAdministrationRoleResultSchema.parse({
+        outcome: "available",
+        role: roleDetail,
+        accessVersion: 9,
+      }),
+    ).toMatchObject({ outcome: "available", role: roleDetail });
+    expect(
+      readOrganizationAdministrationRoleResultSchema.parse({
+        outcome: "unavailable",
+        accessVersion: 9,
+      }),
+    ).toEqual({ outcome: "unavailable", accessVersion: 9 });
+  });
+
+  it("keeps role configuration distinct from effective access and stored evidence", () => {
+    expect(organizationAdministrationRoleSummarySchema.safeParse(roleSummary).success).toBe(true);
+    expect(organizationAdministrationRoleDetailSchema.safeParse(roleDetail).success).toBe(true);
+    expect(
+      organizationAdministrationRoleSummarySchema.safeParse({
+        ...roleSummary,
+        roleKind: "custom",
+      }).success,
+    ).toBe(false);
+    expect(
+      organizationAdministrationRoleSummarySchema.safeParse({
+        ...roleSummary,
+        roleKind: "custom",
+        source: { kind: "custom" },
+        lifecycle: "acceptance_required",
+      }).success,
+    ).toBe(false);
+    for (const candidate of [
+      { ...roleDetail, acceptedPermissionCount: 2 },
+      { ...roleDetail, authorityContinuityRevision: 2 },
+      { ...roleDetail, activationPolicyId: id(43) },
+      { ...roleDetail, roleAssignments: [] },
+      { ...roleDetail, effective: true },
+    ])
+      expect(organizationAdministrationRoleDetailSchema.safeParse(candidate).success).toBe(false);
+    for (const candidate of [
+      { pageSize: 0 },
+      { pageSize: 101 },
+      { pageSize: 10, afterRoleId: "not-a-uuid" },
+      { pageSize: 10, filter: "active" },
+    ])
+      expect(listOrganizationAdministrationRolesCommandSchema.safeParse(candidate).success).toBe(
+        false,
+      );
+  });
+
+  it("accepts separately keyed current application-role templates", () => {
+    expect(
+      listOrganizationAdministrationApplicationRoleTemplatesCommandSchema.parse({
+        pageSize: 25,
+        after: templateReference,
+      }),
+    ).toMatchObject({ after: templateReference });
+    expect(
+      listOrganizationAdministrationApplicationRoleTemplatesResultSchema.parse({
+        templates: [roleTemplate],
+        nextAfter: templateReference,
+        accessVersion: 9,
+      }),
+    ).toMatchObject({ templates: [roleTemplate], accessVersion: 9 });
+    expect(
+      readOrganizationAdministrationApplicationRoleTemplateResultSchema.parse({
+        outcome: "available",
+        template: roleTemplate,
+        accessVersion: 9,
+      }),
+    ).toMatchObject({ outcome: "available", template: roleTemplate });
+    expect(
+      readOrganizationAdministrationApplicationRoleTemplateResultSchema.parse({
+        outcome: "unavailable",
+        accessVersion: 9,
+      }),
+    ).toEqual({ outcome: "unavailable", accessVersion: 9 });
+  });
+
+  it("refuses unsafe template evidence and incomplete contextual cursors", () => {
+    for (const candidate of [
+      { ...roleTemplate, sourceTemplateFingerprint: `sha256:${"a".repeat(64)}` },
+      { ...roleTemplate, homePageId: id(44) },
+      { ...roleTemplate, organizationRoleId: id(45) },
+      { ...roleTemplate, publishedPermissionKeys: ["review.records.read", "review.records.read"] },
+    ])
+      expect(
+        organizationAdministrationApplicationRoleTemplateSchema.safeParse(candidate).success,
+      ).toBe(false);
+    for (const candidate of [
+      { pageSize: 0 },
+      { pageSize: 101 },
+      { pageSize: 10, after: { applicationRootId: id(41) } },
+      { pageSize: 10, after: { sourceRoleId: id(42) } },
+      { pageSize: 10, after: { ...templateReference, extra: true } },
+    ])
+      expect(
+        listOrganizationAdministrationApplicationRoleTemplatesCommandSchema.safeParse(candidate)
+          .success,
+      ).toBe(false);
   });
 });

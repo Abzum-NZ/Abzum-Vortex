@@ -507,4 +507,191 @@ describe("organization Access administration", () => {
       ),
     ).resolves.toEqual({ kind: "temporarily_unavailable" });
   });
+
+  it("lists current local roles without treating accepted configuration as effective access", async () => {
+    const role = {
+      roleId: id(50),
+      key: "review_operator",
+      label: "Review operator",
+      roleKind: "application",
+      lifecycle: "acceptance_required",
+      liveRevision: 3,
+      privilegeClassification: "privileged",
+      assignmentPolicy: {
+        kind: "activation_required",
+        maximumActivationDurationSeconds: 3600,
+        reasonRequired: true,
+        recentAuthentication: { kind: "multi_factor", maximumAgeSeconds: 900 },
+        independentApprovalRequired: true,
+      },
+      source: { kind: "application", applicationRootId: id(51), sourceRoleId: id(52) },
+      acceptedPermissionCount: 1,
+    };
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2).toUpperCase(),
+        roles: [role],
+        next_after_role_id: id(50).toUpperCase(),
+        access_version: "7",
+      },
+    ]);
+
+    await expect(
+      service.listRoles(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10, afterRoleId: id(49) },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { roles: [role], nextAfterRoleId: id(50).toUpperCase(), accessVersion: 7 },
+    });
+    expect(calls[0]?.text).toContain("list_organization_roles_for_administration");
+    expect(calls[0]?.values).toEqual([id(49), 10]);
+  });
+
+  it("reads one exact local role and binds its accepted snapshot", async () => {
+    const role = {
+      roleId: id(50).toUpperCase(),
+      key: "review_operator",
+      label: "Review operator",
+      description: "Operate reviewed records.",
+      roleKind: "custom",
+      lifecycle: "retired",
+      liveRevision: 4,
+      privilegeClassification: "standard",
+      assignmentPolicy: { kind: "standing" },
+      source: { kind: "custom" },
+      acceptedPermissionCount: 1,
+      acceptedPermissions: [
+        {
+          reference: { ownerKind: "platform", ownerId: id(53), permissionId: id(54) },
+          key: "platform.records.read",
+          label: "Read records",
+          description: "Read records.",
+          action: { actionKind: "read" },
+          administrative: false,
+        },
+      ],
+    };
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        role_summary: role,
+        access_version: 7n,
+      },
+    ]);
+
+    await expect(
+      service.readRole(verifiedSession, { organizationId: id(2) }, { roleId: id(50) }),
+    ).resolves.toMatchObject({ kind: "available", value: { role, accessVersion: 7 } });
+    expect(calls[0]?.text).toContain("read_organization_role_for_administration");
+    expect(calls[0]?.values).toEqual([id(50)]);
+  });
+
+  it("lists and reads exact registered application role templates separately", async () => {
+    const reference = { applicationRootId: id(60), sourceRoleId: id(61) };
+    const template = {
+      reference,
+      key: "review_operator",
+      label: "Review operator",
+      permissionSelectionKind: "exact",
+      publishedPermissionKeys: ["review.records.read"],
+    };
+    const listed = serviceFor([
+      {
+        organization_id: id(2),
+        templates: [template],
+        next_after_application_root_id: id(60).toUpperCase(),
+        next_after_source_role_id: id(61).toUpperCase(),
+        access_version: 7,
+      },
+    ]);
+    await expect(
+      listed.service.listApplicationRoleTemplates(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10, after: reference },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { templates: [template], nextAfter: { sourceRoleId: id(61).toUpperCase() } },
+    });
+    expect(listed.calls[0]?.text).toContain("list_application_role_templates_for_administration");
+    expect(listed.calls[0]?.values).toEqual([id(60), id(61), 10]);
+
+    const read = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        template_summary: {
+          ...template,
+          reference: {
+            applicationRootId: id(60).toUpperCase(),
+            sourceRoleId: id(61).toUpperCase(),
+          },
+        },
+        access_version: 7,
+      },
+    ]);
+    await expect(
+      read.service.readApplicationRoleTemplate(
+        verifiedSession,
+        { organizationId: id(2) },
+        { reference },
+      ),
+    ).resolves.toMatchObject({ kind: "available", value: { outcome: "available" } });
+    expect(read.calls[0]?.values).toEqual([id(60), id(61)]);
+  });
+
+  it("refuses malformed role commands, mismatched identities and partial template cursors", async () => {
+    const malformed = serviceFor([]);
+    await expect(
+      malformed.service.listRoles(verifiedSession, { organizationId: id(2) }, { pageSize: 101 }),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(malformed.calls).toHaveLength(0);
+
+    const mismatchedRole = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        role_summary: {
+          roleId: id(99),
+          key: "review_operator",
+          label: "Review operator",
+          description: "Operate reviewed records.",
+          roleKind: "custom",
+          lifecycle: "active",
+          liveRevision: 1,
+          privilegeClassification: "standard",
+          assignmentPolicy: { kind: "standing" },
+          source: { kind: "custom" },
+          acceptedPermissionCount: 0,
+          acceptedPermissions: [],
+        },
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      mismatchedRole.readRole(verifiedSession, { organizationId: id(2) }, { roleId: id(50) }),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+
+    const partialCursor = serviceFor([
+      {
+        organization_id: id(2),
+        templates: [],
+        next_after_application_root_id: id(60),
+        next_after_source_role_id: null,
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      partialCursor.listApplicationRoleTemplates(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10 },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
 });

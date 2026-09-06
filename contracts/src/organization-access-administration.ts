@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  applicationRootIdSchema,
   builderKeySchema,
   groupIdSchema,
   membershipIdSchema,
@@ -7,9 +8,14 @@ import {
   organizationAccountIdSchema,
   recordTypeIdSchema,
   revisionSchema,
+  roleIdSchema,
   timestampSchema,
 } from "./identifiers";
 import { descriptionSchema, labelSchema } from "./common";
+import {
+  rolePrivilegeClassificationSchema,
+  roleRecentAuthenticationRequirementSchema,
+} from "./organization-access-catalogue";
 import {
   organizationAccessActionSchema,
   organizationAccessExactPermissionSchema,
@@ -209,6 +215,185 @@ export const readOrganizationAdministrationPermissionResultSchema = z.discrimina
   ],
 );
 
+export const organizationAdministrationRoleSourceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("custom") }).strict(),
+  z
+    .object({
+      kind: z.literal("application"),
+      applicationRootId: applicationRootIdSchema,
+      sourceRoleId: roleIdSchema,
+    })
+    .strict(),
+]);
+
+export const organizationAdministrationRoleAssignmentPolicySchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("standing") }).strict(),
+  z
+    .object({
+      kind: z.literal("activation_required"),
+      maximumActivationDurationSeconds: javascriptSafeRevisionSchema,
+      reasonRequired: z.boolean(),
+      recentAuthentication: roleRecentAuthenticationRequirementSchema,
+      independentApprovalRequired: z.boolean(),
+    })
+    .strict(),
+]);
+
+const organizationAdministrationRoleFields = {
+  roleId: roleIdSchema,
+  key: builderKeySchema,
+  label: labelSchema,
+  roleKind: z.enum(["application", "custom"]),
+  lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
+  liveRevision: javascriptSafeRevisionSchema,
+  privilegeClassification: rolePrivilegeClassificationSchema,
+  assignmentPolicy: organizationAdministrationRoleAssignmentPolicySchema,
+  source: organizationAdministrationRoleSourceSchema,
+  acceptedPermissionCount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+};
+
+const addOrganizationAdministrationRoleIssues = (
+  value: {
+    roleKind: "application" | "custom";
+    lifecycle: "active" | "acceptance_required" | "unavailable" | "retired";
+    source: z.infer<typeof organizationAdministrationRoleSourceSchema>;
+  },
+  context: z.RefinementCtx,
+) => {
+  if (value.roleKind !== value.source.kind)
+    context.addIssue({
+      code: "custom",
+      path: ["source"],
+      message: "The safe role source must match its stored role kind",
+    });
+  if (value.roleKind === "custom" && !["active", "retired"].includes(value.lifecycle))
+    context.addIssue({
+      code: "custom",
+      path: ["lifecycle"],
+      message: "A custom role has only active or retired current lifecycle",
+    });
+};
+
+export const organizationAdministrationRoleSummarySchema = z
+  .object(organizationAdministrationRoleFields)
+  .strict()
+  .superRefine(addOrganizationAdministrationRoleIssues);
+
+export const organizationAdministrationRoleDetailSchema = z
+  .object({
+    ...organizationAdministrationRoleFields,
+    description: descriptionSchema,
+    /** Stored accepted configuration only; this is not an effective-access result. */
+    acceptedPermissions: z.array(organizationAdministrationPermissionSchema),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    addOrganizationAdministrationRoleIssues(value, context);
+    if (value.acceptedPermissions.length !== value.acceptedPermissionCount)
+      context.addIssue({
+        code: "custom",
+        path: ["acceptedPermissions"],
+        message: "The accepted permission detail must match its safe count",
+      });
+  });
+
+export const listOrganizationAdministrationRolesCommandSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    afterRoleId: roleIdSchema.optional(),
+  })
+  .strict();
+
+export const listOrganizationAdministrationRolesResultSchema = z
+  .object({
+    roles: z.array(organizationAdministrationRoleSummarySchema).max(100),
+    nextAfterRoleId: roleIdSchema.optional(),
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const readOrganizationAdministrationRoleCommandSchema = z
+  .object({ roleId: roleIdSchema })
+  .strict();
+
+export const readOrganizationAdministrationRoleResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("available"),
+      role: organizationAdministrationRoleDetailSchema,
+      accessVersion: javascriptSafeRevisionSchema,
+    })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("unavailable"),
+      accessVersion: javascriptSafeRevisionSchema,
+    })
+    .strict(),
+]);
+
+export const organizationAdministrationApplicationRoleTemplateReferenceSchema = z
+  .object({
+    applicationRootId: applicationRootIdSchema,
+    sourceRoleId: roleIdSchema,
+  })
+  .strict();
+
+export const organizationAdministrationApplicationRoleTemplateSchema = z
+  .object({
+    reference: organizationAdministrationApplicationRoleTemplateReferenceSchema,
+    key: builderKeySchema,
+    label: labelSchema,
+    permissionSelectionKind: z.enum(["exact", "application_wildcard"]),
+    /** Published declaration keys, not accepted or effective permission evidence. */
+    publishedPermissionKeys: z.array(namespacedKeySchema).min(1),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.publishedPermissionKeys).size !== value.publishedPermissionKeys.length)
+      context.addIssue({
+        code: "custom",
+        path: ["publishedPermissionKeys"],
+        message: "Published role-template permission keys must be unique",
+      });
+  });
+
+export const listOrganizationAdministrationApplicationRoleTemplatesCommandSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    after: organizationAdministrationApplicationRoleTemplateReferenceSchema.optional(),
+  })
+  .strict();
+
+export const listOrganizationAdministrationApplicationRoleTemplatesResultSchema = z
+  .object({
+    templates: z.array(organizationAdministrationApplicationRoleTemplateSchema).max(100),
+    nextAfter: organizationAdministrationApplicationRoleTemplateReferenceSchema.optional(),
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const readOrganizationAdministrationApplicationRoleTemplateCommandSchema = z
+  .object({ reference: organizationAdministrationApplicationRoleTemplateReferenceSchema })
+  .strict();
+
+export const readOrganizationAdministrationApplicationRoleTemplateResultSchema =
+  z.discriminatedUnion("outcome", [
+    z
+      .object({
+        outcome: z.literal("available"),
+        template: organizationAdministrationApplicationRoleTemplateSchema,
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+  ]);
+
 export type OrganizationAdministrationGroup = z.infer<typeof organizationAdministrationGroupSchema>;
 export type ListOrganizationAdministrationGroupsCommand = z.infer<
   typeof listOrganizationAdministrationGroupsCommandSchema
@@ -260,4 +445,40 @@ export type ReadOrganizationAdministrationPermissionCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationPermissionResult = z.infer<
   typeof readOrganizationAdministrationPermissionResultSchema
+>;
+export type OrganizationAdministrationRoleSummary = z.infer<
+  typeof organizationAdministrationRoleSummarySchema
+>;
+export type OrganizationAdministrationRoleDetail = z.infer<
+  typeof organizationAdministrationRoleDetailSchema
+>;
+export type ListOrganizationAdministrationRolesCommand = z.infer<
+  typeof listOrganizationAdministrationRolesCommandSchema
+>;
+export type ListOrganizationAdministrationRolesResult = z.infer<
+  typeof listOrganizationAdministrationRolesResultSchema
+>;
+export type ReadOrganizationAdministrationRoleCommand = z.infer<
+  typeof readOrganizationAdministrationRoleCommandSchema
+>;
+export type ReadOrganizationAdministrationRoleResult = z.infer<
+  typeof readOrganizationAdministrationRoleResultSchema
+>;
+export type OrganizationAdministrationApplicationRoleTemplateReference = z.infer<
+  typeof organizationAdministrationApplicationRoleTemplateReferenceSchema
+>;
+export type OrganizationAdministrationApplicationRoleTemplate = z.infer<
+  typeof organizationAdministrationApplicationRoleTemplateSchema
+>;
+export type ListOrganizationAdministrationApplicationRoleTemplatesCommand = z.infer<
+  typeof listOrganizationAdministrationApplicationRoleTemplatesCommandSchema
+>;
+export type ListOrganizationAdministrationApplicationRoleTemplatesResult = z.infer<
+  typeof listOrganizationAdministrationApplicationRoleTemplatesResultSchema
+>;
+export type ReadOrganizationAdministrationApplicationRoleTemplateCommand = z.infer<
+  typeof readOrganizationAdministrationApplicationRoleTemplateCommandSchema
+>;
+export type ReadOrganizationAdministrationApplicationRoleTemplateResult = z.infer<
+  typeof readOrganizationAdministrationApplicationRoleTemplateResultSchema
 >;

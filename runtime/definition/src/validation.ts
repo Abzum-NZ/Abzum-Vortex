@@ -10,6 +10,7 @@ import {
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
   builderKeySchema,
+  platformIdSchema,
   blockSettingReferenceKindByControl,
   namespacedKeySchema,
   translateDefinitionSchemaError,
@@ -928,7 +929,7 @@ function sourceTypeCompatibilityRule(
           return (
             expected === undefined ||
             (binding.source === "current_organization_account_id"
-              ? expected !== "text"
+              ? !["text", "organization_account_reference"].includes(expected)
               : !valueMatchesType(binding.value, expected))
           );
         })
@@ -1341,7 +1342,7 @@ function permissionRecordScopesValid(
         return (
           expected === undefined ||
           (binding.source === "current_organization_account_id"
-            ? expected !== "text"
+            ? !["text", "organization_account_reference"].includes(expected)
             : !valueMatchesType(binding.value, expected))
         );
       })
@@ -4332,6 +4333,7 @@ function valueMatchesType(value: unknown, type: string): boolean {
   if (type === "text") return typeof value === "string";
   if (type === "number") return typeof value === "number" && Number.isFinite(value);
   if (type === "boolean") return typeof value === "boolean";
+  if (type === "organization_account_reference") return platformIdSchema.safeParse(value).success;
   if (type === "date") return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
