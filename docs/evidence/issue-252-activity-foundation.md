@@ -16,7 +16,23 @@ The foundation is implemented and local verification has passed. Independent pla
 | Append-only private store and denied direct/cross-organisation access | Activity database suite: 53 assertions, including actual request-role denial and private schema/default grants |
 | Repository, complete database, concurrency and lint checks | Repository: 1,225 tests pass, three existing skips, eight fixture checks, 23 package typechecks/builds, formatting/lint/boundaries pass. Final database suite: 40 files, 1,956 assertions. All 21 concurrency proofs pass. Six-schema lint: no errors, three unchanged Access warnings, none in Activity |
 | Independent actual-patch review | Sol reviewer approved the final six implementation files at the hashes below; no material findings remain |
-| Hosted Testing checks for the delivered revision | Pending reviewed delivery |
+| Hosted Testing checks for the delivered revision | Reviewed change merged through [PR #310](https://github.com/Abzum-NZ/Abzum-Vortex/pull/310); exact hosted verification is running and is not yet completion evidence |
+
+## Hosted delivery — 6 September 2026
+
+Both normal preview checks passed before the reviewed change was merged into Testing as `69bda089d012e1f35988f4eceeeff5f50bd8b804`. Its file tree is identical to the independently reviewed implementation. [Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/419g5LBbj010D3XglyuPIb) started automatically. The issue remains In review until the complete receipt proves successful execution for that revision.
+
+Expected coverage computed from the delivered source, not a claimed hosted result:
+
+| Bound source fact | Expected value |
+|---|---|
+| Migration count | 43 |
+| Concurrency proofs | 21 |
+| Linted schemas | `public`, `vortex_context`, `vortex_identity`, `vortex_definition`, `vortex_access`, `vortex_activity` |
+| Migration-set SHA-256 | `a205afd0e3a4be83b16145fc632d89025143432715b487a0a5d31dc1c7dbc0a2` |
+| Runner SHA-256 | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Manifest SHA-256 | `00b4d7d302472b8f25f6f5b996a33a354745046e4b279050a9713f10e7e24d48` |
+| Coverage SHA-256 | `dc923ad42b29aae47e6d3d30b1649dc0a83a187e79ff8875ddfa730fd31e2892` |
 
 This task has no browser interface to screenshot. It proves the shared append foundation, not an Activity screen or complete integration of existing operations. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) owns the later permitted views and complete coverage.
 

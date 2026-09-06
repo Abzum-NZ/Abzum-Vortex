@@ -86,6 +86,8 @@ All user-facing role grants and access-expanding changes use the [IAM Vortex app
 
 All organisation roles, application-role registrations, permission availability, Groups and assignments are managed within one organisation. An application declares its permissions and reusable role templates; it does not operate an independent user or permission administration system. Organisation administrators manage both organisation-wide and application-specific access through the same [administration operations](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
 
+[Protected Access administration](../build-plan/issue-40-protected-access-administration.md) reuses the completed private facts and writers rather than rebuilding them. Available read and non-grant operations remain separate from the later governed IAM granting journey. Self-activation is based on the authenticated account's current eligibility and policy, not a requirement to hold role-administration permission; self-deactivation is immediate. Administratively changing another account's access still requires the exact management permission and applicable delegation.
+
 An organisation account, not the global identity, receives a direct assignment. Roles, Groups and assignments from another organisation or a parent organisation are never inherited implicitly. Tenant structure administration remains a separate authority and grants no organisation-management or application-data permission.
 
 ```mermaid
@@ -216,6 +218,8 @@ The exact initial organisation-administration identities, keys and meanings are 
 
 Permission to perform an action and visibility of a particular record are separate checks.
 
+The record-scoped permission explicitly declares its supported visibility routes. Scope is part of that permission's published meaning and current catalogue evidence, not inferred from a role label, a record's ownership mode, or a client-supplied filter. A record can have an owner while an authorised permission allows wider visibility; a record with no owner is not automatically visible. Missing required scope refuses. Historical published definitions remain readable, but a legacy permission without row scope gains no implicit record authority. [The #36 implementation plan](../build-plan/issue-36-ownership-and-visibility.md) owns complete authored-source, compiler, meaning and database mapping without rewriting immutable releases.
+
 A record scope may include:
 
 - All records the role can access.
@@ -234,6 +238,10 @@ The scope is translated into database conditions. Records outside it must not be
 An authorised person may share one record directly with one organisation account or one group in the same organisation. The share has explicit readable and changeable field allowlists, optional expiry, grantor, recipient, reason, state, and activity history. A changeable field must also be readable.
 
 The grantor must hold `record.share`, must be able to read every shared field, and must be able to change every changeable field. A direct share cannot grant delete, restore, export, re-share, ownership, role administration, or any permission the grantor does not hold. Group membership is evaluated on every request. Revocation, expiry, suspension, or group removal takes effect on the next request. Directly shared records appear in ordinary lists and search only where the receiving account also has application access and the page supports that record type.
+
+Every local share names the exact organisation/module/storage-contract/record identity and the source application when storage is application-contained. It cannot replace an inter-application grant or a compatible consuming application binding. Independent current account and Group shares may contribute their individually allowed fields; removing one contribution leaves only fields still authorised through another valid route. This is not permission to combine partial cross-organisation grants. [Field enforcement #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) applies the resulting bounds before response or mutation; [#36](../build-plan/issue-36-ownership-and-visibility.md) establishes those bounds and the database row restriction.
+
+The [protected local-share invocation in #37](../build-plan/issue-37-field-access.md) follows #35's exact record decision: the grantor must pass the share permission, target visibility and current field ceiling before #36's private share writer runs in the same transaction. Private share storage and neutral predicate tests do not by themselves deliver that authorised invocation.
 
 ## Field access
 
