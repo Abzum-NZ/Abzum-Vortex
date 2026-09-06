@@ -38,7 +38,7 @@ The same decision is enforced through coordinated database and server boundaries
 
 The database function, permission vocabulary, and shared test cases are canonical. The system does not claim that one TypeScript function runs inside PostgreSQL. Parity is proved by the [access test suite](20-quality-and-acceptance.md#organisation-separation-suite).
 
-The server consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. The operation's trusted declaration binds its action, target and exact required permission. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
+The server consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. The operation's trusted declaration binds its action, target and exact required permission, or its published alternatives for a record operation as described below. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
 
 For an application operation, [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
 also verifies the selected application's exact active registration in that organisation
@@ -217,6 +217,8 @@ The exact initial organisation-administration identities, keys and meanings are 
 ## Record visibility
 
 Permission to perform an action and visibility of a particular record are separate checks.
+
+One record action can serve people with different permitted scopes. For example, one person may read their own records while another may read all permitted records through the same screen. The published action explicitly lists its alternative permissions, each resolved to the same exact record type and action; named actions also match their owning definition. A record is admitted only when at least one alternative has both current permission authority and its own complete visibility scope. Authority from one alternative cannot combine with visibility from another. Field access combines only independently complete permitted contributions. [Row-policy composition #35](../build-plan/issue-35-row-policy-composition.md) owns this record-operation extension; existing non-record declarations remain unchanged and [field access #37](../build-plan/issue-37-field-access.md) consumes the complete results. There is no separate screen, role-name rule or second permission system.
 
 The record-scoped permission explicitly declares its supported visibility routes. Scope is part of that permission's published meaning and current catalogue evidence, not inferred from a role label, a record's ownership mode, or a client-supplied filter. A record can have an owner while an authorised permission allows wider visibility; a record with no owner is not automatically visible. Missing required scope refuses. Historical published definitions remain readable, but a legacy permission without row scope gains no implicit record authority. [The #36 implementation plan](../build-plan/issue-36-ownership-and-visibility.md) owns complete authored-source, compiler, meaning and database mapping without rewriting immutable releases.
 

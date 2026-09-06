@@ -9,6 +9,7 @@ A person receives only fields they may read and changes only fields they may cha
 ## What will be built
 
 1. Resolve current field permission declarations and #36's local-share bounds into separate readable and changeable sets. Reuse the existing declaration/permission identities, not hardcoded field names, role labels or another access store.
+   Where #35 admits several declared record-permission alternatives, combine only independently complete matched contributions. An alternative missing its own current eligibility or row scope contributes no field access; choosing an arbitrary first match must not hide another complete permitted contribution.
 2. Apply those bounds centrally before response, query or semantic-map projection. Unreadable fields are absent, not blank, CSS-hidden or returned as disabled metadata. Reject an attempted unauthorised write rather than silently dropping it.
 3. Enforce field/action restrictions on filters, sorts, aggregates, error details, named-action inputs and semantic resources as well as displayed values. Sensitive fields require their explicit authority. An allowed row or ordinary permission alone is insufficient.
 4. Add the complete protected same-organisation direct-share grant/revocation invocation over #36's private writer. In one verified transaction, check #35's exact share action/target decision, derive the grantor's current readable/changeable ceiling, require proposed fields to be subsets, validate the current recipient and scope, and invoke the revision-checked writer with Activity and Access invalidation. Keep raw helpers private. Revocation uses its current exact authority and does not wait for a granting approval or revive expired access.
@@ -17,6 +18,7 @@ A person receives only fields they may read and changes only fields they may cha
 ## Acceptance criteria
 
 - [ ] A response and semantic projection contain no unreadable values or protected labels/metadata. Shared fields cannot leak through filters, sorts, aggregates, errors or action inputs.
+- [ ] Alternative permissions contribute field bounds only when their own eligibility and complete row scope both pass. Incomplete alternatives cannot lend field access to an otherwise allowed row.
 - [ ] An unauthorised field write leaves the record unchanged and returns a safe refusal; it is not partially applied.
 - [ ] Current account, role, Group, share and Access-version changes affect the next request. No hardcoded application/field lists decide core behaviour.
 - [ ] A local share grants only fields the grantor may currently read/change. Missing share permission, invisible target, wider field proposal, foreign scope/recipient and stale evidence refuse before mutation.
