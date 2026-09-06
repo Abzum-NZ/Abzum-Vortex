@@ -64,9 +64,16 @@ state required by the real coordinator; no accepted Role or authority was added.
 
 ## Delivery boundary
 
-Combined delivery and its exact hosted Testing receipt remain outstanding. The
-earlier slice 2 receipt is not evidence for these additional migrations or server
-changes. Keep #34 open until its normal delivery gate is complete.
+[PR #309](https://github.com/Abzum-NZ/Abzum-Vortex/pull/309) merged normally after
+successful preview checks on 6 September 2026 at 19:55 NZST. The branch ancestry
+update was verified to leave the tested `f24b94c` file tree unchanged. The exact
+Testing merge is `d554bcb689b31ce238787860ead1bfd91130bc06`.
+
+[Hosted execution `2rlpQddHLvBu3qOnAQrAhW`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/2rlpQddHLvBu3qOnAQrAhW)
+is running with its displayed trigger bound to that exact merge. Its complete
+success receipt remains outstanding. The earlier slice 2 receipt is not evidence
+for these additional migrations or server changes. Keep #34 open until this
+normal delivery gate is complete.
 
 [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
 then consumes this boundary without a user hold. Changing operations there and in
