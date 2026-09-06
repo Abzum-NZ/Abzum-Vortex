@@ -48,6 +48,39 @@ run_sql() {
   "${psql_command[@]}" --command "$1"
 }
 
+read_backend_pid() {
+  local candidate="$1"
+  local backend_pid
+
+  backend_pid="$(tr -d '[:space:]' <"$candidate")"
+  [[ "$backend_pid" =~ ^[1-9][0-9]*$ ]] || {
+    printf 'permission-registry proof captured an invalid database backend identifier: %q\n' \
+      "$backend_pid" >&2
+    return 1
+  }
+  printf '%s\n' "$backend_pid"
+}
+
+wait_for_database_blocker() {
+  local blocked_pid="$1"
+  local blocking_pid="$2"
+  local deadline=$((SECONDS + 20))
+  local state
+
+  while ((SECONDS < deadline)); do
+    state="$(run_sql "
+      select case
+        when $blocking_pid = any(pg_catalog.pg_blocking_pids($blocked_pid)) then 'blocked'
+        else ''
+      end;
+    ")"
+    [ "$state" = 'blocked' ] && return 0
+    sleep 0.1
+  done
+  echo 'concurrent platform initializer did not wait behind the metadata revision lock' >&2
+  return 1
+}
+
 wait_owned_worker() {
   local pid="$1"
   local status
@@ -145,6 +178,7 @@ finalize() {
 
   trap - EXIT INT TERM
   set +e
+  touch "$proof_root/platform-metadata-release" >/dev/null 2>&1 || true
   stop_owned_workers
   cleanup_fixture
   operation_status=$?
@@ -444,13 +478,15 @@ grep -q 'Application permission registration revision is stale or unavailable' "
 
 PGAPPNAME="vortex-platform-metadata-$fixture_name_token" "${psql_command[@]}" >"$proof_root/platform-metadata.log" 2>&1 <<SQL &
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/platform-metadata.pid'
 select registration_revision, access_version
 from vortex_access.revise_platform_permission_catalogue_metadata(
   '$organization_id', 1, '1.0.0', '1.0.1',
   '$actor_id', '$correlation_platform_revision'
 )
 \g '$proof_root/platform-metadata.result'
-select pg_catalog.pg_sleep(10);
+\! deadline=300; while [ ! -f '$proof_root/platform-metadata-release' ] && [ \$deadline -gt 0 ]; do sleep 0.1; deadline=\$((deadline - 1)); done; [ -f '$proof_root/platform-metadata-release' ]
 commit;
 SQL
 platform_metadata_pid=$!
@@ -464,9 +500,12 @@ done
   echo 'platform metadata revision did not reach its transaction barrier' >&2
   exit 1
 }
+platform_metadata_backend_pid="$(read_backend_pid "$proof_root/platform-metadata.pid")"
 
 PGAPPNAME="vortex-platform-initialize-$fixture_name_token" "${psql_command[@]}" >"$proof_root/platform-initialize.log" 2>&1 <<SQL &
 begin;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/platform-initialize.pid'
 select registration_revision, access_version
 from vortex_access.initialize_platform_permission_catalogue(
   '$organization_id', '$actor_id', '$correlation_platform_replay'
@@ -477,18 +516,18 @@ SQL
 platform_initialize_pid=$!
 worker_pids+=("$platform_initialize_pid")
 
-platform_initializer_blocked=0
 for _ in $(seq 1 200); do
-  if [ "$(run_sql "select count(*) from pg_catalog.pg_stat_activity where application_name = 'vortex-platform-initialize-$fixture_name_token' and wait_event_type = 'Lock';")" = '1' ]; then
-    platform_initializer_blocked=1
-    break
-  fi
+  [ -f "$proof_root/platform-initialize.pid" ] && break
   sleep 0.05
 done
-[ "$platform_initializer_blocked" = 1 ] || {
-  echo 'concurrent platform initializer did not wait behind the metadata revision lock' >&2
+[ -f "$proof_root/platform-initialize.pid" ] || {
+  echo 'concurrent platform initializer did not expose its database backend identifier' >&2
   exit 1
 }
+platform_initialize_backend_pid="$(read_backend_pid "$proof_root/platform-initialize.pid")"
+wait_for_database_blocker "$platform_initialize_backend_pid" "$platform_metadata_backend_pid"
+
+touch "$proof_root/platform-metadata-release"
 
 if wait_owned_worker "$platform_metadata_pid"; then
   platform_metadata_status=0

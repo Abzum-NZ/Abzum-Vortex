@@ -142,6 +142,10 @@ for simultaneous_run_id in "$simultaneous_run_a" "$simultaneous_run_b"; do
   simultaneous_name_token="$(name_token_for_run "$simultaneous_run_id")"
   [ ! -f "$simultaneous_state/claimed-$simultaneous_scope" ] || fail "simultaneous run $simultaneous_scope was not cleaned"
   assert_contains "$simultaneous_state/events.log" "setup_committed|$simultaneous_scope"
+  assert_contains "$simultaneous_state/events.log" "platform_metadata_waiting|$simultaneous_scope"
+  assert_contains "$simultaneous_state/events.log" "platform_initializer_blocked|$simultaneous_scope"
+  assert_contains "$simultaneous_state/events.log" "platform_metadata_finished|$simultaneous_scope"
+  assert_contains "$simultaneous_state/events.log" "platform_initializer_finished|$simultaneous_scope"
   assert_contains "$simultaneous_state/events.log" "cleanup_finished|$simultaneous_scope"
   assert_contains "$simultaneous_state/setup-$simultaneous_scope.sql" "permission_$simultaneous_name_token"
 done
