@@ -931,18 +931,17 @@ select is(
   'eligible',
   'a module-owned permission is eligible under its exact active parent application context'
 );
-select is(
-  (
-    select pg_catalog.concat_ws('|', outcome, reason_code, valid_until)
-    from vortex_access.evaluate_organization_permission_eligibility(
+select throws_ok(
+  $$
+    select * from vortex_access.evaluate_organization_permission_eligibility(
       pg_temp.application_declaration(
         '43900000-0000-4000-8000-000000000001', 'read',
         'none', null, true
       )
     )
-  ),
-  'refused|delegation_insufficient',
-  'management remains refused without slice-three delegation coverage'
+  $$,
+  '22023'::char(5), 'Organization permission declaration is invalid',
+  'management cannot omit both before and after authority'
 );
 select is(
   (

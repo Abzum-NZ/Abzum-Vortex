@@ -115,16 +115,29 @@ export const organizationAccessManagementScopeSchema = z.discriminatedUnion("kin
   boundedManagementScopeSchema,
 ]);
 
-export const organizationAccessAuthorityRequirementSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("permission") }).strict(),
-  z
-    .object({
-      kind: z.literal("delegated_management"),
-      before: organizationAccessManagementScopeSchema,
-      after: organizationAccessManagementScopeSchema,
-    })
-    .strict(),
-]);
+export const organizationAccessAuthorityRequirementSchema = z
+  .discriminatedUnion("kind", [
+    z.object({ kind: z.literal("permission") }).strict(),
+    z
+      .object({
+        kind: z.literal("delegated_management"),
+        before: organizationAccessManagementScopeSchema,
+        after: organizationAccessManagementScopeSchema,
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    if (
+      value.kind === "delegated_management" &&
+      value.before.kind === "none" &&
+      value.after.kind === "none"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["after"],
+        message: "Delegated management requires a before or after scope",
+      });
+  });
 
 /**
  * Server-owned declaration for one operation. Successful parsing does not make

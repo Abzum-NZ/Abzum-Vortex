@@ -167,6 +167,29 @@ describe("organization access decision contracts", () => {
       expect(organizationAccessManagementScopeSchema.safeParse(scope).success).toBe(false);
   });
 
+  it("rejects delegated management with no before or after authority", () => {
+    expect(
+      organizationAccessDeclarationSchema.safeParse({
+        ...applicationDeclaration(),
+        authority: {
+          kind: "delegated_management",
+          before: { kind: "none" },
+          after: { kind: "none" },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      organizationAccessDeclarationSchema.safeParse({
+        ...applicationDeclaration(),
+        authority: {
+          kind: "delegated_management",
+          before: { kind: "none" },
+          after: { kind: "bounded", permissions: [applicationPermission()] },
+        },
+      }).success,
+    ).toBe(true);
+  });
+
   it("keeps caller context and authority candidates out of declarations", () => {
     for (const unexpected of [
       { organizationId: id("a", 40) },

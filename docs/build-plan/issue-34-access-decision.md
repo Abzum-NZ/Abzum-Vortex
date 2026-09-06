@@ -105,7 +105,8 @@ The private current-permission evaluator and restricted-role tests are implement
 and independently reviewed. Local verification passed 48 focused assertions, all
 37 SQL files / 1,863 assertions, all 20 concurrency proofs, five-schema lint and the
 full repository gate. The [reviewed source and evidence](../evidence/issue-34-permission-eligibility.md)
-record the exact boundary. Hosted Testing verification is still required. This
+record the exact boundary. Exact hosted Testing verification also passed for the
+merged revision, including all 20 concurrency proofs and five lint schemas. This
 slice deliberately refuses delegated management and does not complete #34 or
 authorize a protected operation by itself.
 
@@ -145,6 +146,22 @@ account. [Protected Access operations #40](https://github.com/Abzum-NZ/Abzum-Vor
 later bind and recheck any distinct requester or approver through trusted workflow
 evidence; caller-selected account input does not belong here. Passing this slice is
 still private eligibility, not final allowance or completed approval governance.
+
+### Slice 3 checkpoint — 6 September 2026
+
+Independent Sol review approved the strict management declaration, the extension
+of the existing evaluator, and the focused tests. All 10 declaration tests passed;
+local rollback probes passed all 28 delegated-management assertions and the 48
+existing permission assertions with the updated both-none rejection.
+
+The final focused case uses the real delegation and application withdrawal writers:
+after removing the wider catalogue path, a valid bounded path works, then refuses
+when its managed application is withdrawn. The use-permission application remains
+active. The fixture correction supplies the real coordinator's required unaccepted
+template state; it adds no accepted Role or authority. Existing evaluator-reader
+and delegation-writer concurrency proofs cover the same governance-lock ordering,
+so no duplicate concurrency harness was added. Full combined gates and hosted
+delivery with slice 4 remain outstanding; this is not task completion.
 
 ### Slice 4 implementation choices
 
