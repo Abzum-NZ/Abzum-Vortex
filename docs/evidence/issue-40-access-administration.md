@@ -118,6 +118,8 @@ The exact migration was applied only to the local testing database without a res
 
 Final aggregate local verification passes **51 database suites / 2,336 assertions**. Six-schema lint reports no errors and only the same eight previously reviewed warnings; no new warning is introduced by these two migrations. Security advisors report no issues. This remains local evidence, not a hosted receipt.
 
+The ledger and direct-ownership checkpoint merged normally through [PR #321](https://github.com/Abzum-NZ/Abzum-Vortex/pull/321) at `2026-09-06T15:20:45Z`, after both preview checks passed. Reviewed source `20f0ea812c2d00ef94a60f135154b5042983079d` and Testing merge `d60821302149cbe04499116e9c83f4523cb01427` have identical file trees. No check was bypassed. Exact hosted database receipt remains unverified; the next activation reader is not included in this merge and #40 remains open.
+
 ## First checkpoint database bytes (historical)
 
 | File | SHA-256 |

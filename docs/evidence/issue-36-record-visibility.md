@@ -118,3 +118,5 @@ The reviewed migration was applied locally without reset alongside the assignmen
 | `385_current_record_ownership_visibility.test.sql` | `e30a7fb041593e68549c311d675a4d16fcbd6c9f495d63a8949db55640af9445` |
 
 Final aggregate local verification passes **51 database suites / 2,336 assertions**. Six-schema lint reports no errors and only the same eight previously reviewed warnings; neither new migration introduces a warning. Security advisors report no issues. These results do not substitute for exact hosted delivery.
+
+The direct-ownership and assignment-ledger checkpoint merged normally through [PR #321](https://github.com/Abzum-NZ/Abzum-Vortex/pull/321) at `2026-09-06T15:20:45Z`, after both preview checks passed. Reviewed source `20f0ea812c2d00ef94a60f135154b5042983079d` and Testing merge `d60821302149cbe04499116e9c83f4523cb01427` have identical file trees. Exact hosted database receipt remains unverified. This source delivery does not complete the remaining local-share, inherited/relationship and change-composition work.
