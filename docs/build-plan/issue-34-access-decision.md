@@ -154,10 +154,16 @@ semantics, not a delivered application-selection interface.
   The read adapter uses the existing resolved request transaction and derives scope
   from `validated_human_request_context()`. Observe database time after resolver
   lock waits, not at transaction start. Keep allow evidence inside that transaction.
-  The later #40 writer must acquire governance before mutable account/access facts,
+  Changing operations in #30 and #40 must acquire governance before mutable account/access facts,
   rather than upgrade the read resolver's shared lock after checking permission.
   Test the actual read/write lock orders and expiry across a wait; correct a
   demonstrated ordering defect at its source, not with a new retry framework.
+- Organisation administration in [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
+  composes its own account, invitation and settings changes with the completed
+  decision in that governance-first transaction. It does not wait for every role,
+  Group or PIM operation in [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
+  Keep the actual dependency graph; do not add a whole-task gate for this shared
+  ordering rule or introduce a separate transaction framework.
 - Refuse safely without exposing internal role labels, permission keys or record
   existence. The decision writes no Activity; the owning operation records evidence.
 

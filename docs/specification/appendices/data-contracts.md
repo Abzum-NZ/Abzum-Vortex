@@ -173,7 +173,8 @@ shared lock. Then the existing authoritative Identity resolver locks and recheck
 the same tenant, organisation and account. Missing or changed eligibility refuses
 without returning a scope; a foreign or ineligible candidate cannot lock unrelated
 Access state. Both locks remain transaction-bound. Protected writers acquire Access
-governance before mutable Identity facts; [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
+governance before mutable Identity facts; [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
+and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
 must not check through the read resolver and later upgrade its shared lock. This is
 one consistent ordering rule, not a new context, counter or retry mechanism.
 
