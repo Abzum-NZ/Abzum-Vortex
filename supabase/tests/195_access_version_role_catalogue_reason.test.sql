@@ -12,8 +12,8 @@ select is(
       'vortex_access.organization_access_versions'::regclass
       and constraint_row.conname = 'organization_access_versions_reason_valid'
   ),
-  'CHECK ((change_reason = ANY (ARRAY[''organization_initialized''::text, ''organization_account_activated''::text, ''organization_account_reactivated''::text, ''organization_account_suspended''::text, ''organization_account_closed''::text, ''role_assignment_changed''::text, ''role_catalogue_changed''::text, ''team_membership_changed''::text, ''application_access_changed''::text, ''direct_share_changed''::text, ''access_grant_changed''::text, ''public_policy_changed''::text, ''federation_mirror_changed''::text, ''mcp_authorization_changed''::text])))',
-  'the exact stored V1 reason allowlist adds only the role catalogue reason'
+  'CHECK ((change_reason = ANY (ARRAY[''organization_initialized''::text, ''organization_account_activated''::text, ''organization_account_reactivated''::text, ''organization_account_suspended''::text, ''organization_account_closed''::text, ''role_assignment_changed''::text, ''role_activation_changed''::text, ''role_catalogue_changed''::text, ''team_membership_changed''::text, ''application_access_changed''::text, ''direct_share_changed''::text, ''access_grant_changed''::text, ''public_policy_changed''::text, ''federation_mirror_changed''::text, ''mcp_authorization_changed''::text])))',
+  'the exact stored V1 reason allowlist includes role catalogue and activation changes'
 );
 
 select is(
@@ -102,11 +102,34 @@ select is(
   'the new reason increments once and returns exact trusted change evidence'
 );
 
-create temporary table legacy_membership_increment on commit drop as
+create temporary table role_activation_increment on commit drop as
 select * from vortex_access.increment_organization_access_version(
   '21950000-0000-4000-8000-000000000001',
   '91950000-0000-4000-8000-000000000003',
   '71950000-0000-4000-8000-000000000003',
+  'role_activation_changed'
+);
+
+select is(
+  (
+    select pg_catalog.to_jsonb(increment_row.*) - 'changed_at'
+    from role_activation_increment as increment_row
+  ),
+  pg_catalog.jsonb_build_object(
+    'organization_id', '21950000-0000-4000-8000-000000000001'::uuid,
+    'current_version', 3,
+    'changed_by', '91950000-0000-4000-8000-000000000003'::uuid,
+    'change_correlation_id', '71950000-0000-4000-8000-000000000003'::uuid,
+    'change_reason', 'role_activation_changed'
+  ),
+  'the activation reason increments once and returns exact trusted change evidence'
+);
+
+create temporary table legacy_membership_increment on commit drop as
+select * from vortex_access.increment_organization_access_version(
+  '21950000-0000-4000-8000-000000000001',
+  '91950000-0000-4000-8000-000000000004',
+  '71950000-0000-4000-8000-000000000004',
   'team_membership_changed'
 );
 
@@ -117,9 +140,9 @@ select is(
   ),
   pg_catalog.jsonb_build_object(
     'organization_id', '21950000-0000-4000-8000-000000000001'::uuid,
-    'current_version', 3,
-    'changed_by', '91950000-0000-4000-8000-000000000003'::uuid,
-    'change_correlation_id', '71950000-0000-4000-8000-000000000003'::uuid,
+    'current_version', 4,
+    'changed_by', '91950000-0000-4000-8000-000000000004'::uuid,
+    'change_correlation_id', '71950000-0000-4000-8000-000000000004'::uuid,
     'change_reason', 'team_membership_changed'
   ),
   'the immutable V1 Team membership reason remains accepted without translation'
@@ -162,9 +185,9 @@ select is(
   ),
   pg_catalog.jsonb_build_object(
     'organization_id', '21950000-0000-4000-8000-000000000001'::uuid,
-    'current_version', 3,
-    'changed_by', '91950000-0000-4000-8000-000000000003'::uuid,
-    'change_correlation_id', '71950000-0000-4000-8000-000000000003'::uuid,
+    'current_version', 4,
+    'changed_by', '91950000-0000-4000-8000-000000000004'::uuid,
+    'change_correlation_id', '71950000-0000-4000-8000-000000000004'::uuid,
     'change_reason', 'team_membership_changed'
   ),
   'refused reasons preserve the last complete Access-version change'
