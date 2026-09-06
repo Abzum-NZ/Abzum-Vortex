@@ -166,3 +166,43 @@ Root ran that actual assignment-change concurrency script against Local Vortex s
 shell syntax and whitespace checks also passed. This evidence does not replace the required fresh
 complete hosted Testing receipt. No additional Kestra deployment or Production change is required
 to deliver the commit-owned test correction.
+
+## Successful exact-revision hosted receipt — 6 September 2026
+
+[Execution `3ZNzrovlUIVUwd11H96KcW`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/3ZNzrovlUIVUwd11H96KcW/outputs)
+completed both `apply_and_verify` and `publish_testing_evidence` successfully for exact Testing
+commit `facc9dc4f81111e2f319de218555a2186235126c`. The apply task took 19 minutes 28 seconds.
+All 30 SQL suites / 1,508 assertions passed. Root opened the actual stored `delivery-evidence.json`
+preview, rather than inferring completeness from the green execution label, and verified:
+
+| Receipt field | Verified value |
+|---|---|
+| Schema / status | `2` / `succeeded` |
+| Environment / repository / ref | `testing` / `Abzum-NZ/Abzum-Vortex` / `refs/heads/testing` |
+| Migration count | 29 listed and 29 recorded as applied |
+| Migration-set SHA-256 | `ddea42f9d22953499204bb851f9efad6aa3ee8c280eb7ca21387a2c9a735703d` |
+| Runner SHA-256 | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Manifest SHA-256 | `65c753af502a075b9d660e72a519efd2cbd0666bcb86467bac7d0e062165ff96` |
+| Coverage SHA-256 | `75b0d990bf6bcb6229f2a75f62859312657a6144e094e5d3ef0f0d4cfa5058be` |
+| Concurrency coverage | All 14 selected paths equal all 14 completed paths, in manifest order |
+| Schema coverage | Selected and completed both equal `public`, `vortex_context`, `vortex_identity`, `vortex_definition`, `vortex_access` |
+| Tools | Supabase CLI `2.116.0`, PostgreSQL major `17` |
+| Execution / approval | `3ZNzrovlUIVUwd11H96KcW` / `null` (Testing) |
+
+The migration, runner, manifest and coverage hashes match independent Git-object computation for
+that exact commit. The two previously failing proof scenarios passed; no selected proof or schema
+was skipped. This establishes the repaired hosted gate for this revision, not for future changes.
+
+[Promotion PR #300](https://github.com/Abzum-NZ/Abzum-Vortex/pull/300) merged normally into `main`
+as `d80740dc9594ab26fa824727511fe8a90fbf5293`. Root verified that its tree equals this exact
+Testing candidate and that the candidate remains an ancestor. Newer
+[activation PR #299](https://github.com/Abzum-NZ/Abzum-Vortex/pull/299) adds a fifteenth proof and
+two migrations and must receive separate successful hosted evidence before its promotion.
+
+[Production execution `31t28N9r4TmPCkDCMbKmH6`](https://kestra.abzum.com/ui/main/executions/vortex.operations/production_database_delivery/31t28N9r4TmPCkDCMbKmH6)
+was observed queued behind older requests. Browser control disconnected before any cancellation
+or resume completed. The existing named-operator checkpoint and resulting Production receipt
+remain outstanding; a protected merge and Testing receipt are not a Production-success claim.
+The temporary Coolify source pin/manual deployment setting still needs restoration to normal
+protected `main`/`HEAD` tracking without interrupting active deliveries. No upgrade or broader
+recovery work is introduced.
