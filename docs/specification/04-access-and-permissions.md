@@ -40,6 +40,16 @@ The database function, permission vocabulary, and shared test cases are canonica
 
 The server consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. The operation's trusted declaration binds its action, target and exact required permission. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
 
+For an application operation, [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
+also verifies the selected application's exact active registration in that organisation
+before establishing application context. This uses the same transaction and current
+organisation account. Selecting an application does not grant permission to use it.
+The server checks the decision against the resolved organisation, account, application
+and declared operation before running the protected action. The
+[implementation plan](../build-plan/issue-34-access-decision.md#slice-4-implementation-choices)
+defines this small shared handoff; later page bindings consume it without a second
+access decision or an application-specific shortcut.
+
 The database evaluates stored role, assignment and delegation facts once. The server calls that decision and composes the required target restrictions; it does not independently reimplement role evaluation in TypeScript. Browser, server and [MCP](12-connections-and-interfaces.md#governed-mcp-access) operations reach the same boundary. A credential's application or capability restrictions can only narrow current account authority. High-impact operations also require their declared verified authentication strength and recent-authentication evidence.
 
 [Identity evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276) supplies the verified authentication method and time through the existing session/context boundary. Token issue time, token refresh and request-context creation time do not prove recent sign-in or recent MFA. If genuine evidence satisfying the operation's declared strength and maximum age is absent, that protected action is refused; an otherwise valid ordinary session remains usable for operations without that requirement. Access never parses provider claims itself. This does not impose MFA on every operation: recent sign-in and specifically required recent MFA remain distinct requirements.

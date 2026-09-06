@@ -97,7 +97,7 @@ application and current active registration. The current organisation-only serve
 wrapper cannot supply that application binding; the later verified application
 selection handoff must establish it before context initialization. A declaration
 alone cannot manufacture application context. Controlled SQL fixtures prove these
-semantics, not a delivered application-selection interface.
+semantics; slice 4 below supplies the real server handoff, not an application UI.
 
 ### Slice 2 checkpoint — 6 September 2026
 
@@ -145,6 +145,55 @@ account. [Protected Access operations #40](https://github.com/Abzum-NZ/Abzum-Vor
 later bind and recheck any distinct requester or approver through trusted workflow
 evidence; caller-selected account input does not belong here. Passing this slice is
 still private eligibility, not final allowance or completed approval governance.
+
+### Slice 4 implementation choices
+
+Complete the application-context handoff here, not in downstream
+[runtime bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), which
+already depends on #34. Extend the existing organisation selection and resolved
+scope with an optional exact application root. The organisation-only route remains
+unchanged. A uniquely named private application resolver calls the delivered
+organisation resolver first, then checks the exact same-organisation active
+application registration while the existing Access shared lock remains held.
+Only `vortex_runtime` may call it; no default argument, overloaded ambiguity, new
+context store, installation engine or application-selection screen is introduced.
+The server binds the returned application to the candidate before initialization.
+Selection establishes scope, never application-use permission.
+
+Add one server-only transaction-local adapter. It accepts the existing request
+transaction, resolved scope, a server-owned declaration and an operation callback.
+It calls the sole database evaluator once, strictly maps one result and matches
+its operation, target, organisation, account and Access version. An application
+result must also match the resolved application. Its closed organisation/application
+policy switch invokes the callback only after final allowance. It adds no policy
+callback registry or second role evaluator. Private refusal reasons are coarsened;
+malformed trusted declarations, invalid storage results and unexpected failures
+remain internal failures without invoking the callback or exposing raw details.
+
+```mermaid
+flowchart LR
+    C[Organisation and optional application candidate] --> O[Resolve current organisation account]
+    O --> A[Verify selected application registration when present]
+    A --> X[Initialize the same transaction context]
+    X --> D[One current access decision]
+    D --> P{Supported target and complete authority?}
+    P -- Yes --> RUN[Run the protected operation in that transaction]
+    P -- No --> REFUSE[Return a safe refusal]
+```
+
+Changing operations in [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and
+[#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) provide their own
+governance-first resolver, then reuse the same context and transaction-local
+adapter. They do not upgrade the ordinary read resolver's shared lock. Acquire
+other potentially blocking operation locks before the decision or re-evaluate after
+a wait; `validUntil` is not a capability to execute later without checking.
+
+Prove strict one-row/one-call mapping, exact scope/operation binding, safe refusal
+and callback suppression, ordinary and application-context selection, foreign or
+withdrawn application refusal, and the real resolver versus withdrawal ordering.
+An injected governance-first resolver verifies that the adapter opens no extra
+transaction or takes its own locks. Real #30/#40 writers and #250 compiled page
+operations remain with those tasks; controlled tests do not claim their delivery.
 
 ## Required decision behaviour
 
