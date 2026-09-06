@@ -99,6 +99,16 @@ selection handoff must establish it before context initialization. A declaration
 alone cannot manufacture application context. Controlled SQL fixtures prove these
 semantics, not a delivered application-selection interface.
 
+### Slice 2 checkpoint — 6 September 2026
+
+The private current-permission evaluator and restricted-role tests are implemented
+and independently reviewed. Local verification passed 48 focused assertions, all
+37 SQL files / 1,863 assertions, all 20 concurrency proofs, five-schema lint and the
+full repository gate. The [reviewed source and evidence](../evidence/issue-34-permission-eligibility.md)
+record the exact boundary. Hosted Testing verification is still required. This
+slice deliberately refuses delegated management and does not complete #34 or
+authorize a protected operation by itself.
+
 ### Slice 3 implementation choices
 
 Extend the same evaluator with current delegation coverage; do not add a second

@@ -20,6 +20,12 @@ Next, [the central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex
 
 The consolidated [central access decision implementation plan](issue-34-access-decision.md) defines #34's exact scope, reviewable slices, complete-path evaluation and downstream policy ownership. Missing target policies refuse; they are not pulled into the permission foundation or treated as already implemented. [#305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305) is complete after [exact hosted Testing verification](../evidence/issue-305-request-lock-order.md#hosted-testing--6-september-2026): the organisation reader and supported account writer now use consistent ordering, proved with the actual writer. The database-integration prerequisite is cleared; #34 implementation proceeds without a user hold.
 
+The #34 current-permission slice now passes independent review and local verification
+for direct/Group standing and activated access, including removal and expiry during
+concurrent work. [Evidence](../evidence/issue-34-permission-eligibility.md) distinguishes
+that completed local proof from the still-required hosted receipt, delegation
+coverage and final protected-operation integration. #34 remains in progress.
+
 ## Architecture review
 
 The [corrected dependency and coverage map](architecture-review.md) is part of this plan. It identifies contract gaps, the Fluid adaptation boundary, the ordinary HR example and the separation between early service proofs and later complete-application evidence. New contract work is #249/#250; HR is #251; reusable foundations are #252/#253; complete integration is #254; full archive/restore is #255.

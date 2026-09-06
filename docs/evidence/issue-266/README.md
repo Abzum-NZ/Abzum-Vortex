@@ -225,3 +225,25 @@ and all five schemas for that exact commit. The existing
 Production execution `31t28N9r4TmPCkDCMbKmH6` was rechecked and remains queued.
 No Production queue or deployment mutation was made during this check. The remaining
 release reconciliation is still distinct from the verified Testing repair.
+
+## Latest reviewed promotion and queue boundary — 6 September 2026
+
+[Release PR #307](https://github.com/Abzum-NZ/Abzum-Vortex/pull/307) merged the verified
+Testing candidate `3a66e4891fc44b4f5c50d9b9d2fd6034aca38be5` through normal checks
+into `main` as `96702fb4dec4e81c2c2908be78648fa62094e6c6`. The new
+[Production execution `2wrHT87OJIgtsKnQ2yQYz2`](https://kestra.abzum.com/ui/main/executions/vortex.operations/production_database_delivery/2wrHT87OJIgtsKnQ2yQYz2)
+was observed queued, with that exact main commit visible in its trigger payload.
+The unfinished #34 permission evaluator is not part of this release.
+
+The flow showed 18 superseded attempts ahead of the new release: 17 queued and one
+paused. The browser safety reviewer rejected selecting those old attempts for bulk
+cleanup. No queue state was changed. Explicit authorization is required to cancel
+only those superseded attempts, preserve their execution history and leave the new
+release untouched. This is a tool-enforced operational authorization, not an added
+product decision or permission gate in Vortex. It is tracked in
+[#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266), not the product decision
+register. Core [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) work continues.
+
+Production delivery and its success receipt remain unverified. After normal release
+handling, reconcile the existing protected main/HEAD tracking without upgrading
+Kestra or expanding the task into backup or infrastructure maintenance.

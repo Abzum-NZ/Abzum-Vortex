@@ -95,6 +95,11 @@
       "migration": "supabase/migrations/20260906040352_coordinate_organization_invitation_access.sql",
       "proof": "supabase/tests/organization-invitation-access-concurrency.test.sh",
       "label": "Organization invitation access"
+    },
+    {
+      "migration": "supabase/migrations/20260906055827_evaluate_organization_permission_eligibility.sql",
+      "proof": "supabase/tests/organization-permission-eligibility-concurrency.test.sh",
+      "label": "Organization permission eligibility"
     }
   ],
   "lintSchemas": [
