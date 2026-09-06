@@ -76,6 +76,16 @@ The independently reviewed first C change carries the already validated scope th
 
 Returning scope is definition evidence, not authority to access a record. The remaining C predicates and [row policy composition #35](issue-35-row-policy-composition.md) still govern live record access.
 
+### C — Next checkpoint: actual database condition parity
+
+Implement a private, pure PostgreSQL predicate over the existing typed condition tree. Do not introduce runtime-generated SQL, another expression language or a query framework. It accepts the published permission scope, sealed saved condition and source record-type semantic definitions, current row field values, and a trusted current organisation-account identifier. Verify their existing condition identity/revision/fingerprint and exact record/field/parameter bindings; reuse published evidence rather than computing a new hash. The later protected composition supplies the current account from verified context, never from a form's parameter map.
+
+Keep the predicate owner-only, `SECURITY INVOKER`, immutable and under an empty search path, with only the private recursive support needed by this tree. It reads no authority tables and creates no state. Validate every consumed node, operand, declaration and supplied value before using the Boolean result, including branches hidden by a successful sibling or negation. Reuse existing limits and semantic types; do not duplicate unrelated Definition settings or invent another validation budget. Invalid input produces a closed error, not a matching result.
+
+Match the [current Rule evaluator](../../runtime/rule/src/typed-condition.ts) exactly. In particular, its offset-bearing date-times use integer microseconds with up to six fractional digits, including pre-epoch values, year zero and the supported offset range; they do not use JavaScript's millisecond-only date parsing. Preserve finite double-precision numbers, exact code-point text ordering, typed-reference UUID identity, null/empty behaviour, contextual collections and structural JSON equality. A permissive PostgreSQL cast must not silently expand the accepted language.
+
+Use a bounded table-driven SQL suite for all existing operators and compound forms plus representative semantic types, invalid hidden branches and exact bindings. A rollback-scoped protected wrapper over neutral rows must derive its account from verified context, filter and count in SQL, and prove the request role cannot call the private predicate directly. This proves condition parity and the integration seam only: complete ownership, local shares, relationship routing and final row/field authority remain in the existing C/D and downstream task scope. Add no new race harness for a pure function. Later [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) integrates the reviewed predicate; any query-plan-driven optimization must preserve the same parity examples and is not a requirement to build another compiler now.
+
 ## Downstream ownership
 
 - [#35](issue-35-row-policy-composition.md) combines the predicates with the central operation decision in fixed SELECT/INSERT/UPDATE/DELETE policies.
