@@ -45,8 +45,12 @@ IAM interface or application-specific logic.
 
 ## Delivery and remaining work
 
-Normal PR delivery and an exact hosted Testing receipt remain required. Local
-results do not establish hosted success or close #34. The next slice adds current
+[PR #308](https://github.com/Abzum-NZ/Abzum-Vortex/pull/308) merged after successful
+normal preview checks as Testing `69eaf51ebf5b65e90542e097bac1cff622c624d4`.
+[Execution `2Hb4Y52VOQvB9UFCbYP5vH`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/2Hb4Y52VOQvB9UFCbYP5vH)
+is running; its displayed trigger commit matches that exact revision. Its complete
+success receipt still needs verification. Local results do not establish hosted
+success or close #34. The next slice adds current
 delegation coverage to the same evaluator. Final server/target-policy composition
 then makes it consumable by protected operations. [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
 and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) retain their actual
