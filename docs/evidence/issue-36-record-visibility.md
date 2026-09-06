@@ -27,7 +27,7 @@ The checkpoint merged into Testing through [PR #312](https://github.com/Abzum-NZ
 
 1. PostgreSQL evaluation and parity for the shared pure typed condition implementation described below. The pure implementation is available to Definition and Access; actual database restrictions are not delivered by that extraction alone.
 2. Minimal trusted dependency-condition evidence for application-owned saved conditions, derived from the exact bound module compilation artifact and revalidated against it. The current identity/version snapshot does not contain that immutable condition contract; the compiler currently refuses unsupported application saved conditions rather than inventing it.
-3. Additive live catalogue storage, validation and read reconstruction of scope. Contract and compiler support alone cannot register or enforce it through the current scope-less catalogue.
+3. Hosted delivery of the locally verified catalogue checkpoint below. Storing and reconstructing scope does not itself enforce record visibility.
 4. Private current shares, ownership/Group/relationship/condition database restrictions, and revision-checked changes with atomic Access/Activity evidence.
 5. Complete local, independent review and exact hosted Testing evidence for the full task.
 
@@ -45,3 +45,13 @@ Independent Sol actual-patch review approved the final eight files after one emp
 |---|---|
 | `runtime/rule/src/typed-condition.ts` | `a5cf2ea81fa56d5b5d21c53f76577ae7532474a3dea3e5028be782f2386cfb5a` |
 | `runtime/rule/test/typed-condition.test.ts` | `b9c92b5cd854116e05cae6e6a54da80a4deef225885699c6a16359332cf93c47` |
+
+This source checkpoint merged into Testing through [PR #313](https://github.com/Abzum-NZ/Abzum-Vortex/pull/313), with identical reviewed file bytes at `b1cdd1ea466d583e32f561ea9ae0f46de22b587f`, after both normal preview checks succeeded. [Membership delivery evidence](issue-40-access-administration.md#group-membership-read-checkpoint--6-september-2026) records the separate, still-unverified hosted database result. The task remains In progress.
+
+## Catalogue scope checkpoint — 7 September 2026
+
+The live permission catalogue now preserves optional record scope through registration, withdrawal, candidate matching and permitted reads. Registration still validates the complete candidate against its sealed definition. Historical absence remains SQL NULL and an omitted runtime property; no default scope, backfill or new permission authority is introduced. Existing acceptance, revisions, locks and permission-meaning rules remain authoritative.
+
+Independent Sol review approved all six changed implementation/test files. Focused contract and repository checks passed 25 tests; the actual database proof passed 23 assertions, first in a rolled-back probe and then in the complete local suite. The final combined checkpoint passed repository verification and all 44 database files / 2,087 assertions. Local security advisors reported no issues; database lint retained only the three previously recorded warnings. All 23 concurrency proofs passed across the initial run and a bounded retry, as detailed in [Group change evidence](issue-40-access-administration.md#group-create-and-rename-checkpoint--7-september-2026); this was not one uninterrupted clean concurrency run.
+
+The approved additive migration `20260906113848_preserve_permission_record_scope.sql` has SHA-256 `c1724349422ffe9e9421634a9efd91fcc5118d9bcd90bfa1858373961f313165`. Its proof `340_permission_registry_record_scope.test.sql` has SHA-256 `a024c436e54764c22ada66d231e04bc1212c9704c9783ac761903dc7b257c07e`. Both were applied/tested locally without resetting data. Together with the Group change migration, local history now contains 47 migrations. Hosted delivery remains unverified, and database visibility evaluation remains outstanding.

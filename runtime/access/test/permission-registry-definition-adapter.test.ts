@@ -12,6 +12,7 @@ import {
   type SessionContext,
 } from "@vortex/contracts";
 import {
+  canonicalJson,
   compareCanonicalStrings,
   compileDefinition,
   fingerprintCanonicalValue,
@@ -361,6 +362,38 @@ describe("permission registry Definition adapter", () => {
     );
     expect(read.mock.calls.every(([, command]) => command.selector.selection === "revision")).toBe(
       true,
+    );
+  });
+
+  it("carries the exact compiled module record scope into prepared catalogue evidence", async () => {
+    const prepared = await prepare(readerFor().reader);
+    const scoped = prepared.entries.find(
+      (entry) => entry.ownerKind === "module" && entry.permission.recordScope !== undefined,
+    );
+    if (!scoped || scoped.sourceRelease.kind !== "module")
+      throw new Error("Scoped module permission required");
+    const source = moduleResults.get(scoped.ownerId);
+    if (!source || source.kind !== "module") throw new Error("Module release required");
+    const sourcePermission = source.content.permissions.find(
+      (permission) => permission.permissionId === scoped.permission.permissionId,
+    );
+    expect(scoped.permission.recordScope).toEqual(sourcePermission?.recordScope);
+
+    const tampered = structuredClone(prepared);
+    const tamperedEntry = tampered.entries.find(
+      (entry) => entry.ownerKind === "module" && entry.permission.recordScope !== undefined,
+    );
+    if (!tamperedEntry) throw new Error("Scoped module permission required");
+    tamperedEntry.permission.recordScope =
+      canonicalJson(tamperedEntry.permission.recordScope) ===
+      canonicalJson({ routes: [{ kind: "all_records" }] })
+        ? { routes: [{ kind: "direct_share" }] }
+        : { routes: [{ kind: "all_records" }] };
+    const { candidateFingerprint, ...core } = tampered;
+    expect(candidateFingerprint).toBeDefined();
+    tampered.candidateFingerprint = fingerprintCanonicalValue(core);
+    expect(() => verifyPreparedApplicationPermissionRegistration(tampered)).toThrow(
+      expect.objectContaining({ code: "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID" }),
     );
   });
 

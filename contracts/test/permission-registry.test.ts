@@ -86,6 +86,38 @@ describe("permission registry contracts", () => {
     ).toBe(false);
   });
 
+  it("preserves an explicit record scope while leaving historical omission absent", () => {
+    const scopedEntry = {
+      ...entry,
+      permission: {
+        ...entry.permission,
+        permissionId: id(30),
+        key: "example.application.records.read",
+        recordTypeId: id(31),
+        actionKind: "read" as const,
+        namedAction: undefined,
+        recordScope: {
+          routes: [{ kind: "ownership" as const }, { kind: "direct_share" as const }],
+        },
+      },
+    };
+    const scopedCandidate = {
+      ...candidate,
+      applicationPermissionIds: [id(30)],
+      entries: [scopedEntry],
+    };
+    expect(preparedApplicationPermissionRegistrationSchema.parse(scopedCandidate)).toEqual(
+      scopedCandidate,
+    );
+
+    const { recordScope, ...legacyPermission } = scopedEntry.permission;
+    expect(recordScope).toBeDefined();
+    const legacyEntry = { ...scopedEntry, permission: legacyPermission };
+    const legacyCandidate = { ...scopedCandidate, entries: [legacyEntry] };
+    const parsedLegacy = preparedApplicationPermissionRegistrationSchema.parse(legacyCandidate);
+    expect(parsedLegacy.entries[0]?.permission).not.toHaveProperty("recordScope");
+  });
+
   it("allows the same key under different owners but refuses owner-local ambiguity", () => {
     const moduleEntry = {
       ...entry,

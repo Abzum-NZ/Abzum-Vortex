@@ -20,6 +20,21 @@ const permission: PermissionDeclaration = {
   actionKind: "read",
   administrative: false,
 };
+const recordPermission: PermissionDeclaration = {
+  ...permission,
+  permissionId: id(21),
+  key: "example.orders.records.read",
+  recordTypeId: id(22),
+  recordScope: {
+    routes: [{ kind: "ownership" }, { kind: "direct_share" }],
+  },
+};
+const legacyRecordPermission: PermissionDeclaration = {
+  ...permission,
+  permissionId: id(23),
+  key: "example.orders.legacy_read",
+  recordTypeId: id(22),
+};
 const applicationRelease = {
   kind: "application" as const,
   definitionKey: "example.orders",
@@ -106,7 +121,7 @@ describe("permission registry private repository", () => {
     expect(calls[0]?.values).toEqual([id(1), 1, "1.0.0", "1.0.1", id(2), id(3)]);
   });
 
-  it("maps exact permission rows and preserves application context", async () => {
+  it("maps exact scoped permission rows and preserves application context", async () => {
     const repository = createPermissionRegistryPrivateRepository(
       transactionFor(() => [
         {
@@ -115,11 +130,12 @@ describe("permission registry private repository", () => {
           registration_revision: "4",
           owner_kind: "application",
           owner_id: applicationRootId,
-          permission_id: permission.permissionId,
-          permission_key: permission.key,
-          label: permission.label,
-          description: permission.description,
-          record_type_id: null,
+          permission_id: recordPermission.permissionId,
+          permission_key: recordPermission.key,
+          label: recordPermission.label,
+          description: recordPermission.description,
+          record_type_id: recordPermission.recordTypeId,
+          record_scope: recordPermission.recordScope,
           action_kind: "read",
           named_action: null,
           administrative: false,
@@ -135,7 +151,7 @@ describe("permission registry private repository", () => {
           meaning_fingerprint: fingerprintPermissionMeaning(
             "application",
             applicationRootId,
-            permission,
+            recordPermission,
           ),
         },
       ]),
@@ -147,16 +163,68 @@ describe("permission registry private repository", () => {
         applicationRootId,
         ownerKind: "application",
         ownerId: applicationRootId,
-        permissionId: permission.permissionId,
+        permissionId: recordPermission.permissionId,
       }),
     ).resolves.toMatchObject({
       outcome: "available",
       entry: {
         applicationRootId,
         registrationRevision: 4,
+        permission: recordPermission,
         sourceRelease: applicationRelease,
       },
     });
+  });
+
+  it("keeps a historical SQL null scope omitted from the reconstructed permission", async () => {
+    const repository = createPermissionRegistryPrivateRepository(
+      transactionFor(() => [
+        {
+          organization_id: id(1),
+          application_root_id: applicationRootId,
+          registration_revision: "5",
+          owner_kind: "application",
+          owner_id: applicationRootId,
+          permission_id: legacyRecordPermission.permissionId,
+          permission_key: legacyRecordPermission.key,
+          label: legacyRecordPermission.label,
+          description: legacyRecordPermission.description,
+          record_type_id: legacyRecordPermission.recordTypeId,
+          record_scope: null,
+          action_kind: legacyRecordPermission.actionKind,
+          named_action: null,
+          administrative: false,
+          source_kind: "application",
+          source_definition_key: applicationRelease.definitionKey,
+          source_root_id: applicationRootId,
+          source_version: applicationRelease.releaseVersion,
+          source_revision: "3",
+          source_validation_contract_version: applicationRelease.validationContractVersion,
+          source_content_fingerprint: applicationRelease.contentFingerprint,
+          source_resolution_fingerprint: applicationRelease.resolutionFingerprint,
+          source_catalogue_fingerprint: null,
+          meaning_fingerprint: fingerprintPermissionMeaning(
+            "application",
+            applicationRootId,
+            legacyRecordPermission,
+          ),
+        },
+      ]),
+    );
+
+    const result = await repository.lookup({
+      organizationId: id(1),
+      applicationRootId,
+      ownerKind: "application",
+      ownerId: applicationRootId,
+      permissionId: legacyRecordPermission.permissionId,
+    });
+    expect(result).toMatchObject({
+      outcome: "available",
+      entry: { permission: legacyRecordPermission },
+    });
+    if (result.outcome !== "available") throw new Error("Available legacy permission required");
+    expect(result.entry.permission).not.toHaveProperty("recordScope");
   });
 
   it("maps the owner-qualified platform catalogue evidence without application context", async () => {
@@ -174,6 +242,7 @@ describe("permission registry private repository", () => {
           label: "View available permissions",
           description: "View the selected organisation permission catalogue.",
           record_type_id: null,
+          record_scope: null,
           action_kind: "read",
           named_action: null,
           administrative: true,

@@ -44,6 +44,27 @@ The engineer's focused contract/service check passes 11 tests, with contracts an
 | `supabase/migrations/20260906110758_protect_organization_group_membership_administration.sql` | `6647b7b991969088557063f4e399666c886cc6f20c398097719b5f02bba790ea` |
 | `supabase/tests/335_organization_group_membership_administration.test.sql` | `ea9a86b58abcad0b03ac7a291ee9b56b2c2df0b849d32fdfa716dabfba033fc5` |
 
+The membership and shared-condition checkpoint merged normally through [PR #313](https://github.com/Abzum-NZ/Abzum-Vortex/pull/313) at `2026-09-06T11:55:55Z`, after Vercel and Vercel Preview Comments succeeded. Source `2435f3e79991af919b77943413fec21fdd94fd70` and Testing merge `b1cdd1ea466d583e32f561ea9ae0f46de22b587f` have identical file trees. The later catalogue work was excluded from that commit. A bounded read-only retry could list the existing Edge tabs, but selecting the normal Kestra KV tab timed out; the exact hosted database receipt remains unverified. No controller/API bypass, credential change, Production promotion or infrastructure work was performed.
+
+## Group create and rename checkpoint — 7 September 2026
+
+Permitted administrators can now create a Group and rename an existing Group through separate protected commands. Renaming preserves its identity and key and requires the expected revision. Both operations reuse the organisation lock, current account and fixed Group-management permission, update Access once and record one content-free Activity in the same transaction. Creating or renaming a Group does not grant roles, add members or delegate authority. Broader administration and IAM screens remain outside this checkpoint.
+
+Independent Sol review approved the final eight implementation/test files. Focused contract/service checks passed 16 tests, the restricted-role database proof passed 23 assertions, and a new concurrent-rename proof established one winner and one stale refusal with no partial change. The selected hosted verification manifest includes that proof as its 23rd concurrency check; this source change is not evidence that a hosted run executed it.
+
+The final combined local repository verification passed formatting, lint, typechecks, boundaries, tests, fixtures and builds. All 44 database files / 2,087 assertions passed. Local security advisors found no issues; six-schema lint retained only the same three earlier warnings. The concurrency runner passed checks 1–18 before an existing invitation acceptance check failed; an explicit run of checks 19–23 then passed all five, including the new Group check. Thus every selected proof passed, but not in one uninterrupted run. An earlier full SQL run also encountered the existing invitation account-reactivation failure; the isolated test and final complete suite passed unchanged.
+
+Source diagnosis identified an invitation writer using a statement-start audit timestamp sampled before serialization waits, which can be older than the locked invitation/account audit value. This is a narrowly scoped follow-up correction, not evidence that the Docker clock was repaired. Revision and Access ordering must remain authoritative; real expiry checks must not use a clamped audit timestamp. No service restart or infrastructure change was made.
+
+The additive migration `20260906115410_protect_organization_group_administration_changes.sql` was applied locally without resetting data. Supported migration history now records all 47 applied entries. The final database proof and race source hashes are recorded below. Hosted Testing receipts remain unverified; no Production promotion is claimed.
+
+| File | SHA-256 |
+|---|---|
+| `20260906115410_protect_organization_group_administration_changes.sql` | `3a9d7d4c7f309bfc1fbdfd0223052400f6d63858e0dbaf1b0566b2fe15c3886d` |
+| `350_organization_group_administration_changes.test.sql` | `4b291dda537f3296d64c5b98051bbeee4ccee2c9fda4291fad4cd195b883d3c9` |
+| `organization-group-administration-change-concurrency.test.sh` | `42fe67c792857645da9fbd445da4cd62336af6593eca0bc0304a3026d02cfa3a` |
+| `workflows/kestra/database-verification.json` | `666c66c3c50e18d11c7f650e7c02e54b5482fd88b566f6d76978906ac8de8c77` |
+
 ## First checkpoint database bytes
 
 | File | SHA-256 |
