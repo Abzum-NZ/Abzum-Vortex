@@ -1,6 +1,11 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import {
+  activityIdSchema,
+  changeOrganizationAdministrationGroupResultSchema,
+  createOrganizationAdministrationGroupCommandSchema,
+  groupIdSchema,
   listOrganizationAdministrationGroupsCommandSchema,
   listOrganizationAdministrationGroupsResultSchema,
   listOrganizationAdministrationMembershipsCommandSchema,
@@ -9,6 +14,9 @@ import {
   readOrganizationAdministrationGroupResultSchema,
   readOrganizationAdministrationMembershipCommandSchema,
   readOrganizationAdministrationMembershipResultSchema,
+  renameOrganizationAdministrationGroupCommandSchema,
+  type ChangeOrganizationAdministrationGroupResult,
+  type CreateOrganizationAdministrationGroupCommand,
   type IdentitySession,
   type ListOrganizationAdministrationGroupsCommand,
   type ListOrganizationAdministrationGroupsResult,
@@ -19,6 +27,7 @@ import {
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationMembershipCommand,
   type ReadOrganizationAdministrationMembershipResult,
+  type RenameOrganizationAdministrationGroupCommand,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
 import {
@@ -37,6 +46,12 @@ type GroupPageRow = DatabaseRow & {
 type GroupDetailRow = DatabaseRow & {
   organization_id: unknown;
   outcome: unknown;
+  group_summary: unknown;
+  access_version: unknown;
+};
+
+type GroupChangeRow = DatabaseRow & {
+  organization_id: unknown;
   group_summary: unknown;
   access_version: unknown;
 };
@@ -81,14 +96,123 @@ const requireOne = <Row>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
-export type OrganizationAccessAdministrationDependencies = HumanOrganizationRequestDependencies;
+export type OrganizationAccessAdministrationDependencies = HumanOrganizationRequestDependencies &
+  Readonly<{
+    groupId?: () => string;
+    activityId?: () => string;
+  }>;
 
 export const createOrganizationAccessAdministrationService = (
   dependencies: OrganizationAccessAdministrationDependencies,
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
+  const newGroupId = dependencies.groupId ?? randomUUID;
+  const newActivityId = dependencies.activityId ?? randomUUID;
+
+  const changedGroup = (
+    rows: readonly GroupChangeRow[],
+    organizationId: string,
+    priorAccessVersion: number,
+    expected: Readonly<{
+      groupId: string;
+      label: string;
+      revision: number;
+      key?: string;
+    }>,
+  ): ChangeOrganizationAdministrationGroupResult => {
+    const row = requireOne(rows);
+    const parsed = changeOrganizationAdministrationGroupResultSchema.safeParse({
+      group: normalizeGroup(row.group_summary),
+      accessVersion: revision(row.access_version),
+    });
+    if (
+      typeof row.organization_id !== "string" ||
+      !sameUuid(row.organization_id, organizationId) ||
+      !parsed.success ||
+      parsed.data.accessVersion !== priorAccessVersion + 1 ||
+      !sameUuid(parsed.data.group.groupId, expected.groupId) ||
+      parsed.data.group.label !== expected.label ||
+      parsed.data.group.revision !== expected.revision ||
+      parsed.data.group.state !== "active" ||
+      (expected.key !== undefined && parsed.data.group.key !== expected.key)
+    )
+      throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+    return parsed.data;
+  };
 
   return Object.freeze({
+    createGroup: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: CreateOrganizationAdministrationGroupCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationGroupResult>> => {
+      const command =
+        createOrganizationAdministrationGroupCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let groupId: string;
+      let activityId: string;
+      try {
+        groupId = groupIdSchema.parse(newGroupId());
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+
+      return requests.runChange(session, candidate, async (transaction, scope) =>
+        changedGroup(
+          await transaction.query<GroupChangeRow>`
+            select organization_id, group_summary, access_version
+            from vortex_access.create_organization_group_for_administration(
+              ${groupId}::uuid,
+              ${command.data.key}::text,
+              ${command.data.label}::text,
+              ${activityId}::uuid
+            )
+          `,
+          scope.organizationId,
+          scope.accessVersion,
+          { groupId, key: command.data.key, label: command.data.label, revision: 1 },
+        ),
+      );
+    },
+
+    renameGroup: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: RenameOrganizationAdministrationGroupCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationGroupResult>> => {
+      const command =
+        renameOrganizationAdministrationGroupCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+
+      return requests.runChange(session, candidate, async (transaction, scope) =>
+        changedGroup(
+          await transaction.query<GroupChangeRow>`
+            select organization_id, group_summary, access_version
+            from vortex_access.rename_organization_group_for_administration(
+              ${command.data.groupId}::uuid,
+              ${command.data.expectedGroupRevision}::bigint,
+              ${command.data.label}::text,
+              ${activityId}::uuid
+            )
+          `,
+          scope.organizationId,
+          scope.accessVersion,
+          {
+            groupId: command.data.groupId,
+            label: command.data.label,
+            revision: command.data.expectedGroupRevision + 1,
+          },
+        ),
+      );
+    },
+
     listGroups: async (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,

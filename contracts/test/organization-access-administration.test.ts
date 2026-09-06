@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  changeOrganizationAdministrationGroupResultSchema,
+  createOrganizationAdministrationGroupCommandSchema,
   listOrganizationAdministrationGroupsCommandSchema,
   listOrganizationAdministrationGroupsResultSchema,
   listOrganizationAdministrationMembershipsCommandSchema,
@@ -8,6 +10,7 @@ import {
   organizationAdministrationMembershipSchema,
   readOrganizationAdministrationGroupResultSchema,
   readOrganizationAdministrationMembershipResultSchema,
+  renameOrganizationAdministrationGroupCommandSchema,
 } from "../src/organization-access-administration";
 
 const id = (value: number): string => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
@@ -33,6 +36,53 @@ const membership = {
 };
 
 describe("organization Access administration contracts", () => {
+  it("keeps Group creation and rename commands narrow and distinct", () => {
+    expect(
+      createOrganizationAdministrationGroupCommandSchema.parse({
+        key: "review_group",
+        label: "Review group",
+      }),
+    ).toEqual({ key: "review_group", label: "Review group" });
+    expect(
+      renameOrganizationAdministrationGroupCommandSchema.parse({
+        groupId: id(1),
+        expectedGroupRevision: 2,
+        label: "Review group renamed",
+      }),
+    ).toMatchObject({ expectedGroupRevision: 2 });
+    for (const candidate of [
+      { key: "review_group", label: "Review group", groupId: id(1) },
+      { groupId: id(1), expectedGroupRevision: 2, label: "Renamed", operation: "retire" },
+      { groupId: id(1), expectedGroupRevision: 0, label: "Renamed" },
+    ])
+      expect(
+        ("key" in candidate
+          ? createOrganizationAdministrationGroupCommandSchema
+          : renameOrganizationAdministrationGroupCommandSchema
+        ).safeParse(candidate).success,
+      ).toBe(false);
+  });
+
+  it("returns only the safe changed Group and resulting Access version", () => {
+    const result = {
+      group: {
+        groupId: id(1),
+        key: "review_group",
+        label: "Review group",
+        state: "active",
+        revision: 1,
+      },
+      accessVersion: 2,
+    };
+    expect(changeOrganizationAdministrationGroupResultSchema.parse(result)).toEqual(result);
+    expect(
+      changeOrganizationAdministrationGroupResultSchema.safeParse({
+        ...result,
+        correlationId: id(2),
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts a bounded Group page and exact detail outcomes", () => {
     expect(
       listOrganizationAdministrationGroupsCommandSchema.parse({

@@ -80,6 +80,7 @@ type PermissionEntryRow = DatabaseRow & {
   label: unknown;
   description: unknown;
   record_type_id: unknown;
+  record_scope: unknown;
   action_kind: unknown;
   named_action: unknown;
   administrative: unknown;
@@ -154,6 +155,7 @@ const parsePlatformMetadataRevision = (
 
 const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult => {
   const platformSource = row.source_kind === "platform_catalogue";
+  const recordScope = optional(row.record_scope);
   const parsed = permissionCatalogueEntrySchema.safeParse({
     organizationId: row.organization_id,
     applicationRootId: optional(row.application_root_id),
@@ -166,6 +168,7 @@ const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult =>
       label: row.label,
       description: row.description,
       recordTypeId: optional(row.record_type_id),
+      ...(recordScope === undefined ? {} : { recordScope }),
       actionKind: row.action_kind,
       namedAction: optional(row.named_action),
       administrative: row.administrative,

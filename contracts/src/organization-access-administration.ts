@@ -56,6 +56,28 @@ export const readOrganizationAdministrationGroupResultSchema = z.discriminatedUn
     .strict(),
 ]);
 
+export const createOrganizationAdministrationGroupCommandSchema = z
+  .object({
+    key: builderKeySchema,
+    label: labelSchema,
+  })
+  .strict();
+
+export const renameOrganizationAdministrationGroupCommandSchema = z
+  .object({
+    groupId: groupIdSchema,
+    expectedGroupRevision: javascriptSafeRevisionSchema,
+    label: labelSchema,
+  })
+  .strict();
+
+export const changeOrganizationAdministrationGroupResultSchema = z
+  .object({
+    group: organizationAdministrationGroupSchema,
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
 export const organizationAdministrationMembershipTemporalStateSchema = z.enum([
   "active",
   "scheduled",
@@ -143,6 +165,15 @@ export type ReadOrganizationAdministrationGroupCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationGroupResult = z.infer<
   typeof readOrganizationAdministrationGroupResultSchema
+>;
+export type CreateOrganizationAdministrationGroupCommand = z.infer<
+  typeof createOrganizationAdministrationGroupCommandSchema
+>;
+export type RenameOrganizationAdministrationGroupCommand = z.infer<
+  typeof renameOrganizationAdministrationGroupCommandSchema
+>;
+export type ChangeOrganizationAdministrationGroupResult = z.infer<
+  typeof changeOrganizationAdministrationGroupResultSchema
 >;
 export type OrganizationAdministrationMembership = z.infer<
   typeof organizationAdministrationMembershipSchema

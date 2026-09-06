@@ -110,6 +110,11 @@
       "migration": "supabase/migrations/20260906101701_protect_organization_access_administration.sql",
       "proof": "supabase/tests/organization-access-administration-concurrency.test.sh",
       "label": "Organization Access administration"
+    },
+    {
+      "migration": "supabase/migrations/20260906115410_protect_organization_group_administration_changes.sql",
+      "proof": "supabase/tests/organization-group-administration-change-concurrency.test.sh",
+      "label": "Organization Group administration changes"
     }
   ],
   "lintSchemas": [

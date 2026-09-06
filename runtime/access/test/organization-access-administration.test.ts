@@ -30,6 +30,8 @@ const serviceFor = (result: readonly DatabaseRow[]) => {
     identityAuthorityId: id(6),
     clock: () => new Date("2026-09-06T01:00:00.000Z"),
     correlationId: () => id(7),
+    groupId: () => id(20),
+    activityId: () => id(21),
     resolvedRequestTransaction: async (resolve, operation) => {
       const resolved = await resolve({
         query: async () => [selectedScope] as never,
@@ -50,6 +52,108 @@ const serviceFor = (result: readonly DatabaseRow[]) => {
 };
 
 describe("organization Access administration", () => {
+  it("creates a Group with trusted identities and binds the safe result", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2).toUpperCase(),
+        group_summary: {
+          groupId: id(20).toUpperCase(),
+          key: "review_group",
+          label: "Review group",
+          state: "active",
+          revision: "1",
+        },
+        access_version: "8",
+      },
+    ]);
+
+    await expect(
+      service.createGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { key: "review_group", label: "Review group" },
+      ),
+    ).resolves.toEqual({
+      kind: "available",
+      value: {
+        group: {
+          groupId: id(20).toUpperCase(),
+          key: "review_group",
+          label: "Review group",
+          state: "active",
+          revision: 1,
+        },
+        accessVersion: 8,
+      },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.text).toContain("create_organization_group_for_administration");
+    expect(calls[0]?.values).toEqual([id(20), "review_group", "Review group", id(21)]);
+  });
+
+  it("renames a Group with its reviewed revision and a trusted Activity identity", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2),
+        group_summary: {
+          groupId: id(8),
+          key: "review_group",
+          label: "Renamed group",
+          state: "active",
+          revision: 3n,
+        },
+        access_version: 8n,
+      },
+    ]);
+
+    await expect(
+      service.renameGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { groupId: id(8), expectedGroupRevision: 2, label: "Renamed group" },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { group: { groupId: id(8), revision: 3 }, accessVersion: 8 },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.text).toContain("rename_organization_group_for_administration");
+    expect(calls[0]?.values).toEqual([id(8), 2, "Renamed group", id(21)]);
+  });
+
+  it("refuses malformed commands and mismatched changed Group evidence", async () => {
+    const malformed = serviceFor([]);
+    await expect(
+      malformed.service.createGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { key: "Invalid Key", label: "Review group" },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(malformed.calls).toHaveLength(0);
+
+    const mismatched = serviceFor([
+      {
+        organization_id: id(2),
+        group_summary: {
+          groupId: id(99),
+          key: "review_group",
+          label: "Review group",
+          state: "active",
+          revision: 1,
+        },
+        access_version: 8,
+      },
+    ]).service;
+    await expect(
+      mismatched.createGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { key: "review_group", label: "Review group" },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
+
   it("lists one bounded sanitized Group page", async () => {
     const { calls, service } = serviceFor([
       {
