@@ -31,7 +31,7 @@ import {
   type TypedConditionParameterDeclaration,
 } from "@vortex/rule";
 import { satisfies } from "semver";
-import { compileDefinition } from "./compiler";
+import { compileDefinitionWithContext } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compareDefinitionVersionImpact } from "./version-impact";
@@ -2229,13 +2229,23 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const applicationPermissions = new Map(
       array(content.permissions).map((permission) => [String(permission.key), permission]),
     );
+    const savedConditionEntries = boundModules.flatMap((module) =>
+      array(object(object(module.canonical).content).sharingConditions),
+    );
+    const savedConditions = new Map(
+      savedConditionEntries.map((condition) => [String(condition.conditionId), condition] as const),
+    );
+    if (savedConditions.size !== savedConditionEntries.length)
+      failures.push(
+        failure(output, "vortex.definition.application_action_references", "scope_conflict"),
+      );
     if (
       !permissionRecordScopesValid(
         [...applicationPermissions.values()],
         records,
         relationshipMap,
-        new Map(),
-        false,
+        savedConditions,
+        true,
         permissionEntries,
       )
     )
@@ -4427,13 +4437,21 @@ export function compileDefinitionSet(
     ordered.push(input);
   };
   [...byKey.keys()].sort(compareCanonicalStrings).forEach(visit);
-  const outputs = ordered.map(compileDefinition);
+  const dependencyOutputs = publicationContext.dependencyOutputs ?? [];
+  const inputKeys = new Set(ordered.map((request) => request.source.key));
+  if (dependencyOutputs.some((output) => inputKeys.has(output.artifact.definitionKey)))
+    throw new DefinitionCompilationError("vortex.definition.duplicate_source_key", "duplicate_key");
+  const outputs: Output[] = [];
+  for (const request of ordered)
+    outputs.push(
+      compileDefinitionWithContext(request, {
+        dependencyOutputs: [...dependencyOutputs, ...outputs],
+      }),
+    );
   const validation = validateDefinitionSet({
     requests: ordered,
     outputs,
-    ...(publicationContext.dependencyOutputs === undefined
-      ? {}
-      : { dependencyOutputs: publicationContext.dependencyOutputs }),
+    ...(dependencyOutputs.length === 0 ? {} : { dependencyOutputs }),
     publishedHistories: publicationContext.publishedHistories,
   });
   if (!validation.valid) {

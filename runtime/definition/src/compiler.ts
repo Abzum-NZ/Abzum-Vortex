@@ -8,6 +8,7 @@ import {
   connectionTypeSchema,
   definitionCompilationOutputSchema,
   definitionCompilationRequestSchema,
+  definitionPublicationContextSchema,
   definitionSourceDocumentSchema,
   moduleDraftSchema,
   readModuleSourceRecordOwnershipModeV1,
@@ -31,6 +32,10 @@ import { extractSourceIdentityRequirements } from "./source-identities";
 
 type Path = (string | number)[];
 type JsonObject = Record<string, unknown>;
+
+export type DefinitionCompilationContext = Readonly<{
+  dependencyOutputs?: readonly DefinitionCompilationOutput[];
+}>;
 
 const ID_FIELDS = new Set([
   "root_alias",
@@ -2039,6 +2044,61 @@ function compilePermissionRecordScope(
   };
 }
 
+function applicationPermissionSharingConditions(
+  permission: JsonObject,
+  source: JsonObject,
+  resolution: Resolution,
+  organizationId: unknown,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): readonly JsonObject[] {
+  if (permission.record_scope === undefined) return [];
+  const sourceScope = asObject(permission.record_scope);
+  if (sourceScope.saved_condition === undefined) return [];
+  if (permission.record_type === undefined)
+    fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
+  const qualifiedRecordType = String(permission.record_type);
+  const separator = qualifiedRecordType.lastIndexOf(":");
+  if (separator < 1)
+    fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
+  const moduleKey = qualifiedRecordType.slice(0, separator);
+  const expectedModule = resolution.definition(moduleKey, "module");
+  const recordType = resolution.recordType(qualifiedRecordType);
+  const bindings = (asObject(source.body).module_bindings as JsonObject[]).filter(
+    (binding) => binding.module === moduleKey,
+  );
+  const matches = dependencyOutputs.filter(
+    (output) => output.kind === "module" && output.artifact.definitionKey === moduleKey,
+  );
+  if (bindings.length !== 1 || matches.length !== 1)
+    fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
+  const binding = bindings[0]!;
+  const requirement = binding.version as Parameters<typeof compatibleVersion>[0];
+  const output = matches[0]!;
+  if (output.kind !== "module")
+    fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
+  const canonical = asObject(output.canonical);
+  const envelope = asObject(canonical.envelope);
+  const content = asObject(canonical.content);
+  const records = (content.recordTypes as JsonObject[]).filter(
+    (record) => record.recordTypeId === recordType.recordTypeId,
+  );
+  if (
+    expectedModule.rootId !== recordType.moduleRootId ||
+    !compatibleVersion(requirement, expectedModule.exactVersion) ||
+    output.artifact.rootId !== expectedModule.rootId ||
+    output.artifact.exactVersion !== expectedModule.exactVersion ||
+    output.artifact.resolutionFingerprint !== resolution.snapshot.fingerprint ||
+    output.resolutionFingerprint !== resolution.snapshot.fingerprint ||
+    envelope.rootId !== expectedModule.rootId ||
+    envelope.key !== moduleKey ||
+    envelope.organizationId !== organizationId ||
+    output.artifact.contentFingerprint !== fingerprintCanonicalValue(content) ||
+    records.length !== 1
+  )
+    fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
+  return content.sharingConditions as JsonObject[];
+}
+
 function fieldSettings(
   field: JsonObject,
   qualifiedRecordType: string,
@@ -2933,7 +2993,12 @@ function compileWorkflow(
   };
 }
 
-function compileApplication(source: JsonObject, resolution: Resolution, metadata: JsonObject) {
+function compileApplication(
+  source: JsonObject,
+  resolution: Resolution,
+  metadata: JsonObject,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const root = resolution.definition(definitionKey, "application");
@@ -3141,7 +3206,18 @@ function compileApplication(source: JsonObject, resolution: Resolution, metadata
     };
   });
   const permissions = (body.permissions as JsonObject[]).map((permission) => {
-    const recordScope = compilePermissionRecordScope(permission, source, resolution, []);
+    const recordScope = compilePermissionRecordScope(
+      permission,
+      source,
+      resolution,
+      applicationPermissionSharingConditions(
+        permission,
+        source,
+        resolution,
+        metadata.organizationId,
+        dependencyOutputs,
+      ),
+    );
     return {
       permissionId: resolution.id(definitionKey, "permission", String(permission.id), "content"),
       key: permission.key,
@@ -3602,10 +3678,33 @@ function resolvedDependencies(source: JsonObject, resolution: Resolution) {
   return keys.map((key) => resolution.definition(key));
 }
 
-export function compileDefinition(input: unknown): DefinitionCompilationOutput {
+function parseDefinitionCompilationContext(
+  context: unknown,
+): readonly DefinitionCompilationOutput[] {
+  if (context === undefined) return [];
+  if (
+    context === null ||
+    typeof context !== "object" ||
+    Array.isArray(context) ||
+    Object.keys(context).some((key) => key !== "dependencyOutputs")
+  )
+    fail("vortex.definition.invalid_compilation_request", "invalid_value");
+  const parsed = definitionPublicationContextSchema.safeParse({
+    ...(context as JsonObject),
+    publishedHistories: [],
+  });
+  if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
+  return parsed.data.dependencyOutputs ?? [];
+}
+
+function compileDefinitionInternal(
+  input: unknown,
+  context?: DefinitionCompilationContext,
+): DefinitionCompilationOutput {
   const parsed = definitionCompilationRequestSchema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
   const request = parsed.data;
+  const dependencyOutputs = parseDefinitionCompilationContext(context);
   const sourceDocument = request.source;
   const source = sourceDocument as unknown as JsonObject;
   try {
@@ -3627,6 +3726,7 @@ export function compileDefinition(input: unknown): DefinitionCompilationOutput {
         source,
         resolution,
         request.draftMetadata as unknown as JsonObject,
+        dependencyOutputs,
       );
     } else canonical = compileConnection(source, resolution);
     const ownDefinition = resolution.definition(sourceDocument.key, sourceDocument.kind);
@@ -3663,4 +3763,15 @@ export function compileDefinition(input: unknown): DefinitionCompilationOutput {
           );
     return fail("vortex.definition.invalid_compilation_output", "invalid_value");
   }
+}
+
+export function compileDefinition(input: unknown): DefinitionCompilationOutput {
+  return compileDefinitionInternal(input);
+}
+
+export function compileDefinitionWithContext(
+  input: unknown,
+  context: DefinitionCompilationContext,
+): DefinitionCompilationOutput {
+  return compileDefinitionInternal(input, context);
 }

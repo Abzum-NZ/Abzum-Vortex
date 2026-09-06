@@ -10,7 +10,7 @@ import {
   definitionCompilerRefusalCodes,
   DefinitionCompilationError,
 } from "../src/compilation-error";
-import { compileDefinition } from "../src/compiler";
+import { compileDefinition, compileDefinitionWithContext } from "../src/compiler";
 import { fingerprintCanonicalValue } from "../src/canonical-json";
 import {
   compileDefinitionSet,
@@ -352,6 +352,220 @@ describe("authored definition compiler", () => {
         },
       ],
     });
+  });
+
+  it("binds an application-owned saved condition to the module owning its record type", () => {
+    const amended = structuredClone(sources);
+    const application = amended.find(
+      (source) => source.kind === "application" && source.key === "vortex.app.crm",
+    );
+    const module = amended.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!application || application.kind !== "application" || !module || module.kind !== "module")
+      throw new Error("Application and module fixtures required");
+    const permission = application.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application permission fixture required");
+    permission.record_type = "vortex.service_desk.cases:case";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+
+    const requests = amended.map(requestFor);
+    const forward = compileDefinitionSet(requests, publicationOptions);
+    const reverse = compileDefinitionSet([...requests].reverse(), publicationOptions);
+    const output = forward.find(
+      (entry) => entry.kind === "application" && entry.canonical.envelope.key === application.key,
+    );
+    const moduleOutput = forward.find(
+      (entry) => entry.kind === "module" && entry.canonical.envelope.key === module.key,
+    );
+    if (!output || output.kind !== "application" || !moduleOutput || moduleOutput.kind !== "module")
+      throw new Error("Compiled application and module outputs required");
+    const condition = moduleOutput.canonical.content.sharingConditions.find(
+      (entry) => entry.key === "matching_priority",
+    );
+    expect(
+      output.canonical.content.permissions.find((entry) => entry.key === permission.key)
+        ?.recordScope,
+    ).toEqual({
+      routes: [{ kind: "all_records" }],
+      savedCondition: {
+        conditionId: condition?.conditionId,
+        publishedRevision: condition?.publishedRevision,
+        contractFingerprint: condition?.contractFingerprint,
+        parameterBindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    });
+    expect(reverse).toEqual(forward);
+
+    const wrongConditionOutputs = structuredClone(forward);
+    const wrongModule = wrongConditionOutputs.find(
+      (entry) => entry.kind === "module" && entry.canonical.envelope.key === module.key,
+    );
+    if (!wrongModule || wrongModule.kind !== "module") throw new Error("Module output required");
+    const wrongCondition = wrongModule.canonical.content.sharingConditions[0];
+    const otherRecord = wrongModule.canonical.content.recordTypes.find(
+      (record) => record.recordTypeId !== condition?.sourceRecordTypeId,
+    );
+    if (!wrongCondition || !otherRecord) throw new Error("Condition and record fixtures required");
+    wrongCondition.sourceRecordTypeId = otherRecord.recordTypeId;
+    wrongModule.artifact.contentFingerprint = fingerprintCanonicalValue(
+      wrongModule.canonical.content,
+    );
+    expect(
+      validateDefinitionSet({
+        requests,
+        outputs: wrongConditionOutputs,
+        ...publicationOptions,
+      }).failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleCode: "vortex.definition.application_action_references" }),
+      ]),
+    );
+
+    const duplicateConditionOutputs = structuredClone(forward);
+    const duplicateOwner = duplicateConditionOutputs.find(
+      (entry) =>
+        entry.kind === "module" && entry.canonical.envelope.key === "vortex.crm.organisations",
+    );
+    if (!duplicateOwner || duplicateOwner.kind !== "module" || !condition)
+      throw new Error("Duplicate condition fixtures required");
+    duplicateOwner.canonical.content.sharingConditions = [condition];
+    duplicateOwner.artifact.contentFingerprint = fingerprintCanonicalValue(
+      duplicateOwner.canonical.content,
+    );
+    expect(
+      validateDefinitionSet({
+        requests,
+        outputs: duplicateConditionOutputs,
+        ...publicationOptions,
+      }).failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleCode: "vortex.definition.application_action_references" }),
+      ]),
+    );
+  });
+
+  it("requires exact trusted dependency evidence for standalone application saved conditions", () => {
+    const application = structuredClone(
+      sources.find((source) => source.kind === "application" && source.key === "vortex.app.crm"),
+    );
+    const module = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!application || application.kind !== "application" || !module || module.kind !== "module")
+      throw new Error("Application and module fixtures required");
+    const applicationWithoutSavedCondition = structuredClone(application);
+    const permission = application.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application permission fixture required");
+    permission.record_type = "vortex.service_desk.cases:case";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+    const moduleOutput = compileDefinition(requestFor(module));
+    const unrelatedModule = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.organisations",
+    );
+    if (!unrelatedModule || unrelatedModule.kind !== "module")
+      throw new Error("Unrelated module fixture required");
+    const unrelatedOutput = compileDefinition(requestFor(unrelatedModule));
+    if (moduleOutput.kind !== "module" || unrelatedOutput.kind !== "module")
+      throw new Error("Module outputs required");
+    const targetCondition = moduleOutput.canonical.content.sharingConditions.find(
+      (entry) => entry.key === "matching_priority",
+    );
+    if (!targetCondition) throw new Error("Saved condition fixture required");
+    const sameKeyElsewhere = structuredClone(unrelatedOutput);
+    sameKeyElsewhere.canonical.content.sharingConditions = [
+      {
+        ...targetCondition,
+        conditionId: "10000000-0000-4000-a000-000000000099",
+      },
+    ];
+    sameKeyElsewhere.artifact.contentFingerprint = fingerprintCanonicalValue(
+      sameKeyElsewhere.canonical.content,
+    );
+    const request = requestFor(application);
+
+    expect(
+      compileDefinitionWithContext(requestFor(applicationWithoutSavedCondition), {
+        dependencyOutputs: [sameKeyElsewhere, moduleOutput],
+      }),
+    ).toEqual(compileDefinition(requestFor(applicationWithoutSavedCondition)));
+
+    const output = compileDefinitionWithContext(request, {
+      dependencyOutputs: [sameKeyElsewhere, moduleOutput],
+    });
+    expect(output.kind).toBe("application");
+    if (output.kind !== "application") throw new Error("Application output required");
+    expect(
+      output.canonical.content.permissions.find((entry) => entry.key === permission.key)
+        ?.recordScope?.savedCondition?.conditionId,
+    ).toBe(targetCondition.conditionId);
+    expect(() => compileDefinition(request)).toThrowError(
+      "vortex.definition.saved_condition_revision_required",
+    );
+    for (const altered of [
+      {
+        ...moduleOutput,
+        artifact: { ...moduleOutput.artifact, exactVersion: "1.0.1" },
+      },
+      {
+        ...moduleOutput,
+        artifact: { ...moduleOutput.artifact, contentFingerprint: `sha256:${"0".repeat(64)}` },
+      },
+      {
+        ...moduleOutput,
+        artifact: { ...moduleOutput.artifact, resolutionFingerprint: `sha256:${"1".repeat(64)}` },
+        resolutionFingerprint: `sha256:${"1".repeat(64)}`,
+      },
+    ])
+      expect(() =>
+        compileDefinitionWithContext(request, { dependencyOutputs: [altered] }),
+      ).toThrowError("vortex.definition.saved_condition_revision_required");
+    expect(() =>
+      compileDefinitionWithContext(request, {
+        dependencyOutputs: [moduleOutput],
+        publishedHistories: [],
+      } as never),
+    ).toThrowError("vortex.definition.invalid_compilation_request");
+    expect(() =>
+      compileDefinitionSet([requestFor(module), request], {
+        ...publicationOptions,
+        dependencyOutputs: [moduleOutput],
+      }),
+    ).toThrowError("vortex.definition.duplicate_source_key");
+
+    const missingRecord = structuredClone(moduleOutput);
+    missingRecord.canonical.content.recordTypes =
+      missingRecord.canonical.content.recordTypes.filter(
+        (record) => record.recordTypeId !== targetCondition.sourceRecordTypeId,
+      );
+    missingRecord.artifact.contentFingerprint = fingerprintCanonicalValue(
+      missingRecord.canonical.content,
+    );
+    expect(() =>
+      compileDefinitionWithContext(request, { dependencyOutputs: [missingRecord] }),
+    ).toThrowError("vortex.definition.saved_condition_revision_required");
   });
 
   it("expands the sole application wildcard into exact non-admin permissions", () => {

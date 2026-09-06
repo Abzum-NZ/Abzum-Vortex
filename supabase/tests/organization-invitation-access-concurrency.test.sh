@@ -28,7 +28,9 @@ readonly inviter_identity_id="b3${run_uuid:2}"
 readonly invited_a_identity_id="b4${run_uuid:2}"
 readonly invited_b_identity_id="b5${run_uuid:2}"
 readonly invited_c_identity_id="b6${run_uuid:2}"
+readonly invited_d_identity_id="d0${run_uuid:2}"
 readonly inviter_account_id="b7${run_uuid:2}"
+readonly invited_d_account_id="d1${run_uuid:2}"
 readonly steward_role_id="b8${run_uuid:2}"
 readonly steward_assignment_id="b9${run_uuid:2}"
 readonly steward_delegation_id="ba${run_uuid:2}"
@@ -37,6 +39,7 @@ readonly membership_a_id="bc${run_uuid:2}"
 readonly assignment_a_id="bd${run_uuid:2}"
 readonly membership_c_id="be${run_uuid:2}"
 readonly membership_b_id="c0${run_uuid:2}"
+readonly membership_d_id="d2${run_uuid:2}"
 readonly actor_id="bf${run_uuid:2}"
 readonly correlation_initialize="c1${run_uuid:2}"
 readonly correlation_catalogue="c2${run_uuid:2}"
@@ -48,13 +51,17 @@ readonly correlation_create_b="c7${run_uuid:2}"
 readonly correlation_legacy_b="c8${run_uuid:2}"
 readonly correlation_create_c="c9${run_uuid:2}"
 readonly correlation_accept_c="ca${run_uuid:2}"
+readonly correlation_create_d="d3${run_uuid:2}"
+readonly correlation_accept_d="d4${run_uuid:2}"
 readonly token_base="${run_token}${run_token}"
 readonly token_a="sha256:${token_base:0:63}a"
 readonly token_b="sha256:${token_base:0:63}b"
 readonly token_c="sha256:${token_base:0:63}c"
+readonly token_d="sha256:${token_base:0:63}d"
 readonly email_a="invite-a-${fixture_name_token}@example.test"
 readonly email_b="invite-b-${fixture_name_token}@example.test"
 readonly email_c="invite-c-${fixture_name_token}@example.test"
+readonly email_d="invite-d-${fixture_name_token}@example.test"
 
 fixture_claimed=0
 declare -a worker_pids=()
@@ -236,7 +243,8 @@ cleanup_fixture() {
     delete from vortex_identity.identity_projections
       where identity_id in (
         '$inviter_identity_id', '$invited_a_identity_id',
-        '$invited_b_identity_id', '$invited_c_identity_id'
+        '$invited_b_identity_id', '$invited_c_identity_id',
+        '$invited_d_identity_id'
       );
     delete from vortex_identity.organizations where organization_id = '$organization_id';
     delete from vortex_identity.tenants where tenant_id = '$tenant_id';
@@ -251,7 +259,7 @@ finalize() {
   trap - EXIT INT TERM
   set +e
   touch "$proof_root/accept-a-release" "$proof_root/create-b-release" \
-    "$proof_root/group-holder-release"
+    "$proof_root/group-holder-release" "$proof_root/account-holder-release"
   stop_owned_workers
   if [ "$original_status" -ne 0 ]; then emit_owned_failure_diagnostics; fi
   cleanup_fixture
@@ -289,19 +297,36 @@ run_sql "
   insert into vortex_identity.identity_projections (
     identity_id, state, created_at, state_changed_at, state_changed_by,
     state_change_correlation_id, revision
-  ) values (
-    '$inviter_identity_id', 'active', pg_catalog.clock_timestamp(),
-    pg_catalog.clock_timestamp(), '$actor_id', '$correlation_initialize', 1
-  );
+  ) values
+    (
+      '$inviter_identity_id', 'active', pg_catalog.clock_timestamp(),
+      pg_catalog.clock_timestamp(), '$actor_id', '$correlation_initialize', 1
+    ),
+    (
+      '$invited_d_identity_id', 'active',
+      pg_catalog.clock_timestamp() - interval '2 hours',
+      pg_catalog.clock_timestamp() - interval '2 hours',
+      '$actor_id', '$correlation_initialize', 1
+    );
   insert into vortex_identity.organization_accounts (
     organization_account_id, organization_id, identity_id, display_name, state,
-    activated_at, changed_at, state_changed_at, state_changed_by,
+    activated_at, suspended_at, changed_at, state_changed_at, state_changed_by,
     state_change_correlation_id, revision
-  ) values (
-    '$inviter_account_id', '$organization_id', '$inviter_identity_id', 'Inviter',
-    'active', pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
-    pg_catalog.clock_timestamp(), '$actor_id', '$correlation_initialize', 1
-  );
+  ) values
+    (
+      '$inviter_account_id', '$organization_id', '$inviter_identity_id', 'Inviter',
+      'active', pg_catalog.clock_timestamp(), null, pg_catalog.clock_timestamp(),
+      pg_catalog.clock_timestamp(), '$actor_id', '$correlation_initialize', 1
+    ),
+    (
+      '$invited_d_account_id', '$organization_id', '$invited_d_identity_id',
+      'Returning invitee', 'suspended',
+      pg_catalog.clock_timestamp() - interval '2 hours',
+      pg_catalog.clock_timestamp() - interval '30 minutes',
+      pg_catalog.clock_timestamp() - interval '30 minutes',
+      pg_catalog.clock_timestamp() - interval '30 minutes',
+      '$actor_id', '$correlation_initialize', 2
+    );
   select * from vortex_access.initialize_organization_access_version(
     '$organization_id', '$actor_id', '$correlation_initialize'
   );
@@ -626,6 +651,110 @@ wait_owned_worker "$accept_c_pid"
 }
 [ "$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id = '$organization_id';")" = "$access_before_c" ] || {
   echo 'expired waiting acceptance changed Access' >&2
+  exit 1
+}
+
+# An existing-account lock is the final supported Identity wait before first
+# acceptance. The fresh expiry decision must therefore run after this wait,
+# while the clamped audit time must not revive the account or invitation.
+PGAPPNAME='vortex-invitation-access-d-account-holder' "${psql_command[@]}" >"$proof_root/account-holder.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout = '30s';
+set local statement_timeout = '45s';
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/account-holder.pid'
+select 1
+from vortex_identity.organization_accounts
+where organization_id = '$organization_id'
+  and organization_account_id = '$invited_d_account_id'
+for update;
+\! touch '$proof_root/account-holder-ready'
+\! deadline=600; while [ ! -f '$proof_root/account-holder-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline - 1)); done; [ -f '$proof_root/account-holder-release' ]
+rollback;
+SQL
+account_holder_pid=$!
+worker_pids+=("$account_holder_pid")
+wait_for_file "$proof_root/account-holder-ready"
+account_holder_backend="$(read_backend_pid "$proof_root/account-holder.pid")"
+
+deadline_d="$(run_sql "
+  begin;
+  do \$context\$
+  begin
+    perform vortex_context.initialize(pg_catalog.jsonb_build_object(
+      'callerKind', 'human', 'identityAuthorityId', '$actor_id',
+      'tenantId', '$tenant_id', 'organizationId', '$organization_id',
+      'sessionId', '$correlation_create_d',
+      'issuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
+      'expiresAt', pg_catalog.clock_timestamp() + interval '10 minutes',
+      'accessVersion', (
+        select current_version from vortex_access.organization_access_versions
+        where organization_id = '$organization_id'
+      ),
+      'correlationId', '$correlation_create_d',
+      'identityId', '$inviter_identity_id',
+      'organizationAccountId', '$inviter_account_id',
+      'authenticationStrength', 'single_factor'
+    ));
+  end
+  \$context\$;
+  with deadline as (
+    select pg_catalog.clock_timestamp() + interval '15 seconds' as value
+  ), created as (
+    select *
+    from deadline
+    cross join lateral vortex_access.coordinate_organization_invitation_with_access_intent(
+      '$email_d', '$token_d', deadline.value,
+      pg_catalog.jsonb_build_object(
+        'membershipIntents', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'membershipId', '$membership_d_id', 'groupId', '$group_id',
+            'startsAt', pg_catalog.clock_timestamp() - interval '1 minute',
+            'expiresAt', deadline.value
+          )
+        ),
+        'roleAssignmentIntents', '[]'::jsonb
+      )
+    )
+  )
+  select value from created;
+  commit;
+")"
+access_before_d="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id = '$organization_id';")"
+
+PGAPPNAME='vortex-invitation-access-d-accept' "${psql_command[@]}" >"$proof_root/accept-d.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout = '30s';
+set local statement_timeout = '45s';
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/accept-d.pid'
+select outcome
+from vortex_access.coordinate_organization_invitation_access_acceptance(
+  '$token_d', '$invited_d_identity_id', '$email_d', 'Returning invitee',
+  '$correlation_accept_d'
+)
+\g '$proof_root/accept-d.outcome'
+commit;
+SQL
+accept_d_pid=$!
+worker_pids+=("$accept_d_pid")
+accept_d_backend="$(read_backend_pid "$proof_root/accept-d.pid")"
+wait_for_database_blocker "$accept_d_backend" "$account_holder_backend"
+[ "$(run_sql "select case when pg_catalog.clock_timestamp() < '$deadline_d'::timestamptz then 'before' else 'late' end;")" = 'before' ] || {
+  echo 'the invitation deadline passed before its account wait was observed' >&2
+  exit 1
+}
+wait_for_database_time "$deadline_d"
+touch "$proof_root/account-holder-release"
+wait_owned_worker "$account_holder_pid"
+wait_owned_worker "$accept_d_pid"
+
+[ "$(tr -d '[:space:]' <"$proof_root/accept-d.outcome")" = 'unavailable' ] || {
+  echo 'an invitation that expired during its observed account wait was accepted' >&2
+  exit 1
+}
+[ "$(run_sql "select pg_catalog.concat_ws('|', invitation.revision, case when invitation.accepted_at is null then 'pending' else 'accepted' end, account.state, account.revision, case when account.originating_invitation_id is null then 'no_origin' else 'origin' end, (select count(*) from vortex_access.organization_group_memberships as membership where membership.organization_id = invitation.organization_id and membership.membership_id = '$membership_d_id'), version.current_version) from vortex_identity.organization_invitations as invitation join vortex_identity.organization_accounts as account on account.organization_id = invitation.organization_id and account.organization_account_id = '$invited_d_account_id' join vortex_access.organization_access_versions as version on version.organization_id = invitation.organization_id where invitation.organization_id = '$organization_id' and invitation.token_fingerprint = '$token_d';")" = "1|pending|suspended|2|no_origin|0|$access_before_d" ] || {
+  echo 'expired account-wait acceptance left partial Identity or Access state' >&2
   exit 1
 }
 
