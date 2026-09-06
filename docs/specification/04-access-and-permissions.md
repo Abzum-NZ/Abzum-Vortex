@@ -92,6 +92,8 @@ Permitted administrators can browse current registered permissions and inspect o
 
 Permitted administrators can also inspect [current local role configuration and separately registered application templates](../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-local-roles-and-application-role-templates). Local role details show the accepted permission configuration and safe assignment-policy settings, including roles awaiting acceptance or no longer available. A template comes from the exact currently registered application release, not the latest draft. Neither view establishes effective access or grants authority, and the same source role in two applications remains two distinct template references.
 
+Permitted administrators can inspect [role assignments and delegation authorities](../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-role-assignments-and-delegation-authorities) as separate bounded ledgers. Each shows its current holder, fixed time window, revision and stored state; delegation details show only the exact permitted scope references, not internal acceptance evidence. Revoked and expired facts remain visible for administration. A displayed active window does not establish effective authority: the current permission decision still applies.
+
 An organisation account, not the global identity, receives a direct assignment. Roles, Groups and assignments from another organisation or a parent organisation are never inherited implicitly. Tenant structure administration remains a separate authority and grants no organisation-management or application-data permission.
 
 ```mermaid

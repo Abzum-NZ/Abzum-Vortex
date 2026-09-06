@@ -2,12 +2,14 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   builderKeySchema,
+  delegationAuthorityIdSchema,
   groupIdSchema,
   membershipIdSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
   recordTypeIdSchema,
   revisionSchema,
+  roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
 } from "./identifiers";
@@ -394,6 +396,191 @@ export const readOrganizationAdministrationApplicationRoleTemplateResultSchema =
       .strict(),
   ]);
 
+export const organizationAdministrationAssignmentTemporalStateSchema = z.enum([
+  "active",
+  "scheduled",
+  "expired",
+  "revoked",
+]);
+
+export const organizationAdministrationAssignmentSubjectSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("organization_account"),
+      organizationAccountId: organizationAccountIdSchema,
+      displayName: z.string().trim().min(1).max(120),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("group"),
+      groupId: groupIdSchema,
+      key: builderKeySchema,
+      label: labelSchema,
+      state: z.enum(["active", "retired"]),
+    })
+    .strict(),
+]);
+
+export const organizationAdministrationAssignedRoleSchema = z
+  .object({
+    roleId: roleIdSchema,
+    key: builderKeySchema,
+    label: labelSchema,
+    lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
+  })
+  .strict();
+
+const organizationAdministrationTemporalFactFields = {
+  revision: javascriptSafeRevisionSchema,
+  startsAt: timestampSchema,
+  expiresAt: timestampSchema.optional(),
+  state: z.enum(["live", "revoked"]),
+  temporalState: organizationAdministrationAssignmentTemporalStateSchema,
+};
+
+const addOrganizationAdministrationTemporalFactIssues = (
+  value: {
+    startsAt: string;
+    expiresAt?: string | undefined;
+    state: "live" | "revoked";
+    temporalState: "active" | "scheduled" | "expired" | "revoked";
+  },
+  context: z.RefinementCtx,
+) => {
+  if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+    context.addIssue({
+      code: "custom",
+      path: ["expiresAt"],
+      message: "Assignment-ledger expiry must follow its start",
+    });
+  if ((value.state === "revoked") !== (value.temporalState === "revoked"))
+    context.addIssue({
+      code: "custom",
+      path: ["temporalState"],
+      message: "Only a revoked assignment-ledger fact has revoked temporal state",
+    });
+};
+
+export const organizationAdministrationRoleAssignmentSchema = z
+  .object({
+    roleAssignmentId: roleAssignmentIdSchema,
+    role: organizationAdministrationAssignedRoleSchema,
+    assignee: organizationAdministrationAssignmentSubjectSchema,
+    assignmentKind: z.enum(["standing", "eligible"]),
+    ...organizationAdministrationTemporalFactFields,
+  })
+  .strict()
+  .superRefine(addOrganizationAdministrationTemporalFactIssues);
+
+export const listOrganizationAdministrationRoleAssignmentsCommandSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    afterRoleAssignmentId: roleAssignmentIdSchema.optional(),
+  })
+  .strict();
+
+export const listOrganizationAdministrationRoleAssignmentsResultSchema = z
+  .object({
+    assignments: z.array(organizationAdministrationRoleAssignmentSchema).max(100),
+    nextAfterRoleAssignmentId: roleAssignmentIdSchema.optional(),
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const readOrganizationAdministrationRoleAssignmentCommandSchema = z
+  .object({ roleAssignmentId: roleAssignmentIdSchema })
+  .strict();
+
+export const readOrganizationAdministrationRoleAssignmentResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        assignment: organizationAdministrationRoleAssignmentSchema,
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+  ],
+);
+
+export const organizationAdministrationDelegationScopeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("organization_catalogue") }).strict(),
+  z
+    .object({
+      kind: z.literal("bounded"),
+      permissions: z.array(organizationAccessExactPermissionSchema).min(1),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const identities = value.permissions.map(
+        (permission) =>
+          `${permission.applicationRootId?.toLowerCase() ?? "platform"}:${permission.ownerKind}:${permission.ownerId.toLowerCase()}:${permission.permissionId.toLowerCase()}`,
+      );
+      if (new Set(identities).size !== identities.length)
+        context.addIssue({
+          code: "custom",
+          path: ["permissions"],
+          message: "A bounded delegation permission identity may appear only once",
+        });
+    }),
+]);
+
+export const organizationAdministrationDelegationAuthoritySchema = z
+  .object({
+    delegationAuthorityId: delegationAuthorityIdSchema,
+    holder: organizationAdministrationAssignmentSubjectSchema,
+    scope: organizationAdministrationDelegationScopeSchema,
+    ...organizationAdministrationTemporalFactFields,
+  })
+  .strict()
+  .superRefine(addOrganizationAdministrationTemporalFactIssues);
+
+export const listOrganizationAdministrationDelegationAuthoritiesCommandSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    afterDelegationAuthorityId: delegationAuthorityIdSchema.optional(),
+  })
+  .strict();
+
+export const listOrganizationAdministrationDelegationAuthoritiesResultSchema = z
+  .object({
+    delegations: z.array(organizationAdministrationDelegationAuthoritySchema).max(100),
+    nextAfterDelegationAuthorityId: delegationAuthorityIdSchema.optional(),
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const readOrganizationAdministrationDelegationAuthorityCommandSchema = z
+  .object({ delegationAuthorityId: delegationAuthorityIdSchema })
+  .strict();
+
+export const readOrganizationAdministrationDelegationAuthorityResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        delegation: organizationAdministrationDelegationAuthoritySchema,
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+  ],
+);
+
 export type OrganizationAdministrationGroup = z.infer<typeof organizationAdministrationGroupSchema>;
 export type ListOrganizationAdministrationGroupsCommand = z.infer<
   typeof listOrganizationAdministrationGroupsCommandSchema
@@ -481,4 +668,37 @@ export type ReadOrganizationAdministrationApplicationRoleTemplateCommand = z.inf
 >;
 export type ReadOrganizationAdministrationApplicationRoleTemplateResult = z.infer<
   typeof readOrganizationAdministrationApplicationRoleTemplateResultSchema
+>;
+export type OrganizationAdministrationAssignmentSubject = z.infer<
+  typeof organizationAdministrationAssignmentSubjectSchema
+>;
+export type OrganizationAdministrationRoleAssignment = z.infer<
+  typeof organizationAdministrationRoleAssignmentSchema
+>;
+export type ListOrganizationAdministrationRoleAssignmentsCommand = z.infer<
+  typeof listOrganizationAdministrationRoleAssignmentsCommandSchema
+>;
+export type ListOrganizationAdministrationRoleAssignmentsResult = z.infer<
+  typeof listOrganizationAdministrationRoleAssignmentsResultSchema
+>;
+export type ReadOrganizationAdministrationRoleAssignmentCommand = z.infer<
+  typeof readOrganizationAdministrationRoleAssignmentCommandSchema
+>;
+export type ReadOrganizationAdministrationRoleAssignmentResult = z.infer<
+  typeof readOrganizationAdministrationRoleAssignmentResultSchema
+>;
+export type OrganizationAdministrationDelegationAuthority = z.infer<
+  typeof organizationAdministrationDelegationAuthoritySchema
+>;
+export type ListOrganizationAdministrationDelegationAuthoritiesCommand = z.infer<
+  typeof listOrganizationAdministrationDelegationAuthoritiesCommandSchema
+>;
+export type ListOrganizationAdministrationDelegationAuthoritiesResult = z.infer<
+  typeof listOrganizationAdministrationDelegationAuthoritiesResultSchema
+>;
+export type ReadOrganizationAdministrationDelegationAuthorityCommand = z.infer<
+  typeof readOrganizationAdministrationDelegationAuthorityCommandSchema
+>;
+export type ReadOrganizationAdministrationDelegationAuthorityResult = z.infer<
+  typeof readOrganizationAdministrationDelegationAuthorityResultSchema
 >;

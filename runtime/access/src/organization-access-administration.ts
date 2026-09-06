@@ -8,6 +8,8 @@ import {
   groupIdSchema,
   listOrganizationAdministrationApplicationRoleTemplatesCommandSchema,
   listOrganizationAdministrationApplicationRoleTemplatesResultSchema,
+  listOrganizationAdministrationDelegationAuthoritiesCommandSchema,
+  listOrganizationAdministrationDelegationAuthoritiesResultSchema,
   listOrganizationAdministrationGroupsCommandSchema,
   listOrganizationAdministrationGroupsResultSchema,
   listOrganizationAdministrationMembershipsCommandSchema,
@@ -16,8 +18,12 @@ import {
   listOrganizationAdministrationPermissionsResultSchema,
   listOrganizationAdministrationRolesCommandSchema,
   listOrganizationAdministrationRolesResultSchema,
+  listOrganizationAdministrationRoleAssignmentsCommandSchema,
+  listOrganizationAdministrationRoleAssignmentsResultSchema,
   readOrganizationAdministrationApplicationRoleTemplateCommandSchema,
   readOrganizationAdministrationApplicationRoleTemplateResultSchema,
+  readOrganizationAdministrationDelegationAuthorityCommandSchema,
+  readOrganizationAdministrationDelegationAuthorityResultSchema,
   readOrganizationAdministrationGroupCommandSchema,
   readOrganizationAdministrationGroupResultSchema,
   readOrganizationAdministrationMembershipCommandSchema,
@@ -26,6 +32,8 @@ import {
   readOrganizationAdministrationPermissionResultSchema,
   readOrganizationAdministrationRoleCommandSchema,
   readOrganizationAdministrationRoleResultSchema,
+  readOrganizationAdministrationRoleAssignmentCommandSchema,
+  readOrganizationAdministrationRoleAssignmentResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
   type ChangeOrganizationAdministrationGroupResult,
   type CreateOrganizationAdministrationGroupCommand,
@@ -34,23 +42,31 @@ import {
   type ListOrganizationAdministrationGroupsResult,
   type ListOrganizationAdministrationApplicationRoleTemplatesCommand,
   type ListOrganizationAdministrationApplicationRoleTemplatesResult,
+  type ListOrganizationAdministrationDelegationAuthoritiesCommand,
+  type ListOrganizationAdministrationDelegationAuthoritiesResult,
   type ListOrganizationAdministrationMembershipsCommand,
   type ListOrganizationAdministrationMembershipsResult,
   type ListOrganizationAdministrationPermissionsCommand,
   type ListOrganizationAdministrationPermissionsResult,
   type ListOrganizationAdministrationRolesCommand,
   type ListOrganizationAdministrationRolesResult,
+  type ListOrganizationAdministrationRoleAssignmentsCommand,
+  type ListOrganizationAdministrationRoleAssignmentsResult,
   type OrganizationSelectionCandidate,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationApplicationRoleTemplateCommand,
   type ReadOrganizationAdministrationApplicationRoleTemplateResult,
+  type ReadOrganizationAdministrationDelegationAuthorityCommand,
+  type ReadOrganizationAdministrationDelegationAuthorityResult,
   type ReadOrganizationAdministrationMembershipCommand,
   type ReadOrganizationAdministrationMembershipResult,
   type ReadOrganizationAdministrationPermissionCommand,
   type ReadOrganizationAdministrationPermissionResult,
   type ReadOrganizationAdministrationRoleCommand,
   type ReadOrganizationAdministrationRoleResult,
+  type ReadOrganizationAdministrationRoleAssignmentCommand,
+  type ReadOrganizationAdministrationRoleAssignmentResult,
   type RenameOrganizationAdministrationGroupCommand,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
@@ -141,6 +157,34 @@ type ApplicationRoleTemplateDetailRow = DatabaseRow & {
   access_version: unknown;
 };
 
+type RoleAssignmentPageRow = DatabaseRow & {
+  organization_id: unknown;
+  assignments: unknown;
+  next_after_role_assignment_id: unknown;
+  access_version: unknown;
+};
+
+type RoleAssignmentDetailRow = DatabaseRow & {
+  organization_id: unknown;
+  outcome: unknown;
+  assignment_summary: unknown;
+  access_version: unknown;
+};
+
+type DelegationAuthorityPageRow = DatabaseRow & {
+  organization_id: unknown;
+  delegations: unknown;
+  next_after_delegation_authority_id: unknown;
+  access_version: unknown;
+};
+
+type DelegationAuthorityDetailRow = DatabaseRow & {
+  organization_id: unknown;
+  outcome: unknown;
+  delegation_summary: unknown;
+  access_version: unknown;
+};
+
 const revision = (value: unknown): unknown => {
   if (typeof value === "bigint") return Number(value);
   if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
@@ -153,6 +197,11 @@ const normalizeGroup = (value: unknown): unknown => {
 };
 
 const normalizeMembership = (value: unknown): unknown => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+  return { ...value, revision: revision((value as { revision?: unknown }).revision) };
+};
+
+const normalizeAssignmentLedgerFact = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
   return { ...value, revision: revision((value as { revision?: unknown }).revision) };
 };
@@ -734,6 +783,176 @@ export const createOrganizationAccessAdministrationService = (
         if (
           result.outcome === "available" &&
           !sameApplicationRoleTemplateReference(result.template.reference, reference)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return result;
+      });
+    },
+
+    listRoleAssignments: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ListOrganizationAdministrationRoleAssignmentsCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ListOrganizationAdministrationRoleAssignmentsResult>
+    > => {
+      const command =
+        listOrganizationAdministrationRoleAssignmentsCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<RoleAssignmentPageRow>`
+            select organization_id, assignments, next_after_role_assignment_id,
+              access_version
+            from vortex_access.list_organization_role_assignments_for_administration(
+              ${command.data.afterRoleAssignmentId ?? null}::uuid,
+              ${command.data.pageSize}::integer
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion ||
+          !Array.isArray(row.assignments)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        return listOrganizationAdministrationRoleAssignmentsResultSchema.parse({
+          assignments: row.assignments.map(normalizeAssignmentLedgerFact),
+          ...(row.next_after_role_assignment_id === null ||
+          row.next_after_role_assignment_id === undefined
+            ? {}
+            : { nextAfterRoleAssignmentId: row.next_after_role_assignment_id }),
+          accessVersion: revision(row.access_version),
+        });
+      });
+    },
+
+    readRoleAssignment: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReadOrganizationAdministrationRoleAssignmentCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ReadOrganizationAdministrationRoleAssignmentResult>
+    > => {
+      const command =
+        readOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<RoleAssignmentDetailRow>`
+            select organization_id, outcome, assignment_summary, access_version
+            from vortex_access.read_organization_role_assignment_for_administration(
+              ${command.data.roleAssignmentId}::uuid
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const result = readOrganizationAdministrationRoleAssignmentResultSchema.parse({
+          outcome: row.outcome,
+          ...(row.assignment_summary === null || row.assignment_summary === undefined
+            ? {}
+            : { assignment: normalizeAssignmentLedgerFact(row.assignment_summary) }),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          result.outcome === "available" &&
+          !sameUuid(result.assignment.roleAssignmentId, command.data.roleAssignmentId)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return result;
+      });
+    },
+
+    listDelegationAuthorities: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ListOrganizationAdministrationDelegationAuthoritiesCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ListOrganizationAdministrationDelegationAuthoritiesResult>
+    > => {
+      const command =
+        listOrganizationAdministrationDelegationAuthoritiesCommandSchema.safeParse(
+          commandCandidate,
+        );
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<DelegationAuthorityPageRow>`
+            select organization_id, delegations,
+              next_after_delegation_authority_id, access_version
+            from vortex_access.list_organization_delegation_authorities_for_administration(
+              ${command.data.afterDelegationAuthorityId ?? null}::uuid,
+              ${command.data.pageSize}::integer
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion ||
+          !Array.isArray(row.delegations)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        return listOrganizationAdministrationDelegationAuthoritiesResultSchema.parse({
+          delegations: row.delegations.map(normalizeAssignmentLedgerFact),
+          ...(row.next_after_delegation_authority_id === null ||
+          row.next_after_delegation_authority_id === undefined
+            ? {}
+            : { nextAfterDelegationAuthorityId: row.next_after_delegation_authority_id }),
+          accessVersion: revision(row.access_version),
+        });
+      });
+    },
+
+    readDelegationAuthority: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReadOrganizationAdministrationDelegationAuthorityCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ReadOrganizationAdministrationDelegationAuthorityResult>
+    > => {
+      const command =
+        readOrganizationAdministrationDelegationAuthorityCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<DelegationAuthorityDetailRow>`
+            select organization_id, outcome, delegation_summary, access_version
+            from vortex_access.read_organization_delegation_authority_for_administration(
+              ${command.data.delegationAuthorityId}::uuid
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const result = readOrganizationAdministrationDelegationAuthorityResultSchema.parse({
+          outcome: row.outcome,
+          ...(row.delegation_summary === null || row.delegation_summary === undefined
+            ? {}
+            : { delegation: normalizeAssignmentLedgerFact(row.delegation_summary) }),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          result.outcome === "available" &&
+          !sameUuid(result.delegation.delegationAuthorityId, command.data.delegationAuthorityId)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return result;

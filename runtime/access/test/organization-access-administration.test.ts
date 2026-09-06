@@ -694,4 +694,227 @@ describe("organization Access administration", () => {
       ),
     ).resolves.toEqual({ kind: "temporarily_unavailable" });
   });
+
+  it("lists role assignments through the bounded protected ledger query", async () => {
+    const assignment = {
+      roleAssignmentId: id(70),
+      role: {
+        roleId: id(71),
+        key: "review_operator",
+        label: "Review operator",
+        lifecycle: "unavailable",
+      },
+      assignee: {
+        kind: "organization_account",
+        organizationAccountId: id(72),
+        displayName: "Neutral assignee",
+      },
+      assignmentKind: "eligible",
+      revision: "2",
+      startsAt: "2026-09-06T00:00:00.000Z",
+      expiresAt: "2026-10-06T00:00:00.000Z",
+      state: "live",
+      temporalState: "expired",
+    };
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2).toUpperCase(),
+        assignments: [assignment],
+        next_after_role_assignment_id: id(70).toUpperCase(),
+        access_version: "7",
+      },
+    ]);
+
+    await expect(
+      service.listRoleAssignments(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10, afterRoleAssignmentId: id(69) },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        assignments: [{ roleAssignmentId: id(70), revision: 2 }],
+        nextAfterRoleAssignmentId: id(70).toUpperCase(),
+        accessVersion: 7,
+      },
+    });
+    expect(calls[0]?.text).toContain("list_organization_role_assignments_for_administration");
+    expect(calls[0]?.values).toEqual([id(69), 10]);
+  });
+
+  it("reads one exact role assignment and refuses mismatched result identity", async () => {
+    const summary = {
+      roleAssignmentId: id(70).toUpperCase(),
+      role: {
+        roleId: id(71),
+        key: "review_operator",
+        label: "Review operator",
+        lifecycle: "active",
+      },
+      assignee: {
+        kind: "group",
+        groupId: id(73),
+        key: "reviewers",
+        label: "Reviewers",
+        state: "retired",
+      },
+      assignmentKind: "standing",
+      revision: 2n,
+      startsAt: "2026-09-06T00:00:00.000Z",
+      state: "revoked",
+      temporalState: "revoked",
+    };
+    const read = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        assignment_summary: summary,
+        access_version: 7,
+      },
+    ]);
+    await expect(
+      read.service.readRoleAssignment(
+        verifiedSession,
+        { organizationId: id(2) },
+        { roleAssignmentId: id(70) },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { assignment: { revision: 2, assignee: { state: "retired" } } },
+    });
+    expect(read.calls[0]?.values).toEqual([id(70)]);
+
+    const mismatched = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        assignment_summary: { ...summary, roleAssignmentId: id(99) },
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      mismatched.readRoleAssignment(
+        verifiedSession,
+        { organizationId: id(2) },
+        { roleAssignmentId: id(70) },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
+
+  it("lists and reads delegation authority with only stripped exact scope", async () => {
+    const delegation = {
+      delegationAuthorityId: id(80),
+      holder: {
+        kind: "group",
+        groupId: id(73),
+        key: "reviewers",
+        label: "Reviewers",
+        state: "retired",
+      },
+      scope: {
+        kind: "bounded",
+        permissions: [
+          {
+            applicationRootId: id(81),
+            ownerKind: "module",
+            ownerId: id(82),
+            permissionId: id(83),
+          },
+        ],
+      },
+      revision: "3",
+      startsAt: "2026-09-06T00:00:00.000Z",
+      state: "live",
+      temporalState: "active",
+    };
+    const listed = serviceFor([
+      {
+        organization_id: id(2),
+        delegations: [delegation],
+        next_after_delegation_authority_id: id(80),
+        access_version: 7,
+      },
+    ]);
+    await expect(
+      listed.service.listDelegationAuthorities(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10, afterDelegationAuthorityId: id(79) },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { delegations: [{ revision: 3, scope: delegation.scope }] },
+    });
+    expect(listed.calls[0]?.values).toEqual([id(79), 10]);
+
+    const read = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        delegation_summary: { ...delegation, scope: { kind: "organization_catalogue" } },
+        access_version: 7n,
+      },
+    ]);
+    await expect(
+      read.service.readDelegationAuthority(
+        verifiedSession,
+        { organizationId: id(2) },
+        { delegationAuthorityId: id(80) },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { delegation: { scope: { kind: "organization_catalogue" } } },
+    });
+    expect(read.calls[0]?.text).toContain(
+      "read_organization_delegation_authority_for_administration",
+    );
+  });
+
+  it("refuses malformed ledger commands and mismatched delegation identity", async () => {
+    const malformed = serviceFor([]);
+    await expect(
+      malformed.service.listRoleAssignments(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 101 },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    await expect(
+      malformed.service.listDelegationAuthorities(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10, afterDelegationAuthorityId: "invalid" },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(malformed.calls).toHaveLength(0);
+
+    const mismatched = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        delegation_summary: {
+          delegationAuthorityId: id(99),
+          holder: {
+            kind: "organization_account",
+            organizationAccountId: id(72),
+            displayName: "Neutral holder",
+          },
+          scope: { kind: "organization_catalogue" },
+          revision: 1,
+          startsAt: "2026-09-06T00:00:00.000Z",
+          state: "live",
+          temporalState: "active",
+        },
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      mismatched.readDelegationAuthority(
+        verifiedSession,
+        { organizationId: id(2) },
+        { delegationAuthorityId: id(80) },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
 });

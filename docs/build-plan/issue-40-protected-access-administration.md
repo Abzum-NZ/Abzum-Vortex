@@ -122,6 +122,8 @@ Let permitted administrators inspect the organisation's assignment ledger throug
 
 ## References
 
+The role-assignment/delegation ledger checkpoint is implemented and independently reviewed; [its evidence](../evidence/issue-40-access-administration.md#role-assignment-and-delegation-ledgers--7-september-2026) records the passing restricted-role checks. PIM activation views, remaining non-grant changes and governed IAM handoffs remain part of this open task.
+
 - [Access model](../specification/04-access-and-permissions.md) and [platform permission catalogue](../specification/appendices/platform-permission-catalogue.md)
 - [Groups and privileged access](../specification/appendices/groups-and-privileged-access.md)
 - [IAM application](../specification/appendices/iam-application.md)
