@@ -156,6 +156,8 @@ Exit proof:
 
 **Phase exit and follow-ups:** the adviser cleanup in [#235](https://github.com/Abzum-NZ/Abzum-Vortex/issues/235) is Phase 2 exit hygiene and should land before the final #29 proof so the hosted performance-adviser result is clean. The corrected exact-commit verification gate [#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266) must produce a complete hosted Testing receipt before #235 or the final #29 evidence relies on hosted database delivery. The bounded-publication work in [#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257) is an independent, non-gating scale follow-up and does not block closing the Phase 2 epic.
 
+The #266 bootstrap is deployed, but its first complete hosted attempt exposed a pooled-connection observation defect in the permission-registry concurrency proof. Repair the observer using the actual transaction-bound database sessions, retain all competing-write assertions, and rerun the current protected revision's complete gate. A successful bootstrap deployment or partial test run is not a successful delivery receipt. This bounded repair does not require another Kestra deployment or hold independent #33 work; see the [dated evidence](../evidence/issue-266/README.md#bootstrap-rollout-and-first-complete-gate-attempt--6-september-2026).
+
 **Outcome:** A person can sign in, choose an organisation, tenant administrators can manage a safe organisation hierarchy, and authorised builders can draft, validate, publish and restore modules and applications independently.
 
 Build:
