@@ -1,4 +1,5 @@
 import { fieldDefinitionSchema, type ConditionNode, type FieldDefinition } from "@vortex/contracts";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   evaluateTypedCondition,
@@ -104,6 +105,123 @@ const evaluate = (
   });
 
 describe("typed conditions", () => {
+  it("executes the exact PostgreSQL parity corpus through the shared Rule evaluator", () => {
+    const sql = readFileSync(
+      new URL(
+        "../../../supabase/tests/365_permission_saved_condition_parity.test.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const matches = [
+      ...sql.matchAll(/\$typed_condition_vectors\$([\s\S]*?)\$typed_condition_vectors\$/g),
+    ];
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.[1]).toBeDefined();
+
+    type ParityField = Readonly<{ fieldId: string; type: string }>;
+    type ParityBinding = Readonly<{
+      key: string;
+      source: "current_organization_account_id" | "literal";
+      value?: unknown;
+    }>;
+    type ParityVector = Readonly<{
+      name: string;
+      condition: unknown;
+      declaredFieldIds: string[];
+      fieldValues: Record<string, unknown>;
+      parameters: { key: string; type: string }[];
+      bindings: ParityBinding[];
+      actorId?: string;
+      expected: "true" | "false" | "error:22023";
+    }>;
+    const corpus = JSON.parse(matches[0]![1]!) as {
+      fields: ParityField[];
+      vectors: ParityVector[];
+    };
+    expect(corpus.vectors).toHaveLength(40);
+
+    const parityField = (entry: ParityField, index: number): FieldDefinition => {
+      const settings = (() => {
+        switch (entry.type) {
+          case "text":
+            return { maxLength: 100 };
+          case "decimal_number":
+            return { digitsBeforeDecimal: 10, decimalPlaces: 6 };
+          case "yes_no":
+          case "date":
+          case "date_time":
+            return {};
+          case "several_choices":
+            return {
+              options: [
+                { value: "high", label: "High" },
+                { value: "low", label: "Low" },
+              ],
+            };
+          case "table":
+            return {
+              columns: [{ key: "name", type: "text", required: true }],
+              minimumRows: 0,
+              maximumRows: 10,
+            };
+          case "link":
+            return {
+              target: { state: "resolved", moduleRootId: id(80), recordTypeId: id(81) },
+              reverseKey: "source_records",
+              onParentDelete: "refuse",
+            };
+          case "link_to_person":
+            return {
+              audience: "organization_accounts",
+              applicationRootIdRequired: false,
+              onPersonDeactivation: "retain_reference",
+            };
+          default:
+            throw new Error(`Unsupported parity field type ${entry.type}`);
+        }
+      })();
+      return field(entry.fieldId, `parity_${index}`, entry.type, settings);
+    };
+    const parityFields = corpus.fields.map(parityField);
+
+    for (const vector of corpus.vectors) {
+      const parameterValues = Object.fromEntries(
+        vector.bindings.map((binding) => [
+          binding.key,
+          binding.source === "current_organization_account_id"
+            ? (vector.actorId ?? "53650000-0000-4000-8000-000000000001")
+            : binding.value,
+        ]),
+      );
+      const input = {
+        condition: vector.condition as ConditionNode,
+        sourceRecordFields: parityFields,
+        declaredFieldIds: vector.declaredFieldIds,
+        parameterDeclarations:
+          vector.parameters as TypedConditionEvaluationInput["parameterDeclarations"],
+        fieldValues: vector.fieldValues,
+        parameterValues,
+      } satisfies TypedConditionEvaluationInput;
+
+      if (vector.expected === "error:22023") {
+        expect(() => evaluateTypedCondition(input), vector.name).toThrowError(
+          TypedConditionEvaluationError,
+        );
+      } else {
+        let actual: boolean;
+        try {
+          actual = evaluateTypedCondition(input);
+        } catch (error) {
+          throw new Error(`Shared parity vector ${vector.name} unexpectedly refused`, {
+            cause: error,
+          });
+        }
+        expect(actual, vector.name).toBe(vector.expected === "true");
+      }
+    }
+  });
+
   it("evaluates all twelve operators without coercion", () => {
     const cases = [
       ["equals", fields.text, "alpha", literal("alpha"), true],
