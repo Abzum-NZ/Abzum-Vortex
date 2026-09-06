@@ -26,8 +26,9 @@ its callers. [Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34),
 [protected invocation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40),
 [installation #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and
 [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) retain those duties.
-Invitation integration remains unfinished in
-[#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33).
+At this D2 checkpoint, invitation integration remained unfinished. Its later
+implementation and Local verification are recorded in the
+[E invitation evidence](../issue-33-invitation-access/README.md).
 
 ## Verification
 
@@ -64,6 +65,18 @@ No additional state mechanism was needed. Rollback-only probes also verified all
 SQL fixtures roll back; concurrency cleanup checks its unique owned fixture.
 The SQL and concurrency suites ran sequentially on the shared database. This
 evidence does not claim a hosted receipt, production delivery or a usable interface.
+
+## Hosted Testing follow-up
+
+The complete [Testing receipt](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6KjHVDJUKSjXOUqSTjRhBV/outputs)
+was inspected on 6 September 2026. Execution `6KjHVDJUKSjXOUqSTjRhBV`
+succeeded for exact Testing commit `54a88f2fdb4c667f9bc50ad5cbf7fcecf22e4551`.
+Its schema-2 receipt records 36 applied migrations, all 18 selected concurrency
+proofs completed and all five selected schema checks completed. The selected
+manifest hash is `24adb0f392fdbda097ae15d48c14a71d5b89535415c4bcfad4f6c27be839ef09`;
+coverage hash is `9a3f039fc622df276c38763383cbba0f2d90d731b356a43254f273d9d4664b6c`.
+This supplies hosted evidence through D2, including the earlier stewardship work.
+It does not include the later E invitation changes or claim Production delivery.
 
 ## Frozen database artifacts
 

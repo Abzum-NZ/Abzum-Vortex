@@ -12,8 +12,8 @@ select is(
       'vortex_access.organization_access_versions'::regclass
       and constraint_row.conname = 'organization_access_versions_reason_valid'
   ),
-  'CHECK ((change_reason = ANY (ARRAY[''organization_initialized''::text, ''organization_account_activated''::text, ''organization_account_reactivated''::text, ''organization_account_suspended''::text, ''organization_account_closed''::text, ''role_assignment_changed''::text, ''role_activation_changed''::text, ''delegation_changed''::text, ''stewardship_changed''::text, ''role_catalogue_changed''::text, ''team_membership_changed''::text, ''application_access_changed''::text, ''direct_share_changed''::text, ''access_grant_changed''::text, ''public_policy_changed''::text, ''federation_mirror_changed''::text, ''mcp_authorization_changed''::text])))',
-  'the exact stored V1 reason allowlist includes role, delegation and stewardship changes'
+  'CHECK ((change_reason = ANY (ARRAY[''organization_initialized''::text, ''organization_account_activated''::text, ''organization_account_reactivated''::text, ''organization_account_suspended''::text, ''organization_account_closed''::text, ''role_assignment_changed''::text, ''role_activation_changed''::text, ''delegation_changed''::text, ''stewardship_changed''::text, ''invitation_access_accepted''::text, ''role_catalogue_changed''::text, ''team_membership_changed''::text, ''application_access_changed''::text, ''direct_share_changed''::text, ''access_grant_changed''::text, ''public_policy_changed''::text, ''federation_mirror_changed''::text, ''mcp_authorization_changed''::text])))',
+  'the exact stored V1 reason allowlist includes role, delegation, stewardship and invitation changes'
 );
 
 select is(
@@ -173,6 +173,29 @@ select is(
 
 drop table stewardship_increment;
 
+create temporary table invitation_access_increment on commit drop as
+select * from vortex_access.increment_organization_access_version(
+  '21950000-0000-4000-8000-000000000001',
+  '91950000-0000-4000-8000-000000000006',
+  '71950000-0000-4000-8000-000000000006',
+  'invitation_access_accepted'
+);
+
+select is(
+  (
+    select pg_catalog.to_jsonb(increment_row.*) - 'changed_at'
+    from invitation_access_increment as increment_row
+  ),
+  pg_catalog.jsonb_build_object(
+    'organization_id', '21950000-0000-4000-8000-000000000001'::uuid,
+    'current_version', 6,
+    'changed_by', '91950000-0000-4000-8000-000000000006'::uuid,
+    'change_correlation_id', '71950000-0000-4000-8000-000000000006'::uuid,
+    'change_reason', 'invitation_access_accepted'
+  ),
+  'the intended-invitation acceptance reason increments once with exact evidence'
+);
+
 create temporary table legacy_membership_increment on commit drop as
 select * from vortex_access.increment_organization_access_version(
   '21950000-0000-4000-8000-000000000001',
@@ -188,7 +211,7 @@ select is(
   ),
   pg_catalog.jsonb_build_object(
     'organization_id', '21950000-0000-4000-8000-000000000001'::uuid,
-    'current_version', 6,
+    'current_version', 7,
     'changed_by', '91950000-0000-4000-8000-000000000004'::uuid,
     'change_correlation_id', '71950000-0000-4000-8000-000000000004'::uuid,
     'change_reason', 'team_membership_changed'
@@ -233,7 +256,7 @@ select is(
   ),
   pg_catalog.jsonb_build_object(
     'organization_id', '21950000-0000-4000-8000-000000000001'::uuid,
-    'current_version', 6,
+    'current_version', 7,
     'changed_by', '91950000-0000-4000-8000-000000000004'::uuid,
     'change_correlation_id', '71950000-0000-4000-8000-000000000004'::uuid,
     'change_reason', 'team_membership_changed'
