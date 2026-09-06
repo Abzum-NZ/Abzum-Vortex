@@ -39,15 +39,34 @@ IAM interface or application-specific logic.
 | Artifact | SHA-256 |
 |---|---|
 | [Migration](../../supabase/migrations/20260906055827_evaluate_organization_permission_eligibility.sql) | `fb53f9c5d3521f7ca4029c1030d6c9cb95e67bfdb07ba510c4ca0a52b26144ff` |
-| [Focused tests](../../supabase/tests/290_organization_permission_eligibility.test.sql) | `136400ed929ec33db9d9128b60420f7ba16936d27cf3a1847eb4f116dd88a8b0` |
+| [Focused tests at the delivered revision](https://github.com/Abzum-NZ/Abzum-Vortex/blob/69eaf51ebf5b65e90542e097bac1cff622c624d4/supabase/tests/290_organization_permission_eligibility.test.sql) | `136400ed929ec33db9d9128b60420f7ba16936d27cf3a1847eb4f116dd88a8b0` |
 | [Concurrency proof](../../supabase/tests/organization-permission-eligibility-concurrency.test.sh) | `1d2a8c782639550acdf0b9b5042bf1c42cba8cb50c7866f5ff3341d37957f954` |
 | [Coverage manifest](../../workflows/kestra/database-verification.json) | `4d22e86299278cb274e2627669ae492d8e8a991be5c94f8db7d08fa0c9e3b0a3` |
 
 ## Delivery and remaining work
 
-Normal PR delivery and an exact hosted Testing receipt remain required. Local
-results do not establish hosted success or close #34. The next slice adds current
-delegation coverage to the same evaluator. Final server/target-policy composition
+[PR #308](https://github.com/Abzum-NZ/Abzum-Vortex/pull/308) merged after successful
+normal preview checks as Testing `69eaf51ebf5b65e90542e097bac1cff622c624d4`.
+[Execution `2Hb4Y52VOQvB9UFCbYP5vH`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/2Hb4Y52VOQvB9UFCbYP5vH)
+succeeded on 6 September 2026 at 19:31:35 NZST after 29 minutes 3.64 seconds.
+The complete schema-version 2 stored receipt was inspected, not only the status:
+40 migrations, all 20 selected concurrency proofs completed, and all five selected
+lint schemas completed. The delivered tree contains 37 SQL suites; the normal SQL
+test gate succeeded before the receipt was published. The same three existing lint
+warnings remain; there were no lint errors.
+
+The receipt's source hashes were independently recomputed from the exact merged
+Git commit and matched:
+
+| Evidence | SHA-256 |
+|---|---|
+| Migration set | `97b24c1f0aeb2864b7b53ca3f5b54ad449b73e39aed573f2b8fb53e2d22073e0` |
+| Delivery runner | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Verification manifest | `4d22e86299278cb274e2627669ae492d8e8a991be5c94f8db7d08fa0c9e3b0a3` |
+| Selected verification coverage | `57ac1be58d018af70a7fcbaa70d6c305d1876c50d7e5ac720681282398232879` |
+
+This completes hosted evidence for slice 2, not #34 or Production promotion.
+The next slice adds current delegation coverage to the same evaluator. Final server/target-policy composition
 then makes it consumable by protected operations. [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
 and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) retain their actual
 dependencies; no new user hold is introduced.

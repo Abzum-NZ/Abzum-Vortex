@@ -1223,6 +1223,18 @@ describe("identity, sharing and secret invariants", () => {
     expect(
       organizationSelectionCandidateSchema.safeParse({
         organizationId: id(220),
+        applicationRootId: id(224),
+      }).success,
+    ).toBe(true);
+    expect(
+      organizationSelectionCandidateSchema.safeParse({
+        organizationId: id(220),
+        applicationRootId: "00000000-0000-0000-0000-000000000000",
+      }).success,
+    ).toBe(false);
+    expect(
+      organizationSelectionCandidateSchema.safeParse({
+        organizationId: id(220),
         tenantId: id(222),
       }).success,
     ).toBe(false);
@@ -1231,6 +1243,15 @@ describe("identity, sharing and secret invariants", () => {
         tenantId: id(222),
         organizationId: id(220),
         organizationAccountId: id(223),
+        accessVersion: 1,
+      }).success,
+    ).toBe(true);
+    expect(
+      selectedOrganizationScopeSchema.safeParse({
+        tenantId: id(222),
+        organizationId: id(220),
+        organizationAccountId: id(223),
+        applicationRootId: id(224),
         accessVersion: 1,
       }).success,
     ).toBe(true);

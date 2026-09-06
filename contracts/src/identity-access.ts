@@ -334,7 +334,10 @@ export const organizationLauncherResolutionSchema = z.discriminatedUnion("kind",
 ]);
 
 export const organizationSelectionCandidateSchema = z
-  .object({ organizationId: organizationIdSchema })
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema.optional(),
+  })
   .strict();
 
 export const selectedOrganizationScopeSchema = z
@@ -342,6 +345,7 @@ export const selectedOrganizationScopeSchema = z
     tenantId: tenantIdSchema,
     organizationId: organizationIdSchema,
     organizationAccountId: organizationAccountIdSchema,
+    applicationRootId: applicationRootIdSchema.optional(),
     accessVersion: revisionSchema,
   })
   .strict();

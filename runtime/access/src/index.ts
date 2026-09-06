@@ -22,6 +22,10 @@ export {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
+export {
+  runOrganizationAccessOperation,
+  type OrganizationAccessOperationResult,
+} from "./organization-access-decision";
 export { fingerprintPermissionMeaning } from "./permission-fingerprints";
 export {
   organizationDelegationScopeEvidenceErrorCodes,
