@@ -140,3 +140,29 @@ Restore normal protected `main`/`HEAD` tracking after a fresh complete Testing r
 merge to `main`. [Issue #266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266) remains open until
 the current protected revision's full selected/completed proof and schema sets are verified in
 its successful hosted receipt. Production remains unchanged.
+
+## Hosted follow-up — permission proof passed; assignment-expiry setup repair
+
+[PR #297](https://github.com/Abzum-NZ/Abzum-Vortex/pull/297) merged the independently reviewed
+permission observer and its existing operational fixture correction into Testing as
+`e9163da9059880d53968faded6366398577b9e5c`. Its normal preview check passed.
+[Execution `2NnMq9tuBUjRRtd9emkm8G`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/2NnMq9tuBUjRRtd9emkm8G/logs)
+ran that exact revision with flow revision 7. All 30 SQL suites / 1,508 assertions and the first ten
+concurrency proofs passed, including the repaired permission-registry proof. The execution then
+**failed** the assignment-change expiry scenario: its five-second expiry elapsed before the
+remote observer established the intended governance-lock wait. Failure propagated and no complete
+success receipt was produced; schema lint and the remaining proofs are not claimed as completed.
+
+The bounded follow-up changes only that scenario's setup: the database expiry is sampled after
+the holder confirms acquisition of the governance lock, with a fifteen-second setup window.
+The proof still establishes the exact blocking backend relationship while the expiry is in the
+future, waits for database time to cross that expiry, then releases the holder. The real grant
+must refuse with `40001`, without an assignment or Access-version change. Product expiry rules,
+database migrations, worker cleanup and all final-state assertions are unchanged.
+
+Independent Sol review approved the exact script SHA-256
+`6dcbba9ca94acd75476cbb7db5bea85cc11dfb7ebc2f986cb820dd4f5a5cbf06`.
+Root ran that actual assignment-change concurrency script against Local Vortex successfully;
+shell syntax and whitespace checks also passed. This evidence does not replace the required fresh
+complete hosted Testing receipt. No additional Kestra deployment or Production change is required
+to deliver the commit-owned test correction.
