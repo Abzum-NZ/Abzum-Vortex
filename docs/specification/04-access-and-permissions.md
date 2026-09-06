@@ -241,6 +241,8 @@ Visibility conditions use one [shared typed evaluator](../build-plan/issue-36-ow
 
 [Ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) supplies the row-narrowing predicates before [row-policy composition #35](../build-plan/issue-35-row-policy-composition.md) proves their combination with the central action-permission decision. Phase 3 uses controlled neutral tables and actual non-owner database roles. [Generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) installs the proven policies on real definition-derived tables later. An operation-permission result alone never grants record access.
 
+Comparing a person field with the current user requires an explicit organisation-account-reference parameter. Its value comes from the verified current organisation account, never a user-entered identity. An ordinary text parameter does not silently become a person reference. The [typed-parameter implementation checkpoint](../build-plan/issue-36-ownership-and-visibility.md#next-condition-correction-compare-a-person-field-with-the-current-account) adds this missing declaration while preserving historical text semantics and publication evidence.
+
 ### Direct record sharing inside one organisation
 
 An authorised person may share one record directly with one organisation account or one group in the same organisation. The share has explicit readable and changeable field allowlists, optional expiry, grantor, recipient, reason, state, and activity history. A changeable field must also be readable.
