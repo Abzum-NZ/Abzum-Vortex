@@ -116,8 +116,12 @@ would be a separate security decision and is refused by the current specificatio
 exact commit, proves that it remains reachable from that protected branch, and applies its ordered
 Supabase migrations. It then runs the remote pgTAP suite through the pinned `pg_prove` harness and
 runs every migration-paired concurrency proof and Supabase database lint across the complete set of
-operated schemas. The checked-out delivery script owns both lists, so a stored older Kestra flow
-revision cannot silently omit a proof or override the schema scope for the commit being delivered.
+operated schemas. The image-baked script is a small provenance bootstrap: it accepts only this fixed
+repository, the environment's protected ref, the selected full commit and the fixed runner path. It
+then executes that commit's regular checked-out runner. The runner and Local database commands read
+the same strict verification manifest, which must name every concurrency proof and every schema
+created by the migration set. A stored older supported bootstrap therefore cannot silently retain an
+older proof list or override the schema scope for the commit being delivered.
 `supabase test db` deliberately uses a Docker helper, so it remains the
 local-development command and is not used by the operated flow: Kestra does not receive the host
 Docker socket. Only a completely successful run writes credential-free evidence to the
@@ -129,7 +133,15 @@ the Testing commit. Kestra records the authenticated account that resumes the ho
 not type their own identity, an execution identifier, or a migration fingerprint. Production then
 loads the successful Testing evidence itself. The delivery script independently proves that the
 tested commit is an ancestor of the Production commit and that both revisions contain the same
-migration set before opening the Production database connection.
+migration set, commit-owned runner and verification manifest before opening the Production database
+connection. Receipt schema 2 records the runner and manifest fingerprints plus the proof and schema
+sets that actually completed. Older receipts remain historical evidence, but cannot approve a
+schema-2 Production delivery.
+
+Testing execution `7w9iLE15hlvA9ii64ROry` predates this corrected runner boundary. It applied and
+ran the SQL suites for commit `50b6d4e2a1b7b079d57f8f15d00ee42a29284780`, but its older image-baked
+script ran only three concurrency proofs and linted four schemas. It is retained as partial historical
+evidence and is not an all-current-checks receipt for #235 or the final Phase 2 gate.
 
 Both flows queue at concurrency one. Supabase's migration history makes delivery of the same commit
 idempotent; the repository does not create another migration ledger. Production never runs seed data,
@@ -164,11 +176,12 @@ docker run --rm --entrypoint bash -v <repository>:/source:ro -v <repository>/wor
 ```
 
 The contract test uses a disposable local Git remote and a credential-free Doppler stand-in. It
-proves exact-commit preparation, evidence shape, refusal of unsuccessful Testing evidence, that valid
-approval reaches the Doppler boundary, refusal of an invalid role or root certificate, and construction
-of the exact credential-free `verify-full` database address even when an unsafe address is present in
-the process environment. It also refuses a remote migration history containing a file absent from the
-selected commit. Actual Testing/Production application remains a remote environment
+proves that an older bootstrap executes a newer reachable commit's runner and expanded manifest,
+exact-commit preparation, complete receipt shape, real failed-command propagation, and refusal of an
+invalid repository, ref, commit, runner, manifest or Testing receipt. It retains the approval, role,
+certificate and exact credential-free `verify-full` address checks even when an unsafe address is
+present in the process environment, and refuses a remote migration history containing a file absent
+from the selected commit. Actual Testing/Production application remains a remote environment
 acceptance check because local evidence cannot prove the configured Supabase projects or their
 least-privilege roles, each Doppler token's external scope, or that only the named Production
 operator can resume the approval hold.
