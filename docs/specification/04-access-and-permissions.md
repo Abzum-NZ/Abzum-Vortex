@@ -50,6 +50,24 @@ Every operation declares which lifecycle, row, field, sharing or public restrict
 
 ## Roles
 
+### Complete authority paths
+
+A permission must be supported by one complete current route: a compatible standing
+direct assignment, a compatible standing Group assignment with current membership,
+or the account's valid activation with its exact required eligible assignment and,
+for a Group-derived activation, exact current membership. Parts of different routes cannot be
+joined to invent access. If several complete routes work, the decision selects one
+consistently and rechecks no later than that route's earliest expiry. A later fresh
+decision may select another route; an earlier result cannot silently change its basis.
+
+For access management, every required before/after permission must also have a
+complete current delegation route. Independent bounded delegations may cover
+different exact permissions, but they cannot be combined into organisation-wide
+catalogue governance. Granting that governance requires an actual current catalogue
+delegation. The decision's validity is limited by all routes it relies on. The
+[central decision plan](../build-plan/issue-34-access-decision.md) records the
+implementation and verification boundary without adding another authority store.
+
 ### IAM is the access-management application
 
 All user-facing role grants and access-expanding changes use the [IAM Vortex application](appendices/iam-application.md), including its user-linked request, review and assignment views and generic approval workflows. Organisation ownership remains unchanged. IAM calls the protected Access operations; editing an ordinary request or approval record cannot grant access. Other administration applications link to IAM instead of offering parallel role-grant forms. Its guided first-steward setup and immediate removal paths are defined in the same application contract.

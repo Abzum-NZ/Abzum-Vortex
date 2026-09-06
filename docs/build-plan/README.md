@@ -18,6 +18,8 @@ The [decision register](../specification/appendices/decisions.md) has one non-bl
 
 Next, [the central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) consumes these exact facts to decide what each account may do. [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) has no user hold and follows its actual dependencies; it must not bypass #34. Installed IAM journeys remain [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
 
+The consolidated [central access decision implementation plan](issue-34-access-decision.md) defines #34's exact scope, reviewable slices, complete-path evaluation and downstream policy ownership. Missing target policies refuse; they are not pulled into the permission foundation or treated as already implemented.
+
 ## Architecture review
 
 The [corrected dependency and coverage map](architecture-review.md) is part of this plan. It identifies contract gaps, the Fluid adaptation boundary, the ordinary HR example and the separation between early service proofs and later complete-application evidence. New contract work is #249/#250; HR is #251; reusable foundations are #252/#253; complete integration is #254; full archive/restore is #255.
