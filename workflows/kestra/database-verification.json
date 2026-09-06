@@ -70,6 +70,31 @@
       "migration": "supabase/migrations/20260905232252_coordinate_organization_group_membership_changes.sql",
       "proof": "supabase/tests/organization-group-membership-change-concurrency.test.sh",
       "label": "Organization Group membership changes"
+    },
+    {
+      "migration": "supabase/migrations/20260906002950_coordinate_organization_role_activation_changes.sql",
+      "proof": "supabase/tests/organization-role-activation-change-concurrency.test.sh",
+      "label": "Organization role activation changes"
+    },
+    {
+      "migration": "supabase/migrations/20260906013706_coordinate_organization_delegation_authority_changes.sql",
+      "proof": "supabase/tests/organization-delegation-authority-change-concurrency.test.sh",
+      "label": "Organization delegation authority changes"
+    },
+    {
+      "migration": "supabase/migrations/20260906023032_coordinate_organization_stewardship_adoption.sql",
+      "proof": "supabase/tests/organization-stewardship-concurrency.test.sh",
+      "label": "Organization stewardship"
+    },
+    {
+      "migration": "supabase/migrations/20260906033309_coordinate_organization_management_application_requirement.sql",
+      "proof": "supabase/tests/organization-management-application-concurrency.test.sh",
+      "label": "Organization management application"
+    },
+    {
+      "migration": "supabase/migrations/20260906040352_coordinate_organization_invitation_access.sql",
+      "proof": "supabase/tests/organization-invitation-access-concurrency.test.sh",
+      "label": "Organization invitation access"
     }
   ],
   "lintSchemas": [

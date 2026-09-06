@@ -133,6 +133,27 @@ The Group's organisation, identity and key remain permanent; its display label m
 
 The private stored record contains `invitation_id`, organisation, lower-cased and trimmed invited email, a unique `sha256:` fingerprint of a 32-byte random secret, inviter organisation account, creation/invitation/expiry times, optional revocation time and revoker account, optional acceptance time and accepted account, last-change time, and positive revision. Phase 2 contains no role or Group assignment field; [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) owns any later authorised assignment transaction. The safe read contract omits the fingerprint. The raw secret appears only once in the successful trusted creation result and is absent from storage, fixtures, logs, errors, and durable evidence. Expiry is evaluated from database time for first acceptance rather than maintained by a background state-change job. A later exact replay by the accepting identity may return the same still-active account without mutating the invitation or account, even after that first-use expiry; every other reuse remains unavailable.
 
+Invitations with intended access add a separate, nonempty immutable intent keyed by the invitation, not fields copied into the Identity invitation or an editable approval record. It names exact new Group memberships and direct-account role assignments, including their fixed windows and reviewed role revisions. The accepted account comes from verified Identity acceptance, never from an invitation form's account identifier. Intended access changes require revoking and reissuing the invitation. The [protected invitation journey](iam-application.md#grant-and-approval-workflow) uses one private create-with-intent composition that calls the existing Identity invitation creator and stores the intent in the same transaction. Only after that transaction commits may the secret be returned. There is no operation for attaching intent to a previously issued invitation. Creating intent alone grants nothing and does not change Access version.
+
+The existing account-only acceptance path must refuse an unaccepted invitation carrying intent before changing Identity state. It cannot silently omit the intended grants or execute them using its existing runtime privileges. [Access #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) provides a separate private composition that rechecks current Group, role revision, assignment kind and fixed windows, accepts the invitation and writes all intended memberships/assignments with one Access-version change in the same transaction. Failure changes none of them. Genuinely account-only invitations retain their existing behaviour. Exact replay after successful intent acceptance returns the original linkage without recreating subsequently removed access.
+
+All these compositions acquire organisation governance before the invitation and mutable account/access facts. Acceptance may first resolve the exact token fingerprint and verified email without a lock, but it must re-read and check that invitation after acquiring governance. First acceptance checks expiry against database time after any lock wait; completed replay retains its existing expiry behaviour. The legacy account-only path uses the existing `unavailable` refusal for pending intent, with no disclosure of intended grants. Intent acceptance uses one `invitation_access_accepted` Access reason, including membership-only or already-active-account cases; account-only acceptance keeps its existing reasons.
+
+The intent retains only its exact invitation link, intended tuples and creation audit evidence. It reuses Identity's stored inviter, not a copied beneficiary, email or secret. [Protected invocation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) must bind trusted operation/workflow evidence to that exact invitation and intent, supply any independent approver linkage, and recheck current authority through [Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34). A submitted approver identifier, editable approval record or trace correlation is never authority; this work does not create an invitation-specific approval store.
+
+[Protected invocation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) verifies the invitee's identity, email and secret before organisation selection. Before first applying intended access, it rechecks the stored inviter/approver's current authority through [Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) inside the same locked transaction. The invitee need not already have the account being created. This narrowly scoped acceptance does not establish ordinary organisation authority or expose the private composition. The [IAM journey #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) owns the user-facing request and approval experience.
+
+```mermaid
+flowchart LR
+    INVITE[Verified invitation acceptance] --> INTENT{Intended access?}
+    INTENT -->|No| ACCOUNT[Existing account-only acceptance]
+    INTENT -->|Yes| CHECK[Protected current-authority and intent checks]
+    CHECK --> APPLY[Accept account and all intended access together]
+    APPLY --> COMMIT[Commit once with Access version]
+    CHECK -->|Refused| NONE[No account or grant changes]
+    APPLY -->|Failed| NONE
+```
+
 ### Session context
 
 The session context is a closed union by caller kind. A human or federated caller has a global identity, trusted Identity Authority identifier and organisation account; a system caller has a system actor; an unauthenticated public caller has neither and uses `anonymous` authentication strength. System and public variants cannot carry an Identity Authority identifier. Every variant carries tenant, organisation, optional application, session and issue times, expiry, access version and correlation identifier. Only the permitted variants may carry delegated or support context.
@@ -144,6 +165,17 @@ The optional application value is the permanent application-root identifier. It 
 Phase 2 organisation selection establishes an application-independent context and therefore carries no application identifier. The browser request contains only an untrusted `organizationId` selection candidate. The trusted server supplies the verified Identity session and configured Identity Authority identifier; Identity resolves the exact active tenant, organisation and organisation account, and Access composes their current positive version. An exact application root is added only after later application-installation and Access work can verify it for the selected organisation account.
 
 The human organisation resolver, context initialization, `SET LOCAL ROLE`, live context validation and protected operation execute in one database transaction. The resolver keeps shared locks on the selected Identity and Access scope rows until that transaction ends. The database preserves the complete union as one transaction-local value. Structural validation and setting that value do not grant authority. The trusted server begins the transaction as `vortex_runtime`, executes the initializer available only to that role, and then enters `vortex_request` with `SET LOCAL ROLE`; only the request role may call the read-only context accessors and Access-owned live-context validator used by protected service SQL. The request role has no Identity schema access. Commit, rollback or pooled connection reuse cannot carry the role or value into another transaction.
+
+The [request/account correction #305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305)
+aligns the resolver with account changes: first select the exact active Identity
+scope without locking Identity rows and acquire only that organisation's Access
+shared lock. Then the existing authoritative Identity resolver locks and rechecks
+the same tenant, organisation and account. Missing or changed eligibility refuses
+without returning a scope; a foreign or ineligible candidate cannot lock unrelated
+Access state. Both locks remain transaction-bound. Protected writers acquire Access
+governance before mutable Identity facts; [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
+must not check through the read resolver and later upgrade its shared lock. This is
+one consistent ordering rule, not a new context, counter or retry mechanism.
 
 ### Organisation launcher and selection contracts
 
@@ -249,6 +281,8 @@ Bounded delegation keeps its current exact permission tuples in one closed, dete
 
 Scope replacement preserves the delegation's organisation, permanent identity, holder, fixed time bounds and original grant provenance while advancing its revision and current change evidence. Revalidate bounded catalogue/continuity evidence on insertion or when the bounded tuples change, not on revocation of an unchanged set. Revocation must remain possible when the holder is inactive or the stored permission evidence is stale; it cannot also replace or broaden that scope.
 
+The [delegation-change composition](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) uses closed grant, whole-scope replacement and terminal revocation commands. Trusted actor/correlation evidence is separate from editable scope input. Bounded scope preparation normalizes known UUID identities, rejects duplicate exact permission identities, uses the database's deterministic tuple order, and derives the existing `scopeFingerprint` with the existing canonical JSON utility over `{kind: "bounded", permissions: canonicalPermissions}`. This is content provenance, not authority; the database checks the proposed exact catalogue and continuity tuples. Replacing stale authority does not require the old tuples to be current. Identical normalized scopes refuse without changing revision or Access. Standalone delegation changes use `delegation_changed`, distinct from record-sharing `access_grant_changed`.
+
 Owner-only fact readers select exactly one organisation and identity and return zero or one typed current fact. Unknown and foreign-organisation identities are equally unavailable. Use one database timestamp for scheduled/active/expired/revoked timing; timing is not an effective-permission decision. These readers add no public or runtime grants, whole-account snapshot or alternate evaluator. Later [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) evaluates scoped facts set-wise; [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) supplies authority-checked reads and [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) supplies the user journey.
 
 An explicit role-assignment grant names the exact organisation role and the role revision reviewed for that grant, as well as the new assignment identity, account or Group assignee, assignment kind and fixed time window. The writer refuses if the current stored role revision differs, even when its standing/activation-required mode is unchanged. This expected revision protects the grant operation; it is not a new lifetime policy pin on the stored assignment or a substitute for current permission-availability checks. The database derives original/change evidence from the trusted operation, validates the current role and holder under the shared organisation governance lock, and refuses a new grant whose expiry has passed while waiting for those locks. Scheduled starts remain supported.
@@ -269,11 +303,40 @@ The permission catalogue records the active registrations supplying each bound-m
 
 Delegation authority is separate from use-permission entries. It records one organisation, its holder kind (`organisation_account` or `group`) and holder identifier, the trusted granting actor, revision and effective start/expiry/revocation facts, and a closed scope: explicit organisation-wide catalogue management, or a version/fingerprint-pinned set of permanent permission references with their application contexts. The holder must belong to that same organisation; Group-held authority applies only through a current active membership. Permanent stewardship requires a direct organisation-account holder, never Group membership. The organisation-wide form deliberately covers future registrations in that organisation; the bounded form does not expand on update. A role-management operation requires its exact management permission and coverage of every affected before/after grant. Any management scope granted onward must be a subset of the actor's effective scope. No application template or supplied caller field can manufacture delegation authority. Use of a shared module does not erase the target application's delegation boundary.
 
-The initial organisation-steward handoff explicitly names an eligible identity and creates or confirms its active organisation account with a direct, non-expiring minimum management/delegation assignment atomically. It is callable only by trusted provisioning, never by an ordinary browser/request role. The permanent-steward invariant covers account/projection state, direct assignment, effective permissions and delegation scope; changing any of those facts must leave a valid replacement. Initial adoption of a pre-existing organisation is explicit and idempotent, not inferred from row order or tenant-administrator membership.
+The initial organisation-steward handoff explicitly names the intended active identity and creates or confirms its active organisation account, a direct non-expiring standing assignment of the minimum management permissions, and separate direct non-expiring organisation-catalogue delegation atomically. It is callable only by trusted provisioning, never by an ordinary browser/request role. The permanent-steward invariant covers account/projection state, direct assignment, effective permissions and delegation scope; changing any of those facts must leave a valid replacement. Initial adoption of a pre-existing organisation is explicit and idempotent, not inferred from row order or tenant-administrator membership.
+
+Within that transaction, [provisioning #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns account and identity creation or confirmation. The [private Access appointment in #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) receives the already-active account and derives the exact minimum platform-management assignment and separate permanent delegation. It must not introduce another Identity writer. A minimal current stewardship requirement records explicit adoption and its immutable provenance; it is not an owner flag or a permission bypass. A completed replay never recreates or revives grants changed by later legitimate administration.
+
+The current requirement is the boundary for the permanent-steward safeguard. Current account/identity, assignment, role permissions and delegation facts establish qualification; the adoption record alone does not. Reuse the existing organisation governance lock, exact revisions and one Access-version increment for the atomic appointment. Only mutations that can remove qualification need the final same-transaction assertion. The exact management-application requirement uses existing sealed role entries rather than another copied permission snapshot. [Access #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) owns its private revision-checked activation/replacement operation; [installation/IAM work](iam-application.md#setup-and-removal) composes its authorised use and proves the installed interface. Private Access facts alone do not prove that interface exists.
+
+That management requirement adds only the exact application root, organisation-local application role and immutable required role revision to the existing requirement. Either all three are absent or all three are present. Activation and replacement are ordinary revision-checked changes: the same binding or a stale revision refuses without changing Access. They cannot clear an active requirement. A new binding must name a current active standing application role with nonempty accepted permissions, and a qualifying permanent steward must actually hold its direct, already-started, non-expiring operating assignment. Merely finding the role does not establish management access.
+
+After binding, the required sealed revision supplies the minimum permission set. The current role must retain every required permission with its exact application/owner identity, meaning and uninterrupted continuity. Separately accepted extra permissions, changed labels or pending additions do not invalidate that retained set. Replacement validates the complete new condition without requiring stale old authority to become current. It advances the existing requirement revision and Access once, or rolls back entirely. The separate management-change result includes the exact binding and change evidence; the existing adoption response and its safe replay remain unchanged. [Application-access changes](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) participate in the same safeguard so withdrawal or an incompatible update cannot leave the final steward unable to administer access.
+
+```mermaid
+flowchart LR
+    BIND[Activate or replace exact management role requirement] --> LOCK[Lock organisation and check revision]
+    LOCK --> ROLE[Read required sealed role permissions]
+    ROLE --> SAME{One permanent steward also has direct permanent operating access?}
+    SAME -->|Yes| COMMIT[Commit requirement and one Access change]
+    SAME -->|No| REFUSE[Refuse without partial changes]
+    UPDATE[Later role, assignment or application change] --> SAME
+```
+
+```mermaid
+flowchart LR
+    PROVISION[Trusted provisioning confirms active account] --> APPOINT[Explicit minimum management appointment]
+    APPOINT --> ADOPT[Record adoption and commit once]
+    CHANGE[Authorised change to steward facts] --> LOCK[Lock organisation governance]
+    LOCK --> MUTATE[Apply proposed change]
+    MUTATE --> CHECK{A permanent steward still qualifies?}
+    CHECK -->|Yes| COMMIT[Commit change and Access version]
+    CHECK -->|No| ROLLBACK[Roll back the complete change]
+```
 
 The Access service owns an `access_version` per organisation. Every access-affecting organisation-account, role, assignment, group, sharing, public-policy, or application-access change increases it in the same transaction as the owning state change.
 
-The closed reasons distinguish standalone `role_catalogue_changed` from `role_assignment_changed`. A coordinated application catalogue/continuity/role change uses `application_access_changed` once for the whole transaction, not another increment per changed role. A refused or unchanged replay increments nothing. The role-storage implementation adds the catalogue reason to the existing contract and database allowlist without rewriting old change records.
+The closed reasons distinguish standalone `role_catalogue_changed`, `role_assignment_changed`, `role_activation_changed` and `delegation_changed`. Activation changes an individual use window without changing its eligibility assignment. Explicit stewardship adoption or a management-application requirement change uses `stewardship_changed` once for its whole composition; existing guarded role, assignment, delegation and account changes retain their own reason. The spelling is shared by current and stored contracts; the existing historical Group-name conversion is unchanged. A coordinated application catalogue/continuity/role change uses `application_access_changed` once for the whole transaction, not another increment per changed role. A refused or unchanged replay increments nothing. Add new reasons to the existing contract and database allowlist without rewriting old change records or creating another counter.
 
 The stored access-version record contains `organisation_id`, positive `current_version`, `changed_at`, `changed_by`, `change_correlation_id`, and one closed `change_reason`. It begins at `1`, cannot exceed the JavaScript safe-integer request-context limit, and exposes no permission result. The closed reasons cover organisation-account lifecycle, roles, Groups, application access, direct shares, grants, public policy, federation mirrors and MCP authorisation. Cluster-local identity-projection lifecycle is checked before Access and does not fan out increments across the person's organisations. Initialisation is separate and idempotent; a general increment cannot pretend to be initialisation. One narrow trusted operation reads only the live organisation identifier and version for an exact active tenant/organisation pair. Owner-only operations initialise or atomically increment and return the complete stored record. Identity-owned records contain no copy or contribution column.
 
@@ -282,6 +345,37 @@ The version number, not the timestamp, establishes the strict order of access ch
 Permission-registration creation, update, withdrawal and reactivation follow the same audit principle. After the organisation lock and current-registration read, choose one observation time: current database time for creation, or the later of the prior registration observation and current database time for a successor. Its immutable revision and current registration use that identical observation. Registration revisions and Access version still order the changes; an early statement-start timestamp cannot reject an otherwise valid serialized change. [Correction #295](https://github.com/Abzum-NZ/Abzum-Vortex/issues/295) owns the demonstrated legacy writer repair without changing permission continuity, stale-revision checks or access decisions.
 
 Invitation acceptance returns `accepted` or `already_accepted` with the organisation account and current Access version, or the closed refusal `unavailable` or `identity_inactive` with neither. The Access operation fingerprints the secret before database entry, calls the Identity-owned transition and increments for a first activation or reactivation in the same transaction. Exact replay and every refusal return without incrementing; missing or exhausted version state rolls back the Identity mutation.
+
+### Central decision contracts
+
+The [central Access declaration](../../../contracts/src/organization-access-decision.ts)
+is supplied by trusted platform code or a verified immutable compiled operation.
+It binds an operation key, exact catalogue action, organisation/application target,
+exact permission identity, recent-authentication requirement and ordinary-use or
+delegated-management requirement. Parsing a declaration never verifies its origin
+or authorizes its caller. Context, not the declaration, supplies organisation,
+account, identity, Access version and correlation.
+
+Exact permission identity contains only application context when applicable, owner
+kind, owner identity and permission identity. The database discovers current
+registration, acceptance, continuity and meaning evidence. Management names both
+before and after scopes, each absent, organisation-catalogue or a nonempty unique
+set of exact permission identities; it does not accept copied authority receipts.
+
+Private permission eligibility is distinct from a final allowed operation. Both
+use the same transaction-bound operation/target/account/organisation/Access evidence
+and a checked time with a finite later recheck deadline. Internal refusal uses a
+closed reason; public refusal contains only a safe reason and correlation, without
+private target, permission or grant details. No random decision identity, exported
+grant-witness set, independent state or reusable capability is introduced.
+
+The initial declaration supports only organisation/application targets without
+record-level policy. Record types, fields, sharing, public callers and remote policy
+cannot be smuggled in as extra fields or treated as implemented. Their required
+policies refuse until their owning tasks extend the same boundary. Contract tests
+prove shape and separation, not effective permission, database execution or a usable
+interface. The [#34 implementation plan](../../build-plan/issue-34-access-decision.md)
+defines the remaining evaluation, integration and verification work.
 
 ## Module and record-type contracts
 
