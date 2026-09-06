@@ -110,6 +110,14 @@ Buttons and controls bind to a small typed operation model: query/view control, 
 
 Tabs, dialogs, drawers, query controls and forms carry semantic IDs. The same operation meaning serves web, keyboard and [MCP](../12-connections-and-interfaces.md#governed-mcp-access). Geometry and animation do not become MCP actions.
 
+### Forms inside a rule flow
+
+The [Frontend Rule Designer Show form node](frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission) selects this same published form representation and renderer, including forms that collect typed action inputs before any subject record exists. It declares defaults, response schema and output mappings to flow variables. There is no second form designer. Dialog/drawer/inline-step placement does not change validation or submission meaning.
+
+Intermediate Continue/Submit validates answers into the private journey draft; only final Submit invokes the configured bounded owning operation. Several required forms must all be satisfied before any business changes commit. Cancel or abandonment commits no business effects, event, activity effect or workflow-start intent. The server recomputes required gates and validates answers, access and expected revisions rather than trusting a client-supplied next node. No transaction or server request remains open during human input. Existing draft storage and revisions provide private persistence and safe resume; no separate durable frontend-run store is introduced.
+
+The typed draft scope includes person, organisation, installation, exact flow/form/node versions and optional subject. Stale installation versions require restart rather than silently combining answers with changed definitions. Invalid, duplicate, concurrent and revoked-access submissions have safe outcomes. Semantic controls expose Continue, Cancel, final Submit, current fields and validation to web and authorised MCP clients through the same contract. Durable workflow requests reuse this renderer and draft capability through [#81](https://github.com/Abzum-NZ/Abzum-Vortex/issues/81) and [#83](https://github.com/Abzum-NZ/Abzum-Vortex/issues/83), not an open database transaction.
+
 ## Draft, preview, publication and activation
 
 ```mermaid

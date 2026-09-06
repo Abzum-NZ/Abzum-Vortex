@@ -1,5 +1,7 @@
 # 20. Quality, accessibility and acceptance
 
+The [Frontend Rule Designer acceptance matrix](appendices/frontend-rule-designer.md#acceptance-and-delivery-coverage) is normative: include variables and phase-safe node execution, reusable input forms, no business submission on Cancel/abandon, one atomic final operation, exact packaged registrations, post-commit Kestra handoff and equivalent web/MCP outcomes. The [delivery map](../build-plan/frontend-rule-designer.md) assigns each proof without moving later UI ahead of its dependencies.
+
 [Previous: Operations, backup and recovery](19-operations-backup-and-recovery.md) · [Specification index](README.md) · [Decision register](appendices/decisions.md)
 
 ## Definition of complete

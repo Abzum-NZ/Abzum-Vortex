@@ -16,7 +16,9 @@ flowchart LR
     EVENT --> FLOW[Workflow performs background work]
 ```
 
-An **action** is a named operation that participates in a save. A **rule** is immediate logic within the save. An **event** is a committed statement that something happened. A [workflow](09-workflows-and-pipelines.md) performs work after the save.
+An **action** is a named operation that participates in a save. A **rule** is a typed flow of immediate logic evaluated in its declared context. An **event** is a committed statement that something happened. A [workflow](09-workflows-and-pipelines.md) performs durable work after the save. The [Frontend Rule Designer](appendices/frontend-rule-designer.md) is the one shared rule/action authoring surface, reusing the Conditions Designer and Page Designer forms.
+
+An interactive action journey may ask for several forms before final submission. Answers and proposed changes remain a private draft: no business writes occur until every required step passes. Final submission revalidates the complete required path and commits the one configured bounded operation atomically. Cancel, abandonment or refusal commits no business effects, event, activity effect or workflow-start intent. A database transaction is never held while waiting for a person; [custom forms and all-or-nothing submission](appendices/frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission) defines this distinction.
 
 ## Actions
 
@@ -43,9 +45,9 @@ An action cannot wait, call an external system, send email, send notifications, 
 
 ## Rules
 
-A rule has a trigger, condition, priority, and one effect. Rules for the same trigger run in a stable published order.
+A rule flow has a trigger, optional condition, priority, declared typed inputs and flow variables, and an ordered graph of registered nodes. Rules for the same trigger run in a stable published order. The current single-effect implementation is a legacy contract, not the limit of the approved designer; [versioned compatibility](appendices/frontend-rule-designer.md#contracts-and-compatibility-delivery) must preserve existing published releases.
 
-Allowed effects are:
+The immediate save-rule effects remain:
 
 - Refuse the save with a field-level message.
 - Set a field value.
@@ -53,6 +55,8 @@ Allowed effects are:
 - Show or hide a field in the current form.
 - Warn without refusing.
 - Request background work after a successful commit.
+
+The complete [frontend node catalogue](appendices/frontend-rule-designer.md#initial-frontend-node-catalogue-and-extensibility) additionally provides branching, flow variables, input forms, action preparation and semantic interface controls. Context validation separates pure feedback, interactive collection and authoritative submission; Show form is never a node inside a database transaction. New node kinds are versioned platform registrations, not customer-uploaded code.
 
 Server validation is authoritative. Client-side rule evaluation may provide immediate feedback, but the server re-evaluates the rule against current data before saving.
 

@@ -6,6 +6,8 @@ This map connects every current specification section to the work that delivers 
 
 ## Specification-to-task map
 
+The [Frontend Rule Designer delivery map](../../build-plan/frontend-rule-designer.md) adds explicit coverage for typed variables, extensible node graphs, shared Conditions/Page Designers, collect-first atomic final submission, installation registration and durable handoff. It reuses existing tasks and records the exact headless-contract versus UI dependencies; no designer task is closed by the specification change.
+
 | Specification section | Governing GitHub work |
 |---|---|
 | [1. Purpose and product boundaries](../01-purpose-and-scope.md) and [core contract boundary](core-contract-boundary.md) | Gate 0 [#151](https://github.com/Abzum-NZ/Abzum-Vortex/issues/151), contract epic [#9](https://github.com/Abzum-NZ/Abzum-Vortex/issues/9), boundary correction [#186](https://github.com/Abzum-NZ/Abzum-Vortex/issues/186), governed MCP parity [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200), operational acceptance [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166); excluded embedded-AI tasks [#105](https://github.com/Abzum-NZ/Abzum-Vortex/issues/105) and [#106](https://github.com/Abzum-NZ/Abzum-Vortex/issues/106) remain closed. |

@@ -1,7 +1,7 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.18
-**Date:** 5 September 2026
+**Status:** Approved specification 2.19
+**Date:** 7 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
@@ -9,9 +9,11 @@
 
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
 
-This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) contains one explicitly non-blocking Studio authoring-surface choice; confirmed runtime requirements do not depend on it. A future material uncertainty must be recorded there before implementation assumes an answer.
+This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) is clear. The owner selected one Frontend Rule Designer, including flow variables and reusable custom forms with all-or-nothing final submission. A future material uncertainty must be recorded there before implementation assumes an answer.
 
 ## Architecture review additions
+
+- [Frontend Rule Designer](appendices/frontend-rule-designer.md): triggers, shared conditions, extensible nodes, typed flow variables, Page Designer forms, collect-first atomic submission, packaged registration and Kestra handoff. [Delivery ownership and dependencies](../build-plan/frontend-rule-designer.md).
 
 - [Verified recent authentication](appendices/recent-authentication.md): protected actions distinguish actual sign-in and MFA confirmation from token refresh, with provider-neutral evidence and ordinary-session compatibility.
 
