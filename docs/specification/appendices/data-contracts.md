@@ -83,7 +83,35 @@ Each authentic source alias has the Definition root, current compiler lookup sco
 
 `tenant_id`, permanent `short_name`, `display_name`, state, `created_at`, `created_by`, `state_changed_at`, and positive `revision`. Tenant identifiers and short names are cluster-unique and permanent; display names may change and need not be unique. State-change time cannot precede creation time. Tenant states are active, suspended, archived, and removal pending. Commercial customer or subscription references are ordinary application records and never part of this core identity contract.
 
-A tenant-administrator assignment has tenant, global identity, state, permissions, creator, start, expiry, revocation, and activity references. It grants no organisation record permission.
+### Tenant-administrator assignment
+
+A tenant-administrator assignment names one tenant and one verified identity. It
+has a permanent assignment identifier, positive revision, a canonical unique
+nonempty set of structural capabilities, start and optional expiry, trusted
+creation/change actor and correlation evidence, and complete revocation evidence
+when revoked. It grants no organisation membership, application entry, local role
+authority or record permission. [Protected administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
+owns its service implementation; [IAM](iam-application.md) owns its later
+user-facing grant journey.
+
+Only these structural capabilities are permitted:
+
+- `platform.tenant.hierarchy.read`
+- `platform.tenant.organizations.create`
+- `platform.tenant.organizations.rename`
+- `platform.tenant.organizations.reparent`
+- `platform.tenant.organizations.lifecycle`
+- `platform.tenant.administrators.read`
+- `platform.tenant.administrators.manage`
+
+`scheduled`, `active`, `expired` and `revoked` are derived from the assignment's
+start, expiry and revocation at an explicit evaluation time; callers cannot edit
+a status to manufacture authority. Revisions order accepted changes. Creation
+and change timestamps are audit evidence, not a second authorization counter.
+No Activity identifier is required before [Activity #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252)
+and [its persistence #115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115)
+are delivered. The assignment does not store a duplicate permission catalogue,
+approval workflow, effective-access cache or organisation Access version.
 
 ### Organisation
 
