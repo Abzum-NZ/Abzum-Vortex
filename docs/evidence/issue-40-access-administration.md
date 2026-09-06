@@ -17,7 +17,7 @@ The organisation/application change resolvers take the existing organisation wri
 | Security and database lint | Local security advisors report no issues. All six selected schemas lint without errors; three previously existing Access warnings remain, none introduced here |
 | Independent actual-patch review | Sol approved the final implementation and corrected application-resolver proof; no remaining source finding |
 | Repository-wide check | Full verification passes: 1,238 tests, three existing skips, eight fixture checks, 23 package typechecks/builds, formatting/lint and package boundaries |
-| Hosted delivery | Pending for this checkpoint; local success is not hosted completion |
+| Hosted delivery | [PR #312](https://github.com/Abzum-NZ/Abzum-Vortex/pull/312) merged into Testing after both normal preview checks passed; the exact hosted database receipt is still pending verification |
 
 The existing local PostgreSQL 17.6 database had 43 migrations before the additive change. The CLI-created migration `20260906101701_protect_organization_access_administration.sql` was applied and iterated locally without resetting data. Once final SQL and concurrency checks passed, the supported local migration-history command recorded that already-applied migration, and the local list confirmed all 44 entries match. No hosted migration history, Production deployment or infrastructure was changed by that local operation.
 
@@ -26,6 +26,10 @@ Review and execution corrected three narrow issues before the passing checkpoint
 One earlier full database run observed a failure in the unchanged Access-version suite: its exhaustion test expected `22003` but received stale-account `40001`. The isolated original suite and the final complete suite both passed without changing that test or its implementation. The cause was not established; this is not evidence that a local clock issue was repaired. A first ad-hoc PowerShell transport also appended a carriage-return line after the new shell proof had passed; running the exact UTF-8 source through the normal Node runner passed. No source workaround was added for either observation.
 
 There is no new user interface to screenshot. Remaining permitted reads, non-grant changes with Activity, private governed handoffs and exact hosted verification remain part of [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
+
+## Testing merge
+
+The approved source `9b23a4219e7cd27e99947109c5ba29438cef09e0` merged normally at `2026-09-06T11:11:27Z` as `35b09d1995a56656cbe6f0401666145e4853bd82`; the merge changed no reviewed file bytes. Both Vercel and Vercel Preview Comments succeeded. No required check was bypassed. Read-only inspection of the hosted receipt could not be completed because the Edge browser controller reported a detached/unattached debugger. The ordinary [Kestra KV page](https://kestra.abzum.com/ui/main/kv) opened, but its receipt content was not readable through the connected tool. This is not evidence of a failed hosted run, nor of a successful one. Core implementation continues while the exact result remains unverified; no API workaround, new credential or infrastructure change was attempted.
 
 ## Reviewed database bytes
 
