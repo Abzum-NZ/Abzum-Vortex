@@ -156,6 +156,9 @@ describe("identity projection, organisation-account and invitation contracts", (
     expect(accessVersionChangeReasonSchema.safeParse("role_activation_changed").success).toBe(true);
     expect(accessVersionChangeReasonSchema.safeParse("delegation_changed").success).toBe(true);
     expect(accessVersionChangeReasonSchema.safeParse("stewardship_changed").success).toBe(true);
+    expect(accessVersionChangeReasonSchema.safeParse("invitation_access_accepted").success).toBe(
+      true,
+    );
     expect(accessVersionChangeReasonSchema.safeParse("team_membership_changed").success).toBe(
       false,
     );
@@ -170,6 +173,9 @@ describe("identity projection, organisation-account and invitation contracts", (
     );
     expect(accessVersionChangeReasonV1Schema.safeParse("delegation_changed").success).toBe(true);
     expect(accessVersionChangeReasonV1Schema.safeParse("stewardship_changed").success).toBe(true);
+    expect(accessVersionChangeReasonV1Schema.safeParse("invitation_access_accepted").success).toBe(
+      true,
+    );
     expect(accessVersionChangeReasonV1Schema.safeParse("group_membership_changed").success).toBe(
       false,
     );
@@ -184,6 +190,9 @@ describe("identity projection, organisation-account and invitation contracts", (
     );
     expect(writeAccessVersionChangeReasonV1("delegation_changed")).toBe("delegation_changed");
     expect(writeAccessVersionChangeReasonV1("stewardship_changed")).toBe("stewardship_changed");
+    expect(writeAccessVersionChangeReasonV1("invitation_access_accepted")).toBe(
+      "invitation_access_accepted",
+    );
     expect(
       readOrganizationAccessVersionV1({
         ...version,
@@ -214,6 +223,12 @@ describe("identity projection, organisation-account and invitation contracts", (
         changeReason: "stewardship_changed",
       }),
     ).toEqual({ ...version, changeReason: "stewardship_changed" });
+    expect(
+      readOrganizationAccessVersionV1({
+        ...version,
+        changeReason: "invitation_access_accepted",
+      }),
+    ).toEqual({ ...version, changeReason: "invitation_access_accepted" });
     expect(accessVersionChangeReasonSchema.safeParse("business_record_changed").success).toBe(
       false,
     );

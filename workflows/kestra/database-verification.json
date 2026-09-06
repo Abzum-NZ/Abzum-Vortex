@@ -90,6 +90,11 @@
       "migration": "supabase/migrations/20260906033309_coordinate_organization_management_application_requirement.sql",
       "proof": "supabase/tests/organization-management-application-concurrency.test.sh",
       "label": "Organization management application"
+    },
+    {
+      "migration": "supabase/migrations/20260906040352_coordinate_organization_invitation_access.sql",
+      "proof": "supabase/tests/organization-invitation-access-concurrency.test.sh",
+      "label": "Organization invitation access"
     }
   ],
   "lintSchemas": [

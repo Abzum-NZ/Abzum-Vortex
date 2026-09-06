@@ -12,6 +12,12 @@ This plan replaces the sequencing of the earlier [Build Plan](https://claude.ai/
 
 The [decision register](../specification/appendices/decisions.md) has one non-blocking Studio authoring-surface choice (D38). Groups and optional per-role PIM are settled in the permanent specification. Vortex assigns the minimum valid next module or application release version after structural comparison, and the builder confirms or cancels publication. A new unresolved business choice must be recorded before implementation assumes an answer.
 
+## Current delivery checkpoint — 6 September 2026
+
+[Permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32) is complete after independent full-task review and the exact hosted Testing receipt through D2. [Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) has completed its A–E implementation and independent full-task review; [invitation evidence](../evidence/issue-33-invitation-access/README.md) records the final Local gates. Normal E pull-request delivery and exact hosted evidence remain delivery work, not another product decision. Earlier slice-by-slice instructions below explain the implementation order, not outstanding duplicate work.
+
+Next, [the central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) consumes these exact facts to decide what each account may do. [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) has no user hold and follows its actual dependencies; it must not bypass #34. Installed IAM journeys remain [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
+
 ## Architecture review
 
 The [corrected dependency and coverage map](architecture-review.md) is part of this plan. It identifies contract gaps, the Fluid adaptation boundary, the ordinary HR example and the separation between early service proofs and later complete-application evidence. New contract work is #249/#250; HR is #251; reusable foundations are #252/#253; complete integration is #254; full archive/restore is #255.
