@@ -178,6 +178,10 @@ The organisation manages its complete role and permission catalogue, including a
 
 Tenant Administration and Organisation Administration are locked, system-installed Vortex applications. They use ordinary modules, records, pages, roles and workflows while calling narrowly protected identity, hierarchy, access, entitlement and data-handling operations. The engine does not contain special portal page logic.
 
+Their responsibilities are distinct: Tenant Administration presents tenant structure and organisation lifecycle; Organisation Administration presents organisation accounts, invitations and runtime settings; [IAM](appendices/iam-application.md) presents requests, approvals and grants for tenant-administrator assignments and organisation access. The administration applications do not add parallel role-grant surfaces. They consume the channel-neutral protected operations from [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40); their rendered journeys remain [#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
+
+Initial tenant and organisation stewardship requires two explicit nominations and separately scoped assignments. The same verified person may be nominated for both; holding either appointment never implicitly supplies the other. Protected service provisioning reuses the existing [organisation stewardship appointment](04-access-and-permissions.md#initial-organisation-stewardship). This service-only setup is not proof that the later IAM application and its required operating role are installed and usable.
+
 Legal details, contacts, branding, business calendars, notices and privacy request cases are ordinary records in administration applications. The identity service retains only the organisation's stable identity, hierarchy, lifecycle, display name and minimum [runtime localisation settings](appendices/data-contracts.md#tenant-identity-and-organisation-account-records) needed before an application loads.
 
 ## Required records

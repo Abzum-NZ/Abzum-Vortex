@@ -20,11 +20,19 @@ Next, [the central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex
 
 The consolidated [central access decision implementation plan](issue-34-access-decision.md) defines #34's exact scope, reviewable slices, complete-path evaluation and downstream policy ownership. Missing target policies refuse; they are not pulled into the permission foundation or treated as already implemented. [#305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305) is complete after [exact hosted Testing verification](../evidence/issue-305-request-lock-order.md#hosted-testing--6-september-2026): the organisation reader and supported account writer now use consistent ordering, proved with the actual writer. The database-integration prerequisite is cleared; #34 implementation proceeds without a user hold.
 
-The #34 current-permission slice now passes independent review and local verification
-for direct/Group standing and activated access, including removal and expiry during
-concurrent work. [Evidence](../evidence/issue-34-permission-eligibility.md) distinguishes
-that completed local proof from the still-required hosted receipt, delegation
-coverage and final protected-operation integration. #34 remains in progress.
+All four #34 slices now pass independent whole-task review and local verification:
+current direct/Group access, privileged activation, delegated management and the
+verified application handoff. [Final implementation evidence](../evidence/issue-34-access-decision.md)
+records [PR #309](https://github.com/Abzum-NZ/Abzum-Vortex/pull/309)'s normal Testing merge.
+The exact hosted receipt for that combined revision is still pending; #34 remains
+in review until it is verified. The earlier [current-permission receipt](../evidence/issue-34-permission-eligibility.md)
+is complete but does not substitute for the combined delivery.
+
+The [protected administration implementation plan](issue-30-protected-administration.md)
+consolidates #30 into reviewable slices. It reuses delivered stewardship and the
+same Access decision; it does not wait for all of #40, add a second permission
+engine or claim the later IAM application is already usable. Preparation is
+complete; implementation starts after #34's exact hosted completion.
 
 ## Architecture review
 
@@ -604,7 +612,7 @@ The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) follow
 
 - [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) corrects literal/reference confusion in completed contract code; it precedes [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249). These are headless contract corrections, not permission to jump straight into a live UI engine.
 - [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) must preserve guided-form content per step under one page shell. Prove exact step-to-content ownership, required slots per step, cross-step identity/dependency validation and lossless V1 conversion before accepting the new representation; a single common page tree is insufficient. Compiler, persistence and adapter slices must all preserve that mapping.
-- [#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257) removes the publication lifetime cap using bounded history/dependency reads. It is a planned headless follow-up to [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) and [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14).
+- [#257](https://github.com/Abzum-NZ/Abzum-Vortex/issues/257) removes the publication lifetime cap using bounded history/dependency reads. Its prerequisites [#19](https://github.com/Abzum-NZ/Abzum-Vortex/issues/19) and [#14](https://github.com/Abzum-NZ/Abzum-Vortex/issues/14) are complete. Coordinate its start after [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249)'s shared publication/persistence version selectors are stable and merged; do not wait for the later conversion, adapter or UI work. Existing bounded history reads, source restore and permanent identity/alias storage are reused. This is backlog sequencing, not a user hold or a Phase 2 exit prerequisite.
 - The historical Phase 1 delivery remains closed. Post-delivery page-contract defects are tracked under Phase 6's contract-readiness work; the Bugs view exposes them immediately.
 - Native parent/sub-issue membership follows delivery ownership, not a task's old number. [#52](https://github.com/Abzum-NZ/Abzum-Vortex/issues/52) and [#169](https://github.com/Abzum-NZ/Abzum-Vortex/issues/169) belong to Phase 6; [#118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) belongs to Phase 3. New correction and foundation tasks are attached to their owning epics.
 - Cancelled business/assistant tasks remain available in issue history but are not children counted as delivered work in current phase completion. Sub-issue percentages are task counts, not percentage estimates of engineering effort or claims of a finished end-to-end application.
