@@ -88,6 +88,8 @@ All organisation roles, application-role registrations, permission availability,
 
 [Protected Access administration](../build-plan/issue-40-protected-access-administration.md) reuses the completed private facts and writers rather than rebuilding them. Available read and non-grant operations remain separate from the later governed IAM granting journey. Self-activation is based on the authenticated account's current eligibility and policy, not a requirement to hold role-administration permission; self-deactivation is immediate. Administratively changing another account's access still requires the exact management permission and applicable delegation.
 
+Permitted administrators can browse current registered permissions and inspect one exact entry through the [protected catalogue reader](../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-registered-permission-catalogue). It shows the permission's reference, name, description and declared action, not internal publication or audit evidence. The same module permission installed in two applications remains two distinct entries. Withdrawn and historical declarations are excluded; a current declaration awaiting role acceptance remains visible. Visibility in this catalogue never establishes permission to use, assign or delegate that entry.
+
 An organisation account, not the global identity, receives a direct assignment. Roles, Groups and assignments from another organisation or a parent organisation are never inherited implicitly. Tenant structure administration remains a separate authority and grants no organisation-management or application-data permission.
 
 ```mermaid

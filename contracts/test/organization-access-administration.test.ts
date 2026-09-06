@@ -6,10 +6,14 @@ import {
   listOrganizationAdministrationGroupsResultSchema,
   listOrganizationAdministrationMembershipsCommandSchema,
   listOrganizationAdministrationMembershipsResultSchema,
+  listOrganizationAdministrationPermissionsCommandSchema,
+  listOrganizationAdministrationPermissionsResultSchema,
   organizationAdministrationGroupSchema,
   organizationAdministrationMembershipSchema,
+  organizationAdministrationPermissionSchema,
   readOrganizationAdministrationGroupResultSchema,
   readOrganizationAdministrationMembershipResultSchema,
+  readOrganizationAdministrationPermissionResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
 } from "../src/organization-access-administration";
 
@@ -33,6 +37,22 @@ const membership = {
   expiresAt: "2026-10-06T00:00:00.000Z",
   state: "live" as const,
   temporalState: "active" as const,
+};
+
+const permissionReference = {
+  applicationRootId: id(20),
+  ownerKind: "module" as const,
+  ownerId: id(21),
+  permissionId: id(22),
+};
+const permission = {
+  reference: permissionReference,
+  key: "review.records.read",
+  label: "Read review records",
+  description: "Read review records in the selected application.",
+  recordTypeId: id(23),
+  action: { actionKind: "read" as const },
+  administrative: false,
 };
 
 describe("organization Access administration contracts", () => {
@@ -215,6 +235,83 @@ describe("organization Access administration contracts", () => {
       readOrganizationAdministrationMembershipResultSchema.safeParse({
         outcome: "unavailable",
         membership,
+        accessVersion: 8,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts bounded permission catalogue pages and exact detail outcomes", () => {
+    expect(
+      listOrganizationAdministrationPermissionsCommandSchema.parse({
+        pageSize: 25,
+        after: permissionReference,
+      }),
+    ).toMatchObject({ pageSize: 25, after: permissionReference });
+    expect(
+      listOrganizationAdministrationPermissionsResultSchema.parse({
+        permissions: [permission],
+        nextAfter: permissionReference,
+        accessVersion: 8,
+      }),
+    ).toMatchObject({ permissions: [permission], accessVersion: 8 });
+    expect(
+      readOrganizationAdministrationPermissionResultSchema.parse({
+        outcome: "available",
+        permission,
+        accessVersion: 8,
+      }),
+    ).toMatchObject({ outcome: "available", permission });
+    expect(
+      readOrganizationAdministrationPermissionResultSchema.parse({
+        outcome: "unavailable",
+        accessVersion: 8,
+      }),
+    ).toEqual({ outcome: "unavailable", accessVersion: 8 });
+  });
+
+  it("reuses exact contextual references and refuses unsafe permission evidence", () => {
+    const platform = {
+      reference: { ownerKind: "platform", ownerId: id(30), permissionId: id(31) },
+      key: "platform.records.read",
+      label: "Read records",
+      description: "Read records.",
+      action: { actionKind: "read" },
+      administrative: true,
+    };
+    expect(organizationAdministrationPermissionSchema.safeParse(platform).success).toBe(true);
+
+    for (const candidate of [
+      { pageSize: 0 },
+      { pageSize: 101 },
+      { pageSize: 10, after: { ...permissionReference, applicationRootId: undefined } },
+      {
+        pageSize: 10,
+        after: { ...permissionReference, ownerKind: "application", ownerId: id(99) },
+      },
+      { pageSize: 10, callerOrganizationId: id(1) },
+    ])
+      expect(
+        listOrganizationAdministrationPermissionsCommandSchema.safeParse(candidate).success,
+      ).toBe(false);
+
+    for (const candidate of [
+      { ...permission, meaningFingerprint: `sha256:${"a".repeat(64)}` },
+      { ...permission, sourceRelease: { kind: "module" } },
+      { ...permission, recordScope: { routes: [{ kind: "all_records" }] } },
+      { ...permission, changedByActorId: id(32) },
+    ])
+      expect(organizationAdministrationPermissionSchema.safeParse(candidate).success).toBe(false);
+
+    expect(
+      readOrganizationAdministrationPermissionResultSchema.safeParse({
+        outcome: "available",
+        accessVersion: 8,
+      }).success,
+    ).toBe(false);
+    expect(
+      readOrganizationAdministrationPermissionResultSchema.safeParse({
+        outcome: "unavailable",
+        permission,
         accessVersion: 8,
       }).success,
     ).toBe(false);

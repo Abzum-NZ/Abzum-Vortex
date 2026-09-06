@@ -3,11 +3,17 @@ import {
   builderKeySchema,
   groupIdSchema,
   membershipIdSchema,
+  namespacedKeySchema,
   organizationAccountIdSchema,
+  recordTypeIdSchema,
   revisionSchema,
   timestampSchema,
 } from "./identifiers";
-import { labelSchema } from "./common";
+import { descriptionSchema, labelSchema } from "./common";
+import {
+  organizationAccessActionSchema,
+  organizationAccessExactPermissionSchema,
+} from "./organization-access-decision";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 
@@ -153,6 +159,56 @@ export const readOrganizationAdministrationMembershipResultSchema = z.discrimina
   ],
 );
 
+export const organizationAdministrationPermissionSchema = z
+  .object({
+    reference: organizationAccessExactPermissionSchema,
+    key: namespacedKeySchema,
+    label: labelSchema,
+    description: descriptionSchema,
+    recordTypeId: recordTypeIdSchema.optional(),
+    action: organizationAccessActionSchema,
+    administrative: z.boolean(),
+  })
+  .strict();
+
+export const listOrganizationAdministrationPermissionsCommandSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    after: organizationAccessExactPermissionSchema.optional(),
+  })
+  .strict();
+
+export const listOrganizationAdministrationPermissionsResultSchema = z
+  .object({
+    permissions: z.array(organizationAdministrationPermissionSchema).max(100),
+    nextAfter: organizationAccessExactPermissionSchema.optional(),
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const readOrganizationAdministrationPermissionCommandSchema = z
+  .object({ reference: organizationAccessExactPermissionSchema })
+  .strict();
+
+export const readOrganizationAdministrationPermissionResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        permission: organizationAdministrationPermissionSchema,
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+  ],
+);
+
 export type OrganizationAdministrationGroup = z.infer<typeof organizationAdministrationGroupSchema>;
 export type ListOrganizationAdministrationGroupsCommand = z.infer<
   typeof listOrganizationAdministrationGroupsCommandSchema
@@ -189,4 +245,19 @@ export type ReadOrganizationAdministrationMembershipCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationMembershipResult = z.infer<
   typeof readOrganizationAdministrationMembershipResultSchema
+>;
+export type OrganizationAdministrationPermission = z.infer<
+  typeof organizationAdministrationPermissionSchema
+>;
+export type ListOrganizationAdministrationPermissionsCommand = z.infer<
+  typeof listOrganizationAdministrationPermissionsCommandSchema
+>;
+export type ListOrganizationAdministrationPermissionsResult = z.infer<
+  typeof listOrganizationAdministrationPermissionsResultSchema
+>;
+export type ReadOrganizationAdministrationPermissionCommand = z.infer<
+  typeof readOrganizationAdministrationPermissionCommandSchema
+>;
+export type ReadOrganizationAdministrationPermissionResult = z.infer<
+  typeof readOrganizationAdministrationPermissionResultSchema
 >;

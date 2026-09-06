@@ -67,6 +67,21 @@ The Group-change and catalogue-scope source checkpoint merged normally through [
 | `organization-group-administration-change-concurrency.test.sh` | `42fe67c792857645da9fbd445da4cd62336af6593eca0bc0304a3026d02cfa3a` |
 | `workflows/kestra/database-verification.json` | `666c66c3c50e18d11c7f650e7c02e54b5482fd88b566f6d76978906ac8de8c77` |
 
+## Registered permission catalogue checkpoint — 7 September 2026
+
+Permitted administrators can browse and inspect current registered permissions in their selected organisation. The same module permission installed in two applications has distinct contextual references. Only entries from active current registrations appear; withdrawn and historical entries do not. A current declaration awaiting role acceptance remains visible, but catalogue visibility grants no use, assignment or delegation authority. Results exclude raw record scope, publication fingerprints, source preparation and audit internals. No IAM page or granting endpoint is delivered by this checkpoint.
+
+Independent Sol review approved the six frozen implementation/test files. Root's rollback-only database execution found one test defect: concatenating an intentionally null platform application reference made the whole expected cursor string null. The assertion was corrected to compare typed columns, including the actual null, and independently re-reviewed. The corrected rollback proof passes all 25 assertions; the migration itself did not change after review.
+
+The exact reviewed migration was then applied locally without resetting data, and supported local history recorded the 49th migration, `20260906130257`. All 46 database suites / 2,125 assertions pass. Six-schema lint reports no errors and only the same three pre-existing Access warnings. Security advisors report no warnings or errors; their 29 informational notices describe the deliberately policy-free, deny-by-default private tables, not newly exposed access. Full repository verification passes 1,270 tests with three existing skips, eight fixture checks, all 23 package typechecks/builds, formatting/lint and boundaries. The runner uses the globally installed Turbo 2.10.12, matching the declared version, and reports its existing local-install warning.
+
+This read-only slice adds no lock path or writer. It reuses the existing governance/read transaction and its previously passing 23 concurrency proofs recorded in [the invitation correction evidence](issue-315-invitation-audit-time.md); that is reused evidence, not a claim of a new concurrency run. The parallel unfinished database-condition migration was not applied or included in these database results. Exact hosted delivery is not yet verified. There is no new interface to screenshot.
+
+| Frozen database file | SHA-256 |
+|---|---|
+| `supabase/migrations/20260906130257_protect_organization_permission_catalogue_administration.sql` | `6562a59beb1112b9a8ae4116328c87878e3ebd65fa732ab498dfff8c3f56ef53` |
+| `supabase/tests/360_organization_permission_catalogue_administration.test.sql` | `2887b58929af6ba04a76bf27a97fa8de3355303a3417921293bbd936f282207e` |
+
 ## First checkpoint database bytes
 
 | File | SHA-256 |
