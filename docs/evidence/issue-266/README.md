@@ -100,5 +100,69 @@ the last successful deployment inspected was `d58cb5a20240d3d76bb0d8c0367ae664ac
 This establishes the bounded same-version deployment prerequisite, not a proven database restore.
 [Issue #271](https://github.com/Abzum-NZ/Abzum-Vortex/issues/271) remains deferred and is not a
 dependency of this repair; [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198) remains deferred.
-Protected rollout and a fresh exact-commit hosted Testing receipt are still required before
-[issue #266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266) closes. Production is unchanged.
+At that preflight, protected rollout and a fresh exact-commit hosted Testing receipt were still
+required. The subsequent rollout and acceptance attempt are recorded below; they do not change
+the historical preflight result.
+
+## Bootstrap rollout and first complete-gate attempt — 6 September 2026
+
+The shared Kestra service successfully deployed the independently reviewed bootstrap at exact
+commit `cdb6debd0477789f9ad7e50278500618065d0990` through
+[the existing Coolify resource](https://abzum.cloud/project/6upzwteumbhvxe0d1drp59o2/environment/6j90mxt7daujxhctmhgywyiu/application/hmdzjmvsy8f9cekvmrkmeygn),
+deployment `nnf00tl0wbsr0rjiqmfkqpcw`.
+Kestra remains 1.0.57, with the existing workflow-state database and storage mounts. This was
+not a Kestra upgrade, backup restore or Supabase Production migration.
+
+[Fresh Testing execution `tx8ZNynECTHR8qzhAwfyf`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/tx8ZNynECTHR8qzhAwfyf/logs)
+used flow revision 7 and selected `fcb1b85b493fea9d9cf45daa3462ede74eaddedb`. It passed all
+28 SQL suites / 1,430 assertions and the first seven concurrency proofs, then **failed** the
+permission-registry proof's platform-initializer lock observation. Failure propagated; there is
+no schema-2 success receipt from that execution. Older successful runs using the image-baked
+verification list do not establish acceptance of the repaired gate.
+
+The failing observer relied on startup `PGAPPNAME` appearing unchanged in pooled backend metadata.
+Hosted inspection did not show those worker names. The
+[Supavisor upstream report](https://github.com/supabase/supavisor/issues/343) describes the
+corresponding propagation limitation. The bounded repair captures each worker's actual database
+backend identifier inside its transaction and checks the exact blocking relationship using
+[PostgreSQL's `pg_blocking_pids`](https://www.postgresql.org/docs/17/functions-info.html).
+An owned, bounded release barrier replaces the fixed holder sleep. Permission, revision,
+competing-write and cleanup assertions remain in place.
+
+Root verification of that repair passed the actual Local permission-registry proof with an
+explicit connection-name override, followed by all 14 manifest-selected Local concurrency proofs.
+These are Local results, not a hosted-success claim. The other 13 proofs have no startup-name
+observer to repair. The hosted bootstrap already loads commit-owned proofs, so delivering this
+script correction does not require another Kestra deployment.
+
+The shared service is temporarily pinned to the reviewed bootstrap commit with manual deployment.
+Restore normal protected `main`/`HEAD` tracking after a fresh complete Testing receipt and reviewed
+merge to `main`. [Issue #266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266) remains open until
+the current protected revision's full selected/completed proof and schema sets are verified in
+its successful hosted receipt. Production remains unchanged.
+
+## Hosted follow-up — permission proof passed; assignment-expiry setup repair
+
+[PR #297](https://github.com/Abzum-NZ/Abzum-Vortex/pull/297) merged the independently reviewed
+permission observer and its existing operational fixture correction into Testing as
+`e9163da9059880d53968faded6366398577b9e5c`. Its normal preview check passed.
+[Execution `2NnMq9tuBUjRRtd9emkm8G`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/2NnMq9tuBUjRRtd9emkm8G/logs)
+ran that exact revision with flow revision 7. All 30 SQL suites / 1,508 assertions and the first ten
+concurrency proofs passed, including the repaired permission-registry proof. The execution then
+**failed** the assignment-change expiry scenario: its five-second expiry elapsed before the
+remote observer established the intended governance-lock wait. Failure propagated and no complete
+success receipt was produced; schema lint and the remaining proofs are not claimed as completed.
+
+The bounded follow-up changes only that scenario's setup: the database expiry is sampled after
+the holder confirms acquisition of the governance lock, with a fifteen-second setup window.
+The proof still establishes the exact blocking backend relationship while the expiry is in the
+future, waits for database time to cross that expiry, then releases the holder. The real grant
+must refuse with `40001`, without an assignment or Access-version change. Product expiry rules,
+database migrations, worker cleanup and all final-state assertions are unchanged.
+
+Independent Sol review approved the exact script SHA-256
+`6dcbba9ca94acd75476cbb7db5bea85cc11dfb7ebc2f986cb820dd4f5a5cbf06`.
+Root ran that actual assignment-change concurrency script against Local Vortex successfully;
+shell syntax and whitespace checks also passed. This evidence does not replace the required fresh
+complete hosted Testing receipt. No additional Kestra deployment or Production change is required
+to deliver the commit-owned test correction.

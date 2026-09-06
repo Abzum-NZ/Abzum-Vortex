@@ -18,6 +18,11 @@ if [ -z "$sql" ]; then
   sql="$(</dev/stdin)"
 fi
 
+if [[ "$sql" == *'pg_catalog.pg_blocking_pids('* ]]; then
+  printf 'blocked\n'
+  exit 0
+fi
+
 if [[ "$sql" =~ (62[0-9a-f]{6}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}) ]]; then
   scope="${BASH_REMATCH[1]//-/}"
 else
@@ -103,10 +108,49 @@ case "${PGAPPNAME:-}" in
     ;;
 esac
 
-if [[ "$sql" == *'select revision from vortex_access.permission_registrations'* ]]; then
+if [[ "$sql" == *'revise_platform_permission_catalogue_metadata'* ]]; then
+  [[ "$sql" =~ \\g[[:space:]]+\'([^\']*platform-metadata\.pid)\' ]] || exit 95
+  platform_metadata_pid_path="${BASH_REMATCH[1]}"
+  [[ "$sql" =~ \\g[[:space:]]+\'([^\']*platform-metadata\.result)\' ]] || exit 96
+  platform_metadata_result_path="${BASH_REMATCH[1]}"
+  platform_release_path="${platform_metadata_result_path%/platform-metadata.result}/platform-metadata-release"
+  printf '41001\n' >"$platform_metadata_pid_path"
+  printf '2|5\n' >"$platform_metadata_result_path"
+  log_event platform_metadata_waiting
+  deadline=$((SECONDS + 35))
+  while ((SECONDS < deadline)) && [ ! -f "$platform_release_path" ]; do sleep 0.05; done
+  [ -f "$platform_release_path" ] || exit 97
+  log_event platform_metadata_finished
+  exit 0
+fi
+
+if [[ "$sql" == *'platform-initialize.result'* ]]; then
+  [[ "$sql" =~ \\g[[:space:]]+\'([^\']*platform-initialize\.pid)\' ]] || exit 98
+  platform_initialize_pid_path="${BASH_REMATCH[1]}"
+  [[ "$sql" =~ \\g[[:space:]]+\'([^\']*platform-initialize\.result)\' ]] || exit 99
+  platform_initialize_result_path="${BASH_REMATCH[1]}"
+  platform_release_path="${platform_initialize_result_path%/platform-initialize.result}/platform-metadata-release"
+  printf '41002\n' >"$platform_initialize_pid_path"
+  log_event platform_initializer_blocked
+  deadline=$((SECONDS + 35))
+  while ((SECONDS < deadline)) && [ ! -f "$platform_release_path" ]; do sleep 0.05; done
+  [ -f "$platform_release_path" ] || exit 100
+  printf '2|5\n' >"$platform_initialize_result_path"
+  touch "$state_root/platform-finished-$scope"
+  log_event platform_initializer_finished
+  exit 0
+fi
+
+if [[ "$sql" == *'initialize_platform_permission_catalogue('* ]]; then
+  printf '1|4\n'
+elif [[ "$sql" == *"select revision::text || '|' || source_version"* ]]; then
+  printf '2|1.0.1\n'
+elif [[ "$sql" == *'select revision from vortex_access.permission_registrations'* ]]; then
   printf '2\n'
 elif [[ "$sql" == *'select current_version from vortex_access.organization_access_versions'* ]]; then
-  printf '3\n'
+  if [ -f "$state_root/platform-finished-$scope" ]; then printf '5\n'; else printf '3\n'; fi
+elif [[ "$sql" == *'select count(*) from vortex_access.permission_catalogue_entries'* ]]; then
+  printf '26\n'
 elif [[ "$sql" == *'select count(*) from vortex_access.permission_registration_revisions'* ]]; then
   printf '2\n'
 else

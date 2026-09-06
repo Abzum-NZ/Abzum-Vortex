@@ -743,7 +743,6 @@ grep -q '40001' "$proof_root/revoke-b.log" || {
 
 # A grant whose expiry crosses while it waits on governance must be refused using
 # the database clock observed after the lock, with no fact or Access change.
-expiry_at="$(run_sql "select (pg_catalog.clock_timestamp() + interval '5 seconds')::text;")"
 PGAPPNAME="vortex-assignment-expiry-holder-$fixture_name_token" \
   "${psql_command[@]}" >"$proof_root/expiry-holder.log" 2>&1 <<SQL &
 begin;
@@ -759,6 +758,7 @@ expiry_holder_pid=$!
 worker_pids+=("$expiry_holder_pid")
 wait_for_file "$proof_root/expiry-ready"
 expiry_holder_backend_pid="$(read_backend_pid "$proof_root/expiry-holder.pid")"
+expiry_at="$(run_sql "select (pg_catalog.clock_timestamp() + interval '15 seconds')::text;")"
 
 PGAPPNAME="vortex-assignment-expiry-grant-$fixture_name_token" \
   "${psql_command[@]}" >"$proof_root/expiry-grant.log" 2>&1 <<SQL &
