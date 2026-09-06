@@ -25,6 +25,7 @@ export * from "./organization-group-membership-changes";
 export * from "./organization-role-assignment-changes";
 export * from "./organization-role-activation-changes";
 export * from "./organization-role-changes";
+export * from "./organization-stewardship";
 export * from "./permissions";
 export * from "./permission-registry";
 export * from "./record-ownership-compatibility";

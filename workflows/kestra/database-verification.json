@@ -80,6 +80,11 @@
       "migration": "supabase/migrations/20260906013706_coordinate_organization_delegation_authority_changes.sql",
       "proof": "supabase/tests/organization-delegation-authority-change-concurrency.test.sh",
       "label": "Organization delegation authority changes"
+    },
+    {
+      "migration": "supabase/migrations/20260906023032_coordinate_organization_stewardship_adoption.sql",
+      "proof": "supabase/tests/organization-stewardship-concurrency.test.sh",
+      "label": "Organization stewardship"
     }
   ],
   "lintSchemas": [
