@@ -73,6 +73,32 @@ fixture checks, all 23 package typechecks/builds and boundary checks, formatting
 lint. This proves contracts only, not effective access or a usable protected action.
 The remaining database decision and server integration still belong to this task.
 
+### Slice 2 implementation choices
+
+Use one request-role callable, private-schema permission-eligibility function. It
+reads the existing validated human context, samples database time after resolver
+waits, and evaluates the four complete routes in one set-wise fact query. It returns
+`eligible` or a closed refusal, never final `allowed`. Delegated management refuses
+until the required delegation evaluation is implemented. No owner-only test adapter,
+second role evaluator, new registry or stored effective-permission copy is needed.
+
+Choose routes by fixed order: direct standing, Group standing, direct activation,
+Group activation, followed by permanent identifiers for ties. The earliest relevant
+bound on that chosen route determines its deadline. Do not combine paths or add an
+expiry-optimization algorithm. The immutable role seal already verifies historical
+acceptance; the live decision checks current entries, registration, catalogue and
+continuity rather than repeatedly revalidating sealed history.
+
+An organisation-target platform operation may retain an already selected application
+in trusted context: IAM administration must work from inside IAM. Its required
+permission remains organisation/platform-scoped. An application-target operation
+requires the exact matching context application, declaration target, permission
+application and current active registration. The current organisation-only server
+wrapper cannot supply that application binding; the later verified application
+selection handoff must establish it before context initialization. A declaration
+alone cannot manufacture application context. Controlled SQL fixtures prove these
+semantics, not a delivered application-selection interface.
+
 ## Required decision behaviour
 
 - Bind the actual operation/action to its trusted exact permission and target.
