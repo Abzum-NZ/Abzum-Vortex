@@ -33,7 +33,7 @@ implementation against its task requirements and challenged unnecessary guards.
 On the local database with 35 migrations through `20260906023032`:
 
 - All 34 SQL test files passed, with 1,690 assertions. The focused stewardship
-  file contributes 56 assertions: initial and existing continuity, unrelated
+  file contributes 55 assertions: initial and existing continuity, unrelated
   application authority, accepted extra permissions, last-administrator removals,
   replacement/replay and whole-statement rollback on Access exhaustion.
 - All 17 manifest-listed separate-session concurrency proofs passed. The new

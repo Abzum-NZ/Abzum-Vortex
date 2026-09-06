@@ -22,6 +22,7 @@ export * from "./organization-access-catalogue";
 export * from "./organization-delegation-authority-changes";
 export * from "./organization-group-changes";
 export * from "./organization-group-membership-changes";
+export * from "./organization-management-application";
 export * from "./organization-role-assignment-changes";
 export * from "./organization-role-activation-changes";
 export * from "./organization-role-changes";
