@@ -291,7 +291,14 @@
         "description": "Allows the standard create operation for companies.",
         "record_type": "company",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_company_read",
@@ -300,7 +307,14 @@
         "description": "Allows the standard read operation for companies.",
         "record_type": "company",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_company_update",
@@ -309,7 +323,14 @@
         "description": "Allows the standard update operation for companies.",
         "record_type": "company",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_company_soft_delete",
@@ -318,7 +339,14 @@
         "description": "Allows the standard soft_delete operation for companies.",
         "record_type": "company",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_company_restore",
@@ -327,7 +355,14 @@
         "description": "Allows the standard restore operation for companies.",
         "record_type": "company",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_company_export",
@@ -336,7 +371,14 @@
         "description": "Allows the standard export operation for companies.",
         "record_type": "company",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_1_merge",
@@ -346,7 +388,14 @@
         "record_type": "company",
         "action_kind": "named",
         "named_action": "merge",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       }
     ],
     "actions": [

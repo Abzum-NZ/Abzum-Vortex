@@ -110,6 +110,39 @@ describe("platform permission catalogue", () => {
     ).toBe(
       fingerprintPermissionMeaning("platform", platformPermissionCatalogueOwnerId, permission),
     );
+
+    const recordPermission = {
+      permissionId: "00000000-0000-4000-8000-000000000001",
+      key: "sample.records.read",
+      label: "Read records",
+      description: "Read scoped records.",
+      recordTypeId: "00000000-0000-4000-8000-000000000002",
+      actionKind: "read" as const,
+      administrative: false,
+    };
+    const legacy = fingerprintPermissionMeaning(
+      "module",
+      "00000000-0000-4000-8000-000000000003",
+      recordPermission,
+    );
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        recordScope: { routes: [{ kind: "all_records" }] },
+      }),
+    ).not.toBe(legacy);
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        recordScope: { routes: [{ kind: "direct_share" }] },
+      }),
+    ).not.toBe(legacy);
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        recordScope: undefined,
+      }),
+    ).toBe(legacy);
   });
 
   it("keeps every SQL catalogue identity and metadata byte-for-byte aligned", () => {

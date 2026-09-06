@@ -46,6 +46,8 @@ Each admitted row needs a complete valid visibility route. Local direct-account 
 
 ## Reviewable delivery slices
 
+The independently reviewed [initial A checkpoint](../evidence/issue-36-record-visibility.md) supplies same-module saved-condition compilation and explicit application-owned base routes. Completing application-owned saved conditions still requires trusted condition evidence from the exact bound module compilation output; the current resolution snapshot contains identities and versions, not that condition's immutable contract. Add that minimal compiler input and revalidate it against the exact dependency artifact before claiming complete source mapping. Do not infer it from keys or trust author-supplied fingerprints. The current catalogue also requires the additive scope storage, validation and read reconstruction in C before these declarations can supply live record authority. Neither gap is a new business decision or a reason to mark A as the whole task.
+
 | Slice | Deliverable |
 |---|---|
 | A — Definition and contracts | Explicit scope, complete source/compiler/meaning mapping, historical-read compatibility and corrected unused local-share contract |

@@ -456,7 +456,14 @@
         "description": "Allows the standard create operation for contacts.",
         "record_type": "contact",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_contact_read",
@@ -465,7 +472,14 @@
         "description": "Allows the standard read operation for contacts.",
         "record_type": "contact",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_contact_update",
@@ -474,7 +488,14 @@
         "description": "Allows the standard update operation for contacts.",
         "record_type": "contact",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_contact_soft_delete",
@@ -483,7 +504,14 @@
         "description": "Allows the standard soft_delete operation for contacts.",
         "record_type": "contact",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_contact_restore",
@@ -492,7 +520,14 @@
         "description": "Allows the standard restore operation for contacts.",
         "record_type": "contact",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_contact_export",
@@ -501,7 +536,14 @@
         "description": "Allows the standard export operation for contacts.",
         "record_type": "contact",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_lead_create",
@@ -510,7 +552,14 @@
         "description": "Allows the standard create operation for leads.",
         "record_type": "lead",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_lead_read",
@@ -519,7 +568,14 @@
         "description": "Allows the standard read operation for leads.",
         "record_type": "lead",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_lead_update",
@@ -528,7 +584,14 @@
         "description": "Allows the standard update operation for leads.",
         "record_type": "lead",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_lead_soft_delete",
@@ -537,7 +600,14 @@
         "description": "Allows the standard soft_delete operation for leads.",
         "record_type": "lead",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_lead_restore",
@@ -546,7 +616,14 @@
         "description": "Allows the standard restore operation for leads.",
         "record_type": "lead",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_lead_export",
@@ -555,7 +632,14 @@
         "description": "Allows the standard export operation for leads.",
         "record_type": "lead",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_1_convert",
@@ -565,7 +649,14 @@
         "record_type": "lead",
         "action_kind": "named",
         "named_action": "convert",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_2_view_sensitive_notes",
@@ -575,7 +666,14 @@
         "record_type": "contact",
         "action_kind": "named",
         "named_action": "view_sensitive_notes",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       }
     ],
     "actions": [

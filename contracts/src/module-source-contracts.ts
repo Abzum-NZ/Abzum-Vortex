@@ -13,6 +13,67 @@ import {
 } from "./definition-source-common";
 import { moduleSourceRecordOwnershipModeV1Schema } from "./record-ownership-compatibility";
 
+export const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("all_records") }).strict(),
+  z.object({ kind: z.literal("ownership") }).strict(),
+  z.object({ kind: z.literal("direct_share") }).strict(),
+  z
+    .object({
+      kind: z.literal("relationship"),
+      relationship: sourceQualifiedRelationshipSchema,
+      source_permission: namespacedKeySchema,
+    })
+    .strict(),
+]);
+
+const sourceRecordScopeRouteIdentity = (
+  route: z.infer<typeof sourcePermissionRecordScopeRouteSchema>,
+) =>
+  route.kind === "relationship"
+    ? `${route.kind}:${route.relationship}:${route.source_permission}`
+    : route.kind;
+
+export const sourcePermissionRecordScopeBaseSchema = z
+  .object({ routes: z.array(sourcePermissionRecordScopeRouteSchema).min(1) })
+  .strict()
+  .superRefine((value, context) => {
+    const identities = value.routes.map(sourceRecordScopeRouteIdentity);
+    if (new Set(identities).size !== identities.length)
+      context.addIssue({
+        code: "custom",
+        path: ["routes"],
+        message: "Permission record-scope routes must be unique",
+      });
+    if (value.routes.some((route) => route.kind === "all_records") && value.routes.length !== 1)
+      context.addIssue({
+        code: "custom",
+        path: ["routes"],
+        message: "The all-record route must be the sole base route",
+      });
+  });
+
+const sourceSavedConditionParameterBindingSchema = z.discriminatedUnion("source", [
+  z
+    .object({
+      key: builderKeySchema,
+      source: z.literal("current_organization_account_id"),
+    })
+    .strict(),
+  z
+    .object({ key: builderKeySchema, source: z.literal("literal"), value: jsonValueSchema })
+    .strict(),
+]);
+
+const moduleSourcePermissionRecordScopeSchema = sourcePermissionRecordScopeBaseSchema.safeExtend({
+  saved_condition: z
+    .object({
+      condition: builderKeySchema,
+      parameter_bindings: z.array(sourceSavedConditionParameterBindingSchema),
+    })
+    .strict()
+    .optional(),
+});
+
 const sourceOptionSchema = z
   .object({ value: z.string().min(1).max(120), label: z.string().min(1).max(60) })
   .strict();
@@ -722,6 +783,7 @@ const moduleSourceBodySchema = z
           ]),
           named_action: builderKeySchema.optional(),
           administrative: z.boolean(),
+          record_scope: moduleSourcePermissionRecordScopeSchema.optional(),
         })
         .strict(),
     ),

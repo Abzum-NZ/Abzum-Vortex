@@ -1600,7 +1600,13 @@ const comparePermissions = (
       "key",
       id,
     );
-    for (const key of ["recordTypeId", "actionKind", "namedAction", "administrative"])
+    for (const key of [
+      "recordTypeId",
+      "actionKind",
+      "namedAction",
+      "administrative",
+      "recordScope",
+    ])
       pushChange(
         reasons,
         left[key],

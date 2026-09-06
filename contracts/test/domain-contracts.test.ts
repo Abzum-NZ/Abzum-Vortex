@@ -1528,17 +1528,25 @@ describe("identity, sharing and secret invariants", () => {
   test("uses the current Group principal for direct record sharing", () => {
     const share = {
       directShareId: id(209),
-      organizationId: id(200),
-      recordTypeId: id(202),
-      recordId: id(204),
+      recordScope: {
+        storageScope: "organization_shared" as const,
+        organizationId: id(200),
+        moduleRootId: id(201),
+        recordTypeId: id(202),
+        storageContractId: id(203),
+        recordId: id(204),
+      },
       recipient: { kind: "group" as const, groupId: id(207) },
       readableFieldIds: [id(210)],
       changeableFieldIds: [],
       startsAt: "2026-09-02T01:00:00+00:00",
-      status: "active" as const,
+      state: "active" as const,
+      revision: 1,
       grantedBy: id(206),
       grantedAt: "2026-09-02T01:00:00+00:00",
+      grantCorrelationId: id(211),
       reason: "Coordinate the current case.",
+      changedAt: "2026-09-02T01:00:00+00:00",
     };
     expect(directRecordShareSchema.safeParse(share).success).toBe(true);
     expect(
@@ -1553,6 +1561,49 @@ describe("identity, sharing and secret invariants", () => {
         recipient: { kind: "group", groupId: id(207), teamId: id(207) },
       }).success,
     ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        readableFieldIds: [id(212), id(210)],
+      }).success,
+    ).toBe(false);
+    const alphaFieldId = "aaaaaaaa-0000-4000-8000-000000000001";
+    expect(alphaFieldId.toUpperCase()).not.toBe(alphaFieldId);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        readableFieldIds: [alphaFieldId, alphaFieldId.toUpperCase()],
+      }).success,
+    ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        revokedAt: "2026-09-02T02:00:00+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        state: "revoked",
+        revision: 2,
+        revokedBy: id(206),
+        revokedAt: "2026-09-02T02:00:00+00:00",
+        revocationCorrelationId: id(213),
+        changedAt: "2026-09-02T02:00:00+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        state: "revoked",
+        revision: 2,
+        revokedBy: id(206),
+        revokedAt: "2026-09-02T02:00:00+00:00",
+        revocationCorrelationId: id(213),
+        revocationReason: "Access no longer required.",
+        changedAt: "2026-09-02T02:00:00+00:00",
+      }).success,
+    ).toBe(true);
   });
 
   test("accepts a genuinely anonymous public caller without inventing an actor", () => {
