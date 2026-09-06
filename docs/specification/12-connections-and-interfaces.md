@@ -84,16 +84,16 @@ Vortex provides one remote MCP server for the platform. The first release follow
 
 The MCP server exposes a small stable set of generic resources and tools rather than generating a separate tool name for every button:
 
-| MCP surface | What it provides |
-|---|---|
-| Context resources | The authorised tenant, organisation account, application, application version and optional connected interface session. |
-| Navigation resources | The discoverable applications, navigation tree, pages and safe route targets for the current context. |
-| Page resources | The current permission-filtered [semantic interface map](07-applications-pages-and-themes.md#semantic-interface-map), record context, readable blocks, queries, view controls and refresh state. |
-| Form resources | Form or guided-form schema, current draft revision, allowed choices, validation state, commit action and confirmation rule. Secret inputs are write-only and are never returned. |
-| Operation resources | The actions, file operations, builder operations and administration operations currently available through the interface, with input shapes, permission meaning, confirmation requirement and safe outcomes. |
-| Context and navigation tools | Select an authorised organisation/application context; open a permitted page or record; change a declared tab, dialog, drawer, filter, sort, page or other view state; and refresh a named region. |
-| Form tools | Start or resume a draft, set one or more allowed values, request validation, move between guided steps, and submit the declared commit action. |
-| Operation tools | Invoke a currently available action, file operation, builder change, publication step or administration operation using the same input contract as the web interface. |
+| MCP surface                  | What it provides                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Context resources            | The authorised tenant, organisation account, application, application version and optional connected interface session.                                                                                      |
+| Navigation resources         | The discoverable applications, navigation tree, pages and safe route targets for the current context.                                                                                                        |
+| Page resources               | The current permission-filtered [semantic interface map](07-applications-pages-and-themes.md#semantic-interface-map), record context, readable blocks, queries, view controls and refresh state.             |
+| Form resources               | Form or guided-form schema, current draft revision, allowed choices, validation state, commit action and confirmation rule. Secret inputs are write-only and are never returned.                             |
+| Operation resources          | The actions, file operations, builder operations and administration operations currently available through the interface, with input shapes, permission meaning, confirmation requirement and safe outcomes. |
+| Context and navigation tools | Select an authorised organisation/application context; open a permitted page or record; change a declared tab, dialog, drawer, filter, sort, page or other view state; and refresh a named region.           |
+| Form tools                   | Start or resume a draft, set one or more allowed values, request validation, move between guided steps, and submit the declared commit action.                                                               |
+| Operation tools              | Invoke a currently available action, file operation, builder change, publication step or administration operation using the same input contract as the web interface.                                        |
 
 Resources are paginated when needed and announce changes when a role, grant, application version or current view changes. The server returns stable semantic identifiers and typed values; it never requires an agent to parse HTML, inspect CSS, guess a label, execute browser script, or click a screen coordinate.
 
@@ -132,7 +132,7 @@ sequenceDiagram
 ```
 
 - Pairing is visible in the web interface, expires, and can be ended immediately by the person. An MCP client never receives a browser cookie, DOM handle or unrestricted browser-control channel.
-- Navigation and local view controls use the stable identifiers in the semantic interface map. Form filling updates the same private, revisioned draft used by the browser. Invoking an action calls the action service and then updates the interface from the canonical result; it does not synthesize a pointer click.
+- Navigation and local view controls use the stable identifiers in the semantic interface map. Form filling updates the same private, revisioned draft used by the browser. Invoking an application action enters its exact published frontend-flow binding; operation nodes call the protected owning service and update the interface from its confirmed result. MCP does not synthesize a pointer click or skip the configured required inputs/path. A presentation-only flow returns its message or view outcome without a business save, including when no browser is paired.
 - Each command names the expected interface-state revision. A stale command is refused so a delayed agent action cannot move the person backward, replace newer form input or act on a record that is no longer current.
 - Purely visual details such as animation progress, pixel position and hover decoration are not mirrored. The connected interface still applies its ordinary accessible loading, focus, motion and error behaviour.
 
@@ -141,6 +141,12 @@ sequenceDiagram
 Every meaningful capability offered by a Vortex-owned web interface—including customer applications, Studio, tenant administration and organisation administration—must be represented by the semantic interface map and usable through the governed MCP surface. A release test inventories both surfaces and fails on a missing operation, mismatched input, different access result, different validation, different side effect or different activity meaning.
 
 The reverse is also controlled: the MCP parity surface does not expose a hidden platform or business operation that the same person could not reach through an authorised Vortex interface. Customer-published interfaces and protected system operations remain separate because they serve non-interactive integration and operational purposes.
+
+### Build applications through the same designer capabilities
+
+An authorised external client can create an application, select its module dependencies, compose pages and components, create/select/copy/edit/link Frontend Flows, configure triggers, conditions, nodes, flow variables and form mappings, inspect references and validation, preview, publish and install through the same governed authoring operations as the App Builder. [Flow-first authoring](appendices/frontend-rule-designer.md#mcp-app-authoring-and-invocation) is part of parity, not a later application-specific agent API.
+
+Use stable application/page/component/flow identities and expected application-draft revisions. A headless author uses semantic edits, not canvas coordinates, scripts or unrestricted JSON writes. Flow sharing/copying and default generation behave identically through UI and MCP. Preview is non-mutating business simulation. Existing publication, installation, confirmation and human-only requirements remain intact. An agent receives no independent approval or permission-grant power and cannot invoke a lower-level helper to bypass a required application journey.
 
 ## Internal cluster federation interface
 

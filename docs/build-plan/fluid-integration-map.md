@@ -4,6 +4,8 @@
 
 ## What was inspected
 
+For action wiring, the later approved [flow-first App Builder contract](../specification/appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) governs this map: adapted buttons, form submits and record gestures bind to application-owned Frontend Flows; registered nodes then call the protected operations below. The page never calls a business save directly. Use editable one-node defaults or custom flows through the same inspector/designer, and preserve equivalent keyboard and MCP bindings. Ordinary field editing and rendering remain generic component behaviour.
+
 On 5 September 2026, the delivery owner opened [the exact running board editor](http://localhost:3001/builder/edit/projects/board) in a separate Edge tab and inspected its page structure and local source. The visible editor has a 46-block palette, outline, application structure, theme and menu panels, a central canvas, property inspector, shell link, preview/publish controls and phone/tablet/desktop previews. No content was edited or published during this inspection. This is a source and interface review, not proof that dragging, keyboard editing, publishing or responsive behaviour has passed Vortex acceptance.
 
 The separate Fluid source (`C:/Apps/fluid`) has base commit `68e3da2bc1224e6f6676c19ae12608fe6ad50345`, but the builder and block files are uncommitted working-tree content. That commit alone does not identify the inspected prototype. Recheck the exact working files, dependencies, assets and licence provenance before copying. No root licence/notice file was found in the inspected source inventory; that is an inventory gap, not a conclusion about ownership or permission.

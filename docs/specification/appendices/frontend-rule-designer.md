@@ -40,13 +40,62 @@ Central means one generic runtime and catalogue, not one unscoped global list. A
 
 ## Three execution contexts, one authoring language
 
-| Context                        | What happens                                                                                            | What cannot happen                                                               |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Immediate feedback             | On an input or page event, calculate draft values, conditions and presentation promptly.                | No record writes, external calls or durable starts.                              |
-| Interactive action journey     | Run immediate steps, show one or more forms, collect answers and prepare one final protected operation. | No business writes between forms and no transaction held while a person thinks.  |
-| Authoritative save/action rule | Recheck and execute the permitted rule graph inside the owning Vortex transaction.                      | No form prompt, network call, delay or Kestra execution inside that transaction. |
+| Context                        | What happens                                                                                                            | What cannot happen                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Immediate feedback             | On an input or page event, calculate draft values, conditions and presentation promptly.                                | No record writes, external calls or durable starts.                              |
+| Interactive action journey     | Run immediate steps, optionally collect forms, and finish with no business submission or one final protected operation. | No business writes between forms and no transaction held while a person thinks.  |
+| Authoritative save/action rule | Recheck and execute the permitted rule graph inside the owning Vortex transaction.                                      | No form prompt, network call, delay or Kestra execution inside that transaction. |
 
 The author sees these as eligible triggers and nodes in the same designer, with explanations for unavailable combinations. There is no second frontend-only language and no second action executor. A synchronous segment may await its final protected Vortex submission without blocking the browser thread. Human input pauses the interactive journey, not a running database transaction. Long-running or assigned work uses the existing [durable workflow](../09-workflows-and-pipelines.md).
+
+## Pages compose; flows define actions
+
+Every user-facing application action has a Frontend Flow binding: standard record commands, custom record actions, toolbar/menu/row commands, action buttons and form submission. A message-only button is a valid action too. The page stores layout, data/form context and typed event-to-flow bindings, not executable business behaviour. A flow belongs to the application's definitions; it is not embedded privately in a component or selected by a display name. Module-owned rules and protected operations remain reusable dependencies.
+
+```mermaid
+flowchart TD
+    APP[App Builder] --> PAGE[Pages: drag and drop components]
+    APP --> FLOWS[Frontend Flows: shared Rule Designer]
+    PAGE --> BUTTON[Action component: choose or create flow]
+    BUTTON --> BIND[Exact event, flow and input binding]
+    FLOWS --> BIND
+    BIND --> RUN[Central frontend flow runtime]
+    RUN --> MSG[Show message: finish without saving]
+    RUN --> SAVE[Save form: protected save]
+    RUN --> CUSTOM[Custom path: conditions, variables and input forms]
+    CUSTOM --> SUBMIT[Final protected operation]
+    SAVE --> CORE[Existing owning services check and commit]
+    SUBMIT --> CORE
+    CORE --> BG[Accepted background request dispatched after commit]
+    MCP[Authorised MCP client] --> APP
+    MCP --> BIND
+```
+
+### Configure a component without leaving the App Builder
+
+1. Drop an action component and open its **Action** inspector. Choose a quick action (Save form, Show message, Navigate or an eligible named action), **Create flow**, or **Use existing flow**. The page inspector opens the same Frontend Rule Designer with the current context, and returns to the selected component afterward.
+2. A Submit button dropped into one explicitly bound form may receive a generated one-node **Save form** flow by default. Show the exact target form and operation immediately. A generic button or an ambiguous/unbound form requires configuration; never silently save the nearest or first form. Allow an unfinished draft, but refuse publication of an action missing its required binding.
+3. A generated default is a real application-owned flow with a permanent identity and editable node settings. Start/Finish connections are supplied automatically for a one-node flow; authors do not have to draw them. Defaults are created only during authoring, never during rendering or execution. They do not need an artificial record, background run or extra approval.
+4. Selecting or replacing a flow validates the supplied record/selection/form context and typed inputs. Save form and final Submit are unavailable to feedback-only triggers. Reusing a flow is deliberate; show its linked controls before editing shared behaviour, and offer an explicit copy for an independent variant. Duplicating a component preserves its flow reference and reports that reuse rather than secretly creating different behaviour.
+5. Pages, bindings and flows use the existing application draft revision and publish/activate together. Renaming a label preserves identity. Missing/deleted flows, incompatible inputs, missing form/operation targets and unresolved node versions prevent publication. Withdrawal or replacement cannot leave a hidden working fallback. Existing immutable releases keep their supported legacy reader; a new-draft conversion creates explicit flow bindings without changing old release content.
+
+The form declares one default submit binding. Clicking its Submit button, pressing Enter and using a supported Save shortcut invoke that same binding once; a click handler plus a native submit event must not start it twice. Other buttons have explicit separate bindings and are not implicit form submits. Record gestures such as a board-card move or inline-edit commit also enter their declared action flow, with typed source/target context. Cancelling a journey before submission leaves business data unchanged; after a confirmed commit, Cancel cannot claim to undo it.
+
+This rule covers configurable action entry points, not browser primitives. Typing into an input, tabbing focus, opening native selection choices, layout and rendering do not require one new flow per keystroke. Their registered behaviour remains generic; any configured reaction uses the declared trigger. Existing navigation and view-control descriptors can provide a one-node flow binding without bespoke page handlers. Query execution, transport, backend service internals and infrastructure maintenance are not wrapped in recursive frontend flows.
+
+### Saving is a node, not hidden page behaviour
+
+**Save form** maps the exact bound draft to its declared save/action operation and performs the one final protected submission. It is a convenience node over the existing owning service, not another save executor. A flow may finish after presentation-only work with zero business submissions. A record-changing journey can submit at most one bounded owning operation, whose permitted record effects commit together. After that commit only presentation/result handling continues; collecting further required business input or attempting another commit needs a separate explicit action. Background-start acceptance retains the existing protected transaction and post-commit dispatch boundary.
+
+The server must re-evaluate mandatory required answers, conditions, validation and authority through every permitted invocation path, including web, MCP, programmable interfaces and durable callers. Presentation-only conditions are not security policies. Configuring a required business condition must attach it to the protected operation/save rules or the required server-validated action entry, not merely to a button. Another button or a raw save/action call cannot evade a requirement by choosing an easier flow or claiming its gates passed. Conversely, showing a popup need not manufacture a database transaction.
+
+The flow runtime orchestrates registered nodes; Record, Action, Access, Definition and Workflow services still own their protected operations. This is one configurable action route over those services, not a universal service that replaces them. The lower-level [named-operation task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) precedes the [rule runtime](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58); it does not acquire a reverse dependency just because the later UI supplies a flow entry point.
+
+### MCP app authoring and invocation
+
+The same [governed MCP capabilities](../12-connections-and-interfaces.md#governed-mcp-access) must allow an authorised builder to create an application, configure its module dependencies, compose pages, add components, create/select/copy/link flows, edit triggers/conditions/nodes/variables and form mappings, inspect validation and reference usage, preview, publish and install. Use existing Definition operations and revisions with stable semantic identities; do not generate a separate tool for every button or node. Preview is simulated and cannot submit business data. The external agent supplies no runtime code or privileged permission evidence.
+
+At runtime the MCP client invokes the same published action binding and receives the same form requests, permitted fields, messages, validation and final outcomes. A headless client can receive a popup's structured message without an open browser; moving an actual interface still requires the existing explicit session pairing. Required user decisions and confirmations remain required. No embedded model, assistant or second action executor is introduced.
 
 ## Triggers
 
@@ -98,6 +147,16 @@ Durable workflows retain their own typed trigger inputs and node outputs. A fron
 
 ## Initial frontend node catalogue and extensibility
 
+### All authored behaviour is configured through nodes
+
+Triggers use the Start node; conditions use condition nodes; forms, field/variable changes, saving, messages, navigation and background requests use their registered action nodes. The Start inspector configures the trigger and optional entry condition. Any compiled trigger index is derived from that definition, never a second independently editable trigger or condition. Finish declares the terminal outcome. Inputs and variable declarations are flow settings; changing their values during execution is a node operation.
+
+Each node exposes readable settings, typed input/value mappings, typed outputs and its supported outcome connections. An author can add, configure, reconnect or remove eligible nodes and choose the route for each declared outcome. Show form exposes validated-answer and Cancel outcomes; Save form/Submit exposes confirmed success and safe refusal/conflict outcomes. Registered nodes define which outcomes exist, so an author cannot invent a success port or suppress a required check. Node-output values can be mapped to declared flow variables for later steps.
+
+The quick-action inspector is a compact editor for those same node settings. A default Save flow means one action node with the structural Start/Finish nodes supplied automatically and available in the full canvas; it is not a separate kind of hardcoded flow. There are no hidden action chains, separate success/error scripts or button-side saves. Continue/Cancel on a displayed form returns through that Show form node's declared outcome in the current flow; the semantic binding identifies that continuation without letting the caller select an arbitrary next node or starting the action twice.
+
+Flexibility comes from node configuration and composition, not bypassing operation guarantees. Authors can branch, collect input, manipulate drafts/variables and choose a protected final operation. The existing phase rules still apply: required human input is collected before submission, at most one business operation commits per journey, and only presentation handling follows that commit. Add later node kinds through the versioned registration contract below; application authors configure their settings rather than uploading executable code.
+
 | Node                                                    | What it configures                                                                                   | Allowed contexts                                                                        |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Start / Finish                                          | Trigger and terminal outcome                                                                         | All                                                                                     |
@@ -108,6 +167,7 @@ Durable workflows retain their own typed trigger inputs and node outputs. A fron
 | Show/hide / Enable/disable                              | Published field or component presentation                                                            | UI only; never changes actual permission                                                |
 | Show message / Focus field                              | Safe message/location or focus target                                                                | UI only; validation messages have server-safe equivalents                               |
 | Show form                                               | Exact reusable form, defaults, output mappings, Submit/Cancel routes                                 | Interactive journey, before final submission only                                       |
+| Save form                                               | Submit the exact form's draft through its declared protected operation; one-node default flow        | Manual interactive action; same final commit boundary as Submit                         |
 | Prepare action / Submit                                 | Map inputs to one published named action or supported owning-service operation and finally submit it | Interactive; no generic sequence of independently committed writes                      |
 | Refresh / Navigate / Open-close panel / Set view filter | Exact permitted semantic target and declared parameters                                              | UI; post-submit uses confirmed results                                                  |
 | Start background workflow                               | Exact published workflow binding and typed input mapping                                             | Prepared in interactive flow or requested by a save rule; accepted only at final commit |
@@ -120,7 +180,7 @@ Published graphs pin node versions; adding a new kind never silently changes exi
 
 ## Custom forms and all-or-nothing submission
 
-**Default: collect first, commit together.** An administrator can require several custom forms before the configured operation is allowed to submit. Missing answers, Cancel or abandonment means no business submission and no background start.
+**For a business submission: collect first, commit together.** An administrator can require several custom forms before the configured operation is allowed to submit. Missing answers, Cancel or abandonment means no business submission and no background start. A presentation-only journey can collect input and finish without a business commit; it must not label that outcome as a saved record.
 
 ```mermaid
 flowchart LR
@@ -142,7 +202,7 @@ Private draft persistence is not a committed business record. Reuse existing per
 
 On final submission the server validates the exact published operation and required typed answers, recomputes the necessary conditions/derived values, checks the actual current actor and record revisions, and then applies the configured bounded effects in one short transaction. A client claim that it visited a node or fulfilled a condition is not evidence. The complete mandatory path must be derivable and validated from the submitted inputs and server-owned context; otherwise publication refuses that definition. Unrelated data changing while a form is open cannot silently change the meaning of the confirmed action: stale affected records return a conflict and a clear refresh/review path.
 
-The initial journey prepares **one final owning operation**, not multiple independently committed service calls. Its existing transaction may affect the allowed records covered by that operation; it is not limited to one field or one record. It cannot combine unrelated service transactions, source organisations or external systems and claim atomicity. Such composition requires an explicit durable process and truthful completion states, not an invisible early commit. Shared-record actions remain entirely source-authoritative under [sharing rules](../04-access-and-permissions.md).
+A business-changing journey prepares **one final owning operation**, not multiple independently committed service calls; a presentation-only journey needs none. Its existing transaction may affect the allowed records covered by that operation; it is not limited to one field or one record. It cannot combine unrelated service transactions, source organisations or external systems and claim atomicity. Such composition requires an explicit durable process and truthful completion states, not an invisible early commit. Shared-record actions remain entirely source-authoritative under [sharing rules](../04-access-and-permissions.md).
 
 Show form is forbidden inside before-save/before-action transaction rules and automatic field-change feedback. Attach the interactive preparation journey to the action entry point instead. This preserves the administrator's all-or-nothing requirement without locking records throughout a person's idle time. The server-side named action remains protected when called directly through an interface or MCP; all required inputs and validations still apply.
 

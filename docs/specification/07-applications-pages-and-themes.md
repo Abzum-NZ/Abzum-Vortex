@@ -76,7 +76,11 @@ The map covers every meaningful interface capability:
 
 Discoverability and invocability are separate. A page, field, choice or control the person may not discover is absent. A control the person may see but cannot currently invoke remains in the semantic resource with `availability: unavailable` and a safe fixed explanation, but it is absent from invocable MCP tool choices. The client-facing entry never exposes an internal permission key, role name or private value. A direct invocation is still refused by the central access decision. Layout coordinates, colours, animation frames and decorative content are not business capabilities and are not copied into the semantic map.
 
-A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Navigation, form changes, action invocation and administration all bind to stable platform operations. This is what lets keyboard access, the web interface and MCP use one behaviour instead of three loosely matched implementations.
+A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Configurable application actions bind to application-owned [Frontend Flows](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions); their nodes delegate to stable platform operations. Form input and ordinary browser behaviour remain generic registered capabilities. Keyboard submission, web action controls and MCP invoke the same declared action binding, not separate save paths.
+
+### Configure flows while composing pages
+
+The App Builder lists Pages and Frontend Flows within the same application. Dropping an action component opens an Action inspector to choose a quick one-node flow, select an existing compatible flow, or create/edit a custom flow in the shared Frontend Rule Designer. A Submit button can default to Save form only when its exact form and commit operation are unambiguous. A message button can simply show a popup and finish without saving. The [complete authoring and execution rules](appendices/frontend-rule-designer.md#configure-a-component-without-leaving-the-app-builder) also cover reusable flows, keyboard submission, record gestures, revision checks and MCP authoring.
 
 ## Addresses and routing
 
@@ -114,14 +118,14 @@ The implementation follows these boundaries:
 
 The first release has six semantic tokens and no customer-adjustable motion modes or extension system:
 
-| Token | Purpose | Initial calibration band |
-|---|---|---|
-| `feedback` | Pressed feedback and tiny state confirmation, normally using CSS | 80–120 ms |
-| `enter_exit` | Tooltip, menu, popover, and small component entry or exit | 140–180 ms |
-| `refresh` | Loading-to-content, local data refresh, and row-value change | 200–250 ms |
-| `panel` | Dialog, drawer, expanding section, and larger local panel | 280–350 ms |
-| `page` | The changing page region while the application shell remains stable | 300–450 ms |
-| `layout_spring` | Reordering, resizing, dragging, and board-card movement | One responsive platform spring, calibrated with the real UI |
+| Token           | Purpose                                                             | Initial calibration band                                    |
+| --------------- | ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `feedback`      | Pressed feedback and tiny state confirmation, normally using CSS    | 80–120 ms                                                   |
+| `enter_exit`    | Tooltip, menu, popover, and small component entry or exit           | 140–180 ms                                                  |
+| `refresh`       | Loading-to-content, local data refresh, and row-value change        | 200–250 ms                                                  |
+| `panel`         | Dialog, drawer, expanding section, and larger local panel           | 280–350 ms                                                  |
+| `page`          | The changing page region while the application shell remains stable | 300–450 ms                                                  |
+| `layout_spring` | Reordering, resizing, dragging, and board-card movement             | One responsive platform spring, calibrated with the real UI |
 
 These bands guide the platform design system; they are not values stored in application definitions. The first complete desktop and phone UI fixes one platform value, easing curve, distance, and spring configuration for each token. Those central values are then versioned with the design system. Platform components select the suitable semantic token; application definitions, modules and blocks cannot select a library or supply arbitrary Motion parameters.
 
@@ -135,16 +139,16 @@ The experimental [Next.js View Transition integration](https://nextjs.org/docs/a
 
 The application supports six page types:
 
-| Page type | Purpose |
-|---|---|
-| List | Read and arrange records from one record type. |
-| Detail | Show one record and approved related information. |
-| Dashboard | Compose blocks that may use several approved sources. |
-| Form | Create or change one record through one commit action. |
-| Guided form | Collect one submission through two to twenty short steps. |
-| Public | Show approved public content or submit one narrowly defined public form. |
+| Page type   | Purpose                                                                  |
+| ----------- | ------------------------------------------------------------------------ |
+| List        | Read and arrange records from one record type.                           |
+| Detail      | Show one record and approved related information.                        |
+| Dashboard   | Compose blocks that may use several approved sources.                    |
+| Form        | Create or change one record through one commit action.                   |
+| Guided form | Collect one submission through two to twenty short steps.                |
+| Public      | Show approved public content or submit one narrowly defined public form. |
 
-A list can use table, board, calendar, or summary arrangement. Board movement calls a named action and rechecks its permission. Each calendar page explicitly selects start/end fields or a start field plus a whole-number duration field and unit; it never guesses missing duration meaning.
+A list can use table, board, calendar, or summary arrangement. Board movement invokes its bound frontend flow, whose operation node calls the named action and rechecks its permission. Each calendar page explicitly selects start/end fields or a start field plus a whole-number duration field and unit; it never guesses missing duration meaning.
 
 Page states are normal, loading, empty, not found, validation, refused, access ended, conflict, failure, and recovery. Access ended is distinct from an ordinary empty result: previously shared values disappear immediately and the affected component explains that its source grant no longer permits the view.
 

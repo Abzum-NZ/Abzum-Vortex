@@ -1,6 +1,8 @@
 # 20. Quality, accessibility and acceptance
 
-The [Frontend Rule Designer acceptance matrix](appendices/frontend-rule-designer.md#acceptance-and-delivery-coverage) is normative: include variables and phase-safe node execution, reusable input forms, no business submission on Cancel/abandon, one atomic final operation, exact packaged registrations, post-commit Kestra handoff and equivalent web/MCP outcomes. The [delivery map](../build-plan/frontend-rule-designer.md) assigns each proof without moving later UI ahead of its dependencies.
+The [Frontend Rule Designer acceptance matrix](appendices/frontend-rule-designer.md#acceptance-and-delivery-coverage) is normative: include variables and phase-safe node execution, reusable input forms, no business submission on Cancel/abandon before submission, at most one atomic final operation, exact packaged registrations, post-commit Kestra handoff and equivalent web/MCP outcomes. The [delivery map](../build-plan/frontend-rule-designer.md) assigns each proof without moving later UI ahead of its dependencies.
+
+The [flow-first action contract](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) additionally requires presentation-only flows without business writes, editable one-node Save form defaults, all user-facing action bindings (including keyboard submission and record gestures), no hidden direct component save, and complete MCP application authoring. Test default replacement, deliberate flow reuse, wrong-form/cross-app bindings, lossless old-release reads, concurrent draft edits, one invocation for click/native-submit overlap and no bypass of mandatory operation rules through another flow or direct interface. Prove behaviour with real executors when the owning tasks are delivered; a planning diagram is not UI evidence.
 
 [Previous: Operations, backup and recovery](19-operations-backup-and-recovery.md) · [Specification index](README.md) · [Decision register](appendices/decisions.md)
 

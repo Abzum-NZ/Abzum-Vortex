@@ -1,6 +1,6 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.20
+**Status:** Approved build plan 2.21
 
 **Date:** 7 September 2026
 
@@ -11,6 +11,8 @@
 This plan replaces the sequencing of the earlier [Build Plan](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef). It keeps the useful ownership boundaries while correcting missing dependencies, an impossible background-worker assumption, incomplete fixtures, and an oversized final phase.
 
 The [decision register](../specification/appendices/decisions.md) is clear. One Frontend Rule Designer, flow variables, reusable custom forms and collect-first atomic submission are settled in the [permanent specification](../specification/appendices/frontend-rule-designer.md). Its [delivery map](frontend-rule-designer.md) updates the existing condition, rule, form, installation and workflow tasks without creating another engine or moving UI ahead of Access dependencies. Groups and optional per-role PIM remain settled. Vortex assigns the minimum valid next module or application release version after structural comparison, and the builder confirms or cancels publication. A new unresolved business choice must be recorded before implementation assumes an answer.
+
+The [flow-first App Builder extension](frontend-rule-designer.md#flow-first-page-actions-and-mcp-authoring) makes action buttons, form submission and record gestures use application-owned Frontend Flows, including editable Save form defaults and presentation-only flows. Pages carry composition/bindings; existing protected services still execute business operations. The same capabilities support MCP app authoring. This is planned functionality, not delivered UI, and does not move the designer ahead of its Access and contract prerequisites.
 
 ## Current delivery checkpoint — 6 September 2026
 

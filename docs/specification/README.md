@@ -1,6 +1,6 @@
 # Abzum Vortex platform specification
 
-**Status:** Approved specification 2.19
+**Status:** Approved specification 2.20
 **Date:** 7 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
@@ -13,7 +13,7 @@ This document is the approved product contract for the current build scope. The 
 
 ## Architecture review additions
 
-- [Frontend Rule Designer](appendices/frontend-rule-designer.md): triggers, shared conditions, extensible nodes, typed flow variables, Page Designer forms, collect-first atomic submission, packaged registration and Kestra handoff. [Delivery ownership and dependencies](../build-plan/frontend-rule-designer.md).
+- [Frontend Rule Designer](appendices/frontend-rule-designer.md): every configurable application action is flow-linked; App Builder supplies editable one-node defaults and custom flows. Includes triggers, shared conditions, typed variables, Page Designer forms, optional collect-first atomic submission, MCP app authoring, packaged registration and Kestra handoff. [Delivery ownership and dependencies](../build-plan/frontend-rule-designer.md).
 
 - [Verified recent authentication](appendices/recent-authentication.md): protected actions distinguish actual sign-in and MFA confirmation from token refresh, with provider-neutral evidence and ordinary-session compatibility.
 
