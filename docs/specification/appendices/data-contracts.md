@@ -740,7 +740,7 @@ The server may page resources with opaque cursors and announce that resource or 
 
 ## Activity and retention contracts
 
-An activity entry has organisation, activity identifier, time, actor, action, subject identifiers, safe changed-field names, source, correlation, outcome, and optional retained-detail reference protected by a stronger permission.
+An activity entry has organisation, activity identifier, time, actor kind and identifier, action, subject identifiers, safe changed-field identifiers, source, correlation and outcome. Actor kinds are `identity`, `organization_account`, `system` and `public_session`; anonymous session attribution is not identity verification. Federation is a source, not a separate principal kind. Identifier lists are unique and canonically ordered. The activity identifier is the duplicate identity within the organisation: exact retries return the existing entry, and conflicting reuse refuses. The content-free append contract has no arbitrary payload or retained-detail reference. Separately governed value history is outside this foundation; see the [Activity plan](../../build-plan/issue-252-activity-foundation.md).
 
 A retention policy has organisation, data category, an optional saved-condition identifier/revision/fingerprint supplied together, active period, recovery period, removal schedule, legal-constraint keys, state, creator, approver, and version.
 

@@ -311,7 +311,7 @@ Build:
 - Multiple group memberships per organisation account and within-organisation direct record sharing to an account or group with field allowlists.
 - Reuse the Access-owned organisation version created in Phase 2 for role, Group, assignment, public-policy and sharing changes and next-request revocation.
 - Configurable field-level read/write filtering and trusted actor-relative relationship/condition scopes; conditions are not UI-only filters.
-- Reusable transactional activity append #252 and headless entitlement policy/reservations #118 before their first consuming operations.
+- [Reusable transactional Activity append #252](issue-252-activity-foundation.md) and headless entitlement policy/reservations [#118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) before their first consuming operations. #252 is independently ready after #28/#34 and builds one owner-only, content-free append boundary with transaction/retry proofs; #115 later adds permitted views and full service coverage. It does not open a general append endpoint or introduce another runtime service.
 - Source-authoritative grant evaluation that can be called through the same local or federated shared-record gateway contract.
 - Split database and end-to-end [organisation separation suite](../specification/20-quality-and-acceptance.md#organisation-separation-suite).
 
