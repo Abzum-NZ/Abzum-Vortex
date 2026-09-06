@@ -22,12 +22,12 @@ The [saved delivery evidence](../evidence/issue-33-invitation-access/README.md#h
 identifies the delivered revision and completed checks. No user approval is outstanding.
 
 [Request/account lock ordering #305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305)
-is the bounded correction required before database execution integration. The
-existing reader locks Identity before Access, whereas the supported account writer
-locks Access before Identity. Align the reader with that order after an exact
-lock-free eligibility filter, then recheck Identity under its normal locks. Replace
-the obsolete direct-writer concurrency fixture with the actual account composition.
-This fixes a concrete cycle without changing role behaviour or adding retries.
+is complete after [exact hosted Testing verification](../evidence/issue-305-request-lock-order.md#hosted-testing--6-september-2026).
+The reader now follows the supported account writer's Access-before-Identity order
+after an exact lock-free eligibility filter, then rechecks Identity under its normal
+locks. The corrected proof exercises the actual account composition. Database
+execution integration is no longer blocked by this correction; no role behaviour
+or retry framework was added.
 
 [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
 and [protected Access operations #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
@@ -73,6 +73,79 @@ fixture checks, all 23 package typechecks/builds and boundary checks, formatting
 lint. This proves contracts only, not effective access or a usable protected action.
 The remaining database decision and server integration still belong to this task.
 
+### Slice 2 implementation choices
+
+Use one request-role callable, private-schema permission-eligibility function. It
+reads the existing validated human context, samples database time after resolver
+waits, and evaluates the four complete routes in one set-wise fact query. It returns
+`eligible` or a closed refusal, never final `allowed`. Delegated management refuses
+until the required delegation evaluation is implemented. No owner-only test adapter,
+second role evaluator, new registry or stored effective-permission copy is needed.
+
+Choose routes by fixed order: direct standing, Group standing, direct activation,
+Group activation, followed by permanent identifiers for ties. The earliest relevant
+bound on that chosen route determines its deadline. Do not combine paths or add an
+expiry-optimization algorithm. The immutable role seal already verifies historical
+acceptance; the live decision checks current entries, registration, catalogue and
+continuity rather than repeatedly revalidating sealed history.
+
+An organisation-target platform operation may retain an already selected application
+in trusted context: IAM administration must work from inside IAM. Its required
+permission remains organisation/platform-scoped. An application-target operation
+requires the exact matching context application, declaration target, permission
+application and current active registration. The current organisation-only server
+wrapper cannot supply that application binding; the later verified application
+selection handoff must establish it before context initialization. A declaration
+alone cannot manufacture application context. Controlled SQL fixtures prove these
+semantics, not a delivered application-selection interface.
+
+### Slice 2 checkpoint — 6 September 2026
+
+The private current-permission evaluator and restricted-role tests are implemented
+and independently reviewed. Local verification passed 48 focused assertions, all
+37 SQL files / 1,863 assertions, all 20 concurrency proofs, five-schema lint and the
+full repository gate. The [reviewed source and evidence](../evidence/issue-34-permission-eligibility.md)
+record the exact boundary. Hosted Testing verification is still required. This
+slice deliberately refuses delegated management and does not complete #34 or
+authorize a protected operation by itself.
+
+### Slice 3 implementation choices
+
+Extend the same evaluator with current delegation coverage; do not add a second
+decision or stored effective-authority view. Parse the distinct exact permissions
+from the declared before and after scopes once. An organisation-catalogue scope is a
+separate requirement that only one current organisation-catalogue delegation can
+satisfy; several bounded delegations must never synthesize it. The after scope also
+expresses the onward ceiling for a delegation grant or replacement, so no third
+scope field or history is needed.
+
+Build complete delegation paths from the existing
+[#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) current facts. A direct
+path belongs to the transaction account. A Group path also requires the active Group
+and that account's current live membership. Every path
+must be live and within its fixed window. A bounded path matches the exact
+application/owner/permission identity and remains usable only while its stored
+continuity and meaning evidence is current; stored fingerprints remain provenance,
+not authority. Organisation-catalogue authority may cover future or stale exact
+identities so a steward can introduce or repair catalogue state, while the protected
+writer still validates the proposed candidate.
+
+Choose one deterministic complete delegation path for each distinct required
+permission and, when required, one actual catalogue path. Independent bounded paths
+may cover different permissions. The decision is eligible only when every
+requirement is covered, and its deadline is the earliest bound from the selected use,
+authentication, context, delegation and Group-membership paths. Existing indexes
+serve these joins; add no history scan, counter, fingerprint engine or path-search
+framework.
+
+The slice-3 contract and focused tests must first reject `delegated_management` when
+both before and after are `none`: an empty management scope cannot bypass the
+separate-delegation requirement. This evaluator checks only the transaction-bound
+account. [Protected Access operations #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
+later bind and recheck any distinct requester or approver through trusted workflow
+evidence; caller-selected account input does not belong here. Passing this slice is
+still private eligibility, not final allowance or completed approval governance.
+
 ## Required decision behaviour
 
 - Bind the actual operation/action to its trusted exact permission and target.
@@ -81,9 +154,10 @@ The remaining database decision and server integration still belong to this task
   grant list, policy result or allow flag that is trusted as authority.
   Platform code or a verified immutable compiled operation supplies the declaration.
   Match catalogue action kind, named action and any record-type restriction, not
-  merely its key. Organisation targets require platform authority without an
-  application context; application/module use carries the exact active target
-  application registration. An operation key is evidence, not a registry or grant.
+  merely its key. Organisation targets require a platform permission whose identity
+  has no application scope; the trusted request may still retain its selected
+  application. Application/module use carries the exact active target application
+  registration. An operation key is evidence, not a registry or grant.
 - Validate active identity, account, organisation and tenant; current Access version;
   exact registration, owner/application scope, accepted meaning and continuity.
   Same-named applications or shared module identities never merge authority.
@@ -128,10 +202,16 @@ The remaining database decision and server integration still belong to this task
   The read adapter uses the existing resolved request transaction and derives scope
   from `validated_human_request_context()`. Observe database time after resolver
   lock waits, not at transaction start. Keep allow evidence inside that transaction.
-  The later #40 writer must acquire governance before mutable account/access facts,
+  Changing operations in #30 and #40 must acquire governance before mutable account/access facts,
   rather than upgrade the read resolver's shared lock after checking permission.
   Test the actual read/write lock orders and expiry across a wait; correct a
   demonstrated ordering defect at its source, not with a new retry framework.
+- Organisation administration in [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
+  composes its own account, invitation and settings changes with the completed
+  decision in that governance-first transaction. It does not wait for every role,
+  Group or PIM operation in [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
+  Keep the actual dependency graph; do not add a whole-task gate for this shared
+  ordering rule or introduce a separate transaction framework.
 - Refuse safely without exposing internal role labels, permission keys or record
   existence. The decision writes no Activity; the owning operation records evidence.
 

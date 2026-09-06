@@ -173,7 +173,8 @@ shared lock. Then the existing authoritative Identity resolver locks and recheck
 the same tenant, organisation and account. Missing or changed eligibility refuses
 without returning a scope; a foreign or ineligible candidate cannot lock unrelated
 Access state. Both locks remain transaction-bound. Protected writers acquire Access
-governance before mutable Identity facts; [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
+governance before mutable Identity facts; [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
+and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
 must not check through the read resolver and later upgrade its shared lock. This is
 one consistent ordering rule, not a new context, counter or retry mechanism.
 
@@ -361,6 +362,20 @@ kind, owner identity and permission identity. The database discovers current
 registration, acceptance, continuity and meaning evidence. Management names both
 before and after scopes, each absent, organisation-catalogue or a nonempty unique
 set of exact permission identities; it does not accept copied authority receipts.
+At least one management scope must be nonempty: both before and after cannot be
+absent. One absent side remains valid for a grant or removal. Only a complete current
+organisation-catalogue delegation can cover catalogue scope; separate bounded grants
+may cover separate exact permissions but cannot combine into catalogue authority.
+The decision evaluates the transaction account. [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
+separately binds and rechecks any distinct requester or approver from trusted
+workflow evidence, never from a caller-selected account identifier.
+
+An organisation-target operation requires a platform permission with no application
+scope in its permission identity. Its trusted request may retain a selected
+application, so organisation administration can run from inside an installed
+management application. An application-target operation instead requires the same
+application in verified request context, target and permission identity, with a
+current active registration. A declaration cannot establish that context by itself.
 
 Private permission eligibility is distinct from a final allowed operation. Both
 use the same transaction-bound operation/target/account/organisation/Access evidence

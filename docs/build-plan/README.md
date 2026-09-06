@@ -18,7 +18,13 @@ The [decision register](../specification/appendices/decisions.md) has one non-bl
 
 Next, [the central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) consumes these exact facts to decide what each account may do. [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) has no user hold and follows its actual dependencies; it must not bypass #34. Installed IAM journeys remain [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
 
-The consolidated [central access decision implementation plan](issue-34-access-decision.md) defines #34's exact scope, reviewable slices, complete-path evaluation and downstream policy ownership. Missing target policies refuse; they are not pulled into the permission foundation or treated as already implemented. Before its database integration, [#305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305) aligns the existing organisation reader's lock order with the supported account writer and replaces the obsolete concurrency fixture. Contract-only work may continue; this is a concrete technical correction, not a user hold.
+The consolidated [central access decision implementation plan](issue-34-access-decision.md) defines #34's exact scope, reviewable slices, complete-path evaluation and downstream policy ownership. Missing target policies refuse; they are not pulled into the permission foundation or treated as already implemented. [#305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305) is complete after [exact hosted Testing verification](../evidence/issue-305-request-lock-order.md#hosted-testing--6-september-2026): the organisation reader and supported account writer now use consistent ordering, proved with the actual writer. The database-integration prerequisite is cleared; #34 implementation proceeds without a user hold.
+
+The #34 current-permission slice now passes independent review and local verification
+for direct/Group standing and activated access, including removal and expiry during
+concurrent work. [Evidence](../evidence/issue-34-permission-eligibility.md) distinguishes
+that completed local proof from the still-required hosted receipt, delegation
+coverage and final protected-operation integration. #34 remains in progress.
 
 ## Architecture review
 
