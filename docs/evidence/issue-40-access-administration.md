@@ -101,7 +101,24 @@ The final combined run also includes the reviewed current-person condition exten
 
 The role/template source checkpoint merged normally through [PR #320](https://github.com/Abzum-NZ/Abzum-Vortex/pull/320) at `2026-09-06T14:30:34Z`. Both normal preview checks passed. Reviewed source `ca3d6d6ee89cb143c2986dec1d36d1183d26e748` and Testing merge `e8313abf386338db45dc9cdc9938bba42a78a6a9` have identical file trees. Exact hosted database delivery remains unconfirmed. The next assignment/delegation ledger is not included in this merge, and this checkpoint does not complete #40.
 
-## First checkpoint database bytes
+## Role-assignment and delegation ledgers — 7 September 2026
+
+Permitted administrators can list and inspect role assignments and delegation authorities through four protected read operations under the existing assignments-read permission. Results distinguish direct-account and Group holders, standing/eligible assignments, fixed windows, stored states and descriptive temporal states. Revoked, expired and unavailable-source facts remain inspectable. Bounded delegation results contain only exact permission references; internal registration, meaning and continuity evidence is omitted. No result claims effective authority, and no granting endpoint or IAM screen is added.
+
+Independent Sol review approved all six frozen implementation/test files. Focused TypeScript checks pass 37 tests; the main architect's final rollback-only restricted-role proof passes 45 assertions. It covers permitted/denied reads, complete cursor pages, retained holder states, safe output and unknown/foreign refusal. The new response validator rejects UUID-equivalent duplicate delegation references without changing global field-key case rules.
+
+The expired historical delegation fixture cannot use the live-grant insertion path, which correctly refuses already expired grants. It therefore calls the bounded-scope validator explicitly and disables only `organization_delegation_authorities_validate_scope` around one coherent historical insert, then immediately re-enables it. That trigger checks the live window, holder and scope; the fixture separately validates bounded scope and uses an active Group. Structural/FK constraints and the immutable-update protector remain active. No replication-role bypass or immutable expiry update remains; this is a reviewed rollback-only fixture exception, not a production change.
+
+The exact migration was applied only to the local testing database without a reset, alongside the independently reviewed ownership predicate. Local migration history now contains 55 entries. Full repository verification passes 1,288 tests with three existing skips, eight fixture checks, all 23 package typechecks/builds, formatting/lint and boundaries. These reads reuse existing locks without a new lock primitive, ordering or write path: the previous governance/read concurrency proof is reused, including its documented multi-run limitation, not claimed as a fresh run. Aggregate database results are recorded below. Source delivery, hosted database success and Production promotion are not yet verified for this checkpoint. There is no new interface to screenshot.
+
+| Frozen database file | SHA-256 |
+|---|---|
+| `20260906142814_protect_organization_assignment_ledger_administration.sql` | `5ad0e0d1594e5a7d658c34493c69c3328dbb4f7410533cde8c64d6a03f2e8984` |
+| `380_organization_assignment_ledger_administration.test.sql` | `37580191e8fa4bb0abb1cad5ca4600bec88677331391fe80de1b946276a8fcb4` |
+
+Final aggregate local verification passes **51 database suites / 2,336 assertions**. Six-schema lint reports no errors and only the same eight previously reviewed warnings; no new warning is introduced by these two migrations. Security advisors report no issues. This remains local evidence, not a hosted receipt.
+
+## First checkpoint database bytes (historical)
 
 | File | SHA-256 |
 |---|---|

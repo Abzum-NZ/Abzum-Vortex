@@ -8,21 +8,29 @@ import {
   listOrganizationAdministrationMembershipsResultSchema,
   listOrganizationAdministrationApplicationRoleTemplatesCommandSchema,
   listOrganizationAdministrationApplicationRoleTemplatesResultSchema,
+  listOrganizationAdministrationDelegationAuthoritiesCommandSchema,
+  listOrganizationAdministrationDelegationAuthoritiesResultSchema,
   listOrganizationAdministrationPermissionsCommandSchema,
   listOrganizationAdministrationPermissionsResultSchema,
   listOrganizationAdministrationRolesCommandSchema,
   listOrganizationAdministrationRolesResultSchema,
+  listOrganizationAdministrationRoleAssignmentsCommandSchema,
+  listOrganizationAdministrationRoleAssignmentsResultSchema,
   organizationAdministrationApplicationRoleTemplateSchema,
+  organizationAdministrationDelegationAuthoritySchema,
   organizationAdministrationGroupSchema,
   organizationAdministrationMembershipSchema,
   organizationAdministrationPermissionSchema,
   organizationAdministrationRoleDetailSchema,
+  organizationAdministrationRoleAssignmentSchema,
   organizationAdministrationRoleSummarySchema,
   readOrganizationAdministrationApplicationRoleTemplateResultSchema,
+  readOrganizationAdministrationDelegationAuthorityResultSchema,
   readOrganizationAdministrationGroupResultSchema,
   readOrganizationAdministrationMembershipResultSchema,
   readOrganizationAdministrationPermissionResultSchema,
   readOrganizationAdministrationRoleResultSchema,
+  readOrganizationAdministrationRoleAssignmentResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
 } from "../src/organization-access-administration";
 
@@ -100,6 +108,49 @@ const roleTemplate = {
   label: "Review operator",
   permissionSelectionKind: "application_wildcard" as const,
   publishedPermissionKeys: ["review.records.read", "review.records.update"],
+};
+
+const assignment = {
+  roleAssignmentId: id(50),
+  role: {
+    roleId: id(40),
+    key: "review_operator",
+    label: "Review operator",
+    lifecycle: "unavailable" as const,
+  },
+  assignee: {
+    kind: "organization_account" as const,
+    organizationAccountId: id(51),
+    displayName: "Neutral assignee",
+  },
+  assignmentKind: "eligible" as const,
+  revision: 2,
+  startsAt: "2026-09-06T00:00:00.000Z",
+  expiresAt: "2026-10-06T00:00:00.000Z",
+  state: "live" as const,
+  temporalState: "expired" as const,
+};
+
+const boundedPermissionReference = {
+  applicationRootId: id(60),
+  ownerKind: "module" as const,
+  ownerId: id(61),
+  permissionId: id(62),
+};
+const delegation = {
+  delegationAuthorityId: id(63),
+  holder: {
+    kind: "group" as const,
+    groupId: id(64),
+    key: "retired_reviewers",
+    label: "Retired reviewers",
+    state: "retired" as const,
+  },
+  scope: { kind: "bounded" as const, permissions: [boundedPermissionReference] },
+  revision: 3,
+  startsAt: "2026-09-06T00:00:00.000Z",
+  state: "revoked" as const,
+  temporalState: "revoked" as const,
 };
 
 describe("organization Access administration contracts", () => {
@@ -477,6 +528,145 @@ describe("organization Access administration contracts", () => {
     ])
       expect(
         listOrganizationAdministrationApplicationRoleTemplatesCommandSchema.safeParse(candidate)
+          .success,
+      ).toBe(false);
+  });
+
+  it("accepts bounded role-assignment pages and descriptive temporal facts", () => {
+    expect(organizationAdministrationRoleAssignmentSchema.parse(assignment)).toEqual(assignment);
+    expect(
+      listOrganizationAdministrationRoleAssignmentsCommandSchema.parse({
+        pageSize: 25,
+        afterRoleAssignmentId: id(49),
+      }),
+    ).toMatchObject({ afterRoleAssignmentId: id(49) });
+    expect(
+      listOrganizationAdministrationRoleAssignmentsResultSchema.parse({
+        assignments: [assignment],
+        nextAfterRoleAssignmentId: id(50),
+        accessVersion: 10,
+      }),
+    ).toMatchObject({ assignments: [assignment], accessVersion: 10 });
+    expect(
+      readOrganizationAdministrationRoleAssignmentResultSchema.parse({
+        outcome: "available",
+        assignment,
+        accessVersion: 10,
+      }),
+    ).toMatchObject({ outcome: "available", assignment });
+  });
+
+  it("does not turn assignment window status into effective-access evidence", () => {
+    for (const candidate of [
+      { ...assignment, temporalState: "revoked" },
+      { ...assignment, effective: true },
+      { ...assignment, grantCorrelationId: id(52) },
+      { ...assignment, role: { ...assignment.role, authorityContinuityRevision: 2 } },
+    ])
+      expect(organizationAdministrationRoleAssignmentSchema.safeParse(candidate).success).toBe(
+        false,
+      );
+    for (const candidate of [
+      { pageSize: 0 },
+      { pageSize: 101 },
+      { pageSize: 10, afterRoleAssignmentId: "invalid" },
+      { pageSize: 10, assigneeKind: "group" },
+    ])
+      expect(
+        listOrganizationAdministrationRoleAssignmentsCommandSchema.safeParse(candidate).success,
+      ).toBe(false);
+  });
+
+  it("accepts catalogue and stripped bounded delegation ledger facts", () => {
+    expect(organizationAdministrationDelegationAuthoritySchema.parse(delegation)).toEqual(
+      delegation,
+    );
+    expect(
+      organizationAdministrationDelegationAuthoritySchema.parse({
+        ...delegation,
+        delegationAuthorityId: id(65),
+        holder: {
+          kind: "organization_account",
+          organizationAccountId: id(51),
+          displayName: "Neutral holder",
+        },
+        scope: { kind: "organization_catalogue" },
+        state: "live",
+        temporalState: "scheduled",
+      }),
+    ).toMatchObject({ scope: { kind: "organization_catalogue" } });
+    expect(
+      listOrganizationAdministrationDelegationAuthoritiesResultSchema.parse({
+        delegations: [delegation],
+        nextAfterDelegationAuthorityId: id(63),
+        accessVersion: 10,
+      }),
+    ).toMatchObject({ delegations: [delegation], accessVersion: 10 });
+    expect(
+      readOrganizationAdministrationDelegationAuthorityResultSchema.parse({
+        outcome: "unavailable",
+        accessVersion: 10,
+      }),
+    ).toEqual({ outcome: "unavailable", accessVersion: 10 });
+  });
+
+  it("refuses raw delegation evidence, duplicate scope and unbounded inputs", () => {
+    for (const candidate of [
+      {
+        ...delegation,
+        scope: {
+          kind: "bounded",
+          permissions: [
+            boundedPermissionReference,
+            {
+              ...boundedPermissionReference,
+              permissionId: boundedPermissionReference.permissionId,
+            },
+          ],
+        },
+      },
+      {
+        ...delegation,
+        scope: {
+          kind: "bounded",
+          permissions: [
+            boundedPermissionReference,
+            {
+              ...boundedPermissionReference,
+              applicationRootId: boundedPermissionReference.applicationRootId.toUpperCase(),
+              ownerId: boundedPermissionReference.ownerId.toUpperCase(),
+              permissionId: boundedPermissionReference.permissionId.toUpperCase(),
+            },
+          ],
+        },
+      },
+      { ...delegation, scopeFingerprint: `sha256:${"a".repeat(64)}` },
+      {
+        ...delegation,
+        scope: {
+          kind: "bounded",
+          permissions: [
+            {
+              ...boundedPermissionReference,
+              acceptedRegistrationRevision: 1,
+              meaningFingerprint: `sha256:${"b".repeat(64)}`,
+            },
+          ],
+        },
+      },
+      { ...delegation, effective: true },
+    ])
+      expect(organizationAdministrationDelegationAuthoritySchema.safeParse(candidate).success).toBe(
+        false,
+      );
+    for (const candidate of [
+      { pageSize: 0 },
+      { pageSize: 101 },
+      { pageSize: 10, afterDelegationAuthorityId: "invalid" },
+      { pageSize: 10, scopeKind: "bounded" },
+    ])
+      expect(
+        listOrganizationAdministrationDelegationAuthoritiesCommandSchema.safeParse(candidate)
           .success,
       ).toBe(false);
   });

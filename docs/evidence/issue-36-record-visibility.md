@@ -103,3 +103,18 @@ All 23 existing concurrency proofs passed across multiple runs; [the repair evid
 | `365_permission_saved_condition_parity.test.sql` | `7fba669e1d7c17492cf5be4657606cabcf208bb6d619eaea82b751671e1cf387` |
 
 The typed-reference checkpoint merged normally through [PR #320](https://github.com/Abzum-NZ/Abzum-Vortex/pull/320) at `2026-09-06T14:30:34Z` after both preview checks passed. Reviewed source `ca3d6d6ee89cb143c2986dec1d36d1183d26e748` and Testing merge `e8313abf386338db45dc9cdc9938bba42a78a6a9` have identical file trees. Exact hosted database verification remains unconfirmed; the remaining row-visibility scope is not delivered by that merge.
+
+## Direct account and current-Group ownership — 7 September 2026
+
+One private invoker-rights predicate now evaluates explicit all-record, direct-account and current-Group ownership routes against the trusted installed binding and exact record identity. It checks current Group/membership state and time windows, reports the relevant membership deadline, and refuses foreign organisation/application/storage identities or malformed owner evidence. Unsupported direct-share, relationship and inherited-owner routes add no authority. No record table, ownership mirror, writer, index or runtime endpoint is added.
+
+Independent Sol review approved the frozen migration and test after aligning route order/uniqueness and JSON UUID identities with the existing contracts. The main architect's final rollback proof passes **42 assertions**, including actual restricted-role SQL filtering and counting with a saved condition. A preliminary fixture correctly failed `permission_unavailable`: the existing #34 evaluator excludes record-scoped permissions until #35. The corrected rollback-only fixture authorizes its exact non-record application operation and separately supplies a stored scoped declaration to the private predicate. This tests the trusted integration seam only; it is not complete record authorization. [#35](../build-plan/issue-35-row-policy-composition.md) must bind each eligible record permission to that same permission's current row scope, never mix the two fixture declarations in shipping code.
+
+The reviewed migration was applied locally without reset alongside the assignment ledger, bringing supported local migration history to 55 entries. Full repository verification passes **1,288 tests**, three existing skips, eight fixtures, all 23 package typechecks/builds and formatting/lint/boundaries. Aggregate database results follow below; source delivery remains unverified for this checkpoint. Existing read/governance concurrency evidence is reused because this helper adds no new lock or write path. Local shares, inherited-parent/relationship joins, revision-checked changes and exact hosted delivery remain unfinished within #36. There is no new interface to screenshot.
+
+| Frozen database file | SHA-256 |
+|---|---|
+| `20260906144015_evaluate_current_record_ownership_visibility.sql` | `e818c191850c7d18e03093f3d33c13f29c3584c5ad59aaa6a940f96c3be1f000` |
+| `385_current_record_ownership_visibility.test.sql` | `e30a7fb041593e68549c311d675a4d16fcbd6c9f495d63a8949db55640af9445` |
+
+Final aggregate local verification passes **51 database suites / 2,336 assertions**. Six-schema lint reports no errors and only the same eight previously reviewed warnings; neither new migration introduces a warning. Security advisors report no issues. These results do not substitute for exact hosted delivery.

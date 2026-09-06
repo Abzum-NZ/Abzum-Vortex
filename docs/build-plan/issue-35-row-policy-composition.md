@@ -19,6 +19,8 @@ For a record, the decision is `OR(permission eligibility AND that same permissio
 
 ## Acceptance criteria
 
+The pre-policy [direct-ownership proof](../evidence/issue-36-record-visibility.md#direct-account-and-current-group-ownership--7-september-2026) deliberately separates an existing non-record operation permission from a stored scoped declaration in its rollback-only fixture. It proves the private predicate seam, not this task's shipping authorization. Here the same selected eligible record-permission identity and current catalogue entry must supply its own row scope. Do not carry that temporary fixture split into a production operation or relax the current non-record evaluator in isolation.
+
 - [ ] Actual non-owner request-role tests cover all four operations in both organisation directions and same-organisation application separation.
 - [ ] Having only the operation permission or only the row visibility never admits the operation.
 - [ ] One action correctly serves own-record and all-record alternatives. Eligibility from alternative A plus row visibility from B refuses when neither complete pair passes. Empty/duplicate alternatives, foreign record types, wrong action kinds and wrong named-action owners refuse at publication.
