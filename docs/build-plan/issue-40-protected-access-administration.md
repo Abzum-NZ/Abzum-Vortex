@@ -63,6 +63,14 @@ The [first implementation checkpoint](../evidence/issue-40-access-administration
 3. Private governed grant, PIM and invitation-intent composition and exact handoff contracts.
 4. Combined review, concurrency and hosted delivery evidence.
 
+### Next non-grant checkpoint: create and rename an empty or existing Group
+
+After the membership-read checkpoint, add protected Group creation and label changes using the existing `create_group` and `revise_group_label` compositions. Creating a Group creates no members, roles, assignments or delegation. Renaming changes only its display label; the permanent identity and key remain unchanged. Neither operation needs a new approval journey.
+
+Use the existing governance-first human change path and the exact Group-management permission. Bind organisation, actor and correlation to verified context, generate new identities on the trusted side, and require the current Group revision when renaming. Call the existing private writer and append one content-free completed Activity entry in the same transaction. Return the safe Group summary and resulting Access version; do not expose writer audit internals or accept caller-supplied authority. Preserve the existing stale/unchanged-result semantics rather than introducing a retry or receipt framework.
+
+Actual restricted-role checks must cover permitted creation/rename, refused permission and foreign/stale targets, and rollback of both the Group change and Access increment if Activity fails. Reuse the existing locking model and prove a representative competing rename order. Retirement and membership/assignment reductions still require their own complete affected-authority checks; these two metadata operations must not become a generic change dispatcher.
+
 [Administration definitions #72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) consumes safe reads and available non-grant operations. [Application lifecycle #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) coordinates protected registration/withdrawal and management bindings. [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267), after [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76) and [#81](https://github.com/Abzum-NZ/Abzum-Vortex/issues/81), owns actual user-linked approval and activation journeys. These later tasks are not prerequisites for the bounded private foundation or safe reads here.
 
 ```mermaid

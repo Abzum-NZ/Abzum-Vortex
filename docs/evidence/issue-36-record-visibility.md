@@ -25,10 +25,23 @@ The checkpoint merged into Testing through [PR #312](https://github.com/Abzum-NZ
 
 ## Remaining before the task is complete
 
-1. A single pure typed condition implementation, reused by Definition and Access, with PostgreSQL parity.
+1. PostgreSQL evaluation and parity for the shared pure typed condition implementation described below. The pure implementation is available to Definition and Access; actual database restrictions are not delivered by that extraction alone.
 2. Minimal trusted dependency-condition evidence for application-owned saved conditions, derived from the exact bound module compilation artifact and revalidated against it. The current identity/version snapshot does not contain that immutable condition contract; the compiler currently refuses unsupported application saved conditions rather than inventing it.
 3. Additive live catalogue storage, validation and read reconstruction of scope. Contract and compiler support alone cannot register or enforce it through the current scope-less catalogue.
 4. Private current shares, ownership/Group/relationship/condition database restrictions, and revision-checked changes with atomic Access/Activity evidence.
 5. Complete local, independent review and exact hosted Testing evidence for the full task.
 
 [Row-policy composition #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) and [field enforcement #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) retain their real dependencies. There is no record editor, sharing screen, generated-storage or complete MCP claim to screenshot at this checkpoint.
+
+## Shared condition implementation checkpoint — 6 September 2026
+
+The existing Rule package now owns pure typed condition evaluation, with Definition calling that implementation through its existing compatibility entry. Rule is explicitly shared tier 1 and imports only contracts. The input includes trusted source field definitions, exact declared field identifiers and parameter declarations, and exactly their supplied values. Every branch is validated before its Boolean result is used; a hidden invalid branch cannot become an allow result through short-circuiting or negation.
+
+The supported operators retain explicit null, text, number, date, date-time, collection and structural JSON semantics. Field identifiers remain exact and case-sensitive. UUID-valued references compare UUID identity, while text values do not receive case conversion. Contextual collection typing preserves date-like text as text and compares date-time membership by instant. Opaque JSON supports equality, not arbitrary collection operators; an empty literal collection cannot bypass that restriction.
+
+Independent Sol actual-patch review approved the final eight files after one empty-collection correction. The combined focused Rule/Definition check passed all 66 tests; both package typechecks, the 23-package boundary check, formatting and diff checks passed. The combined working-tree repository gate subsequently passed 1,256 tests with three existing skips, eight fixture checks and all 23 package typechecks/builds, plus formatting/lint and boundaries. That run also included the membership reads and parallel catalogue runtime/test changes. This is source-level evidence, not proof of PostgreSQL parity or hosted delivery.
+
+| Final reviewed file | SHA-256 |
+|---|---|
+| `runtime/rule/src/typed-condition.ts` | `a5cf2ea81fa56d5b5d21c53f76577ae7532474a3dea3e5028be782f2386cfb5a` |
+| `runtime/rule/test/typed-condition.test.ts` | `b9c92b5cd854116e05cae6e6a54da80a4deef225885699c6a16359332cf93c47` |

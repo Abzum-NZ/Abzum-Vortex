@@ -246,6 +246,9 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../rule
       semver:
         specifier: 'catalog:'
         version: 7.8.5
@@ -386,6 +389,10 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   runtime/search:
     dependencies:

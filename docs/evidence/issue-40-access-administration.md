@@ -31,7 +31,20 @@ There is no new user interface to screenshot. Remaining permitted reads, non-gra
 
 The approved source `9b23a4219e7cd27e99947109c5ba29438cef09e0` merged normally at `2026-09-06T11:11:27Z` as `35b09d1995a56656cbe6f0401666145e4853bd82`; the merge changed no reviewed file bytes. Both Vercel and Vercel Preview Comments succeeded. No required check was bypassed. Read-only inspection of the hosted receipt could not be completed because the Edge browser controller reported a detached/unattached debugger. The ordinary [Kestra KV page](https://kestra.abzum.com/ui/main/kv) opened, but its receipt content was not readable through the connected tool. This is not evidence of a failed hosted run, nor of a successful one. Core implementation continues while the exact result remains unverified; no API workaround, new credential or infrastructure change was attempted.
 
-## Reviewed database bytes
+## Group membership read checkpoint — 6 September 2026
+
+The next bounded slice adds one selected-Group membership page and one exact membership detail. It reuses the existing fixed Group-read permission and shared Access lock; no new permission evaluator or concurrency harness is introduced. Results contain stable references, the existing safe account display name, revision, time window, stored state and descriptive temporal state. `live` storage state is distinct from `active`, `scheduled` or `expired` temporal state; none is an effective-permission decision. Unknown and foreign targets are unavailable without disclosing which case occurred.
+
+Independent Sol review approved the exact six implementation files. The initial transaction-only probe passed all 36 new assertions and rolled back the new index, functions and fixtures. The approved migration was then applied locally: all 42 suites / 2,041 SQL assertions and all 22 existing concurrency proofs passed. All six schemas lint without errors and retain only the same three previous Access warnings; local security advisors report no issues. The supported local history command recorded the already-applied migration, bringing the local total to 45. No hosted database was changed by this local operation.
+
+The engineer's focused contract/service check passes 11 tests, with contracts and Access typechecks plus scoped formatting/lint. The combined working-tree repository gate subsequently passed 1,256 tests with three existing skips, eight fixture checks, all 23 package typechecks/builds, formatting/lint and boundaries. That run also included the shared-condition implementation and parallel catalogue runtime/test changes; it is not hosted-delivery evidence. This remains a local implementation checkpoint, not part of the earlier Testing merge.
+
+| Frozen database file | SHA-256 |
+|---|---|
+| `supabase/migrations/20260906110758_protect_organization_group_membership_administration.sql` | `6647b7b991969088557063f4e399666c886cc6f20c398097719b5f02bba790ea` |
+| `supabase/tests/335_organization_group_membership_administration.test.sql` | `ea9a86b58abcad0b03ac7a291ee9b56b2c2df0b849d32fdfa716dabfba033fc5` |
+
+## First checkpoint database bytes
 
 | File | SHA-256 |
 |---|---|

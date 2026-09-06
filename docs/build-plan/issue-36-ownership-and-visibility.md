@@ -61,6 +61,17 @@ The independently reviewed [initial A checkpoint](../evidence/issue-36-record-vi
 
 Do not add a new issue for each slice. Review them against the same complete task, and keep dependencies blocked until the required outcomes exist.
 
+### C — First checkpoint: permission scope survives registration
+
+The independently reviewed first C change carries the already validated scope through the existing private permission catalogue. It does not yet evaluate record visibility.
+
+1. Add nullable `record_scope` to the existing permission catalogue, without a default or historical backfill. A present value must be an object belonging to an application/module record permission. Preserve the existing full candidate-to-sealed-Definition comparison as the authoritative deep validation.
+2. Update the current registration, withdrawal, unchanged-candidate comparison and exact permission read functions together. Preserve their existing transactions, locks, meaning continuity and Access-version increments. The read function's added result column requires drop/recreation with dependency restriction, never cascading removal; restore its private privileges in the same migration.
+3. Reconstruct optional `recordScope` in the existing private repository. A historical SQL null remains an omitted property, preserving legacy meaning. Do not add another evaluator, fingerprint, history or counter.
+4. Prove actual registration, unchanged replay, scope change, withdrawal, reactivation and read reconstruction. Check legacy omission, one Access-version increment per real change, no increment on replay and the existing fresh-acceptance behaviour after changed permission meaning. Existing concurrency proofs remain applicable because locking and mutation semantics do not change.
+
+Returning scope is definition evidence, not authority to access a record. The remaining C predicates and [row policy composition #35](issue-35-row-policy-composition.md) still govern live record access.
+
 ## Downstream ownership
 
 - [#35](issue-35-row-policy-composition.md) combines the predicates with the central operation decision in fixed SELECT/INSERT/UPDATE/DELETE policies.
