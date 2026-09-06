@@ -79,6 +79,8 @@ Database lint reports no errors. Besides the three earlier warnings, it reports 
 
 The shared corpus also proves that a legacy text current-account parameter does not coerce into a person reference. A separate reviewed follow-up within this task adds the missing explicit reference parameter end-to-end. Hosted delivery remains unverified. There is no new user interface to screenshot.
 
+The checkpoint merged normally through [PR #319](https://github.com/Abzum-NZ/Abzum-Vortex/pull/319) at `2026-09-06T14:00:15Z`, after both preview checks passed. Reviewed source `cbf7b16f5e2206b59ee48e0dcedfd8213fcad043` and Testing merge `413da82f71408a0dc892d761571c05555fa84198` have identical file trees. A subsequent combined repository gate, including frozen but not yet delivered role-reader work, passed 1,279 tests with three existing skips, eight fixture checks, 23 package typechecks/builds and formatting/lint/boundaries. That combined run is not hosted database evidence, and neither the role-reader implementation nor the assignment repair is included in this condition merge.
+
 | Frozen file | SHA-256 |
 |---|---|
 | `supabase/migrations/20260906131348_evaluate_permission_saved_conditions.sql` | `acc80c9d0c031fe7b70dee74daf126dcb4193b7cfc5e4d9fc815bc5a9c60b0e1` |
