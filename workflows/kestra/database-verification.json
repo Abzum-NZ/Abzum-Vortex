@@ -75,6 +75,11 @@
       "migration": "supabase/migrations/20260906002950_coordinate_organization_role_activation_changes.sql",
       "proof": "supabase/tests/organization-role-activation-change-concurrency.test.sh",
       "label": "Organization role activation changes"
+    },
+    {
+      "migration": "supabase/migrations/20260906013706_coordinate_organization_delegation_authority_changes.sql",
+      "proof": "supabase/tests/organization-delegation-authority-change-concurrency.test.sh",
+      "label": "Organization delegation authority changes"
     }
   ],
   "lintSchemas": [
