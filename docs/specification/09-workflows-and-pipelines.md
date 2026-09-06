@@ -98,14 +98,14 @@ Post-commit dispatch scopes the hand-off duplicate key to the source event or st
 
 The initial catalogue draws on the attached legacy workflow inventory while replacing product-specific and unsafe nodes with small, governed operations:
 
-| Group | Supported nodes |
-|---|---|
-| Flow | Start, condition, multi-way decision table, bounded loop, delay or wait-until, start child workflow, stop with reason |
-| Records | Create record, change approved fields, run a named action, soft-delete record, duplicate record, add or copy approved relationships |
-| Human input | Request values through a published form and wait for an authorised response |
-| Data | Run a published query, set typed values, apply a registered formatter or regular expression, generate a bounded export |
-| Files | Attach or move an approved file |
-| Connections | Call a named connection operation and acknowledge only the exact verified incoming message that triggered the current workflow |
+| Group       | Supported nodes                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Flow        | Start, condition, multi-way decision table, bounded loop, delay or wait-until, start child workflow, stop with reason               |
+| Records     | Create record, change approved fields, run a named action, soft-delete record, duplicate record, add or copy approved relationships |
+| Human input | Request values through a published form and wait for an authorised response                                                         |
+| Data        | Run a published query, set typed values, apply a registered formatter or regular expression, generate a bounded export              |
+| Files       | Attach or move an approved file                                                                                                     |
+| Connections | Call a named connection operation and acknowledge only the exact verified incoming message that triggered the current workflow      |
 
 These 24 nodes are the complete first-release catalogue. Each node has a typed input and output contract, named permission, timeout, retry rule, duplicate-protection rule, activity meaning, and redaction policy. Comments, tags, tasks, calendar entries, notifications, messages, documents and business approvals are records or named application actions. Delivery to an external service uses the generic connection-call node.
 

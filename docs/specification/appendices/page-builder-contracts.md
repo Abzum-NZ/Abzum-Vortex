@@ -151,14 +151,14 @@ Update source schemas, canonical schemas, registry, compiler/reference traversal
 
 For Application definitions, support only the exact source/validation version pairs `1.0.0 / 1.0.0` (V1) and `2.0.0 / 2.0.0` (V2). The source version selects authored-source decoding; the validation version selects canonical and compiled content. Reject unknown versions, unsupported pairs and disagreement between JSON and trusted enclosing metadata before decoding nested content. Never infer a version from content shape or a semantic-version major number. Module and connection-type contracts remain unchanged.
 
-| Boundary | Version authority and required behavior |
-|---|---|
-| Authored source and draft | Check intrinsic `source_contract_version` against the existing stored `sourceContractVersion`; require exact agreement. |
-| Compilation | Map the exact source version to its validation version through an explicit supported-pair table. Legacy V1 output remains unchanged and requires trusted V1 compile context. V2 output carries `validationContractVersion: "2.0.0"` as outer metadata. |
-| Standalone canonical content | Require an outer `validationContractVersion` envelope that is not part of the canonical fingerprint. Missing metadata is not permission to guess V1. |
-| Publication and release storage | Persist and verify the exact pair using existing source/validation version columns; check source JSON agreement before publication. No new representation column is needed. |
-| Published and consumer reads | Select canonical content using existing `validationContractVersion` metadata; do not add source metadata where no authored source is returned. |
-| History and restore | Expose both stored versions in history metadata. Restore verifies both and restores the original authored content without conversion. A V1-to-V2 conversion creates a separately confirmed new draft revision. |
+| Boundary                        | Version authority and required behavior                                                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Authored source and draft       | Check intrinsic `source_contract_version` against the existing stored `sourceContractVersion`; require exact agreement.                                                                                                                                |
+| Compilation                     | Map the exact source version to its validation version through an explicit supported-pair table. Legacy V1 output remains unchanged and requires trusted V1 compile context. V2 output carries `validationContractVersion: "2.0.0"` as outer metadata. |
+| Standalone canonical content    | Require an outer `validationContractVersion` envelope that is not part of the canonical fingerprint. Missing metadata is not permission to guess V1.                                                                                                   |
+| Publication and release storage | Persist and verify the exact pair using existing source/validation version columns; check source JSON agreement before publication. No new representation column is needed.                                                                            |
+| Published and consumer reads    | Select canonical content using existing `validationContractVersion` metadata; do not add source metadata where no authored source is returned.                                                                                                         |
+| History and restore             | Expose both stored versions in history metadata. Restore verifies both and restores the original authored content without conversion. A V1-to-V2 conversion creates a separately confirmed new draft revision.                                         |
 
 Existing V1 source, canonical JSON, compilation payloads, release rows and fingerprints remain unchanged: do not add tags or default V2 properties to them. History projections and transport envelopes do not change immutable release content or fingerprint inputs.
 
@@ -170,15 +170,15 @@ Required evidence includes positive and negative contract cases, lossless adapte
 
 The HR application in [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) is an ordinary editable example, not a platform rule.
 
-| Area | Approved example behavior |
-|---|---|
-| Records | Employees, Departments, Positions and Leave Requests, with explicit relationships. |
-| Employee | Own private employee details and own leave requests. Any broader directory projection must be explicitly allowed by the application definition. |
-| Manager | Permitted direct-report details and their leave requests through the declared manager relationship. |
-| HR administrator | Manage this HR application's records within the current organisation. No implicit platform administration. |
-| Leave request | Employee submits; current designated manager approves/refuses; an authorised HR administrator is the fallback when there is no eligible manager or reassignment is required. |
-| Self-approval | A requester cannot approve their own request, even if they have a manager role; route to another authorised HR administrator. If none exists, leave pending with a clear assignment issue. |
-| Limits | No payroll, statutory policy, accrued balances, leave entitlement or country-specific calculation. |
+| Area             | Approved example behavior                                                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Records          | Employees, Departments, Positions and Leave Requests, with explicit relationships.                                                                                                         |
+| Employee         | Own private employee details and own leave requests. Any broader directory projection must be explicitly allowed by the application definition.                                            |
+| Manager          | Permitted direct-report details and their leave requests through the declared manager relationship.                                                                                        |
+| HR administrator | Manage this HR application's records within the current organisation. No implicit platform administration.                                                                                 |
+| Leave request    | Employee submits; current designated manager approves/refuses; an authorised HR administrator is the fallback when there is no eligible manager or reassignment is required.               |
+| Self-approval    | A requester cannot approve their own request, even if they have a manager role; route to another authorised HR administrator. If none exists, leave pending with a clear assignment issue. |
+| Limits           | No payroll, statutory policy, accrued balances, leave entitlement or country-specific calculation.                                                                                         |
 
 The user approved the no-self-approval rule for this example; it is not a legal or platform requirement. All actor selection, statuses, access conditions and fallback behavior live in editable application definitions. A department move or manager change must affect subsequent authority checks; an already-open screen is not authority.
 

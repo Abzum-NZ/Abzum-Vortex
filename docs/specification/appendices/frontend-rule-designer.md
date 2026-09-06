@@ -40,11 +40,11 @@ Central means one generic runtime and catalogue, not one unscoped global list. A
 
 ## Three execution contexts, one authoring language
 
-| Context | What happens | What cannot happen |
-|---|---|---|
-| Immediate feedback | On an input or page event, calculate draft values, conditions and presentation promptly. | No record writes, external calls or durable starts. |
-| Interactive action journey | Run immediate steps, show one or more forms, collect answers and prepare one final protected operation. | No business writes between forms and no transaction held while a person thinks. |
-| Authoritative save/action rule | Recheck and execute the permitted rule graph inside the owning Vortex transaction. | No form prompt, network call, delay or Kestra execution inside that transaction. |
+| Context                        | What happens                                                                                            | What cannot happen                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Immediate feedback             | On an input or page event, calculate draft values, conditions and presentation promptly.                | No record writes, external calls or durable starts.                              |
+| Interactive action journey     | Run immediate steps, show one or more forms, collect answers and prepare one final protected operation. | No business writes between forms and no transaction held while a person thinks.  |
+| Authoritative save/action rule | Recheck and execute the permitted rule graph inside the owning Vortex transaction.                      | No form prompt, network call, delay or Kestra execution inside that transaction. |
 
 The author sees these as eligible triggers and nodes in the same designer, with explanations for unavailable combinations. There is no second frontend-only language and no second action executor. A synchronous segment may await its final protected Vortex submission without blocking the browser thread. Human input pauses the interactive journey, not a running database transaction. Long-running or assigned work uses the existing [durable workflow](../09-workflows-and-pipelines.md).
 
@@ -52,15 +52,15 @@ The author sees these as eligible triggers and nodes in the same designer, with 
 
 Every flow has one start and one declared trigger binding, an optional start condition and a stable priority. Reuse a definition with explicit bindings when more than one event should start the same behaviour. Do not maintain hidden event listeners outside the published definition.
 
-| Trigger family | Configurable events | Behaviour |
-|---|---|---|
-| Manual | Named button, menu command, row action or selected-record action | Start a permitted interactive journey. Selection is a typed, bounded list, never a comma-separated string or an implicit first record. |
-| Page/form lifecycle | Page ready, form ready, form reset | Apply defaults and presentation once for that context; rendering again is not another start. |
-| Input | Selected field value changed; field left | Re-evaluate using typed draft values. “Changed” means a value change, not every render or key press. |
-| Condition transition | A condition becomes true or becomes false after its declared watched values change | Compare before/after values. Initial evaluation is explicit; the default does not treat an already-true initial value as a transition. |
-| Before submission | Before save, or before the selected named action | One server-authoritative validation/adjustment phase; creation/update and the selected action can be distinguished. Collect additional answers before entering this phase. |
-| Submission result | Save succeeded, save failed, action succeeded, action failed | Update presentation using the confirmed safe result. Success means committed, not merely optimistic display. |
-| View controls | Row/selection changed, tab changed, guided step changed, filter applied/cleared | React only to the named semantic control. Do not depend on DOM selectors. |
+| Trigger family       | Configurable events                                                                | Behaviour                                                                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manual               | Named button, menu command, row action or selected-record action                   | Start a permitted interactive journey. Selection is a typed, bounded list, never a comma-separated string or an implicit first record.                                     |
+| Page/form lifecycle  | Page ready, form ready, form reset                                                 | Apply defaults and presentation once for that context; rendering again is not another start.                                                                               |
+| Input                | Selected field value changed; field left                                           | Re-evaluate using typed draft values. “Changed” means a value change, not every render or key press.                                                                       |
+| Condition transition | A condition becomes true or becomes false after its declared watched values change | Compare before/after values. Initial evaluation is explicit; the default does not treat an already-true initial value as a transition.                                     |
+| Before submission    | Before save, or before the selected named action                                   | One server-authoritative validation/adjustment phase; creation/update and the selected action can be distinguished. Collect additional answers before entering this phase. |
+| Submission result    | Save succeeded, save failed, action succeeded, action failed                       | Update presentation using the confirmed safe result. Success means committed, not merely optimistic display.                                                               |
+| View controls        | Row/selection changed, tab changed, guided step changed, filter applied/cleared    | React only to the named semantic control. Do not depend on DOM selectors.                                                                                                  |
 
 Before-save does not cover deletion, restoration, link/unlink, reassignment or state transitions by inference. Bind before-action to the exact supported published operation; use confirmed operation results for UI feedback and the [seven committed record events](../08-forms-actions-rules-and-events.md#events) for durable reactions. The owning operation must enforce its own permissions and rules for web, MCP and interfaces alike.
 
@@ -80,13 +80,13 @@ Operators include typed equality, ordering, ranges, empty/not-empty, membership 
 
 The UI calls these **Flow variables** to distinguish them from infrastructure environment variables and secrets. They are available throughout one run, not shared between users, runs or applications.
 
-| Value group | Who supplies it | Rules |
-|---|---|---|
-| Inputs | Published trigger or submitted form | Named, typed, required/optional and validated; no undeclared payload keys. |
-| Context | Vortex | Read-only actor, organisation, installation, subject and available before/current values. Client context is never authority. |
-| Flow variables | Defaults, Set variable node or explicit output mapping | Declared name, stable identity, type and optional default. Values may change along the selected path. |
-| Node outputs | A named completed node | Typed outputs; available only where that node has executed. |
-| Result | Final operation | Confirmed success/refusal/conflict and permitted returned values. It is not available before submission. |
+| Value group    | Who supplies it                                        | Rules                                                                                                                        |
+| -------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Inputs         | Published trigger or submitted form                    | Named, typed, required/optional and validated; no undeclared payload keys.                                                   |
+| Context        | Vortex                                                 | Read-only actor, organisation, installation, subject and available before/current values. Client context is never authority. |
+| Flow variables | Defaults, Set variable node or explicit output mapping | Declared name, stable identity, type and optional default. Values may change along the selected path.                        |
+| Node outputs   | A named completed node                                 | Typed outputs; available only where that node has executed.                                                                  |
+| Result         | Final operation                                        | Confirmed success/refusal/conflict and permitted returned values. It is not available before submission.                     |
 
 Support the existing typed value kinds, including bounded lists, structured values and references whose allowed record types are declared. Use a value picker for literals, fields, inputs, variables and previous node outputs. Never require authors to type `$env[...]` or code.
 
@@ -98,19 +98,19 @@ Durable workflows retain their own typed trigger inputs and node outputs. A fron
 
 ## Initial frontend node catalogue and extensibility
 
-| Node | What it configures | Allowed contexts |
-|---|---|---|
-| Start / Finish | Trigger and terminal outcome | All |
-| Condition | Shared condition with Yes/No routes | All |
-| Set variable / Calculate value | Typed mapping or registered pure calculation | All; only allowed operands for that context |
-| Set field | Proposed draft value or an allowed server candidate-field change | Feedback, interactive, save/action |
-| Require field / Refuse | Conditional requirement or safe validation message | Feedback and server validation; server repeats enforcement |
-| Show/hide / Enable/disable | Published field or component presentation | UI only; never changes actual permission |
-| Show message / Focus field | Safe message/location or focus target | UI only; validation messages have server-safe equivalents |
-| Show form | Exact reusable form, defaults, output mappings, Submit/Cancel routes | Interactive journey, before final submission only |
-| Prepare action / Submit | Map inputs to one published named action or supported owning-service operation and finally submit it | Interactive; no generic sequence of independently committed writes |
-| Refresh / Navigate / Open-close panel / Set view filter | Exact permitted semantic target and declared parameters | UI; post-submit uses confirmed results |
-| Start background workflow | Exact published workflow binding and typed input mapping | Prepared in interactive flow or requested by a save rule; accepted only at final commit |
+| Node                                                    | What it configures                                                                                   | Allowed contexts                                                                        |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Start / Finish                                          | Trigger and terminal outcome                                                                         | All                                                                                     |
+| Condition                                               | Shared condition with Yes/No routes                                                                  | All                                                                                     |
+| Set variable / Calculate value                          | Typed mapping or registered pure calculation                                                         | All; only allowed operands for that context                                             |
+| Set field                                               | Proposed draft value or an allowed server candidate-field change                                     | Feedback, interactive, save/action                                                      |
+| Require field / Refuse                                  | Conditional requirement or safe validation message                                                   | Feedback and server validation; server repeats enforcement                              |
+| Show/hide / Enable/disable                              | Published field or component presentation                                                            | UI only; never changes actual permission                                                |
+| Show message / Focus field                              | Safe message/location or focus target                                                                | UI only; validation messages have server-safe equivalents                               |
+| Show form                                               | Exact reusable form, defaults, output mappings, Submit/Cancel routes                                 | Interactive journey, before final submission only                                       |
+| Prepare action / Submit                                 | Map inputs to one published named action or supported owning-service operation and finally submit it | Interactive; no generic sequence of independently committed writes                      |
+| Refresh / Navigate / Open-close panel / Set view filter | Exact permitted semantic target and declared parameters                                              | UI; post-submit uses confirmed results                                                  |
+| Start background workflow                               | Exact published workflow binding and typed input mapping                                             | Prepared in interactive flow or requested by a save rule; accepted only at final commit |
 
 Create, update, delete and relationship operations reuse named [actions](../08-forms-actions-rules-and-events.md#actions) and their existing bounded effects. The frontend designer does not acquire direct table-writing nodes. Data selection uses existing authorised Page/Query bindings; arbitrary searches, raw network calls and unbounded lists are not synchronous calculation nodes. Reusable calculations use the existing registered pure value operations, not a new scripting runtime.
 
@@ -184,12 +184,12 @@ There is no distributed database transaction with Kestra. Prepared provider flow
 
 ## Designer experience and package choice
 
-| Component | Selected approach | Reason and boundary |
-|---|---|---|
-| Flow canvas | `@xyflow/react` (React Flow), with selected [React Flow UI components](https://reactflow.dev/learn/tutorials/getting-started-with-react-flow-components) | Existing node/edge interaction and shadcn-based cards; Vortex still owns execution and its graph contract. |
-| Conditions Designer | `react-querybuilder` with its official [shadcn registry](https://react-querybuilder.js.org/docs/compat#shadcnui) | Reuse grouped condition editing with Vortex field/operator/value controls. A tested adapter maps to the single Vortex condition tree; no SQL export or package evaluator becomes authority. |
-| Custom input forms | Existing Puck-backed Page Designer adapter and registered form renderer | One reusable layout/input/validation system, with form-response bindings rather than another form product. |
-| Alternative considered | [Rete.js](https://retejs.org/docs/concepts/engine/) | Offers dataflow/control-flow engines; not selected because Vortex already owns its execution semantics and needs a canvas, not an additional engine. |
+| Component              | Selected approach                                                                                                                                        | Reason and boundary                                                                                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Flow canvas            | `@xyflow/react` (React Flow), with selected [React Flow UI components](https://reactflow.dev/learn/tutorials/getting-started-with-react-flow-components) | Existing node/edge interaction and shadcn-based cards; Vortex still owns execution and its graph contract.                                                                                  |
+| Conditions Designer    | `react-querybuilder` with its official [shadcn registry](https://react-querybuilder.js.org/docs/compat#shadcnui)                                         | Reuse grouped condition editing with Vortex field/operator/value controls. A tested adapter maps to the single Vortex condition tree; no SQL export or package evaluator becomes authority. |
+| Custom input forms     | Existing Puck-backed Page Designer adapter and registered form renderer                                                                                  | One reusable layout/input/validation system, with form-response bindings rather than another form product.                                                                                  |
+| Alternative considered | [Rete.js](https://retejs.org/docs/concepts/engine/)                                                                                                      | Offers dataflow/control-flow engines; not selected because Vortex already owns its execution semantics and needs a canvas, not an additional engine.                                        |
 
 Follow current official package APIs and pin compatible versions in the lockfile when implementation begins. No packages are installed by this specification change. Prove round-trip mapping and context-restricted operators before integrating the conditions UI; report any unsupported package behaviour rather than silently changing Vortex semantics. Keep editor-specific positions/selection state separate from execution meaning. React Flow and Puck data are private adapter representations, not public contracts.
 
@@ -209,16 +209,16 @@ Legacy single effects may be shown as a one-effect graph through a lossless read
 
 ## Acceptance and delivery coverage
 
-| Proof | Owning tasks |
-|---|---|
-| Condition parity; initial true vs becomes true; null vs missing; illegal context operands; no script execution | [#57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) |
-| All node schemas and dependency references; graph order/cycle refusal; variable defaults/types/branch assignment; no cross-run leakage; old-release compatibility | [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) |
-| Before-save refusals and field changes; all-or-nothing final operation; direct API/MCP cannot bypass required answers or rules | [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) |
-| Form without an existing record; several required forms; defaults/output maps; Cancel/abandon leaves no business effects; stale/duplicate submission; same renderer | [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68) |
-| Registration on install; no run on publish; duplicate imports; same-name apps; failed upgrade, rollback and withdrawal | [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#112](https://github.com/Abzum-NZ/Abzum-Vortex/issues/112) |
-| Typed variable handoff; no call before commit; pending during outage; exact accepted version preserved; record-free path has explicit contract | [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#77](https://github.com/Abzum-NZ/Abzum-Vortex/issues/77), [#78](https://github.com/Abzum-NZ/Abzum-Vortex/issues/78) |
-| Durable request_form versus interactive Show form; safe assigned response and draft reuse | [#81](https://github.com/Abzum-NZ/Abzum-Vortex/issues/81), [#83](https://github.com/Abzum-NZ/Abzum-Vortex/issues/83) |
-| Accessible editor, test trace, scoped refresh, stale response removal and same controls through MCP, including form Continue/Cancel/Submit | [#59](https://github.com/Abzum-NZ/Abzum-Vortex/issues/59), [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) |
-| Independent full-flow proof in definition-driven examples, with no business-specific core branches | [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) |
+| Proof                                                                                                                                                               | Owning tasks                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Condition parity; initial true vs becomes true; null vs missing; illegal context operands; no script execution                                                      | [#57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58)                                                                                                                         |
+| All node schemas and dependency references; graph order/cycle refusal; variable defaults/types/branch assignment; no cross-run leakage; old-release compatibility   | [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58)                                                                                                                                                                                    |
+| Before-save refusals and field changes; all-or-nothing final operation; direct API/MCP cannot bypass required answers or rules                                      | [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58)                                                              |
+| Form without an existing record; several required forms; defaults/output maps; Cancel/abandon leaves no business effects; stale/duplicate submission; same renderer | [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68)                                                            |
+| Registration on install; no run on publish; duplicate imports; same-name apps; failed upgrade, rollback and withdrawal                                              | [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#112](https://github.com/Abzum-NZ/Abzum-Vortex/issues/112)                                                            |
+| Typed variable handoff; no call before commit; pending during outage; exact accepted version preserved; record-free path has explicit contract                      | [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#77](https://github.com/Abzum-NZ/Abzum-Vortex/issues/77), [#78](https://github.com/Abzum-NZ/Abzum-Vortex/issues/78)                                                              |
+| Durable request_form versus interactive Show form; safe assigned response and draft reuse                                                                           | [#81](https://github.com/Abzum-NZ/Abzum-Vortex/issues/81), [#83](https://github.com/Abzum-NZ/Abzum-Vortex/issues/83)                                                                                                                         |
+| Accessible editor, test trace, scoped refresh, stale response removal and same controls through MCP, including form Continue/Cancel/Submit                          | [#59](https://github.com/Abzum-NZ/Abzum-Vortex/issues/59), [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) |
+| Independent full-flow proof in definition-driven examples, with no business-specific core branches                                                                  | [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254)                                                                                                                                                                                  |
 
 The [delivery plan](../../build-plan/frontend-rule-designer.md) records the dependency order and exact issue updates. This feature does not pre-empt unfinished Access work or require infrastructure maintenance.
