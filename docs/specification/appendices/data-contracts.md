@@ -362,6 +362,13 @@ kind, owner identity and permission identity. The database discovers current
 registration, acceptance, continuity and meaning evidence. Management names both
 before and after scopes, each absent, organisation-catalogue or a nonempty unique
 set of exact permission identities; it does not accept copied authority receipts.
+At least one management scope must be nonempty: both before and after cannot be
+absent. One absent side remains valid for a grant or removal. Only a complete current
+organisation-catalogue delegation can cover catalogue scope; separate bounded grants
+may cover separate exact permissions but cannot combine into catalogue authority.
+The decision evaluates the transaction account. [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
+separately binds and rechecks any distinct requester or approver from trusted
+workflow evidence, never from a caller-selected account identifier.
 
 An organisation-target operation requires a platform permission with no application
 scope in its permission identity. Its trusted request may retain a selected

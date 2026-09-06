@@ -45,8 +45,32 @@ fixture cleanup; no product or test-code change was made for the invocation arti
 
 ## Delivery boundary
 
-Normal pull-request and exact hosted verification remain required. Local evidence
-does not claim Testing or Production delivery. [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
+Normal pull-request and exact hosted Testing verification are complete, as recorded
+below. This does not claim Production delivery. [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
 continues the permission decision; [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
 must authorize and mutate inside its governance-first writer transaction, not
 upgrade a previously resolved read transaction's shared lock.
+
+## Hosted Testing — 6 September 2026
+
+[PR #306](https://github.com/Abzum-NZ/Abzum-Vortex/pull/306) merged as exact Testing
+commit `3a66e4891fc44b4f5c50d9b9d2fd6034aca38be5`.
+[Execution 3lKAG627yTQ5jsso0yyPFa](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/3lKAG627yTQ5jsso0yyPFa)
+succeeded at 18:18:46 NZST after 27 minutes 48 seconds. The full schema-version 2
+receipt was opened and parsed, not inferred from the status label:
+
+- Exact repository, Testing ref and commit match the delivered revision.
+- All 39 migrations match migration-set hash
+  `cda71ec958b0f2c9b4f8749a4275987c167cdc7c16decd2505314c9e036cde6d`.
+- Logs confirm all 36 SQL files / 1,815 assertions passed.
+- All 19 selected concurrency proofs completed in order, including the corrected
+  request/account proof; all five selected lint schemas completed.
+- Runner hash `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046`,
+  manifest hash `bbf8c2217f522be5b9b0da4070730c81d35aac764d3cf9195654ebb16aefb6ee`
+  and coverage hash `4eff7d8e47b5df09b2ea31a0425be07c2c0854c20137abb88ee2e4afb1d627b4`
+  were independently recomputed from the exact Git commit and match the receipt.
+- Receipt status is `succeeded`, using Supabase CLI 2.116.0 and PostgreSQL 17.
+
+The successful Overview was captured in the task conversation. This closes the
+bounded correction and clears the database-integration prerequisite for
+[#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34).

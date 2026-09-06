@@ -219,7 +219,9 @@ the unchanged deployed bootstrap continued to load expanded commit-owned coverag
 [PR #306](https://github.com/Abzum-NZ/Abzum-Vortex/pull/306) subsequently merged the
 reviewed request/account correction as Testing `3a66e4891fc44b4f5c50d9b9d2fd6034aca38be5`.
 [Its exact hosted execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/3lKAG627yTQ5jsso0yyPFa)
-is running; migration application alone is not its success receipt. The existing
+succeeded at 18:18:46 NZST. The [verified receipt](../issue-305-request-lock-order.md#hosted-testing--6-september-2026)
+matches all 39 migrations, 36 SQL files / 1,815 assertions, all 19 concurrency proofs
+and all five schemas for that exact commit. The existing
 Production execution `31t28N9r4TmPCkDCMbKmH6` was rechecked and remains queued.
 No Production queue or deployment mutation was made during this check. The remaining
 release reconciliation is still distinct from the verified Testing repair.

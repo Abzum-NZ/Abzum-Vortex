@@ -22,12 +22,12 @@ The [saved delivery evidence](../evidence/issue-33-invitation-access/README.md#h
 identifies the delivered revision and completed checks. No user approval is outstanding.
 
 [Request/account lock ordering #305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305)
-is the bounded correction required before database execution integration. The
-existing reader locks Identity before Access, whereas the supported account writer
-locks Access before Identity. Align the reader with that order after an exact
-lock-free eligibility filter, then recheck Identity under its normal locks. Replace
-the obsolete direct-writer concurrency fixture with the actual account composition.
-This fixes a concrete cycle without changing role behaviour or adding retries.
+is complete after [exact hosted Testing verification](../evidence/issue-305-request-lock-order.md#hosted-testing--6-september-2026).
+The reader now follows the supported account writer's Access-before-Identity order
+after an exact lock-free eligibility filter, then rechecks Identity under its normal
+locks. The corrected proof exercises the actual account composition. Database
+execution integration is no longer blocked by this correction; no role behaviour
+or retry framework was added.
 
 [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
 and [protected Access operations #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
@@ -98,6 +98,43 @@ wrapper cannot supply that application binding; the later verified application
 selection handoff must establish it before context initialization. A declaration
 alone cannot manufacture application context. Controlled SQL fixtures prove these
 semantics, not a delivered application-selection interface.
+
+### Slice 3 implementation choices
+
+Extend the same evaluator with current delegation coverage; do not add a second
+decision or stored effective-authority view. Parse the distinct exact permissions
+from the declared before and after scopes once. An organisation-catalogue scope is a
+separate requirement that only one current organisation-catalogue delegation can
+satisfy; several bounded delegations must never synthesize it. The after scope also
+expresses the onward ceiling for a delegation grant or replacement, so no third
+scope field or history is needed.
+
+Build complete delegation paths from the existing
+[#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) current facts. A direct
+path belongs to the transaction account. A Group path also requires the active Group
+and that account's current live membership. Every path
+must be live and within its fixed window. A bounded path matches the exact
+application/owner/permission identity and remains usable only while its stored
+continuity and meaning evidence is current; stored fingerprints remain provenance,
+not authority. Organisation-catalogue authority may cover future or stale exact
+identities so a steward can introduce or repair catalogue state, while the protected
+writer still validates the proposed candidate.
+
+Choose one deterministic complete delegation path for each distinct required
+permission and, when required, one actual catalogue path. Independent bounded paths
+may cover different permissions. The decision is eligible only when every
+requirement is covered, and its deadline is the earliest bound from the selected use,
+authentication, context, delegation and Group-membership paths. Existing indexes
+serve these joins; add no history scan, counter, fingerprint engine or path-search
+framework.
+
+The slice-3 contract and focused tests must first reject `delegated_management` when
+both before and after are `none`: an empty management scope cannot bypass the
+separate-delegation requirement. This evaluator checks only the transaction-bound
+account. [Protected Access operations #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
+later bind and recheck any distinct requester or approver through trusted workflow
+evidence; caller-selected account input does not belong here. Passing this slice is
+still private eligibility, not final allowance or completed approval governance.
 
 ## Required decision behaviour
 
