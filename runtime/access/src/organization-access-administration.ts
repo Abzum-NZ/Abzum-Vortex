@@ -10,10 +10,14 @@ import {
   listOrganizationAdministrationGroupsResultSchema,
   listOrganizationAdministrationMembershipsCommandSchema,
   listOrganizationAdministrationMembershipsResultSchema,
+  listOrganizationAdministrationPermissionsCommandSchema,
+  listOrganizationAdministrationPermissionsResultSchema,
   readOrganizationAdministrationGroupCommandSchema,
   readOrganizationAdministrationGroupResultSchema,
   readOrganizationAdministrationMembershipCommandSchema,
   readOrganizationAdministrationMembershipResultSchema,
+  readOrganizationAdministrationPermissionCommandSchema,
+  readOrganizationAdministrationPermissionResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
   type ChangeOrganizationAdministrationGroupResult,
   type CreateOrganizationAdministrationGroupCommand,
@@ -22,11 +26,15 @@ import {
   type ListOrganizationAdministrationGroupsResult,
   type ListOrganizationAdministrationMembershipsCommand,
   type ListOrganizationAdministrationMembershipsResult,
+  type ListOrganizationAdministrationPermissionsCommand,
+  type ListOrganizationAdministrationPermissionsResult,
   type OrganizationSelectionCandidate,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationMembershipCommand,
   type ReadOrganizationAdministrationMembershipResult,
+  type ReadOrganizationAdministrationPermissionCommand,
+  type ReadOrganizationAdministrationPermissionResult,
   type RenameOrganizationAdministrationGroupCommand,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
@@ -71,6 +79,23 @@ type MembershipDetailRow = DatabaseRow & {
   access_version: unknown;
 };
 
+type PermissionPageRow = DatabaseRow & {
+  organization_id: unknown;
+  permissions: unknown;
+  next_after_application_root_id: unknown;
+  next_after_owner_kind: unknown;
+  next_after_owner_id: unknown;
+  next_after_permission_id: unknown;
+  access_version: unknown;
+};
+
+type PermissionDetailRow = DatabaseRow & {
+  organization_id: unknown;
+  outcome: unknown;
+  permission_summary: unknown;
+  access_version: unknown;
+};
+
 const revision = (value: unknown): unknown => {
   if (typeof value === "bigint") return Number(value);
   if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
@@ -89,6 +114,28 @@ const normalizeMembership = (value: unknown): unknown => {
 
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
+
+const samePermissionReference = (
+  left: Readonly<{
+    applicationRootId?: string | undefined;
+    ownerKind: string;
+    ownerId: string;
+    permissionId: string;
+  }>,
+  right: Readonly<{
+    applicationRootId?: string | undefined;
+    ownerKind: string;
+    ownerId: string;
+    permissionId: string;
+  }>,
+): boolean =>
+  left.ownerKind === right.ownerKind &&
+  sameUuid(left.ownerId, right.ownerId) &&
+  sameUuid(left.permissionId, right.permissionId) &&
+  (left.applicationRootId === undefined) === (right.applicationRootId === undefined) &&
+  (left.applicationRootId === undefined ||
+    right.applicationRootId === undefined ||
+    sameUuid(left.applicationRootId, right.applicationRootId));
 
 const requireOne = <Row>(rows: readonly Row[]): Row => {
   if (rows.length !== 1 || rows[0] === undefined)
@@ -357,6 +404,110 @@ export const createOrganizationAccessAdministrationService = (
             : { membership: normalizeMembership(row.membership_summary) }),
           accessVersion: revision(row.access_version),
         });
+      });
+    },
+
+    listPermissions: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ListOrganizationAdministrationPermissionsCommand,
+    ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationPermissionsResult>> => {
+      const command =
+        listOrganizationAdministrationPermissionsCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const after = command.data.after;
+        const row = requireOne(
+          await transaction.query<PermissionPageRow>`
+            select organization_id, permissions,
+              next_after_application_root_id, next_after_owner_kind,
+              next_after_owner_id, next_after_permission_id, access_version
+            from vortex_access.list_organization_permissions_for_administration(
+              ${after?.applicationRootId ?? null}::uuid,
+              ${after?.ownerKind ?? null}::text,
+              ${after?.ownerId ?? null}::uuid,
+              ${after?.permissionId ?? null}::uuid,
+              ${command.data.pageSize}::integer
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion ||
+          !Array.isArray(row.permissions)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const hasNext = [
+          row.next_after_application_root_id,
+          row.next_after_owner_kind,
+          row.next_after_owner_id,
+          row.next_after_permission_id,
+        ].some((value) => value !== null && value !== undefined);
+        return listOrganizationAdministrationPermissionsResultSchema.parse({
+          permissions: row.permissions,
+          ...(hasNext
+            ? {
+                nextAfter: {
+                  ...(row.next_after_application_root_id === null ||
+                  row.next_after_application_root_id === undefined
+                    ? {}
+                    : { applicationRootId: row.next_after_application_root_id }),
+                  ownerKind: row.next_after_owner_kind,
+                  ownerId: row.next_after_owner_id,
+                  permissionId: row.next_after_permission_id,
+                },
+              }
+            : {}),
+          accessVersion: revision(row.access_version),
+        });
+      });
+    },
+
+    readPermission: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReadOrganizationAdministrationPermissionCommand,
+    ): Promise<HumanOrganizationRequestResult<ReadOrganizationAdministrationPermissionResult>> => {
+      const command =
+        readOrganizationAdministrationPermissionCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const reference = command.data.reference;
+        const row = requireOne(
+          await transaction.query<PermissionDetailRow>`
+            select organization_id, outcome, permission_summary, access_version
+            from vortex_access.read_organization_permission_for_administration(
+              ${reference.applicationRootId ?? null}::uuid,
+              ${reference.ownerKind}::text,
+              ${reference.ownerId}::uuid,
+              ${reference.permissionId}::uuid
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const result = readOrganizationAdministrationPermissionResultSchema.parse({
+          outcome: row.outcome,
+          ...(row.permission_summary === null || row.permission_summary === undefined
+            ? {}
+            : { permission: row.permission_summary }),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          result.outcome === "available" &&
+          !samePermissionReference(result.permission.reference, reference)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return result;
       });
     },
   });

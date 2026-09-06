@@ -372,4 +372,139 @@ describe("organization Access administration", () => {
       ),
     ).resolves.toEqual({ kind: "temporarily_unavailable" });
   });
+
+  it("lists a bounded safe permission page with its complete contextual cursor", async () => {
+    const reference = {
+      applicationRootId: id(30),
+      ownerKind: "module" as const,
+      ownerId: id(31),
+      permissionId: id(32),
+    };
+    const permission = {
+      reference,
+      key: "review.records.read",
+      label: "Read review records",
+      description: "Read review records in the selected application.",
+      recordTypeId: id(33),
+      action: { actionKind: "read" },
+      administrative: false,
+    };
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2).toUpperCase(),
+        permissions: [permission],
+        next_after_application_root_id: id(30).toUpperCase(),
+        next_after_owner_kind: "module",
+        next_after_owner_id: id(31).toUpperCase(),
+        next_after_permission_id: id(32).toUpperCase(),
+        access_version: "7",
+      },
+    ]);
+
+    await expect(
+      service.listPermissions(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10, after: reference },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { permissions: [permission], nextAfter: { ownerKind: "module" }, accessVersion: 7 },
+    });
+    expect(calls[0]?.text).toContain("list_organization_permissions_for_administration");
+    expect(calls[0]?.values).toEqual([id(30), "module", id(31), id(32), 10]);
+  });
+
+  it("reads an exact permission and binds its contextual identity", async () => {
+    const reference = {
+      ownerKind: "platform" as const,
+      ownerId: id(40),
+      permissionId: id(41),
+    };
+    const permission = {
+      reference: {
+        ownerKind: "platform",
+        ownerId: id(40).toUpperCase(),
+        permissionId: id(41).toUpperCase(),
+      },
+      key: "platform.records.read",
+      label: "Read records",
+      description: "Read records.",
+      action: { actionKind: "read" },
+      administrative: true,
+    };
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        permission_summary: permission,
+        access_version: 7n,
+      },
+    ]);
+
+    await expect(
+      service.readPermission(verifiedSession, { organizationId: id(2) }, { reference }),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { outcome: "available", permission, accessVersion: 7 },
+    });
+    expect(calls[0]?.text).toContain("read_organization_permission_for_administration");
+    expect(calls[0]?.values).toEqual([null, "platform", id(40), id(41)]);
+  });
+
+  it("refuses malformed permission commands and mismatched permission evidence", async () => {
+    const malformed = serviceFor([]);
+    await expect(
+      malformed.service.listPermissions(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 101 },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(malformed.calls).toHaveLength(0);
+
+    const reference = {
+      applicationRootId: id(30),
+      ownerKind: "module" as const,
+      ownerId: id(31),
+      permissionId: id(32),
+    };
+    const mismatched = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        permission_summary: {
+          reference: { ...reference, permissionId: id(99) },
+          key: "review.records.read",
+          label: "Read review records",
+          description: "Read review records in the selected application.",
+          action: { actionKind: "read" },
+          administrative: false,
+        },
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      mismatched.readPermission(verifiedSession, { organizationId: id(2) }, { reference }),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+
+    const incompleteCursor = serviceFor([
+      {
+        organization_id: id(2),
+        permissions: [],
+        next_after_application_root_id: null,
+        next_after_owner_kind: "platform",
+        next_after_owner_id: null,
+        next_after_permission_id: id(41),
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      incompleteCursor.listPermissions(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10 },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
 });
