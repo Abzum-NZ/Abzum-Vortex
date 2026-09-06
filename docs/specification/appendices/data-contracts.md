@@ -363,6 +363,13 @@ registration, acceptance, continuity and meaning evidence. Management names both
 before and after scopes, each absent, organisation-catalogue or a nonempty unique
 set of exact permission identities; it does not accept copied authority receipts.
 
+An organisation-target operation requires a platform permission with no application
+scope in its permission identity. Its trusted request may retain a selected
+application, so organisation administration can run from inside an installed
+management application. An application-target operation instead requires the same
+application in verified request context, target and permission identity, with a
+current active registration. A declaration cannot establish that context by itself.
+
 Private permission eligibility is distinct from a final allowed operation. Both
 use the same transaction-bound operation/target/account/organisation/Access evidence
 and a checked time with a finite later recheck deadline. Internal refusal uses a

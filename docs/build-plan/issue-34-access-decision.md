@@ -107,9 +107,10 @@ semantics, not a delivered application-selection interface.
   grant list, policy result or allow flag that is trusted as authority.
   Platform code or a verified immutable compiled operation supplies the declaration.
   Match catalogue action kind, named action and any record-type restriction, not
-  merely its key. Organisation targets require platform authority without an
-  application context; application/module use carries the exact active target
-  application registration. An operation key is evidence, not a registry or grant.
+  merely its key. Organisation targets require a platform permission whose identity
+  has no application scope; the trusted request may still retain its selected
+  application. Application/module use carries the exact active target application
+  registration. An operation key is evidence, not a registry or grant.
 - Validate active identity, account, organisation and tenant; current Access version;
   exact registration, owner/application scope, accepted meaning and continuity.
   Same-named applications or shared module identities never merge authority.
