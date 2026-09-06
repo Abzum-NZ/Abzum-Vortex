@@ -84,6 +84,21 @@ The permission-browsing checkpoint merged normally through [PR #317](https://git
 | `supabase/migrations/20260906130257_protect_organization_permission_catalogue_administration.sql` | `6562a59beb1112b9a8ae4116328c87878e3ebd65fa732ab498dfff8c3f56ef53` |
 | `supabase/tests/360_organization_permission_catalogue_administration.test.sql` | `2887b58929af6ba04a76bf27a97fa8de3355303a3417921293bbd936f282207e` |
 
+## Local roles and registered application templates — 7 September 2026
+
+Permitted administrators can list and inspect their organisation's current role configuration, including roles awaiting acceptance, unavailable roles and retired roles. Details preserve the exact accepted permission snapshot; pending additions do not silently appear as accepted. Safe policy settings explain standing versus activation-required access without exposing internal evidence. Application role templates are a separate resource, identified by both application and source role, and come only from the exact release selected by the active current registration. Neither view claims effective access or grants authority.
+
+Independent Sol review approved the six implementation/test files. The main architect's rollback proof passes **31 database assertions**, including actual restricted-role permission checks, current versus historical configuration, cross-organisation refusal, bounded complete cursors, removed/withdrawn templates and safe output. Test setup was corrected to follow existing source-evidence constraints, insert accepted entries before sealing revisions, classify administrative custom roles as privileged, and explicitly group a JSON text extraction before concatenation. No production constraint or permission rule was relaxed.
+
+Focused contracts/service checks pass **29 tests**, with both package typechecks and targeted formatting/lint. The prior combined repository gate with this frozen TypeScript implementation passed 1,279 tests with three existing skips, eight fixture checks, all 23 package typechecks/builds, formatting/lint and boundaries. The reviewed role migration was applied locally with the separately reviewed [revocation audit correction](issue-318-assignment-revocation-audit-time.md), bringing local history to 52 migrations. Complete regression results and normal Testing delivery are recorded separately when available; no hosted success or usable IAM screen is claimed by these local checks.
+
+| Frozen database file | SHA-256 |
+|---|---|
+| `20260906133622_protect_organization_role_catalogue_administration.sql` | `dbf4f591f89bf654d17ec574e119fe415ce24bb132ca8a3643f4b30bea1c420d` |
+| `370_organization_role_administration.test.sql` | `86f96900d19a3ad823368ff51cf5919fbfcbecc44e4bffcef2300444270eae2f` |
+
+The final combined run also includes the reviewed current-person condition extension: **49 SQL suites / 2,249 assertions** and **1,280 repository tests** pass, with three existing skips, eight fixture checks and all 23 package typechecks/builds. All 23 existing concurrency checks pass across multiple runs, not one uninterrupted run; [the revocation evidence](issue-318-assignment-revocation-audit-time.md#actual-verification) retains the unrelated intermittent permanent-steward observation and its limited diagnosis. Lint has no errors and only previously reviewed warnings; security advisors report no issues. Local history now contains 53 migrations. No new concurrency framework or clock change was introduced.
+
 ## First checkpoint database bytes
 
 | File | SHA-256 |

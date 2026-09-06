@@ -29,7 +29,7 @@ export class TypedConditionEvaluationError extends Error {
 
 export type TypedConditionParameterDeclaration = Readonly<{
   key: string;
-  type: "text" | "number" | "boolean" | "date" | "date_time";
+  type: "text" | "number" | "boolean" | "date" | "date_time" | "organization_account_reference";
 }>;
 
 export type TypedConditionEvaluationInput = Readonly<{
@@ -377,7 +377,14 @@ export function evaluateTypedCondition(input: TypedConditionEvaluationInput): bo
     parameterDeclarations.some(
       (parameter) =>
         !builderKeySchema.safeParse(parameter.key).success ||
-        !["text", "number", "boolean", "date", "date_time"].includes(parameter.type),
+        ![
+          "text",
+          "number",
+          "boolean",
+          "date",
+          "date_time",
+          "organization_account_reference",
+        ].includes(parameter.type),
     )
   )
     refuse("parameter_refused");

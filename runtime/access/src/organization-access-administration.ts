@@ -6,35 +6,51 @@ import {
   changeOrganizationAdministrationGroupResultSchema,
   createOrganizationAdministrationGroupCommandSchema,
   groupIdSchema,
+  listOrganizationAdministrationApplicationRoleTemplatesCommandSchema,
+  listOrganizationAdministrationApplicationRoleTemplatesResultSchema,
   listOrganizationAdministrationGroupsCommandSchema,
   listOrganizationAdministrationGroupsResultSchema,
   listOrganizationAdministrationMembershipsCommandSchema,
   listOrganizationAdministrationMembershipsResultSchema,
   listOrganizationAdministrationPermissionsCommandSchema,
   listOrganizationAdministrationPermissionsResultSchema,
+  listOrganizationAdministrationRolesCommandSchema,
+  listOrganizationAdministrationRolesResultSchema,
+  readOrganizationAdministrationApplicationRoleTemplateCommandSchema,
+  readOrganizationAdministrationApplicationRoleTemplateResultSchema,
   readOrganizationAdministrationGroupCommandSchema,
   readOrganizationAdministrationGroupResultSchema,
   readOrganizationAdministrationMembershipCommandSchema,
   readOrganizationAdministrationMembershipResultSchema,
   readOrganizationAdministrationPermissionCommandSchema,
   readOrganizationAdministrationPermissionResultSchema,
+  readOrganizationAdministrationRoleCommandSchema,
+  readOrganizationAdministrationRoleResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
   type ChangeOrganizationAdministrationGroupResult,
   type CreateOrganizationAdministrationGroupCommand,
   type IdentitySession,
   type ListOrganizationAdministrationGroupsCommand,
   type ListOrganizationAdministrationGroupsResult,
+  type ListOrganizationAdministrationApplicationRoleTemplatesCommand,
+  type ListOrganizationAdministrationApplicationRoleTemplatesResult,
   type ListOrganizationAdministrationMembershipsCommand,
   type ListOrganizationAdministrationMembershipsResult,
   type ListOrganizationAdministrationPermissionsCommand,
   type ListOrganizationAdministrationPermissionsResult,
+  type ListOrganizationAdministrationRolesCommand,
+  type ListOrganizationAdministrationRolesResult,
   type OrganizationSelectionCandidate,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
+  type ReadOrganizationAdministrationApplicationRoleTemplateCommand,
+  type ReadOrganizationAdministrationApplicationRoleTemplateResult,
   type ReadOrganizationAdministrationMembershipCommand,
   type ReadOrganizationAdministrationMembershipResult,
   type ReadOrganizationAdministrationPermissionCommand,
   type ReadOrganizationAdministrationPermissionResult,
+  type ReadOrganizationAdministrationRoleCommand,
+  type ReadOrganizationAdministrationRoleResult,
   type RenameOrganizationAdministrationGroupCommand,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
@@ -96,6 +112,35 @@ type PermissionDetailRow = DatabaseRow & {
   access_version: unknown;
 };
 
+type RolePageRow = DatabaseRow & {
+  organization_id: unknown;
+  roles: unknown;
+  next_after_role_id: unknown;
+  access_version: unknown;
+};
+
+type RoleDetailRow = DatabaseRow & {
+  organization_id: unknown;
+  outcome: unknown;
+  role_summary: unknown;
+  access_version: unknown;
+};
+
+type ApplicationRoleTemplatePageRow = DatabaseRow & {
+  organization_id: unknown;
+  templates: unknown;
+  next_after_application_root_id: unknown;
+  next_after_source_role_id: unknown;
+  access_version: unknown;
+};
+
+type ApplicationRoleTemplateDetailRow = DatabaseRow & {
+  organization_id: unknown;
+  outcome: unknown;
+  template_summary: unknown;
+  access_version: unknown;
+};
+
 const revision = (value: unknown): unknown => {
   if (typeof value === "bigint") return Number(value);
   if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
@@ -136,6 +181,13 @@ const samePermissionReference = (
   (left.applicationRootId === undefined ||
     right.applicationRootId === undefined ||
     sameUuid(left.applicationRootId, right.applicationRootId));
+
+const sameApplicationRoleTemplateReference = (
+  left: Readonly<{ applicationRootId: string; sourceRoleId: string }>,
+  right: Readonly<{ applicationRootId: string; sourceRoleId: string }>,
+): boolean =>
+  sameUuid(left.applicationRootId, right.applicationRootId) &&
+  sameUuid(left.sourceRoleId, right.sourceRoleId);
 
 const requireOne = <Row>(rows: readonly Row[]): Row => {
   if (rows.length !== 1 || rows[0] === undefined)
@@ -505,6 +557,183 @@ export const createOrganizationAccessAdministrationService = (
         if (
           result.outcome === "available" &&
           !samePermissionReference(result.permission.reference, reference)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return result;
+      });
+    },
+
+    listRoles: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ListOrganizationAdministrationRolesCommand,
+    ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationRolesResult>> => {
+      const command = listOrganizationAdministrationRolesCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<RolePageRow>`
+            select organization_id, roles, next_after_role_id, access_version
+            from vortex_access.list_organization_roles_for_administration(
+              ${command.data.afterRoleId ?? null}::uuid,
+              ${command.data.pageSize}::integer
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion ||
+          !Array.isArray(row.roles)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        return listOrganizationAdministrationRolesResultSchema.parse({
+          roles: row.roles,
+          ...(row.next_after_role_id === null || row.next_after_role_id === undefined
+            ? {}
+            : { nextAfterRoleId: row.next_after_role_id }),
+          accessVersion: revision(row.access_version),
+        });
+      });
+    },
+
+    readRole: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReadOrganizationAdministrationRoleCommand,
+    ): Promise<HumanOrganizationRequestResult<ReadOrganizationAdministrationRoleResult>> => {
+      const command = readOrganizationAdministrationRoleCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<RoleDetailRow>`
+            select organization_id, outcome, role_summary, access_version
+            from vortex_access.read_organization_role_for_administration(
+              ${command.data.roleId}::uuid
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const result = readOrganizationAdministrationRoleResultSchema.parse({
+          outcome: row.outcome,
+          ...(row.role_summary === null || row.role_summary === undefined
+            ? {}
+            : { role: row.role_summary }),
+          accessVersion: revision(row.access_version),
+        });
+        if (result.outcome === "available" && !sameUuid(result.role.roleId, command.data.roleId))
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return result;
+      });
+    },
+
+    listApplicationRoleTemplates: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ListOrganizationAdministrationApplicationRoleTemplatesCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ListOrganizationAdministrationApplicationRoleTemplatesResult>
+    > => {
+      const command =
+        listOrganizationAdministrationApplicationRoleTemplatesCommandSchema.safeParse(
+          commandCandidate,
+        );
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const after = command.data.after;
+        const row = requireOne(
+          await transaction.query<ApplicationRoleTemplatePageRow>`
+            select organization_id, templates, next_after_application_root_id,
+              next_after_source_role_id, access_version
+            from vortex_access.list_application_role_templates_for_administration(
+              ${after?.applicationRootId ?? null}::uuid,
+              ${after?.sourceRoleId ?? null}::uuid,
+              ${command.data.pageSize}::integer
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion ||
+          !Array.isArray(row.templates)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const nextApplicationPresent =
+          row.next_after_application_root_id !== null &&
+          row.next_after_application_root_id !== undefined;
+        const nextSourcePresent =
+          row.next_after_source_role_id !== null && row.next_after_source_role_id !== undefined;
+        if (nextApplicationPresent !== nextSourcePresent)
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        const hasNext = nextApplicationPresent && nextSourcePresent;
+        return listOrganizationAdministrationApplicationRoleTemplatesResultSchema.parse({
+          templates: row.templates,
+          ...(hasNext
+            ? {
+                nextAfter: {
+                  applicationRootId: row.next_after_application_root_id,
+                  sourceRoleId: row.next_after_source_role_id,
+                },
+              }
+            : {}),
+          accessVersion: revision(row.access_version),
+        });
+      });
+    },
+
+    readApplicationRoleTemplate: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReadOrganizationAdministrationApplicationRoleTemplateCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ReadOrganizationAdministrationApplicationRoleTemplateResult>
+    > => {
+      const command =
+        readOrganizationAdministrationApplicationRoleTemplateCommandSchema.safeParse(
+          commandCandidate,
+        );
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const reference = command.data.reference;
+        const row = requireOne(
+          await transaction.query<ApplicationRoleTemplateDetailRow>`
+            select organization_id, outcome, template_summary, access_version
+            from vortex_access.read_application_role_template_for_administration(
+              ${reference.applicationRootId}::uuid,
+              ${reference.sourceRoleId}::uuid
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const result = readOrganizationAdministrationApplicationRoleTemplateResultSchema.parse({
+          outcome: row.outcome,
+          ...(row.template_summary === null || row.template_summary === undefined
+            ? {}
+            : { template: row.template_summary }),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          result.outcome === "available" &&
+          !sameApplicationRoleTemplateReference(result.template.reference, reference)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return result;

@@ -867,6 +867,31 @@ describe("closed catalogues and discriminated contracts", () => {
       }).success,
     ).toBe(true);
     expect(
+      savedSharingConditionSchema.safeParse({
+        conditionId: id(84),
+        sourceRecordTypeId: id(85),
+        key: "records_for_current_account",
+        publishedRevision: 1,
+        contractFingerprint: fingerprint,
+        parameters: [{ key: "account", type: "organization_account_reference" }],
+        condition: {
+          kind: "comparison",
+          operator: "equals",
+          left: { source: "field", fieldId: id(86) },
+          right: { source: "parameter", key: "account" },
+        },
+        declaredFieldIds: [id(86)],
+        publicationTests: [
+          {
+            name: "Current account",
+            parameters: { account: id(87) },
+            fieldValues: { [id(86)]: id(87) },
+            expected: true,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
       fieldDefinitionSchema.safeParse({
         ...fieldBase,
         type: "calculation",

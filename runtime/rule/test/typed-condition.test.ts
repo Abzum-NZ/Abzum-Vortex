@@ -139,7 +139,7 @@ describe("typed conditions", () => {
       fields: ParityField[];
       vectors: ParityVector[];
     };
-    expect(corpus.vectors).toHaveLength(40);
+    expect(corpus.vectors).toHaveLength(43);
 
     const parityField = (entry: ParityField, index: number): FieldDefinition => {
       const settings = (() => {

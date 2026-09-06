@@ -107,6 +107,19 @@ flowchart LR
     G --> A
 ```
 
+The local-role/template checkpoint is implemented, independently reviewed and locally verified in [its evidence](../evidence/issue-40-access-administration.md#local-roles-and-registered-application-templates--7-september-2026). It does not finish the remaining assignment/activation/delegation views, non-grant changes or governed IAM handoffs.
+
+### Next safe-read checkpoint: role assignments and delegation authorities
+
+Let permitted administrators inspect the organisation's assignment ledger through two separate resources under the existing fixed `platform.organization.assignments.read` permission. One resource describes role assignments; the other describes delegation authorities. PIM activations follow as their own safe-read checkpoint because their policy and eligibility provenance is different. Do not infer effective permissions from either ledger.
+
+1. List by stable assignment/delegation identity and inspect one exact detail, using the existing verified read transaction and organisation-bound Access result. Reuse the existing indexes and complete keyset cursors with bounded page sizes.
+2. Role assignments show their identity, current role reference/key/label/lifecycle, safe account or Group assignee summary, standing/eligible kind, revision, fixed window, stored state and descriptive temporal state. Include revoked and out-of-window facts and retained unavailable-role or retired-Group references. Do not include grant/change audit details or another effective-access calculation.
+3. Delegations show identity, safe account or Group holder, revision/window/state and organisation-catalogue scope or the ordered bounded exact permission references. Strip registration revisions, fingerprints, continuity and meaning evidence from the latter. Do not return the private raw delegated-scope object.
+4. A single post-authorisation database time observation supplies the descriptive temporal state for each query. Active means only that this fact is live within its window, not that the holder has current effective authority. Do not repurpose timestamps as ordering or use an audit clamp for expiry.
+5. Use one private fixed-permission scope and four request-only list/detail functions in an additive migration, extending the existing contracts/service and focused tests. No writer, Activity append, new index, cache, race framework or granting endpoint is required.
+6. Prove actual permitted/denied restricted-role reads, direct/Group holders, standing/eligible assignments, catalogue/bounded delegations, relevant temporal states and retained source lifecycles, complete cursor pages, unknown/foreign unavailable results, and omission of internal evidence. Reuse the existing read-lock concurrency proofs. Independently review the actual work before delivery.
+
 ## References
 
 - [Access model](../specification/04-access-and-permissions.md) and [platform permission catalogue](../specification/appendices/platform-permission-catalogue.md)

@@ -1936,6 +1936,74 @@ describe("authored definition compiler", () => {
     ).toThrowError("vortex.definition.sharing_condition_input_refused");
   });
 
+  it("publishes and evaluates an explicit current-account reference condition", () => {
+    const source = structuredClone(
+      sources.find((candidate) => candidate.key === "vortex.service_desk.cases")!,
+    );
+    if (source.kind !== "module") throw new Error("Expected module source");
+    const sharingCondition = source.body.sharing_conditions[0]!;
+    sharingCondition.parameters = [
+      { key: "current_account", type: "organization_account_reference" },
+    ];
+    sharingCondition.condition = {
+      field: "owner",
+      operator: "equals",
+      parameter: "current_account",
+    };
+    sharingCondition.declared_fields = ["owner"];
+    sharingCondition.publication_tests = [
+      {
+        name: "Current account owns the case",
+        parameters: { current_account: "53650000-0000-4000-8000-000000000001" },
+        field_values: { owner: "53650000-0000-4000-8000-000000000001" },
+        expected: true,
+      },
+    ];
+
+    const parsed = definitionSourceDocumentSchema.parse(source);
+    expect(validateDefinitionSource(parsed).valid).toBe(true);
+    const amendedSources = sources.map((candidate) =>
+      candidate.key === parsed.key ? parsed : structuredClone(candidate),
+    );
+    for (const candidate of amendedSources) {
+      if (candidate.kind !== "application") continue;
+      for (const permission of candidate.body.permissions) {
+        if (permission.record_scope?.saved_condition?.condition !== sharingCondition.key) continue;
+        permission.record_scope.saved_condition.parameter_bindings = [
+          { key: "current_account", source: "current_organization_account_id" },
+        ];
+      }
+    }
+    const output = compileDefinitionSet(amendedSources.map(requestFor), publicationOptions).find(
+      (candidate) => candidate.kind === "module" && candidate.artifact.definitionKey === parsed.key,
+    );
+    if (!output || output.kind !== "module") throw new Error("Expected module output");
+    const saved = output.canonical.content.sharingConditions[0]!;
+    const sourceRecord = output.canonical.content.recordTypes.find(
+      (record) => record.recordTypeId === saved.sourceRecordTypeId,
+    );
+    if (!sourceRecord) throw new Error("Expected sharing-condition source record");
+    expect(saved.parameters).toEqual([
+      { key: "current_account", type: "organization_account_reference" },
+    ]);
+    expect(
+      evaluateSavedSharingCondition(
+        saved,
+        saved.publicationTests[0]!.fieldValues,
+        saved.publicationTests[0]!.parameters,
+        sourceRecord.fields,
+      ),
+    ).toBe(true);
+    expect(() =>
+      evaluateSavedSharingCondition(
+        saved,
+        saved.publicationTests[0]!.fieldValues,
+        { current_account: "not-an-account-id" },
+        sourceRecord.fields,
+      ),
+    ).toThrowError("vortex.definition.sharing_condition_input_refused");
+  });
+
   it("maps typed sharing-condition refusals through the Definition boundary", () => {
     const module = sources.find((source) => source.key === "vortex.service_desk.cases")!;
     const output = compileDefinition(requestFor(module));

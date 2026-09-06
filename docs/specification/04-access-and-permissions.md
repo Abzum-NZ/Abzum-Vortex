@@ -90,6 +90,8 @@ All organisation roles, application-role registrations, permission availability,
 
 Permitted administrators can browse current registered permissions and inspect one exact entry through the [protected catalogue reader](../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-registered-permission-catalogue). It shows the permission's reference, name, description and declared action, not internal publication or audit evidence. The same module permission installed in two applications remains two distinct entries. Withdrawn and historical declarations are excluded; a current declaration awaiting role acceptance remains visible. Visibility in this catalogue never establishes permission to use, assign or delegate that entry.
 
+Permitted administrators can also inspect [current local role configuration and separately registered application templates](../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-local-roles-and-application-role-templates). Local role details show the accepted permission configuration and safe assignment-policy settings, including roles awaiting acceptance or no longer available. A template comes from the exact currently registered application release, not the latest draft. Neither view establishes effective access or grants authority, and the same source role in two applications remains two distinct template references.
+
 An organisation account, not the global identity, receives a direct assignment. Roles, Groups and assignments from another organisation or a parent organisation are never inherited implicitly. Tenant structure administration remains a separate authority and grants no organisation-management or application-data permission.
 
 ```mermaid

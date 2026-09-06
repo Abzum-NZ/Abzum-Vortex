@@ -86,3 +86,18 @@ The checkpoint merged normally through [PR #319](https://github.com/Abzum-NZ/Abz
 | `supabase/migrations/20260906131348_evaluate_permission_saved_conditions.sql` | `acc80c9d0c031fe7b70dee74daf126dcb4193b7cfc5e4d9fc815bc5a9c60b0e1` |
 | `supabase/tests/365_permission_saved_condition_parity.test.sql` | `f8bffc71ddaeacf4a59ac5acde284233a61145c0e54854ae275356b8e95e14ae` |
 | `runtime/rule/test/typed-condition.test.ts` | `f7aa43c2ffefe36cd7a1fe53160fe9ec679eb5b7e2a13bccf65e2c394e99f948` |
+
+## Typed current-person condition parameters — 7 September 2026
+
+A person field can now be compared with the signed-in organisation account using an explicit `organization_account_reference` parameter. Authored and canonical contracts, Definition validation/publication, Rule evaluation and the private database predicate use the same non-nil UUID meaning. Legacy text parameters remain text and still refuse comparison with person references. No field-key normalization, implicit coercion, new evaluator or authority source is added.
+
+Independent Sol review approved all nine frozen implementation/test files. The additive migration preserves the existing function signature and private security settings; a mechanical body comparison limits its functional change to the parameter declaration and current-account binding allowlists. The earlier delivered condition migration is unchanged. The single shared corpus grows from 40 to **43 vectors**, adding the valid current-person comparison and invalid literal/nil-account cases.
+
+The main architect's rollback database probe passes **80 assertions**. After local application, the combined complete database run passes **49 suites / 2,249 assertions**. Focused checks pass 168 tests; the full combined repository gate passes **1,280 tests**, three existing skips, eight fixtures and all 23 package typechecks/builds, formatting/lint and boundaries. The full gate confirms Definition typechecking too; an engineer's earlier standalone run lacked a resolvable local dependency, without requiring any dependency change. Security advisors report no issues; database lint retains the previously reviewed warnings described above.
+
+All 23 existing concurrency proofs passed across multiple runs; [the repair evidence](issue-318-assignment-revocation-audit-time.md#actual-verification) records the unrelated intermittent management-application predicate observation. This pure condition extension adds no concurrency framework. Local history now contains 53 migrations. Ownership, local sharing, relationship routing and final hosted delivery remain unfinished within this task; this checkpoint is not complete record visibility or a new interface.
+
+| Frozen database file | SHA-256 |
+|---|---|
+| `20260906140028_add_organization_account_reference_condition_parameters.sql` | `56bea890abc2e9c9e201880c3168cd8803b8da578510015fa654f4bf7e94d40f` |
+| `365_permission_saved_condition_parity.test.sql` | `7fba669e1d7c17492cf5be4657606cabcf208bb6d619eaea82b751671e1cf387` |

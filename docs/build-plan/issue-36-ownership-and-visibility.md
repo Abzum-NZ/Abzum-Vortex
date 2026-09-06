@@ -96,6 +96,8 @@ After the database-parity checkpoint, add exactly one parameter type, `organizat
 
 Use an additive migration replacing the same private predicate, not a new current-account source, evaluator, registry, fingerprint mechanism or contract version family. New definitions naturally include the declared type in their existing publication evidence; historical definitions and fingerprints remain unchanged. Add a positive shared current-account/person comparison and representative invalid-reference/typed-mismatch cases, plus source-to-publication validation. This is necessary functional completion within [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), not deferred to [general rule execution #58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58). The latter consumes the shared correction without becoming a reverse dependency.
 
+The explicit current-person parameter correction is implemented and independently verified in [its evidence](../evidence/issue-36-record-visibility.md#typed-current-person-condition-parameters--7-september-2026). The next functional work is the remaining current ownership, Group, local-share and relationship restriction within C, followed by the revision-checked changes in D. These remain prerequisites for downstream complete row/field enforcement; a passing condition component does not satisfy them.
+
 ## Downstream ownership
 
 - [#35](issue-35-row-policy-composition.md) combines the predicates with the central operation decision in fixed SELECT/INSERT/UPDATE/DELETE policies.
