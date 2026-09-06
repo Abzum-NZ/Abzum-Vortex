@@ -65,6 +65,11 @@
       "migration": "supabase/migrations/20260905224720_coordinate_organization_group_changes.sql",
       "proof": "supabase/tests/organization-group-change-concurrency.test.sh",
       "label": "Organization group changes"
+    },
+    {
+      "migration": "supabase/migrations/20260905232252_coordinate_organization_group_membership_changes.sql",
+      "proof": "supabase/tests/organization-group-membership-change-concurrency.test.sh",
+      "label": "Organization Group membership changes"
     }
   ],
   "lintSchemas": [
