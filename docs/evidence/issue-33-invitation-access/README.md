@@ -50,9 +50,29 @@ source/tests and mapped the complete A–E implementation to the whole issue, fi
 no missing functional acceptance criterion. Downstream caller authorization and IAM
 interfaces remain explicitly outside this private foundation task.
 
-This does not claim hosted E verification, Production delivery or a rendered IAM
-interface. Earlier hosted coverage through D2 is recorded in the
+These Local results alone do not claim hosted verification, Production delivery or
+a rendered IAM interface. Earlier hosted coverage through D2 is recorded in the
 [management-application evidence](../issue-33-management-application/README.md#hosted-testing-follow-up).
+
+## Hosted Testing follow-up — 6 September 2026
+
+[PR #304](https://github.com/Abzum-NZ/Abzum-Vortex/pull/304) merged after its normal
+successful preview. [Testing execution `4FtaiIa206uaorJlevIgmt`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/4FtaiIa206uaorJlevIgmt)
+succeeded and published schema-version 2 evidence for exact Testing commit
+`8a1edd258444a904977f263dfe5b863904cbb8e0`. The saved receipt verifies all 38
+migrations, all 19 selected concurrency proofs completed, and all five selected
+schemas linted. Its execution log confirms all 36 SQL files / 1,813 assertions passed.
+
+- Migration-set SHA-256: `2a1a68febc6b762dce31c6733d2693a191d66e5ebdbb6fe7602dded84629b000`.
+- Runner SHA-256: `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046`.
+- Verification-manifest SHA-256: `bbf8c2217f522be5b9b0da4070730c81d35aac764d3cf9195654ebb16aefb6ee`.
+- Verification-coverage SHA-256: `4eff7d8e47b5df09b2ea31a0425be07c2c0854c20137abb88ee2e4afb1d627b4`.
+
+This closes #33's delivery requirement. It does not claim Production promotion or
+the downstream IAM interface. The separately identified
+[request/account lock-order correction #305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305)
+replaces an obsolete reader/writer integration proof before #34's database work;
+it is not an outstanding #33 business-logic decision.
 
 ## Frozen database artifacts
 

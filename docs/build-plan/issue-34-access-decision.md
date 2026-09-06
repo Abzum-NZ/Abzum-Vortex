@@ -17,9 +17,17 @@ it does not implement a second role evaluator.
 [permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32) and
 [authentication evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276)
 are complete. [Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33)
-has its complete reviewed implementation merged into Testing; its exact hosted E
-receipt remains delivery verification. Contract planning can proceed without
-pretending that receipt exists. No user approval is outstanding.
+is complete after its reviewed implementation and exact hosted E verification.
+The [saved delivery evidence](../evidence/issue-33-invitation-access/README.md#hosted-testing-follow-up--6-september-2026)
+identifies the delivered revision and completed checks. No user approval is outstanding.
+
+[Request/account lock ordering #305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305)
+is the bounded correction required before database execution integration. The
+existing reader locks Identity before Access, whereas the supported account writer
+locks Access before Identity. Align the reader with that order after an exact
+lock-free eligibility filter, then recheck Identity under its normal locks. Replace
+the obsolete direct-writer concurrency fixture with the actual account composition.
+This fixes a concrete cycle without changing role behaviour or adding retries.
 
 [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
 and [protected Access operations #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
@@ -48,6 +56,22 @@ membership, display labels or an application's identity.
 Each slice receives independent task-versus-work review. It does not close #34 by
 itself. Use focused behavioural tests for distinct outcomes, not speculative
 combinations or another framework of counters, histories and fingerprints.
+
+### Slice 1 checkpoint — 6 September 2026
+
+The [operation and result contracts](../../contracts/src/organization-access-decision.ts)
+and [focused tests](../../contracts/test/organization-access-decision.test.ts) are
+implemented and independently reviewed. They bind exact organisation/application
+targets, permission identity, action, authentication and before/after management
+scope. Permission eligibility is not final allowance; public refusal contains no
+private authority details. Unsupported policy and caller-supplied authority fields
+are rejected. The unused legacy request/decision shapes were removed with no
+remaining consumers.
+
+Full repository verification passed: 1,196 tests with three existing skips, eight
+fixture checks, all 23 package typechecks/builds and boundary checks, formatting and
+lint. This proves contracts only, not effective access or a usable protected action.
+The remaining database decision and server integration still belong to this task.
 
 ## Required decision behaviour
 

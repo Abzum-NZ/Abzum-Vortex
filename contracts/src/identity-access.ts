@@ -779,60 +779,6 @@ export const permissionSchema = permissionDeclarationSchema.safeExtend({
   ownerId: platformIdSchema,
 });
 
-export const accessRequestSchema = z
-  .object({
-    requestId: platformIdSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema.optional(),
-    organizationAccountId: organizationAccountIdSchema.optional(),
-    systemActorId: actorIdSchema.optional(),
-    actionKey: namespacedKeySchema,
-    recordTypeId: recordTypeIdSchema.optional(),
-    recordId: recordIdSchema.optional(),
-    requestedFieldIds: z.array(fieldIdSchema),
-    candidateGrantIds: z.array(grantIdSchema),
-    accessVersion: revisionSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.organizationAccountId === undefined) === (value.systemActorId === undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["organizationAccountId"],
-        message: "Exactly one organisation account or system actor is required",
-      });
-    if ((value.recordTypeId === undefined) !== (value.recordId === undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["recordId"],
-        message: "Record type and record identifier are supplied together",
-      });
-  });
-
-export const accessDecisionSchema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      outcome: z.literal("allowed"),
-      decisionId: platformIdSchema,
-      organizationId: organizationIdSchema,
-      action: namespacedKeySchema,
-      reliedOnGrantIds: z.array(grantIdSchema),
-      accessVersion: revisionSchema,
-    })
-    .strict(),
-  z
-    .object({
-      outcome: z.literal("refused"),
-      decisionId: platformIdSchema,
-      organizationId: organizationIdSchema,
-      action: namespacedKeySchema,
-      reasonCode: builderKeySchema,
-      accessVersion: revisionSchema,
-    })
-    .strict(),
-]);
-
 const readableAndChangeable = {
   readableFieldIds: z.array(fieldIdSchema).min(1),
   changeableFieldIds: z.array(fieldIdSchema),
@@ -1115,8 +1061,6 @@ export type ChangeOrganizationAccountStateCommand = z.infer<
 >;
 export type SessionContext = z.infer<typeof sessionContextSchema>;
 export type Permission = z.infer<typeof permissionSchema>;
-export type AccessRequest = z.infer<typeof accessRequestSchema>;
-export type AccessDecision = z.infer<typeof accessDecisionSchema>;
 export type FieldRestriction = z.infer<typeof fieldRestrictionSchema>;
 export type DirectRecordShare = z.infer<typeof directRecordShareSchema>;
 export type AccessGrant = z.infer<typeof accessGrantSchema>;
