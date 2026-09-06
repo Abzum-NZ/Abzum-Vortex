@@ -10,6 +10,16 @@ The inspected documentation baseline is Testing commit `f84fc46915f3d1f200d426b3
 
 ## Findings and owners
 
+### Specification 2.15 follow-up: organisation-managed access
+
+The later organisation-role review corrected an implicit dependency missed by the earlier phase map: #27 proves membership, while #30 also needs actual organisation management permissions. Shared #32/#33/#34 foundations therefore advance from completed #22/#28/#224 and #24/#27 before #30, then #29 completes the Phase 2 administration/isolation outcome. This does not remove any Phase 2 requirement or introduce a tenant-capability shortcut for organisation operations.
+
+All live role registrations, assignments and delegation are organisation-managed. Application templates are immutable published content; activation registers them without assigning access. One custom role may select exact scoped permissions across applications. Use rights and bounded assignment authority are separate, with explicit stewardship and no privilege expansion through application updates or reciprocal delegation. The [platform administration catalogue](../specification/appendices/platform-permission-catalogue.md) fixes the initial genuine platform permission identities without adding a business domain.
+
+The early #34 core is generic, not an administration-only evaluator. Every operation declares its required target policies; unavailable implementations refuse rather than treating permission eligibility as final record authority. Its existing row, ownership/condition, field/action, caller, sharing and consent obligations remain explicitly owned by #35/#36/#37/#104/#107/#153/#154/#156. #36 delivers the early condition-to-row restriction foundation; #57 reuses it for later rule/UI work, avoiding a reverse dependency on Phase 5. The exact retained acceptance text is recorded in those GitHub tasks before narrowing the early foundation's completion claim.
+
+### Earlier review findings
+
 | Finding | Required correction | Delivery owner |
 |---|---|---|
 | Tenant governance requires the active organisation context it must create or restore | Distinguish server-resolved tenant-administrator operations from organisation-local account/data operations; preserve #27's checks | [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) |
@@ -34,7 +44,7 @@ The inspected documentation baseline is Testing commit `f84fc46915f3d1f200d426b3
 | Performance timings and sequential scans still block builds | Remove performance-only failure criteria; retain integrity/access and structural bounds | [#46](https://github.com/Abzum-NZ/Abzum-Vortex/issues/46), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58), [#77](https://github.com/Abzum-NZ/Abzum-Vortex/issues/77) |
 | Unsafe predicate is dropped; currency totals change shape | Refuse invalid queries; explicit currency grouping only; avoid derived-value access leaks | [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54), [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) |
 | Four-policy template incorrectly includes private service tables | Generated business tables use operation policies; private tables retain narrow owner-function access | [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) |
-| Single-Team/field-nonconfigurable leftovers contradict access spec | Multiple Teams, direct-share scopes and configurable field read/write contracts | [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) |
+| Single-Group/field-nonconfigurable leftovers contradict access spec | Multiple Groups, direct-share scopes and configurable field read/write contracts | [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) |
 | Extension publication checks installed consumers and can deadlock releases | Publish immutable breaking version; enforce compatibility at consumer adoption; no last-writer field/permission override | [#110](https://github.com/Abzum-NZ/Abzum-Vortex/issues/110), [#111](https://github.com/Abzum-NZ/Abzum-Vortex/issues/111) |
 | Full archive/restore has no explicit task and needs later privacy policy | Add separate Phase 11 task, distinct from tabular import and provider backup | [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255), [#170](https://github.com/Abzum-NZ/Abzum-Vortex/issues/170) |
 
@@ -45,7 +55,7 @@ The inspected documentation baseline is Testing commit `f84fc46915f3d1f200d426b3
 | 1 Purpose and core boundary | Retain generic primitives; HR and operational applications are consumers, not core domains. |
 | 2 Identity, tenants and organisations | Retain one identity/many separate accounts, tenant hierarchy and provider-owned sessions. Do not disturb current Phase 2 work. |
 | 3 Publication and compatibility | Retain immutable releases and explicit consumer adoption; correct page contexts and publish-versus-activate language. |
-| 4 Access | Complete actor-relative/relationship scope contracts; correct Teams, fields and private-table handling. |
+| 4 Access | Complete actor-relative/relationship scope contracts; correct Groups, fields and private-table handling. |
 | 5 Modules, fields and relationships | Retain storage-lineage identity and separate ownership scopes; correct unique-index readiness and mixed-currency task wording. |
 | 6 Record lifecycle | Require transactional evidence, concurrency and safe derived values; no HR-specific saves. |
 | 7 Applications/pages/themes | Substantial contract completion and Fluid adapter defined in the linked appendix. |
@@ -65,6 +75,8 @@ The inspected documentation baseline is Testing commit `f84fc46915f3d1f200d426b3
 | Decision register | HR scope, workflow approvals and no self-approval are resolved in the permanent example specification; no open business choice from this review. |
 
 ## Fluid reuse decision
+
+The [rechecked integration map](fluid-integration-map.md) records the 5 September inspection of the exact board editor, concrete source-to-service wiring, preservation requirements and dependency-led implementation proof.
 
 | Inspected area | Treatment |
 |---|---|
@@ -98,8 +110,9 @@ flowchart TD
 ```
 
 - The native graph initially had no cycles. Several **completion descriptions** nevertheless created implicit cycles; those are corrected above.
-- #258 is the first independent contract correction. #249 follows it and the already completed contract foundations; neither requires a database deployment.
+- #258 is the first independent contract correction and requires no database deployment. #249 follows it and the completed contract foundations, including Definition storage/read/restore #19/#21/#22. It needs a bounded additive Definition-store migration for permanent shell identities and exact platform-block dependency storage, publication and readback. Existing JSONB draft/release tables and immutable V1 rows remain unchanged. Its implementation can proceed independently, but completion requires the normal Local proof and corrected hosted Testing gate #266; it does not bypass normal delivery evidence or #30's technical prerequisites. The user hold on #30 is released; reviewed Production promotion has standing user authorisation.
 - #250 follows Access #34 and defines common operation/binding semantics before UI. #102 extends it later for interfaces and the complete operation catalogue.
+- #249 first freezes V1 behavior, then implements the [exact representation selectors](../specification/appendices/page-builder-contracts.md#exact-representation-selection) across source, compilation, persistence, history and consumers before extending V2 composition. Use existing version columns rather than a parallel registry. Verify the additive migration against a confirmed Local baseline without resetting an existing or shared environment.
 - #252 and #118 follow Access and precede their first consuming mutations/limited work.
 - #52 moves to Phase 6; #42 must not wait for it.
 - #83 consumes #68 drafts; #89 no longer waits for #88; #96 explicitly consumes the renderer.

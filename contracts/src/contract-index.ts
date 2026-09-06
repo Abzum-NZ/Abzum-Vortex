@@ -16,7 +16,7 @@ export const contractIndex = [
     group: "permissions, roles, grants and protected grant consent",
     layer: "canonical_runtime",
     specification: "04-access-and-permissions.md",
-    owner: "#12, corrected by #186",
+    owner: "#12, corrected by #186, #32 and #33",
   },
   {
     group: "modules, record types, fields, actions and rules",

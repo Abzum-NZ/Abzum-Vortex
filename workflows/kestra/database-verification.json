@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "concurrencyProofs": [
+    {
+      "migration": "supabase/migrations/20260903174244_tenant_organization_foundation.sql",
+      "proof": "supabase/tests/tenant-organization-concurrency.test.sh",
+      "label": "tenant and organisation"
+    },
+    {
+      "migration": "supabase/migrations/20260903231258_definition_publication_operations.sql",
+      "proof": "supabase/tests/definition-publication-concurrency.test.sh",
+      "label": "Definition publication"
+    },
+    {
+      "migration": "supabase/migrations/20260904025500_definition_consumer_reads.sql",
+      "proof": "supabase/tests/definition-consumer-read-concurrency.test.sh",
+      "label": "Definition consumer read"
+    },
+    {
+      "migration": "supabase/migrations/20260904040758_definition_history_restore.sql",
+      "proof": "supabase/tests/definition-history-restore-concurrency.test.sh",
+      "label": "Definition history and restore"
+    },
+    {
+      "migration": "supabase/migrations/20260904094030_identity_accounts_invitations.sql",
+      "proof": "supabase/tests/identity-invitation-concurrency.test.sh",
+      "label": "Identity invitation"
+    },
+    {
+      "migration": "supabase/migrations/20260904112625_access_version_foundation.sql",
+      "proof": "supabase/tests/access-version-concurrency.test.sh",
+      "label": "Access version"
+    },
+    {
+      "migration": "supabase/migrations/20260905043000_organization_request_context.sql",
+      "proof": "supabase/tests/organization-request-context-concurrency.test.sh",
+      "label": "Organisation request context"
+    },
+    {
+      "migration": "supabase/migrations/20260905060000_permission_registry.sql",
+      "proof": "supabase/tests/permission-registry-concurrency.test.sh",
+      "label": "Permission registry"
+    },
+    {
+      "migration": "supabase/migrations/20260905060005_organization_role_storage.sql",
+      "proof": "supabase/tests/organization-role-seal-concurrency.test.sh",
+      "label": "Organization role seal"
+    },
+    {
+      "migration": "supabase/migrations/20260905060006_coordinate_application_access_changes.sql",
+      "proof": "supabase/tests/application-access-coordination-concurrency.test.sh",
+      "label": "Application access coordination"
+    },
+    {
+      "migration": "supabase/migrations/20260905130631_coordinate_organization_role_assignment_changes.sql",
+      "proof": "supabase/tests/organization-role-assignment-changes-concurrency.test.sh",
+      "label": "Organization role assignment changes"
+    },
+    {
+      "migration": "supabase/migrations/20260905141727_coordinate_organization_role_changes.sql",
+      "proof": "supabase/tests/organization-role-change-concurrency.test.sh",
+      "label": "Organization role changes"
+    },
+    {
+      "migration": "supabase/migrations/20260905224720_coordinate_organization_group_changes.sql",
+      "proof": "supabase/tests/organization-group-change-concurrency.test.sh",
+      "label": "Organization group changes"
+    },
+    {
+      "migration": "supabase/migrations/20260905232252_coordinate_organization_group_membership_changes.sql",
+      "proof": "supabase/tests/organization-group-membership-change-concurrency.test.sh",
+      "label": "Organization Group membership changes"
+    }
+  ],
+  "lintSchemas": [
+    "public",
+    "vortex_context",
+    "vortex_identity",
+    "vortex_definition",
+    "vortex_access"
+  ]
+}

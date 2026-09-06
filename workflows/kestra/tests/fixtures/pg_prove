@@ -7,6 +7,8 @@ if [ "${1:-}" = "--version" ]; then
   exit 0
 fi
 
+[ "${VORTEX_TEST_FAIL_PG_PROVE:-false}" != "true" ] || exit 41
+
 [ "${PGPASSWORD:-}" = 'placeholder:=/%?&password' ]
 [ "${PGSSLMODE:-}" = "verify-full" ]
 [ -n "${PGSSLROOTCERT:-}" ]

@@ -23,6 +23,10 @@ if [ -n "${VORTEX_TEST_SUPABASE_CALL_MARKER:-}" ]; then
   printf '%s\n' "$*" >>"$VORTEX_TEST_SUPABASE_CALL_MARKER"
 fi
 
+if [ "${1:-} ${2:-}" = "db lint" ] && [ "${VORTEX_TEST_FAIL_DATABASE_LINT:-false}" = "true" ]; then
+  exit 41
+fi
+
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--db-url" ]; then
     shift

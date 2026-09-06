@@ -197,6 +197,9 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/definition':
+        specifier: workspace:*
+        version: link:../definition
       server-only:
         specifier: 0.0.1
         version: 0.0.1

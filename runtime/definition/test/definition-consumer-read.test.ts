@@ -169,6 +169,44 @@ const repositoryFor = (candidate: unknown): DefinitionConsumerReadRepository => 
 });
 
 describe("Definition consumer reads", () => {
+  it("round-trips reference-shaped workflow literals in stored release evidence", async () => {
+    const source = readSource("applications", "crm.json");
+    if (source.kind !== "application") throw new Error("Application example required");
+    const node = source.body.workflows
+      .flatMap((flow) => flow.nodes)
+      .find((entry) => entry.type === "call_connection" && "variables" in entry.config.inputs);
+    if (!node || node.type !== "call_connection") throw new Error("Structured input required");
+    const payload = {
+      state: "unresolved",
+      qualifiedKey: "sample:item",
+      nested: [{ nodeId: "data" }],
+    };
+    node.config.inputs.variables = { source: "literal", value: payload };
+    const output = compileDefinition({
+      source,
+      resolution,
+      draftMetadata: {
+        organizationId,
+        draftRevision: 1,
+        createdAt: publishedAt,
+        createdBy: actorId,
+        updatedAt: publishedAt,
+        updatedBy: actorId,
+      },
+      savedConditionRevisions: [],
+    });
+    if (output.kind !== "application") throw new Error("Application output required");
+    const service = createDefinitionConsumerReadService(
+      repositoryFor(JSON.parse(JSON.stringify(releaseEvidence(output, applicationManifest)))),
+      catalogueFor(),
+    );
+    const read = await service.read(context(), {
+      kind: "application",
+      rootId: output.canonical.envelope.rootId,
+      selector: { selection: "current" },
+    });
+    expect(JSON.stringify(read)).toContain(JSON.stringify(payload));
+  });
   it("returns a strict consumer-safe Module projection and copies correlation", async () => {
     const service = createDefinitionConsumerReadService(
       repositoryFor(moduleEvidence),
@@ -215,6 +253,23 @@ describe("Definition consumer reads", () => {
       rootId: applicationEvidence.rootId,
       dependencyManifest: applicationManifest,
     });
+  });
+
+  it("rejects unknown and reserved Application validation versions before decoding V1 content", async () => {
+    const command = {
+      kind: "application" as const,
+      rootId: applicationEvidence.rootId,
+      selector: { selection: "current" as const },
+    };
+    for (const validationContractVersion of ["1.0.1", "2.0.0"]) {
+      const candidate = { ...applicationEvidence, validationContractVersion };
+      await expect(
+        createDefinitionConsumerReadService(repositoryFor(candidate), catalogueFor()).read(
+          context(),
+          command,
+        ),
+      ).rejects.toMatchObject({ code: "DEFINITION_RELEASE_INTEGRITY_FAILED" });
+    }
   });
 
   it("refuses invalid commands and non-live or non-system contexts before storage", async () => {

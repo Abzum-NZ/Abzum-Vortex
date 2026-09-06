@@ -40,6 +40,24 @@ A page has its existing permanent identity, route key, type, optional subject, a
 
 A shell is a reusable application-contained layout with its own permanent identity, registered layout blocks and uniquely named content slots. It publishes with the application, never independently. A page binds one shell in the same application or uses the default main-content slot without a custom shell. Navigation and theme are inherited by reference from the application; do not copy them into every page.
 
+A guided form selects one shell for the whole page, but each step owns distinct content. Its ordered `steps` list is the sole navigation order. Canonical composition contains a `stepContent` map keyed by exact permanent step identities. Authored `step_content` instead uses source aliases, which compilation resolves through the existing permanent-identity mapping. With the default shell, each step maps to its main-content placement slot; with an application shell, each step maps to that shell's named content slots. The map must contain exactly the unique declared steps: no missing, extra or duplicate step identity is accepted. Required slots and permitted child categories are checked independently for every step. Step content is not copied into a common page tree or selected by display labels.
+
+```mermaid
+flowchart TD
+    PAGE[Guided form: one shell selection] --> ORDER[Ordered steps]
+    PAGE --> CONTENT[Content keyed by exact step identity]
+    ORDER --> FIRST[First step]
+    ORDER --> SECOND[Next step]
+    CONTENT --> FIRSTSLOTS[First step's shell slots]
+    CONTENT --> SECONDSLOTS[Next step's shell slots]
+    FIRST --> FIRSTSLOTS
+    SECOND --> SECONDSLOTS
+    FIRSTSLOTS --> FIRSTBLOCKS[Distinct ordered blocks]
+    SECONDSLOTS --> SECONDBLOCKS[Distinct ordered blocks]
+```
+
+Validation, identity extraction, dependency discovery, fingerprints and the editor adapter traverse every step's content. Placement identities remain unique across the application, including shell content and different steps. V1-to-V2 conversion preserves every existing step identity, its blocks and their authored order in that step's default main slot; selecting a custom shell requires an explicit complete slot mapping. Guided forms retain the existing two-to-twenty-step, one-summary and one-commit rules from [forms and guided forms](../07-applications-pages-and-themes.md#forms-and-guided-forms).
+
 A placement has a permanent identity, registered block and version, schema-validated settings, named child slots, optional binding context, visibility/use constraints and layout overrides. The ordered children of each declared slot are the one source of sibling order. Do not duplicate order in a second page-wide array and a third phone-order field.
 
 Validation rejects duplicate IDs, cycles, unreachable placements, undefined or multiply assigned slots, disallowed children, excessive depth/size and incompatible block versions. Slot declarations define required/optional content and allowed child categories. Unknown or orphan content produces a repairable error; it is never silently appended elsewhere or discarded. Shell locking is enforced on the server against the permitted draft editing scope.
@@ -111,11 +129,32 @@ Use the same registered React components for preview and live rendering. Puck is
 
 Before copying source, inventory Fluid-owned code, third-party licenses and assets. Copy only required generic authoring/components; do not import its demo applications, broad local MCP server or entire dependency tree. Local tabs/drafts must be scoped by current account, organisation, app and revision; do not persist sensitive HR labels in unscoped browser storage.
 
+Follow the [inspected builder integration map](../../build-plan/fluid-integration-map.md) when adapting the canvas, palette, inspector, shell editing and preview controls. The map identifies which prototype connections must be replaced and the owning tasks for each. A screenshot or prototype interaction does not substitute for revision, permission, persistence, keyboard and semantic-operation acceptance tests.
+
 ## Compatibility and proof
 
 Version the new representation explicitly. Legacy flat pages migrate into the default main slot in a new draft through a deterministic documented conversion. Previously published releases remain immutable and retain a supported reader; never reinterpret them silently with new defaults.
 
+[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) retains the existing application source and canonical representation as V1 and introduces explicitly selected V2 contracts. Restoring a V1 release restores its exact V1 authored content; conversion is a separate revision-checked prepare-and-confirm action with explicit exact platform-block mappings. Missing or ambiguous mappings are refused, never guessed from display names. V2 requires only a bounded additive Definition-store migration: add permanent shell identities and exact platform-block dependency shapes to existing constraints, publication, manifest storage and integrity readback. Keep the existing JSONB draft/release tables and every immutable V1 row unchanged. This contract/persistence work precedes dedicated editor UI; its hosted proof follows [#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266).
+
 Update source schemas, canonical schemas, registry, compiler/reference traversal, provenance, version comparison, catalogue snapshots, Definition-service reads/restores and fixtures together. Presentation-only layout changes are patch impact; access, operation or data-meaning changes follow the existing major/minor rules.
+
+### Exact representation selection
+
+For Application definitions, support only the exact source/validation version pairs `1.0.0 / 1.0.0` (V1) and `2.0.0 / 2.0.0` (V2). The source version selects authored-source decoding; the validation version selects canonical and compiled content. Reject unknown versions, unsupported pairs and disagreement between JSON and trusted enclosing metadata before decoding nested content. Never infer a version from content shape or a semantic-version major number. Module and connection-type contracts remain unchanged.
+
+| Boundary | Version authority and required behavior |
+|---|---|
+| Authored source and draft | Check intrinsic `source_contract_version` against the existing stored `sourceContractVersion`; require exact agreement. |
+| Compilation | Map the exact source version to its validation version through an explicit supported-pair table. Legacy V1 output remains unchanged and requires trusted V1 compile context. V2 output carries `validationContractVersion: "2.0.0"` as outer metadata. |
+| Standalone canonical content | Require an outer `validationContractVersion` envelope that is not part of the canonical fingerprint. Missing metadata is not permission to guess V1. |
+| Publication and release storage | Persist and verify the exact pair using existing source/validation version columns; check source JSON agreement before publication. No new representation column is needed. |
+| Published and consumer reads | Select canonical content using existing `validationContractVersion` metadata; do not add source metadata where no authored source is returned. |
+| History and restore | Expose both stored versions in history metadata. Restore verifies both and restores the original authored content without conversion. A V1-to-V2 conversion creates a separately confirmed new draft revision. |
+
+Existing V1 source, canonical JSON, compilation payloads, release rows and fingerprints remain unchanged: do not add tags or default V2 properties to them. History projections and transport envelopes do not change immutable release content or fingerprint inputs.
+
+#249 performs no reset of an existing or shared Local, Testing or Production database. Prove its additive migration incrementally against a separately verified Local baseline. A fresh disposable database may be created or reset only under a separately validated delivery target; no such target grants authority over an existing environment.
 
 Required evidence includes positive and negative contract cases, lossless adapter round trips, old-release reads, two-organisation isolation, simultaneous draft edits, related panels, private form state, safe public pages, desktop/tablet/phone rendering, keyboard/focus behavior and web-independent semantic operation tests.
 
@@ -156,5 +195,7 @@ flowchart LR
 ```
 
 ## Literal data is not a reference
+
+Acceptance by a JSON value contract does not authorize every registered control to accept every JSON shape. Existing scalar controls continue to reject object/array values that do not match their declared types. [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) adds the richer setting declarations and their complete publication proof; [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) must not weaken current control validation to imitate that later feature. User-defined input-map keys are also data labels, not platform reference properties.
 
 Reference traversal follows declared contract positions and discriminated value kinds. An explicitly literal value remains data even if it contains keys named `state`, `qualifiedKey`, `rootId` or `fieldId`. Do not infer platform authority or unresolved references from arbitrary object shape. Literal content still participates in schema validation, fingerprints and its owning component's version-impact policy. [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) corrects the delivered shape-based scanner before [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) expands the representation.

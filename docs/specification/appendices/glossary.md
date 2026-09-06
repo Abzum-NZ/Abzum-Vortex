@@ -18,6 +18,9 @@ flowchart TD
 | Term | Meaning and governing section |
 |---|---|
 | Access decision | The allow-or-refuse answer described in [Access and permissions](../04-access-and-permissions.md). |
+| Group | A set of organisation accounts used for collective access assignments; not a business department or work team. See [Groups](groups-and-privileged-access.md#product-model). |
+| Eligible role assignment | Permission to request activation, not permission to use the role. See [eligibility](groups-and-privileged-access.md#eligibility-is-not-active-access). |
+| PIM | Privileged Identity Management: the governed, time-limited activation of eligible roles under their current policy. See [privileged activation](groups-and-privileged-access.md). |
 | Access grant | A source organisation's limited, approved, and revocable permission for a named recipient context to use specified records, actions, and fields under [Shared-record access](../04-access-and-permissions.md#shared-record-access). |
 | Action | A named operation that participates in one [record save](../08-forms-actions-rules-and-events.md#actions). |
 | Application | A published user experience composed from modules, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md). |
@@ -50,7 +53,7 @@ flowchart TD
 | Legal hold | A protected instruction that prevents permanent removal of matching data under [Activity history, privacy and retention](../14-activity-privacy-and-retention.md#legal-holds). |
 | Module | A reusable description of business data and meaning, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md). |
 | Organisation | One private workspace inside a tenant. Its data and access do not flow to its parent, children, or tenant administrators. |
-| Organisation account | One global identity's separate account inside one organisation, with its own status, profile, roles, teams, preferences, and application access. Earlier drafts called this a membership. |
+| Organisation account | One global identity's separate account inside one organisation, with its own status, profile, roles, groups, preferences, and application access. Earlier drafts called this a membership. |
 | Organisation role | A collection of organisation-wide permissions under [Access and permissions](../04-access-and-permissions.md#organisation-roles). |
 | Page | A published application screen type and block layout under [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#page-types). |
 | Permission | One permanently named right that a role may grant. |

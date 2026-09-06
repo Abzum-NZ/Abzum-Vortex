@@ -34,6 +34,16 @@ A privileged core concept is allowed only when all four answers are **yes**:
 
 If any answer is no, the concept is an ordinary application capability. A delivery task cannot create an exception implicitly; an exception requires a specification change, an explicit invariant and a review of affected contracts and dependencies.
 
+## Keep the implementation proportionate
+
+Use the smallest implementation that satisfies the documented behaviour. A new counter, fingerprint, state, abstraction or compatibility layer needs a concrete failure case that existing identities, revisions and transactions cannot handle. Reuse existing mechanisms; do not build speculative frameworks or turn every test case into a separate domain concept. Reviewers must identify unnecessary machinery as well as missing safeguards.
+
+Fix defects at their cause rather than layering compensating guards around broken behaviour. Tests should prove distinct required outcomes and relevant failure cases, not speculative combinations. If the necessary correction changes unresolved business behaviour, pause only the affected work and ask the product owner. Missing technical prerequisites are dependency-blocked while other available work continues; low-priority maintenance is deferred. Engineering, architecture, database, security and implementation decisions are made and tested by the architect, with material reasoning recorded. Touching IAM, Access, permissions, migrations or Production promotion does not itself create another approval requirement. Existing permission enforcement and delivery evidence checks still apply. Keep unrelated maintenance out of the current feature.
+
+For [role changes](groups-and-privileged-access.md#editing-a-role-versus-accepting-permissions), preserve three guarantees: changes are atomic and revision-checked; broadened or restored authority requires explicit fresh acceptance; competing role and assignment changes serialize or refuse as stale without partial effects. Supporting evidence is an implementation detail, not another user-facing approval process. Retain separate continuity checks only where they protect distinct behaviour; merge duplicates, not different safeguards merely because their names sound similar.
+
+The [Access version](data-contracts.md#permission-and-role-contracts) orders access changes. Its change timestamp is observation metadata, not an additional ordering or authorisation decision. Local clock faults belong to environment verification, not new permission semantics; genuine start and expiry checks still use current trusted time.
+
 ## Core inventory
 
 | Retained capability | Platform-level invariant | Owning boundary |
@@ -57,6 +67,7 @@ The following are built from the retained primitives:
 |---|---|
 | Commercial billing, pricing, subscriptions, invoices and payments | Modules and records plus [connections](../12-connections-and-interfaces.md) and [workflows](../09-workflows-and-pipelines.md). |
 | Business approvals and work queues | Request and decision record types, pages, permissions, human-input workflow steps and named actions. |
+| IAM access requests, reviews and administration journeys | The ordinary [IAM application](iam-application.md) owns request/review records and workflows. Protected Access owns effective assignments and delegation because editable business records cannot safely be their own authorisation authority. |
 | Tasks, comments, tags, calendar entries and notifications | Ordinary record types and actions. Delivery to an external provider uses a connection call. |
 | Organisation legal details, contacts, branding and business calendar | A locked Organisation Administration application using ordinary fields and pages. |
 | Privacy request case management | A locked Privacy Operations application that invokes protected discovery, export and removal operations. |

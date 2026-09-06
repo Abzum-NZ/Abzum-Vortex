@@ -4,6 +4,8 @@
 
 ## Application composition
 
+The locked [IAM application](appendices/iam-application.md) is an ordinary consumer of these application/page primitives. It supplies the single role-grant journey through user-linked records, forms, reviews and workflows. Tenant and Organisation Administration may link to IAM but cannot offer competing grant controls; reusable IAM components still invoke the same governed actions. Its name and module names are never renderer or runtime conditions.
+
 An **application** is a published experience for a defined group of people in one organisation. It selects [modules](05-modules-fields-and-relationships.md) and adds navigation, pages, forms, roles, behaviour, and a theme.
 
 ```mermaid
@@ -31,7 +33,7 @@ An application records:
 - The modules and version ranges it requires.
 - Module bindings and application-contained record types.
 - Navigation tree, reusable shells with named content slots, and pages.
-- Application roles and assignments.
+- Application role templates. Live organisation assignments are managed separately through [Access](04-access-and-permissions.md#one-organisation-managed-catalogue).
 - Actions, rules, events, workflows, and pipelines.
 - Theme and allowed organisation-level theme adjustments.
 - Public addresses and programmable interfaces.
@@ -167,6 +169,8 @@ flowchart TD
 
 All page types use the same block composition model. Layouts may use a twelve-column grid, stack, row or shell. Height follows content unless a registered block permits bounded resizing. Desktop/tablet/phone overrides inherit explicitly; one validated ordering structure determines each slot's reading order.
 
+A guided form uses one shell and gives each ordered step its own block content within that shell's slots. Step identity determines which content belongs to it; moving or renaming a step cannot move its content to another step. The [exact step-content mapping](appendices/page-builder-contracts.md#one-canonical-page-document) also preserves existing guided forms during an explicitly confirmed format conversion.
+
 A registration supplies typed properties, allowed child slots, sizing/responsive capabilities, access semantics, public-surface restrictions and a registered renderer. Literal values must satisfy the property schema. Typed pickers resolve stable references; text and number controls remain available for appropriate literal settings. Safe grouped/list values and rich text are supported without arbitrary executable JSON, CSS, JSX or scripts.
 
 A record page keeps one primary subject and a matching main form commit action. Related panels may deliberately use other record types through declared, separately authorised relationships/queries. Validate each field and action against its explicit binding context, not a blanket same-record-type rule. Public-page and shared-source restrictions remain unchanged.
@@ -174,6 +178,8 @@ A record page keeps one primary subject and a matching main form commit action. 
 Reuse application navigation and theme by reference. Pages and shells publish only with the application. Live updates coalesce bounded subscriptions and refresh affected components; there is no arbitrary four-live-block publication rule.
 
 An application role lists exact permission keys or uses the single value `*` as its whole permission list. `*` means every non-administrative permission declared by that application revision. It cannot be combined with exact keys, does not include a bound module's permissions, and never includes an administrative permission.
+
+These published roles are reusable templates. Registering the application registers its permissions and templates in the selected organisation's [single permission and role catalogue](04-access-and-permissions.md#one-organisation-managed-catalogue), without assigning access to anyone. Organisation administrators manage application-specific assignments and organisation-owned roles, including roles covering selected permissions across applications. An update must not silently broaden existing access or overwrite an organisation's customised role; removed permissions and unavailable applications stop authorising requests. The application operation owns registration and version changes, while Access owns permission evaluation and assignments.
 
 ## Forms and guided forms
 

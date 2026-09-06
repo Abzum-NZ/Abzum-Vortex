@@ -91,6 +91,72 @@ const leafPathKeys = (value: unknown, path: readonly (string | number)[] = []): 
       : [JSON.stringify(path)];
 
 describe("authored definition compiler", () => {
+  it("preserves reference-shaped workflow literals through compilation and publish validation", () => {
+    const amended = structuredClone(sources);
+    const source = amended.find(
+      (entry) =>
+        entry.kind === "application" &&
+        entry.body.workflows.some((flow) =>
+          flow.nodes.some(
+            (node) => node.type === "call_connection" && "variables" in node.config.inputs,
+          ),
+        ),
+    );
+    if (!source || source.kind !== "application")
+      throw new Error("Structured-input example required");
+    const node = source.body.workflows
+      .flatMap((flow) => flow.nodes)
+      .find((entry) => entry.type === "call_connection" && "variables" in entry.config.inputs);
+    if (!node || node.type !== "call_connection") throw new Error("Connection node required");
+    const payload = {
+      state: "unresolved",
+      qualifiedKey: "sample:item",
+      source: "node_output",
+      field: "application data",
+      node: "application data",
+      output: "application data",
+      action: "application data",
+      record_type: "application data",
+      nodeId: "application data",
+      fieldId: "application data",
+      entries: [
+        { id: "same", key: "same" },
+        { id: "same", key: "same" },
+      ],
+      nested: [{ source: "field", fieldId: "not a dependency" }],
+    };
+    node.config.inputs.variables = { source: "literal", value: payload };
+    const page = source.body.pages.find((entry) => "blocks" in entry);
+    const placement = page && "blocks" in page ? page.blocks[0] : undefined;
+    const registration = placement
+      ? source.body.block_registrations.find((entry) => entry.id === placement.block)
+      : undefined;
+    if (!placement || !registration) throw new Error("Placed block registration required");
+    registration.settings.push({ key: "field", control: "text", required: true });
+    placement.settings.field = { kind: "literal", value: "ordinary setting" };
+    const requests = amended.map(requestFor);
+    const result = compileDefinitionSet(requests, publicationOptions);
+    expect(JSON.stringify(result)).toContain(JSON.stringify(payload));
+    const output = requests
+      .map(compileDefinition)
+      .find((entry) => entry.kind === "application" && entry.canonical.envelope.key === source.key);
+    expect(JSON.stringify(output)).toContain(JSON.stringify(payload));
+    const literalProvenance = output?.provenance.filter((entry) =>
+      entry.sourcePath?.includes("variables"),
+    );
+    const literalSourcePaths = literalProvenance.map((entry) => entry.sourcePath);
+    expect(literalSourcePaths).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining(["field"]),
+        expect.arrayContaining(["node"]),
+        expect.arrayContaining(["output"]),
+        expect.arrayContaining(["action"]),
+        expect.arrayContaining(["record_type"]),
+      ]),
+    );
+    expect(literalProvenance?.every((entry) => entry.origin === "source")).toBe(true);
+    expect(JSON.stringify(output)).toContain('"field":{"kind":"literal"');
+  });
   it("compiles all thirteen source definitions through the immutable snapshot", () => {
     const outputs = sources.map((source) => {
       try {

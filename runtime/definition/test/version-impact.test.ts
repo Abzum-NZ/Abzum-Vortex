@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { fieldTypeKeys, workflowNodeTypeKeys } from "@vortex/contracts";
+import {
+  fieldTypeKeys,
+  workflowNodeTypeKeys,
+  publishedApplicationDefinitionSchema,
+} from "@vortex/contracts";
 import type {
   ActionDefinition,
   ApplicationDraft,
@@ -240,6 +244,54 @@ const applicationRequestAfter = (draft: ReturnType<typeof applicationDraft>) => 
   candidate.envelope.publishedRevision = 1;
   return { kind: "application", history: [published], candidate };
 };
+
+describe("literal/reference version regression", () => {
+  test("round-trips page literal JSON through publication contracts and compares its changes", () => {
+    const draft = applicationDraft();
+    const page = draft.content.pages[0]!;
+    if (page.type !== "public") throw new Error("Neutral public page required");
+    const payload = {
+      state: "unresolved",
+      qualifiedKey: "sample:item",
+      nested: [{ rootId: "data" }],
+    };
+    page.blocks[0]!.settings.payload = { kind: "literal", value: payload };
+    const release = publishedApplicationDefinitionSchema.parse(publishApplication(draft));
+    expect(JSON.parse(JSON.stringify(release.content))).toEqual(draft.content);
+    const request = applicationRequestAfter(draft);
+    const before = compareDefinitionVersionImpact(request);
+    const changedPage = request.candidate.content.pages[0]!;
+    if (changedPage.type !== "public") throw new Error("Neutral public page required");
+    changedPage.blocks[0]!.settings.payload = {
+      kind: "literal",
+      value: { ...payload, nested: [] },
+    };
+    const after = compareDefinitionVersionImpact(request);
+    expect(after.outcome).not.toBe("no_change");
+    expect(after.comparisonFingerprint).not.toBe(before.comparisonFingerprint);
+  });
+
+  test("refuses a real unresolved reference beside literal data", () => {
+    const draft = applicationDraft();
+    draft.content.pages[0]!.standardPageReplacement = {
+      standardPage: "detail",
+      recordType: { state: "unresolved", qualifiedKey: "sample:item" },
+    };
+    const published = publishedApplicationDefinitionSchema.safeParse(publishApplication(draft));
+    expect(published.success).toBe(false);
+    if (!published.success)
+      expect(published.error.issues[0]?.path).toEqual([
+        "content",
+        "pages",
+        0,
+        "standardPageReplacement",
+        "recordType",
+      ]);
+    expect(() =>
+      compareDefinitionVersionImpact({ kind: "application", candidate: draft, history: [] }),
+    ).toThrow(expect.objectContaining({ code: "unresolved_candidate" }));
+  });
+});
 
 const resolvedRecordType = (moduleRootId = id(1), recordTypeId = id(4)) => ({
   state: "resolved",

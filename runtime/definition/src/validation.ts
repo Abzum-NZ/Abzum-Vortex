@@ -1,4 +1,10 @@
 import {
+  applicationDraftSchema,
+  moduleDraftSchema,
+  connectionTypeSchema,
+  workflowDefinitionSchema,
+  jsonValueSchema,
+  walkDefinitionContract,
   definitionSourceDocumentSchema,
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
@@ -21,6 +27,7 @@ import { compileDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compareDefinitionVersionImpact } from "./version-impact";
+import { createContractValueWalker } from "./contract-value-walker";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
@@ -51,6 +58,19 @@ const allValidationOutputs = (context: DefinitionSetValidationContext): readonly
   ...(context.dependencyOutputs ?? []),
   ...context.outputs,
 ];
+
+const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
+  createContractValueWalker(
+    allValidationOutputs(context).map((output) => ({
+      schema:
+        output.kind === "module"
+          ? moduleDraftSchema
+          : output.kind === "application"
+            ? applicationDraftSchema
+            : connectionTypeSchema,
+      value: output.canonical,
+    })),
+  );
 
 const rootLocation = (output: Output): DefinitionValidationLocation => {
   const canonical = output.canonical as unknown as JsonObject;
@@ -244,7 +264,10 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
         return String(object(canonical.envelope ?? canonical).key) === sourceKey;
       }) ?? context.outputs[index];
     let duplicate = false;
-    const visit = (value: unknown) => {
+    const parsed = definitionSourceDocumentSchema.safeParse(source);
+    if (!parsed.success) continue;
+    walkDefinitionContract(definitionSourceDocumentSchema, parsed.data, (schema, value) => {
+      if (schema === jsonValueSchema) return;
       if (Array.isArray(value)) {
         for (const property of ["id", "key"] as const) {
           const values = value
@@ -256,10 +279,8 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
             .filter((entry): entry is string => typeof entry === "string");
           if (new Set(values).size !== values.length) duplicate = true;
         }
-        value.forEach(visit);
-      } else if (value !== null && typeof value === "object") Object.values(value).forEach(visit);
-    };
-    visit(source);
+      }
+    });
     if (duplicate)
       failures.push(
         output
@@ -325,6 +346,9 @@ function sourceLocalReferenceRule(
     const parsed = definitionSourceDocumentSchema.safeParse(raw);
     if (!parsed.success) continue;
     const source = parsed.data;
+    const walkValues = createContractValueWalker([
+      { schema: definitionSourceDocumentSchema, value: source },
+    ]);
     const body = object(source.body);
     let valid = true;
     if (source.kind === "module") {
@@ -1171,6 +1195,7 @@ const valueTypeCompatible = (actual: string | undefined, expected: string | unde
     expected === "json");
 
 function moduleReferenceRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
+  const walkValues = canonicalValueWalker(context);
   const failures: DefinitionRuleFailure[] = [];
   const moduleOutputs = context.outputs.filter((output) => output.kind === "module");
   const availableModuleOutputs = allValidationOutputs(context).filter(
@@ -1602,18 +1627,12 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
   return failures;
 }
 
-function walkValues(value: unknown, visit: (value: JsonObject) => void) {
-  if (Array.isArray(value)) value.forEach((entry) => walkValues(entry, visit));
-  else if (value !== null && typeof value === "object") {
-    const record = object(value);
-    visit(record);
-    Object.values(record).forEach((entry) => walkValues(entry, visit));
-  }
-}
-
 const outputsByNodeType: Readonly<Record<string, readonly string[]>> = workflowNodeOutputKeysByType;
 
 function validateWorkflow(output: Output, workflow: JsonObject): DefinitionRuleFailure[] {
+  const walkValues = createContractValueWalker([
+    { schema: workflowDefinitionSchema, value: workflow },
+  ]);
   const failures: DefinitionRuleFailure[] = [];
   const workflowFailure = (ruleCode: string, family: DefinitionRuleFailure["family"]) =>
     failure(output, ruleCode, family, { kind: "workflow", key: String(workflow.key) });
@@ -1921,6 +1940,7 @@ function workflowValueRecordType(
 }
 
 function applicationRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
+  const walkValues = canonicalValueWalker(context);
   const failures: DefinitionRuleFailure[] = [];
   const availableOutputs = allValidationOutputs(context);
   const modules = availableOutputs.filter((output) => output.kind === "module");
