@@ -1,6 +1,6 @@
 # Phase 3 — Protected Access administration
 
-Task: [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). Completed prerequisites: [permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32), [Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33), [central Access #34](issue-34-access-decision.md), and [authentication evidence #276](../specification/appendices/recent-authentication.md). [Activity #252](issue-252-activity-foundation.md) remains the hosted-delivery prerequisite. [Organisation administration #30](issue-30-protected-administration.md) is a separate consumer, not a dependency.
+Task: [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). Completed prerequisites: [permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32), [Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33), [central Access #34](issue-34-access-decision.md), [authentication evidence #276](../specification/appendices/recent-authentication.md), and [Activity #252](issue-252-activity-foundation.md), whose [exact hosted receipt](../evidence/issue-252-activity-foundation.md#hosted-delivery--6-september-2026) is verified. [Organisation administration #30](issue-30-protected-administration.md) is a separate consumer, not a dependency.
 
 ## Outcome
 

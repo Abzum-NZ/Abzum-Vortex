@@ -1,6 +1,6 @@
 # Phase 3 — Ownership and record visibility
 
-Task: [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36). Prerequisites: completed [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) and [transactional Activity #252](issue-252-activity-foundation.md), whose hosted completion is still required. Planning may proceed; dependent implementation does not bypass that delivery check.
+Task: [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36). Prerequisites: completed [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) and [transactional Activity #252](issue-252-activity-foundation.md). The [exact hosted Activity receipt](../evidence/issue-252-activity-foundation.md#hosted-delivery--6-september-2026) is verified; implementation may proceed.
 
 ## Outcome
 

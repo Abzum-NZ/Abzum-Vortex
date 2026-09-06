@@ -248,7 +248,7 @@ These foundations do not themselves expose an IAM granting endpoint or a usable 
 
 ### Current checkpoint and actual order
 
-[Activity foundation #252](issue-252-activity-foundation.md) is independently reviewed and merged into Testing through [PR #310](https://github.com/Abzum-NZ/Abzum-Vortex/pull/310). [Exact hosted verification](../evidence/issue-252-activity-foundation.md#hosted-delivery--6-september-2026) is running; the task remains open. The shared private append boundary records successful changes atomically and supports content-free refusal after rollback. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) owns later permitted views and full service coverage.
+[Activity foundation #252](issue-252-activity-foundation.md) is complete: independently reviewed, merged into Testing through [PR #310](https://github.com/Abzum-NZ/Abzum-Vortex/pull/310), and matched to its successful [exact hosted receipt](../evidence/issue-252-activity-foundation.md#hosted-delivery--6-september-2026). The shared private append boundary records successful changes atomically and supports content-free refusal after rollback. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) owns later permitted views and full service coverage. Its dependent #36 and #40 implementation can proceed.
 
 Use each task's actual prerequisites, not a blanket Phase 2 isolation gate. [Organisation administration #30](issue-30-protected-administration.md) separately consumes the completed #33/#34 foundations; it has no user hold and does not wait for all of #40. The complete Phase 2 isolation result remains required for the full phase exit, but does not prevent independently testable Access foundations.
 
