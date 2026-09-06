@@ -101,3 +101,5 @@ All 23 existing concurrency proofs passed across multiple runs; [the repair evid
 |---|---|
 | `20260906140028_add_organization_account_reference_condition_parameters.sql` | `56bea890abc2e9c9e201880c3168cd8803b8da578510015fa654f4bf7e94d40f` |
 | `365_permission_saved_condition_parity.test.sql` | `7fba669e1d7c17492cf5be4657606cabcf208bb6d619eaea82b751671e1cf387` |
+
+The typed-reference checkpoint merged normally through [PR #320](https://github.com/Abzum-NZ/Abzum-Vortex/pull/320) at `2026-09-06T14:30:34Z` after both preview checks passed. Reviewed source `ca3d6d6ee89cb143c2986dec1d36d1183d26e748` and Testing merge `e8313abf386338db45dc9cdc9938bba42a78a6a9` have identical file trees. Exact hosted database verification remains unconfirmed; the remaining row-visibility scope is not delivered by that merge.

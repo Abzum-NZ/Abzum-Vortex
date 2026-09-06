@@ -99,6 +99,8 @@ Focused contracts/service checks pass **29 tests**, with both package typechecks
 
 The final combined run also includes the reviewed current-person condition extension: **49 SQL suites / 2,249 assertions** and **1,280 repository tests** pass, with three existing skips, eight fixture checks and all 23 package typechecks/builds. All 23 existing concurrency checks pass across multiple runs, not one uninterrupted run; [the revocation evidence](issue-318-assignment-revocation-audit-time.md#actual-verification) retains the unrelated intermittent permanent-steward observation and its limited diagnosis. Lint has no errors and only previously reviewed warnings; security advisors report no issues. Local history now contains 53 migrations. No new concurrency framework or clock change was introduced.
 
+The role/template source checkpoint merged normally through [PR #320](https://github.com/Abzum-NZ/Abzum-Vortex/pull/320) at `2026-09-06T14:30:34Z`. Both normal preview checks passed. Reviewed source `ca3d6d6ee89cb143c2986dec1d36d1183d26e748` and Testing merge `e8313abf386338db45dc9cdc9938bba42a78a6a9` have identical file trees. Exact hosted database delivery remains unconfirmed. The next assignment/delegation ledger is not included in this merge, and this checkpoint does not complete #40.
+
 ## First checkpoint database bytes
 
 | File | SHA-256 |

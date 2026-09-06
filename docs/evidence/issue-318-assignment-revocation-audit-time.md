@@ -20,6 +20,10 @@ The additive [migration](../../supabase/migrations/20260906135228_preserve_role_
 - Six-schema lint reports no errors, retaining three older Access warnings and the five already-reviewed generic immutable/JSON construction warnings documented in [condition parity evidence](issue-36-record-visibility.md#postgresql-condition-parity--7-september-2026). Security advisors report no warnings or errors.
 - Exact hosted delivery remains unverified. Normal source/preview delivery must not be described as a hosted database receipt.
 
+## Testing source delivery
+
+[PR #320](https://github.com/Abzum-NZ/Abzum-Vortex/pull/320) merged normally at `2026-09-06T14:30:34Z` after Vercel and Vercel Preview Comments passed. Reviewed source `ca3d6d6ee89cb143c2986dec1d36d1183d26e748` and Testing merge `e8313abf386338db45dc9cdc9938bba42a78a6a9` have identical file trees. No check was bypassed. Exact hosted database verification remains unconfirmed, so this repair remains in review rather than being closed on preview evidence alone.
+
 ## Frozen proof artifacts
 
 | Artifact | SHA-256 |
