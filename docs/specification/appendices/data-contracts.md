@@ -133,6 +133,23 @@ The Group's organisation, identity and key remain permanent; its display label m
 
 The private stored record contains `invitation_id`, organisation, lower-cased and trimmed invited email, a unique `sha256:` fingerprint of a 32-byte random secret, inviter organisation account, creation/invitation/expiry times, optional revocation time and revoker account, optional acceptance time and accepted account, last-change time, and positive revision. Phase 2 contains no role or Group assignment field; [#33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) owns any later authorised assignment transaction. The safe read contract omits the fingerprint. The raw secret appears only once in the successful trusted creation result and is absent from storage, fixtures, logs, errors, and durable evidence. Expiry is evaluated from database time for first acceptance rather than maintained by a background state-change job. A later exact replay by the accepting identity may return the same still-active account without mutating the invitation or account, even after that first-use expiry; every other reuse remains unavailable.
 
+Invitations with intended access add a separate, nonempty immutable intent keyed by the invitation, not fields copied into the Identity invitation or an editable approval record. It names exact new Group memberships and direct-account role assignments, including their fixed windows and reviewed role revisions. The accepted account comes from verified Identity acceptance, never from an invitation form's account identifier. Intended access changes require revoking and reissuing the invitation. The [protected invitation journey](iam-application.md#grant-and-approval-workflow) binds the intent before returning the secret; creating intent alone grants nothing and does not change Access version.
+
+The existing account-only acceptance path must refuse an unaccepted invitation carrying intent before changing Identity state. It cannot silently omit the intended grants or execute them using its existing runtime privileges. [Access #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) provides a separate private composition that rechecks current Group, role revision, assignment kind and fixed windows, accepts the invitation and writes all intended memberships/assignments with one Access-version change in the same transaction. Failure changes none of them. Genuinely account-only invitations retain their existing behaviour. Exact replay after successful intent acceptance returns the original linkage without recreating subsequently removed access.
+
+[Protected invocation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) verifies the invitee's identity, email and secret before organisation selection. Before first applying intended access, it rechecks the stored inviter/approver's current authority through [Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) inside the same locked transaction. The invitee need not already have the account being created. This narrowly scoped acceptance does not establish ordinary organisation authority or expose the private composition. The [IAM journey #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) owns the user-facing request and approval experience.
+
+```mermaid
+flowchart LR
+    INVITE[Verified invitation acceptance] --> INTENT{Intended access?}
+    INTENT -->|No| ACCOUNT[Existing account-only acceptance]
+    INTENT -->|Yes| CHECK[Protected current-authority and intent checks]
+    CHECK --> APPLY[Accept account and all intended access together]
+    APPLY --> COMMIT[Commit once with Access version]
+    CHECK -->|Refused| NONE[No account or grant changes]
+    APPLY -->|Failed| NONE
+```
+
 ### Session context
 
 The session context is a closed union by caller kind. A human or federated caller has a global identity, trusted Identity Authority identifier and organisation account; a system caller has a system actor; an unauthenticated public caller has neither and uses `anonymous` authentication strength. System and public variants cannot carry an Identity Authority identifier. Every variant carries tenant, organisation, optional application, session and issue times, expiry, access version and correlation identifier. Only the permitted variants may carry delegated or support context.
@@ -271,7 +288,22 @@ The permission catalogue records the active registrations supplying each bound-m
 
 Delegation authority is separate from use-permission entries. It records one organisation, its holder kind (`organisation_account` or `group`) and holder identifier, the trusted granting actor, revision and effective start/expiry/revocation facts, and a closed scope: explicit organisation-wide catalogue management, or a version/fingerprint-pinned set of permanent permission references with their application contexts. The holder must belong to that same organisation; Group-held authority applies only through a current active membership. Permanent stewardship requires a direct organisation-account holder, never Group membership. The organisation-wide form deliberately covers future registrations in that organisation; the bounded form does not expand on update. A role-management operation requires its exact management permission and coverage of every affected before/after grant. Any management scope granted onward must be a subset of the actor's effective scope. No application template or supplied caller field can manufacture delegation authority. Use of a shared module does not erase the target application's delegation boundary.
 
-The initial organisation-steward handoff explicitly names an eligible identity and creates or confirms its active organisation account with a direct, non-expiring minimum management/delegation assignment atomically. It is callable only by trusted provisioning, never by an ordinary browser/request role. The permanent-steward invariant covers account/projection state, direct assignment, effective permissions and delegation scope; changing any of those facts must leave a valid replacement. Initial adoption of a pre-existing organisation is explicit and idempotent, not inferred from row order or tenant-administrator membership.
+The initial organisation-steward handoff explicitly names the intended active identity and creates or confirms its active organisation account, a direct non-expiring standing assignment of the minimum management permissions, and separate direct non-expiring organisation-catalogue delegation atomically. It is callable only by trusted provisioning, never by an ordinary browser/request role. The permanent-steward invariant covers account/projection state, direct assignment, effective permissions and delegation scope; changing any of those facts must leave a valid replacement. Initial adoption of a pre-existing organisation is explicit and idempotent, not inferred from row order or tenant-administrator membership.
+
+Within that transaction, [provisioning #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns account and identity creation or confirmation. The [private Access appointment in #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) receives the already-active account and derives the exact minimum platform-management assignment and separate permanent delegation. It must not introduce another Identity writer. A minimal current stewardship requirement records explicit adoption and its immutable provenance; it is not an owner flag or a permission bypass. A completed replay never recreates or revives grants changed by later legitimate administration.
+
+The current requirement is the boundary for the permanent-steward safeguard. Current account/identity, assignment, role permissions and delegation facts establish qualification; the adoption record alone does not. Reuse the existing organisation governance lock, exact revisions and one Access-version increment for the atomic appointment. Only mutations that can remove qualification need the final same-transaction assertion. The later exact management-application requirement uses existing sealed role entries rather than another copied permission snapshot. [Access #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) owns its private revision-checked activation/replacement operation; [installation/IAM work](iam-application.md#setup-and-removal) composes its authorised use and proves the installed interface. Private Access facts alone do not prove that interface exists.
+
+```mermaid
+flowchart LR
+    PROVISION[Trusted provisioning confirms active account] --> APPOINT[Explicit minimum management appointment]
+    APPOINT --> ADOPT[Record adoption and commit once]
+    CHANGE[Authorised change to steward facts] --> LOCK[Lock organisation governance]
+    LOCK --> MUTATE[Apply proposed change]
+    MUTATE --> CHECK{A permanent steward still qualifies?}
+    CHECK -->|Yes| COMMIT[Commit change and Access version]
+    CHECK -->|No| ROLLBACK[Roll back the complete change]
+```
 
 The Access service owns an `access_version` per organisation. Every access-affecting organisation-account, role, assignment, group, sharing, public-policy, or application-access change increases it in the same transaction as the owning state change.
 
