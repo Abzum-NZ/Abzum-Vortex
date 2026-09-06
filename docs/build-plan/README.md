@@ -252,6 +252,8 @@ These foundations do not themselves expose an IAM granting endpoint or a usable 
 
 Use each task's actual prerequisites, not a blanket Phase 2 isolation gate. [Organisation administration #30](issue-30-protected-administration.md) separately consumes the completed #33/#34 foundations; it has no user hold and does not wait for all of #40. The complete Phase 2 isolation result remains required for the full phase exit, but does not prevent independently testable Access foundations.
 
+The subsequent shared-condition, permission-scope preservation, Group membership reads and protected Group creation/rename checkpoints have merged normally into Testing through [PR #313](https://github.com/Abzum-NZ/Abzum-Vortex/pull/313) and [PR #314](https://github.com/Abzum-NZ/Abzum-Vortex/pull/314). [Visibility evidence](../evidence/issue-36-record-visibility.md) and [administration evidence](../evidence/issue-40-access-administration.md) record their local checks separately from still-unverified hosted database receipts. Continue application-owned saved-condition compilation in [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) alongside the demonstrated [invitation audit-time correction #315](https://github.com/Abzum-NZ/Abzum-Vortex/issues/315). The correction preserves real expiry and revision checks, requires no infrastructure work, and does not reopen the approved Roles and Groups task.
+
 | Work | What it delivers | Order |
 |---|---|---|
 | [Ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) | Explicit ownership, Group, local-share, relationship and saved-condition narrowing on neutral records | After #252 and completed #34 |
