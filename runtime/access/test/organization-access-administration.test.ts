@@ -147,4 +147,125 @@ describe("organization Access administration", () => {
       mismatched.listGroups(verifiedSession, { organizationId: id(2) }, { pageSize: 10 }),
     ).resolves.toEqual({ kind: "temporarily_unavailable" });
   });
+
+  it("lists one bounded membership page and binds its Group and Access scope", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2).toUpperCase(),
+        group_id: id(8).toUpperCase(),
+        memberships: [
+          {
+            membershipId: id(9),
+            groupId: id(8),
+            organizationAccountId: id(10),
+            accountDisplayName: "Neutral member",
+            revision: "2",
+            startsAt: "2026-09-06T00:00:00.000Z",
+            state: "live",
+            temporalState: "active",
+          },
+        ],
+        next_after_membership_id: id(9),
+        access_version: 7n,
+      },
+    ]);
+
+    await expect(
+      service.listGroupMemberships(
+        verifiedSession,
+        { organizationId: id(2) },
+        { groupId: id(8), pageSize: 20 },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        groupId: id(8).toUpperCase(),
+        nextAfterMembershipId: id(9),
+        accessVersion: 7,
+        memberships: [{ membershipId: id(9), revision: 2, temporalState: "active" }],
+      },
+    });
+    expect(calls[0]?.text).toContain("list_organization_group_memberships_for_administration");
+    expect(calls[0]?.values).toEqual([id(8), null, 20]);
+  });
+
+  it("reads exact available and unavailable membership details", async () => {
+    const membership = {
+      membershipId: id(9),
+      groupId: id(8),
+      organizationAccountId: id(10),
+      accountDisplayName: "Neutral member",
+      revision: 3n,
+      startsAt: "2026-09-06T00:00:00.000Z",
+      expiresAt: "2026-09-07T00:00:00.000Z",
+      state: "revoked",
+      temporalState: "revoked",
+    };
+    const available = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        membership_summary: membership,
+        access_version: "7",
+      },
+    ]).service;
+    await expect(
+      available.readGroupMembership(
+        verifiedSession,
+        { organizationId: id(2) },
+        { membershipId: id(9) },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { outcome: "available", membership: { revision: 3 }, accessVersion: 7 },
+    });
+
+    const unavailable = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "unavailable",
+        membership_summary: null,
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      unavailable.readGroupMembership(
+        verifiedSession,
+        { organizationId: id(2) },
+        { membershipId: id(99) },
+      ),
+    ).resolves.toEqual({
+      kind: "available",
+      value: { outcome: "unavailable", accessVersion: 7 },
+    });
+  });
+
+  it("refuses malformed membership commands and mismatched Group evidence", async () => {
+    const malformed = serviceFor([]);
+    await expect(
+      malformed.service.listGroupMemberships(
+        verifiedSession,
+        { organizationId: id(2) },
+        { groupId: id(8), pageSize: 101 },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(malformed.calls).toHaveLength(0);
+
+    const mismatched = serviceFor([
+      {
+        organization_id: id(2),
+        group_id: id(99),
+        memberships: [],
+        next_after_membership_id: null,
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      mismatched.listGroupMemberships(
+        verifiedSession,
+        { organizationId: id(2) },
+        { groupId: id(8), pageSize: 10 },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
 });

@@ -1,6 +1,7 @@
 import {
   applicationDraftSchema,
   moduleDraftSchema,
+  savedSharingConditionSchema,
   connectionTypeSchema,
   workflowDefinitionSchema,
   jsonValueSchema,
@@ -16,12 +17,19 @@ import {
   workflowNodeOutputsByType,
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
+  type ConditionNode,
   type DefinitionPublicationContext,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
+  type FieldDefinition,
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "@vortex/contracts";
+import {
+  evaluateTypedCondition,
+  TypedConditionEvaluationError,
+  type TypedConditionParameterDeclaration,
+} from "@vortex/rule";
 import { satisfies } from "semver";
 import { compileDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
@@ -1796,6 +1804,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
               condition,
               object(publicationTest.fieldValues),
               object(publicationTest.parameters),
+              [...fieldMap.values()] as FieldDefinition[],
             ) !== publicationTest.expected
           )
             valid = false;
@@ -4321,87 +4330,38 @@ export function evaluateSavedSharingCondition(
   input: unknown,
   fieldValues: Readonly<Record<string, unknown>>,
   parameters: Readonly<Record<string, unknown>>,
+  sourceRecordFields: readonly FieldDefinition[],
 ): boolean {
-  const saved = object(input);
-  const parameterDeclarations = new Map(
-    array(saved.parameters).map((parameter) => [String(parameter.key), String(parameter.type)]),
-  );
-  const declaredFields = new Set(saved.declaredFieldIds as string[]);
-  if (
-    Object.keys(parameters).some((key) => !parameterDeclarations.has(key)) ||
-    [...parameterDeclarations].some(
-      ([key, type]) => !(key in parameters) || !valueMatchesType(parameters[key], type),
-    ) ||
-    Object.keys(fieldValues).some((key) => !declaredFields.has(key))
-  )
+  const candidate = object(input);
+  let result: boolean;
+  try {
+    result = evaluateTypedCondition({
+      condition: candidate.condition as ConditionNode,
+      sourceRecordFields,
+      declaredFieldIds: candidate.declaredFieldIds as string[],
+      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclaration[],
+      fieldValues,
+      parameterValues: parameters,
+    });
+  } catch (error) {
+    if (!(error instanceof TypedConditionEvaluationError)) throw error;
+    const mapping = {
+      input_refused: "vortex.definition.sharing_condition_input_refused",
+      field_refused: "vortex.definition.sharing_condition_field_refused",
+      parameter_refused: "vortex.definition.sharing_condition_parameter_refused",
+      operator_refused: "vortex.definition.sharing_condition_operator_refused",
+    } as const;
+    throw new DefinitionCompilationError(
+      mapping[error.reason],
+      error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
+    );
+  }
+  if (!savedSharingConditionSchema.safeParse(input).success)
     throw new DefinitionCompilationError(
       "vortex.definition.sharing_condition_input_refused",
       "scope_conflict",
     );
-
-  const operand = (entry: JsonObject): unknown => {
-    if (entry.source === "field") {
-      const id = String(entry.fieldId);
-      if (!declaredFields.has(id) || !(id in fieldValues))
-        throw new DefinitionCompilationError(
-          "vortex.definition.sharing_condition_field_refused",
-          "scope_conflict",
-        );
-      return fieldValues[id];
-    }
-    if (entry.source === "parameter") {
-      const key = String(entry.key);
-      if (!parameterDeclarations.has(key) || !(key in parameters))
-        throw new DefinitionCompilationError(
-          "vortex.definition.sharing_condition_parameter_refused",
-          "scope_conflict",
-        );
-      return parameters[key];
-    }
-    return entry.value;
-  };
-  const evaluate = (entry: JsonObject): boolean => {
-    if (entry.kind === "all") return array(entry.conditions).every(evaluate);
-    if (entry.kind === "any") return array(entry.conditions).some(evaluate);
-    if (entry.kind === "not") return !evaluate(object(entry.condition));
-    const left = operand(object(entry.left));
-    if (entry.operator === "is_empty") return left === null || left === undefined || left === "";
-    if (entry.operator === "is_not_empty")
-      return left !== null && left !== undefined && left !== "";
-    const right = operand(object(entry.right));
-    switch (entry.operator) {
-      case "equals":
-        return Object.is(left, right);
-      case "not_equals":
-        return !Object.is(left, right);
-      case "contains":
-        return typeof left === "string"
-          ? left.includes(String(right))
-          : Array.isArray(left) && left.includes(right);
-      case "not_contains":
-        return !(typeof left === "string"
-          ? left.includes(String(right))
-          : Array.isArray(left) && left.includes(right));
-      case "in":
-        return Array.isArray(right) && right.includes(left);
-      case "not_in":
-        return Array.isArray(right) && !right.includes(left);
-      case "greater_than":
-        return (left as number | string) > (right as number | string);
-      case "greater_than_or_equal":
-        return (left as number | string) >= (right as number | string);
-      case "less_than":
-        return (left as number | string) < (right as number | string);
-      case "less_than_or_equal":
-        return (left as number | string) <= (right as number | string);
-      default:
-        throw new DefinitionCompilationError(
-          "vortex.definition.sharing_condition_operator_refused",
-          "unsupported_choice",
-        );
-    }
-  };
-  return evaluate(object(saved.condition));
+  return result;
 }
 
 function dependencyKeys(request: DefinitionCompilationRequest): string[] {

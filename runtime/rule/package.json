@@ -8,16 +8,20 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root ../.. runtime/rule/test"
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*"
   },
   "vortex": {
-    "tier": 2,
+    "tier": 1,
     "environment": "shared",
     "ships": true,
     "engine": true,
     "service": "rule"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   }
 }

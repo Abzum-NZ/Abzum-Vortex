@@ -3,14 +3,22 @@ import "server-only";
 import {
   listOrganizationAdministrationGroupsCommandSchema,
   listOrganizationAdministrationGroupsResultSchema,
+  listOrganizationAdministrationMembershipsCommandSchema,
+  listOrganizationAdministrationMembershipsResultSchema,
   readOrganizationAdministrationGroupCommandSchema,
   readOrganizationAdministrationGroupResultSchema,
+  readOrganizationAdministrationMembershipCommandSchema,
+  readOrganizationAdministrationMembershipResultSchema,
   type IdentitySession,
   type ListOrganizationAdministrationGroupsCommand,
   type ListOrganizationAdministrationGroupsResult,
+  type ListOrganizationAdministrationMembershipsCommand,
+  type ListOrganizationAdministrationMembershipsResult,
   type OrganizationSelectionCandidate,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
+  type ReadOrganizationAdministrationMembershipCommand,
+  type ReadOrganizationAdministrationMembershipResult,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
 import {
@@ -33,6 +41,21 @@ type GroupDetailRow = DatabaseRow & {
   access_version: unknown;
 };
 
+type MembershipPageRow = DatabaseRow & {
+  organization_id: unknown;
+  group_id: unknown;
+  memberships: unknown;
+  next_after_membership_id: unknown;
+  access_version: unknown;
+};
+
+type MembershipDetailRow = DatabaseRow & {
+  organization_id: unknown;
+  outcome: unknown;
+  membership_summary: unknown;
+  access_version: unknown;
+};
+
 const revision = (value: unknown): unknown => {
   if (typeof value === "bigint") return Number(value);
   if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
@@ -40,6 +63,11 @@ const revision = (value: unknown): unknown => {
 };
 
 const normalizeGroup = (value: unknown): unknown => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+  return { ...value, revision: revision((value as { revision?: unknown }).revision) };
+};
+
+const normalizeMembership = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
   return { ...value, revision: revision((value as { revision?: unknown }).revision) };
 };
@@ -126,6 +154,83 @@ export const createOrganizationAccessAdministrationService = (
           ...(row.group_summary === null || row.group_summary === undefined
             ? {}
             : { group: normalizeGroup(row.group_summary) }),
+          accessVersion: revision(row.access_version),
+        });
+      });
+    },
+
+    listGroupMemberships: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ListOrganizationAdministrationMembershipsCommand,
+    ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationMembershipsResult>> => {
+      const command =
+        listOrganizationAdministrationMembershipsCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<MembershipPageRow>`
+            select organization_id, group_id, memberships,
+              next_after_membership_id, access_version
+            from vortex_access.list_organization_group_memberships_for_administration(
+              ${command.data.groupId}::uuid,
+              ${command.data.afterMembershipId ?? null}::uuid,
+              ${command.data.pageSize}::integer
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          typeof row.group_id !== "string" ||
+          !sameUuid(row.group_id, command.data.groupId) ||
+          revision(row.access_version) !== scope.accessVersion ||
+          !Array.isArray(row.memberships)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        return listOrganizationAdministrationMembershipsResultSchema.parse({
+          groupId: row.group_id,
+          memberships: row.memberships.map(normalizeMembership),
+          ...(row.next_after_membership_id === null || row.next_after_membership_id === undefined
+            ? {}
+            : { nextAfterMembershipId: row.next_after_membership_id }),
+          accessVersion: revision(row.access_version),
+        });
+      });
+    },
+
+    readGroupMembership: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReadOrganizationAdministrationMembershipCommand,
+    ): Promise<HumanOrganizationRequestResult<ReadOrganizationAdministrationMembershipResult>> => {
+      const command =
+        readOrganizationAdministrationMembershipCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<MembershipDetailRow>`
+            select organization_id, outcome, membership_summary, access_version
+            from vortex_access.read_organization_group_membership_for_administration(
+              ${command.data.membershipId}::uuid
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        return readOrganizationAdministrationMembershipResultSchema.parse({
+          outcome: row.outcome,
+          ...(row.membership_summary === null || row.membership_summary === undefined
+            ? {}
+            : { membership: normalizeMembership(row.membership_summary) }),
           accessVersion: revision(row.access_version),
         });
       });

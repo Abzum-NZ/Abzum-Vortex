@@ -30,6 +30,10 @@ Preserve the exact legacy permission-meaning fingerprint input when scope is abs
 
 Equality and collection membership use deterministic value equality, not JavaScript object identity. Text containment accepts text only; collection containment requires the declared collection shape. Ordering compares compatible declared types, with shared text/date/date-time semantics proved against PostgreSQL. Negated operators negate a valid comparison, not a validation failure. Reuse the existing nesting/operand bounds rather than add a new policy budget. General rule-only operators and presentation tooling remain with #57/#58.
 
+For B, the pure Rule entry takes the existing condition tree, trusted complete source-record field definitions, explicit declared field identifiers and parameter declarations, and their input values. Reject duplicate declarations before building lookup maps and require exactly the declared value keys. The Definition compatibility entry keeps its name and closed error mapping but gains the required field-definition argument; the previous three arguments cannot establish field-to-field type compatibility. Keep the package shared and contracts-only, with the already approved Rule tier-1 change and a thin Definition adapter.
+
+After declared-type validation, equality is null-safe: two nulls are equal, one null and one non-null are not. Positive ordering, containment and membership return false when either operand is null; negative containment/membership return the exact inverse. Missing input refuses. Empty means null or empty text, not an empty array. Dates are calendar-valid; date-times require offsets and compare instants, without date-to-date-time promotion. Text comparisons use deterministic code-point ordering and exact case; JSON equality ignores object key order but preserves array order. Numeric parity uses the existing finite JavaScript-number wire and the same double-precision comparison domain in PostgreSQL; it does not promise arbitrary PostgreSQL numeric precision. Removing the old date/date-time mismatch and opaque-JSON text/membership coercions is an intentional correctness repair, not a claim that those old results stay unchanged. Test each semantic field class, each operator and compound form, and representative invalid hidden branches; do not multiply every field type by every operator. B prepares shared parity vectors; C must execute them against the actual database predicate before parity is claimed.
+
 Each admitted row needs a complete valid visibility route. Local direct-account and current-Group shares may contribute the union of their individually granted field bounds; they cannot contribute an underlying operation permission or cross an application boundary. A conservative recheck deadline is no later than the earliest contributing share/membership expiry and current context/authority deadline. This local field composition does not weaken the distinct one-complete-grant rule for [cross-organisation sharing](../specification/04-access-and-permissions.md#between-organisations).
 
 ## Acceptance criteria
@@ -56,6 +60,17 @@ The independently reviewed [initial A checkpoint](../evidence/issue-36-record-vi
 | D — Changes and delivery | Revision-checked transfer/share composition, Activity/Access atomicity, actual competing-write proof and hosted verification |
 
 Do not add a new issue for each slice. Review them against the same complete task, and keep dependencies blocked until the required outcomes exist.
+
+### C — First checkpoint: permission scope survives registration
+
+The independently reviewed first C change carries the already validated scope through the existing private permission catalogue. It does not yet evaluate record visibility.
+
+1. Add nullable `record_scope` to the existing permission catalogue, without a default or historical backfill. A present value must be an object belonging to an application/module record permission. Preserve the existing full candidate-to-sealed-Definition comparison as the authoritative deep validation.
+2. Update the current registration, withdrawal, unchanged-candidate comparison and exact permission read functions together. Preserve their existing transactions, locks, meaning continuity and Access-version increments. The read function's added result column requires drop/recreation with dependency restriction, never cascading removal; restore its private privileges in the same migration.
+3. Reconstruct optional `recordScope` in the existing private repository. A historical SQL null remains an omitted property, preserving legacy meaning. Do not add another evaluator, fingerprint, history or counter.
+4. Prove actual registration, unchanged replay, scope change, withdrawal, reactivation and read reconstruction. Check legacy omission, one Access-version increment per real change, no increment on replay and the existing fresh-acceptance behaviour after changed permission meaning. Existing concurrency proofs remain applicable because locking and mutation semantics do not change.
+
+Returning scope is definition evidence, not authority to access a record. The remaining C predicates and [row policy composition #35](issue-35-row-policy-composition.md) still govern live record access.
 
 ## Downstream ownership
 

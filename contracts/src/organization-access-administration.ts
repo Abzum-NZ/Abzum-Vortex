@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { builderKeySchema, groupIdSchema, revisionSchema } from "./identifiers";
+import {
+  builderKeySchema,
+  groupIdSchema,
+  membershipIdSchema,
+  organizationAccountIdSchema,
+  revisionSchema,
+  timestampSchema,
+} from "./identifiers";
 import { labelSchema } from "./common";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -49,6 +56,81 @@ export const readOrganizationAdministrationGroupResultSchema = z.discriminatedUn
     .strict(),
 ]);
 
+export const organizationAdministrationMembershipTemporalStateSchema = z.enum([
+  "active",
+  "scheduled",
+  "expired",
+  "revoked",
+]);
+
+export const organizationAdministrationMembershipSchema = z
+  .object({
+    membershipId: membershipIdSchema,
+    groupId: groupIdSchema,
+    organizationAccountId: organizationAccountIdSchema,
+    accountDisplayName: z.string().trim().min(1).max(120),
+    revision: javascriptSafeRevisionSchema,
+    startsAt: timestampSchema,
+    expiresAt: timestampSchema.optional(),
+    state: z.enum(["live", "revoked"]),
+    temporalState: organizationAdministrationMembershipTemporalStateSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Membership expiry must follow its start",
+      });
+    if ((value.state === "revoked") !== (value.temporalState === "revoked"))
+      context.addIssue({
+        code: "custom",
+        path: ["temporalState"],
+        message: "Only a revoked membership has revoked temporal state",
+      });
+  });
+
+export const listOrganizationAdministrationMembershipsCommandSchema = z
+  .object({
+    groupId: groupIdSchema,
+    pageSize: z.number().int().min(1).max(100),
+    afterMembershipId: membershipIdSchema.optional(),
+  })
+  .strict();
+
+export const listOrganizationAdministrationMembershipsResultSchema = z
+  .object({
+    groupId: groupIdSchema,
+    memberships: z.array(organizationAdministrationMembershipSchema).max(100),
+    nextAfterMembershipId: membershipIdSchema.optional(),
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const readOrganizationAdministrationMembershipCommandSchema = z
+  .object({ membershipId: membershipIdSchema })
+  .strict();
+
+export const readOrganizationAdministrationMembershipResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        membership: organizationAdministrationMembershipSchema,
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+  ],
+);
+
 export type OrganizationAdministrationGroup = z.infer<typeof organizationAdministrationGroupSchema>;
 export type ListOrganizationAdministrationGroupsCommand = z.infer<
   typeof listOrganizationAdministrationGroupsCommandSchema
@@ -61,4 +143,19 @@ export type ReadOrganizationAdministrationGroupCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationGroupResult = z.infer<
   typeof readOrganizationAdministrationGroupResultSchema
+>;
+export type OrganizationAdministrationMembership = z.infer<
+  typeof organizationAdministrationMembershipSchema
+>;
+export type ListOrganizationAdministrationMembershipsCommand = z.infer<
+  typeof listOrganizationAdministrationMembershipsCommandSchema
+>;
+export type ListOrganizationAdministrationMembershipsResult = z.infer<
+  typeof listOrganizationAdministrationMembershipsResultSchema
+>;
+export type ReadOrganizationAdministrationMembershipCommand = z.infer<
+  typeof readOrganizationAdministrationMembershipCommandSchema
+>;
+export type ReadOrganizationAdministrationMembershipResult = z.infer<
+  typeof readOrganizationAdministrationMembershipResultSchema
 >;

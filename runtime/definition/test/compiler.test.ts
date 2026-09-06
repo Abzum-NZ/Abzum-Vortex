@@ -1699,17 +1699,79 @@ describe("authored definition compiler", () => {
     const output = compileDefinition(requestFor(module));
     if (output.kind !== "module") throw new Error("Expected module output");
     const saved = output.canonical.content.sharingConditions[0]!;
+    const sourceRecord = output.canonical.content.recordTypes.find(
+      (record) => record.recordTypeId === saved.sourceRecordTypeId,
+    );
+    if (!sourceRecord) throw new Error("Expected sharing-condition source record");
     for (const test of saved.publicationTests)
-      expect(evaluateSavedSharingCondition(saved, test.fieldValues, test.parameters)).toBe(
-        test.expected,
-      );
+      expect(
+        evaluateSavedSharingCondition(
+          saved,
+          test.fieldValues,
+          test.parameters,
+          sourceRecord.fields,
+        ),
+      ).toBe(test.expected);
     expect(() =>
       evaluateSavedSharingCondition(
         saved,
         { ...saved.publicationTests[0]!.fieldValues, unknown: "private" },
         saved.publicationTests[0]!.parameters,
+        sourceRecord.fields,
       ),
     ).toThrowError("vortex.definition.sharing_condition_input_refused");
+  });
+
+  it("maps typed sharing-condition refusals through the Definition boundary", () => {
+    const module = sources.find((source) => source.key === "vortex.service_desk.cases")!;
+    const output = compileDefinition(requestFor(module));
+    if (output.kind !== "module") throw new Error("Expected module output");
+    const saved = output.canonical.content.sharingConditions[0]!;
+    const sourceRecord = output.canonical.content.recordTypes.find(
+      (record) => record.recordTypeId === saved.sourceRecordTypeId,
+    );
+    if (!sourceRecord) throw new Error("Expected sharing-condition source record");
+    const sourceField = sourceRecord.fields[0]!;
+    const equality = (left: unknown) => ({
+      kind: "comparison",
+      operator: "equals",
+      left,
+      right: { source: "value", value: "value" },
+    });
+    expect(() =>
+      evaluateSavedSharingCondition(
+        {
+          ...saved,
+          declaredFieldIds: [],
+          parameters: [],
+          condition: equality({ source: "field", fieldId: sourceField.fieldId }),
+        },
+        {},
+        {},
+        sourceRecord.fields,
+      ),
+    ).toThrowError("vortex.definition.sharing_condition_field_refused");
+    expect(() =>
+      evaluateSavedSharingCondition(
+        {
+          ...saved,
+          declaredFieldIds: [],
+          parameters: [],
+          condition: equality({ source: "parameter", key: "missing" }),
+        },
+        {},
+        {},
+        sourceRecord.fields,
+      ),
+    ).toThrowError("vortex.definition.sharing_condition_parameter_refused");
+    expect(() =>
+      evaluateSavedSharingCondition(
+        { ...saved, condition: { ...equality({ source: "value", value: true }), operator: "run" } },
+        {},
+        {},
+        sourceRecord.fields,
+      ),
+    ).toThrowError("vortex.definition.sharing_condition_operator_refused");
   });
 
   it("refuses missing identities, incompatible versions and dependency cycles", () => {
