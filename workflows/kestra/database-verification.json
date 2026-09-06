@@ -105,6 +105,11 @@
       "migration": "supabase/migrations/20260906090019_activity_append_foundation.sql",
       "proof": "supabase/tests/activity-append-concurrency.test.sh",
       "label": "Activity append"
+    },
+    {
+      "migration": "supabase/migrations/20260906101701_protect_organization_access_administration.sql",
+      "proof": "supabase/tests/organization-access-administration-concurrency.test.sh",
+      "label": "Organization Access administration"
     }
   ],
   "lintSchemas": [

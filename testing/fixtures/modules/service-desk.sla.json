@@ -255,7 +255,14 @@
         "description": "Allows the standard create operation for business calendars.",
         "record_type": "business_calendar",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_business_calendar_read",
@@ -264,7 +271,14 @@
         "description": "Allows the standard read operation for business calendars.",
         "record_type": "business_calendar",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_business_calendar_update",
@@ -273,7 +287,14 @@
         "description": "Allows the standard update operation for business calendars.",
         "record_type": "business_calendar",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_business_calendar_soft_delete",
@@ -282,7 +303,14 @@
         "description": "Allows the standard soft_delete operation for business calendars.",
         "record_type": "business_calendar",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_business_calendar_restore",
@@ -291,7 +319,14 @@
         "description": "Allows the standard restore operation for business calendars.",
         "record_type": "business_calendar",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_business_calendar_export",
@@ -300,7 +335,14 @@
         "description": "Allows the standard export operation for business calendars.",
         "record_type": "business_calendar",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_service_level_create",
@@ -309,7 +351,14 @@
         "description": "Allows the standard create operation for service levels.",
         "record_type": "service_level",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_service_level_read",
@@ -318,7 +367,14 @@
         "description": "Allows the standard read operation for service levels.",
         "record_type": "service_level",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_service_level_update",
@@ -327,7 +383,14 @@
         "description": "Allows the standard update operation for service levels.",
         "record_type": "service_level",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_service_level_soft_delete",
@@ -336,7 +399,14 @@
         "description": "Allows the standard soft_delete operation for service levels.",
         "record_type": "service_level",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_service_level_restore",
@@ -345,7 +415,14 @@
         "description": "Allows the standard restore operation for service levels.",
         "record_type": "service_level",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_service_level_export",
@@ -354,7 +431,14 @@
         "description": "Allows the standard export operation for service levels.",
         "record_type": "service_level",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_1_manage",
@@ -364,7 +448,14 @@
         "record_type": "service_level",
         "action_kind": "named",
         "named_action": "manage",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       }
     ],
     "actions": [

@@ -232,6 +232,10 @@ Organisation-owned roles may select exact permissions from several registered ap
 
 A permission has `permission_id`, permanent `key`, label, description, owner kind and owner identifier, optional record type, action kind, optional named action, and `administrative` flag. A module or application definition owns a complete permission declaration containing every field except the owner kind and identifier, which are unambiguously supplied by the containing definition. The live permission catalogue adds that owner context; it does not invent or alter permission meaning.
 
+Newly published record permissions also require an explicit `recordScope`: a non-empty, unique, canonically ordered set of all-record, ownership, direct-share or declared-relationship routes, optionally narrowed by one saved condition. All-record is the sole base route when selected. A relationship carries its permanent relationship and source read-permission identities. A saved condition carries its permanent identity, published revision, contract fingerprint and exact ordered parameter bindings; each binding is a typed literal or the verified current organisation-account identity. The expression is `(any declared base route) AND (optional saved condition)`, not a second role language. Non-record permissions cannot declare this scope. The [permission contract](../../../contracts/src/permissions.ts) and [record-visibility requirements](../04-access-and-permissions.md#record-visibility) define its exact shape and evaluation ownership.
+
+Historical V1 declarations remain readable with scope absent and their original permission-meaning fingerprint unchanged. Absence is not converted to all-record access and supplies no row authority. Adding or changing scope participates in existing permission acceptance and release-version comparison. [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) completes compiler, catalogue and current-row integration; a contract-only checkpoint is not evidence of a working row policy.
+
 There are three distinct records: an immutable application-contained role template; an organisation-local assignable application-role registration with an accepted exact grant snapshot and source release/catalogue evidence; and an independent organisation-owned custom role. Both assignable live kinds have permanent role identity, organisation, key, label, description, live revision and exact scoped permission entries. The application-role registration intrinsically names its one application root; a custom organisation role may contain separately scoped permissions from several applications.
 
 Both live role kinds additionally require `privilegeClassification` (`standard` or `privileged`), `assignmentPolicy`, `policyContinuityRevision` and `authorityContinuityRevision`. The closed assignment policy is either `standing`, with no activation-policy reference, or `activation_required`, with an exact `activationPolicyId`, revision and fingerprint. There are no implicit policy defaults. Administrative permission evidence enforces the privileged classification floor; classification alone neither grants access nor requires activation.
@@ -480,16 +484,17 @@ A direct share applies to one record and one recipient inside the record's organ
 | Name | Requirement |
 |---|---|
 | `direct_share_id` | Permanent identifier. |
-| `organisation_id`, `record_type_id`, `record_id` | Required source record in the current organisation. |
+| `record_scope` | Full stable [record scope](../../../contracts/src/records.ts): organisation, module root, record type, storage contract and record identity, plus application root only for application-contained storage. Matching record names or release versions are not identity. |
 | `recipient_kind`, `recipient_id` | `organisation_account` or `group`, belonging to the same organisation. |
-| `readable_field_ids` | Explicit non-empty allowlist that the grantor can read. |
-| `changeable_field_ids` | Explicit subset of readable fields that the grantor can change. |
-| `starts_at`, `expires_at` | Required start and optional expiry. |
-| `status` | `active`, `revoked`, or `expired`. |
-| `granted_by`, `granted_at`, `reason` | Required grant evidence. |
-| `revoked_by`, `revoked_at`, `revocation_reason` | Present after revocation. |
+| `readable_field_ids` | Explicit non-empty, unique, canonically ordered allowlist that the grantor can read. |
+| `changeable_field_ids` | Unique, canonically ordered subset of readable fields that the grantor can change. |
+| `starts_at`, `expires_at` | Immutable start and optional strictly later expiry. Expiry is evaluated at the current request time, not written by a scheduler. |
+| `state`, `revision` | `active` or terminal `revoked`, with a positive change revision. An active stored grant may already be expired and then supplies no access. |
+| `granted_by`, `granted_at`, `grant_correlation_id`, `reason` | Required original grant evidence. |
+| `revoked_by`, `revoked_at`, `revocation_correlation_id`, `revocation_reason` | All absent while active; all required after revocation. |
+| `changed_at` | Last-change audit evidence, matching revocation time for a revoked grant. Revisions and Access version govern change ordering. |
 
-The grantor must currently hold `record.share`; the operation refuses fields or authority the grantor cannot delegate. The contract never grants delete, restore, export, re-share, ownership, or administration. Direct-share and group changes increase the organisation access version.
+The grantor must currently hold `record.share`; the operation refuses fields or authority the grantor cannot delegate. The contract never grants delete, restore, export, re-share, ownership, or administration. Accepted direct-share and Group mutations increase the organisation Access version; time-based expiry needs no mutation. [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) owns private facts and revision-checked composition, while [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) owns the full permission/row/field-checked granting operation. Until that operation exists, the private grant helper is not a callable runtime, form or MCP tool. The [executable contract](../../../contracts/src/identity-access.ts) replaces the previously unused incomplete direct-share shape.
 
 ## Access grant contract
 

@@ -21,7 +21,10 @@ import {
   sourceQualifiedRecordTypeSchema,
   sourceRuleEffectSchema,
 } from "./definition-source-common";
-import { actionInputSchema } from "./module-source-contracts";
+import {
+  actionInputSchema,
+  sourcePermissionRecordScopeBaseSchema,
+} from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "./permissions";
 import {
   sourceGuidedFormPageCompositionV2Schema,
@@ -763,6 +766,7 @@ const sourceApplicationBodySchema = z
           ]),
           named_action: builderKeySchema.optional(),
           administrative: z.boolean(),
+          record_scope: sourcePermissionRecordScopeBaseSchema.optional(),
         })
         .strict(),
     ),

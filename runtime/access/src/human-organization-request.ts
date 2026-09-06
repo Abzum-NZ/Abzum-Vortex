@@ -39,6 +39,8 @@ export type HumanOrganizationRequestDependencies = Readonly<{
   correlationId?: () => string;
 }>;
 
+type HumanOrganizationRequestMode = "read" | "change";
+
 type ScopeRow = DatabaseRow & {
   tenant_id: unknown;
   organization_id: unknown;
@@ -83,7 +85,8 @@ export const createHumanOrganizationRequestService = (
   const clock = dependencies.clock ?? (() => new Date());
   const newCorrelationId = dependencies.correlationId ?? randomUUID;
 
-  const run = async <Result>(
+  const runWithMode = async <Result>(
+    mode: HumanOrganizationRequestMode,
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
     operation: (
@@ -122,21 +125,38 @@ export const createHumanOrganizationRequestService = (
       const value = await runTransaction(async (transaction) => {
         const rows =
           verifiedCandidate.data.applicationRootId === undefined
-            ? await transaction.query<ScopeRow>`
-                select *
-                from vortex_access.resolve_human_organization_scope(
-                  ${verifiedSession.data.identityId}::uuid,
-                  ${verifiedCandidate.data.organizationId}::uuid
-                )
-              `
-            : await transaction.query<ScopeRow>`
-                select *
-                from vortex_access.resolve_human_application_scope(
-                  ${verifiedSession.data.identityId}::uuid,
-                  ${verifiedCandidate.data.organizationId}::uuid,
-                  ${verifiedCandidate.data.applicationRootId}::uuid
-                )
-              `;
+            ? mode === "change"
+              ? await transaction.query<ScopeRow>`
+                  select *
+                  from vortex_access.resolve_human_organization_change_scope(
+                    ${verifiedSession.data.identityId}::uuid,
+                    ${verifiedCandidate.data.organizationId}::uuid
+                  )
+                `
+              : await transaction.query<ScopeRow>`
+                  select *
+                  from vortex_access.resolve_human_organization_scope(
+                    ${verifiedSession.data.identityId}::uuid,
+                    ${verifiedCandidate.data.organizationId}::uuid
+                  )
+                `
+            : mode === "change"
+              ? await transaction.query<ScopeRow>`
+                  select *
+                  from vortex_access.resolve_human_application_change_scope(
+                    ${verifiedSession.data.identityId}::uuid,
+                    ${verifiedCandidate.data.organizationId}::uuid,
+                    ${verifiedCandidate.data.applicationRootId}::uuid
+                  )
+                `
+              : await transaction.query<ScopeRow>`
+                  select *
+                  from vortex_access.resolve_human_application_scope(
+                    ${verifiedSession.data.identityId}::uuid,
+                    ${verifiedCandidate.data.organizationId}::uuid,
+                    ${verifiedCandidate.data.applicationRootId}::uuid
+                  )
+                `;
         const scope = parseScope(rows);
         if (
           (verifiedCandidate.data.applicationRootId === undefined) !==
@@ -187,12 +207,29 @@ export const createHumanOrganizationRequestService = (
   };
 
   return Object.freeze({
-    run,
+    run: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+      ) => Promise<Result>,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode("read", session, candidate, operation),
+    runChange: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+      ) => Promise<Result>,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode("change", session, candidate, operation),
     resolve: (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
     ): Promise<HumanOrganizationRequestResult<SelectedOrganizationScope>> =>
-      run(session, candidate, async (transaction, scope) => {
+      runWithMode("read", session, candidate, async (transaction, scope) => {
         const rows = await transaction.query<ScopeRow>`
           select
             checked ->> 'tenantId' as tenant_id,

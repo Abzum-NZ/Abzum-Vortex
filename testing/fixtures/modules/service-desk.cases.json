@@ -513,7 +513,14 @@
         "description": "Allows the standard create operation for cases.",
         "record_type": "case",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_read",
@@ -522,7 +529,14 @@
         "description": "Allows the standard read operation for cases.",
         "record_type": "case",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_update",
@@ -531,7 +545,14 @@
         "description": "Allows the standard update operation for cases.",
         "record_type": "case",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_soft_delete",
@@ -540,7 +561,14 @@
         "description": "Allows the standard soft_delete operation for cases.",
         "record_type": "case",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_restore",
@@ -549,7 +577,14 @@
         "description": "Allows the standard restore operation for cases.",
         "record_type": "case",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_export",
@@ -558,7 +593,14 @@
         "description": "Allows the standard export operation for cases.",
         "record_type": "case",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_comment_create",
@@ -567,7 +609,14 @@
         "description": "Allows the standard create operation for case comments.",
         "record_type": "case_comment",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_comment_read",
@@ -576,7 +625,14 @@
         "description": "Allows the standard read operation for case comments.",
         "record_type": "case_comment",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_comment_update",
@@ -585,7 +641,14 @@
         "description": "Allows the standard update operation for case comments.",
         "record_type": "case_comment",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_comment_soft_delete",
@@ -594,7 +657,14 @@
         "description": "Allows the standard soft_delete operation for case comments.",
         "record_type": "case_comment",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_comment_restore",
@@ -603,7 +673,14 @@
         "description": "Allows the standard restore operation for case comments.",
         "record_type": "case_comment",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_case_comment_export",
@@ -612,7 +689,14 @@
         "description": "Allows the standard export operation for case comments.",
         "record_type": "case_comment",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_1_assign",
@@ -622,7 +706,14 @@
         "record_type": "case",
         "action_kind": "named",
         "named_action": "assign",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_2_resolve",
@@ -632,7 +723,14 @@
         "record_type": "case",
         "action_kind": "named",
         "named_action": "resolve",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_3_add_public_comment",
@@ -642,7 +740,14 @@
         "record_type": "case",
         "action_kind": "named",
         "named_action": "add_public_comment",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       }
     ],
     "actions": [

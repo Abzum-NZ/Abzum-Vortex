@@ -26,6 +26,10 @@ export {
   runOrganizationAccessOperation,
   type OrganizationAccessOperationResult,
 } from "./organization-access-decision";
+export {
+  createOrganizationAccessAdministrationService,
+  type OrganizationAccessAdministrationDependencies,
+} from "./organization-access-administration";
 export { fingerprintPermissionMeaning } from "./permission-fingerprints";
 export {
   organizationDelegationScopeEvidenceErrorCodes,

@@ -34,6 +34,7 @@ import {
 } from "./identifiers";
 import { correlationIdSchema, jsonValueSchema } from "./common";
 import { permissionDeclarationSchema } from "./permissions";
+import { recordScopeSchema } from "./records";
 
 const administrativeStateSchema = z.enum(["active", "suspended", "archived", "removal_pending"]);
 const accountStateSchema = z.enum(["active", "suspended", "closed"]);
@@ -804,9 +805,7 @@ export const fieldRestrictionSchema = z
 export const directRecordShareSchema = z
   .object({
     directShareId: directShareIdSchema,
-    organizationId: organizationIdSchema,
-    recordTypeId: recordTypeIdSchema,
-    recordId: recordIdSchema,
+    recordScope: recordScopeSchema,
     recipient: z.discriminatedUnion("kind", [
       z
         .object({
@@ -819,27 +818,73 @@ export const directRecordShareSchema = z
     ...readableAndChangeable,
     startsAt: timestampSchema,
     expiresAt: timestampSchema.optional(),
-    status: z.enum(["active", "revoked", "expired"]),
+    state: z.enum(["active", "revoked"]),
+    revision: revisionSchema,
     grantedBy: organizationAccountIdSchema,
     grantedAt: timestampSchema,
+    grantCorrelationId: correlationIdSchema,
     reason: z.string().min(1).max(500),
     revokedBy: organizationAccountIdSchema.optional(),
     revokedAt: timestampSchema.optional(),
+    revocationCorrelationId: correlationIdSchema.optional(),
     revocationReason: z.string().min(1).max(500).optional(),
+    changedAt: timestampSchema,
   })
   .strict()
   .superRefine((value, context) => {
-    const revoked = value.status === "revoked";
+    const readable = value.readableFieldIds.map((fieldId) => fieldId.toLowerCase());
+    const changeable = value.changeableFieldIds.map((fieldId) => fieldId.toLowerCase());
     if (
-      revoked !==
-      (value.revokedBy !== undefined &&
-        value.revokedAt !== undefined &&
-        value.revocationReason !== undefined)
+      new Set(readable).size !== readable.length ||
+      readable.some((fieldId, index) => index > 0 && readable[index - 1]! >= fieldId)
     )
+      context.addIssue({
+        code: "custom",
+        path: ["readableFieldIds"],
+        message: "Readable fields must be unique and canonically ordered",
+      });
+    if (
+      new Set(changeable).size !== changeable.length ||
+      changeable.some((fieldId, index) => index > 0 && changeable[index - 1]! >= fieldId)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["changeableFieldIds"],
+        message: "Changeable fields must be unique and canonically ordered",
+      });
+    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "A direct share must expire after it starts",
+      });
+    if (Date.parse(value.changedAt) < Date.parse(value.grantedAt))
+      context.addIssue({
+        code: "custom",
+        path: ["changedAt"],
+        message: "A direct share cannot change before it is granted",
+      });
+    const revoked = value.state === "revoked";
+    const revocationEvidenceCount = [
+      value.revokedBy,
+      value.revokedAt,
+      value.revocationCorrelationId,
+      value.revocationReason,
+    ].filter((entry) => entry !== undefined).length;
+    if ((!revoked && revocationEvidenceCount !== 0) || (revoked && revocationEvidenceCount !== 4))
       context.addIssue({
         code: "custom",
         path: ["revokedAt"],
         message: "Revocation evidence is present exactly when the share is revoked",
+      });
+    if (
+      value.revokedAt !== undefined &&
+      Date.parse(value.revokedAt) !== Date.parse(value.changedAt)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["changedAt"],
+        message: "A revoked share's change time must equal its revocation time",
       });
   })
   .refine(fieldsAreSubset, {

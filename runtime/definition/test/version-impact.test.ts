@@ -1400,6 +1400,26 @@ describe("definition version impact", () => {
     majorRequest.candidate.content.permissions[0]!.administrative = true;
     expect(compareDefinitionVersionImpact(majorRequest)).toMatchObject({ impact: "major" });
 
+    const addedScope = requestAfter(moduleDraft());
+    addedScope.candidate.content.permissions[0]!.recordScope = {
+      routes: [{ kind: "all_records" }],
+    };
+    expect(compareDefinitionVersionImpact(addedScope)).toMatchObject({ impact: "major" });
+
+    const scopedDraft = moduleDraft();
+    scopedDraft.content.permissions[0]!.recordScope = {
+      routes: [{ kind: "all_records" }],
+    };
+    const changedScope = requestAfter(scopedDraft);
+    changedScope.candidate.content.permissions[0]!.recordScope = {
+      routes: [{ kind: "direct_share" }],
+    };
+    expect(compareDefinitionVersionImpact(changedScope)).toMatchObject({ impact: "major" });
+
+    const removedScope = requestAfter(scopedDraft);
+    delete removedScope.candidate.content.permissions[0]!.recordScope;
+    expect(compareDefinitionVersionImpact(removedScope)).toMatchObject({ impact: "major" });
+
     const duplicateRequest = requestAfter(moduleDraft());
     duplicateRequest.candidate.content.permissions.push({
       ...duplicateRequest.candidate.content.permissions[0]!,

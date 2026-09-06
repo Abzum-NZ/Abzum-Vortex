@@ -363,6 +363,9 @@ function sourceLocalReferenceRule(
       const permissions = new Set(
         array(body.permissions).map((permission) => String(permission.key)),
       );
+      const sharingConditions = new Map(
+        array(body.sharing_conditions).map((condition) => [String(condition.key), condition]),
+      );
       const events = new Set(array(body.events).map((event) => String(event.key)));
       const qualifiedRecordValid = (qualified: unknown): boolean => {
         const value = String(qualified);
@@ -453,6 +456,22 @@ function sourceLocalReferenceRule(
         if (permission.record_type && !records.has(String(permission.record_type))) valid = false;
         if ((permission.action_kind === "named") !== (permission.named_action !== undefined))
           valid = false;
+        const scope = permission.record_scope ? object(permission.record_scope) : undefined;
+        for (const route of scope ? array(scope.routes) : []) {
+          if (
+            route.kind === "ownership" &&
+            records.get(String(permission.record_type))?.ownership_mode === "none"
+          )
+            valid = false;
+          if (
+            route.kind === "relationship" &&
+            (!qualifiedRelationshipValid(route.relationship) ||
+              !permissions.has(String(route.source_permission)))
+          )
+            valid = false;
+        }
+        const saved = scope?.saved_condition ? object(scope.saved_condition) : undefined;
+        if (saved && !sharingConditions.has(String(saved.condition))) valid = false;
       }
       for (const action of actions) {
         const record = records.get(String(action.record_type));
@@ -527,6 +546,18 @@ function sourceLocalReferenceRule(
           valid = false;
       }
     } else if (source.kind === "application") {
+      const moduleBindings = new Set(
+        array(body.module_bindings).map((binding) => String(binding.module)),
+      );
+      for (const permission of array(body.permissions)) {
+        const scope = permission.record_scope ? object(permission.record_scope) : undefined;
+        for (const route of scope ? array(scope.routes) : []) {
+          if (route.kind !== "relationship") continue;
+          const relationship = String(route.relationship);
+          const separator = relationship.lastIndexOf(":");
+          if (separator < 1 || !moduleBindings.has(relationship.slice(0, separator))) valid = false;
+        }
+      }
       const pages = new Set(array(body.pages).map((page) => String(page.key)));
       const queries = new Set(array(body.queries).map((query) => String(query.key)));
       const blocks = new Set(array(body.block_registrations).map((block) => String(block.id)));
@@ -863,6 +894,39 @@ function sourceTypeCompatibilityRule(
       );
       if (!sourceConditionTypesValid(sharingCondition.condition, fields, parameters)) valid = false;
     }
+    const sharingConditions = new Map(
+      array(body.sharing_conditions).map((condition) => [String(condition.key), condition]),
+    );
+    for (const permission of array(body.permissions)) {
+      const scope = permission.record_scope ? object(permission.record_scope) : undefined;
+      const restriction = scope?.saved_condition ? object(scope.saved_condition) : undefined;
+      if (!restriction) continue;
+      const saved = sharingConditions.get(String(restriction.condition));
+      const parameters = new Map(
+        saved
+          ? array(saved.parameters).map(
+              (parameter) => [String(parameter.key), String(parameter.type)] as const,
+            )
+          : [],
+      );
+      const bindings = array(restriction.parameter_bindings);
+      if (
+        !saved ||
+        String(saved.source_record_type) !== String(permission.record_type) ||
+        bindings.length !== parameters.size ||
+        new Set(bindings.map((binding) => String(binding.key))).size !== bindings.length ||
+        bindings.some((binding) => {
+          const expected = parameters.get(String(binding.key));
+          return (
+            expected === undefined ||
+            (binding.source === "current_organization_account_id"
+              ? expected !== "text"
+              : !valueMatchesType(binding.value, expected))
+          );
+        })
+      )
+        valid = false;
+    }
     if (!valid)
       failures.push({
         ruleCode: "vortex.definition.source_type_compatibility",
@@ -1194,6 +1258,103 @@ const valueTypeCompatible = (actual: string | undefined, expected: string | unde
     (expected === "record_reference" && actual === "organization_account_reference") ||
     expected === "json");
 
+function permissionRecordScopesValid(
+  permissions: readonly JsonObject[],
+  records: ReadonlyMap<string, JsonObject>,
+  relationships: ReadonlyMap<string, JsonObject>,
+  sharingConditions: ReadonlyMap<string, JsonObject> = new Map(),
+  savedConditionsAllowed = false,
+  availablePermissions: readonly JsonObject[] = permissions,
+): boolean {
+  const permissionsById = new Map(
+    availablePermissions.map((permission) => [String(permission.permissionId), permission]),
+  );
+  const relationshipSources = new Map<string, string[]>();
+  let valid = true;
+  for (const permission of permissions) {
+    const recordTypeId =
+      permission.recordTypeId === undefined ? undefined : String(permission.recordTypeId);
+    const scope = permission.recordScope ? object(permission.recordScope) : undefined;
+    if ((recordTypeId === undefined) !== (scope === undefined)) {
+      valid = false;
+      continue;
+    }
+    if (!scope || recordTypeId === undefined) continue;
+    const record = records.get(recordTypeId);
+    if (!record) {
+      valid = false;
+      continue;
+    }
+    const sources: string[] = [];
+    for (const route of array(scope.routes)) {
+      if (route.kind === "ownership" && record.ownershipMode === "none") valid = false;
+      if (route.kind !== "relationship") continue;
+      const relationship = relationships.get(String(route.relationshipId));
+      const sourcePermission = permissionsById.get(String(route.sourcePermissionId));
+      const targets = relationship?.toRecordType
+        ? [relationship.toRecordType]
+        : array(relationship?.toRecordTypes);
+      if (
+        !relationship ||
+        !sourcePermission ||
+        sourcePermission.actionKind !== "read" ||
+        String(sourcePermission.recordTypeId) !== String(relationship.fromRecordTypeId) ||
+        !targets.some(
+          (target) =>
+            object(target).state === "resolved" &&
+            String(object(target).recordTypeId) === recordTypeId,
+        )
+      )
+        valid = false;
+      else sources.push(String(sourcePermission.permissionId));
+    }
+    relationshipSources.set(String(permission.permissionId), sources);
+    const restriction = scope.savedCondition ? object(scope.savedCondition) : undefined;
+    if (!restriction) continue;
+    const saved = sharingConditions.get(String(restriction.conditionId));
+    const declaredParameters = new Map(
+      saved
+        ? array(saved.parameters).map(
+            (parameter) => [String(parameter.key), String(parameter.type)] as const,
+          )
+        : [],
+    );
+    const bindings = array(restriction.parameterBindings);
+    if (
+      !savedConditionsAllowed ||
+      !saved ||
+      String(saved.sourceRecordTypeId) !== recordTypeId ||
+      saved.publishedRevision !== restriction.publishedRevision ||
+      saved.contractFingerprint !== restriction.contractFingerprint ||
+      bindings.length !== declaredParameters.size ||
+      new Set(bindings.map((binding) => String(binding.key))).size !== bindings.length ||
+      bindings.some((binding) => {
+        const expected = declaredParameters.get(String(binding.key));
+        return (
+          expected === undefined ||
+          (binding.source === "current_organization_account_id"
+            ? expected !== "text"
+            : !valueMatchesType(binding.value, expected))
+        );
+      })
+    )
+      valid = false;
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (permissionId: string): boolean => {
+    if (visiting.has(permissionId)) return false;
+    if (visited.has(permissionId)) return true;
+    visiting.add(permissionId);
+    const acyclic = (relationshipSources.get(permissionId) ?? []).every(visit);
+    visiting.delete(permissionId);
+    visited.add(permissionId);
+    return acyclic;
+  };
+  if (!permissions.map((permission) => String(permission.permissionId)).every(visit)) valid = false;
+  return valid;
+}
+
 function moduleReferenceRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
   const walkValues = canonicalValueWalker(context);
   const failures: DefinitionRuleFailure[] = [];
@@ -1245,13 +1406,36 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
     const moduleRecords = new Map(
       array(content.recordTypes).map((record) => [String(record.recordTypeId), record]),
     );
-    const permissions = new Set(
-      array(content.permissions).map((permission) => String(permission.key)),
-    );
+    const modulePermissions = array(content.permissions);
+    const permissions = new Set(modulePermissions.map((permission) => String(permission.key)));
     const actionsById = new Map(
       array(content.actions).map((action) => [String(action.actionId), action]),
     );
     const events = new Set(array(content.events).map((event) => String(event.key)));
+    const relationships = new Map(
+      [...moduleRecords.values()].flatMap((record) =>
+        array(record.relationships).map(
+          (relationship) => [String(relationship.relationshipId), relationship] as const,
+        ),
+      ),
+    );
+    const sharingConditions = new Map(
+      array(content.sharingConditions).map(
+        (condition) => [String(condition.conditionId), condition] as const,
+      ),
+    );
+    if (
+      !permissionRecordScopesValid(
+        modulePermissions,
+        moduleRecords,
+        relationships,
+        sharingConditions,
+        true,
+      )
+    )
+      failures.push(
+        failure(output, "vortex.definition.module_record_references", "scope_conflict"),
+      );
 
     for (const record of moduleRecords.values()) {
       const recordId = String(record.recordTypeId);
@@ -2036,6 +2220,19 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const applicationPermissions = new Map(
       array(content.permissions).map((permission) => [String(permission.key), permission]),
     );
+    if (
+      !permissionRecordScopesValid(
+        [...applicationPermissions.values()],
+        records,
+        relationshipMap,
+        new Map(),
+        false,
+        permissionEntries,
+      )
+    )
+      failures.push(
+        failure(output, "vortex.definition.application_action_references", "scope_conflict"),
+      );
     const actions = new Map(
       [
         ...array(content.actions),

@@ -191,6 +191,169 @@ describe("authored definition compiler", () => {
     ]);
   });
 
+  it("resolves explicit record scope, condition evidence and provenance", () => {
+    const amended = structuredClone(sources);
+    const module = amended.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!module || module.kind !== "module") throw new Error("Case module fixture required");
+    const permission = module.body.permissions.find(
+      (entry) => entry.key === "vortex.service_desk.cases.case.read",
+    );
+    if (!permission) throw new Error("Case read permission required");
+    permission.record_scope = {
+      routes: [
+        {
+          kind: "relationship",
+          relationship: "vortex.service_desk.cases:case_comment.case",
+          source_permission: "vortex.service_desk.cases.case_comment.read",
+        },
+        { kind: "direct_share" },
+        { kind: "ownership" },
+      ],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+
+    const outputs = compileDefinitionSet(amended.map(requestFor), publicationOptions);
+    const output = outputs.find(
+      (entry) =>
+        entry.kind === "module" && entry.canonical.envelope.key === "vortex.service_desk.cases",
+    );
+    if (!output || output.kind !== "module") throw new Error("Compiled case module required");
+    const compiled = output.canonical.content.permissions.find(
+      (entry) => entry.key === permission.key,
+    );
+    expect(compiled?.recordScope).toEqual({
+      routes: [
+        { kind: "ownership" },
+        { kind: "direct_share" },
+        {
+          kind: "relationship",
+          relationshipId: expect.any(String),
+          sourcePermissionId: expect.any(String),
+        },
+      ],
+      savedCondition: {
+        conditionId: savedConditionRevisions[0]!.conditionId,
+        publishedRevision: 1,
+        contractFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        parameterBindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    });
+    const recordScopeProvenance = output.provenance.filter((entry) =>
+      entry.sourcePath?.includes("record_scope"),
+    );
+    expect(recordScopeProvenance.length).toBeGreaterThan(0);
+    expect(
+      recordScopeProvenance.some(
+        (entry) => entry.origin === "resolved" && entry.ruleCode !== undefined,
+      ),
+    ).toBe(true);
+    expect(
+      recordScopeProvenance.every((entry) => entry.canonicalPath.includes("recordScope")),
+    ).toBe(true);
+  });
+
+  it("requires scope for new record-permission publication and refuses route cycles", () => {
+    const missingScope = structuredClone(sources);
+    const missingModule = missingScope.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.activities",
+    );
+    if (!missingModule || missingModule.kind !== "module")
+      throw new Error("Activities fixture required");
+    delete missingModule.body.permissions[0]!.record_scope;
+    expect(() =>
+      compileDefinitionSet(missingScope.map(requestFor), publicationOptions),
+    ).toThrowError("vortex.definition.module_record_references");
+
+    const cyclic = structuredClone(sources);
+    const companyModule = cyclic.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.organisations",
+    );
+    if (!companyModule || companyModule.kind !== "module")
+      throw new Error("Organisations fixture required");
+    const companyRead = companyModule.body.permissions.find(
+      (entry) => entry.key === "vortex.crm.organisations.company.read",
+    );
+    if (!companyRead) throw new Error("Company read permission required");
+    companyRead.record_scope = {
+      routes: [
+        {
+          kind: "relationship",
+          relationship: "vortex.crm.organisations:company.parent_company",
+          source_permission: companyRead.key,
+        },
+      ],
+    };
+    expect(() => compileDefinitionSet(cyclic.map(requestFor), publicationOptions)).toThrowError(
+      "vortex.definition.module_record_references",
+    );
+
+    const invalidCondition = structuredClone(sources);
+    const caseModule = invalidCondition.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!caseModule || caseModule.kind !== "module") throw new Error("Case fixture required");
+    const caseRead = caseModule.body.permissions.find(
+      (entry) => entry.key === "vortex.service_desk.cases.case.read",
+    );
+    if (!caseRead) throw new Error("Case read permission required");
+    caseRead.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: 42 }],
+      },
+    };
+    expect(() =>
+      compileDefinitionSet(invalidCondition.map(requestFor), publicationOptions),
+    ).toThrowError("vortex.definition.source_type_compatibility");
+  });
+
+  it("maps application-owned record permissions through a bound-module read permission", () => {
+    const amended = structuredClone(sources);
+    const source = amended.find(
+      (candidate) => candidate.kind === "application" && candidate.key === "vortex.app.crm",
+    );
+    if (!source || source.kind !== "application") throw new Error("CRM application required");
+    const permission = source.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application case permission required");
+    permission.record_type = "vortex.crm.organisations:company";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [
+        {
+          kind: "relationship",
+          relationship: "vortex.service_desk.cases:case.customer_company",
+          source_permission: "vortex.service_desk.cases.case.read",
+        },
+      ],
+    };
+    const output = compileDefinitionSet(amended.map(requestFor), publicationOptions).find(
+      (entry) => entry.kind === "application" && entry.canonical.envelope.key === source.key,
+    );
+    if (!output) throw new Error("Compiled application output required");
+    if (output.kind !== "application") throw new Error("Application output required");
+    expect(
+      output.canonical.content.permissions.find((entry) => entry.key === permission.key)
+        ?.recordScope,
+    ).toEqual({
+      routes: [
+        {
+          kind: "relationship",
+          relationshipId: expect.any(String),
+          sourcePermissionId: expect.any(String),
+        },
+      ],
+    });
+  });
+
   it("expands the sole application wildcard into exact non-admin permissions", () => {
     const source = structuredClone(
       sources.find(

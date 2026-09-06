@@ -445,7 +445,14 @@
         "description": "Allows the standard create operation for opportunities.",
         "record_type": "opportunity",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_read",
@@ -454,7 +461,14 @@
         "description": "Allows the standard read operation for opportunities.",
         "record_type": "opportunity",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_update",
@@ -463,7 +477,14 @@
         "description": "Allows the standard update operation for opportunities.",
         "record_type": "opportunity",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_soft_delete",
@@ -472,7 +493,14 @@
         "description": "Allows the standard soft_delete operation for opportunities.",
         "record_type": "opportunity",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_restore",
@@ -481,7 +509,14 @@
         "description": "Allows the standard restore operation for opportunities.",
         "record_type": "opportunity",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_export",
@@ -490,7 +525,14 @@
         "description": "Allows the standard export operation for opportunities.",
         "record_type": "opportunity",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_contact_create",
@@ -499,7 +541,14 @@
         "description": "Allows the standard create operation for opportunity contacts.",
         "record_type": "opportunity_contact",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_contact_read",
@@ -508,7 +557,14 @@
         "description": "Allows the standard read operation for opportunity contacts.",
         "record_type": "opportunity_contact",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_contact_update",
@@ -517,7 +573,14 @@
         "description": "Allows the standard update operation for opportunity contacts.",
         "record_type": "opportunity_contact",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_contact_soft_delete",
@@ -526,7 +589,14 @@
         "description": "Allows the standard soft_delete operation for opportunity contacts.",
         "record_type": "opportunity_contact",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_contact_restore",
@@ -535,7 +605,14 @@
         "description": "Allows the standard restore operation for opportunity contacts.",
         "record_type": "opportunity_contact",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_opportunity_contact_export",
@@ -544,7 +621,14 @@
         "description": "Allows the standard export operation for opportunity contacts.",
         "record_type": "opportunity_contact",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_1_approve_discount",
@@ -554,7 +638,14 @@
         "record_type": "opportunity",
         "action_kind": "named",
         "named_action": "approve_discount",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       },
       {
         "id": "perm_named_2_mark_won",
@@ -564,7 +655,14 @@
         "record_type": "opportunity",
         "action_kind": "named",
         "named_action": "mark_won",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        }
       }
     ],
     "actions": [

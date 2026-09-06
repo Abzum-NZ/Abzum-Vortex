@@ -31,6 +31,47 @@ const session = (overrides: Partial<IdentitySession> = {}): IdentitySession =>
 const authorityId = id(3) as IdentityAuthorityId;
 
 describe("human organisation request", () => {
+  it("uses the governance-first organization and application resolvers for changes", async () => {
+    const calls: string[] = [];
+    const service = createHumanOrganizationRequestService({
+      identityAuthorityId: authorityId,
+      clock: () => new Date("2026-09-05T01:00:00.000Z"),
+      correlationId: () => id(9),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve({
+          query: async <Row extends DatabaseRow>(strings: TemplateStringsArray) => {
+            calls.push(strings.join("$value"));
+            return [
+              {
+                tenant_id: id(4),
+                organization_id: id(5),
+                organization_account_id: id(6),
+                ...(calls.length === 2 ? { application_root_id: id(7) } : {}),
+                access_version: "7",
+              },
+            ] as readonly Row[];
+          },
+        });
+        return operation({ query: async () => [] }, resolved.scope);
+      },
+    });
+
+    await expect(
+      service.runChange(session(), { organizationId: id(5) }, async () => "changed"),
+    ).resolves.toEqual({ kind: "available", value: "changed" });
+    await expect(
+      service.runChange(
+        session(),
+        { organizationId: id(5), applicationRootId: id(7) },
+        async () => "changed",
+      ),
+    ).resolves.toEqual({ kind: "available", value: "changed" });
+
+    expect(calls[0]).toContain("vortex_access.resolve_human_organization_change_scope");
+    expect(calls[1]).toContain("vortex_access.resolve_human_application_change_scope");
+    expect(calls.join("\n")).not.toContain("resolve_human_organization_scope(");
+  });
+
   it("derives the closed context inside the protected transaction", async () => {
     let captured: SessionContext | undefined;
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];

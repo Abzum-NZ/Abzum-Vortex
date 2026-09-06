@@ -56,6 +56,8 @@ A policy edit is not classified as harmless metadata merely because its label is
 
 ## Delivery slices and consumers
 
+The [first implementation checkpoint](../evidence/issue-40-access-administration.md) covers the governance-first seam and Group list/detail reads only. Its local restricted-role and competing-write checks pass; the other reads, changes, private governed handoffs and final hosted delivery below remain required. Do not describe that checkpoint as a complete administration API or an IAM interface.
+
 1. Governance-first writer seam and safe reads.
 2. Available non-grant operations with Activity and real restricted-role proof.
 3. Private governed grant, PIM and invitation-intent composition and exact handoff contracts.
