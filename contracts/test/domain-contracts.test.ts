@@ -153,6 +153,7 @@ describe("identity projection, organisation-account and invitation contracts", (
       true,
     );
     expect(accessVersionChangeReasonSchema.safeParse("role_catalogue_changed").success).toBe(true);
+    expect(accessVersionChangeReasonSchema.safeParse("role_activation_changed").success).toBe(true);
     expect(accessVersionChangeReasonSchema.safeParse("team_membership_changed").success).toBe(
       false,
     );
@@ -160,6 +161,9 @@ describe("identity projection, organisation-account and invitation contracts", (
       true,
     );
     expect(accessVersionChangeReasonV1Schema.safeParse("role_catalogue_changed").success).toBe(
+      true,
+    );
+    expect(accessVersionChangeReasonV1Schema.safeParse("role_activation_changed").success).toBe(
       true,
     );
     expect(accessVersionChangeReasonV1Schema.safeParse("group_membership_changed").success).toBe(
@@ -170,6 +174,9 @@ describe("identity projection, organisation-account and invitation contracts", (
     );
     expect(writeAccessVersionChangeReasonV1("role_catalogue_changed")).toBe(
       "role_catalogue_changed",
+    );
+    expect(writeAccessVersionChangeReasonV1("role_activation_changed")).toBe(
+      "role_activation_changed",
     );
     expect(
       readOrganizationAccessVersionV1({
@@ -183,6 +190,12 @@ describe("identity projection, organisation-account and invitation contracts", (
         changeReason: "role_catalogue_changed",
       }),
     ).toEqual({ ...version, changeReason: "role_catalogue_changed" });
+    expect(
+      readOrganizationAccessVersionV1({
+        ...version,
+        changeReason: "role_activation_changed",
+      }),
+    ).toEqual({ ...version, changeReason: "role_activation_changed" });
     expect(accessVersionChangeReasonSchema.safeParse("business_record_changed").success).toBe(
       false,
     );

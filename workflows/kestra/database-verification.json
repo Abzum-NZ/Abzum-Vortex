@@ -70,6 +70,11 @@
       "migration": "supabase/migrations/20260905232252_coordinate_organization_group_membership_changes.sql",
       "proof": "supabase/tests/organization-group-membership-change-concurrency.test.sh",
       "label": "Organization Group membership changes"
+    },
+    {
+      "migration": "supabase/migrations/20260906002950_coordinate_organization_role_activation_changes.sql",
+      "proof": "supabase/tests/organization-role-activation-change-concurrency.test.sh",
+      "label": "Organization role activation changes"
     }
   ],
   "lintSchemas": [
