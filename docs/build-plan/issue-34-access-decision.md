@@ -212,6 +212,19 @@ An injected governance-first resolver verifies that the adapter opens no extra
 transaction or takes its own locks. Real #30/#40 writers and #250 compiled page
 operations remain with those tasks; controlled tests do not claim their delivery.
 
+### Final integration checkpoint — 6 September 2026
+
+All four slices are source-complete and independently approved against the whole
+task. The application resolver and one-decision operation adapter are implemented;
+the application binding is checked before either refusal or success. Existing
+application coordination proof covers both real withdrawal orderings without a
+new harness. Combined local verification passed 39 SQL suites / 1,903 assertions,
+all 20 concurrency proofs, five-schema lint and full repository verification.
+The [final integration evidence](../evidence/issue-34-access-decision.md) records
+source fingerprints and the initial local test anomalies as well as successful
+reruns. Normal combined Testing delivery and its exact receipt remain outstanding.
+Keep #34 open and do not substitute slice 2's hosted receipt for this final work.
+
 ## Required decision behaviour
 
 - Bind the actual operation/action to its trusted exact permission and target.
