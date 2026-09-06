@@ -184,7 +184,7 @@ An **organisation launcher entry** contains only `organizationId`, `tenantDispla
 
 An **organisation launcher resolution** is exactly one of `available` with ordered entries, `temporarily_unavailable`, or `invalid_session_state`. Empty `available` entries means the verified identity currently has no active organisation account; a temporary data failure is never converted into that empty result.
 
-An **organisation selection candidate** contains exactly one `organizationId`. A **selected organisation scope** contains exactly `tenantId`, `organizationId`, `organizationAccountId`, and positive `accessVersion`; it is a server-only intermediate owned by Access and never a browser payload. Unknown, foreign and inactive candidates are indistinguishable.
+An **organisation selection candidate** contains one `organizationId` and an optional `applicationRootId`, with no other caller-selected authority. A **selected organisation scope** contains `tenantId`, `organizationId`, `organizationAccountId`, positive `accessVersion`, and the same optional application root after its exact active registration is verified. This scope is a server-only intermediate owned by Access and never a browser payload. The organisation-only launcher omits the application root; that absence grants no application scope. Unknown, foreign and inactive candidates are indistinguishable. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) owns the verified application handoff described in the [session-context contract](#session-context).
 
 ### Organisation runtime settings
 
