@@ -23,7 +23,7 @@ import {
 } from "./definition-source-common";
 import {
   actionInputSchema,
-  sourcePermissionRecordScopeBaseSchema,
+  moduleSourcePermissionRecordScopeSchema,
 } from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "./permissions";
 import {
@@ -766,7 +766,7 @@ const sourceApplicationBodySchema = z
           ]),
           named_action: builderKeySchema.optional(),
           administrative: z.boolean(),
-          record_scope: sourcePermissionRecordScopeBaseSchema.optional(),
+          record_scope: moduleSourcePermissionRecordScopeSchema.optional(),
         })
         .strict(),
     ),

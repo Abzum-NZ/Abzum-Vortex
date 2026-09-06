@@ -54,9 +54,11 @@ Independent Sol review approved the final eight implementation/test files. Focus
 
 The final combined local repository verification passed formatting, lint, typechecks, boundaries, tests, fixtures and builds. All 44 database files / 2,087 assertions passed. Local security advisors found no issues; six-schema lint retained only the same three earlier warnings. The concurrency runner passed checks 1–18 before an existing invitation acceptance check failed; an explicit run of checks 19–23 then passed all five, including the new Group check. Thus every selected proof passed, but not in one uninterrupted run. An earlier full SQL run also encountered the existing invitation account-reactivation failure; the isolated test and final complete suite passed unchanged.
 
-Source diagnosis identified an invitation writer using a statement-start audit timestamp sampled before serialization waits, which can be older than the locked invitation/account audit value. This is a narrowly scoped follow-up correction, not evidence that the Docker clock was repaired. Revision and Access ordering must remain authoritative; real expiry checks must not use a clamped audit timestamp. No service restart or infrastructure change was made.
+Source diagnosis identified an invitation writer using a statement-start audit timestamp sampled before serialization waits, which can be older than the locked invitation/account audit value. [Invitation acceptance #315](https://github.com/Abzum-NZ/Abzum-Vortex/issues/315) records the narrowly scoped follow-up correction, not evidence that the Docker clock was repaired. Revision and Access ordering must remain authoritative; real expiry checks must not use a clamped audit timestamp. No service restart or infrastructure change was made.
 
 The additive migration `20260906115410_protect_organization_group_administration_changes.sql` was applied locally without resetting data. Supported migration history now records all 47 applied entries. The final database proof and race source hashes are recorded below. Hosted Testing receipts remain unverified; no Production promotion is claimed.
+
+The Group-change and catalogue-scope source checkpoint merged normally through [PR #314](https://github.com/Abzum-NZ/Abzum-Vortex/pull/314) at `2026-09-06T12:33:57Z`. Source `87540f7c3414ee295d4c4f0f82702153b7b376a7` and Testing merge `04819359e55d9176eec7fe3665cd3fb76f32af56` have identical file trees. Both normal preview checks passed. The subsequent invitation correction is not included in this merge.
 
 | File | SHA-256 |
 |---|---|

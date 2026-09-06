@@ -35,7 +35,7 @@ import {
 } from "@vortex/contracts";
 import { compare, satisfies } from "semver";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
-import { compileDefinition } from "./compiler";
+import { compileDefinition, compileDefinitionWithContext } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { deriveSavedConditionRevisions } from "./saved-condition-revisions";
 import { compileDefinitionSet } from "./validation";
@@ -647,11 +647,6 @@ const compileCandidate = (
     ...common,
     ...(savedConditionRevisions === undefined ? {} : { savedConditionRevisions }),
   };
-  if (!final) {
-    const output = compileDefinition(request);
-    if (output.kind === "connection_type") refuse("DEFINITION_COMPILATION_REFUSED");
-    return output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
-  }
   const dependencyOutputs = [
     ...dependencies.modules.map((release) => release.compilationOutput),
     ...dependencies.connections.map((release) => release.compilationOutput),
@@ -662,6 +657,11 @@ const compileCandidate = (
       resolutionFingerprint: resolution.fingerprint,
     }),
   );
+  if (!final) {
+    const output = compileDefinitionWithContext(request, { dependencyOutputs });
+    if (output.kind === "connection_type") refuse("DEFINITION_COMPILATION_REFUSED");
+    return output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
+  }
   const outputs = compileDefinitionSet([request], {
     dependencyOutputs,
     publishedHistories: [candidate.history],

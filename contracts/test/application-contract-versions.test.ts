@@ -37,6 +37,48 @@ describe("Application contract version selection", () => {
     expect(JSON.stringify(explicitV1)).toBe(JSON.stringify(legacy));
   });
 
+  it("accepts the shared saved-condition scope shape and keeps it closed", () => {
+    const scoped = structuredClone(applicationSourceDocumentV1Schema.parse(applicationSource));
+    const permission = scoped.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application permission fixture required");
+    permission.record_type = "vortex.service_desk.cases:case";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+
+    expect(applicationSourceDocumentV1Schema.parse(scoped)).toEqual(scoped);
+    expect(
+      applicationSourceDocumentV1Schema.safeParse({
+        ...scoped,
+        body: {
+          ...scoped.body,
+          permissions: scoped.body.permissions.map((entry) =>
+            entry.key === permission.key
+              ? {
+                  ...entry,
+                  record_scope: {
+                    ...entry.record_scope,
+                    saved_condition: {
+                      ...entry.record_scope?.saved_condition,
+                      untrusted: true,
+                    },
+                  },
+                }
+              : entry,
+          ),
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it("selects only the exact implemented V1 source, validation and pair", () => {
     expect(selectApplicationSourceContract("1.0.0")).toBe("v1");
     expect(selectApplicationValidationContract("1.0.0")).toBe("v1");

@@ -22,6 +22,7 @@ import {
   type DefinitionPublicationRepository,
   type DefinitionPublicationTransaction,
   type DefinitionReleaseAppend,
+  type ResolvableConnectionTypeRelease,
   type ResolvableModuleRelease,
 } from "../src/definition-publication";
 
@@ -29,6 +30,14 @@ const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures
 const sourceNamed = (name: string) =>
   definitionSourceDocumentSchema.parse(
     JSON.parse(fs.readFileSync(path.join(fixtureRoot, "modules", name), "utf8")),
+  );
+const applicationSourceNamed = (name: string) =>
+  definitionSourceDocumentSchema.parse(
+    JSON.parse(fs.readFileSync(path.join(fixtureRoot, "applications", name), "utf8")),
+  );
+const connectionSourceNamed = (name: string) =>
+  definitionSourceDocumentSchema.parse(
+    JSON.parse(fs.readFileSync(path.join(fixtureRoot, "connection-types", name), "utf8")),
   );
 const baseResolution = definitionResolutionSnapshotSchema.parse(
   JSON.parse(
@@ -108,6 +117,37 @@ const candidateFor = (
   };
 };
 
+const applicationCandidateFor = (
+  source: ReturnType<typeof applicationSourceNamed>,
+): DefinitionPublicationCandidate => {
+  if (source.kind !== "application") throw new Error("Application fixture required");
+  const own = baseResolution.definitions.find(
+    (definition) => definition.kind === "application" && definition.key === source.key,
+  );
+  if (!own || own.kind !== "application") throw new Error("Fixture application root missing");
+  const draft: StoredDefinitionDraft = {
+    kind: "application",
+    rootId: own.rootId,
+    organizationId,
+    key: source.key,
+    draftRevision: 1,
+    sourceContractVersion: source.source_contract_version,
+    sourceFingerprint: fingerprintCanonicalValue(source),
+    source,
+    createdAt: publishedAt,
+    createdBy: actorId,
+    updatedAt: publishedAt,
+    updatedBy: actorId,
+  };
+  return {
+    draft,
+    identities: baseResolution.identities.filter(
+      (identity) => identity.definitionKey === source.key,
+    ),
+    history: { kind: "application", definitionKey: source.key, history: [] },
+  };
+};
+
 const releaseFor = (
   source: ReturnType<typeof sourceNamed>,
   releaseVersion: string,
@@ -119,7 +159,10 @@ const releaseFor = (
     source,
     resolution: resolutionSnapshot,
     draftMetadata: metadata(releaseRevision),
-    savedConditionRevisions: [],
+    savedConditionRevisions:
+      source.key === "vortex.service_desk.cases"
+        ? [{ conditionId: "a4b5546d-8a54-4003-adc4-ddb8b0d7257d", revision: 1 }]
+        : [],
   });
   if (compilationOutput.kind !== "module") throw new Error("Module output required");
   const published = publishedModuleDefinitionSchema.parse({
@@ -150,6 +193,33 @@ const releaseFor = (
     resolutionSnapshot,
   };
 };
+
+const connectionReleaseFor = (
+  source: ReturnType<typeof connectionSourceNamed>,
+): ResolvableConnectionTypeRelease => {
+  if (source.kind !== "connection_type") throw new Error("Connection fixture required");
+  const compilationOutput = compileDefinition({ source, resolution: baseResolution });
+  if (compilationOutput.kind !== "connection_type") throw new Error("Connection output required");
+  return {
+    key: source.key,
+    rootId: compilationOutput.artifact.rootId,
+    releaseVersion: compilationOutput.artifact.exactVersion,
+    contentFingerprint: compilationOutput.artifact.contentFingerprint,
+    catalogueFingerprint: compilationOutput.artifact.contentFingerprint,
+    compilationOutput,
+  };
+};
+
+const catalogueWith = (
+  releases: readonly ResolvableConnectionTypeRelease[],
+): DefinitionPublicationCatalogue => ({
+  listConnectionTypeReleases: async (key) => releases.filter((release) => release.key === key),
+  readConnectionTypeRelease: async (rootId, releaseVersion) =>
+    releases.find(
+      (release) => release.rootId === rootId && release.releaseVersion === releaseVersion,
+    ),
+  readPlatformThemeRelease: async () => undefined,
+});
 
 const emptyCatalogue: DefinitionPublicationCatalogue = {
   listConnectionTypeReleases: async () => [],
@@ -404,6 +474,84 @@ describe("Definition publication service", () => {
       releaseVersion: "1.2.0",
       releaseRevision: 2,
     });
+  });
+
+  it("uses the same verified module condition evidence for application prepare and publish", async () => {
+    const source = structuredClone(applicationSourceNamed("crm.json"));
+    if (source.kind !== "application") throw new Error("Application fixture required");
+    const permission = source.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application permission fixture required");
+    permission.record_type = "vortex.service_desk.cases:case";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+    const moduleReleases = [
+      "crm.organisations.json",
+      "crm.people.json",
+      "crm.opportunities.json",
+      "crm.activities.json",
+      "crm.tags.json",
+      "service-desk.cases.json",
+    ].map((name) => releaseFor(sourceNamed(name), "1.0.0", 1));
+    const connectionReleases = ["email.json", "calendar.json"].map((name) =>
+      connectionReleaseFor(connectionSourceNamed(name)),
+    );
+    const repository = new MemoryRepository(applicationCandidateFor(source), moduleReleases);
+    const service = createDefinitionPublicationService(
+      repository,
+      catalogueWith(connectionReleases),
+    );
+    const prepared = await service.prepare(context(), {
+      rootId: repository.candidate.draft.rootId,
+      expectedDraftRevision: 1,
+    });
+    await service.publish(context(), {
+      confirmation: prepared.confirmation,
+      releaseNote: "Publish one application-owned saved condition",
+    });
+
+    const output = repository.appends[0]?.compilationOutput;
+    if (!output || output.kind !== "application") throw new Error("Application append required");
+    const compiledScope = output.canonical.content.permissions.find(
+      (entry) => entry.key === permission.key,
+    )?.recordScope;
+    const casesRelease = moduleReleases.find(
+      (release) => release.key === "vortex.service_desk.cases",
+    );
+    const condition = casesRelease?.compilationOutput.canonical.content.sharingConditions.find(
+      (entry) => entry.key === "matching_priority",
+    );
+    expect(compiledScope?.savedCondition).toMatchObject({
+      conditionId: condition?.conditionId,
+      publishedRevision: condition?.publishedRevision,
+      contractFingerprint: condition?.contractFingerprint,
+    });
+
+    if (!casesRelease) throw new Error("Cases release required");
+    const substitutedRelease = structuredClone(casesRelease);
+    substitutedRelease.compilationOutput.canonical.content.sharingConditions[0]!.key =
+      "substituted_condition";
+    const substitutedRepository = new MemoryRepository(applicationCandidateFor(source), [
+      ...moduleReleases.filter((release) => release.key !== casesRelease.key),
+      substitutedRelease,
+    ]);
+    await expect(
+      createDefinitionPublicationService(
+        substitutedRepository,
+        catalogueWith(connectionReleases),
+      ).prepare(context(), {
+        rootId: substitutedRepository.candidate.draft.rootId,
+        expectedDraftRevision: 1,
+      }),
+    ).rejects.toMatchObject({ code: "DEFINITION_COMPILATION_REFUSED" });
   });
 
   it("rolls back the observable release and pointer when append fails", async () => {

@@ -64,15 +64,16 @@ const sourceSavedConditionParameterBindingSchema = z.discriminatedUnion("source"
     .strict(),
 ]);
 
-const moduleSourcePermissionRecordScopeSchema = sourcePermissionRecordScopeBaseSchema.safeExtend({
-  saved_condition: z
-    .object({
-      condition: builderKeySchema,
-      parameter_bindings: z.array(sourceSavedConditionParameterBindingSchema),
-    })
-    .strict()
-    .optional(),
-});
+export const moduleSourcePermissionRecordScopeSchema =
+  sourcePermissionRecordScopeBaseSchema.safeExtend({
+    saved_condition: z
+      .object({
+        condition: builderKeySchema,
+        parameter_bindings: z.array(sourceSavedConditionParameterBindingSchema),
+      })
+      .strict()
+      .optional(),
+  });
 
 const sourceOptionSchema = z
   .object({ value: z.string().min(1).max(120), label: z.string().min(1).max(60) })
