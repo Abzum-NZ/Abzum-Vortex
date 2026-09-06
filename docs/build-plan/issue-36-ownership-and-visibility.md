@@ -113,6 +113,10 @@ Independent review clarifies that owner shape is validated before OR routing: di
 
 This is a truthful partial C delivery. Private local-share storage and bounded recipient field contributions, approved relationship/inherited-parent joins, D ownership/share writers and complete hosted verification remain required by this same task. The later #45 storage allocator supplies real bindings and owner/relationship columns and installs #35's complete policies; the neutral fixture is not claimed as that shipping implementation.
 
+### Remaining C semantics: inherited ownership is not relationship visibility
+
+Keep these existing routes distinct. [Inherited ownership](../specification/appendices/data-contracts.md) resolves the child's declared ownership relationship through the actual parent edge to an account or Group owner; it does not copy owner columns or require a parent read permission. A share of the parent does not itself establish ownership of the child. By contrast, the [published relationship visibility route](../../contracts/src/permissions.ts) names both a relationship and a source permission: admission needs a complete current source-permission-and-visibility result for the exact source row, not simply a parent owner or an unrelated readable row. Both compositions preserve exact storage/organisation/application identities and the published relationship target. This is a clarification of existing contracts, not a new propagation option or approval requirement; its implementation follows the direct-owner checkpoint.
+
 ## Downstream ownership
 
 - [#35](issue-35-row-policy-composition.md) combines the predicates with the central operation decision in fixed SELECT/INSERT/UPDATE/DELETE policies.
