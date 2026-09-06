@@ -223,19 +223,57 @@ export const downloadGrantSchema = z
   })
   .strict();
 
+const canonicalActivitySubjectIdsSchema = z
+  .array(platformIdSchema)
+  .min(1)
+  .superRefine((identifiers, context) => {
+    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
+    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
+      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
+        context.addIssue({
+          code: "custom",
+          message: "Activity subject identifiers must be unique and in canonical order",
+        });
+        return;
+      }
+    }
+  });
+
+const canonicalActivityChangedFieldIdsSchema = z
+  .array(fieldIdSchema)
+  .superRefine((identifiers, context) => {
+    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
+    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
+      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
+        context.addIssue({
+          code: "custom",
+          message: "Changed field identifiers must be unique and in canonical order",
+        });
+        return;
+      }
+    }
+  });
+
+export const activityActorKindSchema = z.enum([
+  "identity",
+  "organization_account",
+  "system",
+  "public_session",
+]);
+
 export const activityEntrySchema = z
   .object({
     organizationId: organizationIdSchema,
     activityId: activityIdSchema,
     occurredAt: timestampSchema,
+    actorKind: activityActorKindSchema,
     actorId: actorIdSchema,
     action: builderKeySchema,
-    subjectIds: z.array(platformIdSchema).min(1),
-    changedFieldIds: z.array(fieldIdSchema),
+    subjectIds: canonicalActivitySubjectIdsSchema,
+    changedFieldIds: canonicalActivityChangedFieldIdsSchema,
     source: z.enum(["web", "workflow", "interface", "connection", "federation", "system"]),
     correlationId: correlationIdSchema,
     outcome: z.enum(["completed", "refused", "failed"]),
-    retainedDetailReference: secretReferenceSchema.optional(),
   })
   .strict();
 export const retentionPolicySchema = z

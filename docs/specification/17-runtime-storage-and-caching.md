@@ -85,6 +85,8 @@ The codebase is divided into sixteen named services. These are package and owner
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
 
+The shared [Activity foundation](../build-plan/issue-252-activity-foundation.md) is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_activity` history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
+
 The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives Identity schema usage and execution only for exact pre-request operations: ensure a verified identity projection during bootstrap, read that projection without mutation during normal session resolution, return the minimum safe organisation launcher, and resolve one exact active organisation-account scope for Access. Runtime invitation acceptance is available only through the private `vortex_access` schema. Access calls owner-only Identity operations and owns the atomic account-scope plus current-version composition; it never reads Identity relations. Invitation activation/reactivation and the required organisation Access-version change commit or roll back together. The former standalone runtime version read and rich organisation-account list are revoked. `vortex_runtime` receives no Access table, generic increment, initialisation or administrative lifecycle authority. Invitation administration and account lifecycle remain owner-only until protected administration composes their authorisation. `vortex_request` receives no Identity access; it receives Access schema usage and execution only for the exact live human-context validator. Trigger functions remain non-executable by runtime roles.
 
 ```mermaid
@@ -183,20 +185,25 @@ application request.
   Vortex context or service schemas. Direct browser access to those schemas therefore has no database
   route even if an exposed-schema setting changes.
 
-For a human organisation request, the browser supplies only the selected permanent organisation
-identifier. The server verifies the closed Identity session and adds the configured Identity
+For a human organisation request, the browser supplies the selected permanent organisation
+identifier and, when applicable, an application-root candidate. Neither is authority.
+The server verifies the closed Identity session and adds the configured Identity
 Authority identifier; callers cannot choose it. Inside one database transaction as `vortex_runtime`,
 Access resolves the exact active tenant, organisation account, organisation and current positive
 Access version from live private state. The same transaction retains shared locks on the identity,
 account, organisation, tenant and Access-version rows until protected work ends, so a concurrent
-suspension or version change cannot commit between resolution and use.
+suspension or version change cannot commit between resolution and use. When an application
+is selected, [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) additionally
+verifies its exact active registration in that organisation under the same Access lock,
+before initializing the application-bound context. The organisation-only route remains valid.
 
 The runtime then validates and initializes the complete closed [session-context
 contract](appendices/data-contracts.md#session-context), enters `vortex_request` with `SET LOCAL ROLE`,
 and runs protected service SQL without leaving that transaction. `vortex_runtime` may call only the
 safe launcher, Access scope composer and initializer; the exact Identity scope resolver remains an
 owner-only helper callable through that Access composer. The request role
-has no Identity schema access and may execute only Access's exact live human-context validator. It
+has no Identity schema access and may execute only explicitly granted request functions, including
+Access's exact live human-context validator and central permission/delegation evaluator. It
 cannot call the legacy rich account list or standalone Access-version read, both of which are revoked
 from runtime use. Only `vortex_request` may execute the read-only context accessors used by row
 policies and service SQL. The database stores the whole context as one transaction-local value, not
@@ -208,7 +215,9 @@ Setting a structurally valid context is not itself an access grant. Access owns 
 organisation composition; other services consume its resolved transaction rather than assembling
 human authority from browser or application values. Every human or federated context contains the
 trusted Identity Authority identifier; system and public contexts must not contain one. An
-application-contained policy also refuses a Phase 2 context because it has no application identifier.
+application-contained policy refuses the organisation-only launcher context because it has no
+application identifier. Only the verified application handoff supplies that scope; the declared
+operation still requires the central permission decision.
 A tenant-administration operation may use tenant scope only where its owning service explicitly
 permits it; it never satisfies an organisation-record policy.
 

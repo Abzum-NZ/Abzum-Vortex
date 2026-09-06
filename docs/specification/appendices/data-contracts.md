@@ -83,7 +83,35 @@ Each authentic source alias has the Definition root, current compiler lookup sco
 
 `tenant_id`, permanent `short_name`, `display_name`, state, `created_at`, `created_by`, `state_changed_at`, and positive `revision`. Tenant identifiers and short names are cluster-unique and permanent; display names may change and need not be unique. State-change time cannot precede creation time. Tenant states are active, suspended, archived, and removal pending. Commercial customer or subscription references are ordinary application records and never part of this core identity contract.
 
-A tenant-administrator assignment has tenant, global identity, state, permissions, creator, start, expiry, revocation, and activity references. It grants no organisation record permission.
+### Tenant-administrator assignment
+
+A tenant-administrator assignment names one tenant and one verified identity. It
+has a permanent assignment identifier, positive revision, a canonical unique
+nonempty set of structural capabilities, start and optional expiry, trusted
+creation/change actor and correlation evidence, and complete revocation evidence
+when revoked. It grants no organisation membership, application entry, local role
+authority or record permission. [Protected administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
+owns its service implementation; [IAM](iam-application.md) owns its later
+user-facing grant journey.
+
+Only these structural capabilities are permitted:
+
+- `platform.tenant.hierarchy.read`
+- `platform.tenant.organizations.create`
+- `platform.tenant.organizations.rename`
+- `platform.tenant.organizations.reparent`
+- `platform.tenant.organizations.lifecycle`
+- `platform.tenant.administrators.read`
+- `platform.tenant.administrators.manage`
+
+`scheduled`, `active`, `expired` and `revoked` are derived from the assignment's
+start, expiry and revocation at an explicit evaluation time; callers cannot edit
+a status to manufacture authority. Revisions order accepted changes. Creation
+and change timestamps are audit evidence, not a second authorization counter.
+No Activity identifier is required before [Activity #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252)
+and [its persistence #115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115)
+are delivered. The assignment does not store a duplicate permission catalogue,
+approval workflow, effective-access cache or organisation Access version.
 
 ### Organisation
 
@@ -184,7 +212,7 @@ An **organisation launcher entry** contains only `organizationId`, `tenantDispla
 
 An **organisation launcher resolution** is exactly one of `available` with ordered entries, `temporarily_unavailable`, or `invalid_session_state`. Empty `available` entries means the verified identity currently has no active organisation account; a temporary data failure is never converted into that empty result.
 
-An **organisation selection candidate** contains exactly one `organizationId`. A **selected organisation scope** contains exactly `tenantId`, `organizationId`, `organizationAccountId`, and positive `accessVersion`; it is a server-only intermediate owned by Access and never a browser payload. Unknown, foreign and inactive candidates are indistinguishable.
+An **organisation selection candidate** contains one `organizationId` and an optional `applicationRootId`, with no other caller-selected authority. A **selected organisation scope** contains `tenantId`, `organizationId`, `organizationAccountId`, positive `accessVersion`, and the same optional application root after its exact active registration is verified. This scope is a server-only intermediate owned by Access and never a browser payload. The organisation-only launcher omits the application root; that absence grants no application scope. Unknown, foreign and inactive candidates are indistinguishable. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) owns the verified application handoff described in the [session-context contract](#session-context).
 
 ### Organisation runtime settings
 
@@ -712,7 +740,7 @@ The server may page resources with opaque cursors and announce that resource or 
 
 ## Activity and retention contracts
 
-An activity entry has organisation, activity identifier, time, actor, action, subject identifiers, safe changed-field names, source, correlation, outcome, and optional retained-detail reference protected by a stronger permission.
+An activity entry has organisation, activity identifier, time, actor kind and identifier, action, subject identifiers, safe changed-field identifiers, source, correlation and outcome. Actor kinds are `identity`, `organization_account`, `system` and `public_session`; anonymous session attribution is not identity verification. Federation is a source, not a separate principal kind. Identifier lists are unique and canonically ordered. The activity identifier is the duplicate identity within the organisation: exact retries return the existing entry, and conflicting reuse refuses. The content-free append contract has no arbitrary payload or retained-detail reference. Separately governed value history is outside this foundation; see the [Activity plan](../../build-plan/issue-252-activity-foundation.md).
 
 A retention policy has organisation, data category, an optional saved-condition identifier/revision/fingerprint supplied together, active period, recovery period, removal schedule, legal-constraint keys, state, creator, approver, and version.
 

@@ -22,7 +22,7 @@ The inventory covers tenants, tenant-administrator assignments, global identitie
 
 ## Activity history
 
-Activity entries explain material business and administrative changes. They include organisation, time, actor, action, subject identifiers, correlation identifier, source surface, outcome, and safe changed-field names.
+Activity entries explain material business and administrative changes. They include organisation, a permanent activity identifier, time, actor kind and identifier, action, subject identifiers, correlation identifier, source surface, outcome, and safe changed-field identifiers. Subject and changed-field lists are unique and canonically ordered. The activity identifier is the duplicate identity within its organisation: an exact retry records nothing new, while different evidence under the same identity is refused. Timestamps describe when an action occurred; they do not establish authorisation or a second ordering mechanism.
 
 Activity does not store passwords, connection secrets, full sensitive values, private file addresses, or complete before-and-after record copies. Where a business audit requires a value history, that history has an explicit field policy and access permission.
 
@@ -104,5 +104,7 @@ Privacy administrators act within one organisation. A tenant administrator may c
 ## Foundation before integration
 
 [Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is delivered before Access/Record operations require atomic success evidence. Failed mutations create no success activity; safe refusal evidence may be appended separately after rollback. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) adds permitted views and complete service coverage to the same boundary.
+
+The [foundation plan](../build-plan/issue-252-activity-foundation.md) defines one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. After rollback, an independently authorised operation-specific path may append a refusal using only verified local identifiers. Logging failure cannot convert refusal into success. This task proves the reusable composition; it does not claim that every existing service has already integrated it.
 
 [File-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) supplies current recovery/hold checks before automated purge. [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117) extends selection policies and all-store handling, not a duplicate deletion engine. Complete organisation archive/restore follows these policies in [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255).

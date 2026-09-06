@@ -6,6 +6,11 @@ Governing requirements: [Access](../specification/04-access-and-permissions.md),
 [data contracts](../specification/appendices/data-contracts.md#permission-and-role-contracts)
 and [platform-only core](../specification/appendices/core-contract-boundary.md).
 
+**Complete:** independent whole-task review, combined Local verification and the
+[exact hosted Testing receipt](../evidence/issue-34-access-decision.md#delivery-boundary)
+are verified. Earlier dated slice checkpoints describe the delivery sequence,
+not remaining duplicate work.
+
 ## Outcome and place in the plan
 
 One read-only decision determines whether the transaction-bound organisation
@@ -222,8 +227,11 @@ new harness. Combined local verification passed 39 SQL suites / 1,903 assertions
 all 20 concurrency proofs, five-schema lint and full repository verification.
 The [final integration evidence](../evidence/issue-34-access-decision.md) records
 source fingerprints and the initial local test anomalies as well as successful
-reruns. Normal combined Testing delivery and its exact receipt remain outstanding.
-Keep #34 open and do not substitute slice 2's hosted receipt for this final work.
+reruns. Normal combined Testing delivery completed at exact `d554bcb689b31ce238787860ead1bfd91130bc06`.
+Its full schema-2 receipt matches the recomputed Git fingerprints and records all
+42 migrations, 20 selected/completed concurrency proofs and five selected/completed
+schemas. The normal SQL gate succeeded. This completes #34; slice 2's older receipt
+remains separate historical evidence rather than a substitute for this final work.
 
 ## Required decision behaviour
 
