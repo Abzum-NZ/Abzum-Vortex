@@ -16,7 +16,7 @@ The [decision register](../specification/appendices/decisions.md) has one non-bl
 
 [Permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32) is complete after independent full-task review and the exact hosted Testing receipt through D2. [Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) is complete after A–E implementation, independent full-task review, normal PR delivery and exact hosted Testing verification; [invitation evidence](../evidence/issue-33-invitation-access/README.md#hosted-testing-follow-up--6-september-2026) records the delivered revision and coverage. Earlier slice-by-slice instructions below explain the implementation order, not outstanding duplicate work.
 
-Next, [the central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) consumes these exact facts to decide what each account may do. [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) has no user hold and follows its actual dependencies; it must not bypass #34. Installed IAM journeys remain [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
+The [central access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) is now complete and decides what each account may do from these exact live facts. [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) has no user hold and its shared Access prerequisites are satisfied. Installed IAM journeys remain [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
 
 The consolidated [central access decision implementation plan](issue-34-access-decision.md) defines #34's exact scope, reviewable slices, complete-path evaluation and downstream policy ownership. Missing target policies refuse; they are not pulled into the permission foundation or treated as already implemented. [#305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305) is complete after [exact hosted Testing verification](../evidence/issue-305-request-lock-order.md#hosted-testing--6-september-2026): the organisation reader and supported account writer now use consistent ordering, proved with the actual writer. The database-integration prerequisite is cleared; #34 implementation proceeds without a user hold.
 
@@ -24,15 +24,16 @@ All four #34 slices now pass independent whole-task review and local verificatio
 current direct/Group access, privileged activation, delegated management and the
 verified application handoff. [Final implementation evidence](../evidence/issue-34-access-decision.md)
 records [PR #309](https://github.com/Abzum-NZ/Abzum-Vortex/pull/309)'s normal Testing merge.
-The exact hosted receipt for that combined revision is still pending; #34 remains
-in review until it is verified. The earlier [current-permission receipt](../evidence/issue-34-permission-eligibility.md)
-is complete but does not substitute for the combined delivery.
+The complete exact hosted receipt for that combined revision is verified: 42
+migrations, the normal 39-suite SQL gate, all 20 concurrency proofs and all five
+schemas. #34 is complete. The earlier [current-permission receipt](../evidence/issue-34-permission-eligibility.md)
+remains separate historical evidence.
 
 The [protected administration implementation plan](issue-30-protected-administration.md)
 consolidates #30 into reviewable slices. It reuses delivered stewardship and the
 same Access decision; it does not wait for all of #40, add a second permission
 engine or claim the later IAM application is already usable. Preparation is
-complete; implementation starts after #34's exact hosted completion.
+complete; #34's exact hosted completion now clears implementation to start.
 
 ## Architecture review
 

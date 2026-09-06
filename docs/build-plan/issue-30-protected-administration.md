@@ -9,9 +9,9 @@ Governing requirements: [people and organisations](../specification/02-people-or
 
 ## Status and dependency boundary
 
-Implementation remains dependency-blocked until the exact hosted delivery for the
+Implementation is unblocked: the exact hosted delivery for the
 [central Access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
-is complete. The other native prerequisites — [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23),
+is [complete](../evidence/issue-34-access-decision.md#delivery-boundary). The other native prerequisites — [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23),
 [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24),
 [#26](https://github.com/Abzum-NZ/Abzum-Vortex/issues/26),
 [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27),
@@ -257,7 +257,7 @@ delivery. Production remains separately gated.
 
 ## Acceptance checklist
 
-- [ ] No implementation begins before the exact hosted completion of
+- [x] No implementation begins before the exact hosted completion of
       [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34).
 - [ ] The configured operator idempotently provisions or adopts live scopes with
       explicit tenant and organisation steward nominations; no first-user,

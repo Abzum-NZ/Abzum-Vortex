@@ -70,13 +70,31 @@ update was verified to leave the tested `f24b94c` file tree unchanged. The exact
 Testing merge is `d554bcb689b31ce238787860ead1bfd91130bc06`.
 
 [Hosted execution `2rlpQddHLvBu3qOnAQrAhW`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/2rlpQddHLvBu3qOnAQrAhW)
-is running with its displayed trigger bound to that exact merge. Its complete
-success receipt remains outstanding. The earlier slice 2 receipt is not evidence
-for these additional migrations or server changes. Keep #34 open until this
-normal delivery gate is complete.
+completed successfully on 6 September 2026 at 20:25:49.203 NZST, after 30 minutes
+32.01 seconds. Root inspected the complete, untruncated schema-2 receipt, not only
+the execution badge. Its repository, Testing ref, exact merge and execution match;
+all 42 migrations, all 20 selected/completed concurrency proofs in manifest order,
+and all five selected/completed schemas are present. The normal SQL gate completed
+successfully; the exact source contains 39 SQL suites. CLI `2.116.0`, PostgreSQL 17
+and `status: succeeded` are recorded. No Production success is claimed.
+
+The receipt fingerprints were independently recomputed from exact Git revision
+`d554bcb689b31ce238787860ead1bfd91130bc06` and match:
+
+| Evidence | SHA-256 |
+|---|---|
+| Migration set | `cb3a4d457a2d2e3c258945350437d3e81e456a9619e63b0345f32211e304fe6a` |
+| Commit-owned runner | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Verification manifest | `4d22e86299278cb274e2627669ae492d8e8a991be5c94f8db7d08fa0c9e3b0a3` |
+| Selected coverage | `57ac1be58d018af70a7fcbaa70d6c305d1876c50d7e5ac720681282398232879` |
+
+The five verified schemas are `public`, `vortex_context`, `vortex_identity`,
+`vortex_definition` and `vortex_access`. Lint reports the same three documented
+warnings, not errors. The earlier slice 2 receipt remains separate historical
+evidence; this combined receipt completes #34's delivery boundary.
 
 [Organisation administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
-then consumes this boundary without a user hold. Changing operations there and in
+now consumes this completed boundary without a user hold. Changing operations there and in
 [protected Access operations #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
 own their governance-first resolver and private writer. Neither should upgrade the
 ordinary read resolver's shared lock. The existing plan assigns later record,
