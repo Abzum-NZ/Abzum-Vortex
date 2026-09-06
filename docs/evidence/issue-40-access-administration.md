@@ -77,6 +77,8 @@ The exact reviewed migration was then applied locally without resetting data, an
 
 This read-only slice adds no lock path or writer. It reuses the existing governance/read transaction and its previously passing 23 concurrency proofs recorded in [the invitation correction evidence](issue-315-invitation-audit-time.md); that is reused evidence, not a claim of a new concurrency run. The parallel unfinished database-condition migration was not applied or included in these database results. Exact hosted delivery is not yet verified. There is no new interface to screenshot.
 
+The permission-browsing checkpoint merged normally through [PR #317](https://github.com/Abzum-NZ/Abzum-Vortex/pull/317) at `2026-09-06T13:36:12Z`. Both preview checks passed. Reviewed source `a646a3de62d9cb43d51e48e0fa2ece7788bb4c2a` and Testing merge `89f822ae5a53864dad665fd15d0846f7e7ce3880` have identical file trees. No check was bypassed, and unfinished condition work was excluded. This proves source delivery to Testing, not hosted database success or Production promotion.
+
 | Frozen database file | SHA-256 |
 |---|---|
 | `supabase/migrations/20260906130257_protect_organization_permission_catalogue_administration.sql` | `6562a59beb1112b9a8ae4116328c87878e3ebd65fa732ab498dfff8c3f56ef53` |
