@@ -166,6 +166,17 @@ Phase 2 organisation selection establishes an application-independent context an
 
 The human organisation resolver, context initialization, `SET LOCAL ROLE`, live context validation and protected operation execute in one database transaction. The resolver keeps shared locks on the selected Identity and Access scope rows until that transaction ends. The database preserves the complete union as one transaction-local value. Structural validation and setting that value do not grant authority. The trusted server begins the transaction as `vortex_runtime`, executes the initializer available only to that role, and then enters `vortex_request` with `SET LOCAL ROLE`; only the request role may call the read-only context accessors and Access-owned live-context validator used by protected service SQL. The request role has no Identity schema access. Commit, rollback or pooled connection reuse cannot carry the role or value into another transaction.
 
+The [request/account correction #305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305)
+aligns the resolver with account changes: first select the exact active Identity
+scope without locking Identity rows and acquire only that organisation's Access
+shared lock. Then the existing authoritative Identity resolver locks and rechecks
+the same tenant, organisation and account. Missing or changed eligibility refuses
+without returning a scope; a foreign or ineligible candidate cannot lock unrelated
+Access state. Both locks remain transaction-bound. Protected writers acquire Access
+governance before mutable Identity facts; [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)
+must not check through the read resolver and later upgrade its shared lock. This is
+one consistent ordering rule, not a new context, counter or retry mechanism.
+
 ### Organisation launcher and selection contracts
 
 An **organisation launcher entry** contains only `organizationId`, `tenantDisplayName`, `organizationDisplayName`, and an optional organisation-account `accountDisplayName`. It is ordered by display names with permanent identifiers as deterministic tie-breakers. It contains no tenant identifier, organisation-account identifier, hierarchy, lifecycle state, application, logo, role, Group, permission, email, provider fact, access version or commercial value.
@@ -334,6 +345,37 @@ The version number, not the timestamp, establishes the strict order of access ch
 Permission-registration creation, update, withdrawal and reactivation follow the same audit principle. After the organisation lock and current-registration read, choose one observation time: current database time for creation, or the later of the prior registration observation and current database time for a successor. Its immutable revision and current registration use that identical observation. Registration revisions and Access version still order the changes; an early statement-start timestamp cannot reject an otherwise valid serialized change. [Correction #295](https://github.com/Abzum-NZ/Abzum-Vortex/issues/295) owns the demonstrated legacy writer repair without changing permission continuity, stale-revision checks or access decisions.
 
 Invitation acceptance returns `accepted` or `already_accepted` with the organisation account and current Access version, or the closed refusal `unavailable` or `identity_inactive` with neither. The Access operation fingerprints the secret before database entry, calls the Identity-owned transition and increments for a first activation or reactivation in the same transaction. Exact replay and every refusal return without incrementing; missing or exhausted version state rolls back the Identity mutation.
+
+### Central decision contracts
+
+The [central Access declaration](../../../contracts/src/organization-access-decision.ts)
+is supplied by trusted platform code or a verified immutable compiled operation.
+It binds an operation key, exact catalogue action, organisation/application target,
+exact permission identity, recent-authentication requirement and ordinary-use or
+delegated-management requirement. Parsing a declaration never verifies its origin
+or authorizes its caller. Context, not the declaration, supplies organisation,
+account, identity, Access version and correlation.
+
+Exact permission identity contains only application context when applicable, owner
+kind, owner identity and permission identity. The database discovers current
+registration, acceptance, continuity and meaning evidence. Management names both
+before and after scopes, each absent, organisation-catalogue or a nonempty unique
+set of exact permission identities; it does not accept copied authority receipts.
+
+Private permission eligibility is distinct from a final allowed operation. Both
+use the same transaction-bound operation/target/account/organisation/Access evidence
+and a checked time with a finite later recheck deadline. Internal refusal uses a
+closed reason; public refusal contains only a safe reason and correlation, without
+private target, permission or grant details. No random decision identity, exported
+grant-witness set, independent state or reusable capability is introduced.
+
+The initial declaration supports only organisation/application targets without
+record-level policy. Record types, fields, sharing, public callers and remote policy
+cannot be smuggled in as extra fields or treated as implemented. Their required
+policies refuse until their owning tasks extend the same boundary. Contract tests
+prove shape and separation, not effective permission, database execution or a usable
+interface. The [#34 implementation plan](../../build-plan/issue-34-access-decision.md)
+defines the remaining evaluation, integration and verification work.
 
 ## Module and record-type contracts
 

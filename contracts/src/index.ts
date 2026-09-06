@@ -19,6 +19,7 @@ export * from "./lineage";
 export * from "./module-contracts";
 export * from "./operation-contracts";
 export * from "./organization-access-catalogue";
+export * from "./organization-access-decision";
 export * from "./organization-delegation-authority-changes";
 export * from "./organization-group-changes";
 export * from "./organization-group-membership-changes";

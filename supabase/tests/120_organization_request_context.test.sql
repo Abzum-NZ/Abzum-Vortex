@@ -235,6 +235,25 @@ grant usage on schema extensions to vortex_runtime, vortex_request;
 set local role vortex_runtime;
 set local search_path = pg_catalog, extensions, public;
 
+select throws_ok(
+  $$select * from vortex_access.resolve_human_organization_scope(
+    null,
+    '22000000-0000-4000-8000-000000000001'
+  )$$,
+  '22023'::char(5),
+  'Organisation selection is invalid',
+  'null identity input keeps the closed invalid-selection boundary'
+);
+select throws_ok(
+  $$select * from vortex_access.resolve_human_organization_scope(
+    '42000000-0000-4000-8000-000000000001',
+    '00000000-0000-0000-0000-000000000000'
+  )$$,
+  '22023'::char(5),
+  'Organisation selection is invalid',
+  'nil organization input keeps the closed invalid-selection boundary'
+);
+
 select results_eq(
   $$
     select tenant_id, organization_id, organization_account_id, access_version
