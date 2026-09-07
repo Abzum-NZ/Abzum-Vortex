@@ -1,0 +1,3202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="Interactive Vortex App Designer prototype. No live data or permissions are changed."
+    />
+    <title>Vortex · App Designer prototype</title>
+    <style>
+      :root {
+        font:
+          16px/1.5 Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: #182337;
+        background: #f3f5fa;
+        --accent: #5941cf;
+        --line: #dce2ec;
+        --muted: #56647b;
+        --soft: #f0edff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      button {
+        font-size: 0.875rem;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 0.5rem 0.8rem;
+        background: white;
+        color: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f0f3f9;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      a:focus-visible {
+        outline: 3px solid #9c86ff;
+        outline-offset: 3px;
+      }
+      a {
+        color: var(--accent);
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+      h1 {
+        font-size: 1.5rem;
+        letter-spacing: -0.04em;
+        margin-bottom: 0;
+      }
+      h2 {
+        font-size: 1.125rem;
+        letter-spacing: -0.02em;
+      }
+      h3 {
+        font-size: 0.875rem;
+      }
+      .muted,
+      small {
+        color: var(--muted);
+      }
+      small {
+        font-size: 0.8rem;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .spread {
+        justify-content: space-between;
+      }
+      .stack {
+        display: grid;
+        gap: 1rem;
+      }
+      .tag {
+        font-size: 0.75rem;
+        border-radius: 5px;
+        background: #edf1f6;
+        padding: 0.25rem 0.5rem;
+        color: #43536b;
+      }
+      .tag.purple {
+        background: var(--soft);
+        color: var(--accent);
+      }
+      .tag.green {
+        background: #e5f5ec;
+        color: #14634c;
+      }
+      .top {
+        height: 66px;
+        background: white;
+        border-bottom: 1px solid var(--line);
+        padding: 0 1.2rem;
+      }
+      .brand {
+        font-size: 1.3rem;
+        font-weight: 750;
+        letter-spacing: -0.05em;
+      }
+      .mark {
+        width: 31px;
+        height: 31px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--accent);
+        color: white;
+        font-weight: 800;
+      }
+      .divide {
+        height: 24px;
+        border-left: 1px solid var(--line);
+        margin: 0 0.5rem;
+      }
+      .context {
+        font-size: 0.875rem;
+      }
+      .banner {
+        font-size: 0.8rem;
+        background: #fff9e6;
+        border-bottom: 1px solid #e8dbab;
+        color: #6b511c;
+        padding: 0.45rem 1.2rem;
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: 218px minmax(0, 1fr);
+        min-height: calc(100dvh - 100px);
+      }
+      nav {
+        padding: 1.2rem 0.8rem;
+        background: #192337;
+        color: #d9e2f2;
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+      }
+      nav button {
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        border-color: transparent;
+        color: inherit;
+        padding: 0.7rem;
+        margin: 2px 0;
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+      }
+      nav button:hover {
+        background: #2a3550;
+      }
+      nav button.active {
+        background: #39425f;
+        color: white;
+        box-shadow: inset 3px 0 #b4a3ff;
+      }
+      .nav-title {
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        font-size: 0.75rem;
+        padding: 0.3rem 0.7rem;
+        color: #a8b8d2;
+      }
+      .nav-foot {
+        margin-top: auto;
+        border: 1px solid #42506b;
+        border-radius: 8px;
+        padding: 0.8rem;
+        font-size: 0.8rem;
+        color: #bdc9df;
+      }
+      .nav-count {
+        margin-left: auto;
+        color: #b3c1d9;
+        font-size: 0.75rem;
+      }
+      main {
+        min-width: 0;
+      }
+      .heading {
+        background: white;
+        padding: 1rem 1.3rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .breadcrumb {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-bottom: 0.4rem;
+      }
+      .work {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        min-height: calc(100dvh - 200px);
+      }
+      .editor {
+        padding: 1.2rem;
+        min-width: 0;
+      }
+      .toolbar {
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+      }
+      .segmented {
+        background: #e6ebf3;
+        display: flex;
+        padding: 3px;
+        border-radius: 8px;
+        gap: 2px;
+      }
+      .segmented button {
+        border: 0;
+        background: transparent;
+        padding: 0.35rem 0.7rem;
+      }
+      .segmented button.active {
+        background: white;
+        box-shadow: 0 1px 3px #18233720;
+      }
+      .canvas {
+        max-width: 100%;
+        margin: auto;
+        min-height: 540px;
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: 0 5px 22px #18233709;
+        transition: max-width 0.2s;
+      }
+      .canvas-bar {
+        border-bottom: 1px solid var(--line);
+        padding: 0.7rem 1rem;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .canvas-body {
+        padding: 1.5rem;
+      }
+      .canvas-title {
+        margin-bottom: 1.7rem;
+      }
+      .canvas-title h2 {
+        margin-bottom: 0.2rem;
+      }
+      .canvas-title p {
+        font-size: 0.875rem;
+        margin: 0;
+      }
+      .component {
+        border: 2px solid transparent;
+        border-radius: 7px;
+        position: relative;
+        margin: 1rem 0;
+      }
+      .component.selected {
+        border-color: var(--accent);
+      }
+      .selection {
+        position: absolute;
+        top: -24px;
+        left: -2px;
+        background: var(--accent);
+        color: white;
+        font-size: 0.75rem;
+        padding: 3px 7px;
+        border-radius: 5px 5px 0 0;
+      }
+      .table-tools {
+        padding: 0.8rem;
+        border-bottom: 1px solid var(--line);
+      }
+      input,
+      select,
+      textarea {
+        border: 1px solid #c9d2e1;
+        border-radius: 6px;
+        padding: 0.55rem;
+        color: inherit;
+        background: white;
+        font-size: 0.875rem;
+        max-width: 100%;
+      }
+      .table-tools input {
+        width: min(220px, 100%);
+      }
+      .table-scroll {
+        overflow: auto;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.875rem;
+        text-align: left;
+      }
+      th,
+      td {
+        padding: 0.8rem 1rem;
+        border-bottom: 1px solid #e9edf4;
+        white-space: nowrap;
+      }
+      th {
+        background: #fafbfe;
+        font-size: 0.8rem;
+        color: var(--muted);
+        font-weight: 550;
+      }
+      .table-foot {
+        font-size: 0.8rem;
+        padding: 0.8rem 1rem;
+        color: var(--muted);
+      }
+      .record-icon {
+        background: var(--soft);
+        color: var(--accent);
+        border-radius: 5px;
+        padding: 0.15rem 0.4rem;
+        margin-right: 0.5rem;
+      }
+      .binding-strip {
+        border-top: 1px solid var(--line);
+        margin-top: 1.4rem;
+        padding-top: 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.7rem;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .binding-strip button {
+        background: var(--soft);
+        border-color: #dcd4ff;
+        color: var(--accent);
+        font-size: 0.8rem;
+        padding: 0.35rem 0.6rem;
+      }
+      .palette {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin: 0.9rem 0;
+      }
+      .palette button {
+        font-size: 0.8rem;
+      }
+      .hint {
+        font-size: 0.8rem;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      aside {
+        background: white;
+        border-left: 1px solid var(--line);
+        padding: 1.25rem;
+        min-width: 0;
+      }
+      aside h2 {
+        font-size: 1rem;
+        margin-bottom: 0.2rem;
+      }
+      .field {
+        display: grid;
+        gap: 0.4rem;
+        margin-top: 1rem;
+      }
+      .field label {
+        font-size: 0.875rem;
+        font-weight: 550;
+      }
+      .field input,
+      .field select {
+        width: 100%;
+      }
+      .section {
+        border-top: 1px solid var(--line);
+        margin-top: 1.2rem;
+        padding-top: 1.1rem;
+      }
+      .binding {
+        border: 1px solid #dad2fc;
+        border-radius: 8px;
+        background: #faf9ff;
+        padding: 0.85rem;
+        font-size: 0.875rem;
+      }
+      .binding p {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin: 0.5rem 0;
+      }
+      .binding button {
+        width: 100%;
+        margin-top: 0.35rem;
+      }
+      .text-button {
+        border: 0;
+        padding: 0;
+        color: var(--accent);
+        font-size: 0.8rem;
+      }
+      .flow-canvas {
+        background: #fafbff radial-gradient(#d5dcea 1px, transparent 1px);
+        background-size: 18px 18px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        min-height: 520px;
+        padding: 2rem;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+      }
+      .node {
+        background: white;
+        border: 1px solid #cbd4e4;
+        border-radius: 10px;
+        padding: 1rem;
+        width: min(280px, 100%);
+        text-align: left;
+        box-shadow: 0 3px 12px #1723380a;
+      }
+      .node.selected {
+        border: 2px solid var(--accent);
+        padding: calc(1rem - 1px);
+      }
+      .node small {
+        display: block;
+        margin-bottom: 0.4rem;
+      }
+      .node strong {
+        font-size: 0.95rem;
+      }
+      .node p {
+        margin: 0.4rem 0 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .edge {
+        height: 36px;
+        border-left: 2px solid #a2adc4;
+        position: relative;
+      }
+      .edge:after {
+        content: "";
+        position: absolute;
+        bottom: 1px;
+        left: -5px;
+        width: 8px;
+        height: 8px;
+        border-bottom: 2px solid #a2adc4;
+        border-right: 2px solid #a2adc4;
+        transform: rotate(45deg);
+      }
+      .panel {
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1.4rem;
+      }
+      .hidden {
+        display: none !important;
+      }
+      dialog {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1.5rem;
+        width: min(600px, 92vw);
+        color: inherit;
+        box-shadow: 0 20px 80px #18233730;
+      }
+      dialog::backdrop {
+        background: #18233766;
+      }
+      dialog p {
+        font-size: 0.875rem;
+        line-height: 1.6;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: #f3f5fa;
+        padding: 1rem;
+        border-radius: 7px;
+        font-size: 0.8rem;
+      }
+      .toast {
+        position: fixed;
+        bottom: 1.2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: 90vw;
+        background: #192337;
+        color: white;
+        border-radius: 8px;
+        padding: 0.8rem 1.2rem;
+        font-size: 0.875rem;
+        z-index: 10;
+      }
+      .skip {
+        position: fixed;
+        top: -60px;
+        left: 1rem;
+        background: white;
+        padding: 1rem;
+        z-index: 20;
+      }
+      .skip:focus {
+        top: 1rem;
+      }
+      .mobile-menu {
+        display: none;
+      }
+      @media (max-width: 1100px) {
+        .shell {
+          grid-template-columns: 185px minmax(0, 1fr);
+        }
+        .work {
+          grid-template-columns: minmax(0, 1fr) 270px;
+        }
+        .canvas-body {
+          padding: 1rem;
+        }
+        .context {
+          display: none;
+        }
+      }
+      @media (max-width: 850px) {
+        .work {
+          grid-template-columns: 1fr;
+        }
+        aside {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+        .canvas {
+          min-height: 400px;
+        }
+        .draft-tag {
+          display: none;
+        }
+      }
+      @media (max-width: 600px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+        nav {
+          display: none;
+        }
+        nav.open {
+          display: flex;
+        }
+        .mobile-menu {
+          display: block;
+        }
+        .top {
+          height: auto;
+          min-height: 66px;
+          flex-wrap: wrap;
+          padding: 0.7rem;
+          gap: 0.7rem;
+        }
+        .top button {
+          padding: 0.4rem 0.6rem;
+        }
+        .heading {
+          padding: 1rem;
+        }
+        .editor {
+          padding: 0.8rem;
+        }
+        .banner {
+          font-size: 0.75rem;
+        }
+        .canvas-body {
+          padding: 0.8rem;
+        }
+        .toolbar {
+          gap: 0.6rem;
+        }
+        .canvas-title {
+          align-items: flex-start;
+        }
+        .canvas-title .tag {
+          display: none;
+        }
+        h1 {
+          font-size: 1.25rem;
+        }
+        .flow-canvas {
+          padding: 1.5rem 0.7rem;
+        }
+        .nav-foot {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+          animation: none !important;
+          scroll-behavior: auto !important;
+        }
+      }
+
+      /* Canvas-first prototype: application rail, contextual palette, canvas, inspector. */
+      :root {
+        color-scheme: dark;
+        background: #171717;
+        color: #ededed;
+        --accent: #8eafff;
+        --line: #353535;
+        --muted: #a2a2a2;
+        --soft: #252d40;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      body {
+        background: #171717;
+      }
+      .top,
+      .heading {
+        background: #171717;
+      }
+      .top {
+        height: 72px;
+      }
+      .banner {
+        background: #252319;
+        color: #dfd2a4;
+        border-color: #3d3825;
+        padding: 0.35rem 1.2rem;
+      }
+      .shell {
+        grid-template-columns: 195px minmax(0, 1fr);
+      }
+      nav {
+        background: #101010;
+        color: #dedede;
+        border-right: 1px solid #303030;
+        padding: 0.8rem 0.6rem;
+      }
+      .nav-title {
+        color: #888;
+      }
+      nav button {
+        font-size: 14px;
+        padding: 0.6rem;
+      }
+      .nav-count {
+        color: #aaa;
+      }
+      nav button.active {
+        background: #292929;
+        box-shadow: inset 3px 0 #ddd;
+      }
+      nav button:hover {
+        background: #242424;
+      }
+      .nav-foot {
+        border-color: #333;
+        color: #aaa;
+      }
+      .work {
+        grid-template-columns: 225px minmax(320px, 1fr) 280px;
+        min-height: calc(100dvh - 204px);
+      }
+      #designer-palette {
+        background: #101010;
+        border-right: 1px solid #333;
+        padding: 1rem;
+        min-width: 0;
+        overflow: auto;
+        max-height: calc(100dvh - 204px);
+      }
+      .palette-heading {
+        margin-bottom: 1.2rem;
+      }
+      .palette-heading h2 {
+        margin-bottom: 0.2rem;
+      }
+      #palette-search {
+        width: 100%;
+        margin-bottom: 1.2rem;
+      }
+      .palette-group {
+        display: grid;
+        gap: 0.6rem;
+      }
+      .palette-group button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        text-align: left;
+        padding: 0.75rem;
+        background: #1b1b1b;
+        border-color: #353535;
+        cursor: grab;
+      }
+      .palette-group button[hidden] {
+        display: none;
+      }
+      .palette-group button:active {
+        cursor: grabbing;
+      }
+      button {
+        color: #ededed;
+        background: #202020;
+        border-color: #3b3b3b;
+        border-radius: 6px;
+      }
+      button:hover {
+        background: #313131;
+      }
+      button.primary {
+        background: #e9e9e9;
+        color: #171717;
+        border-color: #e9e9e9;
+      }
+      input,
+      select,
+      textarea {
+        background: #171717;
+        color: #ededed;
+        border-color: #414141;
+      }
+      input::placeholder {
+        color: #929292;
+      }
+      .editor {
+        background: #252525;
+        padding: 1.25rem;
+        overflow: hidden;
+      }
+      .heading {
+        padding: 0.85rem 1.25rem;
+      }
+      .breadcrumb {
+        color: #aaa;
+      }
+      aside {
+        background: #171717;
+        border-color: #353535;
+        padding: 1.2rem;
+      }
+      .canvas,
+      .panel,
+      .node {
+        background: #191919;
+        border-color: #505050;
+        box-shadow: none;
+      }
+      .canvas {
+        border-radius: 2px;
+        min-height: 600px;
+      }
+      .canvas-bar {
+        border-color: #3d3d3d;
+      }
+      .component {
+        border: 1px dashed #5d5d5d;
+        border-radius: 2px;
+      }
+      .component.selected {
+        border: 2px solid var(--accent);
+      }
+      .selection {
+        background: #355078;
+        color: #eef3ff;
+      }
+      .tag {
+        background: #303030;
+        color: #ddd;
+      }
+      .tag.purple {
+        background: #293448;
+        color: #c2d3ff;
+      }
+      .tag.green {
+        background: #22382b;
+        color: #b4dfbd;
+      }
+      .mark {
+        background: #e9e9e9;
+        color: #171717;
+      }
+      .segmented {
+        background: #191919;
+      }
+      .segmented button.active {
+        background: #414141;
+      }
+      .table-tools,
+      .table-foot,
+      td,
+      th {
+        border-color: #383838;
+      }
+      th {
+        background: #202020;
+        color: #aaa;
+      }
+      .record-icon {
+        background: #2c3545;
+        color: #cad8f5;
+      }
+      .binding {
+        background: #202329;
+        border-color: #3c465a;
+      }
+      .section {
+        border-color: #383838;
+      }
+      dialog {
+        background: #1c1c1c;
+        color: #ededed;
+        border-color: #555;
+      }
+      dialog::backdrop {
+        background: #0009;
+      }
+      pre {
+        background: #101010;
+        color: #ddd;
+      }
+      .toast {
+        background: #ededed;
+        color: #171717;
+      }
+      .skip {
+        background: #171717;
+      }
+      a {
+        color: #abc3ff;
+      }
+      .palette {
+        display: none !important;
+      }
+      .graph-scroll {
+        height: calc(100dvh - 320px);
+        min-height: 470px;
+        overflow: auto;
+        border: 1px solid #444;
+        background: #252525 radial-gradient(#484848 1px, transparent 1px);
+        background-size: 20px 20px;
+        position: relative;
+      }
+      .graph-tools {
+        margin-bottom: 1rem;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .graph-tools select {
+        max-width: 210px;
+      }
+      #graph-space {
+        position: relative;
+      }
+      #graph-stage {
+        width: 2800px;
+        height: 1800px;
+        transform-origin: 0 0;
+        position: absolute;
+      }
+      .connections {
+        position: absolute;
+        inset: 0;
+        width: 2800px;
+        height: 1800px;
+        pointer-events: none;
+      }
+      .graph-node {
+        position: absolute;
+        width: 220px;
+        min-height: 130px;
+        background: #191919;
+        border: 1px solid #696969;
+        border-radius: 8px;
+        box-shadow: 0 5px 15px #0003;
+      }
+      .graph-node.selected {
+        border: 2px solid var(--accent);
+      }
+      .graph-node strong {
+        display: block;
+        font-size: 14px;
+      }
+      .graph-node small {
+        display: block;
+        font-size: 12px;
+        color: #a8a8a8;
+        margin-top: 0.5rem;
+      }
+      .node-drag {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        border-bottom: 1px solid #333;
+        border-radius: 8px 8px 0 0;
+        font-size: 12px;
+        padding: 0.65rem;
+        cursor: grab;
+      }
+      .node-content {
+        display: block;
+        text-align: left;
+        width: 100%;
+        padding: 0.7rem;
+        border: 0;
+        background: transparent;
+      }
+      .trigger-node {
+        padding: 1rem;
+        border-color: #75a487;
+      }
+      .trigger-node > button:first-child {
+        border: 0;
+        background: transparent;
+        padding: 0 0 0.5rem;
+        color: #b2d3bd;
+      }
+      .port {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        min-width: 24px;
+        padding: 0;
+        border: 2px solid #a7b6d0;
+        background: #293d61;
+        border-radius: 50%;
+        top: 52px;
+        z-index: 2;
+      }
+      .port:hover,
+      .port:focus {
+        background: #bad0ff;
+      }
+      .port.input {
+        left: -13px;
+      }
+      .port.output {
+        right: -13px;
+        cursor: crosshair;
+      }
+      .port.lower {
+        top: 94px;
+      }
+      .hint {
+        font-size: 13px;
+      }
+      .binding button {
+        font-size: 13px;
+      }
+      .field label {
+        font-size: 14px;
+      }
+      h1 {
+        font-size: 1.2rem;
+      }
+      .top .context {
+        font-size: 14px;
+      }
+      .toolbar .segmented {
+        flex-wrap: wrap;
+      }
+      .row {
+        min-width: 0;
+      }
+      .top .row {
+        flex-wrap: wrap;
+      }
+      .table-scroll {
+        max-width: 100%;
+      }
+      @media (max-width: 1300px) {
+        .shell {
+          grid-template-columns: 175px minmax(0, 1fr);
+        }
+        .work {
+          grid-template-columns: 190px minmax(280px, 1fr) 245px;
+        }
+        #designer-palette {
+          padding: 0.8rem;
+        }
+        .editor {
+          padding: 1rem;
+        }
+        aside {
+          padding: 1rem;
+        }
+      }
+      @media (max-width: 1080px) {
+        .work {
+          grid-template-columns: 185px minmax(0, 1fr);
+        }
+        aside {
+          grid-column: 1/-1;
+          border-top: 1px solid #333;
+          border-left: 0;
+        }
+        .graph-scroll {
+          height: 570px;
+        }
+        #designer-palette {
+          max-height: none;
+        }
+        .context {
+          display: none;
+        }
+      }
+      @media (max-width: 720px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+        nav {
+          display: none;
+        }
+        nav.open {
+          display: flex;
+        }
+        .mobile-menu {
+          display: block;
+        }
+        .work {
+          grid-template-columns: 145px minmax(0, 1fr);
+        }
+        .editor {
+          padding: 0.65rem;
+        }
+        #designer-palette {
+          padding: 0.65rem;
+        }
+        .palette-group button {
+          font-size: 13px;
+          padding: 0.55rem;
+        }
+        .top {
+          height: auto;
+        }
+        .graph-tools .row {
+          flex-wrap: wrap;
+        }
+        .heading .row {
+          flex-wrap: wrap;
+        }
+        .canvas-body {
+          padding: 0.7rem;
+        }
+        .canvas {
+          min-height: 420px;
+        }
+        .graph-scroll {
+          min-height: 420px;
+        }
+        #palette-search {
+          font-size: 12px;
+        }
+        #designer-palette h2 {
+          font-size: 14px;
+        }
+      }
+      @media (max-width: 460px) {
+        .work {
+          grid-template-columns: 1fr;
+        }
+        #designer-palette {
+          max-height: 225px;
+          border-bottom: 1px solid #333;
+        }
+        .palette-group {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .palette-heading {
+          margin-bottom: 0.5rem;
+        }
+        #palette-search {
+          margin-bottom: 0.5rem;
+        }
+        .graph-scroll {
+          height: 450px;
+        }
+        .top .brand {
+          font-size: 1.1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to designer</a>
+    <header class="top row spread">
+      <div class="row">
+        <button class="mobile-menu" id="menu" aria-controls="navigation" aria-expanded="false">
+          Menu</button
+        ><span class="mark" aria-hidden="true">V</span><span class="brand">Vortex</span
+        ><span class="divide"></span
+        ><span class="context">Demo organisation <span class="muted">/</span> Workspace demo</span>
+      </div>
+      <div class="row">
+        <span class="tag green draft-tag" id="draft">Draft · revision 1</span
+        ><button id="agent">Agent capabilities</button><button id="validate">Validate</button
+        ><button class="primary" id="release">Review release</button>
+      </div>
+    </header>
+    <div class="banner">
+      <strong>Interactive prototype.</strong> Changes stay in this tab. No live data, permissions or
+      publication. Browser tools edit this demo only.
+    </div>
+    <div class="shell">
+      <nav id="navigation" aria-label="Application designer">
+        <div>
+          <div class="nav-title">Workspace demo</div>
+          <button data-view="application">◇ Application</button
+          ><button data-view="modules">▦ Modules <span class="nav-count">2</span></button
+          ><button data-view="pages" class="active" aria-current="page">
+            ▤ Pages <span class="nav-count">1</span></button
+          ><button data-view="navigation">☷ Navigation</button>
+        </div>
+        <div>
+          <div class="nav-title">Behaviour</div>
+          <button data-view="flows">⑂ Frontend flows <span class="nav-count">2</span></button
+          ><button data-view="background">◷ Background workflows</button>
+        </div>
+        <div>
+          <div class="nav-title">Configure</div>
+          <button data-view="access">♧ Roles & access</button
+          ><button data-view="connections">⇄ Connections</button
+          ><button data-view="appearance">◐ Appearance</button>
+        </div>
+        <div class="nav-foot">
+          Application <strong>0.1.0 draft</strong><br />Module versions are independent.<br /><a
+            href="https://github.com/Abzum-NZ/Abzum-Vortex/issues/323"
+            target="_blank"
+            rel="noreferrer"
+            style="color: #c7baff"
+            >Prototype scope ↗</a
+          >
+        </div>
+      </nav>
+      <main id="main" tabindex="-1">
+        <div class="heading">
+          <div class="breadcrumb" id="breadcrumb">Pages / Records</div>
+          <div class="row spread">
+            <div class="row">
+              <h1 id="title">Records</h1>
+              <span class="tag purple" id="kind">Page</span>
+            </div>
+            <div class="row">
+              <button id="preview">Preview draft</button
+              ><button id="walkthrough">Walkthrough ↗</button>
+            </div>
+          </div>
+        </div>
+        <div class="work">
+          <section id="designer-palette" aria-label="Components and nodes"></section>
+          <section class="editor" aria-label="Editing canvas">
+            <div class="toolbar row spread">
+              <div class="segmented">
+                <button id="design" class="active">Design</button
+                ><button id="outline">Outline</button>
+              </div>
+              <div class="segmented" aria-label="Preview width">
+                <button data-width="100%" class="active">Desktop</button
+                ><button data-width="768px">Tablet</button><button data-width="375px">Phone</button>
+              </div>
+            </div>
+            <div id="surface"></div>
+            <div class="palette" id="palette">
+              <button data-add="table">+ Records table</button
+              ><button data-add="form">+ Form</button
+              ><button data-add="button">+ Action button</button>
+            </div>
+            <p class="hint">
+              Select a component to configure its data and actions. The page defines the layout;
+              flows define what happens.
+            </p>
+          </section>
+          <aside id="inspector" aria-label="Selection settings"></aside>
+        </div>
+      </main>
+    </div>
+    <dialog id="dialog">
+      <div class="row spread">
+        <h2 id="dialog-title"></h2>
+        <button id="close" aria-label="Close dialog">✕</button>
+      </div>
+      <div id="dialog-content"></div>
+    </dialog>
+    <div class="toast hidden" id="toast" role="status"></div>
+    <script>
+      const viewInfo = {
+        application: {
+          label: "Application",
+          fields: { name: "Name", description: "Description", version: "Application version" },
+          owner: 64,
+        },
+        modules: {
+          label: "Modules",
+          fields: { name: "Name", scope: "Data ownership", version: "Module version" },
+          owner: 64,
+        },
+        fields: {
+          label: "Fields",
+          fields: { name: "Name", module: "Module", type: "Field type" },
+          owner: 44,
+        },
+        relationships: {
+          label: "Relationships",
+          fields: { name: "Name", from: "Source module", to: "Target module" },
+          owner: 49,
+        },
+        queries: {
+          label: "Exposed queries",
+          fields: { name: "Name", module: "Module", condition: "Condition" },
+          owner: 54,
+        },
+        pages: { label: "Pages", fields: { name: "Name", route: "Route" }, owner: 65 },
+        navigation: { label: "Navigation", fields: { name: "Label", page: "Page" }, owner: 64 },
+        flows: {
+          label: "Frontend flows",
+          fields: { name: "Name", trigger: "Trigger", output: "Result type" },
+          owner: 58,
+        },
+        background: {
+          label: "Background workflows",
+          fields: { name: "Name", input: "Input", purpose: "Purpose" },
+          owner: 76,
+        },
+        access: {
+          label: "Role templates",
+          fields: { name: "Name", permissions: "Requested permissions" },
+          owner: 64,
+        },
+        connections: {
+          label: "Connections",
+          fields: {
+            name: "Name",
+            type: "Connection type",
+            secretReference: "Secret reference — never a secret value",
+          },
+          owner: 99,
+        },
+        interfaces: {
+          label: "Interfaces",
+          fields: { name: "Name", operation: "Exposed operation" },
+          owner: 103,
+        },
+        appearance: {
+          label: "Appearance",
+          fields: { name: "Theme name", accent: "Accent colour", density: "Density" },
+          owner: 71,
+        },
+      };
+      const catalog = {
+        application: [
+          {
+            id: "app",
+            name: "Workspace demo",
+            description: "A neutral application for exploring the builder.",
+            version: "0.1.0",
+          },
+        ],
+        modules: [
+          { id: "items", name: "Items", scope: "Application-contained", version: "1.0.0" },
+          { id: "categories", name: "Categories", scope: "Organisation-shared", version: "1.0.0" },
+        ],
+        fields: [
+          { id: "name", name: "Name", module: "items", type: "Text" },
+          { id: "status", name: "Status", module: "items", type: "Choice" },
+          { id: "category-name", name: "Name", module: "categories", type: "Text" },
+        ],
+        relationships: [{ id: "category", name: "Category", from: "items", to: "categories" }],
+        queries: [
+          {
+            id: "available",
+            name: "Available records",
+            module: "items",
+            condition: "Status equals Active",
+          },
+        ],
+        pages: [{ id: "records", name: "Records", route: "/records" }],
+        navigation: [{ id: "records-nav", name: "Records", page: "records" }],
+        flows: [
+          {
+            id: "load",
+            name: "Load records",
+            trigger: "Component load or refresh",
+            output: "Rows",
+          },
+          { id: "save", name: "Save form", trigger: "Manual submit", output: "Saved record" },
+          {
+            id: "managed",
+            name: "Managed load records",
+            trigger: "Component load or refresh",
+            output: "Rows",
+          },
+        ],
+        background: [
+          {
+            id: "process",
+            name: "Process submitted record",
+            input: "Record reference",
+            purpose: "Continue work in the background after a committed request",
+          },
+        ],
+        access: [{ id: "editor", name: "Editor", permissions: "Items: read, create, update" }],
+        connections: [
+          {
+            id: "service",
+            name: "External service",
+            type: "HTTP service",
+            secretReference: "Configured separately during installation",
+          },
+        ],
+        interfaces: [{ id: "submit", name: "Submit record", operation: "Published submit action" }],
+        appearance: [{ id: "theme", name: "Vortex", accent: "#8eafff", density: "Comfortable" }],
+      };
+
+      ("use strict");
+      // All state below is disposable prototype data, not a platform contract or authority engine.
+      const $ = (id) => document.getElementById(id);
+      const esc = (value) =>
+        String(value ?? "").replace(
+          /[&<>"']/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+        );
+      const clone = (value) => JSON.parse(JSON.stringify(value));
+      const state = {
+        view: "pages",
+        revision: 1,
+        page: "records",
+        component: "table",
+        flow: "load",
+        node: "query",
+        outline: false,
+        width: "100%",
+        scenario: "normal",
+        lastOperation: null,
+        release: null,
+      };
+      const samples = [
+        ["Item 001", "Category A", "Active", "Today"],
+        ["Item 002", "Category B", "Draft", "Yesterday"],
+        ["Item 003", "Category A", "Active", "Yesterday"],
+      ];
+      const components = {
+        records: [
+          {
+            id: "table",
+            type: "table",
+            name: "Records",
+            flow: "load",
+            filter: "All",
+            pageSize: "25",
+          },
+        ],
+      };
+      const graphs = {
+        load: [
+          {
+            id: "query",
+            type: "Query records",
+            name: "Get permitted items",
+            runAs: "Current user",
+            source: "Available records",
+            value: "rows",
+          },
+          {
+            id: "return",
+            type: "Return",
+            name: "Return rows",
+            runAs: "Current user",
+            source: "rows",
+            value: "",
+          },
+        ],
+        save: [
+          {
+            id: "save-node",
+            type: "Save form",
+            name: "Save validated values",
+            runAs: "Current user",
+            source: "Current page form",
+            value: "savedRecord",
+          },
+          {
+            id: "saved-return",
+            type: "Return",
+            name: "Return saved record",
+            runAs: "Current user",
+            source: "savedRecord",
+            value: "",
+          },
+        ],
+      };
+      const variables = {
+        load: [{ id: "rows", name: "rows", type: "List", initial: "[]" }],
+        save: [],
+      };
+      const nodeTypes = [
+        "Query records",
+        "Transform rows",
+        "Condition",
+        "Set variable",
+        "Show form",
+        "Save form",
+        "Update records",
+        "Show message",
+        "Navigate",
+        "Refresh component",
+        "Start background workflow",
+        "Return",
+      ];
+      let simulation = null;
+      const edges = {
+        load: [
+          { from: "trigger", to: "query", port: "next" },
+          { from: "query", to: "return", port: "next" },
+        ],
+        save: [
+          { from: "trigger", to: "save-node", port: "next" },
+          { from: "save-node", to: "saved-return", port: "next" },
+        ],
+      };
+      let connectFrom = null;
+      let zoom = 0.8;
+      for (const nodes of Object.values(graphs))
+        nodes.forEach((n, i) => {
+          n.x = String(350 + i * 300);
+          n.y = "160";
+        });
+      function find(section, id) {
+        return catalog[section]?.find((x) => x.id === id);
+      }
+      function modal(title, html) {
+        $("dialog-title").textContent = title;
+        $("dialog-content").innerHTML = html;
+        if (!$("dialog").open) $("dialog").showModal();
+      }
+      function notice(text) {
+        $("toast").textContent = text;
+        $("toast").classList.remove("hidden");
+        clearTimeout(notice.timer);
+        notice.timer = setTimeout(() => $("toast").classList.add("hidden"), 5000);
+      }
+      function closeModal() {
+        $("dialog").close();
+      }
+      function btn(text, action, arg = "", primary = false) {
+        return (
+          "<button " +
+          (primary ? 'class="primary" ' : "") +
+          'data-action="' +
+          action +
+          '" data-arg="' +
+          esc(arg) +
+          '">' +
+          esc(text) +
+          "</button>"
+        );
+      }
+      function field(name, label, value = "", choices = null) {
+        return (
+          '<div class="field"><label for="edit-' +
+          name +
+          '">' +
+          esc(label) +
+          "</label>" +
+          (choices
+            ? '<select id="edit-' +
+              name +
+              '" name="' +
+              name +
+              '">' +
+              choices
+                .map((v) => {
+                  const id = typeof v === "string" ? v : v.id,
+                    label = typeof v === "string" ? v : v.name;
+                  return (
+                    '<option value="' +
+                    esc(id) +
+                    '" ' +
+                    (id === value ? "selected" : "") +
+                    ">" +
+                    esc(label) +
+                    "</option>"
+                  );
+                })
+                .join("") +
+              "</select>"
+            : '<input id="edit-' +
+              name +
+              '" name="' +
+              name +
+              '" value="' +
+              esc(value) +
+              '" maxlength="500" ' +
+              (name === "name" ? "required" : "") +
+              ">") +
+          "</div>"
+        );
+      }
+      function editor(title, kind, target, fields) {
+        modal(
+          title,
+          '<form id="editor-form" data-kind="' +
+            kind +
+            '" data-target="' +
+            esc(target) +
+            '" data-revision="' +
+            state.revision +
+            '" class="stack">' +
+            fields +
+            '<p id="edit-error" role="alert" style="color:#a33432"></p><button class="primary" type="submit">Save to demo draft</button></form>',
+        );
+      }
+      function currentComponents() {
+        return components[state.page] ?? [];
+      }
+      function currentComponent() {
+        return currentComponents().find((c) => c.id === state.component);
+      }
+      function currentFlow() {
+        return find("flows", state.flow);
+      }
+      function touch(operation) {
+        state.revision++;
+        state.lastOperation = {
+          ...clone(operation),
+          resultRevision: state.revision,
+          liveEffect: false,
+        };
+        render();
+        return { kind: "local_prototype", revision: state.revision, liveEffect: false };
+      }
+      function verifyInput(input, allowed) {
+        if (
+          !input ||
+          typeof input !== "object" ||
+          Array.isArray(input) ||
+          Object.keys(input).some((k) => !allowed.includes(k))
+        )
+          throw Error("Unsupported input.");
+      }
+      function valuesOnly(values, allowed) {
+        verifyInput(values, allowed);
+        if (
+          Object.keys(values).length === 0 ||
+          Object.values(values).some((v) => typeof v !== "string" || v.length > 500)
+        )
+          throw Error("Use supported text settings.");
+        if ("name" in values && !values.name.trim()) throw Error("Enter a name.");
+      }
+      function definitionChoices(section, key) {
+        if (key === "scope") return ["Application-contained", "Organisation-shared"];
+        if (key === "type" && section === "fields")
+          return ["Text", "Number", "Date", "Choice", "Person", "File"];
+        if (["module", "from", "to"].includes(key)) return catalog.modules;
+        if (key === "page") return catalog.pages;
+        if (key === "output") return ["Rows", "Saved record", "Message", "No value"];
+        if (key === "trigger")
+          return [
+            "Manual submit",
+            "Button click",
+            "Component load or refresh",
+            "Field changes",
+            "Field matches value",
+            "Before save",
+            "After successful save",
+            "Save fails",
+            "Page opens",
+            "Selection changes",
+            "Condition becomes true",
+          ];
+        if (key === "density") return ["Comfortable", "Compact"];
+        return null;
+      }
+      // UI forms and WebMCP invoke this same bounded prototype operation.
+      function configure(input) {
+        verifyInput(input, ["kind", "target", "values", "expectedRevision"]);
+        if (input.expectedRevision !== state.revision || state.scenario === "stale")
+          throw Error("Draft changed. Read the current revision and retry.");
+        const { kind, target = "", values } = input;
+        let changedId;
+        if (kind === "definition") {
+          const [section, id] = target.split(":");
+          if (!Object.hasOwn(viewInfo, section)) throw Error("Unknown section.");
+          valuesOnly(values, Object.keys(viewInfo[section].fields));
+          if (id === "managed")
+            throw Error("Managed flow internals are not available to customer administrators.");
+          let item = id ? find(section, id) : null;
+          if (id && !item) throw Error("Definition not found.");
+          for (const [key, value] of Object.entries(values)) {
+            const choices = definitionChoices(section, key);
+            if (choices && !choices.some((c) => (typeof c === "string" ? c : c.id) === value))
+              throw Error("Choose an available " + key + ".");
+          }
+          if (!item && !values.name?.trim()) throw Error("A new definition needs a name.");
+          if (!item && ["application", "appearance"].includes(section))
+            throw Error("Edit the existing application or theme.");
+          if (section === "appearance" && values.accent && !/^#[0-9a-f]{6}$/i.test(values.accent))
+            throw Error("Use a six-digit colour such as #5941cf.");
+          item ??= { id: crypto.randomUUID() };
+          changedId = item.id;
+          Object.assign(item, values);
+          if (!id) catalog[section].push(item);
+          if (section === "pages") {
+            components[item.id] ??= [];
+            state.page = item.id;
+            state.component = components[item.id][0]?.id ?? "";
+          }
+          if (section === "flows") {
+            graphs[item.id] ??= [];
+            variables[item.id] ??= [];
+            edges[item.id] ??= [];
+            state.flow = item.id;
+          }
+        } else if (kind === "component") {
+          valuesOnly(values, ["type", "name", "flow", "filter", "pageSize"]);
+          const item = target ? currentComponents().find((c) => c.id === target) : null;
+          if (target && !item) throw Error("Select a component on this page.");
+          const type = values.type ?? item?.type;
+          if (!["table", "form", "button"].includes(type))
+            throw Error("Choose a supported component.");
+          if (values.flow) {
+            const flow = find("flows", values.flow);
+            if (!flow || (type === "table" && flow.output !== "Rows"))
+              throw Error("A table needs a flow returning rows.");
+          }
+          if (values.filter && !["All", "Active", "Draft"].includes(values.filter))
+            throw Error("Unknown filter.");
+          if (
+            values.pageSize &&
+            (!/^\d+$/.test(values.pageSize) || +values.pageSize < 1 || +values.pageSize > 100)
+          )
+            throw Error("Rows per page must be 1–100.");
+          const next = item ?? {
+            id: crypto.randomUUID(),
+            type,
+            name: { table: "Records table", form: "Record form", button: "Save changes" }[type],
+            flow: type === "table" ? "load" : "save",
+            filter: "All",
+            pageSize: "25",
+          };
+          Object.assign(next, values);
+          if (!item) currentComponents().push(next);
+          state.component = next.id;
+          changedId = next.id;
+        } else if (kind === "component_order") {
+          valuesOnly(values, ["direction"]);
+          const list = currentComponents(),
+            i = list.findIndex((c) => c.id === target),
+            j = i + (values.direction === "up" ? -1 : values.direction === "down" ? 1 : NaN);
+          if (i < 0 || !Number.isInteger(j) || j < 0 || j >= list.length)
+            throw Error("Cannot move that component.");
+          [list[i], list[j]] = [list[j], list[i]];
+        } else if (kind === "node") {
+          if (state.flow === "managed") throw Error("Managed flow internals are unavailable.");
+          valuesOnly(values, [
+            "type",
+            "name",
+            "runAs",
+            "source",
+            "value",
+            "specifiedUser",
+            "x",
+            "y",
+          ]);
+          const list = graphs[state.flow];
+          if (!list) throw Error("Select an editable flow.");
+          const item = target ? list.find((n) => n.id === target) : null;
+          if (target && !item) throw Error("Node not found.");
+          const type = values.type ?? item?.type;
+          if (!nodeTypes.includes(type)) throw Error("Choose a supported node.");
+          if (
+            values.runAs &&
+            !["Current user", "Specified user", "Scoped System"].includes(values.runAs)
+          )
+            throw Error("Unknown execution identity.");
+          for (const axis of ["x", "y"])
+            if (values[axis] !== undefined && (!/^\d+$/.test(values[axis]) || +values[axis] > 2500))
+              throw Error("Position must be between 0 and 2500.");
+          const next = item ?? {
+            id: crypto.randomUUID(),
+            type,
+            name: type,
+            runAs: "Current user",
+            source: "",
+            value: "",
+            x: "350",
+            y: "380",
+          };
+          if (item && values.type && values.type !== item.type) {
+            const ports =
+              values.type === "Return"
+                ? []
+                : values.type === "Condition"
+                  ? ["matches", "otherwise"]
+                  : ["next"];
+            edges[state.flow] = edges[state.flow].filter(
+              (e) => e.from !== item.id || ports.includes(e.port),
+            );
+          }
+          Object.assign(next, values);
+          if (!item) {
+            const last = list.findIndex((n) => n.type === "Return");
+            list.splice(last < 0 ? list.length : last, 0, next);
+          }
+          state.node = next.id;
+          changedId = next.id;
+        } else if (kind === "node_order") {
+          if (state.flow === "managed") throw Error("Managed flow internals are unavailable.");
+          valuesOnly(values, ["direction"]);
+          const list = graphs[state.flow],
+            i = list.findIndex((n) => n.id === target),
+            j = i + (values.direction === "up" ? -1 : values.direction === "down" ? 1 : NaN);
+          if (i < 0 || !Number.isInteger(j) || j < 0 || j >= list.length)
+            throw Error("Cannot move that node.");
+          [list[i], list[j]] = [list[j], list[i]];
+        } else if (kind === "variable") {
+          if (state.flow === "managed") throw Error("Managed flow internals are unavailable.");
+          valuesOnly(values, ["name", "type", "initial"]);
+          if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(values.name ?? ""))
+            throw Error("Use a simple variable name.");
+          if (!["Text", "Number", "Boolean", "Record", "List"].includes(values.type))
+            throw Error("Choose a variable type.");
+          const list = variables[state.flow];
+          if (!list) throw Error("Select a flow.");
+          if (list.some((v) => v.name === values.name && v.id !== target))
+            throw Error("Variable name already exists.");
+          const existing = target ? list.find((v) => v.id === target) : null;
+          if (target && !existing) throw Error("Variable not found.");
+          const item = existing ?? { id: crypto.randomUUID() };
+          Object.assign(item, values);
+          if (!existing) list.push(item);
+          changedId = item.id;
+        } else if (kind === "connection") {
+          if (state.flow === "managed") throw Error("Managed flow internals are unavailable.");
+          valuesOnly(values, ["from", "to", "port"]);
+          const nodes = graphs[state.flow];
+          if (
+            !nodes ||
+            values.to === "trigger" ||
+            values.from === values.to ||
+            !nodes.some((n) => n.id === values.to) ||
+            (values.from !== "trigger" && !nodes.some((n) => n.id === values.from))
+          )
+            throw Error("Choose distinct available endpoints.");
+          const from = nodes.find((n) => n.id === values.from);
+          const ports = from?.type === "Condition" ? ["matches", "otherwise"] : ["next"];
+          if (from?.type === "Return" || !ports.includes(values.port))
+            throw Error("Choose an available output port.");
+          const list = edges[state.flow],
+            candidate = list
+              .filter((e) => !(e.from === values.from && e.port === values.port))
+              .concat({ from: values.from, to: values.to, port: values.port });
+          const visits = new Set();
+          function cycle(id, path) {
+            if (path.has(id)) return true;
+            if (visits.has(id)) return false;
+            const next = new Set(path);
+            next.add(id);
+            if (candidate.filter((e) => e.from === id).some((e) => cycle(e.to, next))) return true;
+            visits.add(id);
+            return false;
+          }
+          if (["trigger", ...nodes.map((n) => n.id)].some((id) => cycle(id, new Set())))
+            throw Error("This connection would create a cycle.");
+          edges[state.flow] = candidate;
+        } else if (kind === "disconnect") {
+          valuesOnly(values, ["from", "port"]);
+          if (state.flow === "managed") throw Error("Managed flow internals are unavailable.");
+          edges[state.flow] = edges[state.flow].filter(
+            (e) => !(e.from === values.from && e.port === values.port),
+          );
+        } else throw Error("Unknown draft operation.");
+        return { ...touch(input), id: changedId ?? target };
+      }
+      function openDefinition(section, id = "") {
+        const info = viewInfo[section],
+          item = find(section, id) ?? {};
+        if (id === "managed") {
+          modal(
+            "Managed flow",
+            "<p>Only public settings are visible. The locked internal graph is never sent to this prototype. Configure rows per page on the bound table.</p><p>Managing this definition requires a separately granted platform capability, not a hardcoded role name.</p>",
+          );
+          return;
+        }
+        editor(
+          (id ? "Edit " : "Add ") + info.label.toLowerCase(),
+          "definition",
+          section + ":" + id,
+          Object.entries(info.fields)
+            .map(([key, label]) =>
+              field(key, label, item[key] ?? "", definitionChoices(section, key)),
+            )
+            .join(""),
+        );
+      }
+      function componentEditor() {
+        const c = currentComponent();
+        if (!c) return;
+        const flows = catalog.flows.filter((f) => c.type !== "table" || f.output === "Rows");
+        editor(
+          "Configure " + c.name,
+          "component",
+          c.id,
+          field("name", "Label", c.name) +
+            field(
+              "flow",
+              c.type === "table" ? "Data flow — returns rows" : "Action flow",
+              c.flow,
+              flows,
+            ) +
+            (c.type === "table"
+              ? field("filter", "Status equals", c.filter, ["All", "Active", "Draft"]) +
+                field("pageSize", "Rows per page", c.pageSize)
+              : ""),
+        );
+      }
+      function nodeEditor(id = "") {
+        const n = graphs[state.flow]?.find((x) => x.id === id) ?? {
+          type: "Condition",
+          runAs: "Current user",
+        };
+        editor(
+          id ? "Configure node" : "Add a node",
+          "node",
+          id,
+          field("type", "Node", n.type, nodeTypes) +
+            field("name", "Label", n.name ?? n.type) +
+            field("runAs", "Run as", n.runAs, ["Current user", "Specified user", "Scoped System"]) +
+            field("specifiedUser", "Specified user reference (if selected)", n.specifiedUser) +
+            field("source", "Input, query, form or condition field", n.source) +
+            field("value", "Output variable, condition value or setting", n.value) +
+            '<p class="hint">The flow is configuration. Specified user and System require separate execution grants. Show form uses a page-designed form. No credentials belong here. Changing a node type disconnects any outgoing ports that the new type does not support.</p>',
+        );
+      }
+      function variableEditor(id = "") {
+        const v = variables[state.flow]?.find((x) => x.id === id) ?? {};
+        editor(
+          "Flow variable",
+          "variable",
+          id,
+          field("name", "Name", v.name) +
+            field("type", "Type", v.type ?? "Text", [
+              "Text",
+              "Number",
+              "Boolean",
+              "Record",
+              "List",
+            ]) +
+            field("initial", "Initial value", v.initial) +
+            '<p class="hint">Available only in this flow run. Not a server environment variable or secret.</p>',
+        );
+      }
+      function rows(filter = "All", search = "") {
+        return samples
+          .filter(
+            (r) =>
+              (filter === "All" || r[2] === filter) &&
+              r.join(" ").toLowerCase().includes(search.toLowerCase()),
+          )
+          .map(
+            (r) =>
+              '<tr><td><span class="record-icon" aria-hidden="true">▧</span>' +
+              esc(r[0]) +
+              "</td><td>" +
+              esc(r[1]) +
+              '</td><td><span class="tag ' +
+              (r[2] === "Active" ? "green" : "") +
+              '">' +
+              r[2] +
+              "</span></td><td>" +
+              r[3] +
+              "</td></tr>",
+          )
+          .join("");
+      }
+      function sampleTable(c) {
+        return (
+          '<div class="table-tools row spread"><input data-search="' +
+          c.id +
+          '" aria-label="Search ' +
+          esc(c.name) +
+          ' sample records" placeholder="Search records…">' +
+          btn("Filter", "component-edit", c.id) +
+          '</div><div class="table-scroll"><table><thead><tr><th>Name</th><th>Category</th><th>Status</th><th>Updated</th></tr></thead><tbody id="rows-' +
+          c.id +
+          '">' +
+          rows(c.filter) +
+          '</tbody></table></div><div class="table-foot">Sample data · ' +
+          esc(find("flows", c.flow)?.name ?? "Missing flow") +
+          "</div>"
+        );
+      }
+      function componentHtml(c) {
+        return (
+          '<section class="component ' +
+          (state.component === c.id ? "selected" : "") +
+          '" data-component="' +
+          c.id +
+          '" tabindex="0" role="group" aria-label="' +
+          esc(c.name) +
+          ' component">' +
+          (state.component === c.id
+            ? '<span class="selection">' +
+              esc(c.type === "table" ? "Records table" : c.type) +
+              "</span>"
+            : "") +
+          (c.type === "table"
+            ? sampleTable(c)
+            : c.type === "form"
+              ? '<div style="padding:1rem"><h2>' +
+                esc(c.name) +
+                "</h2>" +
+                field("sample-" + c.id, "Name") +
+                '<p class="hint">Draft form. Saving is a flow node.</p></div>'
+              : '<div style="padding:1rem">' +
+                btn(c.name, "component-edit", c.id, true) +
+                "</div>") +
+          "</section>"
+        );
+      }
+      function tabs(sections) {
+        return (
+          '<div class="row" style="flex-wrap:wrap;margin-bottom:1rem">' +
+          sections.map((s) => btn(viewInfo[s].label, "view", s, state.view === s)).join("") +
+          "</div>"
+        );
+      }
+      function pageView() {
+        const p = find("pages", state.page);
+        if (!p) {
+          $("surface").innerHTML =
+            '<div class="panel"><h2>Add your first page</h2>' +
+            btn("+ Add page", "definition-new", "pages", true) +
+            "</div>";
+          $("inspector").innerHTML = "<h2>Page workspace</h2>";
+          return;
+        }
+        $("surface").innerHTML =
+          '<div class="row spread" style="flex-wrap:wrap;margin-bottom:1rem"><label>Page <select id="page-picker">' +
+          catalog.pages
+            .map(
+              (x) =>
+                '<option value="' +
+                x.id +
+                '" ' +
+                (x.id === p.id ? "selected" : "") +
+                ">" +
+                esc(x.name) +
+                "</option>",
+            )
+            .join("") +
+          '</select></label><div class="row">' +
+          btn("Page settings", "definition-edit", "pages:" + p.id) +
+          btn("+ Page", "definition-new", "pages") +
+          "</div></div>" +
+          (state.outline
+            ? '<div class="panel stack"><h2>Page outline</h2>' +
+              currentComponents()
+                .map(
+                  (c, i) =>
+                    '<div class="row spread">' +
+                    btn(c.name, "select-component", c.id) +
+                    '<div class="row">' +
+                    (i ? btn("Move up", "component-up", c.id) : "") +
+                    (i < currentComponents().length - 1
+                      ? btn("Move down", "component-down", c.id)
+                      : "") +
+                    "</div></div>",
+                )
+                .join("") +
+              "</div>"
+            : '<div class="canvas" style="max-width:' +
+              state.width +
+              '"><div class="canvas-bar">' +
+              esc(catalog.application[0].name) +
+              " / " +
+              esc(p.name) +
+              '</div><div class="canvas-body"><h2>' +
+              esc(p.name) +
+              "</h2>" +
+              (!currentComponents().length
+                ? '<div class="panel"><h3>This page is empty</h3><p>Add a component below. Then connect its data or action flow.</p></div>'
+                : currentComponents().map(componentHtml).join("")) +
+              "</div></div>");
+        const c = currentComponent(),
+          f = c && find("flows", c.flow);
+        $("inspector").innerHTML = c
+          ? "<h2>" +
+            esc(c.name) +
+            "</h2><small>" +
+            esc(c.type) +
+            ' component</small><div class="section">' +
+            btn("Configure component", "component-edit", c.id, true) +
+            '</div><div class="section"><h3>' +
+            (c.type === "table" ? "Data binding" : "Action binding") +
+            '</h3><div class="binding"><strong>' +
+            esc(f?.name ?? "Missing flow") +
+            "</strong><p>" +
+            (c.type === "table"
+              ? "Load / refresh → flow → returned rows"
+              : "Button or form event → flow → configured result") +
+            "</p>" +
+            btn("Edit linked flow ↗", "open-flow", c.flow) +
+            btn("Choose another flow", "component-edit", c.id) +
+            '</div><p class="hint">A data flow can explicitly write before returning rows. Authoring preview runs no effects.</p></div><div class="section"><h3>Same path for an agent</h3>' +
+            btn("Inspect capabilities", "capabilities") +
+            "</div>"
+          : '<h2>Select a component</h2><p class="hint">Add components from the palette or choose one on the canvas.</p>';
+      }
+
+      function flowView() {
+        const f = currentFlow();
+        if (!f) {
+          $("surface").innerHTML = btn("+ Add flow", "definition-new", "flows", true);
+          $("inspector").innerHTML = "";
+          return;
+        }
+        const nodes = graphs[f.id] ?? [],
+          locked = f.id === "managed";
+        $("surface").innerHTML =
+          '<div class="graph-tools row spread"><div class="row">' +
+          btn("← Page", "view", "pages") +
+          '<select id="flow-picker" aria-label="Selected flow">' +
+          catalog.flows
+            .map(
+              (x) =>
+                '<option value="' +
+                x.id +
+                '" ' +
+                (x.id === f.id ? "selected" : "") +
+                ">" +
+                esc(x.name) +
+                "</option>",
+            )
+            .join("") +
+          "</select>" +
+          btn("+ Flow", "definition-new", "flows") +
+          '</div><div class="row">' +
+          btn("−", "zoom-out") +
+          "<span>" +
+          Math.round(zoom * 100) +
+          "%</span>" +
+          btn("+", "zoom-in") +
+          "</div></div>" +
+          (locked
+            ? '<div class="panel"><h2>Managed flow</h2><p>Internal nodes are locked and unavailable. Public settings remain configurable on the component.</p>' +
+              btn("Public contract", "definition-edit", "flows:managed") +
+              "</div>"
+            : '<div class="graph-scroll"><div id="graph-space" style="width:' +
+              2800 * zoom +
+              "px;height:" +
+              1800 * zoom +
+              'px"><div id="graph-stage" style="transform:scale(' +
+              zoom +
+              ')"><svg class="connections" viewBox="0 0 2800 1800" aria-label="Flow connections"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8Z" fill="#8eafff"/></marker></defs>' +
+              edges[f.id]
+                .map((e) => {
+                  const a =
+                      e.from === "trigger" ? { x: 45, y: 160 } : nodes.find((n) => n.id === e.from),
+                    b = nodes.find((n) => n.id === e.to);
+                  if (!a || !b) return "";
+                  const x1 = +a.x + 220,
+                    y1 = +a.y + (e.port === "otherwise" ? 106 : 64),
+                    x2 = +b.x,
+                    y2 = +b.y + 64;
+                  return (
+                    '<path d="M' +
+                    x1 +
+                    " " +
+                    y1 +
+                    " C" +
+                    (x1 + 90) +
+                    " " +
+                    y1 +
+                    " " +
+                    (x2 - 90) +
+                    " " +
+                    y2 +
+                    " " +
+                    x2 +
+                    " " +
+                    y2 +
+                    '" fill="none" stroke="#8eafff" stroke-width="2" marker-end="url(#arrow)"/><text x="' +
+                    (x1 + 24) +
+                    '" y="' +
+                    (y1 - 10) +
+                    '" fill="#b5c5e5" font-size="12">' +
+                    esc(e.port) +
+                    "</text>"
+                  );
+                })
+                .join("") +
+              '</svg><div class="graph-node trigger-node" style="left:45px;top:160px">' +
+              btn("Trigger", "definition-edit", "flows:" + f.id) +
+              "<strong>" +
+              esc(f.trigger) +
+              '</strong><small>Click to configure</small><button class="port output" data-port-from="trigger" data-port="next" aria-label="Connect Trigger output"></button></div>' +
+              nodes
+                .map(
+                  (n) =>
+                    '<div class="graph-node ' +
+                    (n.id === state.node ? "selected" : "") +
+                    '" style="left:' +
+                    n.x +
+                    "px;top:" +
+                    n.y +
+                    'px" data-graph-node="' +
+                    n.id +
+                    '"><button class="node-drag" draggable="true" data-drag-node="' +
+                    n.id +
+                    '" aria-label="Move ' +
+                    esc(n.name) +
+                    '; use Alt and arrow keys" data-action="select-node" data-arg="' +
+                    n.id +
+                    '"><span>⠿ ' +
+                    esc(n.type) +
+                    '</span></button><button class="node-content" data-action="select-node" data-arg="' +
+                    n.id +
+                    '"><strong>' +
+                    esc(n.name) +
+                    "</strong><small>" +
+                    esc(n.runAs) +
+                    '</small></button><button class="port input" data-port-to="' +
+                    n.id +
+                    '" aria-label="Connect to ' +
+                    esc(n.name) +
+                    ' input"></button>' +
+                    (n.type === "Return"
+                      ? ""
+                      : (n.type === "Condition" ? ["matches", "otherwise"] : ["next"])
+                          .map(
+                            (port) =>
+                              '<button class="port output ' +
+                              (port === "otherwise" ? "lower" : "") +
+                              '" data-port-from="' +
+                              n.id +
+                              '" data-port="' +
+                              port +
+                              '" aria-label="Connect ' +
+                              esc(n.name) +
+                              " " +
+                              port +
+                              ' output"></button>',
+                          )
+                          .join("")) +
+                    "</div>",
+                )
+                .join("") +
+              '</div></div></div><p class="hint">' +
+              (connectFrom
+                ? "Choose an input port to complete the connection."
+                : "Drag nodes from the left. Connect an output circle to an input circle; clicking each circle also works.") +
+              "</p>");
+        const n = nodes.find((x) => x.id === state.node);
+        $("inspector").innerHTML =
+          "<h2>" +
+          (n ? esc(n.name) : "Flow settings") +
+          "</h2><small>Frontend Rule Designer</small>" +
+          (locked
+            ? '<p class="hint">Managed internals are not disclosed.</p>'
+            : (n
+                ? '<div class="section">' +
+                  btn("Configure node", "node-edit", n.id, true) +
+                  '<p class="hint">' +
+                  esc(n.type) +
+                  " · " +
+                  esc(n.runAs) +
+                  '</p><p class="hint">Drag the grip to position. Alt + arrow keys also move the selected node.</p>' +
+                  edges[f.id]
+                    .filter((e) => e.from === n.id)
+                    .map(
+                      (e) =>
+                        '<div class="binding" style="margin-top:.5rem">' +
+                        esc(e.port) +
+                        " → " +
+                        esc(nodes.find((x) => x.id === e.to)?.name) +
+                        btn("Disconnect", "disconnect", n.id + "|" + e.port) +
+                        "</div>",
+                    )
+                    .join("") +
+                  "</div>"
+                : "") +
+              '<div class="section"><h3>Flow variables</h3>' +
+              (variables[f.id] ?? [])
+                .map((v) => "<p>" + btn(v.name + " · " + v.type, "variable-edit", v.id) + "</p>")
+                .join("") +
+              btn("+ Variable", "variable-new") +
+              '</div><div class="section"><h3>Interaction preview</h3><p class="hint">A scripted example shows input, continuation and partial outcomes. It does not execute this graph.</p>' +
+              btn("Try form continuation", "simulate-start") +
+              "</div>");
+      }
+      function renderPalette() {
+        const palette = $("designer-palette");
+        if (!palette) return;
+        const flow = state.view === "flows",
+          page = state.view === "pages";
+        const choices = flow ? nodeTypes : page ? ["Records table", "Form", "Action button"] : [];
+        palette.innerHTML =
+          '<div class="palette-heading"><h2>' +
+          (flow ? "Nodes" : page ? "Components" : "Application structure") +
+          "</h2><small>" +
+          (flow
+            ? "Drag to the canvas, then connect"
+            : page
+              ? "Drag components onto your page"
+              : "Choose a definition to configure") +
+          "</small></div>" +
+          (choices.length
+            ? '<input id="palette-search" aria-label="Search ' +
+              (flow ? "nodes" : "components") +
+              '" placeholder="Search ' +
+              (flow ? "nodes" : "components") +
+              '…"><div class="palette-group">' +
+              choices
+                .map(
+                  (label, i) =>
+                    '<button draggable="true" data-palette-kind="' +
+                    (flow ? "node" : "component") +
+                    '" data-palette-value="' +
+                    (flow ? label : ["table", "form", "button"][i]) +
+                    '"><span>' +
+                    esc(label) +
+                    '</span><span aria-hidden="true">⠿</span></button>',
+                )
+                .join("") +
+              '</div><p class="hint">Click a tile to add it without dragging.</p>'
+            : '<div class="palette-group">' +
+              (state.view === "application"
+                ? ["modules", "pages", "flows"]
+                : ["modules", "fields", "relationships", "queries"].includes(state.view)
+                  ? ["modules", "fields", "relationships", "queries"]
+                  : ["connections", "interfaces"]
+              )
+                .map((v) => btn(viewInfo[v].label, "view", v))
+                .join("") +
+              "</div>");
+      }
+      function definitionView() {
+        const section = state.view,
+          info = viewInfo[section];
+        const sub = ["modules", "fields", "relationships", "queries"].includes(section)
+          ? ["modules", "fields", "relationships", "queries"]
+          : ["connections", "interfaces"].includes(section)
+            ? ["connections", "interfaces"]
+            : [];
+        $("surface").innerHTML =
+          tabs(sub) +
+          '<div class="row spread" style="margin-bottom:1rem"><small>' +
+          catalog[section].length +
+          " definition" +
+          (catalog[section].length === 1 ? "" : "s") +
+          "</small>" +
+          (!["application", "appearance"].includes(section)
+            ? btn("+ Add " + info.label.toLowerCase(), "definition-new", section, true)
+            : "") +
+          "</div>" +
+          catalog[section]
+            .map(
+              (item) =>
+                '<article class="panel" style="margin-bottom:1rem"><div class="row spread"><h2 style="margin:0">' +
+                esc(item.name) +
+                "</h2>" +
+                btn("Edit", "definition-edit", section + ":" + item.id) +
+                "</div><dl>" +
+                Object.entries(info.fields)
+                  .filter(([key]) => key !== "name")
+                  .map(([key, label]) => {
+                    const choices = definitionChoices(section, key),
+                      value =
+                        choices?.find((c) => typeof c === "object" && c.id === item[key])?.name ??
+                        item[key];
+                    return (
+                      '<div class="row spread" style="padding:.35rem 0;align-items:start"><dt class="muted">' +
+                      esc(label) +
+                      '</dt><dd style="margin:0;text-align:right;overflow-wrap:anywhere">' +
+                      esc(value || "Not configured") +
+                      "</dd></div>"
+                    );
+                  })
+                  .join("") +
+                "</dl></article>",
+            )
+            .join("") +
+          (section === "application"
+            ? '<div class="panel"><h2>Start with your application</h2><p>Modules → pages → flows → validation → release → installation.</p>' +
+              btn("Configure modules →", "view", "modules") +
+              "</div>"
+            : "");
+        const help = {
+          modules:
+            "Application-contained data belongs to this installation. Organisation-shared data can use one compatible source across applications. Names never determine storage identity.",
+          fields:
+            "Fields and relationships refer to modules by stable identity, even if a label changes.",
+          relationships:
+            "Source and target are explicit. Ownership inheritance and permission propagation are separate choices.",
+          queries:
+            "Expose queries from a module. Components consume their results through a configured data flow.",
+          access:
+            "These are role templates, not assignments. Users receive roles through the ordinary IAM application, with its requests and approvals.",
+          background:
+            "Installation registers packaged background workflows. A frontend node requests a durable run; it does not wait for that entire run.",
+          connections:
+            "Configure type and secret references only. Actual credentials are supplied separately, not returned to the builder or an agent.",
+          interfaces:
+            "Expose a protected operation. Interfaces and tools do not bypass its permissions.",
+          navigation: "Navigation points to an application page by identity.",
+          application:
+            "Application and module versions are independent. This tab contains disposable draft configuration only.",
+          appearance:
+            "Pages inherit the application theme. The demo applies the chosen accent colour.",
+        };
+        $("inspector").innerHTML =
+          "<h2>" +
+          info.label +
+          '</h2><p class="hint" style="margin-top:1rem">' +
+          esc(help[section] ?? "Configure the selected definition.") +
+          "</p>" +
+          (section === "access" ? btn("View IAM journey", "iam") : "") +
+          '<div class="section">' +
+          btn("Agent capabilities", "capabilities") +
+          "</div>";
+      }
+      function render() {
+        const view = state.view;
+        document.querySelectorAll("[data-view]").forEach((b) => {
+          const selected =
+            (["fields", "relationships", "queries"].includes(view)
+              ? "modules"
+              : view === "interfaces"
+                ? "connections"
+                : view) === b.dataset.view;
+          b.classList.toggle("active", selected);
+          if (selected) b.setAttribute("aria-current", "page");
+          else b.removeAttribute("aria-current");
+        });
+        $("draft").textContent = "Draft · revision " + state.revision;
+        document.querySelector(".context").textContent =
+          "Demo organisation / " + catalog.application[0].name;
+        document.querySelector(".nav-title").textContent = catalog.application[0].name;
+        for (const key of ["modules", "pages", "flows"])
+          document.querySelector('[data-view="' + key + '"] .nav-count').textContent =
+            catalog[key].length;
+        document.documentElement.style.setProperty("--accent", catalog.appearance[0].accent);
+        $("title").textContent =
+          view === "pages"
+            ? (find("pages", state.page)?.name ?? "Pages")
+            : view === "flows"
+              ? (currentFlow()?.name ?? "Flows")
+              : viewInfo[view].label;
+        $("breadcrumb").textContent = catalog.application[0].name + " / " + viewInfo[view].label;
+        $("kind").textContent =
+          view === "pages" ? "Page" : view === "flows" ? "Flow" : "Definition";
+        $("palette").classList.toggle("hidden", view !== "pages");
+        document.querySelector(".toolbar").classList.toggle("hidden", view !== "pages");
+        $("design").classList.toggle("active", !state.outline);
+        $("outline").classList.toggle("active", state.outline);
+        if (view === "pages") pageView();
+        else if (view === "flows") flowView();
+        else definitionView();
+        renderPalette();
+      }
+      function navigate(input) {
+        verifyInput(input, ["view", "id"]);
+        if (!Object.hasOwn(viewInfo, input.view)) throw Error("Unknown view.");
+        if (input.id && !find(input.view, input.id)) throw Error("Definition is unavailable.");
+        connectFrom = null;
+        state.view = input.view;
+        if (input.view === "pages" && input.id) {
+          state.page = input.id;
+          state.component = currentComponents()[0]?.id ?? "";
+        }
+        if (input.view === "flows" && input.id) {
+          state.flow = input.id;
+          state.node = graphs[input.id]?.[0]?.id ?? "";
+        }
+        render();
+        return { view: state.view, revision: state.revision };
+      }
+      function validate() {
+        const errors = [];
+        for (const section of ["modules", "pages"])
+          if (!catalog[section].length)
+            errors.push("Add at least one " + section.slice(0, -1) + ".");
+        for (const f of catalog.fields)
+          if (!find("modules", f.module))
+            errors.push("Field " + f.name + " needs an available module.");
+        for (const r of catalog.relationships)
+          if (!find("modules", r.from) || !find("modules", r.to))
+            errors.push("Relationship " + r.name + " needs both endpoints.");
+        for (const p of catalog.pages)
+          for (const c of components[p.id] ?? []) {
+            const f = find("flows", c.flow);
+            if (!f || (c.type === "table" && f.output !== "Rows"))
+              errors.push(c.name + " needs a compatible flow.");
+          }
+        for (const [id, nodes] of Object.entries(graphs)) {
+          if (!nodes.length || !nodes.some((n) => n.type === "Return"))
+            errors.push((find("flows", id)?.name ?? id) + " needs a Return node.");
+          if (nodes.some((n) => n.runAs === "Specified user" && !n.specifiedUser?.trim()))
+            errors.push("Specify the user for each Specified user node.");
+        }
+        for (const [id, nodes] of Object.entries(graphs)) {
+          const flowEdges = edges[id] ?? [],
+            all = [{ id: "trigger", type: "Trigger" }, ...nodes];
+          for (const node of all) {
+            const ports =
+              node.type === "Return"
+                ? []
+                : node.type === "Condition"
+                  ? ["matches", "otherwise"]
+                  : ["next"];
+            for (const port of ports)
+              if (!flowEdges.some((e) => e.from === node.id && e.port === port))
+                errors.push(
+                  (find("flows", id)?.name ?? id) +
+                    ": " +
+                    (node.name ?? "Trigger") +
+                    " needs a " +
+                    port +
+                    " connection.",
+                );
+            if (flowEdges.some((e) => e.from === node.id && !ports.includes(e.port)))
+              errors.push("A connection uses an unavailable output port.");
+          }
+          if (
+            flowEdges.some(
+              (e) => !all.some((n) => n.id === e.from) || !nodes.some((n) => n.id === e.to),
+            )
+          )
+            errors.push("A connection endpoint is unavailable.");
+          const reachable = new Set(["trigger"]);
+          let changed = true;
+          while (changed) {
+            changed = false;
+            for (const e of edges[id] ?? [])
+              if (reachable.has(e.from) && !reachable.has(e.to)) {
+                reachable.add(e.to);
+                changed = true;
+              }
+          }
+          if (nodes.some((n) => !reachable.has(n.id)))
+            errors.push((find("flows", id)?.name ?? id) + " has unconnected nodes.");
+        }
+        if (state.scenario === "dependency")
+          errors.push("Demonstration: required module release is unavailable.");
+        if (state.scenario === "authority")
+          errors.push("Demonstration: execution grant is unavailable.");
+        if (state.scenario === "stale")
+          errors.push("Demonstration: draft revision changed. Reload before publishing.");
+        return {
+          kind: "prototype_validation",
+          revision: state.revision,
+          errors,
+          liveEffect: false,
+          notProductionValidation: true,
+        };
+      }
+      function validationDialog() {
+        const r = validate();
+        modal(
+          "Validate draft",
+          "<p>Revision " +
+            r.revision +
+            " · prototype checks only.</p>" +
+            (r.errors.length
+              ? "<ul>" + r.errors.map((e) => "<li>" + esc(e) + "</li>").join("") + "</ul>"
+              : "<p>Demo checks pass. Live publication also validates complete contracts, all references and current authority.</p>") +
+            field("scenario", "Explore a state", state.scenario, [
+              "normal",
+              "dependency",
+              "authority",
+              "stale",
+            ]),
+        );
+        $("edit-scenario").id = "scenario";
+      }
+      function releaseDialog() {
+        const r = validate();
+        modal(
+          "Review release — simulation",
+          "<p><strong>" +
+            esc(catalog.application[0].name) +
+            "</strong> · application " +
+            esc(catalog.application[0].version) +
+            " · revision " +
+            state.revision +
+            "</p><p>Modules: " +
+            catalog.modules.map((m) => esc(m.name) + " " + esc(m.version)).join(", ") +
+            "</p><p>Publish creates a release. Install is a separate action. Neither automatically assigns people roles or grants node execution authority.</p>" +
+            (r.errors.length
+              ? "<ul>" + r.errors.map((e) => "<li>" + esc(e) + "</li>").join("") + "</ul>"
+              : btn("Simulate publication", "publish", "", true)),
+        );
+      }
+      function simulate(input) {
+        verifyInput(input, ["step", "expectedRevision", "value"]);
+        if (input.expectedRevision !== state.revision) throw Error("Draft changed. Read it again.");
+        if (input.step === "publish") {
+          if (validate().errors.length) throw Error("Resolve draft checks first.");
+          state.release = { revision: state.revision, version: catalog.application[0].version };
+          modal(
+            "Demo release prepared",
+            "<p>No live publication occurred. Exact draft revision " +
+              state.revision +
+              " is selected for this demonstration.</p>" +
+              btn("Review installation", "install-review", "", true),
+          );
+        } else if (input.step === "install") {
+          if (!state.release) throw Error("Simulate publication first.");
+          if (validate().errors.length || state.release.revision !== state.revision)
+            throw Error("Release is stale or prerequisites are missing.");
+          modal(
+            "Installation simulated",
+            "<p>This example reports <strong>installation simulated</strong> for release " +
+              esc(state.release.version) +
+              ". No real installation, workflow registration, secret provisioning or role assignment occurred.</p>",
+          );
+        } else if (input.step === "start") {
+          simulation = { status: "draft", value: "", committed: false };
+          modal(
+            "Interactive flow example",
+            "<p>Scripted demonstration: ask for input → validate → Save form → start background work. No database transaction waits while you type.</p>" +
+              btn("Collect input first", "collect", "", true) +
+              btn("Demonstrate a prior committed write", "prior-write"),
+          );
+        } else if (input.step === "prior-write") {
+          simulation = { status: "partial", committed: true, value: "" };
+          collect();
+        } else if (input.step === "continue") {
+          if (!simulation) throw Error("Start an example first.");
+          if (typeof input.value !== "string" || !input.value.trim())
+            throw Error("Enter the required value to continue.");
+          simulation.value = input.value;
+          simulation.status = "background-pending";
+          modal(
+            "Flow continued — simulated",
+            "<p>Input accepted. Save node: <strong>committed (simulation)</strong>. Background request: <strong>accepted, still pending (simulation)</strong>.</p><p>The flow continues after submission. It does not claim the durable run completed.</p>",
+          );
+        } else if (input.step === "cancel") {
+          if (!simulation) throw Error("No example is active.");
+          simulation.status = simulation.committed ? "partial" : "cancelled";
+          modal(
+            "Input cancelled",
+            "<p>" +
+              (simulation.committed
+                ? "An earlier explicit write was already committed in this example. Cancelling input stops the remaining nodes; it cannot undo that write. Result: partial."
+                : "No write node has run. Nothing was submitted or saved. Result: cancelled.") +
+              "</p>",
+          );
+        } else throw Error("Unknown simulation step.");
+        return {
+          kind: "local_simulation",
+          revision: state.revision,
+          release: clone(state.release),
+          flow: clone(simulation),
+          liveEffect: false,
+        };
+      }
+      function collect() {
+        modal(
+          "Show form — waiting for input",
+          '<p>This form reuses the page form component. The flow is paused, but no database transaction is held open.</p><form id="continuation-form">' +
+            field("value", "Required description") +
+            '<p id="continue-error" role="alert" style="color:#a33432"></p><div class="row"><button class="primary" type="submit">Submit and continue</button>' +
+            btn("Cancel flow", "cancel-flow") +
+            "</div></form>",
+        );
+      }
+      function read() {
+        return {
+          kind: "local_prototype",
+          revision: state.revision,
+          view: state.view,
+          selection: {
+            page: state.page,
+            component: state.component,
+            flow: state.flow,
+            node: state.node,
+          },
+          configuration: clone(catalog),
+          components: clone(components),
+          editableGraphs: clone(graphs),
+          connections: clone(edges),
+          variables: clone(variables),
+          lastOperation: clone(state.lastOperation),
+          simulation: clone(simulation),
+          liveMcpServer: false,
+        };
+      }
+
+      const capabilityOwners = [
+        ["Application and module composition", [64, 43, 52]],
+        ["Fields, relationships and exposed queries", [44, 49, 52, 54]],
+        ["Pages, components, slots and navigation", [249, 65, 66, 64]],
+        ["Data/action bindings and forms", [250, 67, 68]],
+        ["Frontend nodes, conditions and run-as authority", [58, 57, 322]],
+        ["Background definitions and starts", [76, 77, 78]],
+        ["Role templates and governed IAM assignments", [64, 72, 267]],
+        ["Connections and protected interfaces", [99, 102, 103]],
+        ["Preview, publication and installation", [73, 64]],
+        ["Authenticated MCP transport and full parity", [200]],
+      ];
+      function ownerMatrix() {
+        return (
+          '<div class="table-scroll"><table><thead><tr><th>Capability</th><th>Implementation owners</th></tr></thead><tbody>' +
+          capabilityOwners
+            .map(
+              ([label, ids]) =>
+                '<tr><td style="white-space:normal">' +
+                esc(label) +
+                '</td><td style="white-space:normal">' +
+                ids
+                  .map(
+                    (id) =>
+                      '<a href="https://github.com/Abzum-NZ/Abzum-Vortex/issues/' +
+                      id +
+                      '" target="_blank" rel="noreferrer">#' +
+                      id +
+                      "</a>",
+                  )
+                  .join(" · ") +
+                "</td></tr>",
+            )
+            .join("") +
+          "</tbody></table></div>"
+        );
+      }
+
+      function capabilities() {
+        modal(
+          "Agent authoring coverage",
+          '<p>Visible forms and local WebMCP tools share the same draft operations. These prototype tools are not the authenticated Vortex MCP server.</p><div class="table-scroll"><table><thead><tr><th>Operation</th><th>What it covers</th></tr></thead><tbody><tr><td>Read</td><td>Definitions, identities, revisions, graphs and selection</td></tr><tr><td>Navigate</td><td>Every application workspace and selected page/flow</td></tr><tr><td>Configure</td><td>Application, modules, fields, relationships, queries, pages, navigation, role templates, connections, interfaces, appearance, components, bindings, nodes, ordering and typed variables</td></tr><tr><td>Simulate</td><td>Publish, install, interactive form continuation and cancellation — no live effects</td></tr></tbody></table></div><h3>Delivery owners</h3>' +
+            ownerMatrix() +
+            "<h3>Last draft operation</h3><pre>" +
+            esc(
+              JSON.stringify(state.lastOperation ?? { status: "No draft changes yet" }, null, 2),
+            ) +
+            '</pre><p><a href="https://github.com/Abzum-NZ/Abzum-Vortex/issues/200">Authenticated MCP delivery #200</a> · <a href="https://github.com/Abzum-NZ/Abzum-Vortex/issues/323">Prototype #323</a></p>',
+        );
+      }
+      function act(action, arg = "") {
+        if (action === "zoom-in" || action === "zoom-out") {
+          zoom = Math.max(0.5, Math.min(1.5, zoom + (action === "zoom-in" ? 0.1 : -0.1)));
+          render();
+        } else if (action === "disconnect") {
+          const [from, port] = arg.split("|");
+          configure({
+            kind: "disconnect",
+            values: { from, port },
+            expectedRevision: state.revision,
+          });
+        } else if (action === "view") navigate({ view: arg });
+        else if (action === "definition-new") openDefinition(arg);
+        else if (action === "definition-edit") {
+          const [section, id] = arg.split(":");
+          openDefinition(section, id);
+        } else if (action === "select-component") {
+          state.component = arg;
+          render();
+        } else if (action === "component-edit") {
+          state.component = arg || state.component;
+          componentEditor();
+        } else if (action === "open-flow") navigate({ view: "flows", id: arg });
+        else if (action === "component-add")
+          configure({ kind: "component", values: { type: arg }, expectedRevision: state.revision });
+        else if (action === "component-up" || action === "component-down")
+          configure({
+            kind: "component_order",
+            target: arg,
+            values: { direction: action.endsWith("up") ? "up" : "down" },
+            expectedRevision: state.revision,
+          });
+        else if (action === "select-node") {
+          state.node = arg;
+          render();
+        } else if (action === "node-new") nodeEditor();
+        else if (action === "node-edit") nodeEditor(arg);
+        else if (action === "node-up" || action === "node-down")
+          configure({
+            kind: "node_order",
+            target: arg,
+            values: { direction: action.endsWith("up") ? "up" : "down" },
+            expectedRevision: state.revision,
+          });
+        else if (action === "variable-new") variableEditor();
+        else if (action === "variable-edit") variableEditor(arg);
+        else if (action === "capabilities") capabilities();
+        else if (action === "simulate-start")
+          simulate({ step: "start", expectedRevision: state.revision });
+        else if (action === "collect") collect();
+        else if (action === "prior-write")
+          simulate({ step: "prior-write", expectedRevision: state.revision });
+        else if (action === "cancel-flow")
+          simulate({ step: "cancel", expectedRevision: state.revision });
+        else if (action === "publish")
+          simulate({ step: "publish", expectedRevision: state.revision });
+        else if (action === "install-review")
+          modal(
+            "Installation readiness — simulation",
+            "<p>Resolve module versions and storage bindings; register packaged frontend flows and background workflows; register role templates; supply connection secrets separately; verify execution grants.</p>" +
+              btn("Simulate installation", "install", "", true),
+          );
+        else if (action === "install")
+          simulate({ step: "install", expectedRevision: state.revision });
+        else if (action === "iam")
+          modal(
+            "Grant roles through IAM",
+            '<p>The live builder opens the ordinary IAM application with organisation and requested-role context. Requests, approvals and assignments stay tied to users; editing a template never grants access.</p><a href="https://github.com/Abzum-NZ/Abzum-Vortex/issues/267">IAM journey #267</a>',
+          );
+      }
+      document.addEventListener("click", (event) => {
+        const b = event.target.closest("button");
+        try {
+          if (b) {
+            if (b.dataset.action) {
+              act(b.dataset.action, b.dataset.arg);
+              return;
+            }
+            if (b.dataset.view) {
+              navigate({ view: b.dataset.view });
+              return;
+            }
+            if (b.dataset.add) {
+              act("component-add", b.dataset.add);
+              return;
+            }
+            if (b.dataset.width) {
+              state.width = b.dataset.width;
+              document
+                .querySelectorAll("[data-width]")
+                .forEach((x) => x.classList.toggle("active", x === b));
+              render();
+              return;
+            }
+            switch (b.id) {
+              case "close":
+                closeModal();
+                break;
+              case "menu":
+                b.setAttribute("aria-expanded", String($("navigation").classList.toggle("open")));
+                break;
+              case "design":
+              case "outline":
+                state.outline = b.id === "outline";
+                render();
+                break;
+              case "agent":
+                capabilities();
+                break;
+              case "validate":
+                validationDialog();
+                break;
+              case "release":
+                releaseDialog();
+                break;
+              case "preview":
+                modal(
+                  "Effect-free draft preview",
+                  "<p>Draft revision " +
+                    state.revision +
+                    '. No write, form submission or background node executes in authoring preview.</p><div class="panel"><h2>' +
+                    esc(catalog.application[0].name) +
+                    "</h2><p>" +
+                    esc(find("pages", state.page)?.name ?? "No selected page") +
+                    "</p>" +
+                    currentComponents()
+                      .map((c) =>
+                        c.type === "table"
+                          ? '<div class="table-scroll"><table><tbody>' +
+                            rows(c.filter) +
+                            "</tbody></table></div>"
+                          : "<p>" + esc(c.name) + " · " + esc(c.type) + "</p>",
+                      )
+                      .join("") +
+                    "</div>",
+                );
+                break;
+              case "walkthrough":
+                modal(
+                  "Build an application",
+                  "<ol><li>Application: name your draft and set its independent version.</li><li>Modules: add data modules, fields, relationships and exposed queries.</li><li>Pages: add a page, then a table, form and button. Use Outline to reorder.</li><li>Component settings: choose a flow. Edit its trigger, nodes, variables and execution identity.</li><li>Try the interactive form example; compare cancelling before and after a committed write.</li><li>Configure navigation, role templates, workflows, connections and interfaces.</li><li>Validate, preview and simulate publication, then installation.</li></ol><p>Every result is local demonstration data. Reloading resets the draft.</p>",
+                );
+                break;
+            }
+          } else if (!event.target.closest("input,select,a")) {
+            const c = event.target.closest("[data-component]");
+            if (c) {
+              state.component = c.dataset.component;
+              render();
+            }
+          }
+        } catch (error) {
+          notice(error.message);
+        }
+      });
+      document.addEventListener("submit", (event) => {
+        if (event.target.id === "editor-form") {
+          event.preventDefault();
+          const f = event.target;
+          try {
+            configure({
+              kind: f.dataset.kind,
+              target: f.dataset.target,
+              values: Object.fromEntries(new FormData(f)),
+              expectedRevision: Number(f.dataset.revision),
+            });
+            closeModal();
+            notice("Demo draft saved. No live changes.");
+          } catch (error) {
+            $("edit-error").textContent = error.message;
+          }
+        }
+        if (event.target.id === "continuation-form") {
+          event.preventDefault();
+          try {
+            simulate({
+              step: "continue",
+              value: new FormData(event.target).get("value"),
+              expectedRevision: state.revision,
+            });
+          } catch (error) {
+            $("continue-error").textContent = error.message;
+          }
+        }
+      });
+      document.addEventListener("change", (event) => {
+        const el = event.target;
+        if (el.id === "page-picker") navigate({ view: "pages", id: el.value });
+        if (el.id === "flow-picker") navigate({ view: "flows", id: el.value });
+        if (el.id === "scenario") {
+          state.scenario = el.value;
+          notice("Demo state: " + el.value + ". Reopen validation to see its result.");
+        }
+      });
+      document.addEventListener("input", (event) => {
+        const id = event.target.dataset.search;
+        if (id) {
+          const c = currentComponents().find((c) => c.id === id);
+          $("rows-" + id).innerHTML = rows(c.filter, event.target.value);
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.target.matches("[data-component]") && ["Enter", " "].includes(event.key)) {
+          event.preventDefault();
+          state.component = event.target.dataset.component;
+          render();
+          document.querySelector('[data-component="' + state.component + '"]')?.focus();
+        }
+      });
+
+      let dragItem = null;
+      function addPalette(kind, value, x = null, y = null) {
+        if (x === null || y === null) {
+          x = 350;
+          y = 380;
+          while (
+            graphs[state.flow]?.some((n) => Math.abs(+n.x - x) < 240 && Math.abs(+n.y - y) < 160)
+          ) {
+            y += 180;
+            if (y > 1500) {
+              y = 380;
+              x += 260;
+            }
+          }
+        }
+        if (kind === "component")
+          configure({
+            kind: "component",
+            values: { type: value },
+            expectedRevision: state.revision,
+          });
+        else
+          configure({
+            kind: "node",
+            values: {
+              type: value,
+              name: value,
+              x: String(Math.round(Math.max(0, Math.min(2500, x)))),
+              y: String(Math.round(Math.max(0, Math.min(2500, y)))),
+            },
+            expectedRevision: state.revision,
+          });
+      }
+      let suppressPortClick = false;
+      document.addEventListener("pointerdown", (event) => {
+        const out = event.target.closest("[data-port-from]");
+        if (!out) return;
+        event.preventDefault();
+        connectFrom = { from: out.dataset.portFrom, port: out.dataset.port };
+      });
+      document.addEventListener("pointermove", (event) => {
+        if (!connectFrom || !event.buttons || !$("graph-stage")) return;
+        const svg = $("graph-stage").querySelector("svg"),
+          stage = $("graph-stage").getBoundingClientRect();
+        const source =
+          connectFrom.from === "trigger"
+            ? { x: 45, y: 160 }
+            : graphs[state.flow].find((n) => n.id === connectFrom.from);
+        if (!source) return;
+        let line = svg.querySelector("#pending-edge");
+        if (!line) {
+          line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          line.id = "pending-edge";
+          line.setAttribute("stroke", "#d5e3ff");
+          line.setAttribute("stroke-width", "2");
+          line.setAttribute("fill", "none");
+          line.setAttribute("stroke-dasharray", "5 4");
+          svg.append(line);
+        }
+        line.setAttribute(
+          "d",
+          "M" +
+            (+source.x + 220) +
+            " " +
+            (+source.y + (connectFrom.port === "otherwise" ? 106 : 64)) +
+            " L" +
+            (event.clientX - stage.left) / zoom +
+            " " +
+            (event.clientY - stage.top) / zoom,
+        );
+      });
+      document.addEventListener("pointerup", (event) => {
+        const input = event.target.closest("[data-port-to]");
+        document.querySelector("#pending-edge")?.remove();
+        if (!input || !connectFrom) return;
+        const values = { ...connectFrom, to: input.dataset.portTo };
+        connectFrom = null;
+        suppressPortClick = true;
+        try {
+          configure({ kind: "connection", values, expectedRevision: state.revision });
+          notice("Nodes connected.");
+        } catch (error) {
+          notice(error.message);
+        }
+      });
+
+      document.addEventListener("dragstart", (event) => {
+        const palette = event.target.closest("[data-palette-kind]"),
+          node = event.target.closest("[data-drag-node]"),
+          port = event.target.closest("[data-port-from]");
+        dragItem = palette
+          ? { kind: palette.dataset.paletteKind, value: palette.dataset.paletteValue }
+          : node
+            ? { kind: "move", id: node.dataset.dragNode }
+            : port
+              ? { kind: "connect", from: port.dataset.portFrom, port: port.dataset.port }
+              : null;
+        if (dragItem) {
+          event.dataTransfer.setData("text/plain", JSON.stringify(dragItem));
+          event.dataTransfer.effectAllowed = "copyMove";
+        }
+      });
+      document.addEventListener("dragover", (event) => {
+        if (event.target.closest("#graph-stage,.canvas,[data-port-to]")) event.preventDefault();
+      });
+      document.addEventListener("drop", (event) => {
+        if (!dragItem) return;
+        const target = event.target.closest("#graph-stage,.canvas,[data-port-to]");
+        if (!target) return;
+        event.preventDefault();
+        try {
+          if (dragItem.kind === "connect") {
+            const input = event.target.closest("[data-port-to]");
+            if (input)
+              configure({
+                kind: "connection",
+                values: { from: dragItem.from, to: input.dataset.portTo, port: dragItem.port },
+                expectedRevision: state.revision,
+              });
+          } else if (state.view === "flows") {
+            const rect = $("graph-stage").getBoundingClientRect(),
+              x = Math.max(0, Math.min(2500, Math.round((event.clientX - rect.left) / zoom))),
+              y = Math.max(0, Math.min(2500, Math.round((event.clientY - rect.top) / zoom)));
+            if (dragItem.kind === "move")
+              configure({
+                kind: "node",
+                target: dragItem.id,
+                values: { x: String(x), y: String(y) },
+                expectedRevision: state.revision,
+              });
+            else if (dragItem.kind === "node") addPalette("node", dragItem.value, x, y);
+          } else if (state.view === "pages" && dragItem.kind === "component")
+            addPalette("component", dragItem.value);
+        } catch (error) {
+          notice(error.message);
+        } finally {
+          dragItem = null;
+        }
+      });
+      document.addEventListener("click", (event) => {
+        const p = event.target.closest("[data-palette-kind]"),
+          out = event.target.closest("[data-port-from]"),
+          input = event.target.closest("[data-port-to]");
+        try {
+          if (p) {
+            addPalette(p.dataset.paletteKind, p.dataset.paletteValue);
+            return;
+          }
+          if (out) {
+            connectFrom = { from: out.dataset.portFrom, port: out.dataset.port };
+            notice("Now choose a node input circle.");
+            return;
+          }
+          if (input) {
+            if (suppressPortClick) {
+              suppressPortClick = false;
+              return;
+            }
+            if (!connectFrom) {
+              notice("Choose an output circle first.");
+              return;
+            }
+            const values = { ...connectFrom, to: input.dataset.portTo };
+            connectFrom = null;
+            configure({ kind: "connection", values, expectedRevision: state.revision });
+            notice("Nodes connected.");
+          }
+        } catch (error) {
+          notice(error.message);
+        }
+      });
+      document.addEventListener("input", (event) => {
+        if (event.target.id === "palette-search") {
+          const term = event.target.value.toLowerCase();
+          document
+            .querySelectorAll("[data-palette-kind]")
+            .forEach((b) => (b.hidden = !b.textContent.toLowerCase().includes(term)));
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (
+          event.altKey &&
+          ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+        ) {
+          const target = event.target.closest("[data-drag-node]");
+          if (!target) return;
+          event.preventDefault();
+          const n = graphs[state.flow].find((n) => n.id === target.dataset.dragNode),
+            x = Math.max(
+              0,
+              Math.min(
+                2500,
+                +n.x + (event.key === "ArrowLeft" ? -20 : event.key === "ArrowRight" ? 20 : 0),
+              ),
+            ),
+            y = Math.max(
+              0,
+              Math.min(
+                2500,
+                +n.y + (event.key === "ArrowUp" ? -20 : event.key === "ArrowDown" ? 20 : 0),
+              ),
+            );
+          configure({
+            kind: "node",
+            target: n.id,
+            values: { x: String(x), y: String(y) },
+            expectedRevision: state.revision,
+          });
+          document.querySelector('[data-drag-node="' + n.id + '"]')?.focus();
+        }
+      });
+
+      const tools = [
+        {
+          name: "read_demo_app_designer",
+          title: "Read prototype draft",
+          description:
+            "Read local demo definitions, graphs, selection and revision. No live data or secrets.",
+          inputSchema: { type: "object", properties: {}, additionalProperties: false },
+          annotations: { readOnlyHint: true, untrustedContentHint: true },
+          execute(input) {
+            verifyInput(input, []);
+            return read();
+          },
+        },
+        {
+          name: "navigate_demo_app_designer",
+          title: "Navigate prototype workspace",
+          description:
+            "Open a demo configuration view and optionally select a page or flow. No draft change.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              view: { type: "string", enum: Object.keys(viewInfo) },
+              id: { type: "string" },
+            },
+            required: ["view"],
+            additionalProperties: false,
+          },
+          annotations: { readOnlyHint: true },
+          execute: navigate,
+        },
+        {
+          name: "configure_demo_app_designer",
+          title: "Configure prototype draft",
+          description:
+            "Use the same revision-checked operation as the visible forms to change local demo definitions, components, bindings, node order and variables. No live effects. Read the draft first.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              kind: {
+                type: "string",
+                enum: [
+                  "definition",
+                  "component",
+                  "component_order",
+                  "node",
+                  "node_order",
+                  "variable",
+                  "connection",
+                  "disconnect",
+                ],
+              },
+              target: {
+                type: "string",
+                description:
+                  "Definition: section:id, or section: for new. Others: selected component/node/variable ID; omit for new.",
+              },
+              values: { type: "object", additionalProperties: { type: "string" } },
+              expectedRevision: { type: "integer", minimum: 1 },
+            },
+            required: ["kind", "values", "expectedRevision"],
+            additionalProperties: false,
+          },
+          annotations: { readOnlyHint: false, untrustedContentHint: true },
+          execute: configure,
+        },
+        {
+          name: "simulate_demo_app_designer",
+          title: "Simulate release or interactive flow",
+          description:
+            "Run explicitly local release or form-continuation demonstrations. No real publication, installation, record write or background execution.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              step: {
+                type: "string",
+                enum: ["publish", "install", "start", "prior-write", "continue", "cancel"],
+              },
+              expectedRevision: { type: "integer", minimum: 1 },
+              value: { type: "string" },
+            },
+            required: ["step", "expectedRevision"],
+            additionalProperties: false,
+          },
+          annotations: { readOnlyHint: false, untrustedContentHint: true },
+          execute: simulate,
+        },
+      ];
+      const lifecycle = new AbortController();
+      if (document.modelContext?.registerTool)
+        for (const tool of tools) {
+          try {
+            Promise.resolve(
+              document.modelContext.registerTool(tool, { signal: lifecycle.signal }),
+            ).catch(() => notice("Browser tools unavailable; use the visible controls."));
+          } catch {
+            notice("Browser tools unavailable; use the visible controls.");
+          }
+        }
+      addEventListener("pagehide", () => lifecycle.abort(), { once: true });
+      render();
+    </script>
+  </body>
+</html>

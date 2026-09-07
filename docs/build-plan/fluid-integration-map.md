@@ -78,3 +78,9 @@ An independent Sol reviewer inspected the prototype source against the current b
 The review did not change either repository or exercise saving/publishing. These are implementation requirements, not claims that the future Vortex builder already passes them.
 
 This map satisfies the current analysis request; it does not start the dependent editor implementation, clear its user-facing design checkpoint, or authorise changes in the separate Fluid repository. Unrelated Kestra maintenance remains deferred. [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) has no user hold and proceeds after its technical prerequisites; it is not part of this editor-analysis task.
+
+## Canvas-first layout checkpoint — 7 September 2026
+
+The [App Designer prototype](../prototypes/app-designer/README.md) now follows the supplied shell-editor layout: application navigation at the far left, a contextual component/node palette, the central editing canvas and a right-hand selection inspector. Application navigation remains available while editing pages or flows. Flow connections use explicit labelled ports, not node placement or array order; dragging and keyboard/click alternatives must invoke the same draft operations. The dark editor controls are independent of the application's Appearance settings.
+
+Independent review approved this layout checkpoint, not the full prototype acceptance or production editor. Keep the remaining journeys under [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323); implementation remains with [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64), [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) and [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200), respecting their existing dependencies.
