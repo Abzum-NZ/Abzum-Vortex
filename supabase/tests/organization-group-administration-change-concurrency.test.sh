@@ -37,6 +37,9 @@ readonly correlation_winner="a8${run_uuid:2}"
 readonly correlation_loser="a9${run_uuid:2}"
 readonly activity_winner="b5${run_uuid:2}"
 readonly activity_loser="b6${run_uuid:2}"
+readonly revoke_assignment_id="b9${run_uuid:2}"
+readonly revoke_activity_winner="ba${run_uuid:2}"
+readonly revoke_activity_loser="bb${run_uuid:2}"
 readonly identity_authority_id="b7${run_uuid:2}"
 readonly session_id="b8${run_uuid:2}"
 
@@ -409,5 +412,61 @@ final_state="$(run_sql "
   echo 'competing protected renames left unexpected Group, Access or Activity state' >&2
   exit 1
 }
+
+run_sql "select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant','$organization_id','$revoke_assignment_id',null,'$role_id',1,
+  'organization_account','$account_id',null,'standing',pg_catalog.clock_timestamp(),null,
+  '$actor_id','$correlation_create');" >/dev/null
+before_revoke="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$organization_id';")"
+
+PGAPPNAME="vortex-assignment-revoke-winner-${run_token:0:12}" "${psql_command[@]}" >"$proof_root/revoke-winner.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout = '30s'; set local statement_timeout = '45s';
+set local role vortex_runtime;
+select * from vortex_access.resolve_human_organization_change_scope('$identity_id','$organization_id') \gset scope_
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'callerKind','human','identityAuthorityId','$identity_authority_id','tenantId','$tenant_id',
+  'organizationId','$organization_id','organizationAccountId','$account_id','identityId','$identity_id',
+  'sessionId','$session_id','authenticationStrength','multi_factor',
+  'issuedAt',pg_catalog.clock_timestamp(),'expiresAt',pg_catalog.clock_timestamp()+interval '5 minutes',
+  'accessVersion',:scope_access_version,'correlationId','$correlation_winner'));
+set local role vortex_request;
+select access_version from vortex_access.revoke_organization_role_assignment_for_administration(
+  '$revoke_assignment_id',1,'$revoke_activity_winner') \g '$proof_root/revoke-winner.version'
+reset role;
+select pg_catalog.pg_backend_pid() \g '$proof_root/revoke-winner.pid'
+\! deadline=600; while [ ! -f '$proof_root/revoke-winner-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/revoke-winner-release' ]
+commit;
+SQL
+revoke_winner=$!; worker_pids+=("$revoke_winner")
+revoke_winner_db="$(read_backend_pid "$proof_root/revoke-winner.pid")"
+
+PGAPPNAME="vortex-assignment-revoke-loser-${run_token:0:12}" "${psql_command[@]}" >"$proof_root/revoke-loser.log" 2>&1 <<SQL &
+\set VERBOSITY verbose
+begin;
+set local lock_timeout = '30s'; set local statement_timeout = '45s';
+set local role vortex_runtime;
+select pg_catalog.pg_backend_pid() \g '$proof_root/revoke-loser.pid'
+select * from vortex_access.resolve_human_organization_change_scope('$identity_id','$organization_id') \gset scope_
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'callerKind','human','identityAuthorityId','$identity_authority_id','tenantId','$tenant_id',
+  'organizationId','$organization_id','organizationAccountId','$account_id','identityId','$identity_id',
+  'sessionId','$session_id','authenticationStrength','multi_factor',
+  'issuedAt',pg_catalog.clock_timestamp(),'expiresAt',pg_catalog.clock_timestamp()+interval '5 minutes',
+  'accessVersion',:scope_access_version,'correlationId','$correlation_loser'));
+set local role vortex_request;
+select * from vortex_access.revoke_organization_role_assignment_for_administration(
+  '$revoke_assignment_id',1,'$revoke_activity_loser');
+commit;
+SQL
+revoke_loser=$!; worker_pids+=("$revoke_loser")
+revoke_loser_db="$(read_backend_pid "$proof_root/revoke-loser.pid")"
+wait_for_database_blocker "$revoke_loser_db" "$revoke_winner_db"
+touch "$proof_root/revoke-winner-release"
+wait_owned_worker "$revoke_winner"
+if wait_owned_worker "$revoke_loser"; then echo 'same-revision protected revoke loser unexpectedly committed' >&2; exit 1; fi
+grep -Eq '40001|42501' "$proof_root/revoke-loser.log" || { echo 'same-revision revoke loser lacked stable refusal' >&2; exit 1; }
+revoke_state="$(run_sql "select pg_catalog.concat_ws('|',version.current_version,assignment.revision,assignment.state,(select count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id in ('$revoke_activity_winner','$revoke_activity_loser')),(select count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id='$revoke_activity_winner')) from vortex_access.organization_access_versions version join vortex_access.organization_role_assignments assignment on assignment.organization_id=version.organization_id and assignment.role_assignment_id='$revoke_assignment_id' where version.organization_id='$organization_id';")"
+[ "$revoke_state" = "$((before_revoke + 1))|2|revoked|1|1" ] || { printf 'same-revision protected revokes left unexpected state: %q\n' "$revoke_state" >&2; exit 1; }
 
 echo 'organization Group-administration change concurrency proof passed'

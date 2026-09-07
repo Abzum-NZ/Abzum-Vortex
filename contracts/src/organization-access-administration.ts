@@ -557,6 +557,20 @@ export const readOrganizationAdministrationRoleAssignmentResultSchema = z.discri
   ],
 );
 
+export const revokeOrganizationAdministrationRoleAssignmentCommandSchema = z
+  .object({
+    roleAssignmentId: roleAssignmentIdSchema,
+    expectedAssignmentRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const changeOrganizationAdministrationRoleAssignmentResultSchema = z
+  .object({
+    assignment: organizationAdministrationRoleAssignmentSchema,
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
 export const organizationAdministrationDelegationScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("organization_catalogue") }).strict(),
   z
@@ -888,6 +902,12 @@ export type ReadOrganizationAdministrationRoleAssignmentCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationRoleAssignmentResult = z.infer<
   typeof readOrganizationAdministrationRoleAssignmentResultSchema
+>;
+export type RevokeOrganizationAdministrationRoleAssignmentCommand = z.infer<
+  typeof revokeOrganizationAdministrationRoleAssignmentCommandSchema
+>;
+export type ChangeOrganizationAdministrationRoleAssignmentResult = z.infer<
+  typeof changeOrganizationAdministrationRoleAssignmentResultSchema
 >;
 export type OrganizationAdministrationDelegationAuthority = z.infer<
   typeof organizationAdministrationDelegationAuthoritySchema

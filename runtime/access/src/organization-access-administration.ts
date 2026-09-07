@@ -6,6 +6,7 @@ import {
   changeOrganizationAdministrationMembershipResultSchema,
   changeOrganizationAdministrationRoleResultSchema,
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
+  changeOrganizationAdministrationRoleAssignmentResultSchema,
   changeOrganizationAdministrationRoleActivationResultSchema,
   changeOrganizationAdministrationGroupResultSchema,
   createOrganizationAdministrationGroupCommandSchema,
@@ -49,9 +50,11 @@ import {
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
+  revokeOrganizationAdministrationRoleAssignmentCommandSchema,
   type ChangeOrganizationAdministrationGroupResult,
   type ChangeOrganizationAdministrationMembershipResult,
   type ChangeOrganizationAdministrationRoleResult,
+  type ChangeOrganizationAdministrationRoleAssignmentResult,
   type ChangeOrganizationAdministrationDelegationAuthorityResult,
   type ChangeOrganizationAdministrationRoleActivationResult,
   type CreateOrganizationAdministrationGroupCommand,
@@ -95,6 +98,7 @@ import {
   type RetireOrganizationAdministrationGroupCommand,
   type RetireOrganizationAdministrationRoleCommand,
   type ReviseOrganizationAdministrationRoleMetadataCommand,
+  type RevokeOrganizationAdministrationRoleAssignmentCommand,
   type DeactivateOrganizationAdministrationRoleActivationCommand,
   type RevokeOrganizationAdministrationDelegationAuthorityCommand,
 } from "@vortex/contracts";
@@ -215,6 +219,12 @@ type RoleAssignmentPageRow = DatabaseRow & {
 type RoleAssignmentDetailRow = DatabaseRow & {
   organization_id: unknown;
   outcome: unknown;
+  assignment_summary: unknown;
+  access_version: unknown;
+};
+
+type RoleAssignmentChangeRow = DatabaseRow & {
+  organization_id: unknown;
   assignment_summary: unknown;
   access_version: unknown;
 };
@@ -719,6 +729,52 @@ export const createOrganizationAccessAdministrationService = (
           !sameUuid(parsed.data.role.roleId, command.data.roleId) ||
           parsed.data.role.liveRevision !== command.data.expectedRoleRevision + 1 ||
           parsed.data.role.lifecycle !== "retired"
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return parsed.data;
+      });
+    },
+
+    revokeRoleAssignment: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: RevokeOrganizationAdministrationRoleAssignmentCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleAssignmentResult>
+    > => {
+      const command =
+        revokeOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+      return requests.runChange(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<RoleAssignmentChangeRow>`
+          select organization_id, assignment_summary, access_version
+          from vortex_access.revoke_organization_role_assignment_for_administration(
+            ${command.data.roleAssignmentId}::uuid,
+            ${command.data.expectedAssignmentRevision}::bigint,
+            ${activityId}::uuid
+          )
+        `,
+        );
+        const parsed = changeOrganizationAdministrationRoleAssignmentResultSchema.safeParse({
+          assignment: normalizeAssignmentLedgerFact(row.assignment_summary),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          !parsed.success ||
+          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          !sameUuid(parsed.data.assignment.roleAssignmentId, command.data.roleAssignmentId) ||
+          parsed.data.assignment.revision !== command.data.expectedAssignmentRevision + 1 ||
+          parsed.data.assignment.state !== "revoked" ||
+          parsed.data.assignment.temporalState !== "revoked"
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return parsed.data;

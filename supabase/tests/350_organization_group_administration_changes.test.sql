@@ -42,6 +42,49 @@ begin
 end
 $function$;
 
+create function pg_temp.current_platform_permissions(
+  p_organization_id uuid,
+  p_count integer
+)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_agg(candidate.permission order by candidate.ordinality)
+  from (
+    select pg_catalog.jsonb_build_object(
+      'kind', 'exact', 'ownerKind', entry.owner_kind,
+      'ownerId', entry.owner_id, 'permissionId', entry.permission_id,
+      'acceptedRegistrationRevision', entry.registration_revision,
+      'catalogueFingerprint', registration.permission_catalogue_fingerprint,
+      'continuityRevision', continuity.continuity_revision,
+      'meaningFingerprint', entry.meaning_fingerprint
+    ) as permission,
+    pg_catalog.row_number() over (
+      order by entry.application_root_id asc nulls last,
+        entry.owner_kind collate "C", entry.owner_id, entry.permission_id
+    ) as ordinality
+    from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registration_revisions as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and registration.revision = entry.registration_revision
+      and registration.state = 'active'
+    join vortex_access.permission_continuities as continuity
+      on continuity.organization_id = entry.organization_id
+      and continuity.application_root_id is not distinct from entry.application_root_id
+      and continuity.owner_kind = entry.owner_kind and continuity.owner_id = entry.owner_id
+      and continuity.permission_id = entry.permission_id and continuity.state = 'available'
+    where entry.organization_id = p_organization_id
+      and entry.registration_kind = 'platform'
+    order by entry.application_root_id asc nulls last,
+      entry.owner_kind collate "C", entry.owner_id, entry.permission_id
+    limit p_count
+  ) as candidate;
+$function$;
+
 select has_function(
   'vortex_access', 'create_organization_group_for_administration',
   array['uuid', 'text', 'text', 'uuid'],
@@ -242,6 +285,45 @@ select * from vortex_access.coordinate_organization_group_change(
   '93500000-0000-4000-8000-000000000001',
   'a3500000-0000-4000-8000-000000000009'
 );
+
+set local session_replication_role = replica;
+insert into vortex_access.organization_roles (
+  organization_id, role_id, role_kind, role_key, live_revision, created_by, created_at
+) values (
+  '23500000-0000-4000-8000-000000000002',
+  '63500000-0000-4000-8000-000000000098', 'custom', 'foreign_assignment_role', 1,
+  '93500000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp()
+);
+insert into vortex_access.organization_role_revisions (
+  organization_id, role_id, revision, role_kind, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
+  authority_continuity_revision, role_key, label, description, changed_by,
+  changed_at, change_correlation_id
+) values (
+  '23500000-0000-4000-8000-000000000002',
+  '63500000-0000-4000-8000-000000000098', 1, 'custom', 'active',
+  'standard', 'standing', 1, 1, 'foreign_assignment_role',
+  'Foreign assignment role', 'Real cross-organization assignment target.',
+  '93500000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a3500000-0000-4000-8000-000000000071'
+);
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, group_id, assignment_kind, revision, starts_at,
+  expires_at, state, granted_by, granted_at, grant_correlation_id,
+  changed_by, changed_at, change_correlation_id
+) values (
+  '23500000-0000-4000-8000-000000000002',
+  '73500000-0000-4000-8000-000000000099',
+  '63500000-0000-4000-8000-000000000098', 'group', null,
+  '63500000-0000-4000-8000-000000000099', 'standing', 1,
+  pg_catalog.clock_timestamp(), null, 'live',
+  '93500000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a3500000-0000-4000-8000-000000000072',
+  '93500000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a3500000-0000-4000-8000-000000000072'
+);
+set local session_replication_role = origin;
 
 set constraints all immediate;
 set constraints all deferred;
@@ -499,6 +581,330 @@ select throws_ok(
   '22023'::char(5),
   'Organization Group creation input is invalid',
   'malformed protected creation input refuses before authority evaluation'
+);
+reset role;
+
+set constraints all immediate;
+
+select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant', '23500000-0000-4000-8000-000000000001',
+  '73500000-0000-4000-8000-000000000010', null,
+  '63500000-0000-4000-8000-000000000001', 1,
+  'organization_account', '53500000-0000-4000-8000-000000000002', null,
+  'standing', pg_catalog.clock_timestamp(), null,
+  '93500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000040'
+);
+
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000001',
+  '53500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000041'
+);
+set local role vortex_request;
+select results_eq(
+  $$
+    select organization_id, assignment_summary ->> 'state', access_version
+    from vortex_access.revoke_organization_role_assignment_for_administration(
+      '73500000-0000-4000-8000-000000000010', 1,
+      'b3500000-0000-4000-8000-000000000041'
+    )
+  $$,
+  $$values (
+    '23500000-0000-4000-8000-000000000001'::uuid, 'revoked'::text, 7::bigint
+  )$$,
+  'an assignments manager with catalogue delegation revokes one exact assignment'
+);
+reset role;
+
+select is(
+  (
+    select assignment.revision::text || '|' || assignment.state || '|' ||
+      activity.action || '|' || (activity.occurred_at = assignment.changed_at)::text
+    from vortex_access.organization_role_assignments as assignment
+    join vortex_activity.organization_activity_entries as activity
+      on activity.organization_id = assignment.organization_id
+      and activity.activity_id = 'b3500000-0000-4000-8000-000000000041'
+    where assignment.organization_id = '23500000-0000-4000-8000-000000000001'
+      and assignment.role_assignment_id = '73500000-0000-4000-8000-000000000010'
+  ),
+  '2|revoked|revoke_role_assignment|true',
+  'assignment, single Access increment and content-free Activity commit together'
+);
+
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000002',
+  '53500000-0000-4000-8000-000000000002',
+  'a3500000-0000-4000-8000-000000000042'
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000001', 1,
+    'b3500000-0000-4000-8000-000000000042')$$,
+  '42501'::char(5), 'Organization role-assignment revocation is unavailable',
+  'an account without assignment management authority cannot revoke'
+);
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000010', 1,
+    'b3500000-0000-4000-8000-000000000043')$$,
+  '40001'::char(5), 'Organization role-assignment revocation is stale or unavailable',
+  'a stale or already revoked assignment refuses without another change'
+);
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000099', 1,
+    'b3500000-0000-4000-8000-000000000099')$$,
+  '40001'::char(5), 'Organization role-assignment revocation is stale or unavailable',
+  'a real foreign assignment is unavailable within the selected organization'
+);
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000097', 1,
+    'b3500000-0000-4000-8000-000000000097')$$,
+  '40001'::char(5), 'Organization role-assignment revocation is stale or unavailable',
+  'an unknown assignment is unavailable within the selected organization'
+);
+reset role;
+
+select is(
+  (
+    select assignment.state || '|' || assignment.revision::text
+    from vortex_access.organization_role_assignments as assignment
+    where assignment.organization_id = '23500000-0000-4000-8000-000000000002'
+      and assignment.role_assignment_id = '73500000-0000-4000-8000-000000000099'
+  ),
+  'live|1',
+  'the refused cross-organization target remains unchanged'
+);
+
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000001',
+  '53500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000044'
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000001', 1,
+    'b3500000-0000-4000-8000-000000000044')$$,
+  '23514'::char(5), 'An adopted organization requires a permanent steward',
+  'the protected composition cannot revoke the final permanent steward assignment'
+);
+reset role;
+
+select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant', '23500000-0000-4000-8000-000000000001',
+  '73500000-0000-4000-8000-000000000020', null,
+  '63500000-0000-4000-8000-000000000001', 1,
+  'organization_account', '53500000-0000-4000-8000-000000000002', null,
+  'standing', pg_catalog.clock_timestamp(), null,
+  '93500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000045'
+);
+select vortex_activity.append_organization_activity_entry(
+  '23500000-0000-4000-8000-000000000001',
+  'b3500000-0000-4000-8000-000000000045', pg_catalog.clock_timestamp(),
+  'organization_account', '53500000-0000-4000-8000-000000000001',
+  'conflicting_activity', array['73500000-0000-4000-8000-000000000020'::uuid],
+  array[]::uuid[], 'web', 'a3500000-0000-4000-8000-000000000045', 'completed'
+);
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000001',
+  '53500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000045'
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000020', 1,
+    'b3500000-0000-4000-8000-000000000045')$$,
+  '22023'::char(5), 'Activity identity already records different evidence',
+  'Activity collision rolls back assignment revocation and Access increment'
+);
+reset role;
+select is(
+  (select assignment.revision::text || '|' || assignment.state || '|' ||
+      version.current_version::text
+    from vortex_access.organization_role_assignments as assignment
+    join vortex_access.organization_access_versions as version
+      on version.organization_id = assignment.organization_id
+    where assignment.organization_id = '23500000-0000-4000-8000-000000000001'
+      and assignment.role_assignment_id = '73500000-0000-4000-8000-000000000020'),
+  '1|live|8',
+  'failed Activity composition leaves the assignment and Access version unchanged'
+);
+
+select * from vortex_access.coordinate_organization_delegation_authority_change(
+  'grant_delegation', '23500000-0000-4000-8000-000000000001',
+  '83500000-0000-4000-8000-000000000020', null,
+  'organization_account', '53500000-0000-4000-8000-000000000002', null,
+  'bounded', pg_temp.current_platform_permissions(
+    '23500000-0000-4000-8000-000000000001', 1
+  ), 'sha256:' || pg_catalog.repeat('f', 64), pg_catalog.clock_timestamp(), null,
+  '93500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000046'
+);
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000002',
+  '53500000-0000-4000-8000-000000000002',
+  'a3500000-0000-4000-8000-000000000047'
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000020', 1,
+    'b3500000-0000-4000-8000-000000000047')$$,
+  '42501'::char(5), 'Organization role-assignment revocation is unavailable',
+  'a partial bounded delegation cannot revoke a wider accepted role scope'
+);
+reset role;
+
+set constraints all deferred;
+insert into vortex_access.organization_roles (
+  organization_id, role_id, role_kind, role_key, live_revision, created_by, created_at
+) values (
+  '23500000-0000-4000-8000-000000000001',
+  '63500000-0000-4000-8000-000000000030', 'custom', 'cleanup_role', 1,
+  '93500000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp()
+);
+insert into vortex_access.organization_role_revisions (
+  organization_id, role_id, revision, role_kind, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
+  authority_continuity_revision, role_key, label, description, changed_by,
+  changed_at, change_correlation_id
+) values (
+  '23500000-0000-4000-8000-000000000001',
+  '63500000-0000-4000-8000-000000000030', 1, 'custom', 'active',
+  'privileged', 'standing', 1, 1, 'cleanup_role', 'Cleanup role',
+  'Cleanup-only role fixture.', '93500000-0000-4000-8000-000000000001',
+  pg_catalog.clock_timestamp(), 'a3500000-0000-4000-8000-000000000049'
+);
+set local session_replication_role = replica;
+insert into vortex_access.organization_role_permission_entries (
+  organization_id, role_id, role_revision, entry_ordinal, role_kind,
+  application_root_id, owner_kind, owner_id, permission_id, registration_kind,
+  registration_owner_id, accepted_registration_revision, catalogue_fingerprint,
+  continuity_revision, meaning_fingerprint
+)
+select permission.organization_id,
+  '63500000-0000-4000-8000-000000000030', permission.role_revision,
+  permission.entry_ordinal, 'custom', permission.application_root_id,
+  permission.owner_kind, permission.owner_id, permission.permission_id,
+  permission.registration_kind, permission.registration_owner_id,
+  permission.accepted_registration_revision, permission.catalogue_fingerprint,
+  permission.continuity_revision, permission.meaning_fingerprint
+from vortex_access.organization_role_permission_entries as permission
+where permission.organization_id = '23500000-0000-4000-8000-000000000001'
+  and permission.role_id = '63500000-0000-4000-8000-000000000001'
+  and permission.role_revision = 1;
+set local session_replication_role = origin;
+set constraints all immediate;
+select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant', '23500000-0000-4000-8000-000000000001',
+  '73500000-0000-4000-8000-000000000030', null,
+  '63500000-0000-4000-8000-000000000030', 1,
+  'organization_account', '53500000-0000-4000-8000-000000000002', null,
+  'standing', pg_catalog.clock_timestamp(), null,
+  '93500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000050'
+);
+set local session_replication_role = replica;
+update vortex_access.organization_role_revisions
+set lifecycle = 'retired'
+where organization_id = '23500000-0000-4000-8000-000000000001'
+  and role_id = '63500000-0000-4000-8000-000000000030' and revision = 1;
+update vortex_identity.organization_accounts
+set state = 'suspended', suspended_at = pg_catalog.clock_timestamp()
+where organization_id = '23500000-0000-4000-8000-000000000001'
+  and organization_account_id = '53500000-0000-4000-8000-000000000002';
+update vortex_access.organization_role_assignments
+set starts_at = pg_catalog.clock_timestamp() - interval '2 hours',
+  expires_at = pg_catalog.clock_timestamp() - interval '1 hour'
+where organization_id = '23500000-0000-4000-8000-000000000001'
+  and role_assignment_id = '73500000-0000-4000-8000-000000000030';
+set local session_replication_role = origin;
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000001',
+  '53500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000051'
+);
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000030', 1,
+    'b3500000-0000-4000-8000-000000000051')$$,
+  'retired-role, expired-window and inactive-subject facts remain removable'
+);
+reset role;
+
+-- The withdrawal cleanup exception is deliberately narrower than an empty-role
+-- fallback. Seed retained assignments while the role is still valid, then prove
+-- that only the exact unavailable/current-empty state plus catalogue delegation
+-- can remove one.
+set local session_replication_role = replica;
+update vortex_access.organization_role_revisions
+set lifecycle = 'active'
+where organization_id = '23500000-0000-4000-8000-000000000001'
+  and role_id = '63500000-0000-4000-8000-000000000030' and revision = 1;
+update vortex_identity.organization_accounts
+set state = 'active', suspended_at = null
+where organization_id = '23500000-0000-4000-8000-000000000001'
+  and organization_account_id = '53500000-0000-4000-8000-000000000002';
+set local session_replication_role = origin;
+
+select assignment_change.*
+from (values
+  ('73500000-0000-4000-8000-000000000040'::uuid, 'a3500000-0000-4000-8000-000000000060'::uuid),
+  ('73500000-0000-4000-8000-000000000041'::uuid, 'a3500000-0000-4000-8000-000000000061'::uuid)
+) as candidate(assignment_id, correlation_id)
+cross join lateral vortex_access.coordinate_organization_role_assignment_change(
+  'grant', '23500000-0000-4000-8000-000000000001', candidate.assignment_id, null,
+  '63500000-0000-4000-8000-000000000030', 1,
+  'organization_account', '53500000-0000-4000-8000-000000000002', null,
+  'standing', pg_catalog.clock_timestamp(), null,
+  '93500000-0000-4000-8000-000000000001', candidate.correlation_id
+) as assignment_change;
+
+set local session_replication_role = replica;
+delete from vortex_access.organization_role_permission_entries
+where organization_id = '23500000-0000-4000-8000-000000000001'
+  and role_id = '63500000-0000-4000-8000-000000000030' and role_revision = 1;
+set local session_replication_role = origin;
+
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000001',
+  '53500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000065'
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000040', 1,
+    'b3500000-0000-4000-8000-000000000060')$$,
+  '40001'::char(5), 'Organization role-assignment authority is stale or unavailable',
+  'an active empty role cannot use the withdrawal cleanup exception'
+);
+reset role;
+
+set local session_replication_role = replica;
+update vortex_access.organization_role_revisions set lifecycle = 'retired'
+where organization_id = '23500000-0000-4000-8000-000000000001'
+  and role_id = '63500000-0000-4000-8000-000000000030' and revision = 1;
+set local session_replication_role = origin;
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000001',
+  '53500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000066'
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '73500000-0000-4000-8000-000000000041', 1,
+    'b3500000-0000-4000-8000-000000000061')$$,
+  '40001'::char(5), 'Organization role-assignment authority is stale or unavailable',
+  'a retired empty role cannot use the withdrawal cleanup exception'
 );
 reset role;
 

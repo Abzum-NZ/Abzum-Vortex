@@ -8,14 +8,6 @@ Resolved choices have been incorporated into the permanent requirements, contrac
 
 Credentials, service access, environment health, one-time deployment or destructive-operation approval, and implementation findings are not product decisions. Track them in the responsible delivery issue or runbook, with their owner and evidence. Add them here only if two viable answers would materially change a permanent product requirement or architecture.
 
-The user approved removal-only cleanup of assignments to withdrawn roles/permissions
-on 8 September 2026. The permanent limits and verification requirements are in
-[access administration #40](../../build-plan/issue-40-protected-access-administration.md#approved-removal-only-cleanup-after-withdrawal--8-september-2026);
-that authorization is resolved and is not an open decision. Implementation and
-delivery evidence remain in the responsible task. The separate
-[#35 tool-execution restriction](../../build-plan/issue-35-row-policy-composition.md#narrow-implementation-authorization--8-september-2026)
-is unaffected by this approval and is not a product decision.
-
 The September architecture review resolved the HR example scope, workflow-based manager approval with HR fallback, and no self-approval. The permanent requirements are in [HR example policy](page-builder-contracts.md#hr-example-policy); implementation gaps remain in delivery tasks, not in this decision register.
 
 The 5 September Roles and Groups clarification and optional per-role PIM model are incorporated in [Groups and privileged access](groups-and-privileged-access.md) and their owning tasks. Organisation policy configuration (duration, authentication and required review) is not an unresolved universal product setting. There is no new open decision from that clarification.
