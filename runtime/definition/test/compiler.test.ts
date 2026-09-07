@@ -91,6 +91,256 @@ const leafPathKeys = (value: unknown, path: readonly (string | number)[] = []): 
       : [JSON.stringify(path)];
 
 describe("authored definition compiler", () => {
+  it("preserves singular action bindings and compiles plural alternatives without rewriting", () => {
+    const source = structuredClone(
+      sources.find(
+        (candidate) => candidate.kind === "module" && candidate.key === "vortex.service_desk.cases",
+      ),
+    );
+    if (!source || source.kind !== "module") throw new Error("Case module required");
+    const [first] = source.body.actions;
+    if (!first?.permission) throw new Error("Named action required");
+    const permission = source.body.permissions.find(
+      (candidate) => candidate.key === first.permission,
+    );
+    if (!permission) throw new Error("Action permission required");
+    const primaryPermissionKey = permission.key;
+    const alternative = {
+      ...structuredClone(permission),
+      id: "perm_named_9_assign_alternative",
+      key: `${permission.key}_alternative`,
+    };
+    source.body.permissions.push(alternative);
+    const alternatives = [primaryPermissionKey, alternative.key].sort();
+    delete first.permission;
+    first.permission_alternatives = alternatives;
+    const alternativeId = "9c4b5aef-297a-4ae0-a4d2-b4664e73c4ad";
+    const amendedResolution = withResolutionFingerprint({
+      ...resolution,
+      identities: [
+        ...resolution.identities,
+        ...[alternative.id, alternative.key].map((alias) => ({
+          definitionKey: source.key,
+          scope: "content" as const,
+          kind: "permission" as const,
+          alias,
+          identifier: alternativeId,
+          componentOwner: alternative.id,
+        })),
+      ],
+    });
+
+    const output = compileDefinition({ ...requestFor(source), resolution: amendedResolution });
+    if (output.kind !== "module") throw new Error("Compiled module required");
+    const compiled = output.canonical.content.actions.find((action) => action.key === first.key);
+    expect(compiled).toMatchObject({ permissionKeys: alternatives });
+    expect(compiled).not.toHaveProperty("permissionKey");
+    for (const index of alternatives.keys())
+      expect(output.provenance).toContainEqual(
+        expect.objectContaining({
+          canonicalPath: ["content", "actions", 0, "permissionKeys", index],
+          sourcePath: ["body", "actions", 0, "permission_alternatives", index],
+          origin: "source",
+        }),
+      );
+
+    const applicationSource = structuredClone(
+      sources.find(
+        (candidate) =>
+          candidate.kind === "application" && candidate.key === "vortex.app.service_desk",
+      ),
+    );
+    if (!applicationSource || applicationSource.kind !== "application")
+      throw new Error("Service desk application required");
+    const applicationAction = {
+      id: "act_case_assign_alternative",
+      key: "vortex.app.service_desk.case.assign_alternative",
+      label: "Assign case",
+      record_type: "vortex.service_desk.cases:case",
+      permission_alternatives: alternatives,
+      sharing: "refused" as const,
+      inputs: [],
+      effects: [
+        {
+          kind: "set_field" as const,
+          field: "status",
+          value: { source: "literal" as const, value: "resolved" },
+        },
+      ],
+    };
+    applicationSource.body.actions.push(applicationAction);
+    const parsedApplicationSource = definitionSourceDocumentSchema.safeParse(applicationSource);
+    if (!parsedApplicationSource.success)
+      throw new Error(JSON.stringify(parsedApplicationSource.error.issues));
+    const applicationActionId = "29a7d1af-21e5-442b-b7ad-9504ec11c2ce";
+    const applicationResolution = withResolutionFingerprint({
+      ...amendedResolution,
+      identities: [
+        ...amendedResolution.identities,
+        ...[applicationAction.id, applicationAction.key].map((alias) => ({
+          definitionKey: applicationSource.key,
+          scope: "content" as const,
+          kind: "action" as const,
+          alias,
+          identifier: applicationActionId,
+          componentOwner: applicationAction.id,
+        })),
+      ],
+    });
+    const applicationOutput = compileDefinition({
+      ...requestFor(applicationSource),
+      resolution: applicationResolution,
+    });
+    if (applicationOutput.kind !== "application") throw new Error("Compiled application required");
+    expect(applicationOutput.canonical.content.actions.at(-1)).toMatchObject({
+      permissionKeys: alternatives,
+    });
+    expect(
+      applicationOutput.canonical.content.interfaces.flatMap((entry) => entry.operations),
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ permissionKey: expect.any(String) })]),
+    );
+    expect(
+      applicationOutput.canonical.content.interfaces
+        .flatMap((entry) => entry.operations)
+        .some((operation) => "permissionKeys" in operation),
+    ).toBe(false);
+    for (const index of alternatives.keys())
+      expect(applicationOutput.provenance).toContainEqual(
+        expect.objectContaining({
+          canonicalPath: ["content", "actions", 0, "permissionKeys", index],
+          sourcePath: ["body", "actions", 0, "permission_alternatives", index],
+          origin: "source",
+        }),
+      );
+
+    const amendedRequests = sources.map((candidate) => ({
+      ...requestFor(
+        candidate.kind === "module" && candidate.key === source.key
+          ? source
+          : candidate.kind === "application" && candidate.key === applicationSource.key
+            ? applicationSource
+            : candidate,
+      ),
+      resolution: applicationResolution,
+    }));
+    const amendedOutputs = amendedRequests.map(compileDefinition);
+    expect(
+      validateDefinitionSet(publicationContext(amendedRequests, amendedOutputs)).failures,
+    ).toEqual([]);
+
+    for (const mismatch of ["action", "owner"] as const) {
+      const mismatchedOutputs = structuredClone(amendedOutputs);
+      const mismatched = mismatchedOutputs.find(
+        (candidate) =>
+          candidate.kind === "module" && candidate.artifact.definitionKey === source.key,
+      );
+      if (!mismatched || mismatched.kind !== "module") throw new Error("Case module required");
+      const alternativePermission = mismatched.canonical.content.permissions.find(
+        (candidate) => candidate.key === alternative.key,
+      );
+      if (!alternativePermission) throw new Error("Alternative permission required");
+      if (mismatch === "action") alternativePermission.namedAction = "resolve";
+      else {
+        const foreignRecord = mismatched.canonical.content.recordTypes.find(
+          (record) => record.recordTypeId !== alternativePermission.recordTypeId,
+        );
+        if (!foreignRecord) throw new Error("Foreign record type required");
+        alternativePermission.recordTypeId = foreignRecord.recordTypeId;
+      }
+      mismatched.artifact.contentFingerprint = fingerprintCanonicalValue(
+        mismatched.canonical.content,
+      );
+      expect(
+        validateDefinitionSet(publicationContext(amendedRequests, mismatchedOutputs)).failures,
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ruleCode: "vortex.definition.module_action_references" }),
+        ]),
+      );
+    }
+
+    const crossOwnerOutputs = structuredClone(amendedOutputs);
+    const crossOwnerApplication = crossOwnerOutputs.find(
+      (candidate) =>
+        candidate.kind === "application" &&
+        candidate.artifact.definitionKey === applicationSource.key,
+    );
+    if (!crossOwnerApplication || crossOwnerApplication.kind !== "application")
+      throw new Error("Service desk application required");
+    const moduleAlternative = output.canonical.content.permissions.find(
+      (candidate) => candidate.key === alternative.key,
+    );
+    const crossOwnerKey = "vortex.app.service_desk.case.assign_alternative";
+    if (!moduleAlternative) throw new Error("Alternative permission required");
+    crossOwnerApplication.canonical.content.permissions.push({
+      ...structuredClone(moduleAlternative),
+      permissionId: "a261cc36-78c4-41a6-a10a-39e0ef6f210a",
+      key: crossOwnerKey,
+    });
+    crossOwnerApplication.canonical.content.actions.at(-1)!.permissionKeys = [
+      primaryPermissionKey,
+      crossOwnerKey,
+    ].sort();
+    crossOwnerApplication.artifact.contentFingerprint = fingerprintCanonicalValue(
+      crossOwnerApplication.canonical.content,
+    );
+    expect(
+      validateDefinitionSet(publicationContext(amendedRequests, crossOwnerOutputs)).failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleCode: "vortex.definition.application_action_references",
+        }),
+      ]),
+    );
+
+    const collisionOutputs = structuredClone(amendedOutputs);
+    const collisionApplication = collisionOutputs.find(
+      (candidate) =>
+        candidate.kind === "application" &&
+        candidate.artifact.definitionKey === applicationSource.key,
+    );
+    if (!collisionApplication || collisionApplication.kind !== "application")
+      throw new Error("Service desk application required");
+    const collisionPermission = output.canonical.content.permissions.find(
+      (candidate) => candidate.actionKind === "read" && !alternatives.includes(candidate.key),
+    );
+    if (!collisionPermission) throw new Error("Unreferenced read permission required");
+    collisionApplication.canonical.content.permissions.push({
+      ...structuredClone(collisionPermission),
+      permissionId: "44abdf25-ac8e-45dc-8367-7bb54c4f0a11",
+    });
+    // Keep the action's valid module-owned alternatives unchanged: only the
+    // extra ambiguous application/module permission key makes this case fail.
+    expect(collisionApplication.canonical.content.actions.at(-1)!.permissionKeys).toEqual(
+      alternatives,
+    );
+    expect(alternatives).not.toContain(collisionPermission.key);
+    collisionApplication.artifact.contentFingerprint = fingerprintCanonicalValue(
+      collisionApplication.canonical.content,
+    );
+    expect(
+      validateDefinitionSet(publicationContext(amendedRequests, collisionOutputs)).failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleCode: "vortex.definition.application_action_references",
+        }),
+      ]),
+    );
+
+    const unchangedSource = sources.find(
+      (candidate) => candidate.kind === "module" && candidate.key === source.key,
+    );
+    if (!unchangedSource || unchangedSource.kind !== "module")
+      throw new Error("Original module required");
+    const unchanged = compileDefinition(requestFor(unchangedSource));
+    if (unchanged.kind !== "module") throw new Error("Compiled module required");
+    expect(unchanged.canonical.content.actions[0]).toHaveProperty("permissionKey");
+    expect(unchanged.canonical.content.actions[0]).not.toHaveProperty("permissionKeys");
+  });
+
   it("preserves reference-shaped workflow literals through compilation and publish validation", () => {
     const amended = structuredClone(sources);
     const source = amended.find(
