@@ -917,4 +917,140 @@ describe("organization Access administration", () => {
       ),
     ).resolves.toEqual({ kind: "temporarily_unavailable" });
   });
+
+  it("lists retained role activations through the protected assignment ledger", async () => {
+    const activation = {
+      roleActivationId: id(90),
+      beneficiary: {
+        organizationAccountId: id(72),
+        displayName: "Neutral beneficiary",
+      },
+      role: {
+        roleId: id(71),
+        key: "review_operator",
+        label: "Review operator",
+        lifecycle: "unavailable",
+      },
+      revision: "2",
+      historicalRoleRevision: "1",
+      eligibilitySourceKind: "group",
+      activatedAt: "2026-09-06T00:00:00.000Z",
+      expiresAt: "2026-09-06T01:00:00.000Z",
+      state: "live",
+      temporalState: "expired",
+    };
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2).toUpperCase(),
+        activations: [activation],
+        next_after_role_activation_id: id(90).toUpperCase(),
+        access_version: "7",
+      },
+    ]);
+
+    await expect(
+      service.listRoleActivations(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 10, afterRoleActivationId: id(89) },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        activations: [{ roleActivationId: id(90), revision: 2, historicalRoleRevision: 1 }],
+        nextAfterRoleActivationId: id(90).toUpperCase(),
+        accessVersion: 7,
+      },
+    });
+    expect(calls[0]?.text).toContain("list_organization_role_activations_for_administration");
+    expect(calls[0]?.values).toEqual([id(89), 10]);
+  });
+
+  it("reads exact activation provenance and rejects mismatched or malformed requests", async () => {
+    const detail = {
+      roleActivationId: id(90).toUpperCase(),
+      beneficiary: {
+        organizationAccountId: id(72),
+        displayName: "Neutral beneficiary",
+      },
+      role: {
+        roleId: id(71),
+        key: "review_operator",
+        label: "Review operator",
+        lifecycle: "retired",
+      },
+      revision: 2n,
+      historicalRoleRevision: "1",
+      eligibilitySource: {
+        kind: "group",
+        eligibilityAssignment: { roleAssignmentId: id(70), revision: "3" },
+        originatingMembership: { membershipId: id(73), revision: 4n },
+      },
+      policyAtActivation: {
+        maximumActivationDurationSeconds: "3600",
+        reasonRequired: true,
+        recentAuthentication: { kind: "multi_factor", maximumAgeSeconds: 900 },
+        independentApprovalRequired: false,
+      },
+      activatedAt: "2026-09-06T00:00:00.000Z",
+      expiresAt: "2026-09-06T01:00:00.000Z",
+      state: "revoked",
+      temporalState: "revoked",
+    };
+    const read = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        activation_summary: detail,
+        access_version: 7,
+      },
+    ]);
+    await expect(
+      read.service.readRoleActivation(
+        verifiedSession,
+        { organizationId: id(2) },
+        { roleActivationId: id(90) },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        activation: {
+          revision: 2,
+          historicalRoleRevision: 1,
+          eligibilitySource: {
+            eligibilityAssignment: { revision: 3 },
+            originatingMembership: { revision: 4 },
+          },
+          policyAtActivation: { maximumActivationDurationSeconds: 3600 },
+        },
+      },
+    });
+    expect(read.calls[0]?.values).toEqual([id(90)]);
+
+    const malformed = serviceFor([]);
+    await expect(
+      malformed.service.listRoleActivations(
+        verifiedSession,
+        { organizationId: id(2) },
+        { pageSize: 101 },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(malformed.calls).toHaveLength(0);
+
+    const mismatched = serviceFor([
+      {
+        organization_id: id(2),
+        outcome: "available",
+        activation_summary: { ...detail, roleActivationId: id(99) },
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      mismatched.readRoleActivation(
+        verifiedSession,
+        { organizationId: id(2) },
+        { roleActivationId: id(90) },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
 });

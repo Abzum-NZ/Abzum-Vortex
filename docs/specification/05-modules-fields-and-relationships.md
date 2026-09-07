@@ -34,6 +34,8 @@ A module definition records:
 - Whether its records are shared across applications in an organisation or kept within one application.
 - Import, export, search, retention, and activity defaults that applications may narrow but not silently weaken.
 
+A module may expose a versioned, named query for application flows. That contract fixes its record source, typed inputs, projection, filters, ordering, grouping and bounded result shape through the ordinary [Query service](10-queries-reports-search.md); it is not raw SQL or a label-selected handler. An application flow binds the exact installed module release and query identity, and every execution still applies current tenant, application, record, field and sharing access.
+
 ## Record types
 
 Each record type has:
@@ -82,21 +84,21 @@ This keeps the number of tables proportional to genuinely different record-type 
 
 Every field carries the following properties. Properties marked “optional” have the listed default.
 
-| Property | Requirement |
-|---|---|
-| `key` | Required permanent name, 1–40 characters, unique in the record type. |
-| `type` | Required field type from the list below. |
-| `label` | Required user-facing text, 1–60 characters. |
-| `help_text` | Optional explanation, at most 200 characters. |
-| `required` | Optional; defaults to false. |
-| `default` | Optional valid starting value or approved calculation. |
-| `unique` | Optional; defaults to false and applies within the record type's storage scope. |
-| `filterable` | Optional; defaults to false. |
-| `sortable` | Optional; defaults to false. |
-| `search` | Optional search priority: `first`, `normal`, or `last`. |
-| `personal_data` | Required: `none`, `personal`, or `sensitive`. |
+| Property         | Requirement                                                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `key`            | Required permanent name, 1–40 characters, unique in the record type.                                                 |
+| `type`           | Required field type from the list below.                                                                             |
+| `label`          | Required user-facing text, 1–60 characters.                                                                          |
+| `help_text`      | Optional explanation, at most 200 characters.                                                                        |
+| `required`       | Optional; defaults to false.                                                                                         |
+| `default`        | Optional valid starting value or approved calculation.                                                               |
+| `unique`         | Optional; defaults to false and applies within the record type's storage scope.                                      |
+| `filterable`     | Optional; defaults to false.                                                                                         |
+| `sortable`       | Optional; defaults to false.                                                                                         |
+| `search`         | Optional search priority: `first`, `normal`, or `last`.                                                              |
+| `personal_data`  | Required: `none`, `personal`, or `sensitive`.                                                                        |
 | `public_display` | Required: `refused` or `allowed`; defaults to `refused`, and a public operation must separately allowlist the field. |
-| `settings` | The settings allowed for the selected field type. |
+| `settings`       | The settings allowed for the selected field type.                                                                    |
 
 Unknown properties are refused. Type-specific properties belong inside `settings`.
 
@@ -104,30 +106,30 @@ Unknown properties are refused. Type-specific properties belong inside `settings
 
 The platform supports these twenty-two types:
 
-| Type key | Meaning | Main settings |
-|---|---|---|
-| `text` | One line of text | Maximum length and optional format |
-| `long_text` | Several lines of plain text | Maximum length |
-| `formatted_text` | Restricted formatted content | Allowed paragraph, heading, list, table, link and attachment blocks, plus maximum length |
-| `whole_number` | Integer | Minimum, maximum, and step |
-| `decimal_number` | Decimal value | Digits before and after the decimal point, minimum, maximum |
-| `money` | Monetary value | Currency, minimum, maximum |
-| `yes_no` | Boolean value | None |
-| `date` | Calendar date | Earliest and latest date |
-| `date_time` | Time-zone-aware instant | Display time zone policy |
-| `choice` | One defined option | Options |
-| `several_choices` | Several defined options | Options and maximum selections |
-| `reference_number` | Platform-issued sequence | Digits, prefix, suffix, starting number |
-| `email_address` | Email address | None |
-| `phone_number` | Telephone number | Default country |
-| `web_address` | Web address | None |
-| `table` | Repeating structured rows | Columns and minimum/maximum rows |
-| `link` | Link to one record type | Target, delete behaviour, reverse name |
-| `link_to_one_of_several` | Link to one of several record types | Allowed targets |
-| `link_to_person` | Link to an organisation account | Optional application-access requirement through an application binding |
-| `calculation` | Value calculated from the record | Expression and result type |
-| `total` | Aggregate across a relationship | Relationship, operation, field, filter |
-| `attachment` | One or more files | The canonical settings in [files and attachments](11-files-and-attachments.md) |
+| Type key                 | Meaning                             | Main settings                                                                            |
+| ------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| `text`                   | One line of text                    | Maximum length and optional format                                                       |
+| `long_text`              | Several lines of plain text         | Maximum length                                                                           |
+| `formatted_text`         | Restricted formatted content        | Allowed paragraph, heading, list, table, link and attachment blocks, plus maximum length |
+| `whole_number`           | Integer                             | Minimum, maximum, and step                                                               |
+| `decimal_number`         | Decimal value                       | Digits before and after the decimal point, minimum, maximum                              |
+| `money`                  | Monetary value                      | Currency, minimum, maximum                                                               |
+| `yes_no`                 | Boolean value                       | None                                                                                     |
+| `date`                   | Calendar date                       | Earliest and latest date                                                                 |
+| `date_time`              | Time-zone-aware instant             | Display time zone policy                                                                 |
+| `choice`                 | One defined option                  | Options                                                                                  |
+| `several_choices`        | Several defined options             | Options and maximum selections                                                           |
+| `reference_number`       | Platform-issued sequence            | Digits, prefix, suffix, starting number                                                  |
+| `email_address`          | Email address                       | None                                                                                     |
+| `phone_number`           | Telephone number                    | Default country                                                                          |
+| `web_address`            | Web address                         | None                                                                                     |
+| `table`                  | Repeating structured rows           | Columns and minimum/maximum rows                                                         |
+| `link`                   | Link to one record type             | Target, delete behaviour, reverse name                                                   |
+| `link_to_one_of_several` | Link to one of several record types | Allowed targets                                                                          |
+| `link_to_person`         | Link to an organisation account     | Optional application-access requirement through an application binding                   |
+| `calculation`            | Value calculated from the record    | Expression and result type                                                               |
+| `total`                  | Aggregate across a relationship     | Relationship, operation, field, filter                                                   |
+| `attachment`             | One or more files                   | The canonical settings in [files and attachments](11-files-and-attachments.md)           |
 
 There is no separate duration type in this release. Each calendar page explicitly selects either start and end date-time fields, or a start date-time plus a whole-number duration field and unit. Missing or invalid inputs are shown as invalid data; the platform never guesses an end time or unit.
 

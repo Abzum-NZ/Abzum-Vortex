@@ -4,6 +4,8 @@
 
 ## What was inspected
 
+For action wiring, the later approved [flow-first App Builder contract](../specification/appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) governs this map: adapted buttons, form submits and record gestures bind to application-owned Frontend Flows; registered nodes then call the protected operations below. The page never calls a business save directly. Use editable one-node defaults or custom flows through the same inspector/designer, and preserve equivalent keyboard and MCP bindings. Ordinary field editing and rendering remain generic component behaviour.
+
 On 5 September 2026, the delivery owner opened [the exact running board editor](http://localhost:3001/builder/edit/projects/board) in a separate Edge tab and inspected its page structure and local source. The visible editor has a 46-block palette, outline, application structure, theme and menu panels, a central canvas, property inspector, shell link, preview/publish controls and phone/tablet/desktop previews. No content was edited or published during this inspection. This is a source and interface review, not proof that dragging, keyboard editing, publishing or responsive behaviour has passed Vortex acceptance.
 
 The separate Fluid source (`C:/Apps/fluid`) has base commit `68e3da2bc1224e6f6676c19ae12608fe6ad50345`, but the builder and block files are uncommitted working-tree content. That commit alone does not identify the inspected prototype. Recheck the exact working files, dependencies, assets and licence provenance before copying. No root licence/notice file was found in the inspected source inventory; that is an inventory gap, not a conclusion about ownership or permission.
@@ -52,6 +54,8 @@ flowchart TD
 Keep the interactive editor in client components and protected reads/mutations on the server, following [Next.js server/client boundaries](https://nextjs.org/docs/app/getting-started/server-and-client-components). Follow [Puck's declared slot API](https://puckeditor.com/docs/guides/migrations/dropzones-to-slots); its private inline data format remains inside the adapter. Do not replace Vortex's service boundaries with direct database calls from page components.
 
 ## Dependency-led delivery and proof
+
+Before the App Designer UI implementation below, complete the [App Designer HTML prototype](app-designer-html-prototype.md). The existing Fluid inspection is useful source evidence, not the requested complete Vortex authoring prototype. Extend the walkthrough beyond the canvas to modules, relationships, queries, component flows, managed-flow settings, authority, release readiness and full MCP authoring parity. Record reusable interface decisions here after reviewing the actual prototype. Independent headless foundations continue in dependency order.
 
 1. Finish [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249): exact composition, compiler, persistence compatibility, conversion and lossless headless adapter. Finish [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) after its real Access dependency for data/form/action bindings.
 2. Deliver [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) application ownership and lifecycle, then the [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65) canvas and [#66](https://github.com/Abzum-NZ/Abzum-Vortex/issues/66) registered library. Reuse one minimal generic vertical slice first; expand the palette through registered definitions, not a wholesale prototype import.

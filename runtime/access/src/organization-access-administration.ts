@@ -18,6 +18,8 @@ import {
   listOrganizationAdministrationPermissionsResultSchema,
   listOrganizationAdministrationRolesCommandSchema,
   listOrganizationAdministrationRolesResultSchema,
+  listOrganizationAdministrationRoleActivationsCommandSchema,
+  listOrganizationAdministrationRoleActivationsResultSchema,
   listOrganizationAdministrationRoleAssignmentsCommandSchema,
   listOrganizationAdministrationRoleAssignmentsResultSchema,
   readOrganizationAdministrationApplicationRoleTemplateCommandSchema,
@@ -32,6 +34,8 @@ import {
   readOrganizationAdministrationPermissionResultSchema,
   readOrganizationAdministrationRoleCommandSchema,
   readOrganizationAdministrationRoleResultSchema,
+  readOrganizationAdministrationRoleActivationCommandSchema,
+  readOrganizationAdministrationRoleActivationResultSchema,
   readOrganizationAdministrationRoleAssignmentCommandSchema,
   readOrganizationAdministrationRoleAssignmentResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
@@ -50,6 +54,8 @@ import {
   type ListOrganizationAdministrationPermissionsResult,
   type ListOrganizationAdministrationRolesCommand,
   type ListOrganizationAdministrationRolesResult,
+  type ListOrganizationAdministrationRoleActivationsCommand,
+  type ListOrganizationAdministrationRoleActivationsResult,
   type ListOrganizationAdministrationRoleAssignmentsCommand,
   type ListOrganizationAdministrationRoleAssignmentsResult,
   type OrganizationSelectionCandidate,
@@ -65,6 +71,8 @@ import {
   type ReadOrganizationAdministrationPermissionResult,
   type ReadOrganizationAdministrationRoleCommand,
   type ReadOrganizationAdministrationRoleResult,
+  type ReadOrganizationAdministrationRoleActivationCommand,
+  type ReadOrganizationAdministrationRoleActivationResult,
   type ReadOrganizationAdministrationRoleAssignmentCommand,
   type ReadOrganizationAdministrationRoleAssignmentResult,
   type RenameOrganizationAdministrationGroupCommand,
@@ -185,6 +193,20 @@ type DelegationAuthorityDetailRow = DatabaseRow & {
   access_version: unknown;
 };
 
+type RoleActivationPageRow = DatabaseRow & {
+  organization_id: unknown;
+  activations: unknown;
+  next_after_role_activation_id: unknown;
+  access_version: unknown;
+};
+
+type RoleActivationDetailRow = DatabaseRow & {
+  organization_id: unknown;
+  outcome: unknown;
+  activation_summary: unknown;
+  access_version: unknown;
+};
+
 const revision = (value: unknown): unknown => {
   if (typeof value === "bigint") return Number(value);
   if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return Number(value);
@@ -204,6 +226,75 @@ const normalizeMembership = (value: unknown): unknown => {
 const normalizeAssignmentLedgerFact = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
   return { ...value, revision: revision((value as { revision?: unknown }).revision) };
+};
+
+const normalizeRoleActivation = (value: unknown): unknown => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+  const activation = value as {
+    revision?: unknown;
+    historicalRoleRevision?: unknown;
+    eligibilitySource?: unknown;
+    policyAtActivation?: unknown;
+  };
+  const source = activation.eligibilitySource;
+  const normalizedSource =
+    typeof source === "object" && source !== null && !Array.isArray(source)
+      ? {
+          ...source,
+          ...(typeof (source as { eligibilityAssignment?: unknown }).eligibilityAssignment ===
+            "object" &&
+          (source as { eligibilityAssignment?: unknown }).eligibilityAssignment !== null &&
+          !Array.isArray((source as { eligibilityAssignment?: unknown }).eligibilityAssignment)
+            ? {
+                eligibilityAssignment: {
+                  ...(source as { eligibilityAssignment: object }).eligibilityAssignment,
+                  revision: revision(
+                    (
+                      source as {
+                        eligibilityAssignment: { revision?: unknown };
+                      }
+                    ).eligibilityAssignment.revision,
+                  ),
+                },
+              }
+            : {}),
+          ...(typeof (source as { originatingMembership?: unknown }).originatingMembership ===
+            "object" &&
+          (source as { originatingMembership?: unknown }).originatingMembership !== null &&
+          !Array.isArray((source as { originatingMembership?: unknown }).originatingMembership)
+            ? {
+                originatingMembership: {
+                  ...(source as { originatingMembership: object }).originatingMembership,
+                  revision: revision(
+                    (
+                      source as {
+                        originatingMembership: { revision?: unknown };
+                      }
+                    ).originatingMembership.revision,
+                  ),
+                },
+              }
+            : {}),
+        }
+      : source;
+  const policy = activation.policyAtActivation;
+  return {
+    ...activation,
+    revision: revision(activation.revision),
+    historicalRoleRevision: revision(activation.historicalRoleRevision),
+    ...(source === undefined ? {} : { eligibilitySource: normalizedSource }),
+    ...(typeof policy === "object" && policy !== null && !Array.isArray(policy)
+      ? {
+          policyAtActivation: {
+            ...policy,
+            maximumActivationDurationSeconds: revision(
+              (policy as { maximumActivationDurationSeconds?: unknown })
+                .maximumActivationDurationSeconds,
+            ),
+          },
+        }
+      : {}),
+  };
 };
 
 const sameUuid = (left: string, right: string): boolean =>
@@ -953,6 +1044,90 @@ export const createOrganizationAccessAdministrationService = (
         if (
           result.outcome === "available" &&
           !sameUuid(result.delegation.delegationAuthorityId, command.data.delegationAuthorityId)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return result;
+      });
+    },
+
+    listRoleActivations: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ListOrganizationAdministrationRoleActivationsCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ListOrganizationAdministrationRoleActivationsResult>
+    > => {
+      const command =
+        listOrganizationAdministrationRoleActivationsCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<RoleActivationPageRow>`
+            select organization_id, activations, next_after_role_activation_id,
+              access_version
+            from vortex_access.list_organization_role_activations_for_administration(
+              ${command.data.afterRoleActivationId ?? null}::uuid,
+              ${command.data.pageSize}::integer
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion ||
+          !Array.isArray(row.activations)
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        return listOrganizationAdministrationRoleActivationsResultSchema.parse({
+          activations: row.activations.map(normalizeRoleActivation),
+          ...(row.next_after_role_activation_id === null ||
+          row.next_after_role_activation_id === undefined
+            ? {}
+            : { nextAfterRoleActivationId: row.next_after_role_activation_id }),
+          accessVersion: revision(row.access_version),
+        });
+      });
+    },
+
+    readRoleActivation: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReadOrganizationAdministrationRoleActivationCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ReadOrganizationAdministrationRoleActivationResult>
+    > => {
+      const command =
+        readOrganizationAdministrationRoleActivationCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+
+      return requests.run(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<RoleActivationDetailRow>`
+            select organization_id, outcome, activation_summary, access_version
+            from vortex_access.read_organization_role_activation_for_administration(
+              ${command.data.roleActivationId}::uuid
+            )
+          `,
+        );
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          revision(row.access_version) !== scope.accessVersion
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const result = readOrganizationAdministrationRoleActivationResultSchema.parse({
+          outcome: row.outcome,
+          ...(row.activation_summary === null || row.activation_summary === undefined
+            ? {}
+            : { activation: normalizeRoleActivation(row.activation_summary) }),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          result.outcome === "available" &&
+          !sameUuid(result.activation.roleActivationId, command.data.roleActivationId)
         )
           throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
         return result;

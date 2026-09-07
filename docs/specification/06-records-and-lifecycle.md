@@ -53,6 +53,8 @@ The save transaction performs these steps in order:
 9. Add committed [events](08-forms-actions-rules-and-events.md) to an outbox in that same transaction.
 10. Return the fields the person may read and the new concurrency number.
 
+This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). In the target runtime, a configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. The actual protected Record execution and receipt boundary remains owned by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47); this flow description does not claim it is delivered.
+
 ## Concurrent changes
 
 Every change request includes the last concurrency number the person received. If the stored number differs, the save is refused as a conflict and returns the current readable values. The platform never silently overwrites a later change.

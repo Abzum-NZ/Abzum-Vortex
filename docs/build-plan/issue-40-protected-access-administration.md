@@ -8,6 +8,8 @@ Authorised people can inspect and administer their organisation's access through
 
 ## Already built — do not rebuild
 
+The [temporary activation ledger](../evidence/issue-40-access-administration.md#temporary-activation-ledger--7-september-2026) is implemented and locally verified. Together with the earlier catalogue, role/template, Group, membership, assignment and delegation views, it completes the planned safe-read resources at source level. Exact hosted delivery is still required. The next implementation slices are the existing protected reductions and private governed IAM handoffs below, not another administration read model or early granting UI. This whole task remains open.
+
 - #32 supplies permission identities, current availability and source preparation.
 - #33 supplies the private facts and revision-checked writers, including role changes, Groups, memberships, assignments, activations, delegation, application coordination, stewardship and invitation intents.
 - #34 supplies the sole current permission/delegation decision and read-transaction adapter. #276 supplies genuine authentication evidence.
@@ -29,13 +31,13 @@ Fixed platform-catalogue initialisation and metadata transitions remain bounded 
 
 ## Availability before the full IAM journey
 
-| Operation class | Phase 3 boundary |
-|---|---|
-| Permitted list/detail reads | Shipping protected service operation; later generic pages consume it |
-| Empty Group creation/label change, role metadata-only edit with policy/permissions unchanged | Protected non-grant operation with exact authority and Activity |
-| Terminal retirement, removal, revocation, withdrawal and self-deactivation | Immediate protected operation; no granting approval wait, but current authority and final-steward protection still apply |
+| Operation class                                                                                                                                                                   | Phase 3 boundary                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Permitted list/detail reads                                                                                                                                                       | Shipping protected service operation; later generic pages consume it                                                                                                    |
+| Empty Group creation/label change, role metadata-only edit with policy/permissions unchanged                                                                                      | Protected non-grant operation with exact authority and Activity                                                                                                         |
+| Terminal retirement, removal, revocation, withdrawal and self-deactivation                                                                                                        | Immediate protected operation; no granting approval wait, but current authority and final-steward protection still apply                                                |
 | Grants, membership restore/renewal, assignment grants, permission acceptance/broadening, policy/mode edits, delegation grant/replacement, activation and application reactivation | Private preparation/composition only until [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) supplies the verified IAM action/workflow/human-response binding |
-| Invitation carrying access intent | Separate private verified-identity handoff until that governed binding is available |
+| Invitation carrying access intent                                                                                                                                                 | Separate private verified-identity handoff until that governed binding is available                                                                                     |
 
 The available writer variants are `create_group`, `revise_group_label`, `retire_group`, `retire_role`, `remove_membership`, assignment `revoke`, `revoke_role_activation`, `revoke_delegation`, and application withdrawal, each through its owning protected wrapper. Activation revocation distinguishes the authenticated person's own deactivation from administration of another account. The existing `revise_metadata_policy` variant is available here only with policy and permissions unchanged; a changed policy is routed to the private governed class instead. These are exact existing variants, not permission names or a general caller-selected dispatcher.
 
@@ -120,9 +122,20 @@ Let permitted administrators inspect the organisation's assignment ledger throug
 5. Use one private fixed-permission scope and four request-only list/detail functions in an additive migration, extending the existing contracts/service and focused tests. No writer, Activity append, new index, cache, race framework or granting endpoint is required.
 6. Prove actual permitted/denied restricted-role reads, direct/Group holders, standing/eligible assignments, catalogue/bounded delegations, relevant temporal states and retained source lifecycles, complete cursor pages, unknown/foreign unavailable results, and omission of internal evidence. Reuse the existing read-lock concurrency proofs. Independently review the actual work before delivery.
 
-## References
-
 The role-assignment/delegation ledger checkpoint is implemented and independently reviewed; [its evidence](../evidence/issue-40-access-administration.md#role-assignment-and-delegation-ledgers--7-september-2026) records the passing restricted-role checks. PIM activation views, remaining non-grant changes and governed IAM handoffs remain part of this open task.
+
+### Next safe-read checkpoint: temporary privileged activations
+
+Let permitted administrators inspect retained temporary role activations through one bounded list/detail resource under the existing assignments-read permission and private fixed-permission scope. This is an administration ledger, not a self-service activation command or a calculation of currently effective access.
+
+1. List by activation identity with the existing 1–100 page bound; inspect one exact activation. Reuse the verified organisation read transaction, request role, Access version and unknown/foreign unavailable result.
+2. Summaries show activation identity, safe beneficiary identity/display name, current role identity/key/label/lifecycle, activation revision, existing `historicalRoleRevision`, direct/Group eligibility-source kind, activation time, finite expiry, stored live/revoked state and descriptive active/expired/revoked window state. Activations are not scheduled. The current role label/lifecycle is descriptive and distinct from the historical role revision used at activation.
+3. Detail replaces the summary's source-kind shortcut with the existing closed eligibility-source reference: exact assignment identity/revision and, for Group eligibility, exact originating membership identity/revision. It adds safe policy settings as they were at activation, selected through the complete immutable policy foreign-key tuple. Do not substitute the current role policy. Omit internal policy identities/fingerprints/continuity, authority witnesses, reason, approval/authentication payloads, actor/correlation evidence and account state.
+4. Authorize first, then observe time once per query. Revoked takes precedence over expired; otherwise the window is active. Do not hide a retained activation because its current assignment, membership, Group or role no longer provides authority. The central decision alone answers whether it is usable now.
+5. Add two narrow request-only database leaves and extend the existing administration contracts/service. Reuse current indexes, source schemas and read-lock ordering. Do not add an effective-state evaluator, writer, Activity event, history table, new race proof or UI.
+6. Verify restricted-role allowed/denied reads, private-helper refusal, direct/Group sources, retained active/expired/revoked facts, complete cursors and unknown/foreign details. Prove historical policy settings survive later policy changes and retained source references survive authority changes. Contract/service tests enforce exact shapes, finite windows, context/result binding and absence of private evidence. Independently review the actual patch and distinguish local checks from hosted delivery.
+
+## References
 
 - [Access model](../specification/04-access-and-permissions.md) and [platform permission catalogue](../specification/appendices/platform-permission-catalogue.md)
 - [Groups and privileged access](../specification/appendices/groups-and-privileged-access.md)

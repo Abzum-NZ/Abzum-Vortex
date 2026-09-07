@@ -14,6 +14,8 @@ import {
   listOrganizationAdministrationPermissionsResultSchema,
   listOrganizationAdministrationRolesCommandSchema,
   listOrganizationAdministrationRolesResultSchema,
+  listOrganizationAdministrationRoleActivationsCommandSchema,
+  listOrganizationAdministrationRoleActivationsResultSchema,
   listOrganizationAdministrationRoleAssignmentsCommandSchema,
   listOrganizationAdministrationRoleAssignmentsResultSchema,
   organizationAdministrationApplicationRoleTemplateSchema,
@@ -22,6 +24,8 @@ import {
   organizationAdministrationMembershipSchema,
   organizationAdministrationPermissionSchema,
   organizationAdministrationRoleDetailSchema,
+  organizationAdministrationRoleActivationDetailSchema,
+  organizationAdministrationRoleActivationSummarySchema,
   organizationAdministrationRoleAssignmentSchema,
   organizationAdministrationRoleSummarySchema,
   readOrganizationAdministrationApplicationRoleTemplateResultSchema,
@@ -30,6 +34,7 @@ import {
   readOrganizationAdministrationMembershipResultSchema,
   readOrganizationAdministrationPermissionResultSchema,
   readOrganizationAdministrationRoleResultSchema,
+  readOrganizationAdministrationRoleActivationResultSchema,
   readOrganizationAdministrationRoleAssignmentResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
 } from "../src/organization-access-administration";
@@ -99,6 +104,50 @@ const roleDetail = {
   ...roleSummary,
   description: "Operate reviewed records.",
   acceptedPermissions: [permission],
+};
+
+const roleActivationSummary = {
+  roleActivationId: id(90),
+  beneficiary: {
+    organizationAccountId: id(51),
+    displayName: "Neutral beneficiary",
+  },
+  role: {
+    roleId: id(40),
+    key: "review_operator",
+    label: "Review operator",
+    lifecycle: "acceptance_required" as const,
+  },
+  revision: 2,
+  historicalRoleRevision: 1,
+  eligibilitySourceKind: "group" as const,
+  activatedAt: "2026-09-06T00:00:00.000Z",
+  expiresAt: "2026-09-06T01:00:00.000Z",
+  state: "live" as const,
+  temporalState: "expired" as const,
+};
+
+const roleActivationDetail = {
+  roleActivationId: roleActivationSummary.roleActivationId,
+  beneficiary: roleActivationSummary.beneficiary,
+  role: roleActivationSummary.role,
+  revision: roleActivationSummary.revision,
+  historicalRoleRevision: roleActivationSummary.historicalRoleRevision,
+  activatedAt: roleActivationSummary.activatedAt,
+  expiresAt: roleActivationSummary.expiresAt,
+  state: roleActivationSummary.state,
+  temporalState: roleActivationSummary.temporalState,
+  eligibilitySource: {
+    kind: "group" as const,
+    eligibilityAssignment: { roleAssignmentId: id(50), revision: 3 },
+    originatingMembership: { membershipId: id(10), revision: 2 },
+  },
+  policyAtActivation: {
+    maximumActivationDurationSeconds: 3600,
+    reasonRequired: true,
+    recentAuthentication: { kind: "multi_factor" as const, maximumAgeSeconds: 900 },
+    independentApprovalRequired: true,
+  },
 };
 
 const templateReference = { applicationRootId: id(41), sourceRoleId: id(42) };
@@ -668,6 +717,79 @@ describe("organization Access administration contracts", () => {
       expect(
         listOrganizationAdministrationDelegationAuthoritiesCommandSchema.safeParse(candidate)
           .success,
+      ).toBe(false);
+  });
+
+  it("accepts bounded activation pages and exact direct or Group detail evidence", () => {
+    expect(
+      organizationAdministrationRoleActivationSummarySchema.parse(roleActivationSummary),
+    ).toEqual(roleActivationSummary);
+    expect(
+      organizationAdministrationRoleActivationDetailSchema.parse(roleActivationDetail),
+    ).toEqual(roleActivationDetail);
+    expect(
+      organizationAdministrationRoleActivationDetailSchema.parse({
+        ...roleActivationDetail,
+        eligibilitySource: {
+          kind: "direct",
+          eligibilityAssignment: { roleAssignmentId: id(55), revision: 1 },
+        },
+      }),
+    ).toMatchObject({ eligibilitySource: { kind: "direct" } });
+    expect(
+      listOrganizationAdministrationRoleActivationsCommandSchema.parse({
+        pageSize: 25,
+        afterRoleActivationId: id(89),
+      }),
+    ).toMatchObject({ afterRoleActivationId: id(89) });
+    expect(
+      listOrganizationAdministrationRoleActivationsResultSchema.parse({
+        activations: [roleActivationSummary],
+        nextAfterRoleActivationId: id(90),
+        accessVersion: 10,
+      }),
+    ).toMatchObject({ activations: [roleActivationSummary], accessVersion: 10 });
+    expect(
+      readOrganizationAdministrationRoleActivationResultSchema.parse({
+        outcome: "unavailable",
+        accessVersion: 10,
+      }),
+    ).toEqual({ outcome: "unavailable", accessVersion: 10 });
+  });
+
+  it("keeps activation timing and provenance distinct from effective access", () => {
+    for (const candidate of [
+      { ...roleActivationSummary, temporalState: "revoked" },
+      { ...roleActivationSummary, expiresAt: roleActivationSummary.activatedAt },
+      { ...roleActivationSummary, effective: true },
+      { ...roleActivationSummary, authorityContinuityRevision: 2 },
+      { ...roleActivationSummary, policyFingerprint: `sha256:${"a".repeat(64)}` },
+      { ...roleActivationDetail, activatedByActorId: id(92) },
+      {
+        ...roleActivationDetail,
+        eligibilitySource: {
+          kind: "direct",
+          eligibilityAssignment: { roleAssignmentId: id(50), revision: 3 },
+          originatingMembership: { membershipId: id(10), revision: 2 },
+        },
+      },
+      { ...roleActivationDetail, policyAtActivation: { kind: "activation_required" } },
+    ])
+      expect(
+        ("eligibilitySource" in candidate
+          ? organizationAdministrationRoleActivationDetailSchema
+          : organizationAdministrationRoleActivationSummarySchema
+        ).safeParse(candidate).success,
+      ).toBe(false);
+
+    for (const candidate of [
+      { pageSize: 0 },
+      { pageSize: 101 },
+      { pageSize: 10, afterRoleActivationId: "invalid" },
+      { pageSize: 10, organizationAccountId: id(51) },
+    ])
+      expect(
+        listOrganizationAdministrationRoleActivationsCommandSchema.safeParse(candidate).success,
       ).toBe(false);
   });
 });

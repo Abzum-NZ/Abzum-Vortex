@@ -63,6 +63,10 @@ The public Vortex execution reference stores the Vortex run identifier, workflow
 
 ## Triggers
 
+The [Frontend Rule Designer](appendices/frontend-rule-designer.md) uses the same typed condition and value concepts, but its target interactive coordination runs in Vortex. Its planned Show form node may collect private draft answers between configured protected operations; [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) own that private draft and binding runtime. The durable request_form node below instead parks a Kestra execution after work has been accepted. Both reuse the Page Designer form renderer. Neither keeps a database transaction open while awaiting a person. Each interactive protected node uses one short owning-service transaction, so earlier committed nodes remain committed when a later node fails.
+
+Frontend flow variables map explicitly to declared workflow inputs through the versioned binding extension in [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), completed by [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#77](https://github.com/Abzum-NZ/Abzum-Vortex/issues/77) and [#78](https://github.com/Abzum-NZ/Abzum-Vortex/issues/78). This is a validated snapshot, never a shared mutable environment or a wholesale browser-variable payload. The first-release restrictions below remain the legacy contract until that explicit extension is delivered. No unrelated interface or child-workflow payload is silently widened.
+
 A workflow may start from a committed [event](08-forms-actions-rules-and-events.md), its own published schedule contract, a verified incoming [connection](12-connections-and-interfaces.md) message, an authorised button, a versioned interface operation, or another workflow. An authored event trigger names both the event and its record type explicitly; publication proves that the event exists, belongs to that record type, and carries every declared record-field input the workflow reads. A scheduled trigger owns a closed recurrence value: cadence (`hourly`, `daily`, `weekly`, or `monthly`), positive interval, time zone, minute, and only the hour, weekday, or month-day values required by that cadence. It does not refer to an unverified schedule name. Each input has a unique key and declared value type. Other trigger kinds may declare only typed payload inputs supplied by their exact owning contract; publication matches every payload key, type and allowed record target and refuses missing, extra or invented inputs. A connection message uses its named workflow-trigger mapping and input shape. An interface trigger must be the operation whose target is that same workflow. Schedules and parent-workflow calls accept no separate payload in the first release, and interface-triggered workflows use the interface's currently empty workflow input shape. No trigger may pretend to read an event field, and no record type is guessed from a key. Every trigger declares its input list, nullable condition, and duplicate-protection rule. The first release requires duplicate protection for every durable trigger. A condition may reference only fields on the actual event or button subject record. Declared event fields are read through the trigger-field value source; declared non-event payload values are read through the trigger-input value source by their local key.
 
 ### Interactive and save hand-off
@@ -94,14 +98,14 @@ Post-commit dispatch scopes the hand-off duplicate key to the source event or st
 
 The initial catalogue draws on the attached legacy workflow inventory while replacing product-specific and unsafe nodes with small, governed operations:
 
-| Group | Supported nodes |
-|---|---|
-| Flow | Start, condition, multi-way decision table, bounded loop, delay or wait-until, start child workflow, stop with reason |
-| Records | Create record, change approved fields, run a named action, soft-delete record, duplicate record, add or copy approved relationships |
-| Human input | Request values through a published form and wait for an authorised response |
-| Data | Run a published query, set typed values, apply a registered formatter or regular expression, generate a bounded export |
-| Files | Attach or move an approved file |
-| Connections | Call a named connection operation and acknowledge only the exact verified incoming message that triggered the current workflow |
+| Group       | Supported nodes                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Flow        | Start, condition, multi-way decision table, bounded loop, delay or wait-until, start child workflow, stop with reason               |
+| Records     | Create record, change approved fields, run a named action, soft-delete record, duplicate record, add or copy approved relationships |
+| Human input | Request values through a published form and wait for an authorised response                                                         |
+| Data        | Run a published query, set typed values, apply a registered formatter or regular expression, generate a bounded export              |
+| Files       | Attach or move an approved file                                                                                                     |
+| Connections | Call a named connection operation and acknowledge only the exact verified incoming message that triggered the current workflow      |
 
 These 24 nodes are the complete first-release catalogue. Each node has a typed input and output contract, named permission, timeout, retry rule, duplicate-protection rule, activity meaning, and redaction policy. Comments, tags, tasks, calendar entries, notifications, messages, documents and business approvals are records or named application actions. Delivery to an external service uses the generic connection-call node.
 

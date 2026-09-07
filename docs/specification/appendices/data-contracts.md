@@ -50,18 +50,18 @@ flowchart TD
 
 Every publishable [module or application](../03-composition-and-publication.md#definition-ownership-and-versions) has:
 
-| Name | Requirement |
-|---|---|
-| `root_id` | Permanent platform-issued identifier. |
-| `organisation_id` | Owning organisation, or an explicit platform publisher identifier for platform definitions. |
-| `kind` | `module` or `application`. |
-| `key` | Permanent builder key within owner and kind. |
-| `draft_revision` | Increasing number used for edit conflicts. |
-| `draft_source` | Complete strict authored-source document. |
-| `source_contract_version`, `source_fingerprint` | The source contract used to read the draft and the fingerprint used for stale-edit protection. |
-| `published_revision` | Current revision offered when preparing a new consumer, or absent when never published. It is not a global live-consumer pointer and never retargets an existing consumer's exact recorded release. |
-| `created_at`, `created_by` | Creation time and actor. |
-| `updated_at`, `updated_by` | Last draft change time and actor. |
+| Name                                            | Requirement                                                                                                                                                                                         |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `root_id`                                       | Permanent platform-issued identifier.                                                                                                                                                               |
+| `organisation_id`                               | Owning organisation, or an explicit platform publisher identifier for platform definitions.                                                                                                         |
+| `kind`                                          | `module` or `application`.                                                                                                                                                                          |
+| `key`                                           | Permanent builder key within owner and kind.                                                                                                                                                        |
+| `draft_revision`                                | Increasing number used for edit conflicts.                                                                                                                                                          |
+| `draft_source`                                  | Complete strict authored-source document.                                                                                                                                                           |
+| `source_contract_version`, `source_fingerprint` | The source contract used to read the draft and the fingerprint used for stale-edit protection.                                                                                                      |
+| `published_revision`                            | Current revision offered when preparing a new consumer, or absent when never published. It is not a global live-consumer pointer and never retargets an existing consumer's exact recorded release. |
+| `created_at`, `created_by`                      | Creation time and actor.                                                                                                                                                                            |
+| `updated_at`, `updated_by`                      | Last draft change time and actor.                                                                                                                                                                   |
 
 Each immutable published revision has `root_id`, `revision`, complete `authored_source`, `authored_source_fingerprint`, `source_contract_version`, complete canonical `content`, `content_fingerprint`, `published_at`, `published_by`, validation-contract version, dependency manifest, and release note. Restore copies the stored authored source into a later draft; Vortex never tries to reconstruct editable source from canonical content.
 
@@ -193,6 +193,8 @@ The optional application value is the permanent application-root identifier. It 
 The Phase 2 organisation launcher establishes an application-independent context and therefore carries no application identifier. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) extends the same request boundary with an optional untrusted `applicationRootId` alongside the `organizationId` candidate. The trusted server supplies the verified Identity session and configured Identity Authority identifier; Identity resolves the exact active tenant, organisation and organisation account, and Access composes their current positive version. When an application is selected, the private application resolver first reuses that organisation resolution, then verifies the exact active application registration in the same organisation under its existing Access lock. The returned root must match the candidate before context initialization. Missing, foreign or withdrawn registrations refuse without revealing which case occurred. This establishes application scope, not application-use permission: the central decision must still authorize the declared operation. Downstream [runtime bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) consume this handoff; it does not depend on their page or installation interface.
 
 The human organisation resolver, context initialization, `SET LOCAL ROLE`, live context validation and protected operation execute in one database transaction. The resolver keeps shared locks on the selected Identity and Access scope rows until that transaction ends. The database preserves the complete union as one transaction-local value. Structural validation and setting that value do not grant authority. The trusted server begins the transaction as `vortex_runtime`, executes the initializer available only to that role, and then enters `vortex_request` with `SET LOCAL ROLE`; only the request role may call the read-only context accessors and Access-owned live-context validator used by protected service SQL. The request role has no Identity schema access. Commit, rollback or pooled connection reuse cannot carry the role or value into another transaction.
+
+A Frontend Flow never mutates this initiating human context. A future node execution binding may select `current_actor`, one exact specified organisation account, or one registered system actor, but specified/system execution also requires the separate exact [scoped execution-identity authority](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) for the published flow and node. Every identity-changing protected node starts a new Access-resolved transaction and establishes the effective actor's complete closed context; no actor UUID, browser value, flow variable or service-role credential can replace that resolution. Results returned to a different initiator use the initiator's current viewer-safe projection, and subsequent writes re-authorise their own inputs.
 
 The [request/account correction #305](https://github.com/Abzum-NZ/Abzum-Vortex/issues/305)
 aligns the resolver with account changes: first select the exact active Identity
@@ -450,22 +452,22 @@ A calendar mapping is either `start_field_id` plus `end_field_id`, or `start_fie
 
 Every organisation-owned business record provides:
 
-| Name | Requirement |
-|---|---|
-| `organisation_id` | Required organisation owner. |
-| `module_root_id` | Required permanent module definition identity. |
-| `record_type_id` | Required stable record-type identity. |
-| `storage_contract_id` | Required permanent compatible storage-lineage identity. It resolves through the protected Record service catalog to exactly one physical table in the cluster. |
-| `record_id` | Required permanent record identity. |
-| `application_root_id` | Required only for application-contained storage and absent for organisation-shared storage. It is the receiving organisation's application root, not a display name or package key. |
-| `definition_revision` | Published module revision used for validation. |
-| `owner` | Absent for none or inherited ownership. Otherwise exactly one organisation-account or group owner from the record's organisation, matching the published record-type ownership mode. |
-| `lifecycle_state` | `active`, `soft_deleted`, or `removal_pending`. |
-| `concurrency_number` | Starts at one and increases on every accepted change. |
-| `created_at`, `created_by` | Required creation record. |
-| `updated_at`, `updated_by` | Required last-change record. |
-| `deleted_at`, `deleted_by` | Present after soft deletion. |
-| `removal_due_at` | Present when permanent removal is scheduled. |
+| Name                       | Requirement                                                                                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `organisation_id`          | Required organisation owner.                                                                                                                                                         |
+| `module_root_id`           | Required permanent module definition identity.                                                                                                                                       |
+| `record_type_id`           | Required stable record-type identity.                                                                                                                                                |
+| `storage_contract_id`      | Required permanent compatible storage-lineage identity. It resolves through the protected Record service catalog to exactly one physical table in the cluster.                       |
+| `record_id`                | Required permanent record identity.                                                                                                                                                  |
+| `application_root_id`      | Required only for application-contained storage and absent for organisation-shared storage. It is the receiving organisation's application root, not a display name or package key.  |
+| `definition_revision`      | Published module revision used for validation.                                                                                                                                       |
+| `owner`                    | Absent for none or inherited ownership. Otherwise exactly one organisation-account or group owner from the record's organisation, matching the published record-type ownership mode. |
+| `lifecycle_state`          | `active`, `soft_deleted`, or `removal_pending`.                                                                                                                                      |
+| `concurrency_number`       | Starts at one and increases on every accepted change.                                                                                                                                |
+| `created_at`, `created_by` | Required creation record.                                                                                                                                                            |
+| `updated_at`, `updated_by` | Required last-change record.                                                                                                                                                         |
+| `deleted_at`, `deleted_by` | Present after soft deletion.                                                                                                                                                         |
+| `removal_due_at`           | Present when permanent removal is scheduled.                                                                                                                                         |
 
 Every storage-catalog entry contains `storage_contract_id`, owning service, physical schema and table token, module and record-type lineage, active compatible revision range, state, creation migration, and content fingerprint. Every field mapping contains `storage_contract_id`, permanent `field_id`, physical column token, database value type, introduction migration, optional retirement migration, and state. Physical tokens are allocated once, contain no mutable business name, fit PostgreSQL identifier limits, and are collision-checked before migration.
 
@@ -481,18 +483,18 @@ Unique values remain reserved while `lifecycle_state` is `soft_deleted` or `remo
 
 A direct share applies to one record and one recipient inside the record's organisation:
 
-| Name | Requirement |
-|---|---|
-| `direct_share_id` | Permanent identifier. |
-| `record_scope` | Full stable [record scope](../../../contracts/src/records.ts): organisation, module root, record type, storage contract and record identity, plus application root only for application-contained storage. Matching record names or release versions are not identity. |
-| `recipient_kind`, `recipient_id` | `organisation_account` or `group`, belonging to the same organisation. |
-| `readable_field_ids` | Explicit non-empty, unique, canonically ordered allowlist that the grantor can read. |
-| `changeable_field_ids` | Unique, canonically ordered subset of readable fields that the grantor can change. |
-| `starts_at`, `expires_at` | Immutable start and optional strictly later expiry. Expiry is evaluated at the current request time, not written by a scheduler. |
-| `state`, `revision` | `active` or terminal `revoked`, with a positive change revision. An active stored grant may already be expired and then supplies no access. |
-| `granted_by`, `granted_at`, `grant_correlation_id`, `reason` | Required original grant evidence. |
-| `revoked_by`, `revoked_at`, `revocation_correlation_id`, `revocation_reason` | All absent while active; all required after revocation. |
-| `changed_at` | Last-change audit evidence, matching revocation time for a revoked grant. Revisions and Access version govern change ordering. |
+| Name                                                                         | Requirement                                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `direct_share_id`                                                            | Permanent identifier.                                                                                                                                                                                                                                                  |
+| `record_scope`                                                               | Full stable [record scope](../../../contracts/src/records.ts): organisation, module root, record type, storage contract and record identity, plus application root only for application-contained storage. Matching record names or release versions are not identity. |
+| `recipient_kind`, `recipient_id`                                             | `organisation_account` or `group`, belonging to the same organisation.                                                                                                                                                                                                 |
+| `readable_field_ids`                                                         | Explicit non-empty, unique, canonically ordered allowlist that the grantor can read.                                                                                                                                                                                   |
+| `changeable_field_ids`                                                       | Unique, canonically ordered subset of readable fields that the grantor can change.                                                                                                                                                                                     |
+| `starts_at`, `expires_at`                                                    | Immutable start and optional strictly later expiry. Expiry is evaluated at the current request time, not written by a scheduler.                                                                                                                                       |
+| `state`, `revision`                                                          | `active` or terminal `revoked`, with a positive change revision. An active stored grant may already be expired and then supplies no access.                                                                                                                            |
+| `granted_by`, `granted_at`, `grant_correlation_id`, `reason`                 | Required original grant evidence.                                                                                                                                                                                                                                      |
+| `revoked_by`, `revoked_at`, `revocation_correlation_id`, `revocation_reason` | All absent while active; all required after revocation.                                                                                                                                                                                                                |
+| `changed_at`                                                                 | Last-change audit evidence, matching revocation time for a revoked grant. Revisions and Access version govern change ordering.                                                                                                                                         |
 
 The grantor must currently hold `record.share`; the operation refuses fields or authority the grantor cannot delegate. The contract never grants delete, restore, export, re-share, ownership, or administration. Accepted direct-share and Group mutations increase the organisation Access version; time-based expiry needs no mutation. [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) owns private facts and revision-checked composition, while [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) owns the full permission/row/field-checked granting operation. Until that operation exists, the private grant helper is not a callable runtime, form or MCP tool. The [executable contract](../../../contracts/src/identity-access.ts) replaces the previously unused incomplete direct-share shape.
 
@@ -502,35 +504,35 @@ An access grant authorises one recipient context to perform named actions on sou
 
 Every access grant provides:
 
-| Name | Requirement |
-|---|---|
-| `grant_id` | Required permanent grant identity. |
-| `source_cluster_id` | Required cluster that authoritatively stores the grant and records. |
-| `source_organisation_id` | Required organisation that owns the records. |
-| `source_application_id` | Required only when sharing application-contained records. |
-| `recipient_cluster_id` | Required cluster that stores the recipient organisation account, application, roles, and non-content grant mirror. May equal the source cluster. |
-| `recipient_organisation_id` | Required for cross-organisation grants; equal to the source for inter-application grants. |
-| `recipient_application_id` | Required application from which the records may be requested. It must have a compatible module binding. |
-| `recipient_role_ids` | Required non-empty set of roles in the named recipient application. An account must currently hold at least one of them. |
-| `scope_kind` | Exactly one of `module`, `record_type`, `saved_condition`, or `record`. |
-| `module_root_id` | Required stable module identity. |
-| `record_type_id` | Required for record-type, saved-condition, and record scope. |
+| Name                                                                                              | Requirement                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grant_id`                                                                                        | Required permanent grant identity.                                                                                                                                     |
+| `source_cluster_id`                                                                               | Required cluster that authoritatively stores the grant and records.                                                                                                    |
+| `source_organisation_id`                                                                          | Required organisation that owns the records.                                                                                                                           |
+| `source_application_id`                                                                           | Required only when sharing application-contained records.                                                                                                              |
+| `recipient_cluster_id`                                                                            | Required cluster that stores the recipient organisation account, application, roles, and non-content grant mirror. May equal the source cluster.                       |
+| `recipient_organisation_id`                                                                       | Required for cross-organisation grants; equal to the source for inter-application grants.                                                                              |
+| `recipient_application_id`                                                                        | Required application from which the records may be requested. It must have a compatible module binding.                                                                |
+| `recipient_role_ids`                                                                              | Required non-empty set of roles in the named recipient application. An account must currently hold at least one of them.                                               |
+| `scope_kind`                                                                                      | Exactly one of `module`, `record_type`, `saved_condition`, or `record`.                                                                                                |
+| `module_root_id`                                                                                  | Required stable module identity.                                                                                                                                       |
+| `record_type_id`                                                                                  | Required for record-type, saved-condition, and record scope.                                                                                                           |
 | `saved_condition_id`, `saved_condition_revision`, `saved_condition_fingerprint`, and `parameters` | Required only for saved-condition scope. The condition is published, the revision remains pinned for the grant, and parameter values must match its declared contract. |
-| `record_id` | Required only for record scope. |
-| `allowed_action_keys` | Required explicit action allowlist. Empty means no mutation. Every named action must be published as shareable by the source definition. |
-| `readable_field_ids` | Required explicit field allowlist. Sensitive fields are refused in the first release. |
-| `changeable_field_ids` | Required subset of readable fields; empty for read-only grants. |
-| `export_allowed` | Required boolean; defaults to false in the creation experience and requires separate approval when true. |
-| `approved_recipient_region` | Required source-approved service region for a cross-cluster grant. A different current recipient region suspends access until a newly approved payload activates. |
-| `starts_at`, `expires_at` | Required start and expiry for a cross-organisation grant. No indefinite access is inferred. |
-| `status` | `draft`, `pending_consent`, `active`, `suspended`, `revoked`, or `expired`. |
-| `created_by_organisation_account_id` | Required source organisation account that proposed the grant. |
-| `consent_request_id` | Required for a cross-organisation grant and links the exact consented proposal fingerprint. |
-| `contract_version`, `contract_fingerprint` | Required published source record contract understood by source and recipient applications. |
-| `recipient_binding_id`, `definition_mapping_fingerprint` | Required recipient application binding and validated source-to-local component mapping. |
-| `activated_at` | Present only after the Access service verifies the required decisions and activates the grant. |
-| `revoked_at` | Present after revocation. |
-| `revoked_by_organisation_account_id`, `revocation_reason` | Present after an authorised revocation. |
+| `record_id`                                                                                       | Required only for record scope.                                                                                                                                        |
+| `allowed_action_keys`                                                                             | Required explicit action allowlist. Empty means no mutation. Every named action must be published as shareable by the source definition.                               |
+| `readable_field_ids`                                                                              | Required explicit field allowlist. Sensitive fields are refused in the first release.                                                                                  |
+| `changeable_field_ids`                                                                            | Required subset of readable fields; empty for read-only grants.                                                                                                        |
+| `export_allowed`                                                                                  | Required boolean; defaults to false in the creation experience and requires separate approval when true.                                                               |
+| `approved_recipient_region`                                                                       | Required source-approved service region for a cross-cluster grant. A different current recipient region suspends access until a newly approved payload activates.      |
+| `starts_at`, `expires_at`                                                                         | Required start and expiry for a cross-organisation grant. No indefinite access is inferred.                                                                            |
+| `status`                                                                                          | `draft`, `pending_consent`, `active`, `suspended`, `revoked`, or `expired`.                                                                                            |
+| `created_by_organisation_account_id`                                                              | Required source organisation account that proposed the grant.                                                                                                          |
+| `consent_request_id`                                                                              | Required for a cross-organisation grant and links the exact consented proposal fingerprint.                                                                            |
+| `contract_version`, `contract_fingerprint`                                                        | Required published source record contract understood by source and recipient applications.                                                                             |
+| `recipient_binding_id`, `definition_mapping_fingerprint`                                          | Required recipient application binding and validated source-to-local component mapping.                                                                                |
+| `activated_at`                                                                                    | Present only after the Access service verifies the required decisions and activates the grant.                                                                         |
+| `revoked_at`                                                                                      | Present after revocation.                                                                                                                                              |
+| `revoked_by_organisation_account_id`, `revocation_reason`                                         | Present after an authorised revocation.                                                                                                                                |
 
 Only fields belonging to the chosen `scope_kind` may be populated. Grant validation and activation refuse an incompatible module binding, missing or empty recipient audience, sensitive field, unknown or non-shareable action, invalid condition parameter, unpinned condition revision, source/recipient reversal, or recipient equal to a forbidden audience.
 
@@ -540,18 +542,18 @@ One grant must independently cover record, action, and field. The runtime cannot
 
 Grant consent records only the protected evidence required to activate a cross-organisation sharing grant. It is not a general approval, task or sensitive-record-action facility. Ordinary business approvals are application records and cannot activate a grant.
 
-| Name | Requirement |
-|---|---|
-| `request_id` | Required permanent request identity. |
-| `source_organisation_id` | Required organisation proposing the protected action. |
-| `source_cluster_id` | Required cluster that owns the protected action. |
-| `recipient_organisation_id`, `recipient_cluster_id` | Required recipient of the proposed cross-organisation grant. |
-| `proposed_grant_fingerprint` | Required fingerprint of the complete proposed grant; changing the proposal invalidates earlier decisions. |
-| `status` | Required: `draft`, `pending`, `consented`, `refused`, `withdrawn`, `expired`, or `activated`. |
-| `requested_by_organisation_account_id` | Required organisation account that created the request. |
-| `requested_at` | Required creation timestamp. |
-| `required_decisions` | Exactly one `source_authorization` side and one `recipient_acceptance` side, each with its authorised role identifiers. |
-| `expires_at` | Required deadline after which undecided requests expire. |
+| Name                                                | Requirement                                                                                                             |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `request_id`                                        | Required permanent request identity.                                                                                    |
+| `source_organisation_id`                            | Required organisation proposing the protected action.                                                                   |
+| `source_cluster_id`                                 | Required cluster that owns the protected action.                                                                        |
+| `recipient_organisation_id`, `recipient_cluster_id` | Required recipient of the proposed cross-organisation grant.                                                            |
+| `proposed_grant_fingerprint`                        | Required fingerprint of the complete proposed grant; changing the proposal invalidates earlier decisions.               |
+| `status`                                            | Required: `draft`, `pending`, `consented`, `refused`, `withdrawn`, `expired`, or `activated`.                           |
+| `requested_by_organisation_account_id`              | Required organisation account that created the request.                                                                 |
+| `requested_at`                                      | Required creation timestamp.                                                                                            |
+| `required_decisions`                                | Exactly one `source_authorization` side and one `recipient_acceptance` side, each with its authorised role identifiers. |
+| `expires_at`                                        | Required deadline after which undecided requests expire.                                                                |
 
 Each consent decision is an immutable child entry with request, decision side, proposed-grant fingerprint, approver organisation, approver organisation account, decision (`consented` or `refused`), time, optional safe note, authentication strength, and correlation identifier. The source and recipient must be different organisations. Activation requires one consented entry for each side over the same fingerprint. A later revocation creates a separate grant event; it does not rewrite the consent history.
 
@@ -561,18 +563,18 @@ Federation transports the existing grant, query, action, file, and refusal contr
 
 ### Cluster manifest
 
-| Name | Requirement |
-|---|---|
-| `cluster_id` | Required permanent cluster identity. |
-| `environment` | Required `local`, `testing`, or `production`; requests cannot cross environments. |
-| `federation_base_address` | Required approved HTTPS address. |
-| `service_region` | Required deployment region used by sharing-policy checks. Changing it suspends grants that did not approve the new region. |
-| `routed_organisation_ids` | Protected list of globally unique organisation identifiers currently served by the cluster; it contains no organisation profile or business data. |
-| `status` | `active`, `draining`, `disabled`, or `retired`. Only `active` accepts new grants. |
-| `protocol_versions` | Required supported federation protocol versions and compatibility ranges. |
-| `shared_contract_versions` | Required supported query, action, grant, file, error, and identity-assertion contract versions. |
-| `signing_keys` | Current and next public keys with key identifier, approved asymmetric algorithm, activation time, and retirement time. Verifiers accept only the platform algorithm allowlist; private keys never appear. |
-| `issued_at`, `expires_at`, `manifest_signature` | Required directory-issued validity and integrity evidence. |
+| Name                                            | Requirement                                                                                                                                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cluster_id`                                    | Required permanent cluster identity.                                                                                                                                                                      |
+| `environment`                                   | Required `local`, `testing`, or `production`; requests cannot cross environments.                                                                                                                         |
+| `federation_base_address`                       | Required approved HTTPS address.                                                                                                                                                                          |
+| `service_region`                                | Required deployment region used by sharing-policy checks. Changing it suspends grants that did not approve the new region.                                                                                |
+| `routed_organisation_ids`                       | Protected list of globally unique organisation identifiers currently served by the cluster; it contains no organisation profile or business data.                                                         |
+| `status`                                        | `active`, `draining`, `disabled`, or `retired`. Only `active` accepts new grants.                                                                                                                         |
+| `protocol_versions`                             | Required supported federation protocol versions and compatibility ranges.                                                                                                                                 |
+| `shared_contract_versions`                      | Required supported query, action, grant, file, error, and identity-assertion contract versions.                                                                                                           |
+| `signing_keys`                                  | Current and next public keys with key identifier, approved asymmetric algorithm, activation time, and retirement time. Verifiers accept only the platform algorithm allowlist; private keys never appear. |
+| `issued_at`, `expires_at`, `manifest_signature` | Required directory-issued validity and integrity evidence.                                                                                                                                                |
 
 ### Recipient discovery entry
 
@@ -606,9 +608,15 @@ The recipient stores one non-content mirror with `grant_id`, source and recipien
 
 ## Action, rule and condition contracts
 
+User-facing action and data-component bindings reference an exact application-owned Frontend Flow, event identity and typed input/context map; they do not contain an alternate operation handler. Platform-managed flows are separate exact versioned catalogue dependencies with distinct use and edit authority. A flow may terminate with presentation only or sequence registered pure, module-query, protected-change, form and background-start nodes. Each protected operation commits or refuses atomically in its own short transaction; later failure preserves earlier commits. Save form remains a one-node convenience over the exact form commit operation, and collect-first remains an optional authoring pattern. Default flow identities are allocated during revision-checked authoring, not rendering. [Bindings delivery](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) owns these reference shapes, and [rule delivery](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) owns their graph validation/execution. Preserve immutable legacy direct bindings through their supported reader; new-draft conversion materialises explicit flows. See [page-to-flow composition](frontend-rule-designer.md#pages-compose-flows-define-actions).
+
 An action contains identifier, key, label, subject record type, permission, sharing setting (`refused` by default or `allowed`), uniquely keyed typed inputs, precondition, and one to ten ordered effects. Each input has a label and required flag. Its validation contract is discriminated by type: plain/formatted text, number, Boolean, date, date-time, one-or-more record-type reference, or organisation-account reference. One input cannot accept another type's settings. Effects are `set_field`, `create_record`, `copy_relationships`, `soft_delete_subject`, or `announce_event`. A relationship-copy effect names every source relationship and its target-record input; it never means “all relationships.” A shared action executes wholly in the source organisation and cannot create a relationship to recipient-owned data.
 
-A rule contains identifier, subject record type, trigger, condition, priority, and one effect. Module rules may use `refuse`, `set_value`, `require`, or `warn`. Application rules may additionally use `show_or_hide` and `start_background_work`, because only applications own page components and workflows. There is no separate permission-approval rule.
+A rule flow contains identifier, owner/subject context, explicit contract version, trigger binding, optional condition, priority, typed input/variable declarations, registered versioned nodes, labelled edges and terminal/submission outcomes. The [Frontend Rule Designer contract](frontend-rule-designer.md#contracts-and-compatibility-delivery) governs the complete versioned extension and fixtures. The existing single-effect representation remains readable as immutable legacy content; conversion produces a new versioned draft, never a rewritten release. Module rules retain their record-only context; application rules can additionally refer to owned pages, forms and workflows. There is no separate permission-approval rule.
+
+The target extension also declares module-exposed query references, platform-managed flow dependencies, per-flow defaults and per-node execution bindings (`current_actor`, exact specified account or registered system actor), viewer-safe output bindings and the separate execution-authority reference required for specified/system use. Those shapes are future source, canonical compiler, provenance, version-impact, storage, consumer-read and restore work; the current contracts do not yet deliver them. They add no caller-selected actor, service-role bypass, copied role set or second activity envelope.
+
+Target Interactive Show form bindings declare exact form/flow/node identity, typed defaults and response output maps. One private revision-checked draft collects answers and proposed operation inputs. A journey may collect first and run one bounded owning operation, or may place forms between several explicitly configured operations. Each operation revalidates its own mandatory path and commits atomically; a later refusal does not undo an earlier commit. Input-only forms need no owning operation and their response alone is not a business commit. Browser variables and node-path claims are not authority. [Form drafts #68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68) and [bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) own these planned contracts and runtime, including explicit record-free input forms and protected workflow-start input maps; the [page contract](page-builder-contracts.md) remains the sole form representation. They are not implemented by the existing Definition draft store.
 
 A condition node has an operator and typed field, value, or parameter operands. Either side of a binary comparison may use any of those operands, so field-to-field comparison is explicit rather than encoded as a value. Boolean groups use `all`, `any`, or `not`. Every authored and canonical condition is limited to ten nesting levels and one hundred total operands. Publication also enforces the relevant relationship-hop limit and refuses wrong unary/binary arity, an operator/type mismatch, or an unknown operand source.
 
@@ -626,10 +634,10 @@ An immutable release stores the complete authored source, full canonical compila
 
 The exported [`definitionConsumerReadCommandSchema`](../../../contracts/src/definition-consumer-read.ts) is a strict discriminated command:
 
-| Field | Rule |
-|---|---|
-| `kind` | Exactly `module` or `application`. |
-| `rootId` | The matching permanent Module or Application root identifier. |
+| Field      | Rule                                                                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`     | Exactly `module` or `application`.                                                                                                       |
+| `rootId`   | The matching permanent Module or Application root identifier.                                                                            |
 | `selector` | Exactly `{ selection: current }` or `{ selection: revision, releaseRevision }`; an exact revision is a JavaScript-safe positive integer. |
 
 The exported result is a strict kind-discriminated safe projection containing only `kind`, `organizationId`, `definitionKey`, `rootId`, `releaseRevision`, stable `releaseVersion`, `validationContractVersion`, `contentFingerprint`, `resolutionFingerprint`, complete canonical `content`, sorted complete `dependencyManifest`, and `correlationId`. The manifest uses one exact dependency entry per Module, connection type or platform theme, in deterministic subject order. A connection-type or platform-theme `catalogueFingerprint` authenticates that exact immutable catalogue release rather than the catalogue as a whole; unrelated catalogue additions therefore do not change existing dependency evidence.
@@ -680,7 +688,7 @@ The message is sent only through a private, authorised channel and is not proof 
 
 A Vortex workflow reference has `run_id`, tenant, organisation, application and application version, workflow identifier and contained version, trigger and source identifier, start actor, duplicate-protection key, human-input links, safe activity links, last refresh time, and a clearly non-authoritative last-known state snapshot. A published workflow trigger contains unique typed inputs, a nullable typed condition, and an explicit duplicate-protection rule. Event inputs resolve to carried fields. A schedule trigger owns its closed cadence, interval, time zone and cadence-specific clock fields; it cannot name an undeclared external schedule. Every other non-event input resolves by payload key, type and allowed record target against the exact action, incoming-message shape or interface operation that owns the trigger; trigger kinds whose first-release contract has no inputs must publish an empty input list. A child workflow names its exact parent, the parent contains the matching child-start node, and current-record type flows only through that verified chain. A trigger-input value names only one declared local input. Every fixed node output declares its key, value type and record-target source where applicable; a form request declares its dynamic outputs and allowed record targets in the node definition. Link-field assignments retain target record types, while file nodes require a file reference and an attachment field. The workflow adapter stores its Kestra execution mapping privately; provider-specific identifiers are not part of the canonical application contract.
 
-An application side-effect receipt has run, node, attempt, duplicate-protection key, accepted time, safe input fingerprint, outcome, and resulting record/action/event identifiers. It proves duplicate safety but does not become the workflow-state authority.
+The target application side-effect receipt has run, node, attempt, duplicate-protection key, accepted time, safe input fingerprint, outcome, and resulting record/action/event identifiers. It proves duplicate safety but does not become the workflow-state authority. The protected Record and Query execution/receipt runtimes remain future work owned by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50); the delivered Activity foundation is not that receipt runtime.
 
 A [Kestra protected-operation request](../09-workflows-and-pipelines.md#protected-operation-contract) carries:
 
@@ -697,21 +705,21 @@ The response is `completed`, `already_completed`, `waiting`, `retryable_failure`
 
 ## Query limits
 
-| Limit | Draft value |
-|---|---|
-| Relationship hops | 2 |
-| Board columns | 12 |
-| Guided-form steps | 2–20 |
-| Blocks per page | 1–200 |
-| Blocks per guided-form step | 1–40 |
-| Workflow steps | 1–100 |
-| Workflow nesting depth | 5 |
-| Records in one workflow repeat | 1,000, processed in pages |
-| One workflow wait | 90 days |
-| Default interactive query page | 50 records |
-| Maximum interactive query page | 200 records |
-| Interface page | 100 records by default; maximum 500 when published |
-| Export page | 1,000 records per background batch |
+| Limit                          | Draft value                                        |
+| ------------------------------ | -------------------------------------------------- |
+| Relationship hops              | 2                                                  |
+| Board columns                  | 12                                                 |
+| Guided-form steps              | 2–20                                               |
+| Blocks per page                | 1–200                                              |
+| Blocks per guided-form step    | 1–40                                               |
+| Workflow steps                 | 1–100                                              |
+| Workflow nesting depth         | 5                                                  |
+| Records in one workflow repeat | 1,000, processed in pages                          |
+| One workflow wait              | 90 days                                            |
+| Default interactive query page | 50 records                                         |
+| Maximum interactive query page | 200 records                                        |
+| Interface page                 | 100 records by default; maximum 500 when published |
+| Export page                    | 1,000 records per background batch                 |
 
 These are safety and product-shape limits, not performance release gates. Changing one requires contract review, compatibility evidence, and updated tests.
 
@@ -746,6 +754,8 @@ The server may page resources with opaque cursors and announce that resource or 
 ## Activity and retention contracts
 
 An activity entry has organisation, activity identifier, time, actor kind and identifier, action, subject identifiers, safe changed-field identifiers, source, correlation and outcome. Actor kinds are `identity`, `organization_account`, `system` and `public_session`; anonymous session attribution is not identity verification. Federation is a source, not a separate principal kind. Identifier lists are unique and canonically ordered. The activity identifier is the duplicate identity within the organisation: exact retries return the existing entry, and conflicting reuse refuses. The content-free append contract has no arbitrary payload or retained-detail reference. Separately governed value history is outside this foundation; see the [Activity plan](../../build-plan/issue-252-activity-foundation.md).
+
+For a flow node using specified-account or system execution, the owning operation records its ordinary activity under the effective actor. When an initiating organisation account exists, the separate execution-delegation use records an initiator-account entry under the same correlation identifier. A system-started flow instead records its actual verified system actor and cause without inventing a human initiator. These entries use this existing append contract; no flow-specific activity store, envelope or copied authority evidence is introduced.
 
 A retention policy has organisation, data category, an optional saved-condition identifier/revision/fingerprint supplied together, active period, recovery period, removal schedule, legal-constraint keys, state, creator, approver, and version.
 

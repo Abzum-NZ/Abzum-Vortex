@@ -28,6 +28,8 @@ Activity does not store passwords, connection secrets, full sensitive values, pr
 
 Activity is append-only through ordinary product operations. Corrections create a later entry. Privileged retention work may remove protected content while preserving a non-content receipt.
 
+When a protected flow node runs under a specified account or system actor, the owning operation records its ordinary operation activity for that effective actor. When an initiating organisation account exists, use of the separate execution delegation also records an initiator-account delegation-use entry with the same correlation identifier. A system-started flow has no fabricated human initiator; its existing Activity entries identify the actual verified system actor and triggering cause. These are linked entries in the existing Activity store, not a new flow envelope, history table or substitute for the operation's own evidence.
+
 ## Personal-data classification
 
 Every [field](05-modules-fields-and-relationships.md) is classified as:

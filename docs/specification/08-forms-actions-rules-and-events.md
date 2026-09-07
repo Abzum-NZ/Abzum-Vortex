@@ -16,7 +16,11 @@ flowchart LR
     EVENT --> FLOW[Workflow performs background work]
 ```
 
-An **action** is a named operation that participates in a save. A **rule** is immediate logic within the save. An **event** is a committed statement that something happened. A [workflow](09-workflows-and-pipelines.md) performs work after the save.
+An **action** is a named operation that participates in a save. A **rule** is a typed flow of immediate logic evaluated in its declared context. An **event** is a committed statement that something happened. A [workflow](09-workflows-and-pipelines.md) performs durable work after the save. The [Frontend Rule Designer](appendices/frontend-rule-designer.md) is the one shared rule/action authoring surface, reusing the Conditions Designer and Page Designer forms.
+
+A user-facing action always enters an application-owned Frontend Flow; the named **action** contract below is its lower-level protected business operation, not a competing click handler. A popup-only or navigation-only flow finishes without a business submission. A one-node Save form flow is sufficient for an ordinary submit button. The [flow-first binding rules](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) separate page composition from behaviour without replacing the owning services.
+
+An interactive flow may collect forms, query data and execute several changing nodes in its configured order. Each protected operation commits independently; cancellation or later failure does not undo earlier commits. The collect-first pattern remains available: collect all required answers before one supported atomic operation when no business changes should occur until every form passes. Each operation revalidates its required path, inputs, current authority and revisions. No database transaction spans human or network waits. See [execution and custom forms](appendices/frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission).
 
 ## Actions
 
@@ -43,9 +47,9 @@ An action cannot wait, call an external system, send email, send notifications, 
 
 ## Rules
 
-A rule has a trigger, condition, priority, and one effect. Rules for the same trigger run in a stable published order.
+A rule flow has a trigger, optional condition, priority, declared typed inputs and flow variables, and an ordered graph of registered nodes. Rules for the same trigger run in a stable published order. The current single-effect implementation is a legacy contract, not the limit of the approved designer; [versioned compatibility](appendices/frontend-rule-designer.md#contracts-and-compatibility-delivery) must preserve existing published releases.
 
-Allowed effects are:
+The immediate save-rule effects remain:
 
 - Refuse the save with a field-level message.
 - Set a field value.
@@ -54,9 +58,11 @@ Allowed effects are:
 - Warn without refusing.
 - Request background work after a successful commit.
 
+The complete [frontend node catalogue](appendices/frontend-rule-designer.md#initial-frontend-node-catalogue-and-extensibility) additionally provides branching, flow variables, input forms, action preparation and semantic interface controls. Context validation separates pure feedback, interactive collection and authoritative submission; Show form is never a node inside a database transaction. New node kinds are versioned platform registrations, not customer-uploaded code.
+
 Server validation is authoritative. Client-side rule evaluation may provide immediate feedback, but the server re-evaluates the rule against current data before saving.
 
-The client evaluator is pure: it may show the same predicted field changes, warnings, refusals, and background-work request as the server, but it never writes a record, event, workflow-start intent, or external effect. Only the authoritative Vortex action or save path may accept the request after checking the current organisation, active application installation, permission, exact published action or rule, subject revision, and typed inputs.
+The client evaluator is pure: it may show the same predicted field changes, warnings, refusals, and background-work request as the server, but it never writes a record, event, workflow-start intent, or external effect. Only an authoritative protected operation node or save-rule path may accept the request after checking the current organisation, active application installation, permission, exact published action or rule, subject revision, and typed inputs.
 
 Rules must declare their read fields and write fields. Publication refuses cycles, conflicting writes without a declared order, and a rule that reads information unavailable to its execution context.
 
@@ -147,4 +153,8 @@ sequenceDiagram
 
 ## Page binding boundary
 
-[Typed page/form/operation bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map controls to these actions and their inputs. Authorised administration forms may instead invoke a closed protected platform operation owned by its service. Neither path permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection.
+[Typed page/form/operation bindings](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) map each surfaced action to an application-owned flow and typed context. The flow's operation node invokes the protected named action/save, or a closed protected platform operation for an authorised administration form. No component silently saves, and no frontend binding permits arbitrary RPC or bypasses current access, validation, revisions or duplicate protection. Mandatory business rules must also hold for every permitted direct service/interface invocation; hiding or replacing a button never changes them.
+
+## Configured effects and execution identity
+
+Component load, refresh and other declared events can invoke read/write node sequences. The pure preview evaluator still has no effects; the orchestrator invokes protected services for effectful nodes. Each node uses its verified [execution identity](appendices/frontend-rule-designer.md#node-execution-identity), with separate initiator and effective actor. Operation atomicity and outbox guarantees apply per committed step, not to all previously completed steps in the flow. A committed background-start intent is not undone because a later form is cancelled.
