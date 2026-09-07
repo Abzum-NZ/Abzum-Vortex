@@ -4,6 +4,10 @@
 
 The final reviewed C/D implementation merged normally through [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326) at `2026-09-07T03:52:34Z`, after both preview checks passed. Reviewed source `d89ecc380808cfe187c8184734bdc11ad5762465` and Testing merge `e813def92071799c99df739f65b1549c2efe9b04` have the identical tree `720fdd56c53a91bb3d1b9b4dc6058c46b8c5885b`. Unapproved #40 work is absent from this merge. Exact hosted Testing SQL/concurrency verification is still required before #36 closes; a source merge alone does not establish it.
 
+Read-only inspection of Testing project `abflfptnguasinoussws` now confirms all 60 delivered migrations, including the inherited relationship witness, private direct-share changes and ownership-change reason through `20260907025834`. The local count of 61 included a separate undelivered #40 migration and is not the expected hosted count for this revision. Two bounded attempts to inspect the existing Kestra tab timed out in the browser controller; its inventory showed the login page, not a test receipt. This proves schema arrival only, not SQL/concurrency success. No credential, infrastructure or Production change was made.
+
+A subsequent independent Sol whole-task audit approved the delivered source with no missing requirement inside #36's private-primitive scope. It rechecked the formatted contract-test hash `470b649523a61861488722698981aaeda0373d38b6e0fcf8cf71d869ecd42978` and confirmed the separate #35/#37/#45 ownership. This supersedes the historical exact-byte review and source-review pending notes below; it does not supply the missing hosted receipt or claim those downstream engines exist.
+
 Task: [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36). Scope and acceptance: [implementation plan](../build-plan/issue-36-ownership-and-visibility.md).
 
 ## Definition and contract checkpoint — 6 September 2026
@@ -29,9 +33,8 @@ The checkpoint merged into Testing through [PR #312](https://github.com/Abzum-NZ
 
 ## Remaining before the task is complete
 
-1. Refresh independent exact-byte review after the integration formatter changed only the D contract-test layout; the previously approved behaviour and production bytes are unchanged.
-2. Deliver the approved C/D source through the normal Testing path and verify exact hosted migration/advisor receipt. Local application is not hosted evidence.
-3. Complete final task review against the checkpoints below. Retained facts and individual predicates do not themselves provide the complete #35 row decision or #37 field enforcement.
+1. Verify the exact hosted SQL/concurrency receipt for the delivered revision. Source review, normal merge and migration arrival are recorded above; neither local checks nor schema arrival substitute for this receipt.
+2. Reconcile final task acceptance with that receipt and the reviewed checkpoints below. Retained facts and individual predicates do not themselves provide the complete #35 row decision or #37 field enforcement.
 
 [Row-policy composition #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) and [field enforcement #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) retain their real dependencies. There is no record editor, sharing screen, generated-storage or complete MCP claim to screenshot at this checkpoint.
 
