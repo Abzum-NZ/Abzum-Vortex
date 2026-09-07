@@ -36,6 +36,14 @@ history before a successful receipt is claimed. The unrelated unfinished #35
 migrations are excluded and must be timestamped after the latest delivered
 migration before their own delivery.
 
+The repaired committed inventory contains 65 migrations and has migration-set
+SHA-256 `2a1df6d1aa52c2d89cfb305e4b65b1eddb7e4d1047d235e824022d2325039446`.
+[PR #335](https://github.com/Abzum-NZ/Abzum-Vortex/pull/335) merged normally at
+`2026-09-07T22:20:02Z` after both preview checks passed on exact reviewed source
+`6dd70e68554db2099e626b47c18d1eefe9616921`. Testing merge is
+`88dce0c73c23002d97eae66baa418ff4dff5fc7c`. Its hosted receipt is not yet verified;
+this records delivery of the ordering repair, not completion of #40.
+
 ## Cleanup source delivered to Testing — 8 September 2026
 
 [PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334) merged normally into
