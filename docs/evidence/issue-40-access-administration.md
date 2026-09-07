@@ -13,6 +13,65 @@ evidence of a passing implementation, source delivery or hosted verification.
 Those results will be recorded separately after actual execution and independent
 review. The historical checkpoint descriptions below retain their original scope.
 
+## Removal-only assignment operation — locally verified, 8 September 2026
+
+Implementation: `fca2992fd1cc552ddf445e2730c94f0bc6cf8b24`, in
+[PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334). Merging Testing ancestry
+into the feature branch as `954e3627db0cd6388ffeaf4a47ddcc1689cb9e94` preserves its exact
+tracked source tree, `d4657bdbe193fb4274203e17b65aa6d03eedb295`.
+
+The protected command accepts only one existing assignment identity and its
+expected revision. Its trusted operation checks the current organisation, fixed
+assignment-management permission and complete affected scope. Only an explicitly
+unavailable current role with zero entries uses organisation-catalogue delegation;
+bounded delegation, missing management permission and empty active/retired roles
+refuse. It calls the existing terminal assignment coordinator and appends one
+Activity entry atomically with the single Access change. No grant, reactivation,
+historical fallback or new authority mechanism is added.
+
+Independent Sol review approved the exact nine implementation/test files after
+correcting a test that had conflated an unknown assignment with a real foreign
+assignment. The corrected test proves that the foreign assignment remains live at
+the same revision. Root independently executed the final rollback-only SQL350
+**37/37** and SQL395 **8/8** checks. The implementer also passed both real
+role-change and Group-administration concurrency harnesses under the candidate
+function, then restored the previous local function without changing migration
+history. The withdrawal harness proves actual application withdrawal, insufficient
+management/scope refusals, catalogue-delegated success and unchanged retained role
+and assignment facts.
+
+Existing unchanged coordinator proofs establish retained activation provenance
+after source-assignment revocation ([SQL240](../../supabase/tests/240_organization_role_activation_changes.test.sql))
+and refusal of stale activation authority ([SQL290](../../supabase/tests/290_organization_permission_eligibility.test.sql)).
+The existing Activity-collision test covers rollback through the identical shared
+writer/append path. These are reused rather than adding duplicate history or
+rollback permutations for the new scope-selection branch.
+
+The separate isolated snapshot used its own locked dependencies and matched all
+**612 tracked files** of `fca2992` by SHA-256, with no dependency junction escaping
+the snapshot. It passed formatting, lint, boundaries, **1,311 tests across 88 test
+files**, **8 fixture checks**, and the direct existing typecheck/build scripts in
+all **23 packages**, including the Next.js production build. Two live-test files
+containing three tests were skipped; no live Identity or hosted verification is
+claimed by that run.
+
+The isolated `pnpm verify` command itself **did not pass**: Turbo's typecheck
+orchestrator exited `3221226505` twice without a TypeScript diagnostic. An earlier
+unelevated invocation could not read dependencies installed under the elevated
+context; matching the installation's execution context resolved that file-access
+error without changing dependencies or hoisting. Independent Sol review confirmed
+that running the same existing package scripts directly, in dependency order,
+provides equivalent substantive source checks. All those direct checks passed.
+No CI configuration, protection, dependency version or product source was changed
+to accommodate the tooling faults. The native mixed-working-tree full check also
+passed, but is corroboration only because it included unfinished #35 work.
+
+Local Supabase security advisors reported no issues in the existing local database;
+this baseline check is not a hosted or candidate-migration receipt. The separate
+#35 database candidate is excluded from this delivery. Exact hosted Testing
+verification remains required before closing the whole task; no Production
+promotion is claimed.
+
 ## Private role and delegation composition — 7 September 2026
 
 Source delivery: [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332) merged normally into Testing at `2026-09-07T06:11:02Z`, after both preview checks passed. Reviewed source `6569a4d54b3522360f07cf90ee0e98c2c0975e7f` merged as `c036ff274e31fa7f4d71a17c9f37341c81d892cd`. This includes both private composition families and the reviewed consumer-ownership documentation. No protection was bypassed. At that checkpoint, the exact hosted database/security/concurrency receipt and isolated assignment-cleanup exception remained unresolved. The later cleanup approval is recorded above; implementation and hosted verification still keep the whole task open.

@@ -8,7 +8,7 @@ Authorised people can inspect and administer their organisation's access through
 
 ## Already built — do not rebuild
 
-The [temporary activation ledger](../evidence/issue-40-access-administration.md#temporary-activation-ledger--7-september-2026) is implemented and locally verified. Together with the earlier catalogue, role/template, Group, membership, assignment and delegation views, it completes the planned safe-read resources at source level. Exact hosted delivery is still required. Remaining work is the isolated assignment reduction and feasible private membership/assignment/role/delegation compositions below, not another administration read model or early granting UI. This whole task remains open.
+The [temporary activation ledger](../evidence/issue-40-access-administration.md#temporary-activation-ledger--7-september-2026) is implemented and locally verified. Together with the earlier catalogue, role/template, Group, membership, assignment and delegation views, it completes the planned safe-read resources at source level. The private governed compositions are delivered through [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332), and the final [removal-only assignment operation](../evidence/issue-40-access-administration.md#removal-only-assignment-operation--locally-verified-8-september-2026) is independently reviewed and locally verified in [PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334). Remaining work is normal source delivery and exact hosted Testing verification of these checkpoints, not another administration read model or early granting UI. This whole task remains open.
 
 - #32 supplies permission identities, current availability and source preparation.
 - #33 supplies the private facts and revision-checked writers, including role changes, Groups, memberships, assignments, activations, delegation, application coordination, stewardship and invitation intents.
@@ -135,7 +135,12 @@ Let permitted administrators inspect retained temporary role activations through
 5. Add two narrow request-only database leaves and extend the existing administration contracts/service. Reuse current indexes, source schemas and read-lock ordering. Do not add an effective-state evaluator, writer, Activity event, history table, new race proof or UI.
 6. Verify restricted-role allowed/denied reads, private-helper refusal, direct/Group sources, retained active/expired/revoked facts, complete cursors and unknown/foreign details. Prove historical policy settings survive later policy changes and retained source references survive authority changes. Contract/service tests enforce exact shapes, finite windows, context/result binding and absence of private evidence. Independently review the actual patch and distinguish local checks from hosted delivery.
 
-## Next protected change: revoke one role assignment
+## Locally verified protected change: revoke one role assignment
+
+[PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334) implements this scope,
+including the approved withdrawal cleanup. Its [verification evidence](../evidence/issue-40-access-administration.md#removal-only-assignment-operation--locally-verified-8-september-2026)
+distinguishes passing local checks and independent review from outstanding hosted
+Testing verification. The requirements below define that completed source scope.
 
 After the activation-ledger checkpoint, implement one immediate reduction through the existing human governance-first transaction. This is not a grant or approval journey.
 
