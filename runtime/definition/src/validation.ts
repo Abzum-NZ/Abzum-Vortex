@@ -1371,12 +1371,26 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
   const availableModuleOutputs = allValidationOutputs(context).filter(
     (output) => output.kind === "module",
   );
-  const records = new Map<string, { record: JsonObject; moduleRootId: string }>();
+  const recordIdentity = (moduleRootId: string, recordTypeId: string): string =>
+    `${moduleRootId}:${recordTypeId}`;
+  const records = new Map<
+    string,
+    { record: JsonObject; moduleRootId: string; allowedModuleRoots: ReadonlySet<string> }
+  >();
   for (const output of availableModuleOutputs) {
     const canonical = object(output.canonical);
+    const content = object(canonical.content);
     const moduleRootId = String(object(canonical.envelope).rootId);
-    for (const record of array(object(canonical.content).recordTypes))
-      records.set(String(record.recordTypeId), { record, moduleRootId });
+    const allowedModuleRoots = new Set([
+      moduleRootId,
+      ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
+    ]);
+    for (const record of array(content.recordTypes))
+      records.set(recordIdentity(moduleRootId, String(record.recordTypeId)), {
+        record,
+        moduleRootId,
+        allowedModuleRoots,
+      });
   }
   const recordReference = (
     reference: unknown,
@@ -1384,14 +1398,58 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
   ): JsonObject | undefined => {
     const resolved = object(reference);
     if (resolved.state !== "resolved") return undefined;
-    const target = records.get(String(resolved.recordTypeId));
-    if (
-      !target ||
-      target.moduleRootId !== String(resolved.moduleRootId) ||
-      !allowedModuleRoots.has(target.moduleRootId)
-    )
-      return undefined;
+    const target = records.get(
+      recordIdentity(String(resolved.moduleRootId), String(resolved.recordTypeId)),
+    );
+    if (!target || !allowedModuleRoots.has(target.moduleRootId)) return undefined;
     return target.record;
+  };
+  const inheritedOwnershipValid = (moduleRootId: string, record: JsonObject): boolean => {
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const visit = (currentModuleRootId: string, currentRecord: JsonObject): boolean => {
+      const identity = recordIdentity(currentModuleRootId, String(currentRecord.recordTypeId));
+      if (visiting.has(identity)) return false;
+      if (visited.has(identity)) return true;
+      if (["organization_account", "team"].includes(String(currentRecord.ownershipMode))) {
+        visited.add(identity);
+        return true;
+      }
+      if (currentRecord.ownershipMode !== "inherited") return false;
+      const relationship = array(currentRecord.relationships).find(
+        (candidate) =>
+          String(candidate.relationshipId) === String(currentRecord.ownershipRelationshipId),
+      );
+      const current = records.get(identity);
+      const targets = relationship?.toRecordType
+        ? [relationship.toRecordType]
+        : array(relationship?.toRecordTypes);
+      if (
+        !relationship ||
+        !current ||
+        String(relationship.fromRecordTypeId) !== String(currentRecord.recordTypeId) ||
+        targets.length === 0
+      )
+        return false;
+      visiting.add(identity);
+      const valid = targets.every((targetReference) => {
+        const target = object(targetReference);
+        if (target.state !== "resolved") return false;
+        const targetModuleRootId = String(target.moduleRootId);
+        const targetRecord = records.get(
+          recordIdentity(targetModuleRootId, String(target.recordTypeId)),
+        );
+        return (
+          current.allowedModuleRoots.has(targetModuleRootId) &&
+          targetRecord !== undefined &&
+          visit(targetModuleRootId, targetRecord.record)
+        );
+      });
+      visiting.delete(identity);
+      if (valid) visited.add(identity);
+      return valid;
+    };
+    return visit(moduleRootId, record);
   };
   const fieldReferencesValid = (value: unknown, fields: ReadonlySet<string>): boolean => {
     let valid = true;
@@ -1440,6 +1498,16 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         relationships,
         sharingConditions,
         true,
+      )
+    )
+      failures.push(
+        failure(output, "vortex.definition.module_record_references", "scope_conflict"),
+      );
+
+    if (
+      [...moduleRecords.values()].some(
+        (record) =>
+          record.ownershipMode === "inherited" && !inheritedOwnershipValid(moduleRootId, record),
       )
     )
       failures.push(

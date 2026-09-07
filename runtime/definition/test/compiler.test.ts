@@ -313,6 +313,113 @@ describe("authored definition compiler", () => {
     ).toThrowError("vortex.definition.source_type_compatibility");
   });
 
+  it("requires inherited ownership to terminate through exact cycle-free record identities", () => {
+    const sourceRecord = (candidates: typeof sources, moduleKey: string, recordKey: string) => {
+      const module = candidates.find(
+        (source) => source.kind === "module" && source.key === moduleKey,
+      );
+      if (!module || module.kind !== "module") throw new Error(`Expected ${moduleKey}`);
+      const record = module.body.record_types.find((entry) => entry.key === recordKey);
+      if (!record) throw new Error(`Expected ${moduleKey}:${recordKey}`);
+      return record;
+    };
+
+    const twoHopSources = structuredClone(sources);
+    const opportunitySource = sourceRecord(
+      twoHopSources,
+      "vortex.crm.opportunities",
+      "opportunity",
+    );
+    opportunitySource.ownership_mode = "inherited";
+    opportunitySource.ownership_relationship = "company";
+    expect(() =>
+      compileDefinitionSet(twoHopSources.map(requestFor), publicationOptions),
+    ).not.toThrow();
+
+    const terminalNoneSources = structuredClone(sources);
+    sourceRecord(terminalNoneSources, "vortex.crm.organisations", "company").ownership_mode =
+      "none";
+    expect(() =>
+      compileDefinitionSet(terminalNoneSources.map(requestFor), publicationOptions),
+    ).toThrowError("vortex.definition.module_record_references");
+
+    const cyclicSources = structuredClone(sources);
+    const companySource = sourceRecord(cyclicSources, "vortex.crm.organisations", "company");
+    companySource.ownership_mode = "inherited";
+    companySource.ownership_relationship = "parent_company";
+    expect(() =>
+      compileDefinitionSet(cyclicSources.map(requestFor), publicationOptions),
+    ).toThrowError("vortex.definition.module_record_references");
+
+    const tagSource = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.tags",
+    );
+    if (!tagSource || tagSource.kind !== "module") throw new Error("Expected tag module");
+    const dependencyOutputs = sources
+      .filter((source) => source.kind === "module" && source.key !== tagSource.key)
+      .map((source) => compileDefinition(requestFor(source)));
+    const tagRequest = requestFor(tagSource);
+    const tagOutput = compileDefinition(tagRequest);
+    expect(
+      validateDefinitionSet({
+        requests: [tagRequest],
+        outputs: [tagOutput],
+        dependencyOutputs,
+        publishedHistories: [{ kind: "module", definitionKey: tagSource.key, history: [] }],
+      }).failures.map((entry) => entry.ruleCode),
+    ).not.toContain("vortex.definition.module_record_references");
+    const invalidDependencies = structuredClone(dependencyOutputs);
+    const organizationDependency = invalidDependencies.find(
+      (output) =>
+        output.kind === "module" && output.canonical.envelope.key === "vortex.crm.organisations",
+    );
+    if (!organizationDependency || organizationDependency.kind !== "module")
+      throw new Error("Expected organization dependency");
+    const dependencyCompany = organizationDependency.canonical.content.recordTypes.find(
+      (record) => record.key === "company",
+    );
+    if (!dependencyCompany) throw new Error("Expected dependency company record");
+    dependencyCompany.ownershipMode = "none";
+    expect(
+      validateDefinitionSet({
+        requests: [tagRequest],
+        outputs: [tagOutput],
+        dependencyOutputs: invalidDependencies,
+        publishedHistories: [{ kind: "module", definitionKey: tagSource.key, history: [] }],
+      }).failures.map((entry) => entry.ruleCode),
+    ).toContain("vortex.definition.module_record_references");
+
+    const requests = sources.map(requestFor);
+    const outputs = requests.map(compileDefinition);
+    const moduleRecord = (candidates: typeof outputs, moduleKey: string, recordKey: string) => {
+      const module = candidates.find(
+        (output) => output.kind === "module" && output.canonical.envelope.key === moduleKey,
+      );
+      if (!module || module.kind !== "module") throw new Error(`Expected ${moduleKey}`);
+      const record = module.canonical.content.recordTypes.find((entry) => entry.key === recordKey);
+      if (!record) throw new Error(`Expected ${moduleKey}:${recordKey}`);
+      return record;
+    };
+
+    const wrongModule = structuredClone(outputs);
+    const inherited = moduleRecord(wrongModule, "vortex.crm.opportunities", "opportunity_contact");
+    const ownershipRelationship = inherited.relationships.find(
+      (relationship) => relationship.relationshipId === inherited.ownershipRelationshipId,
+    );
+    if (!ownershipRelationship?.toRecordType)
+      throw new Error("Expected inherited ownership target");
+    const peopleModule = wrongModule.find(
+      (output) => output.kind === "module" && output.canonical.envelope.key === "vortex.crm.people",
+    );
+    if (!peopleModule || peopleModule.kind !== "module") throw new Error("Expected people module");
+    ownershipRelationship.toRecordType.moduleRootId = peopleModule.canonical.envelope.rootId;
+    expect(
+      validateDefinitionSet(publicationContext(requests, wrongModule)).failures.map(
+        (entry) => entry.ruleCode,
+      ),
+    ).toContain("vortex.definition.module_record_references");
+  });
+
   it("maps application-owned record permissions through a bound-module read permission", () => {
     const amended = structuredClone(sources);
     const source = amended.find(

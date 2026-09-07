@@ -25,10 +25,9 @@ The checkpoint merged into Testing through [PR #312](https://github.com/Abzum-NZ
 
 ## Remaining before the task is complete
 
-1. Complete the remaining inherited-ownership and approved relationship routes. Typed current-person conditions and direct account/current-Group ownership are already implemented as recorded below; they are not new outstanding tasks.
-2. Complete current direct-share contribution proof and the private revision-checked share/ownership changes with atomic Access/Activity evidence. Retained facts or individual predicates do not themselves provide complete record authorization.
-3. Verify hosted delivery of the combined scope below. Storing and reconstructing scope does not itself enforce record visibility.
-4. Complete local, independent review and exact hosted Testing evidence for the full task.
+1. Refresh independent exact-byte review after the integration formatter changed only the D contract-test layout; the previously approved behaviour and production bytes are unchanged.
+2. Deliver the approved C/D source through the normal Testing path and verify exact hosted migration/advisor receipt. Local application is not hosted evidence.
+3. Complete final task review against the checkpoints below. Retained facts and individual predicates do not themselves provide the complete #35 row decision or #37 field enforcement.
 
 [Row-policy composition #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) and [field enforcement #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) retain their real dependencies. There is no record editor, sharing screen, generated-storage or complete MCP claim to screenshot at this checkpoint.
 
@@ -137,3 +136,49 @@ Local history contains **57 migrations**, including the separately reviewed acti
 | `390_current_direct_record_share_contributions.test.sql`      | `f83bbc3b93b70f2076cd898b85612ea36437a199cf9579a0e538d033d38083cd` |
 
 Final independent Sol review approves these exact bytes with no findings. The final full local suite passes **53 files / 2,418 assertions**. Before that passing aggregate retry, the unchanged permission-eligibility suite stopped after 43 assertions in the permanent-steward safeguard; its isolated 48-assertion run passed. [The existing #318 observation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/318#issuecomment-5563910662) retains that failure and its unproven cause. The retry is not a fix, and no clock adjustment, reset or safeguard relaxation was introduced. Both new suites pass; exact hosted verification remains required separately.
+
+[PR #324](https://github.com/Abzum-NZ/Abzum-Vortex/pull/324) merged normally into Testing as `e1d9159445c913115618af7e0525b7111320d0ee`, after both preview checks passed. The intended hosted Testing project now lists all 57 migrations, including this share store. [Combined delivery evidence](issue-40-access-administration.md#activationshare-testing-source-delivery--7-september-2026) records the advisor observations and distinguishes schema arrival from the still-unverified exact hosted SQL/concurrency receipt. No full-task completion, Production promotion or record-sharing interface is claimed.
+
+## Inherited ownership and relationship witness — 7 September 2026
+
+The approved C checkpoint validates published inherited-ownership chains in Definition and adds one private factual relationship-witness matcher. Publication checks the child's declared link, exact resolved target and terminal account/Group ownership, refusing missing targets, cycles and terminal `none`. The database matcher compares one sealed relationship identity and direction with exact source/target RecordScopes and one stored edge. It returns only factual match/no-match evidence: it does not decide permission, ownership or relationship-route authority.
+
+A rollback-only neutral-row proof composes the witness with the existing direct account/current-Group ownership predicate. It covers one- and two-hop inheritance, membership deadlines, account ownership without an artificial deadline, and refusal of reversed, duplicate, foreign, wrong-type, wrong-application and unbound evidence. Parent visibility or a parent share is not treated as child ownership. Independent Sol review approved these four exact files:
+
+| Frozen C file                                                                | SHA-256                                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `runtime/definition/src/validation.ts`                                       | `394b78e52d2505a3ba660dbcec0baec3cc256be255d6d0e3b7615cad3a0a8add` |
+| `runtime/definition/test/compiler.test.ts`                                   | `01af58d2f1141791a4c30b617ec1d39a020a49984f3deb2cdd6f1c6639963f2c` |
+| `supabase/migrations/20260907021442_evaluate_inherited_record_relationship_witness.sql` | `92830b9e6b4aa4c693fca31f47521304fc48ecccfcc7e5a657fbc6f4512abe19` |
+| `supabase/tests/400_inherited_record_relationship_witness.test.sql`          | `0486fb6627349b46724712300d3a35c20bb26986611a76dbd1c32284c9b8329b` |
+
+This completes the bounded C primitive, not complete relationship-route authorization. [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) must still evaluate the named source permission and its complete row scope before consuming this witness. [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) still supplies generated physical record storage. Exact hosted delivery and whole-repository verification for this combined checkpoint remain pending, so #36 is not Done.
+
+## Private direct-share changes and neutral ownership transfer — 7 September 2026
+
+The D candidate adds owner-only structural grant and terminal revision-checked revoke writers over the existing direct-share table. Both take trusted closed Activity source evidence, lock the organisation Access version before recipient/share facts, preserve exact immutable scope and field bounds, and commit one Access increment with one content-free Activity entry. Grant rejects a window already expired at its post-lock operation time. Refused, stale, conflicting and Activity-collision cases leave no partial share, version or Activity effect. These writers grant no caller authority and have no public, request or runtime execution grant; [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) remains responsible for the complete grantor, target and field-ceiling decision after #35.
+
+Until #45 supplies real generated storage, ownership transfer is proven only through a fixed rollback-owned neutral table and private composition. The stored published mode and current owner bind the candidate; account ownership transfers only to another active same-organisation account and Group ownership only to another active same-organisation Group. Wrong-kind, inherited/none, stale and unchanged-owner proposals refuse without a record revision, Access or Activity effect. No production owner mirror or generic dispatcher is introduced.
+
+Focused local checks currently pass **98 contract tests**, **49 assertions across the Access-reason and D SQL suites**, all **5 manifest tests**, and three deterministic competing-change cases: same-ID grant, same-revision revoke and same-record-revision neutral ownership transfer. Local history contains **61 migrations** through `20260907025834`; no reset was used. The separate reason migration was mechanically checked: removing its single `record_ownership_changed` accepted literal yields the byte-identical current 2,498-byte Access-version function definition. The hosted database was not changed by this checkpoint.
+
+| Frozen D candidate file                                                       | SHA-256                                                            |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `contracts/src/identity-access.ts`                                            | `a531c0d1279a44dd57305c7b6f016029d37b576024090ab6a5093751608cb697` |
+| `contracts/test/domain-contracts.test.ts`                                     | `470b649523a61861488722698981aaeda0373d38b6e0fcf8cf71d869ecd42978` |
+| `supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql` | `1c698af7aade5fec3c3ab9e17135088a753c510ba8b6e0ab4cb32b7161b0941c` |
+| `supabase/migrations/20260907025834_add_record_ownership_changed_access_reason.sql` | `470f8c814cf162ac8a64b6c5d0e9d69e0e20ad0ea607defdf021d547bdcfcea1` |
+| `supabase/tests/195_access_version_role_catalogue_reason.test.sql`            | `934caedaa9e9b527ea4860b6bbabeb59d088a3b4f7e77721c2a9be109f6f38e0` |
+| `supabase/tests/405_private_direct_record_share_changes.test.sql`             | `06ed82facc40c449dc1c805af8e4fd85a12c1ceb66773f69d5c97a812d452677` |
+| `supabase/tests/private-direct-record-share-change-concurrency.test.sh`       | `6fe0f4cb61718ee125ace1bb2a03d00d735b2e5e65d6927be08f4b6be8c85db2` |
+| `workflows/kestra/database-verification.json`                                | `a26e8c400ebb3d9047338c78c345244fd45254aad62d5c6b0460504c9b965b2c` |
+
+Independent Sol actual-patch review approved D with no findings, including the final revocation Activity-source preservation and unchanged-owner refusal corrections. The later integration gate mechanically formatted only `domain-contracts.test.ts`; its refreshed hash is recorded above and awaits exact-byte review, without a functional or production change. Complete row-policy composition remains #35, complete field enforcement and protected share invocation remain #37, and generated storage remains #45. Exact hosted receipt and final task review remain pending. #36 therefore remains In progress, with no record editor, sharing screen, public endpoint or MCP transport claimed.
+
+## C/D local integration verification — 7 September 2026
+
+The full repository `pnpm verify` gate initially stopped because the D contract test was not formatted. A targeted Prettier rewrite corrected only that owned test, after which the complete gate passed formatting, lint, all 23 package typechecks, boundaries, repository tests, fixture checks and builds. No dependency or production behaviour changed.
+
+The complete local SQL suite passes **56 files / 2,494 assertions**, including the approved inherited witness and private share/neutral ownership suites. All **24 manifest-registered concurrency proofs** complete with a successful runner exit, including the deterministic same-ID grant, same-revision revoke and same-record-revision neutral ownership races. Six-schema database lint reports no errors and retains the same eight previously reviewed warnings: two unused variables, one text-to-UUID target warning and five reviewed immutable/JSON-construction warnings. Neither C nor D introduces a lint warning.
+
+This passing aggregate does not repair or approve the separately rejected #40 unavailable-role cleanup fallback; that scenario and its withdrawal evidence remain owned by #40 and were not changed here. No reset, hosted database mutation, security-advisor claim, commit or push was performed during this integration run. Local history remains **61 migrations**. The genuine remaining #36 acceptance work is refreshed exact-byte review for the formatted test, normal source delivery, exact hosted receipt and final task review—not additional C/D authority logic.

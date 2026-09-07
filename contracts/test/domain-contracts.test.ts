@@ -66,6 +66,7 @@ import {
   tenantSchema,
   verifiedIdentitySchema,
   readOrganizationAccessVersionCommandSchema,
+  readAccessVersionChangeReasonV1,
   readOrganizationAccessVersionV1,
   writeAccessVersionChangeReasonV1,
 } from "../src";
@@ -192,6 +193,12 @@ describe("identity projection, organisation-account and invitation contracts", (
     expect(writeAccessVersionChangeReasonV1("stewardship_changed")).toBe("stewardship_changed");
     expect(writeAccessVersionChangeReasonV1("invitation_access_accepted")).toBe(
       "invitation_access_accepted",
+    );
+    expect(writeAccessVersionChangeReasonV1("record_ownership_changed")).toBe(
+      "record_ownership_changed",
+    );
+    expect(readAccessVersionChangeReasonV1("record_ownership_changed")).toBe(
+      "record_ownership_changed",
     );
     expect(
       readOrganizationAccessVersionV1({

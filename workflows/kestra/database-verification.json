@@ -115,6 +115,11 @@
       "migration": "supabase/migrations/20260906115410_protect_organization_group_administration_changes.sql",
       "proof": "supabase/tests/organization-group-administration-change-concurrency.test.sh",
       "label": "Organization Group administration changes"
+    },
+    {
+      "migration": "supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql",
+      "proof": "supabase/tests/private-direct-record-share-change-concurrency.test.sh",
+      "label": "Private direct record-share changes"
     }
   ],
   "lintSchemas": [
