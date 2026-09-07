@@ -2,6 +2,23 @@
 
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and acceptance: [implementation plan](../build-plan/issue-37-field-access.md).
 
+## Protected-share typed operation — 8 September 2026
+
+The strict grant/revoke commands accept normal record, recipient, field, time and
+revision inputs, never caller-supplied authority or field ceilings. Grant and
+Activity identifiers are generated server-side. The runtime invokes a fixed
+trusted adapter through the existing governance-first change transaction.
+Read-only sharing retains the existing nonempty readable-field invariant and
+does not require update authority. The SQL adapter still owns the actual exact
+record and field-ceiling checks before calling the existing private writer.
+
+Independent Sol review approved the actual typed/runtime slice. Root reran its
+seven focused tests and the Access typecheck successfully, then the full shared
+worktree suite: 95 files passed (two skipped), 1,363 tests passed (three skipped),
+12 fixture checks, and all 23 package typechecks and boundaries. This is source
+and orchestration evidence, not a live sharing endpoint or completed SQL proof.
+The pending neutral database adapter tests remain separately required.
+
 ## Pure field-resolution checkpoint — 8 September 2026
 
 [PR #337](https://github.com/Abzum-NZ/Abzum-Vortex/pull/337) merged normally into

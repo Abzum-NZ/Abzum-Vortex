@@ -32,6 +32,11 @@ export {
   type OrganizationRecordAccessOperationResult,
 } from "./organization-record-access-operation";
 export {
+  createOrganizationDirectRecordShareService,
+  type FixedOrganizationDirectRecordShareAdapter,
+  type OrganizationDirectRecordShareDependencies,
+} from "./organization-direct-record-share";
+export {
   createOrganizationAccessAdministrationService,
   type OrganizationAccessAdministrationDependencies,
 } from "./organization-access-administration";
