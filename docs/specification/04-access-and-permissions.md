@@ -183,6 +183,19 @@ When accepting a supplied template as an assignable local role, the administrato
 
 An organisation account may have several organisation roles and several application roles. The effective permission set is the union of active role grants, followed by field restrictions and record-scope restrictions. There is no hidden default administrator permission.
 
+Delegated organisation administrators may remove existing assignments after their
+role or permissions are withdrawn. This is removal only: it cannot reactivate or
+recreate a role or permission, assign or replace access, extend an assignment, or
+activate privileged eligibility. Nonempty current accepted permission references
+retain the normal complete affected-scope check. If the current role is explicitly
+unavailable and has no entries, removal requires both the exact assignment-management
+permission and current organisation-catalogue delegation. A missing role snapshot,
+empty active/retired role or merely bounded delegation cannot use that exception.
+The exact organisation, reviewed assignment revision and final-steward safeguard
+still apply. Removal, one Access-version change and Activity evidence are atomic;
+role, permission and activation history are not restored or rewritten. See the
+[approved cleanup contract](../build-plan/issue-40-protected-access-administration.md#approved-removal-only-cleanup-after-withdrawal--8-september-2026).
+
 ### Managing access is different from using data
 
 An administrator needs the exact role-management permission and an explicit scope of permissions they may assign. That delegation authority does not itself permit opening an application or reading its records. This lets an organisation steward assign the first application role without first receiving the application's business-data access.

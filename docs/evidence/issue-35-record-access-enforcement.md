@@ -40,4 +40,4 @@ That checkpoint remains unfinished delivery work: its migration and tests were n
 - #35 remains **In progress**; no complete row-enforcement claim is made by this metadata checkpoint.
 - The implementation plan and Access specification preserve one central decision, exact permission/scope pairing, no new authority cache, and conservative expiry checks for both states of an update.
 - [Complete file-defined application proof #327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327) includes module/application-owned actions and both permission representations through the completed engine; it still precedes App Designer delivery.
-- No new dependency or user business decision was introduced. Existing hosted receipts remain unverified, and the separate #40 cleanup authorization is outside this implementation.
+- No new dependency was introduced. Existing hosted receipts remain unverified. The separate #40 removal-only cleanup was approved on 8 September and remains outside this implementation; it does not resolve #35's separately recorded tool-execution restriction.

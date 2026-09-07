@@ -1,8 +1,21 @@
 # Protected Access administration evidence
 
+## Removal-only cleanup approval — 8 September 2026
+
+The user explicitly authorized delegated organisation administrators to remove
+assignments to withdrawn roles/permissions only when the operation cannot restore,
+recreate, assign or increase authority. The [approved implementation scope](../build-plan/issue-40-protected-access-administration.md#approved-removal-only-cleanup-after-withdrawal--8-september-2026)
+retains exact management permission, current organisation-catalogue delegation for
+an unavailable empty role, revision/governance checks, terminal removal and atomic
+Access/Activity. Historical permission fallback and permission-only removal remain
+excluded. The earlier tool-authorization hold is resolved; this approval is not
+evidence of a passing implementation, source delivery or hosted verification.
+Those results will be recorded separately after actual execution and independent
+review. The historical checkpoint descriptions below retain their original scope.
+
 ## Private role and delegation composition — 7 September 2026
 
-Source delivery: [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332) merged normally into Testing at `2026-09-07T06:11:02Z`, after both preview checks passed. Reviewed source `6569a4d54b3522360f07cf90ee0e98c2c0975e7f` merged as `c036ff274e31fa7f4d71a17c9f37341c81d892cd`. This includes both private composition families and the reviewed consumer-ownership documentation. No protection was bypassed. The exact hosted database/security/concurrency receipt and isolated assignment-cleanup exception remain unresolved; the whole task stays open.
+Source delivery: [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332) merged normally into Testing at `2026-09-07T06:11:02Z`, after both preview checks passed. Reviewed source `6569a4d54b3522360f07cf90ee0e98c2c0975e7f` merged as `c036ff274e31fa7f4d71a17c9f37341c81d892cd`. This includes both private composition families and the reviewed consumer-ownership documentation. No protection was bypassed. At that checkpoint, the exact hosted database/security/concurrency receipt and isolated assignment-cleanup exception remained unresolved. The later cleanup approval is recorded above; implementation and hosted verification still keep the whole task open.
 
 The second private family supports delegation grants/scope replacement and all six existing authority-establishing role variants: create custom, copy a current template, accept a new application role, revise custom permissions, change role policy, and accept an application role revision. It checks fixed management permissions plus the exact complete before/after scope, then reuses existing canonical preparation, source checks, assignment manifests where required, stewardship and atomic Access/Activity writers. These are owner-only functions, not runtime/MCP endpoints or a delivered IAM grant journey.
 
