@@ -4,6 +4,16 @@ Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and accep
 
 ## Pure field-resolution checkpoint — 8 September 2026
 
+[PR #337](https://github.com/Abzum-NZ/Abzum-Vortex/pull/337) merged normally into
+Testing at `2026-09-07T23:45:25Z`, after preview success on reviewed head
+`800c3abdc6cd6df3f37ef7b84ab385b6a766be7e`. Testing merge:
+`480ee21f6ba8349919f676a861aa6418168f5c01`.
+An isolated clean checkout of the exact head passed 93 test files (two skipped),
+1,356 tests (three skipped), all 12 fixture checks, all 23 package typechecks and
+boundaries, and all 23 production builds. No unfinished SQL was included.
+These results supersede the earlier partial rerun qualification below; they do
+not claim a new hosted database receipt or completion of the whole task.
+
 The pure engine now combines only complete exact-record contributions. Each
 permission is matched to its immutable declaration, source owner, action, record
 type and scope. Direct-share limits intersect that contribution before the final

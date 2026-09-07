@@ -289,7 +289,22 @@ Every local share names the exact organisation/module/storage-contract/record id
 
 The [protected local-share invocation in #37](../build-plan/issue-37-field-access.md) follows #35's exact record decision: the grantor must pass the share permission, target visibility and current field ceiling before #36's private share writer runs in the same transaction. Private share storage and neutral predicate tests do not by themselves deliver that authorised invocation.
 
+A read-only share does not require permission to edit the record. The operation
+requires at least one proposed readable field and checks the grantor's current
+read authority. It checks changeable-field authority only when changeable fields
+are proposed; a read-only share does not add an update requirement. The exact
+share permission and target visibility are still mandatory. Revocation checks its current fixed authority and
+share revision without requiring the historical grantor's old field ceiling.
+
 ## Field access
+
+Row restrictions alone do not hide columns. Protected record projection and change
+operations enforce field bounds before returning data or changing it; the request
+role must not have a raw content-table route that bypasses these operations.
+Fixed neutral adapters prove this in [#37](../build-plan/issue-37-field-access.md),
+and [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45)
+creates the permanent equivalents. The underlying private field helpers are not
+client-selectable endpoints.
 
 A role's exact record permissions declare the fields that permission allows a person to read and change. Each immutable `fieldPolicy` contains explicit `readableFieldIds` and `changeableFieldIds`; changeable fields must also be readable. An omitted field is refused by that permission, not a global veto on other independently complete permissions. This follows the existing permission-union model: first prove each permission's own current eligibility and complete record scope, narrow any direct-share contribution by that share's field lists, then combine the surviving contributions. A permission or share that fails its own checks contributes nothing. Do not combine eligibility from one permission with the field policy or record scope of another.
 
