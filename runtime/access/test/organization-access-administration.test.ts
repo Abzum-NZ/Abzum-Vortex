@@ -394,6 +394,83 @@ describe("organization Access administration", () => {
     expect(mismatched.calls).toHaveLength(1);
   });
 
+  it("revokes one reviewed role assignment through the protected operation", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2).toUpperCase(),
+        assignment_summary: {
+          roleAssignmentId: id(30).toUpperCase(),
+          role: { roleId: id(31), key: "reviewer", label: "Reviewer", lifecycle: "retired" },
+          assignee: {
+            kind: "organization_account",
+            organizationAccountId: id(32),
+            displayName: "Reviewer",
+          },
+          assignmentKind: "standing",
+          revision: "3",
+          startsAt: "2026-09-01T00:00:00.000Z",
+          state: "revoked",
+          temporalState: "revoked",
+        },
+        access_version: "8",
+      },
+    ]);
+    await expect(
+      service.revokeRoleAssignment(
+        verifiedSession,
+        { organizationId: id(2) },
+        { roleAssignmentId: id(30), expectedAssignmentRevision: 2 },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        assignment: { roleAssignmentId: id(30).toUpperCase(), revision: 3, state: "revoked" },
+        accessVersion: 8,
+      },
+    });
+    expect(calls[0]?.text).toContain("revoke_organization_role_assignment_for_administration");
+    expect(calls[0]?.values).toEqual([id(30), 2, id(21)]);
+  });
+
+  it("refuses malformed or mismatched role-assignment revocation evidence", async () => {
+    const malformed = serviceFor([]);
+    await expect(
+      malformed.service.revokeRoleAssignment(
+        verifiedSession,
+        { organizationId: id(2) },
+        { roleAssignmentId: id(30), expectedAssignmentRevision: 0 },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(malformed.calls).toHaveLength(0);
+    const mismatched = serviceFor([
+      {
+        organization_id: id(2),
+        assignment_summary: {
+          roleAssignmentId: id(99),
+          role: { roleId: id(31), key: "reviewer", label: "Reviewer", lifecycle: "active" },
+          assignee: {
+            kind: "organization_account",
+            organizationAccountId: id(32),
+            displayName: "Reviewer",
+          },
+          assignmentKind: "standing",
+          revision: 3,
+          startsAt: "2026-09-01T00:00:00.000Z",
+          state: "revoked",
+          temporalState: "revoked",
+        },
+        access_version: 8,
+      },
+    ]).service;
+    await expect(
+      mismatched.revokeRoleAssignment(
+        verifiedSession,
+        { organizationId: id(2) },
+        { roleAssignmentId: id(30), expectedAssignmentRevision: 2 },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
+
   it("refuses malformed commands and mismatched changed Group evidence", async () => {
     const malformed = serviceFor([]);
     await expect(

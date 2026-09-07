@@ -36,6 +36,18 @@ readonly assignment_a_id="aa${run_uuid:2}"
 readonly assignment_b_id="ab${run_uuid:2}"
 readonly policy_id="ac${run_uuid:2}"
 readonly actor_id="ad${run_uuid:2}"
+readonly steward_role_id="ae${run_uuid:2}"
+readonly steward_assignment_id="af${run_uuid:2}"
+readonly steward_delegation_id="b0${run_uuid:2}"
+readonly revoke_activity_id="c0${run_uuid:2}"
+readonly unavailable_assignment_id="c1${run_uuid:2}"
+readonly unavailable_activity_id="c2${run_uuid:2}"
+readonly limited_identity_id="c3${run_uuid:2}"
+readonly limited_account_id="c4${run_uuid:2}"
+readonly limited_delegation_id="c5${run_uuid:2}"
+readonly limited_steward_assignment_id="c6${run_uuid:2}"
+readonly unavailable_missing_assignment_id="c7${run_uuid:2}"
+readonly unavailable_bounded_assignment_id="c8${run_uuid:2}"
 readonly correlation_initialize="ae${run_uuid:2}"
 readonly correlation_platform="af${run_uuid:2}"
 readonly correlation_register="b0${run_uuid:2}"
@@ -49,6 +61,11 @@ readonly correlation_update="b7${run_uuid:2}"
 readonly correlation_stale_accept="b8${run_uuid:2}"
 readonly correlation_accept="b9${run_uuid:2}"
 readonly correlation_withdraw="ba${run_uuid:2}"
+readonly correlation_adopt="bb${run_uuid:2}"
+readonly correlation_race_role="bc${run_uuid:2}"
+readonly correlation_race_revoke="bd${run_uuid:2}"
+readonly correlation_unavailable_grant="be${run_uuid:2}"
+readonly correlation_unavailable_revoke="bf${run_uuid:2}"
 
 fixture_claimed=0
 declare -a worker_pids=()
@@ -177,7 +194,8 @@ cleanup_fixture() {
     delete from vortex_definition.roots where root_id = '$application_root_id';
     delete from vortex_access.organization_access_versions where organization_id = '$organization_id';
     delete from vortex_identity.organization_accounts where organization_id = '$organization_id';
-    delete from vortex_identity.identity_projections where identity_id = '$identity_id';
+    delete from vortex_identity.identity_projections
+      where identity_id in ('$identity_id', '$limited_identity_id');
     delete from vortex_identity.organizations where organization_id = '$organization_id';
     delete from vortex_identity.tenants where tenant_id = '$tenant_id';
     commit;
@@ -370,15 +388,22 @@ insert into vortex_identity.organizations (
 insert into vortex_identity.identity_projections (
   identity_id, state, created_at, state_changed_at, state_changed_by,
   state_change_correlation_id, revision
-) values ('$identity_id', 'active', pg_catalog.statement_timestamp(),
-  pg_catalog.statement_timestamp(), '$actor_id', '$correlation_initialize', 1);
+) values
+  ('$identity_id', 'active', pg_catalog.statement_timestamp(),
+   pg_catalog.statement_timestamp(), '$actor_id', '$correlation_initialize', 1),
+  ('$limited_identity_id', 'active', pg_catalog.statement_timestamp(),
+   pg_catalog.statement_timestamp(), '$actor_id', '$correlation_initialize', 1);
 insert into vortex_identity.organization_accounts (
   organization_account_id, organization_id, identity_id, display_name, state,
   activated_at, changed_at, state_changed_at, state_changed_by,
   state_change_correlation_id, revision
-) values ('$account_id', '$organization_id', '$identity_id', 'Role change account',
-  'active', pg_catalog.statement_timestamp(), pg_catalog.statement_timestamp(),
-  pg_catalog.statement_timestamp(), '$actor_id', '$correlation_initialize', 1);
+) values
+  ('$account_id', '$organization_id', '$identity_id', 'Role change account',
+   'active', pg_catalog.statement_timestamp(), pg_catalog.statement_timestamp(),
+   pg_catalog.statement_timestamp(), '$actor_id', '$correlation_initialize', 1),
+  ('$limited_account_id', '$organization_id', '$limited_identity_id', 'Limited cleanup account',
+   'active', pg_catalog.statement_timestamp(), pg_catalog.statement_timestamp(),
+   pg_catalog.statement_timestamp(), '$actor_id', '$correlation_initialize', 1);
 select * from vortex_access.initialize_organization_access_version(
   '$organization_id', '$actor_id', '$correlation_initialize'
 );
@@ -395,6 +420,43 @@ select entry.organization_id, null, entry.owner_kind, entry.owner_id, entry.perm
   entry.meaning_fingerprint, entry.registration_revision, pg_catalog.statement_timestamp()
 from vortex_access.permission_catalogue_entries as entry
 where entry.organization_id = '$organization_id' and entry.registration_kind = 'platform';
+select * from vortex_access.coordinate_organization_stewardship_adoption(
+  '$organization_id', '$account_id', '$steward_role_id',
+  'role_change_steward', 'Role change steward',
+  'Neutral authority for the composed assignment-revocation race.',
+  '$steward_assignment_id', '$steward_delegation_id', '$actor_id', '$correlation_adopt'
+);
+select * from vortex_access.coordinate_organization_delegation_authority_change(
+  'grant_delegation', '$organization_id', '$limited_delegation_id', null,
+  'organization_account', '$limited_account_id', null, 'bounded',
+  (
+    select pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'kind', 'exact', 'ownerKind', entry.owner_kind,
+      'ownerId', entry.owner_id, 'permissionId', entry.permission_id,
+      'acceptedRegistrationRevision', entry.registration_revision,
+      'catalogueFingerprint', registration.permission_catalogue_fingerprint,
+      'continuityRevision', continuity.continuity_revision,
+      'meaningFingerprint', entry.meaning_fingerprint
+    ))
+    from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registration_revisions as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and registration.revision = entry.registration_revision
+    join vortex_access.permission_continuities as continuity
+      on continuity.organization_id = entry.organization_id
+      and continuity.application_root_id is not distinct from entry.application_root_id
+      and continuity.owner_kind = entry.owner_kind and continuity.owner_id = entry.owner_id
+      and continuity.permission_id = entry.permission_id
+    where entry.organization_id = '$organization_id'
+      and entry.registration_kind = 'platform'
+    order by entry.permission_id
+    limit 1
+  ),
+  'sha256:' || pg_catalog.repeat('f', 64), pg_catalog.statement_timestamp(), null,
+  '$actor_id', 'd0${run_uuid:2}'
+);
 insert into vortex_access.organization_roles (
   organization_id, role_id, role_kind, role_key, live_revision, created_by, created_at
 ) values ('$organization_id', '$custom_role_id', 'custom', 'proof_custom', 1,
@@ -591,6 +653,66 @@ retry="$(run_sql "select pg_catalog.concat_ws('|',outcome,operation,revision) fr
 r2_state="$(run_sql "select pg_catalog.concat_ws('|',version.current_version,role.live_revision,revision.label,revision.policy_continuity_revision,revision.authority_continuity_revision,(select count(*) from vortex_access.organization_role_permission_entries where organization_id='$organization_id' and role_id='$custom_role_id' and role_revision=2),(select count(*) from vortex_access.organization_role_assignments where organization_id='$organization_id' and role_id='$custom_role_id' and state='live')) from vortex_access.organization_access_versions version join vortex_access.organization_roles role on role.organization_id=version.organization_id and role.role_id='$custom_role_id' join vortex_access.organization_role_revisions revision on revision.organization_id=role.organization_id and revision.role_id=role.role_id and revision.revision=role.live_revision where version.organization_id='$organization_id';")"
 [ "$r2_state" = "$((before_r2 + 2))|2|Proof custom revised|1|1|1|2" ] || { printf 'role-first race or fresh retry left unexpected state: %q\n' "$r2_state" >&2; exit 1; }
 
+# R2b: an actual role metadata change owns governance before a direct
+# request-role protected revocation. The revoker must wait before sampling the
+# role scope, then refuse its now-stale request context without any Activity.
+before_r2b="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$organization_id';")"
+PGAPPNAME="vortex-role-change-r2b-holder-$fixture_name_token" "${psql_command[@]}" >"$proof_root/r2b-holder.log" 2>&1 <<SQL &
+begin;
+set lock_timeout = '30s';
+set statement_timeout = '45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/r2b-holder.pid'
+select 1 from vortex_access.organization_roles where organization_id='$organization_id' and role_id='$custom_role_id' for update;
+\! touch '$proof_root/r2b-holder-ready'
+\! deadline=600; while [ ! -f '$proof_root/r2b-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/r2b-release' ]
+commit;
+SQL
+r2b_holder=$!; worker_pids+=("$r2b_holder"); wait_for_file "$proof_root/r2b-holder-ready"
+r2b_holder_db="$(read_backend_pid "$proof_root/r2b-holder.pid")"
+
+PGAPPNAME="vortex-role-change-r2b-role-$fixture_name_token" "${psql_command[@]}" >"$proof_root/r2b-role.log" 2>&1 <<SQL &
+set lock_timeout = '30s'; set statement_timeout = '45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/r2b-role.pid'
+select * from vortex_access.coordinate_organization_role_change(
+  pg_catalog.jsonb_build_object('contractVersion','1.0.0','candidate',pg_catalog.jsonb_build_object(
+    'operation','revise_metadata_policy','organizationId','$organization_id','roleId','$custom_role_id',
+    'expectedRoleRevision',2,'key','proof_custom','label','Proof custom race winner',
+    'description','Custom role for concurrency.','privilegeClassification','privileged',
+    'assignmentPolicy',pg_catalog.jsonb_build_object('kind','standing')),
+    'roleCandidateFingerprint','sha256:' || pg_catalog.repeat('8',64)),
+  '$actor_id','$correlation_race_role');
+SQL
+r2b_role=$!; worker_pids+=("$r2b_role")
+r2b_role_db="$(read_backend_pid "$proof_root/r2b-role.pid")"
+wait_for_database_blocker "$r2b_role_db" "$r2b_holder_db"
+
+PGAPPNAME="vortex-role-change-r2b-revoke-$fixture_name_token" "${psql_command[@]}" >"$proof_root/r2b-revoke.log" 2>&1 <<SQL &
+\set VERBOSITY verbose
+begin;
+set lock_timeout = '30s'; set statement_timeout = '45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/r2b-revoke.pid'
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'callerKind','human','identityAuthorityId','$actor_id','tenantId','$tenant_id',
+  'organizationId','$organization_id','organizationAccountId','$account_id',
+  'identityId','$identity_id','sessionId','$correlation_race_revoke',
+  'authenticationStrength','multi_factor','issuedAt',pg_catalog.clock_timestamp(),
+  'expiresAt',pg_catalog.clock_timestamp() + interval '5 minutes',
+  'accessVersion',$before_r2b,'correlationId','$correlation_race_revoke'));
+set role vortex_request;
+select * from vortex_access.revoke_organization_role_assignment_for_administration(
+  '$assignment_b_id',1,'$revoke_activity_id');
+commit;
+SQL
+r2b_revoke=$!; worker_pids+=("$r2b_revoke")
+r2b_revoke_db="$(read_backend_pid "$proof_root/r2b-revoke.pid")"
+wait_for_database_blocker "$r2b_revoke_db" "$r2b_role_db"
+touch "$proof_root/r2b-release"
+wait_owned_worker "$r2b_holder"; wait_owned_worker "$r2b_role"
+if wait_owned_worker "$r2b_revoke"; then echo 'stale protected revoke unexpectedly committed' >&2; exit 1; fi
+grep -q '42501' "$proof_root/r2b-revoke.log" || { echo 'stale protected revoke lacked 42501' >&2; exit 1; }
+r2b_state="$(run_sql "select pg_catalog.concat_ws('|',version.current_version,role.live_revision,assignment.state,assignment.revision,(select count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id='$revoke_activity_id')) from vortex_access.organization_access_versions version join vortex_access.organization_roles role on role.organization_id=version.organization_id and role.role_id='$custom_role_id' join vortex_access.organization_role_assignments assignment on assignment.organization_id=version.organization_id and assignment.role_assignment_id='$assignment_b_id' where version.organization_id='$organization_id';")"
+[ "$r2b_state" = "$((before_r2b + 1))|3|live|1|0" ] || { printf 'role-change/protected-revoke race left unexpected state: %q\n' "$r2b_state" >&2; exit 1; }
+
 # R3: B2 meaning update wins governance and changes the role revision. The stale
 # application acceptance waits behind it and then refuses without partial state.
 before_r3="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$organization_id';")"
@@ -670,11 +792,25 @@ r4_holder_db="$(read_backend_pid "$proof_root/r4-holder.pid")"
 
 PGAPPNAME="vortex-role-change-r4-accept-$fixture_name_token" "${psql_command[@]}" >"$proof_root/r4-accept.log" 2>&1 <<SQL &
 \set VERBOSITY verbose
+begin;
 set lock_timeout = '30s';
 set statement_timeout = '45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/r4-accept.pid'
 select outcome, operation, access_version from vortex_access.coordinate_organization_role_change(
   $app_evidence_two,'$actor_id','$correlation_accept');
+select outcome, operation, access_version from vortex_access.coordinate_organization_role_assignment_change(
+  'grant','$organization_id','$unavailable_assignment_id',null,'$application_role_id',3,
+  'organization_account','$account_id',null,'standing',pg_catalog.clock_timestamp(),null,
+  '$actor_id','$correlation_unavailable_grant');
+select outcome, operation, access_version from vortex_access.coordinate_organization_role_assignment_change(
+  'grant','$organization_id','$unavailable_missing_assignment_id',null,'$application_role_id',3,
+  'organization_account','$account_id',null,'standing',pg_catalog.clock_timestamp(),null,
+  '$actor_id','d1${run_uuid:2}');
+select outcome, operation, access_version from vortex_access.coordinate_organization_role_assignment_change(
+  'grant','$organization_id','$unavailable_bounded_assignment_id',null,'$application_role_id',3,
+  'organization_account','$account_id',null,'standing',pg_catalog.clock_timestamp(),null,
+  '$actor_id','d2${run_uuid:2}');
+commit;
 SQL
 r4_accept=$!; worker_pids+=("$r4_accept")
 r4_accept_db="$(read_backend_pid "$proof_root/r4-accept.pid")"
@@ -697,7 +833,95 @@ wait_owned_worker "$r4_holder"; wait_owned_worker "$r4_accept"; wait_owned_worke
 grep -q 'changed|accept_application_role_revision' "$proof_root/r4-accept.log" || { echo 'accept-first writer did not commit' >&2; exit 1; }
 grep -q 'changed|withdraw|3' "$proof_root/r4-withdraw.log" || { echo 'withdraw-after writer did not commit' >&2; exit 1; }
 after_r4="$(run_sql "select pg_catalog.concat_ws('|',version.current_version,role.live_revision,revision.lifecycle,(select count(*) from vortex_access.organization_role_revisions where organization_id='$organization_id' and role_id='$application_role_id'),(select count(*) from vortex_access.organization_role_permission_entries where organization_id='$organization_id' and role_id='$application_role_id' and role_revision=3)) from vortex_access.organization_access_versions version join vortex_access.organization_roles role on role.organization_id=version.organization_id and role.role_id='$application_role_id' join vortex_access.organization_role_revisions revision on revision.organization_id=role.organization_id and revision.role_id=role.role_id and revision.revision=role.live_revision where version.organization_id='$organization_id';")"
-expected_r4="$((before_r4 + 2))|4|unavailable|4|1"
+expected_r4="$((before_r4 + 5))|4|unavailable|4|1"
 [ "$after_r4" = "$expected_r4" ] || { printf 'accept/withdraw ordering left unexpected state: %q expected %q\n' "$after_r4" "$expected_r4" >&2; exit 1; }
+
+limited_version="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$organization_id';")"
+set +e
+run_sql "begin;
+  select vortex_context.initialize(pg_catalog.jsonb_build_object(
+    'callerKind','human','identityAuthorityId','$actor_id','tenantId','$tenant_id',
+    'organizationId','$organization_id','organizationAccountId','$limited_account_id',
+    'identityId','$limited_identity_id','sessionId','d3${run_uuid:2}',
+    'authenticationStrength','multi_factor','issuedAt',pg_catalog.clock_timestamp(),
+    'expiresAt',pg_catalog.clock_timestamp()+interval '5 minutes',
+    'accessVersion',$limited_version,'correlationId','d3${run_uuid:2}'));
+  set local role vortex_request;
+  select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '$unavailable_missing_assignment_id',1,'d4${run_uuid:2}');
+  commit;" >"$proof_root/unavailable-missing.log" 2>&1
+missing_status=$?
+set -e
+[ "$missing_status" -ne 0 ] && grep -q 'Organization role-assignment revocation is unavailable' "$proof_root/unavailable-missing.log" || {
+  echo 'unavailable cleanup without assignment management did not refuse' >&2; exit 1;
+}
+
+run_sql "select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant','$organization_id','$limited_steward_assignment_id',null,'$steward_role_id',1,
+  'organization_account','$limited_account_id',null,'standing',pg_catalog.clock_timestamp(),null,
+  '$actor_id','d5${run_uuid:2}');" >/dev/null
+limited_version="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$organization_id';")"
+set +e
+run_sql "begin;
+  select vortex_context.initialize(pg_catalog.jsonb_build_object(
+    'callerKind','human','identityAuthorityId','$actor_id','tenantId','$tenant_id',
+    'organizationId','$organization_id','organizationAccountId','$limited_account_id',
+    'identityId','$limited_identity_id','sessionId','d6${run_uuid:2}',
+    'authenticationStrength','multi_factor','issuedAt',pg_catalog.clock_timestamp(),
+    'expiresAt',pg_catalog.clock_timestamp()+interval '5 minutes',
+    'accessVersion',$limited_version,'correlationId','d6${run_uuid:2}'));
+  set local role vortex_request;
+  select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '$unavailable_bounded_assignment_id',1,'d7${run_uuid:2}');
+  commit;" >"$proof_root/unavailable-bounded.log" 2>&1
+bounded_status=$?
+set -e
+[ "$bounded_status" -ne 0 ] && grep -q 'Organization role-assignment revocation is unavailable' "$proof_root/unavailable-bounded.log" || {
+  echo 'unavailable cleanup with only bounded delegation did not refuse' >&2; exit 1;
+}
+
+cleanup_version="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$organization_id';")"
+unavailable_revoke="$(run_sql "
+  begin;
+  select vortex_context.initialize(pg_catalog.jsonb_build_object(
+    'callerKind','human','identityAuthorityId','$actor_id','tenantId','$tenant_id',
+    'organizationId','$organization_id','organizationAccountId','$account_id',
+    'identityId','$identity_id','sessionId','$correlation_unavailable_revoke',
+    'authenticationStrength','multi_factor','issuedAt',pg_catalog.clock_timestamp(),
+    'expiresAt',pg_catalog.clock_timestamp()+interval '5 minutes',
+    'accessVersion',$cleanup_version,'correlationId','$correlation_unavailable_revoke'));
+  set local role vortex_request;
+  select (assignment_summary #>> '{role,lifecycle}') || '|' ||
+    (assignment_summary ->> 'state') || '|' || access_version::text
+  from vortex_access.revoke_organization_role_assignment_for_administration(
+    '$unavailable_assignment_id',1,'$unavailable_activity_id');
+  commit;" | tr -d '[:space:]')"
+[ "$unavailable_revoke" = "unavailable|revoked|$((cleanup_version + 1))" ] || {
+  printf 'unavailable-role cleanup returned unexpected result: %q\n' "$unavailable_revoke" >&2; exit 1;
+}
+
+unchanged_unavailable_facts="$(run_sql "select pg_catalog.concat_ws('|',
+  revision.lifecycle,
+  (select count(*) from vortex_access.organization_role_permission_entries entry
+   where entry.organization_id='$organization_id' and entry.role_id='$application_role_id'
+     and entry.role_revision=revision.revision),
+  (select count(*) from vortex_access.organization_role_activations activation
+   where activation.organization_id='$organization_id' and activation.role_id='$application_role_id'),
+  (select count(*) from vortex_access.organization_role_assignments assignment
+   where assignment.organization_id='$organization_id' and assignment.role_id='$application_role_id'
+     and assignment.state='live'),
+  (select count(*) from vortex_access.organization_role_revisions history
+   where history.organization_id='$organization_id' and history.role_id='$application_role_id'),
+  (select count(*) from vortex_access.organization_role_permission_entries retained
+   where retained.organization_id='$organization_id' and retained.role_id='$application_role_id'
+     and retained.role_revision=3))
+ from vortex_access.organization_roles role
+ join vortex_access.organization_role_revisions revision
+   on revision.organization_id=role.organization_id and revision.role_id=role.role_id
+  and revision.revision=role.live_revision
+ where role.organization_id='$organization_id' and role.role_id='$application_role_id';")"
+[ "$unchanged_unavailable_facts" = 'unavailable|0|0|2|4|1' ] || {
+  printf 'unavailable cleanup changed retained authority facts: %q\n' "$unchanged_unavailable_facts" >&2; exit 1;
+}
 
 echo 'organization role-change concurrency proof passed'

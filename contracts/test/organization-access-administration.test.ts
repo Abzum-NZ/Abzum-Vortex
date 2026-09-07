@@ -3,6 +3,7 @@ import {
   changeOrganizationAdministrationMembershipResultSchema,
   changeOrganizationAdministrationRoleResultSchema,
   changeOrganizationAdministrationGroupResultSchema,
+  changeOrganizationAdministrationRoleAssignmentResultSchema,
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
   changeOrganizationAdministrationRoleActivationResultSchema,
   createOrganizationAdministrationGroupCommandSchema,
@@ -45,6 +46,7 @@ import {
   retireOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationRoleCommandSchema,
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
+  revokeOrganizationAdministrationRoleAssignmentCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
 } from "../src/organization-access-administration";
@@ -693,6 +695,30 @@ describe("organization Access administration contracts", () => {
       expect(
         listOrganizationAdministrationRoleAssignmentsCommandSchema.safeParse(candidate).success,
       ).toBe(false);
+  });
+
+  it("binds terminal assignment revocation to one reviewed revision", () => {
+    expect(
+      revokeOrganizationAdministrationRoleAssignmentCommandSchema.parse({
+        roleAssignmentId: id(50),
+        expectedAssignmentRevision: 2,
+      }),
+    ).toEqual({ roleAssignmentId: id(50), expectedAssignmentRevision: 2 });
+    for (const candidate of [
+      { roleAssignmentId: id(50), expectedAssignmentRevision: 0 },
+      { roleAssignmentId: id(50), expectedAssignmentRevision: 2, operation: "grant" },
+    ])
+      expect(
+        revokeOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(candidate).success,
+      ).toBe(false);
+    expect(
+      changeOrganizationAdministrationRoleAssignmentResultSchema.parse({
+        assignment: { ...assignment, revision: 3, state: "revoked", temporalState: "revoked" },
+        accessVersion: 11,
+      }),
+    ).toMatchObject({
+      assignment: { roleAssignmentId: assignment.roleAssignmentId, state: "revoked" },
+    });
   });
 
   it("accepts catalogue and stripped bounded delegation ledger facts", () => {

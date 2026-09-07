@@ -1,6 +1,6 @@
 # Phase 3 — Row-policy composition
 
-Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites: [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), complete, and [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), whose source is complete and delivered through [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326). Its exact hosted receipt remains unverified. The source dependency is available for local implementation; hosted integration and closure must still verify the actual delivered prerequisites. The available [access administration #40](issue-40-protected-access-administration.md) compositions were delivered first through [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332). Its isolated cleanup authorization and exact hosted receipt remain open, but neither supplies a dependency of this local implementation. Continue this available engine work rather than creating a new whole-project hold.
+Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites: [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), complete, and [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), whose source is complete and delivered through [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326). Its exact hosted receipt remains unverified. The source dependency is available for local implementation; hosted integration and closure must still verify the actual delivered prerequisites. The available [access administration #40](issue-40-protected-access-administration.md) compositions were delivered first through [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332). Its removal-only withdrawn-assignment cleanup was explicitly approved on 8 September and is independently reviewed and locally verified in [PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334). Normal source delivery and exact hosted verification remain separate from this local implementation's dependencies. Continue available engine work rather than creating a new whole-project hold.
 
 ## Outcome
 
@@ -29,6 +29,8 @@ For a record, the decision is `OR(permission eligibility AND that same permissio
 The reviewed implementation keeps the existing non-record declaration and eligibility function signature unchanged. A separate strict record declaration carries the exact application and installed module/record-type/storage binding, canonical required permissions, action and recent-authentication requirement; it allows ordinary permission authority only, not delegated-management scopes. A private shared eligibility core reuses current catalogue and role-path logic for both wrappers. Each wrapper validates its context and takes one Access-version observation and time sample; request roles cannot call the core directly or supply those internal facts. The first checkpoint proves candidate-bound eligibility and legacy equivalence only. It must not report a final record allow result before the row-scope composition is implemented.
 
 The complete record decision retains each independently successful permission contribution and each applicable direct share's own field bounds and expiry. Its validity cannot outlive any contribution it reports. Immutable Definition releases and their exact dependencies supply conditions and relationship declarations; a fixed protected adapter supplies actual rows and edges. No caller selects a table, predicate or source permission. Relationship recursion uses the same decision and refuses cycles; inherited ownership remains a separate factual owner route. These are private implementation seams, not another catalogue, cache or public endpoint.
+
+Both allowed and refused final record evidence identify the exact `recordId` supplied by the trusted record adapter, in addition to the existing organisation/application/type/storage binding. A result for one record cannot stand in for another record of the same type. Permission-only eligibility remains pre-row and does not carry a record identifier. Reuse the existing record identifier contract; do not add a decision token, fingerprint or duplicate scope model. The downstream field-access consumer must check this exact target before using the result.
 
 UPDATE's old-row and proposed-row policies are separate complete decisions under the transaction's held Access facts. Each may take a fresh time sample: expiry between them must refuse the later decision, never extend authority. Do not introduce a statement-local cache or token merely to force identical timestamps. A direct-share update contribution here proves row eligibility only; [field access #37](issue-37-field-access.md) must still restrict the fields actually changed. The fixed neutral adapters are a proof boundary, not the generated storage delivered by [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
 
@@ -65,6 +67,21 @@ The pre-policy [direct-ownership proof](../evidence/issue-36-record-visibility.m
 - [ ] Independent review and local/hosted verification cover the delivered scope. Evidence explicitly identifies the neutral test tables; it does not claim generated-table or end-user application delivery.
 
 ## Integration ownership
+
+### Narrow implementation authorization — 8 September 2026
+
+The unfinished local implementation currently refuses record decisions when the
+application has more than 1,000 record permissions and caps recursive traversal at
+1,000. This is not an approved product-size limit. Review recommends retaining the
+existing published-graph bound and cycle refusal without the unrelated fixed
+application-size cutoff. An automated safety check rejected removing the fixed
+upper bounds because larger traversals can exhaust database resources. The change
+was not applied or retried. A narrow tool-execution authorization has been requested
+for the graph-bound/cycle-preserving replacement; this is not product approval of
+either limit. Without that authorization the cutoff remains in the unfinished
+local candidate pending a separately authorized safe change. Only this edit awaits
+authorization, not the remaining implementation or tests. Do not describe the
+cutoff as a permanent product requirement or claim it was removed.
 
 This task proves the policy shape that [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) will install. #45 owns real storage mappings, Definition-derived physical tables and generated integration. It continues to depend on #35; #35 does not depend on #45 or a new storage subtask. That avoids a cycle through the Phase 3 epic and Phase 4 installation tasks.
 
