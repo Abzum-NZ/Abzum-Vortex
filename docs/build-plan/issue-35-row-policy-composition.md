@@ -24,6 +24,17 @@ For a record, the decision is `OR(permission eligibility AND that same permissio
 3. Compose each eligible alternative with its own complete visibility scope through the existing predicates. Keep only complete matches and their conservative validity deadline for the field-access consumer. Reuse the published cycle-free relationship graph for recursion; add no parallel policy registry or authority cache.
 4. Apply and verify the four fixed policy shapes below on neutral business-row tables, followed by whole-scope review and exact hosted evidence. Generated storage and field projection remain downstream consumers.
 
+## Implementation ownership verified against current source
+
+| Existing area | Required change |
+| --- | --- |
+| [Module authored actions](../../contracts/src/module-source-contracts.ts), [application authored actions](../../contracts/src/application-source-contracts.ts), [compiled actions](../../contracts/src/module-contracts.ts) | Extend record-action permission binding to canonical alternatives while retaining historical singular definitions. Do not broaden unrelated navigation, interface or non-record bindings into caller-selected permission lists. |
+| [Compiler](../../runtime/definition/src/compiler.ts), [validation](../../runtime/definition/src/validation.ts), [version comparison](../../runtime/definition/src/comparison-policy.ts) | Resolve all alternatives to the exact record/action owner before fingerprinting. Validate the complete set and include it in ordinary meaning/version comparison; do not rewrite immutable historical artifacts. |
+| [Central decision contracts](../../contracts/src/organization-access-decision.ts) and existing database eligibility implementation | Add the record-aware branch through shared existing eligibility logic, with one locked context/Access version and conservative time evidence. Preserve non-record callers. Do not repeatedly combine independent eligibility calls with drifting facts or relax the current non-record filter alone. |
+| Existing eligibility, record-scope, ownership, share and relationship SQL proofs | Reuse fixtures and add the complete-pair, old/new UPDATE, alternative contribution and isolation cases unique to this task. No new test framework; #45 still owns generated tables and #37 field combination. |
+
+This is implementation preparation only. Current #40 delivery remains first; neither these source locations nor passing earlier predicate tests constitute delivered record policies.
+
 ## Relationship-route composition
 
 [#36](issue-36-ownership-and-visibility.md#c--next-inherited-ownership-and-relationship-witness-checkpoint) supplies an exact factual relationship witness and proves inherited-owner routing separately. This task owns the complete relationship visibility decision: resolve the declared `sourcePermissionId`, evaluate its current eligibility and its own complete row scope against the exact source row, and only then apply the declared relationship witness to the target row. Recursively apply that same composition when the source permission itself uses a relationship route. Preserve publication's cycle-free route graph and exact installed storage bindings; do not accept a caller-provided allow flag or mix different permissions' eligibility and scope.
