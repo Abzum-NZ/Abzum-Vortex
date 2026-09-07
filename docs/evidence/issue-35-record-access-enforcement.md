@@ -35,6 +35,37 @@ The separately reviewed private eligibility core retains each candidate's exact 
 
 That checkpoint remains unfinished delivery work: its migration and tests were not committed or merged with the compiler change, and its rollback-only proof persisted no database state. It must participate in a complete per-permission row-scope decision and four-operation neutral policy proof before SQL delivery. The next implementation composes the existing ownership, share, saved-condition and relationship primitives; [field enforcement #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) and [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) remain downstream.
 
+## Complete row-decision candidate — local proof, not delivery
+
+On 8 September 2026, the complete composition candidate passed independent root
+rollback-only execution: SQL425 **57/57** and SQL430 **45/45**. The first root
+invocation omitted the existing private-schema assertion helper and stopped before
+assertions; the corrected invocation included that helper and both suites passed.
+Both successful runs ended in rollback and created no migration-history entries.
+
+The proof covers exact permission-and-row pairing without combining unrelated
+permissions, ownership and Group ownership, factual inherited ownership, saved
+conditions, direct-share field evidence, two-hop relationship evaluation, cycle
+refusal, exact record identity and the earliest retained contribution deadline.
+Actual restricted-caller policies exercise read, create, update of old and proposed
+rows, and delete, with isolation across applications and both organisation
+directions. An independent Sol reviewer identified missing non-read isolation
+assertions in the earlier 36-check suite; those assertions were added and the
+reviewer closed that finding against the final 45-check suite. The reviewer
+inspected actual source and tests but did not run the database proof.
+
+Reviewed composition migration SHA-256:
+`414875b841cf2610e58e747486795f3b23073c863f5e51671d4e2c441813b81e`.
+Final SQL430 SHA-256:
+`7eda663c4c5e84c4b06f9c5328f70e0d709ceb989275b78df1f51d5ad8c9f804`.
+The unchanged legacy SQL290 **48/48** and SQL300 **28/28** passed the implementer's
+rollback-only run with both candidate migrations.
+
+This is not source delivery, hosted verification or whole-task completion. The
+[separate fixed-cutoff tooling restriction](../build-plan/issue-35-row-policy-composition.md#narrow-implementation-authorization--8-september-2026)
+remains unchanged and unresolved; the cleanup approval for
+[#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) does not authorize it.
+
 ## Recorded state
 
 - #35 remains **In progress**; no complete row-enforcement claim is made by this metadata checkpoint.
