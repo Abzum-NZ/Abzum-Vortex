@@ -2,6 +2,12 @@
 
 Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Governing scope: [row-policy composition plan](../build-plan/issue-35-row-policy-composition.md).
 
+## Testing source delivery — 8 September 2026
+
+[PR #333](https://github.com/Abzum-NZ/Abzum-Vortex/pull/333) merged through the normal protected Testing path at `2026-09-07T20:16:16Z`, after both preview checks succeeded. Source `032fb23472e1810dbc4d1b3007d28ac27c9c69a3` is the source-identical branch update of reviewed `ee496da9117ceee66209fb1c27a231251adf34be`; Testing merge is `80c5b626177a255cbccba6207f9d7e8ca0f81e7c`. The change contains compiler metadata, tests and documentation, not the unfinished record-policy SQL or assignment-cleanup work. No Production promotion or exact hosted database receipt is claimed.
+
+The scoped security diff review of compiler commit `d69a3672cb77d56f6f6d5ce06d4f310069937685` completed as scan `81973b14-5243-448e-b2a6-ea0bf0db8b50`: six changed production files and three changed tests were inspected with no reportable findings or deferred in-scope candidates. It included an independent architecture review and retained the original failed full-verification result and the later, separately reviewed test-import correction. It is not a repository-wide audit or a proof of the pending database runtime.
+
 ## Permission-alternative definitions — 8 September 2026
 
 This checkpoint supports one action with several declared permission routes, so a future shared screen can serve people with own-record or wider access. It defines and validates those alternatives; it does not execute an action or establish a final database record-access decision.
