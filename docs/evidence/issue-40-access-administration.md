@@ -1,5 +1,51 @@
 # Protected Access administration evidence
 
+## Hosted cleanup delivery blocked by migration ordering — 8 September 2026
+
+After the user renewed the existing Edge sign-in, the architect read the actual
+[Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/2SCFacBCxOw8DpNfBeCYq2/logs).
+It validated exact Testing merge `ae5a09f28206f38766a5bc06f5b923177f064ab9`
+and migration-set hash `1678172547dd5da54f220445dc51c30e20fe2920a37198764881715ca4d84f56`,
+then failed before SQL/concurrency verification. Supabase refused the missing
+`20260907020345_protect_organization_role_assignment_revocation.sql` because its
+version precedes migrations already present remotely. This is not a failing
+permission assertion, successful hosted verification, or a user hold.
+
+Read-only migration inventory of Testing project `abflfptnguasinoussws` confirms
+64 applied migrations through `20260907053923`, with `20260907020345` absent.
+There is no success receipt for this exact merge. The repair must reconcile this
+one reviewed delivery gap without resetting Testing, rewriting applied history,
+relaxing permission checks, upgrading Kestra, or claiming tests that did not run.
+The existing run correctly refused delivery; its CLI upgrade notice is not the
+failure cause. The [Supabase migration guidance](https://supabase.com/docs/reference/cli/supabase-db-push)
+informs the ordering repair. Source and local proof below remain valid but do not
+close [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
+
+The 65-file reviewed source inventory was compared with all 64 hosted history
+entries: this was the only missing migration, and there were no unexpected remote
+entries. Supabase CLI generated replacement version `20260907221412`; only the
+unapplied file's name changed. Independent Sol actual-diff review confirms identical
+Git blob `adaf1fb8fc82eb486bf39aff38074649685903bc` and SQL SHA-256
+`0f792e3b91ae995f06c44a28e8106982c9c8aac53433296f0ebc5a7bf072059f`.
+No later committed migration depends on this wrapper, and the unchanged SQL was
+already tested after those migrations. The runner remains unchanged, without
+`--include-all` or migration-history repair. Historical filenames below identify
+the original reviewed artifact; the current deliverable has the new filename.
+Normal hosted delivery must still run all existing checks and verify exact final
+history before a successful receipt is claimed. The unrelated unfinished #35
+migrations are excluded and must be timestamped after the latest delivered
+migration before their own delivery.
+
+## Cleanup source delivered to Testing — 8 September 2026
+
+[PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334) merged normally into
+Testing at `2026-09-07T21:58:38Z`, after both normal preview checks passed on final
+source `4f9ebdf8b1d95e1e7ee89d8d8cb4f8ae48122738`. Testing merge:
+`ae5a09f28206f38766a5bc06f5b923177f064ab9`. No protection was bypassed and no
+Production promotion occurred. The approved removal-only implementation is source
+delivered; exact hosted database/security/concurrency verification of this merge
+remains outstanding. This does not close the whole access-administration task.
+
 ## Removal-only cleanup approval — 8 September 2026
 
 The user explicitly authorized delegated organisation administrators to remove
