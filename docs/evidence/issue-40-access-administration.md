@@ -1,5 +1,15 @@
 # Protected Access administration evidence
 
+## Cleanup source delivered to Testing — 8 September 2026
+
+[PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334) merged normally into
+Testing at `2026-09-07T21:58:38Z`, after both normal preview checks passed on final
+source `4f9ebdf8b1d95e1e7ee89d8d8cb4f8ae48122738`. Testing merge:
+`ae5a09f28206f38766a5bc06f5b923177f064ab9`. No protection was bypassed and no
+Production promotion occurred. The approved removal-only implementation is source
+delivered; exact hosted database/security/concurrency verification of this merge
+remains outstanding. This does not close the whole access-administration task.
+
 ## Removal-only cleanup approval — 8 September 2026
 
 The user explicitly authorized delegated organisation administrators to remove
