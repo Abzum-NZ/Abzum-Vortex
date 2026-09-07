@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   changeOrganizationAdministrationGroupResultSchema,
+  changeOrganizationAdministrationDelegationAuthorityResultSchema,
+  changeOrganizationAdministrationRoleActivationResultSchema,
   createOrganizationAdministrationGroupCommandSchema,
   listOrganizationAdministrationGroupsCommandSchema,
   listOrganizationAdministrationGroupsResultSchema,
@@ -37,6 +39,8 @@ import {
   readOrganizationAdministrationRoleActivationResultSchema,
   readOrganizationAdministrationRoleAssignmentResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
+  deactivateOrganizationAdministrationRoleActivationCommandSchema,
+  revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
 } from "../src/organization-access-administration";
 
 const id = (value: number): string => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
@@ -657,6 +661,46 @@ describe("organization Access administration contracts", () => {
         accessVersion: 10,
       }),
     ).toEqual({ outcome: "unavailable", accessVersion: 10 });
+  });
+
+  it("binds activation and delegation reductions to one reviewed revision", () => {
+    expect(
+      deactivateOrganizationAdministrationRoleActivationCommandSchema.parse({
+        roleActivationId: id(60),
+        expectedActivationRevision: 2,
+      }),
+    ).toEqual({ roleActivationId: id(60), expectedActivationRevision: 2 });
+    expect(
+      revokeOrganizationAdministrationDelegationAuthorityCommandSchema.parse({
+        delegationAuthorityId: id(61),
+        expectedDelegationRevision: 3,
+      }),
+    ).toEqual({ delegationAuthorityId: id(61), expectedDelegationRevision: 3 });
+    expect(
+      deactivateOrganizationAdministrationRoleActivationCommandSchema.safeParse({
+        roleActivationId: id(60),
+        expectedActivationRevision: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      revokeOrganizationAdministrationDelegationAuthorityCommandSchema.safeParse({
+        delegationAuthorityId: id(61),
+        expectedDelegationRevision: 3,
+        scope: { kind: "organization_catalogue" },
+      }).success,
+    ).toBe(false);
+    expect(
+      changeOrganizationAdministrationRoleActivationResultSchema.safeParse({
+        activation: { roleActivationId: id(60) },
+        accessVersion: 4,
+      }).success,
+    ).toBe(false);
+    expect(
+      changeOrganizationAdministrationDelegationAuthorityResultSchema.parse({
+        delegation: { ...delegation, revision: 3, state: "revoked", temporalState: "revoked" },
+        accessVersion: 4,
+      }).accessVersion,
+    ).toBe(4);
   });
 
   it("refuses raw delegation evidence, duplicate scope and unbounded inputs", () => {

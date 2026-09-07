@@ -32,6 +32,7 @@ readonly role_id="c7${run_uuid:2}"
 readonly policy_one_id="c8${run_uuid:2}"
 readonly policy_two_id="c9${run_uuid:2}"
 readonly policy_three_id="ca${run_uuid:2}"
+readonly policy_four_id="cf${run_uuid:2}"
 readonly assignment_role_id="cb${run_uuid:2}"
 readonly assignment_revoke_id="cc${run_uuid:2}"
 readonly assignment_group_id="cd${run_uuid:2}"
@@ -54,6 +55,9 @@ readonly correlation_r4_remove="e8${run_uuid:2}"
 readonly correlation_r4_activation="e9${run_uuid:2}"
 readonly correlation_expiry_grant="ea${run_uuid:2}"
 readonly correlation_expiry_activation="eb${run_uuid:2}"
+readonly correlation_r6_role="ec${run_uuid:2}"
+readonly correlation_r6_deactivate="ed${run_uuid:2}"
+readonly deactivate_activity_id="ee${run_uuid:2}"
 
 fixture_claimed=0
 declare -a worker_pids=()
@@ -183,6 +187,7 @@ cleanup_fixture() {
     delete from vortex_access.permission_catalogue_entries where organization_id = '$organization_id';
     delete from vortex_access.permission_registrations where organization_id = '$organization_id';
     delete from vortex_access.permission_registration_revisions where organization_id = '$organization_id';
+    delete from vortex_activity.organization_activity_entries where organization_id = '$organization_id';
     delete from vortex_access.organization_access_versions where organization_id = '$organization_id';
     delete from vortex_identity.organization_accounts where organization_id = '$organization_id';
     delete from vortex_identity.identity_projections where identity_id = '$identity_id';
@@ -199,7 +204,8 @@ finalize() {
   trap - EXIT INT TERM
   set +e
   touch "$proof_root/r1-release" "$proof_root/r2-release" \
-    "$proof_root/r3-release" "$proof_root/r4-release" "$proof_root/r5-release"
+    "$proof_root/r3-release" "$proof_root/r4-release" "$proof_root/r5-release" \
+    "$proof_root/r6-release"
   stop_owned_workers
   if [ "$original_status" -ne 0 ]; then emit_owned_failure_diagnostics; fi
   cleanup_fixture
@@ -378,6 +384,22 @@ role_change_three="pg_catalog.jsonb_build_object(
           'independentApprovalRequired',false)))),
   'newActivationPolicyFingerprint','sha256:' || pg_catalog.repeat('4',64),
   'roleCandidateFingerprint','sha256:' || pg_catalog.repeat('5',64))"
+
+role_change_four="pg_catalog.jsonb_build_object(
+  'contractVersion','1.0.0','candidate',pg_catalog.jsonb_build_object(
+    'operation','revise_metadata_policy','organizationId','$organization_id',
+    'roleId','$role_id','expectedRoleRevision',3,'key','activation_role',
+    'label','Activation role final','description','Role activation concurrency fixture.',
+    'privilegeClassification','privileged',
+    'assignmentPolicy',pg_catalog.jsonb_build_object(
+      'kind','activation_required','activationPolicy',pg_catalog.jsonb_build_object(
+        'selection','new','policy',pg_catalog.jsonb_build_object(
+          'activationPolicyId','$policy_four_id','revision',1,
+          'maximumActivationDurationSeconds',350,'reasonRequired',false,
+          'recentAuthentication',pg_catalog.jsonb_build_object('kind','none'),
+          'independentApprovalRequired',false)))),
+  'newActivationPolicyFingerprint','sha256:' || pg_catalog.repeat('6',64),
+  'roleCandidateFingerprint','sha256:' || pg_catalog.repeat('7',64))"
 
 # R1: activation owns governance first and waits for the role. Its reviewed
 # policy remains historical evidence when a queued policy change commits next.
@@ -689,6 +711,69 @@ grep -q '40001' "$proof_root/r5-activation.log" || {
 r5_state="$(run_sql "select pg_catalog.concat_ws('|',version.current_version,assignment.state,assignment.revision,(assignment.expires_at <= pg_catalog.clock_timestamp()),(select count(*) from vortex_access.organization_role_activations where organization_id='$organization_id' and role_activation_id='$activation_expiry_id')) from vortex_access.organization_access_versions version join vortex_access.organization_role_assignments assignment on assignment.organization_id=version.organization_id and assignment.role_assignment_id='$assignment_expiry_id' where version.organization_id='$organization_id';")"
 [ "$r5_state" = "$before_r5|live|1|t|0" ] || {
   printf 'expiry-during-governance race left unexpected state: %q\n' "$r5_state" >&2
+  exit 1
+}
+
+# R6: a role change owns governance before a protected deactivation request.
+# The request initialized against the reviewed Access version must wait and
+# then refuse stale without changing the activation or appending Activity.
+before_r6="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$organization_id';")"
+PGAPPNAME="vortex-role-activation-r6-holder-$fixture_name_token" "${psql_command[@]}" >"$proof_root/r6-holder.log" 2>&1 <<SQL &
+begin;
+set lock_timeout = '30s'; set statement_timeout = '45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/r6-holder.pid'
+select 1 from vortex_access.organization_roles
+where organization_id='$organization_id' and role_id='$role_id' for update;
+\! touch '$proof_root/r6-holder-ready'
+\! deadline=600; while [ ! -f '$proof_root/r6-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/r6-release' ]
+commit;
+SQL
+r6_holder=$!; worker_pids+=("$r6_holder"); wait_for_file "$proof_root/r6-holder-ready"
+r6_holder_db="$(read_backend_pid "$proof_root/r6-holder.pid")"
+
+PGAPPNAME="vortex-role-activation-r6-role-$fixture_name_token" "${psql_command[@]}" >"$proof_root/r6-role.log" 2>&1 <<SQL &
+set lock_timeout = '30s'; set statement_timeout = '45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/r6-role.pid'
+select * from vortex_access.coordinate_organization_role_change(
+  $role_change_four,'$actor_id','$correlation_r6_role');
+SQL
+r6_role=$!; worker_pids+=("$r6_role")
+r6_role_db="$(read_backend_pid "$proof_root/r6-role.pid")"
+wait_for_database_blocker "$r6_role_db" "$r6_holder_db"
+
+PGAPPNAME="vortex-role-activation-r6-deactivate-$fixture_name_token" "${psql_command[@]}" >"$proof_root/r6-deactivate.log" 2>&1 <<SQL &
+\set VERBOSITY verbose
+begin;
+set lock_timeout = '30s'; set statement_timeout = '45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/r6-deactivate.pid'
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'callerKind','human','identityAuthorityId','$actor_id','tenantId','$tenant_id',
+  'organizationId','$organization_id','organizationAccountId','$account_id',
+  'identityId','$identity_id','sessionId','$correlation_r6_deactivate',
+  'authenticationStrength','multi_factor','issuedAt',pg_catalog.clock_timestamp(),
+  'expiresAt',pg_catalog.clock_timestamp() + interval '5 minutes',
+  'accessVersion',$before_r6,'correlationId','$correlation_r6_deactivate'));
+set role vortex_request;
+select * from vortex_access.deactivate_organization_role_activation_for_administration(
+  '$activation_role_first_id',1,'$deactivate_activity_id');
+commit;
+SQL
+r6_deactivate=$!; worker_pids+=("$r6_deactivate")
+r6_deactivate_db="$(read_backend_pid "$proof_root/r6-deactivate.pid")"
+wait_for_database_blocker "$r6_deactivate_db" "$r6_role_db"
+touch "$proof_root/r6-release"
+wait_owned_worker "$r6_holder"; wait_owned_worker "$r6_role"
+if wait_owned_worker "$r6_deactivate"; then
+  echo 'stale protected activation deactivation unexpectedly committed' >&2
+  exit 1
+fi
+grep -q '42501' "$proof_root/r6-deactivate.log" || {
+  echo 'stale protected activation deactivation lacked 42501' >&2
+  exit 1
+}
+r6_state="$(run_sql "select pg_catalog.concat_ws('|',version.current_version,role.live_revision,activation.state,activation.revision,(select count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id='$deactivate_activity_id')) from vortex_access.organization_access_versions version join vortex_access.organization_roles role on role.organization_id=version.organization_id and role.role_id='$role_id' join vortex_access.organization_role_activations activation on activation.organization_id=role.organization_id and activation.role_activation_id='$activation_role_first_id' where version.organization_id='$organization_id';")"
+[ "$r6_state" = "$((before_r6 + 1))|4|live|1|0" ] || {
+  printf 'role-change/protected-deactivation race left unexpected state: %q\n' "$r6_state" >&2
   exit 1
 }
 

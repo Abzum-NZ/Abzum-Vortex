@@ -918,6 +918,46 @@ describe("organization Access administration", () => {
     ).resolves.toEqual({ kind: "temporarily_unavailable" });
   });
 
+  it("revokes one reviewed delegation and binds the terminal result", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2),
+        delegation_summary: {
+          delegationAuthorityId: id(80),
+          holder: {
+            kind: "organization_account",
+            organizationAccountId: id(72),
+            displayName: "Holder",
+          },
+          scope: { kind: "organization_catalogue" },
+          revision: "4",
+          startsAt: "2026-09-06T00:00:00.000Z",
+          state: "revoked",
+          temporalState: "revoked",
+        },
+        access_version: "8",
+      },
+    ]);
+    await expect(
+      service.revokeDelegationAuthority(
+        verifiedSession,
+        { organizationId: id(2) },
+        {
+          delegationAuthorityId: id(80),
+          expectedDelegationRevision: 3,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        delegation: { delegationAuthorityId: id(80), revision: 4, state: "revoked" },
+        accessVersion: 8,
+      },
+    });
+    expect(calls[0]?.text).toContain("revoke_organization_delegation_authority_for_administration");
+    expect(calls[0]?.values).toEqual([id(80), 3, id(21)]);
+  });
+
   it("lists retained role activations through the protected assignment ledger", async () => {
     const activation = {
       roleActivationId: id(90),
@@ -964,6 +1004,50 @@ describe("organization Access administration", () => {
     });
     expect(calls[0]?.text).toContain("list_organization_role_activations_for_administration");
     expect(calls[0]?.values).toEqual([id(89), 10]);
+  });
+
+  it("deactivates one reviewed activation and binds the terminal result", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2),
+        activation_summary: {
+          roleActivationId: id(90),
+          beneficiary: { organizationAccountId: id(72), displayName: "Beneficiary" },
+          role: {
+            roleId: id(71),
+            key: "review_operator",
+            label: "Review operator",
+            lifecycle: "active",
+          },
+          revision: "3",
+          historicalRoleRevision: "1",
+          eligibilitySourceKind: "direct",
+          activatedAt: "2026-09-06T00:00:00.000Z",
+          expiresAt: "2026-09-06T02:00:00.000Z",
+          state: "revoked",
+          temporalState: "revoked",
+        },
+        access_version: "8",
+      },
+    ]);
+    await expect(
+      service.deactivateRoleActivation(
+        verifiedSession,
+        { organizationId: id(2) },
+        {
+          roleActivationId: id(90),
+          expectedActivationRevision: 2,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        activation: { roleActivationId: id(90), revision: 3, state: "revoked" },
+        accessVersion: 8,
+      },
+    });
+    expect(calls[0]?.text).toContain("deactivate_organization_role_activation_for_administration");
+    expect(calls[0]?.values).toEqual([id(90), 2, id(21)]);
   });
 
   it("reads exact activation provenance and rejects mismatched or malformed requests", async () => {
