@@ -2,6 +2,41 @@
 
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and acceptance: [implementation plan](../build-plan/issue-37-field-access.md).
 
+## Pure field-resolution checkpoint — 8 September 2026
+
+The pure engine now combines only complete exact-record contributions. Each
+permission is matched to its immutable declaration, source owner, action, record
+type and scope. Direct-share limits intersect that contribution before the final
+readable/changeable field union. Missing historical policy contributes no fields.
+
+Projection removes unreadable values and derived values whose declared field
+dependencies are not all readable. Those dependencies and source values must come
+from trusted server-resolved definitions, not caller assertions. Write validation
+accepts only fields allowed by the already-authorised create, update or named
+action and refuses the whole proposed change if any field is disallowed. It does
+not turn read permission into write authority.
+
+The helpers bind to existing current request evidence and a trusted observation,
+including the account, application, Access version, correlation and expiry.
+They add no stored token, permission evaluator, counter or authority cache.
+
+Independent Sol actual-work review approved the final bounded slice after fixing
+UUID-case identity comparison and adding create/named-action proof. Final source
+SHA-256: `0e2cd49be0f24c54e8e624fc4f811687e5284f74bad6026173208a782156e84b`.
+Final test SHA-256:
+`510eb8f853138f03a5c17ca632f0d5d6f41d6e28a61b03c3a289ad2c34202e55`.
+Root reran the final combined record-contract/contribution/field/runtime tests:
+38/38 passed. The earlier full candidate run passed 1,355 tests with three skipped,
+and all 23 package typechecks and boundaries passed. The focused final rerun
+covers the subsequent small reviewed field correction; it is not a new hosted
+receipt. The author also passed Contracts typecheck, lint and formatting.
+
+These are pure contracts/helpers, not a public endpoint or proof that all future
+query, filter, sort, export, semantic-map or form executors enforce fields. The
+actual neutral database projection/write and protected sharing proof remains
+required by [#37](../build-plan/issue-37-field-access.md). The private #35 SQL
+candidate is not delivered with this checkpoint.
+
 ## Isolated source delivery — 8 September 2026
 
 [PR #336](https://github.com/Abzum-NZ/Abzum-Vortex/pull/336) merged normally into

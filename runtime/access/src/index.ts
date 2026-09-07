@@ -27,6 +27,11 @@ export {
   type OrganizationAccessOperationResult,
 } from "./organization-access-decision";
 export {
+  runOrganizationRecordAccessOperation,
+  type FixedOrganizationRecordAccessAdapter,
+  type OrganizationRecordAccessOperationResult,
+} from "./organization-record-access-operation";
+export {
   createOrganizationAccessAdministrationService,
   type OrganizationAccessAdministrationDependencies,
 } from "./organization-access-administration";

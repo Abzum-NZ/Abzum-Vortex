@@ -2,6 +2,33 @@
 
 Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Governing scope: [row-policy composition plan](../build-plan/issue-35-row-policy-composition.md).
 
+## Typed exact-record handoff — 8 September 2026
+
+The bounded contract/runtime checkpoint distinguishes candidate permission
+eligibility from a complete record decision. Complete decisions retain the exact
+record, storage binding, action and independently matched permission/row
+contributions, with immutable source and conservative expiry evidence.
+
+The server-only operation seam accepts a trusted fixed adapter, not caller-selected
+permissions or row graphs. After adapter evaluation it reads the existing validated
+human context and database clock through the same restricted transaction, then
+checks the exact target, current account/application/Access version/correlation,
+context and decision expiry, and membership in the fixed declaration's permission
+alternatives. Safe access refusals remain content-free; subsequent operation errors
+are not mislabelled as access failures.
+
+Independent Sol actual-work review approved the canonical contribution contracts,
+their tests and the runtime seam. The runtime author passed 12 focused tests,
+Access typecheck, lint and formatting. Root independently passed the combined
+contract/contribution/field/runtime focused checks (37 assertions at that checkpoint).
+
+This provides no default adapter, new SQL endpoint, owner connection, token or
+authority store. The [fixed-adapter handoff](../build-plan/issue-35-row-policy-composition.md#trusted-record-adapters--8-september-2026)
+retains SQL430 as actual restricted-role neutral policy evidence and #45 as owner
+of permanent generated adapters. The unfinished SQL candidate and fixed-limit
+authorization below are not delivered by this source checkpoint; whole #35 stays
+open and no hosted or Production success is claimed for this slice.
+
 ## Testing source delivery — 8 September 2026
 
 [PR #333](https://github.com/Abzum-NZ/Abzum-Vortex/pull/333) merged through the normal protected Testing path at `2026-09-07T20:16:16Z`, after both preview checks succeeded. Source `032fb23472e1810dbc4d1b3007d28ac27c9c69a3` is the source-identical branch update of reviewed `ee496da9117ceee66209fb1c27a231251adf34be`; Testing merge is `80c5b626177a255cbccba6207f9d7e8ca0f81e7c`. The change contains compiler metadata, tests and documentation, not the unfinished record-policy SQL or assignment-cleanup work. No Production promotion or exact hosted database receipt is claimed.
