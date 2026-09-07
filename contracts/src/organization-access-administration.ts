@@ -9,12 +9,14 @@ import {
   organizationAccountIdSchema,
   recordTypeIdSchema,
   revisionSchema,
+  roleActivationIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
 } from "./identifiers";
 import { descriptionSchema, labelSchema } from "./common";
 import {
+  roleActivationEligibilitySourceSchema,
   rolePrivilegeClassificationSchema,
   roleRecentAuthenticationRequirementSchema,
 } from "./organization-access-catalogue";
@@ -581,6 +583,116 @@ export const readOrganizationAdministrationDelegationAuthorityResultSchema = z.d
   ],
 );
 
+export const organizationAdministrationRoleActivationTemporalStateSchema = z.enum([
+  "active",
+  "expired",
+  "revoked",
+]);
+
+const organizationAdministrationRoleActivationFields = {
+  roleActivationId: roleActivationIdSchema,
+  beneficiary: z
+    .object({
+      organizationAccountId: organizationAccountIdSchema,
+      displayName: z.string().trim().min(1).max(120),
+    })
+    .strict(),
+  role: organizationAdministrationAssignedRoleSchema,
+  revision: javascriptSafeRevisionSchema,
+  historicalRoleRevision: javascriptSafeRevisionSchema,
+  activatedAt: timestampSchema,
+  expiresAt: timestampSchema,
+  state: z.enum(["live", "revoked"]),
+  temporalState: organizationAdministrationRoleActivationTemporalStateSchema,
+};
+
+const addOrganizationAdministrationRoleActivationIssues = (
+  value: {
+    activatedAt: string;
+    expiresAt: string;
+    state: "live" | "revoked";
+    temporalState: "active" | "expired" | "revoked";
+  },
+  context: z.RefinementCtx,
+) => {
+  if (Date.parse(value.expiresAt) <= Date.parse(value.activatedAt))
+    context.addIssue({
+      code: "custom",
+      path: ["expiresAt"],
+      message: "Activation expiry must follow activation",
+    });
+  if ((value.state === "revoked") !== (value.temporalState === "revoked"))
+    context.addIssue({
+      code: "custom",
+      path: ["temporalState"],
+      message: "Only a revoked activation has revoked temporal state",
+    });
+};
+
+export const organizationAdministrationRoleActivationSummarySchema = z
+  .object({
+    ...organizationAdministrationRoleActivationFields,
+    eligibilitySourceKind: z.enum(["direct", "group"]),
+  })
+  .strict()
+  .superRefine(addOrganizationAdministrationRoleActivationIssues);
+
+export const organizationAdministrationRoleActivationPolicySchema = z
+  .object({
+    maximumActivationDurationSeconds: javascriptSafeRevisionSchema,
+    reasonRequired: z.boolean(),
+    recentAuthentication: roleRecentAuthenticationRequirementSchema,
+    independentApprovalRequired: z.boolean(),
+  })
+  .strict();
+
+export const organizationAdministrationRoleActivationDetailSchema = z
+  .object({
+    ...organizationAdministrationRoleActivationFields,
+    eligibilitySource: roleActivationEligibilitySourceSchema,
+    policyAtActivation: organizationAdministrationRoleActivationPolicySchema,
+  })
+  .strict()
+  .superRefine(addOrganizationAdministrationRoleActivationIssues);
+
+export const listOrganizationAdministrationRoleActivationsCommandSchema = z
+  .object({
+    pageSize: z.number().int().min(1).max(100),
+    afterRoleActivationId: roleActivationIdSchema.optional(),
+  })
+  .strict();
+
+export const listOrganizationAdministrationRoleActivationsResultSchema = z
+  .object({
+    activations: z.array(organizationAdministrationRoleActivationSummarySchema).max(100),
+    nextAfterRoleActivationId: roleActivationIdSchema.optional(),
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const readOrganizationAdministrationRoleActivationCommandSchema = z
+  .object({ roleActivationId: roleActivationIdSchema })
+  .strict();
+
+export const readOrganizationAdministrationRoleActivationResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        activation: organizationAdministrationRoleActivationDetailSchema,
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        accessVersion: javascriptSafeRevisionSchema,
+      })
+      .strict(),
+  ],
+);
+
 export type OrganizationAdministrationGroup = z.infer<typeof organizationAdministrationGroupSchema>;
 export type ListOrganizationAdministrationGroupsCommand = z.infer<
   typeof listOrganizationAdministrationGroupsCommandSchema
@@ -701,4 +813,22 @@ export type ReadOrganizationAdministrationDelegationAuthorityCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationDelegationAuthorityResult = z.infer<
   typeof readOrganizationAdministrationDelegationAuthorityResultSchema
+>;
+export type OrganizationAdministrationRoleActivationSummary = z.infer<
+  typeof organizationAdministrationRoleActivationSummarySchema
+>;
+export type OrganizationAdministrationRoleActivationDetail = z.infer<
+  typeof organizationAdministrationRoleActivationDetailSchema
+>;
+export type ListOrganizationAdministrationRoleActivationsCommand = z.infer<
+  typeof listOrganizationAdministrationRoleActivationsCommandSchema
+>;
+export type ListOrganizationAdministrationRoleActivationsResult = z.infer<
+  typeof listOrganizationAdministrationRoleActivationsResultSchema
+>;
+export type ReadOrganizationAdministrationRoleActivationCommand = z.infer<
+  typeof readOrganizationAdministrationRoleActivationCommandSchema
+>;
+export type ReadOrganizationAdministrationRoleActivationResult = z.infer<
+  typeof readOrganizationAdministrationRoleActivationResultSchema
 >;

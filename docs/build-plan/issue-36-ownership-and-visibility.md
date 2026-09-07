@@ -8,6 +8,8 @@ Each record operation sees only records admitted by its explicitly declared scop
 
 ## What will be built
 
+The [current direct-share contribution checkpoint](../evidence/issue-36-record-visibility.md#current-direct-share-contributions--7-september-2026) is implemented and locally verified, including actual restricted-role invocation through a rollback-only controlled binding. It is not a shipping record/share endpoint. The remaining C work is inherited ownership and approved relationship routing; D supplies the private atomic share/ownership changes. Full current permission/scope composition remains [#35](issue-35-row-policy-composition.md), field authority remains #37, and exact hosted delivery is still required before this task closes.
+
 1. **Explicit record scope beside the existing permission declaration.** Reuse the exact record-type/action permission identity and current permission catalogue rather than add a role language or operation registry. A scope explicitly selects one or more base routes: all records in the valid storage context, declared ownership, local direct sharing, or an approved relationship. One optional published saved condition further narrows their result. Having an owner does not mean owner-only visibility; having no owner does not grant all-record visibility. Missing required scope refuses.
 2. **Complete definition-to-runtime mapping.** Resolve authored relationship, condition and permission references to permanent identities through the existing Definition compiler. Include scope in permission meaning, publication validation, provenance and change comparison so an update cannot silently broaden assigned authority. Preserve readable immutable historical releases; an older declaration without scope supplies no record authority. Do not rewrite released JSON or depend on unrelated page-composition changes.
 3. **One shared typed condition implementation.** Reuse the existing condition tree and twelve comparison operators plus `all`, `any` and `not`. Move the pure boolean semantics into the existing Rule package and explicitly change that contracts-only shared package from tier 2 to tier 1. Definition remains tier 2 and Access remains tier 3, so both can consume it through the enforced package graph. Retain the existing Definition export as a thin compatibility entry. This adds no runtime service or second expression language. The later [condition builder #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) and [rule execution #58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) reuse it.
@@ -56,12 +58,12 @@ An application permission uses a saved condition from the module owning that per
 
 Complete that mapping by reusing the existing compiled dependency outputs as trusted compiler context, separate from authored source. Pass the same verified dependency outputs into provisional and final publication compilation; compilation of a whole definition set also supplies its already-compiled module outputs. Validate the selected output's exact module binding, version and existing artifact evidence before resolving the condition. Reuse the current scope schema, parameter checks and provenance mapping. Missing, stale, ambiguous or wrong-record-type evidence refuses. Tests cover exact owner selection, standalone and set compilation, publication consistency and historical omission; no new evidence registry, fingerprint or author-controlled authority field is needed.
 
-| Slice | Deliverable |
-|---|---|
+| Slice                        | Deliverable                                                                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | A — Definition and contracts | Explicit scope, complete source/compiler/meaning mapping, historical-read compatibility and corrected unused local-share contract |
-| B — Shared conditions | One pure typed implementation plus Definition compatibility and PostgreSQL parity vectors |
-| C — Current visibility | Private current shares and database ownership/Group/relationship/condition restrictions on neutral rows |
-| D — Changes and delivery | Revision-checked transfer/share composition, Activity/Access atomicity, actual competing-write proof and hosted verification |
+| B — Shared conditions        | One pure typed implementation plus Definition compatibility and PostgreSQL parity vectors                                         |
+| C — Current visibility       | Private current shares and database ownership/Group/relationship/condition restrictions on neutral rows                           |
+| D — Changes and delivery     | Revision-checked transfer/share composition, Activity/Access atomicity, actual competing-write proof and hosted verification      |
 
 Do not add a new issue for each slice. Review them against the same complete task, and keep dependencies blocked until the required outcomes exist.
 

@@ -55,6 +55,8 @@ Keep the interactive editor in client components and protected reads/mutations o
 
 ## Dependency-led delivery and proof
 
+Before the App Designer UI implementation below, complete the [App Designer HTML prototype](app-designer-html-prototype.md). The existing Fluid inspection is useful source evidence, not the requested complete Vortex authoring prototype. Extend the walkthrough beyond the canvas to modules, relationships, queries, component flows, managed-flow settings, authority, release readiness and full MCP authoring parity. Record reusable interface decisions here after reviewing the actual prototype. Independent headless foundations continue in dependency order.
+
 1. Finish [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249): exact composition, compiler, persistence compatibility, conversion and lossless headless adapter. Finish [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) after its real Access dependency for data/form/action bindings.
 2. Deliver [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) application ownership and lifecycle, then the [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65) canvas and [#66](https://github.com/Abzum-NZ/Abzum-Vortex/issues/66) registered library. Reuse one minimal generic vertical slice first; expand the palette through registered definitions, not a wholesale prototype import.
 3. Prove editing, save/reopen, concurrent-edit refusal, shell ownership, distinct guided steps, exact draft preview and immutable publication. No unsupported setting or orphaned content may be silently moved or lost.

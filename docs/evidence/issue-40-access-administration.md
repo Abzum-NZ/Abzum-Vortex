@@ -8,16 +8,16 @@ The first bounded implementation adds the governance-first verified human reques
 
 The organisation/application change resolvers take the existing organisation write lock before rechecking mutable account and application facts. Only the trusted runtime can call those resolvers. Group readers use the existing exact catalogue permission and return bounded summaries through the restricted request role. No private helper or table is opened to ordinary clients; no second permission engine, approval store or business-domain behaviour is added.
 
-| Evidence | Result |
-|---|---|
-| Focused contract/service tests | 17 tests pass; contracts and Access typechecks pass |
-| Actual restricted-role database coverage | New suite passes all 49 assertions, including permitted/forbidden Group reads, foreign and stale scope, and the real application resolver |
-| Full local database suite | 41 files, 2,005 assertions pass |
-| Concurrent-change coverage | All 22 selected proofs pass, including organisation/account locking and actual application withdrawal versus the new application resolver |
-| Security and database lint | Local security advisors report no issues. All six selected schemas lint without errors; three previously existing Access warnings remain, none introduced here |
-| Independent actual-patch review | Sol approved the final implementation and corrected application-resolver proof; no remaining source finding |
-| Repository-wide check | Full verification passes: 1,238 tests, three existing skips, eight fixture checks, 23 package typechecks/builds, formatting/lint and package boundaries |
-| Hosted delivery | [PR #312](https://github.com/Abzum-NZ/Abzum-Vortex/pull/312) merged into Testing after both normal preview checks passed; the exact hosted database receipt is still pending verification |
+| Evidence                                 | Result                                                                                                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Focused contract/service tests           | 17 tests pass; contracts and Access typechecks pass                                                                                                                                       |
+| Actual restricted-role database coverage | New suite passes all 49 assertions, including permitted/forbidden Group reads, foreign and stale scope, and the real application resolver                                                 |
+| Full local database suite                | 41 files, 2,005 assertions pass                                                                                                                                                           |
+| Concurrent-change coverage               | All 22 selected proofs pass, including organisation/account locking and actual application withdrawal versus the new application resolver                                                 |
+| Security and database lint               | Local security advisors report no issues. All six selected schemas lint without errors; three previously existing Access warnings remain, none introduced here                            |
+| Independent actual-patch review          | Sol approved the final implementation and corrected application-resolver proof; no remaining source finding                                                                               |
+| Repository-wide check                    | Full verification passes: 1,238 tests, three existing skips, eight fixture checks, 23 package typechecks/builds, formatting/lint and package boundaries                                   |
+| Hosted delivery                          | [PR #312](https://github.com/Abzum-NZ/Abzum-Vortex/pull/312) merged into Testing after both normal preview checks passed; the exact hosted database receipt is still pending verification |
 
 The existing local PostgreSQL 17.6 database had 43 migrations before the additive change. The CLI-created migration `20260906101701_protect_organization_access_administration.sql` was applied and iterated locally without resetting data. Once final SQL and concurrency checks passed, the supported local migration-history command recorded that already-applied migration, and the local list confirmed all 44 entries match. No hosted migration history, Production deployment or infrastructure was changed by that local operation.
 
@@ -39,10 +39,10 @@ Independent Sol review approved the exact six implementation files. The initial 
 
 The engineer's focused contract/service check passes 11 tests, with contracts and Access typechecks plus scoped formatting/lint. The combined working-tree repository gate subsequently passed 1,256 tests with three existing skips, eight fixture checks, all 23 package typechecks/builds, formatting/lint and boundaries. That run also included the shared-condition implementation and parallel catalogue runtime/test changes; it is not hosted-delivery evidence. This remains a local implementation checkpoint, not part of the earlier Testing merge.
 
-| Frozen database file | SHA-256 |
-|---|---|
+| Frozen database file                                                                          | SHA-256                                                            |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `supabase/migrations/20260906110758_protect_organization_group_membership_administration.sql` | `6647b7b991969088557063f4e399666c886cc6f20c398097719b5f02bba790ea` |
-| `supabase/tests/335_organization_group_membership_administration.test.sql` | `ea9a86b58abcad0b03ac7a291ee9b56b2c2df0b849d32fdfa716dabfba033fc5` |
+| `supabase/tests/335_organization_group_membership_administration.test.sql`                    | `ea9a86b58abcad0b03ac7a291ee9b56b2c2df0b849d32fdfa716dabfba033fc5` |
 
 The membership and shared-condition checkpoint merged normally through [PR #313](https://github.com/Abzum-NZ/Abzum-Vortex/pull/313) at `2026-09-06T11:55:55Z`, after Vercel and Vercel Preview Comments succeeded. Source `2435f3e79991af919b77943413fec21fdd94fd70` and Testing merge `b1cdd1ea466d583e32f561ea9ae0f46de22b587f` have identical file trees. The later catalogue work was excluded from that commit. A bounded read-only retry could list the existing Edge tabs, but selecting the normal Kestra KV tab timed out; the exact hosted database receipt remains unverified. No controller/API bypass, credential change, Production promotion or infrastructure work was performed.
 
@@ -60,12 +60,12 @@ The additive migration `20260906115410_protect_organization_group_administration
 
 The Group-change and catalogue-scope source checkpoint merged normally through [PR #314](https://github.com/Abzum-NZ/Abzum-Vortex/pull/314) at `2026-09-06T12:33:57Z`. Source `87540f7c3414ee295d4c4f0f82702153b7b376a7` and Testing merge `04819359e55d9176eec7fe3665cd3fb76f32af56` have identical file trees. Both normal preview checks passed. The subsequent invitation correction is not included in this merge.
 
-| File | SHA-256 |
-|---|---|
+| File                                                                   | SHA-256                                                            |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `20260906115410_protect_organization_group_administration_changes.sql` | `3a9d7d4c7f309bfc1fbdfd0223052400f6d63858e0dbaf1b0566b2fe15c3886d` |
-| `350_organization_group_administration_changes.test.sql` | `4b291dda537f3296d64c5b98051bbeee4ccee2c9fda4291fad4cd195b883d3c9` |
-| `organization-group-administration-change-concurrency.test.sh` | `42fe67c792857645da9fbd445da4cd62336af6593eca0bc0304a3026d02cfa3a` |
-| `workflows/kestra/database-verification.json` | `666c66c3c50e18d11c7f650e7c02e54b5482fd88b566f6d76978906ac8de8c77` |
+| `350_organization_group_administration_changes.test.sql`               | `4b291dda537f3296d64c5b98051bbeee4ccee2c9fda4291fad4cd195b883d3c9` |
+| `organization-group-administration-change-concurrency.test.sh`         | `42fe67c792857645da9fbd445da4cd62336af6593eca0bc0304a3026d02cfa3a` |
+| `workflows/kestra/database-verification.json`                          | `666c66c3c50e18d11c7f650e7c02e54b5482fd88b566f6d76978906ac8de8c77` |
 
 ## Registered permission catalogue checkpoint — 7 September 2026
 
@@ -79,10 +79,10 @@ This read-only slice adds no lock path or writer. It reuses the existing governa
 
 The permission-browsing checkpoint merged normally through [PR #317](https://github.com/Abzum-NZ/Abzum-Vortex/pull/317) at `2026-09-06T13:36:12Z`. Both preview checks passed. Reviewed source `a646a3de62d9cb43d51e48e0fa2ece7788bb4c2a` and Testing merge `89f822ae5a53864dad665fd15d0846f7e7ce3880` have identical file trees. No check was bypassed, and unfinished condition work was excluded. This proves source delivery to Testing, not hosted database success or Production promotion.
 
-| Frozen database file | SHA-256 |
-|---|---|
+| Frozen database file                                                                              | SHA-256                                                            |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `supabase/migrations/20260906130257_protect_organization_permission_catalogue_administration.sql` | `6562a59beb1112b9a8ae4116328c87878e3ebd65fa732ab498dfff8c3f56ef53` |
-| `supabase/tests/360_organization_permission_catalogue_administration.test.sql` | `2887b58929af6ba04a76bf27a97fa8de3355303a3417921293bbd936f282207e` |
+| `supabase/tests/360_organization_permission_catalogue_administration.test.sql`                    | `2887b58929af6ba04a76bf27a97fa8de3355303a3417921293bbd936f282207e` |
 
 ## Local roles and registered application templates — 7 September 2026
 
@@ -92,10 +92,10 @@ Independent Sol review approved the six implementation/test files. The main arch
 
 Focused contracts/service checks pass **29 tests**, with both package typechecks and targeted formatting/lint. The prior combined repository gate with this frozen TypeScript implementation passed 1,279 tests with three existing skips, eight fixture checks, all 23 package typechecks/builds, formatting/lint and boundaries. The reviewed role migration was applied locally with the separately reviewed [revocation audit correction](issue-318-assignment-revocation-audit-time.md), bringing local history to 52 migrations. Complete regression results and normal Testing delivery are recorded separately when available; no hosted success or usable IAM screen is claimed by these local checks.
 
-| Frozen database file | SHA-256 |
-|---|---|
+| Frozen database file                                                    | SHA-256                                                            |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `20260906133622_protect_organization_role_catalogue_administration.sql` | `dbf4f591f89bf654d17ec574e119fe415ce24bb132ca8a3643f4b30bea1c420d` |
-| `370_organization_role_administration.test.sql` | `86f96900d19a3ad823368ff51cf5919fbfcbecc44e4bffcef2300444270eae2f` |
+| `370_organization_role_administration.test.sql`                         | `86f96900d19a3ad823368ff51cf5919fbfcbecc44e4bffcef2300444270eae2f` |
 
 The final combined run also includes the reviewed current-person condition extension: **49 SQL suites / 2,249 assertions** and **1,280 repository tests** pass, with three existing skips, eight fixture checks and all 23 package typechecks/builds. All 23 existing concurrency checks pass across multiple runs, not one uninterrupted run; [the revocation evidence](issue-318-assignment-revocation-audit-time.md#actual-verification) retains the unrelated intermittent permanent-steward observation and its limited diagnosis. Lint has no errors and only previously reviewed warnings; security advisors report no issues. Local history now contains 53 migrations. No new concurrency framework or clock change was introduced.
 
@@ -111,20 +111,37 @@ The expired historical delegation fixture cannot use the live-grant insertion pa
 
 The exact migration was applied only to the local testing database without a reset, alongside the independently reviewed ownership predicate. Local migration history now contains 55 entries. Full repository verification passes 1,288 tests with three existing skips, eight fixture checks, all 23 package typechecks/builds, formatting/lint and boundaries. These reads reuse existing locks without a new lock primitive, ordering or write path: the previous governance/read concurrency proof is reused, including its documented multi-run limitation, not claimed as a fresh run. Aggregate database results are recorded below. Source delivery, hosted database success and Production promotion are not yet verified for this checkpoint. There is no new interface to screenshot.
 
-| Frozen database file | SHA-256 |
-|---|---|
+| Frozen database file                                                       | SHA-256                                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `20260906142814_protect_organization_assignment_ledger_administration.sql` | `5ad0e0d1594e5a7d658c34493c69c3328dbb4f7410533cde8c64d6a03f2e8984` |
-| `380_organization_assignment_ledger_administration.test.sql` | `37580191e8fa4bb0abb1cad5ca4600bec88677331391fe80de1b946276a8fcb4` |
+| `380_organization_assignment_ledger_administration.test.sql`               | `37580191e8fa4bb0abb1cad5ca4600bec88677331391fe80de1b946276a8fcb4` |
 
 Final aggregate local verification passes **51 database suites / 2,336 assertions**. Six-schema lint reports no errors and only the same eight previously reviewed warnings; no new warning is introduced by these two migrations. Security advisors report no issues. This remains local evidence, not a hosted receipt.
 
 The ledger and direct-ownership checkpoint merged normally through [PR #321](https://github.com/Abzum-NZ/Abzum-Vortex/pull/321) at `2026-09-06T15:20:45Z`, after both preview checks passed. Reviewed source `20f0ea812c2d00ef94a60f135154b5042983079d` and Testing merge `d60821302149cbe04499116e9c83f4523cb01427` have identical file trees. No check was bypassed. Exact hosted database receipt remains unverified; the next activation reader is not included in this merge and #40 remains open.
 
+## Temporary activation ledger — 7 September 2026
+
+The protected administration service now has bounded activation list/detail operations. Administrators can inspect a beneficiary, the current role label, the historical role revision, retained direct/Group eligibility references and the policy settings that applied at activation. Revoked and expired facts remain inspectable. These descriptive views do not calculate effective access, grant a role, expose private approval/authentication evidence or deliver the later IAM interface.
+
+The six implementation/test files received independent source review. Actual rollback-only execution found a test expression with unparenthesized JSON extraction before string concatenation; only that expression was corrected and independently re-reviewed. The migration and runtime behavior did not change. The corrected focused database proof passes **38 assertions**, including actual permitted/refused request-role access, historical policy retention, complete keyset pages and safe output. Focused contract/service checks pass **41 tests**.
+
+Both this migration and the independently reviewed direct-share migration were applied only to the existing local Vortex database, without reset. The initial combined suite passes **53 SQL files / 2,417 assertions**. All **23 existing concurrency proofs pass in one uninterrupted run**. Six-schema lint passes its error gate with the same eight previously reviewed warnings and no new warning from these migrations. No fresh security-advisor result is claimed here. Full repository verification passes **1,292 tests**, three existing skips, eight fixture checks, all 23 package typechecks/builds, formatting, lint and package boundaries.
+
+This is local checkpoint evidence. Final direct-share test expansion, combined independent review, normal Testing source delivery and the exact hosted receipt are recorded separately when verified. Remaining protected reductions and private governed handoffs remain required by [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40); no task completion or usable IAM screen is claimed. The existing approved access specification requires no new product decision for this ledger.
+
+| Frozen file                                                              | SHA-256                                                            |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `20260906152143_protect_organization_role_activation_administration.sql` | `0cf502c68dc10ebbb2b0b1d29b3463553365cde851d13bdcf5529bab63d964da` |
+| `390_organization_role_activation_administration.test.sql`               | `f72b387e3789a0aae74866920e96eaf461c3c69b6f0e8975b8a1d1214e240f80` |
+
+Final independent Sol actual-work review approves the activation and direct-share checkpoint with no findings. The final aggregate database result is **53 files / 2,418 assertions**, after the direct-share suite gained its restricted-role proof. The preceding aggregate attempt encountered an intermittent failure in an unchanged stewardship check; [the direct-share evidence](issue-36-record-visibility.md#current-direct-share-contributions--7-september-2026) and [#318](https://github.com/Abzum-NZ/Abzum-Vortex/issues/318#issuecomment-5563910662) retain the failed run and successful isolated/bounded aggregate retry. This is not an unqualified first-run pass or a repair of that separate observation.
+
 ## First checkpoint database bytes (historical)
 
-| File | SHA-256 |
-|---|---|
+| File                                                                                | SHA-256                                                            |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `supabase/migrations/20260906101701_protect_organization_access_administration.sql` | `6a38b57e31ac47873c34a4059b81846db53c560b2994e2dc370144465f8f50ee` |
-| `supabase/tests/330_organization_access_administration_foundation.test.sql` | `7d6d6dc530206bbdff6afd9e0d5b76c3b53fa5ad3dfbdf87c9ebe24f01dc90e4` |
-| `supabase/tests/organization-access-administration-concurrency.test.sh` | `c2df5dce569195a4fb98dbb6ac35c438252f76dbe9cf0ac9be0da04caa492d9b` |
-| `workflows/kestra/database-verification.json` | `cc8f63971161a2814d83fc6820ca660ef51d2db00ea65fca0d642255366b9adc` |
+| `supabase/tests/330_organization_access_administration_foundation.test.sql`         | `7d6d6dc530206bbdff6afd9e0d5b76c3b53fa5ad3dfbdf87c9ebe24f01dc90e4` |
+| `supabase/tests/organization-access-administration-concurrency.test.sh`             | `c2df5dce569195a4fb98dbb6ac35c438252f76dbe9cf0ac9be0da04caa492d9b` |
+| `workflows/kestra/database-verification.json`                                       | `cc8f63971161a2814d83fc6820ca660ef51d2db00ea65fca0d642255366b9adc` |

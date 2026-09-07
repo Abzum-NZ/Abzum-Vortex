@@ -8,6 +8,8 @@ Authorised people can inspect and administer their organisation's access through
 
 ## Already built — do not rebuild
 
+The [temporary activation ledger](../evidence/issue-40-access-administration.md#temporary-activation-ledger--7-september-2026) is implemented and locally verified. Together with the earlier catalogue, role/template, Group, membership, assignment and delegation views, it completes the planned safe-read resources at source level. Exact hosted delivery is still required. The next implementation slices are the existing protected reductions and private governed IAM handoffs below, not another administration read model or early granting UI. This whole task remains open.
+
 - #32 supplies permission identities, current availability and source preparation.
 - #33 supplies the private facts and revision-checked writers, including role changes, Groups, memberships, assignments, activations, delegation, application coordination, stewardship and invitation intents.
 - #34 supplies the sole current permission/delegation decision and read-transaction adapter. #276 supplies genuine authentication evidence.
@@ -29,13 +31,13 @@ Fixed platform-catalogue initialisation and metadata transitions remain bounded 
 
 ## Availability before the full IAM journey
 
-| Operation class | Phase 3 boundary |
-|---|---|
-| Permitted list/detail reads | Shipping protected service operation; later generic pages consume it |
-| Empty Group creation/label change, role metadata-only edit with policy/permissions unchanged | Protected non-grant operation with exact authority and Activity |
-| Terminal retirement, removal, revocation, withdrawal and self-deactivation | Immediate protected operation; no granting approval wait, but current authority and final-steward protection still apply |
+| Operation class                                                                                                                                                                   | Phase 3 boundary                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Permitted list/detail reads                                                                                                                                                       | Shipping protected service operation; later generic pages consume it                                                                                                    |
+| Empty Group creation/label change, role metadata-only edit with policy/permissions unchanged                                                                                      | Protected non-grant operation with exact authority and Activity                                                                                                         |
+| Terminal retirement, removal, revocation, withdrawal and self-deactivation                                                                                                        | Immediate protected operation; no granting approval wait, but current authority and final-steward protection still apply                                                |
 | Grants, membership restore/renewal, assignment grants, permission acceptance/broadening, policy/mode edits, delegation grant/replacement, activation and application reactivation | Private preparation/composition only until [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) supplies the verified IAM action/workflow/human-response binding |
-| Invitation carrying access intent | Separate private verified-identity handoff until that governed binding is available |
+| Invitation carrying access intent                                                                                                                                                 | Separate private verified-identity handoff until that governed binding is available                                                                                     |
 
 The available writer variants are `create_group`, `revise_group_label`, `retire_group`, `retire_role`, `remove_membership`, assignment `revoke`, `revoke_role_activation`, `revoke_delegation`, and application withdrawal, each through its owning protected wrapper. Activation revocation distinguishes the authenticated person's own deactivation from administration of another account. The existing `revise_metadata_policy` variant is available here only with policy and permissions unchanged; a changed policy is routed to the private governed class instead. These are exact existing variants, not permission names or a general caller-selected dispatcher.
 

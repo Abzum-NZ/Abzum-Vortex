@@ -66,6 +66,8 @@ The [corrected dependency and coverage map](architecture-review.md) is part of t
 
 ## Planning rules
 
+The [App Designer HTML prototype](app-designer-html-prototype.md) precedes production App Designer UI implementation. It demonstrates the whole application-building journey and maps every meaningful authoring capability to the same protected operations for UI and MCP. Current implementation remains Phase 3: [record visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) and [access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40), then [row enforcement #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). The prototype does not block independent headless foundations or replace their tests.
+
 1. A phase starts only when its required earlier outcomes are working, not merely when their issues exist.
 2. Every work item links its governing [specification section](../specification/README.md), [data contract](../specification/appendices/data-contracts.md), and any still-open business choice that can change its outcome.
 3. Visible work includes desktop and phone evidence under [quality and acceptance](../specification/20-quality-and-acceptance.md).
