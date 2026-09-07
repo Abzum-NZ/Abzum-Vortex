@@ -1,6 +1,6 @@
 # App Designer HTML prototype
 
-Task: [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323). Phase 6 design prerequisite; planned, not delivered.
+Task: [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323). Phase 6 design prerequisite; interactive prototype in progress, not yet accepted as complete.
 
 [Build plan](README.md) · [Application specification](../specification/07-applications-pages-and-themes.md) · [Fluid reuse map](fluid-integration-map.md) · [Frontend Rule Designer](../specification/appendices/frontend-rule-designer.md)
 
@@ -9,6 +9,14 @@ Task: [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323). Phase 6 desig
 Before implementing the App Designer interface, deliver a clickable HTML prototype that lets a builder understand and try the complete application-authoring journey. This is a design deliverable, not a working Vortex installation, database, workflow engine or MCP server. Mark demonstrations and simulated outcomes visibly. Do not deploy prototype code as the production builder.
 
 Current implementation priority remains [record visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) and [access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40), then [consistent data-access enforcement #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prototype design can proceed independently, but does not replace that work. Its completion precedes the interface portions of [App Builder #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and [page canvas #65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65). It does not block headless application lifecycle work, [page composition #249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249), [bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), or [flow execution #58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58).
+
+## Canvas-first layout — user direction, 7 September 2026
+
+Use the supplied Fluid shell-editor layout as the visual reference, not its example application's business content. The far-left navigation always represents the whole application: Application, Modules, Pages, Navigation, Frontend flows, Background workflows, Roles & access, Connections and Appearance. Counts reflect the current draft. A separate contextual panel beside it contains a searchable component palette for pages or node palette for flows. The central area is the working canvas; the right panel configures the selected component, node or definition. Keep the current organisation, application and draft revision visible.
+
+Dragging a component from the palette adds it to the page. Dragging a flow node adds it at the drop position; nodes can be repositioned and connected through labelled input/output ports. Conditions expose distinct branch outputs. Click-to-add, click-to-connect, keyboard positioning and semantic agent operations must perform the same draft changes. Connections, not visual position or source-array order, describe flow routes. Managed internal graphs are not disclosed. The dark editor chrome is separate from the theme of the application being designed.
+
+The [self-contained prototype](../prototypes/app-designer/index.html) is disposable design evidence. Its canvas mechanics are not the production editor adapter or flow engine; the selected [React Flow integration](../specification/appendices/frontend-rule-designer.md) remains owned by the existing implementation tasks.
 
 ## What to build
 
