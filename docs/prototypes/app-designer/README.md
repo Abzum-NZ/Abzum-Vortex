@@ -43,6 +43,10 @@ Where the browser supports WebMCP, the prototype registers four local tools: rea
 - Phone layout was visually checked; phone/tablet document-width checks showed no page-level horizontal overflow. The graph scrolls inside its own viewport. Temporary viewport overrides were reset. Full responsive, enlarged-text and reduced-motion acceptance remains to be completed for the whole task.
 - Independent Sol review approved the corrected layout checkpoint at HTML SHA-256 `936E5FD49304D20B0359F9EA591FC49D0858A41FD98BA4387EB66C8291233AE4`. It checked generic boundaries, shared UI/tool operations, managed-graph non-disclosure, connection integrity, palette placement and truthful simulated results. No whole-task completion was claimed.
 
-## Still required before the full prototype is complete
+## Testing source delivery — 7 September 2026
+
+[PR #325](https://github.com/Abzum-NZ/Abzum-Vortex/pull/325) merged normally into Testing at `2026-09-07T03:35:43Z`, after both preview checks passed. Reviewed source `dbd1c8053c47f075a2a4aee02006bb560d10559b` and Testing merge `763df5c7d0101a8145189b3f1ac21a8fb5c3e321` have the identical tree `c9110b2795e19e83efad0979a2cf5918f4dc6c79`. This delivers the six prototype/documentation files only; it does not deliver the separate uncommitted Phase 3 work, complete the whole prototype, or claim a Production deployment.
+
+## Remaining full-prototype acceptance
 
 Create an application from blank; remove definitions/components/nodes; complete typed condition and node-reference editors; complete background, shell/slot and history/restore walkthroughs; final whole-journey accessibility, responsive and screenshot evidence. The current metadata editors and scripted form example do not claim those complete capabilities. Keep [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323) open and do not start the production designer because this layout checkpoint passed.
