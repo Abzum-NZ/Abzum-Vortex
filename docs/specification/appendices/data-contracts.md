@@ -426,6 +426,20 @@ prove shape and separation, not effective permission, database execution or a us
 interface. The [#34 implementation plan](../../build-plan/issue-34-access-decision.md)
 defines the remaining evaluation, integration and verification work.
 
+The [record-access extension #35](../../build-plan/issue-35-row-policy-composition.md)
+adds a separate trusted record declaration with exact application, module, record
+type and installed storage binding, plus canonical alternative permission identities.
+Permission-only eligibility is still not authority over any particular row. Final
+allowed and refused record evidence additionally require the existing `recordId`,
+bound by the trusted record adapter. The final allowed result carries only complete
+permission-and-row contributions and expires at the earliest deadline among those
+reported contributions. Each contribution retains its exact permission owner and
+matched route; direct-share contributions retain their own field bounds. The
+[field-access consumer #37](../../build-plan/issue-37-field-access.md) checks the exact
+record target before applying those bounds. No new decision token or reusable
+capability is introduced. These contracts describe the extension being built, not
+proof that record policies or field enforcement have already shipped.
+
 ## Module and record-type contracts
 
 A module contains identity and publication metadata, dependencies, record types, permission declarations, module actions, business events, saved sharing conditions, and extension points.
