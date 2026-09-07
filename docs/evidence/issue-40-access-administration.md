@@ -1,10 +1,22 @@
 # Protected Access administration evidence
 
+## Structural administration — 7 September 2026
+
+Permitted administrators can retire a Group, remove a membership, edit a role's label/description without altering its permissions or policy, and retire a role. Group changes evaluate the complete retained assignment/delegation scope, including scheduled or expired retained facts. Role metadata uses the existing canonical preparation within the same transaction; all four changes retain current revision, tenant, permission and final-steward safeguards with one atomic Access/Activity result.
+
+Independent Sol actual-work review approves the frozen eight-file candidate. The focused database proof passes 33 assertions, including bounded-scope union/deduplication and protected final-steward refusal. The two-scenario structural race passes with actual blocker chains: a membership change wins before stale Group retirement, and an existing assignment grant wins before stale role retirement. These use the delivered coordinators, not the excluded assignment-revocation wrapper. Initial proof-only temporary-table permissions and race-fixture candidate construction were corrected before the passing runs; no product authorization was weakened.
+
+Root's full working-tree repository verification passes formatting, lint, all 23 typechecks/builds, boundaries, tests and fixtures. That tree still contains separate assignment TypeScript work; it is not approval of that excluded SQL path. The exact staged-source database corpus passes **56 files / 2,525 assertions**, and **all 25 registered concurrency proofs** pass from that same exported index. Six-schema database lint has no errors and retains the same eight existing warnings; local security advisors at warning/error level report no issues. Source delivery and the exact hosted receipt remain separate requirements.
+
+Frozen SHA-256: migration `c9f61f16b8e77901b01fde07e5cb362be554eec49dc7049820c65f6af678f1bd`; SQL410 `c2927deac9924461a4ad21e6be1ba36810b9777f25f07660f42c206f830b2077`; structural race `1659f114b82af1398b27f06af5ba05486b9f6d0b35d9090e3a6ed3485e45a06f`; manifest `0cfcb4d9995f0c79b132b479a4ec56448d504fa097520fc6610908d21c99dfc8`. Selective staging preserves but excludes the unfinished assignment-revocation changes and private membership/assignment draft. No user interface or production promotion is claimed, and the whole [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) remains open.
+
 ## Temporary and delegated access removal — locally verified candidate
 
 Source delivery: [PR #330](https://github.com/Abzum-NZ/Abzum-Vortex/pull/330) merged normally into Testing at `2026-09-07T05:00:47Z`, after both preview checks passed. Reviewed source `41ea316aa841563524670dd92fe71dfd7da97528` merged as `b56daf903e802d7b63d8b688f75a03aeeeae2aa4`. A separate delivery-boundary review confirmed no dependency on the excluded assignment-revocation or structural draft migrations. Exact hosted database/security/concurrency receipt verification remains pending; preview success is not that receipt. The connected Vercel inspection tool lacked access to the project scope, so the normal GitHub checks supplied preview status without a credential or infrastructure change.
 
 Final local database lint passes all six selected schemas without errors. The same eight existing warnings remain; this candidate adds no lint warning.
+
+A subsequent read-only inspection of the intended hosted Testing project (`abflfptnguasinoussws`) confirms all 61 delivered migrations through `20260907035309_protect_activation_delegation_revocation`. The excluded assignment and structural draft migrations are absent. This establishes arrival of this checkpoint's schema, not a passing hosted verification receipt.
 
 The candidate adds protected self-deactivation and administrator revocation of temporary role activations, plus protected revocation of delegation. It reuses the existing governance-first transaction, current authority decision, revision-checked writers and atomic Activity append. Self-deactivation requires no administration permission; administrator deactivation uses the activation's exact immutable role revision, while delegation removal uses its exact current stored scope. No grant, renewal, generic dispatcher or new approval journey is added.
 

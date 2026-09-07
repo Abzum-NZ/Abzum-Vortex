@@ -3,6 +3,8 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import {
   activityIdSchema,
+  changeOrganizationAdministrationMembershipResultSchema,
+  changeOrganizationAdministrationRoleResultSchema,
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
   changeOrganizationAdministrationRoleActivationResultSchema,
   changeOrganizationAdministrationGroupResultSchema,
@@ -40,10 +42,16 @@ import {
   readOrganizationAdministrationRoleActivationResultSchema,
   readOrganizationAdministrationRoleAssignmentCommandSchema,
   readOrganizationAdministrationRoleAssignmentResultSchema,
+  removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
+  retireOrganizationAdministrationGroupCommandSchema,
+  retireOrganizationAdministrationRoleCommandSchema,
+  reviseOrganizationAdministrationRoleMetadataCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   type ChangeOrganizationAdministrationGroupResult,
+  type ChangeOrganizationAdministrationMembershipResult,
+  type ChangeOrganizationAdministrationRoleResult,
   type ChangeOrganizationAdministrationDelegationAuthorityResult,
   type ChangeOrganizationAdministrationRoleActivationResult,
   type CreateOrganizationAdministrationGroupCommand,
@@ -65,6 +73,7 @@ import {
   type ListOrganizationAdministrationRoleAssignmentsCommand,
   type ListOrganizationAdministrationRoleAssignmentsResult,
   type OrganizationSelectionCandidate,
+  organizationRoleChangeCandidateSchema,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationApplicationRoleTemplateCommand,
@@ -82,6 +91,10 @@ import {
   type ReadOrganizationAdministrationRoleAssignmentCommand,
   type ReadOrganizationAdministrationRoleAssignmentResult,
   type RenameOrganizationAdministrationGroupCommand,
+  type RemoveOrganizationAdministrationMembershipCommand,
+  type RetireOrganizationAdministrationGroupCommand,
+  type RetireOrganizationAdministrationRoleCommand,
+  type ReviseOrganizationAdministrationRoleMetadataCommand,
   type DeactivateOrganizationAdministrationRoleActivationCommand,
   type RevokeOrganizationAdministrationDelegationAuthorityCommand,
 } from "@vortex/contracts";
@@ -91,6 +104,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
+import { prepareOrganizationRoleChangeEvidence } from "./organization-role-change-evidence";
 
 type GroupPageRow = DatabaseRow & {
   organization_id: unknown;
@@ -127,6 +141,12 @@ type MembershipDetailRow = DatabaseRow & {
   access_version: unknown;
 };
 
+type MembershipChangeRow = DatabaseRow & {
+  organization_id: unknown;
+  membership_summary: unknown;
+  access_version: unknown;
+};
+
 type PermissionPageRow = DatabaseRow & {
   organization_id: unknown;
   permissions: unknown;
@@ -154,6 +174,18 @@ type RolePageRow = DatabaseRow & {
 type RoleDetailRow = DatabaseRow & {
   organization_id: unknown;
   outcome: unknown;
+  role_summary: unknown;
+  access_version: unknown;
+};
+
+type RoleMetadataPreparationRow = DatabaseRow & {
+  organization_id: unknown;
+  candidate_basis: unknown;
+  access_version: unknown;
+};
+
+type RoleChangeRow = DatabaseRow & {
+  organization_id: unknown;
   role_summary: unknown;
   access_version: unknown;
 };
@@ -470,6 +502,227 @@ export const createOrganizationAccessAdministrationService = (
           },
         ),
       );
+    },
+
+    retireGroup: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: RetireOrganizationAdministrationGroupCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationGroupResult>> => {
+      const command =
+        retireOrganizationAdministrationGroupCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+
+      return requests.runChange(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<GroupChangeRow>`
+            select organization_id, group_summary, access_version
+            from vortex_access.retire_organization_group_for_administration(
+              ${command.data.groupId}::uuid,
+              ${command.data.expectedGroupRevision}::bigint,
+              ${activityId}::uuid
+            )
+          `,
+        );
+        const parsed = changeOrganizationAdministrationGroupResultSchema.safeParse({
+          group: normalizeGroup(row.group_summary),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          !parsed.success ||
+          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          !sameUuid(parsed.data.group.groupId, command.data.groupId) ||
+          parsed.data.group.revision !== command.data.expectedGroupRevision + 1 ||
+          parsed.data.group.state !== "retired"
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return parsed.data;
+      });
+    },
+
+    removeGroupMembership: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: RemoveOrganizationAdministrationMembershipCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ChangeOrganizationAdministrationMembershipResult>
+    > => {
+      const command =
+        removeOrganizationAdministrationMembershipCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+
+      return requests.runChange(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<MembershipChangeRow>`
+            select organization_id, membership_summary, access_version
+            from vortex_access.remove_organization_group_membership_for_administration(
+              ${command.data.membershipId}::uuid,
+              ${command.data.expectedMembershipRevision}::bigint,
+              ${activityId}::uuid
+            )
+          `,
+        );
+        const parsed = changeOrganizationAdministrationMembershipResultSchema.safeParse({
+          membership: normalizeMembership(row.membership_summary),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          !parsed.success ||
+          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          !sameUuid(parsed.data.membership.membershipId, command.data.membershipId) ||
+          parsed.data.membership.revision !== command.data.expectedMembershipRevision + 1 ||
+          parsed.data.membership.state !== "revoked" ||
+          parsed.data.membership.temporalState !== "revoked"
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return parsed.data;
+      });
+    },
+
+    reviseRoleMetadata: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: ReviseOrganizationAdministrationRoleMetadataCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> => {
+      const command =
+        reviseOrganizationAdministrationRoleMetadataCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+
+      return requests.runChange(session, candidate, async (transaction, scope) => {
+        const preparationRow = requireOne(
+          await transaction.query<RoleMetadataPreparationRow>`
+            select organization_id, candidate_basis, access_version
+            from vortex_access.prepare_organization_role_metadata_change_for_administration(
+              ${command.data.roleId}::uuid,
+              ${command.data.expectedRoleRevision}::bigint
+            )
+          `,
+        );
+        const basis = organizationRoleChangeCandidateSchema.safeParse(
+          preparationRow.candidate_basis,
+        );
+        if (
+          typeof preparationRow.organization_id !== "string" ||
+          !sameUuid(preparationRow.organization_id, scope.organizationId) ||
+          revision(preparationRow.access_version) !== scope.accessVersion ||
+          !basis.success ||
+          basis.data.operation !== "revise_metadata_policy" ||
+          !sameUuid(basis.data.organizationId, scope.organizationId) ||
+          !sameUuid(basis.data.roleId, command.data.roleId) ||
+          basis.data.expectedRoleRevision !== command.data.expectedRoleRevision
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+
+        const prepared = prepareOrganizationRoleChangeEvidence({
+          candidate: {
+            ...basis.data,
+            label: command.data.label,
+            description: command.data.description,
+          },
+        });
+        const row = requireOne(
+          await transaction.query<RoleChangeRow>`
+            select organization_id, role_summary, access_version
+            from vortex_access.revise_organization_role_metadata_for_administration(
+              ${command.data.roleId}::uuid,
+              ${command.data.expectedRoleRevision}::bigint,
+              ${command.data.label}::text,
+              ${command.data.description}::text,
+              ${JSON.stringify(prepared)}::text::jsonb,
+              ${activityId}::uuid
+            )
+          `,
+        );
+        const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
+          role: row.role_summary,
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          !parsed.success ||
+          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          !sameUuid(parsed.data.role.roleId, command.data.roleId) ||
+          parsed.data.role.liveRevision !== command.data.expectedRoleRevision + 1 ||
+          parsed.data.role.label !== command.data.label
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return parsed.data;
+      });
+    },
+
+    retireRole: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: RetireOrganizationAdministrationRoleCommand,
+    ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> => {
+      const command = retireOrganizationAdministrationRoleCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+
+      return requests.runChange(session, candidate, async (transaction, scope) => {
+        const prepared = prepareOrganizationRoleChangeEvidence({
+          candidate: {
+            operation: "retire_role",
+            organizationId: scope.organizationId,
+            roleId: command.data.roleId,
+            expectedRoleRevision: command.data.expectedRoleRevision,
+          },
+        });
+        const row = requireOne(
+          await transaction.query<RoleChangeRow>`
+            select organization_id, role_summary, access_version
+            from vortex_access.retire_organization_role_for_administration(
+              ${command.data.roleId}::uuid,
+              ${command.data.expectedRoleRevision}::bigint,
+              ${JSON.stringify(prepared)}::text::jsonb,
+              ${activityId}::uuid
+            )
+          `,
+        );
+        const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
+          role: row.role_summary,
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          !parsed.success ||
+          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          !sameUuid(parsed.data.role.roleId, command.data.roleId) ||
+          parsed.data.role.liveRevision !== command.data.expectedRoleRevision + 1 ||
+          parsed.data.role.lifecycle !== "retired"
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return parsed.data;
+      });
     },
 
     deactivateRoleActivation: async (
