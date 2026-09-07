@@ -1,6 +1,6 @@
 # 20. Quality, accessibility and acceptance
 
-The [Frontend Rule Designer acceptance matrix](appendices/frontend-rule-designer.md#acceptance-and-delivery-coverage) is normative: include variables and phase-safe node execution, reusable input forms, no business submission on Cancel/abandon before submission, at most one atomic final operation, exact packaged registrations, post-commit Kestra handoff and equivalent web/MCP outcomes. The [delivery map](../build-plan/frontend-rule-designer.md) assigns each proof without moving later UI ahead of its dependencies.
+The [Frontend Rule Designer acceptance matrix](appendices/frontend-rule-designer.md#acceptance-and-delivery-coverage) is normative: include variables and phase-safe node execution, reusable input forms, presentation-only and configured read/write flows, atomicity within each protected operation, preserved earlier commits in a configured sequence, exact packaged registrations, post-commit Kestra handoff and equivalent web/MCP outcomes. Cancel or abandon before any protected operation changes no business data; after a confirmed commit it cannot claim to undo that operation. Collect-first with one final operation remains a supported pattern, not a universal flow restriction. The [delivery map](../build-plan/frontend-rule-designer.md) assigns each proof without moving later UI ahead of its dependencies.
 
 The [flow-first action contract](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) additionally requires presentation-only flows without business writes, editable one-node Save form defaults, all user-facing action bindings (including keyboard submission and record gestures), no hidden direct component save, and complete MCP application authoring. Test default replacement, deliberate flow reuse, wrong-form/cross-app bindings, lossless old-release reads, concurrent draft edits, one invocation for click/native-submit overlap and no bypass of mandatory operation rules through another flow or direct interface. Prove behaviour with real executors when the owning tasks are delivered; a planning diagram is not UI evidence.
 
@@ -34,6 +34,9 @@ flowchart LR
 - Backward-compatible delivery and tested recovery.
 - Continuous navigation, component-scoped loading and refresh, restrained motion, and equivalent reduced-motion behaviour under [core UI continuity](07-applications-pages-and-themes.md#core-ui-continuity-and-motion).
 - Complete behavioural parity between the web interface and the governed [MCP surface](12-connections-and-interfaces.md#governed-mcp-access), with one permission, validation, execution, activity and error path.
+- Frontend Flow proof distinguishes pure preview from configured load, refresh and action execution; proves no render, prefetch, retry or cache event manufactures a write; and verifies each protected node through its owning service.
+- Current-, specified- and system-actor nodes prove separate exact execution authority, a fresh Access-resolved transaction for every identity-changing protected node, unchanged initiating-human context, viewer-safe returned values, and no service-role bypass.
+- Sequential-flow failure evidence proves each completed operation's own atomicity and preserves earlier committed writes; only an uncommitted current operation rolls back.
 
 ## Organisation separation suite
 

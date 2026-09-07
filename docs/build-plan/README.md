@@ -1,6 +1,8 @@
 # Abzum Vortex revised build plan
 
-**Status:** Approved build plan 2.21
+The [7 September whole-platform architecture review](architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
+
+**Status:** Approved build plan 2.22
 
 **Date:** 7 September 2026
 
@@ -317,13 +319,14 @@ Exit proof:
 
 **Needs:** Phase 4.
 
-**Outcome:** Every surface can use one safe query contract; immediate rules run during saves; committed events reach consumers in record order.
+**Outcome:** Every surface can use one safe query contract; configured immediate flows coordinate queries, protected operations and input, while transactional rules validate saves and committed events reach consumers in record order.
 
 Build:
 
 - Filter, sort, grouping, total, pagination and saved-view contracts.
 - Safe database query compilation with no dropped predicates.
-- One pure declarative rule/action evaluation path for immediate client feedback and authoritative server execution. Client preview has no side effects; a successful save commits its event or exact background-start fact with the record, while a no-change authorised button persists its own start intent before returning.
+- One shared typed node catalogue with pure preview, interactive/component orchestration and transactional rule contexts. Configured flows can read, transform, write and read again; protected operation nodes commit individually, while collect-first can use one atomic operation. Preview stays effect-free. A committed node can accept a durable intent; later failure cannot undo it.
+- [Module-exposed queries #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) and [scoped node execution identities #322](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) consume early headless [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) before [flow execution #58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58). No reverse dependency on designer UI or second Access evaluator.
 - Transactional event outbox, [Supabase Queue](https://supabase.com/docs/guides/queues), webhook wake-up, sequence barrier, retry, failed-event handling and recovery call.
 - Private Supabase Realtime Broadcast channels that send content-free invalidations and force an authorised reload.
 - Search/file data-version hooks needed by later phases.
@@ -332,6 +335,7 @@ Exit proof:
 
 - Lists, summaries and exports agree on access and filter meaning.
 - Unsafe filters refuse rather than broaden.
+- Configured read/write flows preserve viewer-safe results, per-node current/specified/System authority, current revisions and exact duplicate receipts. Cancellation preserves earlier commits; pure renders and self-caused invalidation do not repeat effects.
 - A refused or rolled-back save starts no background work; a committed save remains successful when Kestra is unavailable and its durable start fact stays pending for #77's duplicate-safe hand-off.
 - Duplicate delivery is safe and a later record event never discards or overtakes an earlier blocked event.
 - Database-webhook wake-up and operational scheduled recovery deliver from the durable queue through a controlled registered consumer without duplicated effects. #77 integrates the real Workflow service later.
@@ -355,6 +359,7 @@ Build:
 - Generic data-module editing and generated default pages #52, plus the normal editable HR application fixture #251. Approvals are ordinary workflows; no HR-specific code.
 - [Next.js client-side navigation and scoped loading](../specification/07-applications-pages-and-themes.md#core-ui-continuity-and-motion): persistent application shell, route and block loading boundaries, on-demand code and data, component-level refresh, restrained state transitions, and equivalent reduced-motion behaviour. Use Motion for React for coordinated presence and layout changes, CSS transitions for simple control feedback, the six central semantic tokens, interruptible state-driven motion, and lazy-loaded Motion features; do not depend on experimental Next.js View Transitions.
 - Forms, guided-form drafts, action buttons and public pages.
+- The shared Frontend Rule Designer opens from component Action/Data inspectors. App-owned defaults are editable nodes; managed-flow internals are protected with permitted public parameters/extensions. Component load/refresh and interactive forms consume the same runtime, with explicit partial outcomes and no copied execution grants.
 - A permission-filtered [semantic interface map](../specification/07-applications-pages-and-themes.md#semantic-interface-map) for navigation, pages, queries, forms, drafts, choices, files, actions, Studio and administration. Web components bind to these stable semantic controls so Phase 9 can expose the same capabilities without describing the DOM or rebuilding application behaviour.
 - Process-pipeline definitions and presentation contracts. Real guarded transitions, entry/exit work and timed execution come in Phase 7; unavailable controls are not working-looking placeholders.
 - The protected sign-in and recovery shell, plus locked Tenant Administration, Organisation Administration and [IAM application](../specification/appendices/iam-application.md) definitions built with the same application/page primitives as customer applications. IAM owns all role-grant journeys; the other apps link to it. #72 validates its complete definitions and supplies available views, but may not claim working approvals or expose a direct-grant workaround before #267 completes the generic workflow journey after #76/#81.

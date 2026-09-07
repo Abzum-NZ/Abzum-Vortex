@@ -1,5 +1,7 @@
 # Core contract boundary
 
+Scoped flow execution identities are admitted only as the minimum security primitive needed to execute arbitrary configured applications safely. The [execution-identity contract](frontend-rule-designer.md#node-execution-identity) remains owned by Access; business-role policy stays in ordinary applications. See the [whole-platform review](../../build-plan/architecture-review-2026-09-07.md).
+
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Build plan](../../build-plan/README.md)
 
 ## Normative rule
@@ -46,33 +48,33 @@ The [Access version](data-contracts.md#permission-and-role-contracts) orders acc
 
 ## Core inventory
 
-| Retained capability | Platform-level invariant | Owning boundary |
-|---|---|---|
-| Stable identities, tenants, organisation hierarchy, organisation accounts and caller contexts | Access cannot be evaluated without a stable actor and organisation boundary. | [Identity](../02-people-organisations-and-sign-in.md) |
-| Definitions, modules, applications, fields, pages and publication versions | Vortex cannot define or safely publish arbitrary applications without them. | [Composition](../03-composition-and-publication.md) |
-| Permissions, access decisions, grants and cross-organisation grant consent | Every protected read or change needs one enforceable decision; a cross-organisation grant needs immutable consent evidence. | [Access](../04-access-and-permissions.md) |
-| Records, relationships, queries, events and generic actions | Arbitrary application data needs a common execution language. | [Records](../06-records-and-lifecycle.md) and [queries](../10-queries-reports-search.md) |
-| Generic control flow, record operations, human input and connection calls | Workflows need composition primitives, not named business outcomes. | [Workflows](../09-workflows-and-pipelines.md) |
-| Files, connections and interfaces | Arbitrary applications need protected binary data and external interaction boundaries. | [Files](../11-files-and-attachments.md) and [connections](../12-connections-and-interfaces.md) |
-| Activity evidence, data classification, retention, legal holds and protected removal | Security and lawful data handling must cover every application record, regardless of which application defined it. | [Activity and retention](../14-activity-privacy-and-retention.md) |
-| Entitlement decisions and immutable metering events | Runtime resource limits must be enforceable without understanding how an entitlement was sold or assigned. | [Entitlements and metering](../15-entitlements-and-metering.md) |
-| Storage lineage, cache invalidation and federation | Definitions need collision-free storage and source-authoritative sharing across clusters. | [Runtime and storage](../17-runtime-storage-and-caching.md) |
-| Operational status, recovery, audit and time-bound support access | The platform must remain diagnosable and recoverable even when an application is unavailable. | [Operations](../19-operations-backup-and-recovery.md) |
+| Retained capability                                                                           | Platform-level invariant                                                                                                    | Owning boundary                                                                                |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Stable identities, tenants, organisation hierarchy, organisation accounts and caller contexts | Access cannot be evaluated without a stable actor and organisation boundary.                                                | [Identity](../02-people-organisations-and-sign-in.md)                                          |
+| Definitions, modules, applications, fields, pages and publication versions                    | Vortex cannot define or safely publish arbitrary applications without them.                                                 | [Composition](../03-composition-and-publication.md)                                            |
+| Permissions, access decisions, grants and cross-organisation grant consent                    | Every protected read or change needs one enforceable decision; a cross-organisation grant needs immutable consent evidence. | [Access](../04-access-and-permissions.md)                                                      |
+| Records, relationships, queries, events and generic actions                                   | Arbitrary application data needs a common execution language.                                                               | [Records](../06-records-and-lifecycle.md) and [queries](../10-queries-reports-search.md)       |
+| Generic control flow, record operations, human input and connection calls                     | Workflows need composition primitives, not named business outcomes.                                                         | [Workflows](../09-workflows-and-pipelines.md)                                                  |
+| Files, connections and interfaces                                                             | Arbitrary applications need protected binary data and external interaction boundaries.                                      | [Files](../11-files-and-attachments.md) and [connections](../12-connections-and-interfaces.md) |
+| Activity evidence, data classification, retention, legal holds and protected removal          | Security and lawful data handling must cover every application record, regardless of which application defined it.          | [Activity and retention](../14-activity-privacy-and-retention.md)                              |
+| Entitlement decisions and immutable metering events                                           | Runtime resource limits must be enforceable without understanding how an entitlement was sold or assigned.                  | [Entitlements and metering](../15-entitlements-and-metering.md)                                |
+| Storage lineage, cache invalidation and federation                                            | Definitions need collision-free storage and source-authoritative sharing across clusters.                                   | [Runtime and storage](../17-runtime-storage-and-caching.md)                                    |
+| Operational status, recovery, audit and time-bound support access                             | The platform must remain diagnosable and recoverable even when an application is unavailable.                               | [Operations](../19-operations-backup-and-recovery.md)                                          |
 
 ## Ordinary applications, not core domains
 
 The following are built from the retained primitives:
 
-| Application concern | Composition |
-|---|---|
-| Commercial billing, pricing, subscriptions, invoices and payments | Modules and records plus [connections](../12-connections-and-interfaces.md) and [workflows](../09-workflows-and-pipelines.md). |
-| Business approvals and work queues | Request and decision record types, pages, permissions, human-input workflow steps and named actions. |
-| IAM access requests, reviews and administration journeys | The ordinary [IAM application](iam-application.md) owns request/review records and workflows. Protected Access owns effective assignments and delegation because editable business records cannot safely be their own authorisation authority. |
-| Tasks, comments, tags, calendar entries and notifications | Ordinary record types and actions. Delivery to an external provider uses a connection call. |
-| Organisation legal details, contacts, branding and business calendar | A locked Organisation Administration application using ordinary fields and pages. |
-| Privacy request case management | A locked Privacy Operations application that invokes protected discovery, export and removal operations. |
-| Tenant, organisation and application notices | An ordinary Notices application rendered through a reusable accessible banner block. |
-| Incident, support and customer-communication records | Ordinary operations or service applications. Core support access references their authorisation evidence without owning the ticket record. |
+| Application concern                                                  | Composition                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Commercial billing, pricing, subscriptions, invoices and payments    | Modules and records plus [connections](../12-connections-and-interfaces.md) and [workflows](../09-workflows-and-pipelines.md).                                                                                                                 |
+| Business approvals and work queues                                   | Request and decision record types, pages, permissions, human-input workflow steps and named actions.                                                                                                                                           |
+| IAM access requests, reviews and administration journeys             | The ordinary [IAM application](iam-application.md) owns request/review records and workflows. Protected Access owns effective assignments and delegation because editable business records cannot safely be their own authorisation authority. |
+| Tasks, comments, tags, calendar entries and notifications            | Ordinary record types and actions. Delivery to an external provider uses a connection call.                                                                                                                                                    |
+| Organisation legal details, contacts, branding and business calendar | A locked Organisation Administration application using ordinary fields and pages.                                                                                                                                                              |
+| Privacy request case management                                      | A locked Privacy Operations application that invokes protected discovery, export and removal operations.                                                                                                                                       |
+| Tenant, organisation and application notices                         | An ordinary Notices application rendered through a reusable accessible banner block.                                                                                                                                                           |
+| Incident, support and customer-communication records                 | Ordinary operations or service applications. Core support access references their authorisation evidence without owning the ticket record.                                                                                                     |
 
 ```mermaid
 flowchart LR

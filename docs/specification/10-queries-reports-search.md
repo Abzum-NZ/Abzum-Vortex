@@ -30,6 +30,8 @@ A query names:
 
 Every selected, filtered, grouped, totalled, or sorted field must permit that operation in its [field definition](05-modules-fields-and-relationships.md). An invalid or unsafe filter refuses the entire query. The platform never removes an invalid condition and runs a broader query.
 
+A module-exposed query is this same closed query contract published under a stable module-owned identity and exact release. A Frontend Flow may invoke only a query exposed by its resolved module dependency; it cannot supply raw SQL, broaden the projection, or infer a query from a label. The query executes for the node's Access-resolved effective actor. If a different initiating viewer receives its result, the runtime applies the viewer's current readable projection before returning it, and any later write is authorised independently. [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) owns the actual protected Query execution and receipt boundary; these target flow semantics do not claim that runtime is delivered.
+
 ## Pagination and limits
 
 - Results use stable continuation tokens rather than unbounded offsets for large datasets.

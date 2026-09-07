@@ -52,6 +52,8 @@ Navigation is an ordered tree of headings, page links, and approved external lin
 
 Every published application produces one permission-filtered description of what the current person can see and do. The web interface renders it, and the governed [MCP surface](12-connections-and-interfaces.md#governed-mcp-access) exposes the same meaning to an authorised external client. This description is derived from the published application, page, form, query, action and access contracts; builders do not maintain a second agent-specific definition.
 
+Data components bind versioned Frontend Flows that may call module-exposed queries and return declared viewer-safe outputs. Load and refresh are read-only only when their configured flow is read-only; a deliberate changing node is permitted on its named semantic event. Rendering, prefetch, cache revalidation and automatic retry never manufacture an invocation or repeat a write.
+
 ```mermaid
 flowchart LR
     DEF[Published application definitions] --> ACCESS[Current organisation account and access decision]
@@ -145,7 +147,7 @@ The application supports six page types:
 | Detail      | Show one record and approved related information.                        |
 | Dashboard   | Compose blocks that may use several approved sources.                    |
 | Form        | Create or change one record through one commit action.                   |
-| Guided form | Collect one submission through two to twenty short steps.                |
+| Guided form | Coordinate input and configured operations through two to twenty steps.  |
 | Public      | Show approved public content or submit one narrowly defined public form. |
 
 A list can use table, board, calendar, or summary arrangement. Board movement invokes its bound frontend flow, whose operation node calls the named action and rechecks its permission. Each calendar page explicitly selects start/end fields or a start field plus a whole-number duration field and unit; it never guesses missing duration meaning.
@@ -188,12 +190,14 @@ These published roles are reusable templates. Registering the application regist
 ## Forms and guided forms
 
 - A form commits through one typed operation binding: a named [application action](08-forms-actions-rules-and-events.md), or a closed protected platform operation in an authorised administration application. [Binding contracts](appendices/page-builder-contracts.md#forms-actions-and-semantic-controls) define inputs, validation, confirmation and outcomes.
-- A guided form has two to twenty reachable steps, exactly one summary step, and one final commit action.
+- A guided form has two to twenty reachable steps and at least one reachable completion outcome. It may use a summary and a single final commit, or explicitly sequence several protected operations as defined by its bound flow.
 - A guided-form draft is private to the person, form, subject, application, and organisation.
 - The browser and an authorised MCP client may update the same draft only through its current revision. A stale update is refused instead of overwriting newer person or agent input.
 - Drafts do not create business records, appear in queries, or announce events.
 - An untouched draft is removed after thirty days unless [privacy and retention](14-activity-privacy-and-retention.md) sets a shorter organisation policy.
-- The final submission is validated and written as one save operation where its action changes one transaction boundary. Work that cannot fit that boundary starts a [workflow](09-workflows-and-pipelines.md).
+- Each configured protected operation revalidates and commits within its own short owning-service transaction. Earlier committed steps remain committed if a later step refuses or fails. Work requiring durable waits, autonomous retry or cross-session recovery starts a [workflow](09-workflows-and-pipelines.md); interactive sequencing alone does not require one.
+
+These are target form and flow semantics. The private form-draft runtime remains owned by [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), its typed flow bindings by [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), and the protected Record and Query execution/receipt boundaries by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50). Existing Definition drafts and the delivered Activity foundation do not constitute those runtimes.
 
 ## Public pages
 

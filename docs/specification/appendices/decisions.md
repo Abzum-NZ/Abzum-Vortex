@@ -2,7 +2,7 @@
 
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Build plan](../../build-plan/README.md)
 
-There are no open user decisions. The selected [Frontend Rule Designer](frontend-rule-designer.md) now includes shared conditions, flow variables, extensible nodes, reusable custom forms and collect-first atomic submission. Implementation gaps are tracked in its [delivery plan](../../build-plan/frontend-rule-designer.md), not held for another product approval.
+There are no open user decisions. The selected [Frontend Rule Designer](frontend-rule-designer.md) now includes shared conditions, flow variables, extensible nodes, configurable read/write component flows, per-node Current user/Specified user/System execution, managed-flow controls and reusable forms. Collect-first atomic submission is optional; sequential protected commits have explicit partial outcomes. Implementation gaps are tracked in its [delivery plan](../../build-plan/frontend-rule-designer.md), not held for another product approval.
 
 Resolved choices have been incorporated into the permanent requirements, contracts, examples, acceptance tests, build phases, and linked GitHub work. They are intentionally absent here so implementation cannot mistake a resolved option for an open question.
 

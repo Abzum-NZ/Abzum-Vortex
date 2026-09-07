@@ -43,6 +43,8 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 5. The record save attaches the active file by identifier.
 6. Unattached pending uploads expire and are removed.
 
+A Frontend Flow file node calls this same File-service boundary for its Access-resolved effective actor. Specified-user or system execution authority never bypasses record, field, file, storage, safety, retention or entitlement checks, and no service-role credential acts as a file grant. File references or metadata returned to a different initiating viewer are projected through that viewer's current authority before display or later use.
+
 ## Download and preview
 
 - Every download rechecks organisation, record, field, and file access.
