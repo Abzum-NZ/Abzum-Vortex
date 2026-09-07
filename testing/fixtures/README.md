@@ -39,6 +39,37 @@ The validator must never ignore an unresolved reference to accept an incomplete 
 - The fixture grant exposes a limited set of case fields, permits changes only to status and priority, and permits only the published public-comment action.
 - Revocation removes the case from CRM on the next access check and leaves no recipient record, summary record, search entry, offline value, or cross-request cached value.
 
+## Explicit field permissions
+
+The [field-access engine task](../../docs/build-plan/issue-37-field-access.md) adds
+explicit authored field lists to the 94 record permissions. These are intentional
+fixture definitions, not compiler defaults or rules inferred from application names.
+Native read/export and form permissions enumerate the current fields they need;
+form changes exclude generated reference numbers, calculations and totals. Named
+actions declare only their own subject reads/changes. Content-free deletion,
+restoration and sharing authority use empty lists. Adding a field later never
+silently adds it to a permission.
+
+Sensitive Contact notes are excluded from ordinary read/export/create/update.
+The existing `view_sensitive_notes` identity is corrected from an unused named
+action placeholder to an explicit read permission for `notes` only. This is an
+intentional meaning change in these editable fixtures, not a rewrite of a stored
+historical release. A future trusted read binding must explicitly include this
+alternative and evaluate its own complete scope; Service Desk roles do not hold
+it. No sensitive-notes write operation is invented.
+
+The existing discount-approval permission declares read access to its amount,
+discount and calculated result, with no change authority. It still lacks a real
+named-action definition: [page/action bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250)
+and [definition-first application proof #327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327)
+must resolve that explicit fixture gap before claiming executable approval.
+The same handoff covers the sensitive-notes alternative read binding.
+
+The approved Case Summary grant is unchanged: six readable fields and changes to
+status/priority only. Native Service Desk policies can include more fields, but
+the source grant still restricts CRM. The fixture checks prove these declared
+bounds and compilation, not live field enforcement or delivered screens.
+
 ## Physical storage rule
 
 - The same validated record-type lineage uses one table across organisations and application bindings.

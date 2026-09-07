@@ -306,6 +306,27 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article_number",
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ],
+          "changeable_fields": [
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ]
         }
       },
       {
@@ -322,6 +343,19 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article_number",
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -337,6 +371,27 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article_number",
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ],
+          "changeable_fields": [
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
           ]
         }
       },
@@ -354,6 +409,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -370,6 +429,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -386,6 +449,19 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article_number",
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -401,6 +477,18 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article",
+            "case",
+            "linked_at"
+          ],
+          "changeable_fields": [
+            "article",
+            "case",
+            "linked_at"
           ]
         }
       },
@@ -418,6 +506,14 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article",
+            "case",
+            "linked_at"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -434,6 +530,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -450,6 +550,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -466,6 +570,14 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article",
+            "case",
+            "linked_at"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -482,6 +594,14 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "status"
+          ],
+          "changeable_fields": [
+            "status"
           ]
         }
       }

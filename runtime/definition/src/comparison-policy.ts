@@ -1619,6 +1619,7 @@ const comparePermissions = (
       "namedAction",
       "administrative",
       "recordScope",
+      "fieldPolicy",
     ])
       pushChange(
         reasons,

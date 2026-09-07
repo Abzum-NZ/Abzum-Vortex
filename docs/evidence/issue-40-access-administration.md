@@ -1,5 +1,45 @@
 # Protected Access administration evidence
 
+## Exact hosted completion verified — 8 September 2026
+
+The final [Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/53FvCnZe1nl7T4VQb9NFrU/logs)
+completed successfully for exact Testing merge
+`88dce0c73c23002d97eae66baa418ff4dff5fc7c`, delivered through
+[PR #335](https://github.com/Abzum-NZ/Abzum-Vortex/pull/335).
+The read-only Kestra receipt `database-testing-88dce0c73c23002d97eae66baa418ff4dff5fc7c`
+reports `succeeded`, 65 applied migrations, and all 25 selected concurrency proofs
+and six selected lint schemas completed. The actual run passed 59 SQL files with
+2,616 assertions, including the final removal-only assignment checks.
+
+The architect fetched the delivered Testing commit and independently recomputed
+all four fingerprints from its committed bytes; each matches the stored receipt:
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Migration set | `2a1df6d1aa52c2d89cfb305e4b65b1eddb7e4d1047d235e824022d2325039446` |
+| Delivery runner | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Verification manifest | `0cfcb4d9995f0c79b132b479a4ec56448d504fa097520fc6610908d21c99dfc8` |
+| Selected/completed coverage | `7345fd22aa5f8040ddb4356965377e8863dbb5f6ff51bb666d6bc16c8c605f0e` |
+
+Selected and completed proof/schema arrays match exactly. Read-only hosted
+migration inventory confirms 65 entries through `20260907221412`. The earlier
+migration-order failure below is resolved by the unchanged-SQL filename repair,
+not a reset, history rewrite, skipped check or Kestra upgrade.
+
+A fresh Testing security-advisor read retains informational private-table
+RLS-without-policy notices and the existing leaked-password-protection warning
+tracked by [#171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171). This is not
+claimed to be a warning-free advisory report; no permissive policies or Auth
+settings were introduced to clear those notices.
+
+Together with the independently reviewed implementation and restricted-role/local
+concurrency evidence below, this completes the bounded
+[#40 service scope](../build-plan/issue-40-protected-access-administration.md).
+The later IAM approval/grant journeys remain explicitly owned by
+[#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267), and installation
+composition by [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64).
+No IAM screen, #35/#37 implementation, or Production delivery is claimed.
+
 ## Hosted cleanup delivery blocked by migration ordering — 8 September 2026
 
 After the user renewed the existing Edge sign-in, the architect read the actual
@@ -35,6 +75,14 @@ Normal hosted delivery must still run all existing checks and verify exact final
 history before a successful receipt is claimed. The unrelated unfinished #35
 migrations are excluded and must be timestamped after the latest delivered
 migration before their own delivery.
+
+The repaired committed inventory contains 65 migrations and has migration-set
+SHA-256 `2a1df6d1aa52c2d89cfb305e4b65b1eddb7e4d1047d235e824022d2325039446`.
+[PR #335](https://github.com/Abzum-NZ/Abzum-Vortex/pull/335) merged normally at
+`2026-09-07T22:20:02Z` after both preview checks passed on exact reviewed source
+`6dd70e68554db2099e626b47c18d1eefe9616921`. Testing merge is
+`88dce0c73c23002d97eae66baa418ff4dff5fc7c`. Its hosted receipt is not yet verified;
+this records delivery of the ordering repair, not completion of #40.
 
 ## Cleanup source delivered to Testing — 8 September 2026
 

@@ -24,6 +24,7 @@ import {
 import {
   actionInputSchema,
   moduleSourcePermissionRecordScopeSchema,
+  sourcePermissionFieldPolicySchema,
 } from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "./permissions";
 import {
@@ -767,8 +768,17 @@ const sourceApplicationBodySchema = z
           named_action: builderKeySchema.optional(),
           administrative: z.boolean(),
           record_scope: moduleSourcePermissionRecordScopeSchema.optional(),
+          field_policy: sourcePermissionFieldPolicySchema.optional(),
         })
-        .strict(),
+        .strict()
+        .superRefine((value, context) => {
+          if (value.field_policy !== undefined && value.record_type === undefined)
+            context.addIssue({
+              code: "custom",
+              path: ["field_policy"],
+              message: "Only record permissions may declare a field policy",
+            });
+        }),
     ),
     roles: z
       .array(

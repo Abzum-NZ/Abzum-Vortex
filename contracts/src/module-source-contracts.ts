@@ -75,6 +75,34 @@ export const moduleSourcePermissionRecordScopeSchema =
       .optional(),
   });
 
+export const sourcePermissionFieldPolicySchema = z
+  .object({
+    readable_fields: z.array(builderKeySchema),
+    changeable_fields: z.array(builderKeySchema),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.readable_fields).size !== value.readable_fields.length)
+      context.addIssue({
+        code: "custom",
+        path: ["readable_fields"],
+        message: "Readable field aliases must be unique",
+      });
+    if (new Set(value.changeable_fields).size !== value.changeable_fields.length)
+      context.addIssue({
+        code: "custom",
+        path: ["changeable_fields"],
+        message: "Changeable field aliases must be unique",
+      });
+    const readable = new Set(value.readable_fields);
+    if (value.changeable_fields.some((field) => !readable.has(field)))
+      context.addIssue({
+        code: "custom",
+        path: ["changeable_fields"],
+        message: "Changeable fields must be a readable subset",
+      });
+  });
+
 const sourceOptionSchema = z
   .object({ value: z.string().min(1).max(120), label: z.string().min(1).max(60) })
   .strict();
@@ -785,8 +813,17 @@ const moduleSourceBodySchema = z
           named_action: builderKeySchema.optional(),
           administrative: z.boolean(),
           record_scope: moduleSourcePermissionRecordScopeSchema.optional(),
+          field_policy: sourcePermissionFieldPolicySchema.optional(),
         })
-        .strict(),
+        .strict()
+        .superRefine((value, context) => {
+          if (value.field_policy !== undefined && value.record_type === undefined)
+            context.addIssue({
+              code: "custom",
+              path: ["field_policy"],
+              message: "Only record permissions may declare a field policy",
+            });
+        }),
     ),
     actions: z.array(
       z

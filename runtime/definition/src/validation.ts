@@ -1321,16 +1321,27 @@ function permissionRecordScopesValid(
     const recordTypeId =
       permission.recordTypeId === undefined ? undefined : String(permission.recordTypeId);
     const scope = permission.recordScope ? object(permission.recordScope) : undefined;
-    if ((recordTypeId === undefined) !== (scope === undefined)) {
+    const fieldPolicy = permission.fieldPolicy ? object(permission.fieldPolicy) : undefined;
+    if (
+      (recordTypeId === undefined) !== (scope === undefined) ||
+      (recordTypeId === undefined) !== (fieldPolicy === undefined)
+    ) {
       valid = false;
       continue;
     }
-    if (!scope || recordTypeId === undefined) continue;
+    if (!scope || !fieldPolicy || recordTypeId === undefined) continue;
     const record = records.get(recordTypeId);
     if (!record) {
       valid = false;
       continue;
     }
+    const fieldIds = new Set(array(record.fields).map((field) => String(field.fieldId)));
+    if (
+      [...array(fieldPolicy.readableFieldIds), ...array(fieldPolicy.changeableFieldIds)].some(
+        (fieldId) => !fieldIds.has(String(fieldId)),
+      )
+    )
+      valid = false;
     const sources: string[] = [];
     for (const route of array(scope.routes)) {
       if (route.kind === "ownership" && record.ownershipMode === "none") valid = false;

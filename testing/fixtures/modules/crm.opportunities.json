@@ -452,6 +452,34 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "opportunity_number",
+            "name",
+            "company",
+            "primary_contact",
+            "value",
+            "discount_percent",
+            "net_value",
+            "probability",
+            "stage",
+            "expected_close_date",
+            "payment_schedule",
+            "documents"
+          ],
+          "changeable_fields": [
+            "name",
+            "company",
+            "primary_contact",
+            "value",
+            "discount_percent",
+            "probability",
+            "stage",
+            "expected_close_date",
+            "payment_schedule",
+            "documents"
+          ]
         }
       },
       {
@@ -468,6 +496,23 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "opportunity_number",
+            "name",
+            "company",
+            "primary_contact",
+            "value",
+            "discount_percent",
+            "net_value",
+            "probability",
+            "stage",
+            "expected_close_date",
+            "payment_schedule",
+            "documents"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -483,6 +528,34 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "opportunity_number",
+            "name",
+            "company",
+            "primary_contact",
+            "value",
+            "discount_percent",
+            "net_value",
+            "probability",
+            "stage",
+            "expected_close_date",
+            "payment_schedule",
+            "documents"
+          ],
+          "changeable_fields": [
+            "name",
+            "company",
+            "primary_contact",
+            "value",
+            "discount_percent",
+            "probability",
+            "stage",
+            "expected_close_date",
+            "payment_schedule",
+            "documents"
           ]
         }
       },
@@ -500,6 +573,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -516,6 +593,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -532,6 +613,23 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "opportunity_number",
+            "name",
+            "company",
+            "primary_contact",
+            "value",
+            "discount_percent",
+            "net_value",
+            "probability",
+            "stage",
+            "expected_close_date",
+            "payment_schedule",
+            "documents"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -547,6 +645,18 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "opportunity",
+            "contact",
+            "role"
+          ],
+          "changeable_fields": [
+            "opportunity",
+            "contact",
+            "role"
           ]
         }
       },
@@ -564,6 +674,14 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "opportunity",
+            "contact",
+            "role"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -579,6 +697,18 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "opportunity",
+            "contact",
+            "role"
+          ],
+          "changeable_fields": [
+            "opportunity",
+            "contact",
+            "role"
           ]
         }
       },
@@ -596,6 +726,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -612,6 +746,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -628,6 +766,14 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "opportunity",
+            "contact",
+            "role"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -645,6 +791,14 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "value",
+            "discount_percent",
+            "net_value"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -661,6 +815,14 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "stage"
+          ],
+          "changeable_fields": [
+            "stage"
           ]
         }
       }

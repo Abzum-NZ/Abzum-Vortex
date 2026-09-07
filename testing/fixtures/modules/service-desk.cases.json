@@ -520,6 +520,40 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "case_number",
+            "subject",
+            "description",
+            "customer_company",
+            "requester",
+            "owner",
+            "status",
+            "priority",
+            "service_level",
+            "opened_at",
+            "first_response_due_at",
+            "resolution_due_at",
+            "resolved_at",
+            "breached",
+            "attachments"
+          ],
+          "changeable_fields": [
+            "subject",
+            "description",
+            "customer_company",
+            "requester",
+            "owner",
+            "status",
+            "priority",
+            "service_level",
+            "opened_at",
+            "first_response_due_at",
+            "resolution_due_at",
+            "resolved_at",
+            "attachments"
+          ]
         }
       },
       {
@@ -536,6 +570,26 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "case_number",
+            "subject",
+            "description",
+            "customer_company",
+            "requester",
+            "owner",
+            "status",
+            "priority",
+            "service_level",
+            "opened_at",
+            "first_response_due_at",
+            "resolution_due_at",
+            "resolved_at",
+            "breached",
+            "attachments"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -551,6 +605,40 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "case_number",
+            "subject",
+            "description",
+            "customer_company",
+            "requester",
+            "owner",
+            "status",
+            "priority",
+            "service_level",
+            "opened_at",
+            "first_response_due_at",
+            "resolution_due_at",
+            "resolved_at",
+            "breached",
+            "attachments"
+          ],
+          "changeable_fields": [
+            "subject",
+            "description",
+            "customer_company",
+            "requester",
+            "owner",
+            "status",
+            "priority",
+            "service_level",
+            "opened_at",
+            "first_response_due_at",
+            "resolution_due_at",
+            "resolved_at",
+            "attachments"
           ]
         }
       },
@@ -568,6 +656,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -584,6 +676,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -600,6 +696,26 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "case_number",
+            "subject",
+            "description",
+            "customer_company",
+            "requester",
+            "owner",
+            "status",
+            "priority",
+            "service_level",
+            "opened_at",
+            "first_response_due_at",
+            "resolution_due_at",
+            "resolved_at",
+            "breached",
+            "attachments"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -615,6 +731,22 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "case",
+            "body",
+            "customer_visible",
+            "created_by",
+            "created_at"
+          ],
+          "changeable_fields": [
+            "case",
+            "body",
+            "customer_visible",
+            "created_by",
+            "created_at"
           ]
         }
       },
@@ -632,6 +764,16 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "case",
+            "body",
+            "customer_visible",
+            "created_by",
+            "created_at"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -647,6 +789,22 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "case",
+            "body",
+            "customer_visible",
+            "created_by",
+            "created_at"
+          ],
+          "changeable_fields": [
+            "case",
+            "body",
+            "customer_visible",
+            "created_by",
+            "created_at"
           ]
         }
       },
@@ -664,6 +822,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -680,6 +842,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -696,6 +862,16 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "case",
+            "body",
+            "customer_visible",
+            "created_by",
+            "created_at"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -712,6 +888,14 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "owner"
+          ],
+          "changeable_fields": [
+            "owner"
           ]
         }
       },
@@ -730,6 +914,16 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "status",
+            "resolved_at"
+          ],
+          "changeable_fields": [
+            "status",
+            "resolved_at"
+          ]
         }
       },
       {
@@ -747,6 +941,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       }
     ],

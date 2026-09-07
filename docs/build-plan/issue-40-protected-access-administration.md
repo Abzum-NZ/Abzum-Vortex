@@ -6,9 +6,13 @@ Task: [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). Completed prere
 
 Authorised people can inspect and administer their organisation's access through protected operations. Existing role, Group, membership, assignment, activation and delegation facts are reused. The later ordinary IAM application supplies forms, requests and approvals; it cannot grant authority by editing a record.
 
+## Completion — 8 September 2026
+
+The independently reviewed service scope is complete. [Exact hosted completion evidence](../evidence/issue-40-access-administration.md#exact-hosted-completion-verified--8-september-2026) matches Testing merge `88dce0c73c23002d97eae66baa418ff4dff5fc7c`: 65 migrations, 2,616 SQL assertions, 25 concurrency proofs and six lint schemas. Later IAM granting/approval screens remain #267, not missing #40 work.
+
 ## Already built — do not rebuild
 
-The [temporary activation ledger](../evidence/issue-40-access-administration.md#temporary-activation-ledger--7-september-2026) is implemented and locally verified. Together with the earlier catalogue, role/template, Group, membership, assignment and delegation views, it completes the planned safe-read resources at source level. The private governed compositions are delivered through [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332), and the final [removal-only assignment operation](../evidence/issue-40-access-administration.md#cleanup-source-delivered-to-testing--8-september-2026) is independently reviewed, locally verified and source-delivered to Testing through [PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334). Remaining work is exact hosted Testing verification of these checkpoints, not another administration read model or early granting UI. This whole task remains open.
+The [temporary activation ledger](../evidence/issue-40-access-administration.md#temporary-activation-ledger--7-september-2026) is implemented and locally verified. Together with the earlier catalogue, role/template, Group, membership, assignment and delegation views, it completes the planned safe-read resources at source level. The private governed compositions are delivered through [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332), and the final [removal-only assignment operation](../evidence/issue-40-access-administration.md#cleanup-source-delivered-to-testing--8-september-2026) is independently reviewed, locally verified and source-delivered to Testing through [PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334). Their exact hosted Testing verification is now complete; no additional administration read model or early granting UI is required here.
 
 - #32 supplies permission identities, current availability and source preparation.
 - #33 supplies the private facts and revision-checked writers, including role changes, Groups, memberships, assignments, activations, delegation, application coordination, stewardship and invitation intents.
@@ -17,7 +21,7 @@ The [temporary activation ledger](../evidence/issue-40-access-administration.md#
 
 ## What will be built
 
-The [8 September hosted check](../evidence/issue-40-access-administration.md#hosted-cleanup-delivery-blocked-by-migration-ordering--8-september-2026) found one unapplied, out-of-order migration filename. The independently reviewed repair renames only that unapplied file, preserving identical SQL and all delivery checks. Complete normal Testing delivery and read its exact successful receipt; no new user approval, reset, history rewrite, Kestra upgrade or permission redesign is required.
+The [8 September hosted check](../evidence/issue-40-access-administration.md#hosted-cleanup-delivery-blocked-by-migration-ordering--8-september-2026) found one unapplied, out-of-order migration filename. The independently reviewed repair renames only that unapplied file, preserving identical SQL and all delivery checks. Normal Testing delivery and its exact successful receipt are now verified; no new user approval, reset, history rewrite, Kestra upgrade or permission redesign is required.
 
 1. **One governance-first writer path.** Resolve the verified human into the exact organisation/application in the existing transaction, taking the organisation's write/governance locks before mutable account facts and authority evaluation. Recheck source/time facts after waits. Do not upgrade the ordinary read resolver's shared Access lock after permission checking, add another database driver, or give the application owner credentials.
 2. **Safe administration reads.** Provide bounded list/detail projections for the permission catalogue, roles, Groups, memberships, assignments, activations and delegations under their exact administration permissions. Return useful labels/descriptions and stable references, not internal fingerprints, credentials or unrelated organisations. Reuse current stored facts; do not create a second effective-access table or unbounded owner snapshot.
@@ -47,18 +51,20 @@ A policy edit is not classified as harmless metadata merely because its label is
 
 ## Acceptance criteria
 
-- [ ] Actual restricted runtime/request-role tests prove permitted reads and available non-grant changes, plus unauthorised, foreign, stale and raw-helper refusal. Owner fixtures and transaction mocks alone do not prove the shipping path.
-- [ ] Every command uses the existing exact writer variant and correct expected revision. Current preparation verification, before/after authority and permanent stewardship are enforced in the same transaction; no name or tenant-administrator shortcut exists.
-- [ ] Group membership add/remove/restore/renew, role acceptance, assignment windows and terminal revocation retain #33's distinct semantics. No old privileged activation resumes after source restoration or a new grant identity.
-- [ ] Self-deactivation and administrator revocation follow their distinct authority paths. The existing private activation writer stays unreachable; #267 explicitly owns eligibility, reason, authentication and verified-response invocation tests in the [handoff](access-consumer-handoffs.md).
-- [ ] Existing private grant paths remain unreachable from shipping runtime exports or arbitrary forms/MCP until #267 is delivered. Read/non-grant operations do not depend on that later UI.
-- [ ] Successful mutation, one Access increment and one Activity entry are atomic. Refusal does not increment or create completed evidence, and retries do not repeat a change.
-- [ ] Real competing writer orders and expiry across waits are tested using the governance-first seam. Fix lock-order defects at their source; add no generic retry or lock framework.
-- [ ] Existing private invitation-intent and lifecycle writers remain inaccessible to ordinary callers; #267/#64 record their complete protected composition and actual journey tests in the [handoff](access-consumer-handoffs.md). No missing behaviour is claimed delivered by #40.
-- [ ] Outputs are usable by ordinary application definitions without hardcoded role screens, business names, AI behaviour or another permission/approval store.
-- [ ] Independent actual-work review, full relevant local checks and exact hosted Testing evidence pass before completion. Service-only evidence is not described as a usable IAM interface.
+- [x] Actual restricted runtime/request-role tests prove permitted reads and available non-grant changes, plus unauthorised, foreign, stale and raw-helper refusal. Owner fixtures and transaction mocks alone do not prove the shipping path.
+- [x] Every command uses the existing exact writer variant and correct expected revision. Current preparation verification, before/after authority and permanent stewardship are enforced in the same transaction; no name or tenant-administrator shortcut exists.
+- [x] Group membership add/remove/restore/renew, role acceptance, assignment windows and terminal revocation retain #33's distinct semantics. No old privileged activation resumes after source restoration or a new grant identity.
+- [x] Self-deactivation and administrator revocation follow their distinct authority paths. The existing private activation writer stays unreachable; #267 explicitly owns eligibility, reason, authentication and verified-response invocation tests in the [handoff](access-consumer-handoffs.md).
+- [x] Existing private grant paths remain unreachable from shipping runtime exports or arbitrary forms/MCP until #267 is delivered. Read/non-grant operations do not depend on that later UI.
+- [x] Successful mutation, one Access increment and one Activity entry are atomic. Refusal does not increment or create completed evidence, and retries do not repeat a change.
+- [x] Real competing writer orders and expiry across waits are tested using the governance-first seam. Fix lock-order defects at their source; add no generic retry or lock framework.
+- [x] Existing private invitation-intent and lifecycle writers remain inaccessible to ordinary callers; #267/#64 record their complete protected composition and actual journey tests in the [handoff](access-consumer-handoffs.md). No missing behaviour is claimed delivered by #40.
+- [x] Outputs are usable by ordinary application definitions without hardcoded role screens, business names, AI behaviour or another permission/approval store.
+- [x] Independent actual-work review, full relevant local checks and exact hosted Testing evidence pass before completion. Service-only evidence is not described as a usable IAM interface.
 
-## Delivery slices and consumers
+## Historical delivery slices and consumers
+
+The checkpoints below preserve the implementation sequence and their original bounded claims. Their references to remaining work are superseded by the completion evidence above; they are not current blockers.
 
 The [first implementation checkpoint](../evidence/issue-40-access-administration.md) covers the governance-first seam and Group list/detail reads only. Its local restricted-role and competing-write checks pass; the other reads, changes, private governed handoffs and final hosted delivery below remain required. Do not describe that checkpoint as a complete administration API or an IAM interface.
 

@@ -703,6 +703,46 @@ function permissionRecordScopeTargets(
   ];
 }
 
+function permissionFieldPolicyTargets(
+  source: JsonObject,
+  canonical: unknown,
+  sourcePath: Path,
+  resolution: Resolution,
+): Path[] | undefined {
+  if (
+    (source.kind !== "module" && source.kind !== "application") ||
+    sourcePath[0] !== "body" ||
+    sourcePath[1] !== "permissions" ||
+    typeof sourcePath[2] !== "number" ||
+    sourcePath[3] !== "field_policy" ||
+    (sourcePath[4] !== "readable_fields" && sourcePath[4] !== "changeable_fields") ||
+    typeof sourcePath[5] !== "number" ||
+    sourcePath.length !== 6
+  )
+    return undefined;
+  const permissionIndex = sourcePath[2];
+  const permission = (asObject(source.body).permissions as JsonObject[])[permissionIndex]!;
+  const recordType = String(permission.record_type);
+  const resolvedFieldId = resolution.field(
+    source.kind === "module" ? `${String(source.key)}:${recordType}` : recordType,
+    String(valueAtPath(source, sourcePath)),
+  );
+  const canonicalCollection =
+    sourcePath[4] === "readable_fields" ? "readableFieldIds" : "changeableFieldIds";
+  const canonicalFields = valueAtPath(canonical, [
+    "content",
+    "permissions",
+    permissionIndex,
+    "fieldPolicy",
+    canonicalCollection,
+  ]) as string[];
+  const targetIndex = canonicalFields.findIndex((fieldId) => fieldId === resolvedFieldId);
+  if (targetIndex < 0) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  return [
+    ["content", "permissions", permissionIndex, "fieldPolicy", canonicalCollection, targetIndex],
+  ];
+}
+
 function explicitSourceTargets(
   source: JsonObject,
   canonical: unknown,
@@ -710,6 +750,13 @@ function explicitSourceTargets(
   positions: SourceContractPositions,
   resolution: Resolution,
 ): Path[] | undefined {
+  const fieldPolicyTargets = permissionFieldPolicyTargets(
+    source,
+    canonical,
+    sourcePath,
+    resolution,
+  );
+  if (fieldPolicyTargets) return fieldPolicyTargets;
   const recordScopeTargets = permissionRecordScopeTargets(
     source,
     canonical,
@@ -1315,6 +1362,7 @@ const moduleSourceTransformPatterns = [
   /^body\/sharing_conditions\/#\/(?:source_record_type|declared_fields\/#)$/,
   /^body\/sharing_conditions\/#\/publication_tests\/#\/(?:field_values|parameters)\/[^/]+(?:\/.*)?$/,
   /^body\/permissions\/#\/record_scope\/.+$/,
+  /^body\/permissions\/#\/field_policy\/(?:readable_fields|changeable_fields)\/#$/,
 ] as const;
 
 const applicationSourceTransformPatterns = [
@@ -1359,6 +1407,7 @@ const applicationSourceTransformPatterns = [
   /^body\/workflows\/#\/nodes\/#\/config\/value(?:\/#|\/.*)?$/,
   /^body\/(?:permissions|actions|events|rules)\/#\/record_type$/,
   /^body\/permissions\/#\/record_scope\/.+$/,
+  /^body\/permissions\/#\/field_policy\/(?:readable_fields|changeable_fields)\/#$/,
   /^body\/actions\/#\/(?:permission|sharing)$/,
   /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
   /^body\/actions\/#\/effects\/#\/(?:field|record_type|relationships\/#|target_input|event)$/,
@@ -1476,6 +1525,13 @@ function recordScopeSourceResolvesIdentity(sourcePath: Path): boolean {
   );
 }
 
+function fieldPolicySourceResolvesIdentity(sourcePath: Path): boolean {
+  const path = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment)).join("/");
+  return /^body\/permissions\/#\/field_policy\/(?:readable_fields|changeable_fields)\/#$/.test(
+    path,
+  );
+}
+
 function sourceCombinesResolvedKeyAndValue(sourcePath: Path): boolean {
   const path = sourcePath.map((segment) => (typeof segment === "number" ? "#" : segment)).join("/");
   return /\/(?:effects\/#\/values|sharing_conditions\/#\/publication_tests\/#\/field_values|workflows\/#\/nodes\/#\/config\/values)\/[^/]+\//.test(
@@ -1535,7 +1591,8 @@ function provenanceFor(
     const mapsToCanonicalLeaf = canonicalLeafSet.has(pathKey(canonicalPath));
     const resolved =
       sourceResolvesIdentity(sourcePath, positions) ||
-      recordScopeSourceResolvesIdentity(sourcePath);
+      recordScopeSourceResolvesIdentity(sourcePath) ||
+      fieldPolicySourceResolvesIdentity(sourcePath);
     const transformTargets = explicitTargets ?? (mapsToCanonicalLeaf ? [canonicalPath] : []);
     if (transformTargets.length === 0)
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
@@ -2045,6 +2102,31 @@ function compilePermissionRecordScope(
   };
 }
 
+function compilePermissionFieldPolicy(
+  permission: JsonObject,
+  source: JsonObject,
+  resolution: Resolution,
+): unknown | undefined {
+  if (permission.field_policy === undefined) return undefined;
+  if (permission.record_type === undefined)
+    fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  const recordType = String(permission.record_type);
+  const policy = asObject(permission.field_policy);
+  const resolveFields = (aliases: unknown): string[] =>
+    (aliases as string[])
+      .map((alias) =>
+        resolution.field(
+          source.kind === "module" ? `${String(source.key)}:${recordType}` : recordType,
+          alias,
+        ),
+      )
+      .sort(compareCanonicalStrings);
+  return {
+    readableFieldIds: resolveFields(policy.readable_fields),
+    changeableFieldIds: resolveFields(policy.changeable_fields),
+  };
+}
+
 function applicationPermissionSharingConditions(
   permission: JsonObject,
   source: JsonObject,
@@ -2542,6 +2624,7 @@ function compileModule(
       resolution,
       sharingConditions,
     );
+    const fieldPolicy = compilePermissionFieldPolicy(permission, source, resolution);
     return {
       permissionId: resolution.id(definitionKey, "permission", String(permission.id), "content"),
       key: permission.key,
@@ -2557,6 +2640,7 @@ function compileModule(
       ...(permission.named_action ? { namedAction: permission.named_action } : {}),
       administrative: permission.administrative,
       ...(recordScope === undefined ? {} : { recordScope }),
+      ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
     };
   });
   const canonical = moduleDraftSchema.parse({
@@ -3221,6 +3305,7 @@ function compileApplication(
         dependencyOutputs,
       ),
     );
+    const fieldPolicy = compilePermissionFieldPolicy(permission, source, resolution);
     return {
       permissionId: resolution.id(definitionKey, "permission", String(permission.id), "content"),
       key: permission.key,
@@ -3233,6 +3318,7 @@ function compileApplication(
       ...(permission.named_action ? { namedAction: permission.named_action } : {}),
       administrative: permission.administrative,
       ...(recordScope === undefined ? {} : { recordScope }),
+      ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
     };
   });
   const wildcardPermissions = permissions

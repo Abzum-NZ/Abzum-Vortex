@@ -237,6 +237,28 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "subject",
+            "activity_type",
+            "due_at",
+            "completed",
+            "duration_minutes",
+            "regarding",
+            "owner",
+            "notes"
+          ],
+          "changeable_fields": [
+            "subject",
+            "activity_type",
+            "due_at",
+            "completed",
+            "duration_minutes",
+            "regarding",
+            "owner",
+            "notes"
+          ]
         }
       },
       {
@@ -253,6 +275,19 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "subject",
+            "activity_type",
+            "due_at",
+            "completed",
+            "duration_minutes",
+            "regarding",
+            "owner",
+            "notes"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -268,6 +303,28 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "subject",
+            "activity_type",
+            "due_at",
+            "completed",
+            "duration_minutes",
+            "regarding",
+            "owner",
+            "notes"
+          ],
+          "changeable_fields": [
+            "subject",
+            "activity_type",
+            "due_at",
+            "completed",
+            "duration_minutes",
+            "regarding",
+            "owner",
+            "notes"
           ]
         }
       },
@@ -285,6 +342,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -301,6 +362,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -317,6 +382,19 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "subject",
+            "activity_type",
+            "due_at",
+            "completed",
+            "duration_minutes",
+            "regarding",
+            "owner",
+            "notes"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -333,6 +411,14 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "completed"
+          ],
+          "changeable_fields": [
+            "completed"
           ]
         }
       }

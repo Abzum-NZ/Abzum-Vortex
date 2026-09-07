@@ -3,12 +3,43 @@ import { descriptionSchema, jsonValueSchema, labelSchema } from "./common";
 import {
   builderKeySchema,
   containedComponentIdSchema,
+  fieldIdSchema,
   fingerprintSchema,
   namespacedKeySchema,
   permissionIdSchema,
   recordTypeIdSchema,
   revisionSchema,
 } from "./identifiers";
+
+const canonicalFieldIdsSchema = z.array(fieldIdSchema).superRefine((fieldIds, context) => {
+  const identities = fieldIds.map((fieldId) => fieldId.toLowerCase());
+  if (new Set(identities).size !== identities.length)
+    context.addIssue({
+      code: "custom",
+      message: "Field identities must be unique",
+    });
+  if (identities.some((fieldId, index) => index > 0 && identities[index - 1]! >= fieldId))
+    context.addIssue({
+      code: "custom",
+      message: "Field identities must use canonical UUID order",
+    });
+});
+
+export const permissionFieldPolicySchema = z
+  .object({
+    readableFieldIds: canonicalFieldIdsSchema,
+    changeableFieldIds: canonicalFieldIdsSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const readable = new Set(value.readableFieldIds.map((fieldId) => fieldId.toLowerCase()));
+    if (value.changeableFieldIds.some((fieldId) => !readable.has(fieldId.toLowerCase())))
+      context.addIssue({
+        code: "custom",
+        path: ["changeableFieldIds"],
+        message: "Changeable fields must be a readable subset",
+      });
+  });
 
 export const permissionActionKindSchema = z.enum([
   "create",
@@ -125,6 +156,7 @@ export const permissionDeclarationSchema = z
     namedAction: builderKeySchema.optional(),
     administrative: z.boolean(),
     recordScope: permissionRecordScopeSchema.optional(),
+    fieldPolicy: permissionFieldPolicySchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -133,6 +165,12 @@ export const permissionDeclarationSchema = z
         code: "custom",
         path: ["namedAction"],
         message: "Named actions are present only for the named action kind",
+      });
+    if (value.fieldPolicy !== undefined && value.recordTypeId === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["fieldPolicy"],
+        message: "Only record permissions may declare a field policy",
       });
   });
 
@@ -157,5 +195,6 @@ export const applicationRolePermissionKeysSchema = z
 export type PermissionActionKind = z.infer<typeof permissionActionKindSchema>;
 export type PermissionRecordScopeRoute = z.infer<typeof permissionRecordScopeRouteSchema>;
 export type PermissionRecordScope = z.infer<typeof permissionRecordScopeSchema>;
+export type PermissionFieldPolicy = z.infer<typeof permissionFieldPolicySchema>;
 export type PermissionDeclaration = z.infer<typeof permissionDeclarationSchema>;
 export type ApplicationRolePermissionEntry = z.infer<typeof applicationRolePermissionEntrySchema>;
