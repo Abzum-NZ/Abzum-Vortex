@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  changeOrganizationAdministrationMembershipResultSchema,
+  changeOrganizationAdministrationRoleResultSchema,
   changeOrganizationAdministrationGroupResultSchema,
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
   changeOrganizationAdministrationRoleActivationResultSchema,
@@ -38,7 +40,11 @@ import {
   readOrganizationAdministrationRoleResultSchema,
   readOrganizationAdministrationRoleActivationResultSchema,
   readOrganizationAdministrationRoleAssignmentResultSchema,
+  removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
+  retireOrganizationAdministrationGroupCommandSchema,
+  retireOrganizationAdministrationRoleCommandSchema,
+  reviseOrganizationAdministrationRoleMetadataCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
 } from "../src/organization-access-administration";
@@ -531,6 +537,65 @@ describe("organization Access administration contracts", () => {
       expect(listOrganizationAdministrationRolesCommandSchema.safeParse(candidate).success).toBe(
         false,
       );
+  });
+
+  it("keeps structural reductions exact, narrow and revision-bound", () => {
+    expect(
+      retireOrganizationAdministrationGroupCommandSchema.parse({
+        groupId: id(1),
+        expectedGroupRevision: 2,
+      }),
+    ).toEqual({ groupId: id(1), expectedGroupRevision: 2 });
+    expect(
+      removeOrganizationAdministrationMembershipCommandSchema.parse({
+        membershipId: id(10),
+        expectedMembershipRevision: 2,
+      }),
+    ).toEqual({ membershipId: id(10), expectedMembershipRevision: 2 });
+    expect(
+      reviseOrganizationAdministrationRoleMetadataCommandSchema.parse({
+        roleId: id(40),
+        expectedRoleRevision: 3,
+        label: "Reviewed role",
+        description: "Updated descriptive metadata only.",
+      }),
+    ).toMatchObject({ roleId: id(40), expectedRoleRevision: 3 });
+    expect(
+      retireOrganizationAdministrationRoleCommandSchema.parse({
+        roleId: id(40),
+        expectedRoleRevision: 3,
+      }),
+    ).toEqual({ roleId: id(40), expectedRoleRevision: 3 });
+
+    for (const candidate of [
+      { groupId: id(1), expectedGroupRevision: 0 },
+      { groupId: id(1), expectedGroupRevision: 2, cascade: true },
+    ])
+      expect(retireOrganizationAdministrationGroupCommandSchema.safeParse(candidate).success).toBe(
+        false,
+      );
+    expect(
+      reviseOrganizationAdministrationRoleMetadataCommandSchema.safeParse({
+        roleId: id(40),
+        expectedRoleRevision: 3,
+        label: "Reviewed role",
+        description: "Updated descriptive metadata only.",
+        assignmentPolicy: { kind: "standing" },
+      }).success,
+    ).toBe(false);
+
+    expect(
+      changeOrganizationAdministrationMembershipResultSchema.parse({
+        membership: { ...membership, state: "revoked", temporalState: "revoked" },
+        accessVersion: 11,
+      }),
+    ).toMatchObject({ membership: { membershipId: membership.membershipId, state: "revoked" } });
+    expect(
+      changeOrganizationAdministrationRoleResultSchema.parse({
+        role: { ...roleSummary, lifecycle: "retired", liveRevision: 4 },
+        accessVersion: 12,
+      }),
+    ).toMatchObject({ role: { roleId: roleSummary.roleId, lifecycle: "retired" } });
   });
 
   it("accepts separately keyed current application-role templates", () => {

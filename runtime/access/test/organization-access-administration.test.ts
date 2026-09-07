@@ -51,6 +51,36 @@ const serviceFor = (result: readonly DatabaseRow[]) => {
   return { calls, service };
 };
 
+const serviceForSequence = (results: readonly (readonly DatabaseRow[])[]) => {
+  const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+  let queryIndex = 0;
+  const service = createOrganizationAccessAdministrationService({
+    identityAuthorityId: id(6),
+    clock: () => new Date("2026-09-06T01:00:00.000Z"),
+    correlationId: () => id(7),
+    groupId: () => id(20),
+    activityId: () => id(21),
+    resolvedRequestTransaction: async (resolve, operation) => {
+      const resolved = await resolve({
+        query: async () => [selectedScope] as never,
+      } satisfies RuntimeDatabaseTransaction);
+      const transaction: RequestDatabaseTransaction = {
+        query: async <Row extends DatabaseRow>(
+          strings: TemplateStringsArray,
+          ...values: readonly DatabaseValue[]
+        ) => {
+          calls.push({ text: strings.join("$value"), values });
+          const result = results[queryIndex];
+          queryIndex += 1;
+          return (result ?? []) as readonly Row[];
+        },
+      };
+      return operation(transaction, resolved.scope);
+    },
+  });
+  return { calls, service };
+};
+
 describe("organization Access administration", () => {
   it("creates a Group with trusted identities and binds the safe result", async () => {
     const { calls, service } = serviceFor([
@@ -119,6 +149,249 @@ describe("organization Access administration", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.text).toContain("rename_organization_group_for_administration");
     expect(calls[0]?.values).toEqual([id(8), 2, "Renamed group", id(21)]);
+  });
+
+  it("retires a Group without caller-selected affected authority", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2),
+        group_summary: {
+          groupId: id(8),
+          key: "review_group",
+          label: "Review group",
+          state: "retired",
+          revision: "3",
+        },
+        access_version: "8",
+      },
+    ]);
+    await expect(
+      service.retireGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { groupId: id(8), expectedGroupRevision: 2 },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { group: { groupId: id(8), state: "retired", revision: 3 }, accessVersion: 8 },
+    });
+    expect(calls[0]?.values).toEqual([id(8), 2, id(21)]);
+  });
+
+  it("removes one exact Group membership and binds the terminal result", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2),
+        membership_summary: {
+          membershipId: id(30),
+          groupId: id(8),
+          organizationAccountId: id(32),
+          accountDisplayName: "Member",
+          revision: "2",
+          startsAt: "2026-09-01T00:00:00.000Z",
+          state: "revoked",
+          temporalState: "revoked",
+        },
+        access_version: "8",
+      },
+    ]);
+    await expect(
+      service.removeGroupMembership(
+        verifiedSession,
+        { organizationId: id(2) },
+        { membershipId: id(30), expectedMembershipRevision: 1 },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        membership: { membershipId: id(30), state: "revoked", revision: 2 },
+        accessVersion: 8,
+      },
+    });
+    expect(calls[0]?.values).toEqual([id(30), 1, id(21)]);
+  });
+
+  it("prepares canonical role metadata evidence inside the protected change transaction", async () => {
+    const { calls, service } = serviceForSequence([
+      [
+        {
+          organization_id: id(2).toUpperCase(),
+          candidate_basis: {
+            operation: "revise_metadata_policy",
+            organizationId: id(2).toUpperCase(),
+            roleId: id(40).toUpperCase(),
+            expectedRoleRevision: 1,
+            key: "reviewed_role",
+            label: "Old label",
+            description: "Old description.",
+            privilegeClassification: "privileged",
+            assignmentPolicy: {
+              kind: "activation_required",
+              activationPolicy: {
+                selection: "existing",
+                reference: {
+                  activationPolicyId: id(41),
+                  revision: 2,
+                  fingerprint: `sha256:${"a".repeat(64)}`,
+                },
+              },
+            },
+          },
+          access_version: "7",
+        },
+      ],
+      [
+        {
+          organization_id: id(2),
+          role_summary: {
+            roleId: id(40),
+            key: "reviewed_role",
+            label: "New label",
+            roleKind: "custom",
+            lifecycle: "active",
+            liveRevision: 2,
+            privilegeClassification: "privileged",
+            assignmentPolicy: {
+              kind: "activation_required",
+              maximumActivationDurationSeconds: 3600,
+              reasonRequired: true,
+              recentAuthentication: { kind: "multi_factor", maximumAgeSeconds: 900 },
+              independentApprovalRequired: false,
+            },
+            source: { kind: "custom" },
+            acceptedPermissionCount: 2,
+          },
+          access_version: "8",
+        },
+      ],
+    ]);
+
+    await expect(
+      service.reviseRoleMetadata(
+        verifiedSession,
+        { organizationId: id(2) },
+        {
+          roleId: id(40),
+          expectedRoleRevision: 1,
+          label: "New label",
+          description: "New description.",
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { role: { roleId: id(40), label: "New label", liveRevision: 2 }, accessVersion: 8 },
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.text).toContain(
+      "prepare_organization_role_metadata_change_for_administration",
+    );
+    expect(calls[0]?.values).toEqual([id(40), 1]);
+    expect(calls[1]?.text).toContain("revise_organization_role_metadata_for_administration");
+    expect(calls[1]?.values.slice(0, 4)).toEqual([id(40), 1, "New label", "New description."]);
+    const prepared = JSON.parse(String(calls[1]?.values[4]));
+    expect(prepared).toMatchObject({
+      contractVersion: "1.0.0",
+      candidate: {
+        operation: "revise_metadata_policy",
+        label: "New label",
+        description: "New description.",
+        assignmentPolicy: {
+          activationPolicy: { reference: { activationPolicyId: id(41), revision: 2 } },
+        },
+      },
+    });
+    expect(prepared.roleCandidateFingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(calls[1]?.values[5]).toBe(id(21));
+  });
+
+  it("retires one role using canonical evidence derived only from the exact command", async () => {
+    const { calls, service } = serviceFor([
+      {
+        organization_id: id(2),
+        role_summary: {
+          roleId: id(40),
+          key: "reviewed_role",
+          label: "Reviewed role",
+          roleKind: "custom",
+          lifecycle: "retired",
+          liveRevision: 3,
+          privilegeClassification: "privileged",
+          assignmentPolicy: { kind: "standing" },
+          source: { kind: "custom" },
+          acceptedPermissionCount: 2,
+        },
+        access_version: "8",
+      },
+    ]);
+    await expect(
+      service.retireRole(
+        verifiedSession,
+        { organizationId: id(2) },
+        { roleId: id(40), expectedRoleRevision: 2 },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { role: { roleId: id(40), lifecycle: "retired", liveRevision: 3 } },
+    });
+    expect(calls[0]?.text).toContain("retire_organization_role_for_administration");
+    expect(calls[0]?.values[0]).toBe(id(40));
+    expect(calls[0]?.values[1]).toBe(2);
+    expect(JSON.parse(String(calls[0]?.values[2]))).toMatchObject({
+      candidate: { operation: "retire_role", roleId: id(40), expectedRoleRevision: 2 },
+    });
+    expect(calls[0]?.values[3]).toBe(id(21));
+  });
+
+  it("refuses malformed structural commands and mismatched private preparation", async () => {
+    const malformed = serviceFor([]);
+    await expect(
+      malformed.service.retireGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { groupId: id(8), expectedGroupRevision: 0 },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    await expect(
+      malformed.service.removeGroupMembership(
+        verifiedSession,
+        { organizationId: id(2) },
+        { membershipId: id(30), expectedMembershipRevision: 0 },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(malformed.calls).toHaveLength(0);
+
+    const mismatched = serviceForSequence([
+      [
+        {
+          organization_id: id(2),
+          candidate_basis: {
+            operation: "revise_metadata_policy",
+            organizationId: id(2),
+            roleId: id(99),
+            expectedRoleRevision: 1,
+            key: "reviewed_role",
+            label: "Old label",
+            description: "Old description.",
+            privilegeClassification: "privileged",
+            assignmentPolicy: { kind: "standing" },
+          },
+          access_version: 7,
+        },
+      ],
+    ]);
+    await expect(
+      mismatched.service.reviseRoleMetadata(
+        verifiedSession,
+        { organizationId: id(2) },
+        {
+          roleId: id(40),
+          expectedRoleRevision: 1,
+          label: "New label",
+          description: "New description.",
+        },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+    expect(mismatched.calls).toHaveLength(1);
   });
 
   it("refuses malformed commands and mismatched changed Group evidence", async () => {

@@ -167,7 +167,9 @@ Complete activation and delegation revocation together using the existing transa
 5. Verify actual restricted-role success/refusal, self versus other beneficiary, unchanged historical activation scope after role/source changes, complete versus partial delegation coverage, foreign/stale/replayed targets, last-steward refusal and atomic Access/Activity rollback. Reuse existing race harnesses for representative activation/source-change and delegation revoke/replace contention; do not multiply equivalent test combinations.
 6. Obtain independent review of the actual work, then combined local and exact hosted evidence. The later structural-reduction family covers Group retirement, membership removal, role retirement and metadata-only edits. Grants, renewal, activation and broadening remain private until [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) supplies its verified user-linked workflow binding.
 
-## Next structural-reduction delivery
+## Reviewed structural-reduction delivery
+
+All four operations below are implemented and independently source-approved. [The evidence](../evidence/issue-40-access-administration.md#structural-administration--7-september-2026) records local verification and subsequent delivery results. Remaining private governed handoffs follow this family; the isolated assignment-cleanup exception and exact hosted evidence still prevent whole-task closure.
 
 After temporary/delegated authority revocation, deliver Group retirement, membership removal, role metadata edits and role retirement together. Reuse the existing governance-first writer and safe ledger results; no designer, new approval journey or second access evaluator is required.
 
@@ -177,6 +179,14 @@ After temporary/delegated authority revocation, deliver Group retirement, member
 4. Keep the already recorded unavailable/empty-role exception isolated: a retained assignment with that unresolved scope refuses rather than using historical permissions or a permission-only fallback. This is not a hold on the other structural changes.
 5. Change only the target fact and retain related assignments, activations, delegations and shares as evidence. Revoked membership cannot revive old activation authority. Each successful operation and its one Activity/Access change are atomic; failed Activity, stale revision, foreign target, missing permission or incomplete delegation leaves no partial change.
 6. Prove the actual restricted caller paths, safe results, source retention and final-steward protection. Extend representative existing Group/role versus assignment/membership races; do not build a new concurrency framework or exhaustive permutation suite. Independent review must assess all four operations against this scope.
+
+## Remaining private governed composition
+
+After the available reductions, complete the existing membership/assignment, authority-changing role, activation, delegation, invitation-intent and application-lifecycle handoffs. Reuse their existing command/result contracts and coordinators; do not add a universal governed envelope, another approval store or a generic dispatcher.
+
+The first coherent family is membership add/restore/renew and role-assignment grant. Add operation-specific **owner-only** composition that derives the current affected authority under the existing governance lock, applies the existing management/delegation decision, calls the existing coordinator and appends Activity atomically. Bind organisation, account, actor and correlation to validated human context rather than trusting copies submitted in a command. Preserve existing candidate identities, expected revisions and membership/assignment windows; use the existing schemas instead of duplicating them.
+
+These private functions receive no request-role, public-client or service-role execution grant and no shipping runtime/MCP endpoint. Their actual owner-bound tests must prove current authority, isolation, stale/source refusal, atomic results and refusal of direct restricted-role invocation. Such tests prove private composition only, not a working approval or grant journey. The later verified IAM operation in [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) supplies the invocation boundary and rechecks after user/workflow waits; verified session alone is insufficient, including for activation policies that require no independent approval. Do not invent an approval flag to bridge the missing consumer.
 
 ## References
 

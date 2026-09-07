@@ -87,6 +87,13 @@ export const renameOrganizationAdministrationGroupCommandSchema = z
   })
   .strict();
 
+export const retireOrganizationAdministrationGroupCommandSchema = z
+  .object({
+    groupId: groupIdSchema,
+    expectedGroupRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
 export const changeOrganizationAdministrationGroupResultSchema = z
   .object({
     group: organizationAdministrationGroupSchema,
@@ -168,6 +175,20 @@ export const readOrganizationAdministrationMembershipResultSchema = z.discrimina
       .strict(),
   ],
 );
+
+export const removeOrganizationAdministrationMembershipCommandSchema = z
+  .object({
+    membershipId: membershipIdSchema,
+    expectedMembershipRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const changeOrganizationAdministrationMembershipResultSchema = z
+  .object({
+    membership: organizationAdministrationMembershipSchema,
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
 
 export const organizationAdministrationPermissionSchema = z
   .object({
@@ -335,6 +356,29 @@ export const readOrganizationAdministrationRoleResultSchema = z.discriminatedUni
     })
     .strict(),
 ]);
+
+export const reviseOrganizationAdministrationRoleMetadataCommandSchema = z
+  .object({
+    roleId: roleIdSchema,
+    expectedRoleRevision: javascriptSafeRevisionSchema,
+    label: labelSchema,
+    description: descriptionSchema,
+  })
+  .strict();
+
+export const retireOrganizationAdministrationRoleCommandSchema = z
+  .object({
+    roleId: roleIdSchema,
+    expectedRoleRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const changeOrganizationAdministrationRoleResultSchema = z
+  .object({
+    role: organizationAdministrationRoleSummarySchema,
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
 
 export const organizationAdministrationApplicationRoleTemplateReferenceSchema = z
   .object({
@@ -740,6 +784,9 @@ export type CreateOrganizationAdministrationGroupCommand = z.infer<
 export type RenameOrganizationAdministrationGroupCommand = z.infer<
   typeof renameOrganizationAdministrationGroupCommandSchema
 >;
+export type RetireOrganizationAdministrationGroupCommand = z.infer<
+  typeof retireOrganizationAdministrationGroupCommandSchema
+>;
 export type ChangeOrganizationAdministrationGroupResult = z.infer<
   typeof changeOrganizationAdministrationGroupResultSchema
 >;
@@ -757,6 +804,12 @@ export type ReadOrganizationAdministrationMembershipCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationMembershipResult = z.infer<
   typeof readOrganizationAdministrationMembershipResultSchema
+>;
+export type RemoveOrganizationAdministrationMembershipCommand = z.infer<
+  typeof removeOrganizationAdministrationMembershipCommandSchema
+>;
+export type ChangeOrganizationAdministrationMembershipResult = z.infer<
+  typeof changeOrganizationAdministrationMembershipResultSchema
 >;
 export type OrganizationAdministrationPermission = z.infer<
   typeof organizationAdministrationPermissionSchema
@@ -790,6 +843,15 @@ export type ReadOrganizationAdministrationRoleCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationRoleResult = z.infer<
   typeof readOrganizationAdministrationRoleResultSchema
+>;
+export type ReviseOrganizationAdministrationRoleMetadataCommand = z.infer<
+  typeof reviseOrganizationAdministrationRoleMetadataCommandSchema
+>;
+export type RetireOrganizationAdministrationRoleCommand = z.infer<
+  typeof retireOrganizationAdministrationRoleCommandSchema
+>;
+export type ChangeOrganizationAdministrationRoleResult = z.infer<
+  typeof changeOrganizationAdministrationRoleResultSchema
 >;
 export type OrganizationAdministrationApplicationRoleTemplateReference = z.infer<
   typeof organizationAdministrationApplicationRoleTemplateReferenceSchema

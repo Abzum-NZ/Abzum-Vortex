@@ -117,6 +117,11 @@
       "label": "Organization Group administration changes"
     },
     {
+      "migration": "supabase/migrations/20260907042701_protect_organization_structural_access_reductions.sql",
+      "proof": "supabase/tests/organization-structural-access-reduction-concurrency.test.sh",
+      "label": "Organization structural Access reductions"
+    },
+    {
       "migration": "supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql",
       "proof": "supabase/tests/private-direct-record-share-change-concurrency.test.sh",
       "label": "Private direct record-share changes"
