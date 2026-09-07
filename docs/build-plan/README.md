@@ -1,5 +1,7 @@
 # Abzum Vortex revised build plan
 
+The [Access consumer handoff](access-consumer-handoffs.md) keeps activation/invitation invocation with the real IAM workflow and application lifecycle composition with the Application engine. Earlier Access work must not fabricate their missing evidence or depend back on those consumers. All journeys remain required by the complete engine-first application proof.
+
 The [7 September whole-platform architecture review](architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
 
 **Status:** Approved build plan 2.23
@@ -284,7 +286,7 @@ The shared condition foundation in #36 precedes [the later condition builder #57
 ### Later integration ownership
 
 - [Generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) installs the proven row policies on Definition-derived physical tables. Phase 3 uses controlled neutral tables; it does not depend on Phase 4 storage.
-- [Application lifecycle #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) consumes protected #40 operations for registration, withdrawal, reactivation and management-application binding.
+- [Application lifecycle #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) owns protected registration, withdrawal, reactivation and management-application binding, reusing #40's governance-first transaction pattern and the existing private Access writer.
 - [Administration definitions/views #72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) and [governed IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) supply the ordinary application journey. Grant invocation needs the actual verified workflow/human-response boundary from [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76) and [#81](https://github.com/Abzum-NZ/Abzum-Vortex/issues/81); editable approvals never establish authority.
 - File, workflow, search, public-interface, live UI and [MCP #200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) owners reuse the same policies when their executors arrive. Cross-organisation sharing and federation remain [#153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153) and [#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156); unsupported routes refuse.
 
