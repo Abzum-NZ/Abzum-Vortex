@@ -68,6 +68,21 @@ The pre-policy [direct-ownership proof](../evidence/issue-36-record-visibility.m
 
 ## Integration ownership
 
+### Narrow implementation authorization — 8 September 2026
+
+The unfinished local implementation currently refuses record decisions when the
+application has more than 1,000 record permissions and caps recursive traversal at
+1,000. This is not an approved product-size limit. Review recommends retaining the
+existing published-graph bound and cycle refusal without the unrelated fixed
+application-size cutoff. An automated safety check rejected removing the fixed
+upper bounds because larger traversals can exhaust database resources. The change
+was not applied or retried. A narrow tool-execution authorization has been requested
+for the graph-bound/cycle-preserving replacement; this is not product approval of
+either limit. Without that authorization the cutoff remains in the unfinished
+local candidate pending a separately authorized safe change. Only this edit awaits
+authorization, not the remaining implementation or tests. Do not describe the
+cutoff as a permanent product requirement or claim it was removed.
+
 This task proves the policy shape that [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) will install. #45 owns real storage mappings, Definition-derived physical tables and generated integration. It continues to depend on #35; #35 does not depend on #45 or a new storage subtask. That avoids a cycle through the Phase 3 epic and Phase 4 installation tasks.
 
 [Field access #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) owns field projection and allowed changes. [Sharing #153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153) and [federation #156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156) own complete cross-organisation and live remote integration; unsupported routes stay closed until those policies exist. Search, reporting and export owners reuse the delivered decision when their executors arrive.
