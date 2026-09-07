@@ -30,6 +30,8 @@ The proof also depends on [workflow run views and permitted controls #86](https:
 - [ ] Files → validation/publication → explicit installation → real browser use → upgrade/withdrawal works without a visual editor.
 - [ ] Pages, data, forms, frontend/background flows, pipelines, files/search, governed access, connections and interfaces work in the declared application context.
 - [ ] Shared-record identity, limited Case Summary collaboration/revocation and both organisation isolation directions pass.
+- [ ] The sensitive Contact-notes read permission is a separately checked exact alternative; ordinary Contact read/export and Service Desk roles cannot obtain those notes. Bind the existing permission identity explicitly through [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), not a label-based exception. No notes-write authority is inferred.
+- [ ] The existing discount-approval permission has a real published action/flow and typed binding before its approval journey is claimed executable. Its field policy alone is not an implementation or an approval result. Retain the current no-write permission policy unless an explicit reviewed action needs a different published meaning.
 - [ ] The same installed artifacts drive browser and non-editor semantic operations.
 - [ ] Screenshots, walkthrough, exact Testing results and independent whole-task approval are recorded.
 

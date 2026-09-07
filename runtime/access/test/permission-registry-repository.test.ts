@@ -28,6 +28,10 @@ const recordPermission: PermissionDeclaration = {
   recordScope: {
     routes: [{ kind: "ownership" }, { kind: "direct_share" }],
   },
+  fieldPolicy: {
+    readableFieldIds: [id(24), id(25)],
+    changeableFieldIds: [id(25)],
+  },
 };
 const legacyRecordPermission: PermissionDeclaration = {
   ...permission,
@@ -136,6 +140,7 @@ describe("permission registry private repository", () => {
           description: recordPermission.description,
           record_type_id: recordPermission.recordTypeId,
           record_scope: recordPermission.recordScope,
+          field_policy: recordPermission.fieldPolicy,
           action_kind: "read",
           named_action: null,
           administrative: false,
@@ -191,6 +196,7 @@ describe("permission registry private repository", () => {
           description: legacyRecordPermission.description,
           record_type_id: legacyRecordPermission.recordTypeId,
           record_scope: null,
+          field_policy: null,
           action_kind: legacyRecordPermission.actionKind,
           named_action: null,
           administrative: false,
@@ -225,6 +231,7 @@ describe("permission registry private repository", () => {
     });
     if (result.outcome !== "available") throw new Error("Available legacy permission required");
     expect(result.entry.permission).not.toHaveProperty("recordScope");
+    expect(result.entry.permission).not.toHaveProperty("fieldPolicy");
   });
 
   it("maps the owner-qualified platform catalogue evidence without application context", async () => {

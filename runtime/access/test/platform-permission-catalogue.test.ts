@@ -143,6 +143,21 @@ describe("platform permission catalogue", () => {
         recordScope: undefined,
       }),
     ).toBe(legacy);
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        fieldPolicy: {
+          readableFieldIds: ["00000000-0000-4000-8000-000000000004"],
+          changeableFieldIds: [],
+        },
+      }),
+    ).not.toBe(legacy);
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        fieldPolicy: undefined,
+      }),
+    ).toBe(legacy);
   });
 
   it("keeps every SQL catalogue identity and metadata byte-for-byte aligned", () => {

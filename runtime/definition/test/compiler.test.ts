@@ -507,6 +507,63 @@ describe("authored definition compiler", () => {
     ).toBe(true);
   });
 
+  it("resolves exact permission field policies with canonical per-field provenance", () => {
+    const amended = structuredClone(sources);
+    const module = amended.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!module || module.kind !== "module") throw new Error("Case module fixture required");
+    const permission = module.body.permissions.find(
+      (entry) => entry.key === "vortex.service_desk.cases.case.read",
+    );
+    if (!permission) throw new Error("Case read permission required");
+    const permissionIndex = module.body.permissions.indexOf(permission);
+    permission.field_policy = {
+      readable_fields: ["subject", "case_number"],
+      changeable_fields: ["subject"],
+    };
+
+    const output = compileDefinitionSet(amended.map(requestFor), publicationOptions).find(
+      (entry) =>
+        entry.kind === "module" && entry.canonical.envelope.key === "vortex.service_desk.cases",
+    );
+    if (!output || output.kind !== "module") throw new Error("Compiled case module required");
+    const record = output.canonical.content.recordTypes.find((entry) => entry.key === "case");
+    const fieldId = (key: string) => record?.fields.find((field) => field.key === key)?.fieldId;
+    const expectedReadable = [fieldId("subject"), fieldId("case_number")].sort();
+    const compiled = output.canonical.content.permissions.find(
+      (entry) => entry.key === permission.key,
+    );
+    expect(compiled?.fieldPolicy).toEqual({
+      readableFieldIds: expectedReadable,
+      changeableFieldIds: [fieldId("subject")],
+    });
+    const policyProvenance = output.provenance.filter(
+      (entry) =>
+        entry.sourcePath?.includes("field_policy") && entry.sourcePath[2] === permissionIndex,
+    );
+    expect(policyProvenance).toHaveLength(3);
+    expect(policyProvenance.every((entry) => entry.origin === "resolved")).toBe(true);
+    expect(policyProvenance.every((entry) => entry.canonicalPath.includes("fieldPolicy"))).toBe(
+      true,
+    );
+  });
+
+  it("preserves historical field-policy omission but refuses it for new publication", () => {
+    const amended = structuredClone(sources);
+    const module = amended.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.activities",
+    );
+    if (!module || module.kind !== "module") throw new Error("Activities fixture required");
+    delete module.body.permissions[0]!.field_policy;
+
+    const compiled = compileDefinition(requestFor(module));
+    expect(compiled.canonical.content.permissions[0]).not.toHaveProperty("fieldPolicy");
+    expect(() => compileDefinitionSet(amended.map(requestFor), publicationOptions)).toThrowError(
+      "vortex.definition.module_record_references",
+    );
+  });
+
   it("requires scope for new record-permission publication and refuses route cycles", () => {
     const missingScope = structuredClone(sources);
     const missingModule = missingScope.find(
@@ -680,6 +737,7 @@ describe("authored definition compiler", () => {
       (entry) => entry.key === "application.crm.shared_cases.read",
     );
     if (!permission) throw new Error("Application case permission required");
+    const permissionIndex = source.body.permissions.indexOf(permission);
     permission.record_type = "vortex.crm.organisations:company";
     permission.action_kind = "read";
     delete permission.named_action;
@@ -692,15 +750,20 @@ describe("authored definition compiler", () => {
         },
       ],
     };
-    const output = compileDefinitionSet(amended.map(requestFor), publicationOptions).find(
+    permission.field_policy = {
+      readable_fields: ["name"],
+      changeable_fields: [],
+    };
+    const outputs = compileDefinitionSet(amended.map(requestFor), publicationOptions);
+    const output = outputs.find(
       (entry) => entry.kind === "application" && entry.canonical.envelope.key === source.key,
     );
     if (!output) throw new Error("Compiled application output required");
     if (output.kind !== "application") throw new Error("Application output required");
-    expect(
-      output.canonical.content.permissions.find((entry) => entry.key === permission.key)
-        ?.recordScope,
-    ).toEqual({
+    const compiledPermission = output.canonical.content.permissions.find(
+      (entry) => entry.key === permission.key,
+    );
+    expect(compiledPermission?.recordScope).toEqual({
       routes: [
         {
           kind: "relationship",
@@ -709,6 +772,52 @@ describe("authored definition compiler", () => {
         },
       ],
     });
+    const companyModule = outputs.find(
+      (entry) =>
+        entry.kind === "module" && entry.canonical.envelope.key === "vortex.crm.organisations",
+    );
+    const company =
+      companyModule?.kind === "module"
+        ? companyModule.canonical.content.recordTypes.find((record) => record.key === "company")
+        : undefined;
+    const nameFieldId = company?.fields.find((field) => field.key === "name")?.fieldId;
+    expect(compiledPermission?.fieldPolicy).toEqual({
+      readableFieldIds: [nameFieldId],
+      changeableFieldIds: [],
+    });
+    expect(
+      output.provenance.some(
+        (entry) =>
+          entry.sourcePath?.includes("field_policy") &&
+          entry.sourcePath[2] === permissionIndex &&
+          entry.canonicalPath.includes("fieldPolicy") &&
+          entry.origin === "resolved",
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses unresolved and foreign-record field-policy aliases", () => {
+    const compileApplicationField = (field: string) => {
+      const amended = structuredClone(sources);
+      const application = amended.find(
+        (source) => source.kind === "application" && source.key === "vortex.app.crm",
+      );
+      if (!application || application.kind !== "application")
+        throw new Error("CRM application required");
+      const permission = application.body.permissions.find(
+        (entry) => entry.key === "application.crm.shared_cases.read",
+      );
+      if (!permission) throw new Error("Application case permission required");
+      permission.record_type = "vortex.crm.organisations:company";
+      permission.action_kind = "read";
+      delete permission.named_action;
+      permission.record_scope = { routes: [{ kind: "ownership" }] };
+      permission.field_policy = { readable_fields: [field], changeable_fields: [] };
+      return () => compileDefinitionSet(amended.map(requestFor), publicationOptions);
+    };
+
+    expect(compileApplicationField("missing_field")).toThrow();
+    expect(compileApplicationField("subject")).toThrow();
   });
 
   it("binds an application-owned saved condition to the module owning its record type", () => {
@@ -734,6 +843,10 @@ describe("authored definition compiler", () => {
         condition: "matching_priority",
         parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
       },
+    };
+    permission.field_policy = {
+      readable_fields: ["subject"],
+      changeable_fields: [],
     };
 
     const requests = amended.map(requestFor);
@@ -837,6 +950,10 @@ describe("authored definition compiler", () => {
         condition: "matching_priority",
         parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
       },
+    };
+    permission.field_policy = {
+      readable_fields: ["subject"],
+      changeable_fields: [],
     };
     const moduleOutput = compileDefinition(requestFor(module));
     const unrelatedModule = sources.find(

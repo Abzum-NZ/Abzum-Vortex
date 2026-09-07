@@ -248,6 +248,19 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "description",
+            "active",
+            "assignment_count"
+          ],
+          "changeable_fields": [
+            "name",
+            "description",
+            "active"
+          ]
         }
       },
       {
@@ -264,6 +277,15 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "description",
+            "active",
+            "assignment_count"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -279,6 +301,19 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "description",
+            "active",
+            "assignment_count"
+          ],
+          "changeable_fields": [
+            "name",
+            "description",
+            "active"
           ]
         }
       },
@@ -296,6 +331,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -312,6 +351,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -328,6 +371,15 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "description",
+            "active",
+            "assignment_count"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -343,6 +395,20 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "tag",
+            "record",
+            "assigned_at",
+            "assigned_by"
+          ],
+          "changeable_fields": [
+            "tag",
+            "record",
+            "assigned_at",
+            "assigned_by"
           ]
         }
       },
@@ -360,6 +426,15 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "tag",
+            "record",
+            "assigned_at",
+            "assigned_by"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -376,6 +451,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -392,6 +471,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -408,6 +491,15 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "tag",
+            "record",
+            "assigned_at",
+            "assigned_by"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -425,6 +517,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       }
     ],

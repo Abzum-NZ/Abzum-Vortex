@@ -493,6 +493,17 @@ describe("Definition publication service", () => {
         parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
       },
     };
+    permission.field_policy = {
+      readable_fields: [
+        "case_number",
+        "subject",
+        "status",
+        "priority",
+        "customer_company",
+        "resolved_at",
+      ],
+      changeable_fields: [],
+    };
     const moduleReleases = [
       "crm.organisations.json",
       "crm.people.json",

@@ -1420,6 +1420,31 @@ describe("definition version impact", () => {
     delete removedScope.candidate.content.permissions[0]!.recordScope;
     expect(compareDefinitionVersionImpact(removedScope)).toMatchObject({ impact: "major" });
 
+    const addedEmptyFieldPolicy = requestAfter(moduleDraft());
+    addedEmptyFieldPolicy.candidate.content.permissions[0]!.fieldPolicy = {
+      readableFieldIds: [],
+      changeableFieldIds: [],
+    };
+    expect(compareDefinitionVersionImpact(addedEmptyFieldPolicy)).toMatchObject({
+      impact: "major",
+    });
+
+    const policyDraft = moduleDraft();
+    policyDraft.content.permissions[0]!.fieldPolicy = {
+      readableFieldIds: [id(10)],
+      changeableFieldIds: [],
+    };
+    const changedFieldPolicy = requestAfter(policyDraft);
+    changedFieldPolicy.candidate.content.permissions[0]!.fieldPolicy = {
+      readableFieldIds: [id(10)],
+      changeableFieldIds: [id(10)],
+    };
+    expect(compareDefinitionVersionImpact(changedFieldPolicy)).toMatchObject({ impact: "major" });
+
+    const removedFieldPolicy = requestAfter(policyDraft);
+    delete removedFieldPolicy.candidate.content.permissions[0]!.fieldPolicy;
+    expect(compareDefinitionVersionImpact(removedFieldPolicy)).toMatchObject({ impact: "major" });
+
     const duplicateRequest = requestAfter(moduleDraft());
     duplicateRequest.candidate.content.permissions.push({
       ...duplicateRequest.candidate.content.permissions[0]!,

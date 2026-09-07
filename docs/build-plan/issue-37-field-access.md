@@ -1,6 +1,6 @@
 # Phase 3 — Field access and protected local sharing
 
-Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Prerequisites: completed [central Access #34](issue-34-access-decision.md), completed [ownership and visibility #36](issue-36-ownership-and-visibility.md), and [final record/row decision #35](issue-35-row-policy-composition.md). The [canonical contract checkpoint](../evidence/issue-37-field-access.md#canonical-permission-policy--8-september-2026) is implemented and independently reviewed. Authored-source declarations, compiler, provenance and version-impact work remain and can proceed alongside #35; integration with the record boundary and the complete protected invocation require #35's final exact-record decision and callable runtime/request-role handoff.
+Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Prerequisites: completed [central Access #34](issue-34-access-decision.md), completed [ownership and visibility #36](issue-36-ownership-and-visibility.md), and [final record/row decision #35](issue-35-row-policy-composition.md). The [definition-to-catalogue checkpoint](../evidence/issue-37-field-access.md#definition-to-catalogue-checkpoint--8-september-2026) is implemented, locally verified and independently reviewed. Source declarations, compiler/provenance, publication/version impact and catalogue persistence now carry explicit field policies. The field resolver and projection/write contracts can proceed alongside #35; complete record integration and protected sharing still require #35's final exact-record decision and callable runtime/request-role handoff. This whole task remains in progress, and the new checkpoint is not yet verified on hosted Testing.
 
 ## Outcome
 
@@ -18,6 +18,16 @@ A person receives only fields they may read and changes only fields they may cha
 6. Supply typed field-decision, projection, write-validation and protected-share service operations plus shared parity cases for later record/query/search/export/interface/MCP executors. Prove the actual server/database boundary on controlled neutral rows and with the real non-owner request role here. Later executor tasks must reuse this result; #37 does not claim their screens, generated storage, query engines or transports are delivered.
 
 ## Delivery boundary and dependency
+
+The reviewed definition-to-catalogue slice carries the policy all the way through
+the existing permission meaning fingerprint and private catalogue alongside
+its new-publication requirement. Nullable `field_policy` sits beside the existing
+record scope, retaining strict registration and exact read reconstruction. Do not
+add another table, permission evaluator, continuity counter or approval gate.
+Absent historical policy must remain absent through TypeScript and database
+round-trips; explicit empty is a distinct published meaning. The
+[fixture field-policy notes](../../testing/fixtures/README.md#explicit-field-permissions)
+record intentional usable field lists and the separate later action-binding gaps.
 
 The source/canonical declaration shape, compiler mapping, provenance, version-impact comparison, pure field resolver and typed operation contracts can be built without a callable #35 runtime. Their tests must use typed exact-record fixtures and must not describe mocks as live record integration.
 

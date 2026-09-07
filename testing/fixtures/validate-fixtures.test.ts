@@ -353,6 +353,123 @@ describe("complete fixture set", () => {
     expect(body.assertions).toHaveLength(9);
   });
 
+  it("authors exact field policies without implicit authority for future fields", () => {
+    let recordPermissions = 0;
+    for (const source of sources) {
+      if (source.kind !== "module") continue;
+      for (const permission of source.body.permissions) {
+        if (!permission.record_type) {
+          expect(permission.field_policy).toBeUndefined();
+          continue;
+        }
+        recordPermissions++;
+        const record = source.body.record_types.find((entry) => entry.key === permission.record_type)!;
+        const fields = new Set(record.fields.map((field) => field.key));
+        const policy = permission.field_policy;
+        expect(policy, permission.key).toBeDefined();
+        if (!policy) continue;
+        expect(new Set(policy.readable_fields).size).toBe(policy.readable_fields.length);
+        expect(new Set(policy.changeable_fields).size).toBe(policy.changeable_fields.length);
+        for (const field of policy.readable_fields) expect(fields.has(field), permission.key).toBe(true);
+        for (const field of policy.changeable_fields) {
+          expect(policy.readable_fields, permission.key).toContain(field);
+          expect(["reference_number", "calculation", "total"]).not.toContain(
+            record.fields.find((entry) => entry.key === field)!.type,
+          );
+        }
+        if (["delete", "restore", "share"].includes(permission.action_kind)) {
+          expect(policy).toEqual({ readable_fields: [], changeable_fields: [] });
+        }
+        if (["read", "export"].includes(permission.action_kind)) {
+          expect(policy.changeable_fields).toEqual([]);
+        }
+      }
+    }
+    expect(recordPermissions).toBe(94);
+  });
+
+  it("preserves native detail and editable-field coverage without exposing sensitive Contact notes", () => {
+    for (const source of sources) {
+      if (source.kind !== "module") continue;
+      for (const record of source.body.record_types) {
+        const ordinary = record.fields.filter((field) =>
+          !(source.key === "vortex.crm.people" && record.key === "contact" && field.key === "notes"),
+        );
+        for (const action of ["read", "export", "create", "update"]) {
+          const permission = source.body.permissions.find((entry) =>
+            entry.key === `${source.key}.${record.key}.${action}`,
+          );
+          if (!permission) continue;
+          expect([...permission.field_policy!.readable_fields].sort()).toEqual(
+            ordinary.map((field) => field.key).sort(),
+          );
+          const expectedChanges = ["create", "update"].includes(action)
+            ? ordinary.filter((field) => !["reference_number", "calculation", "total"].includes(field.type)).map((field) => field.key)
+            : [];
+          expect([...permission.field_policy!.changeable_fields].sort()).toEqual(expectedChanges.sort());
+        }
+      }
+    }
+    const people = sources.find((source) => source.kind === "module" && source.key === "vortex.crm.people");
+    if (!people || people.kind !== "module") throw new Error("People fixture required");
+    const notes = people.body.permissions.find((entry) => entry.key.endsWith(".view_sensitive_notes"))!;
+    expect(notes.action_kind).toBe("read");
+    expect(notes.named_action).toBeUndefined();
+    expect(notes.field_policy).toEqual({ readable_fields: ["notes"], changeable_fields: [] });
+    const desk = sources.find((source) => source.kind === "application" && source.key === "vortex.app.service_desk");
+    if (!desk || desk.kind !== "application") throw new Error("Service Desk fixture required");
+    for (const role of desk.body.roles) expect(role.permissions).not.toContain(notes.key);
+  });
+
+  it("covers named-action subject effects without granting unrelated subject fields", () => {
+    const opportunities = sources.find((source) => source.kind === "module" && source.key === "vortex.crm.opportunities");
+    if (!opportunities || opportunities.kind !== "module") throw new Error("Opportunities fixture required");
+    const approval = opportunities.body.permissions.find((entry) => entry.key.endsWith(".approve_discount"))!;
+    expect(approval.action_kind).toBe("named");
+    expect(approval.named_action).toBe("approve_discount");
+    expect(approval.field_policy).toEqual({
+      readable_fields: ["value", "discount_percent", "net_value"],
+      changeable_fields: [],
+    });
+    const subjectReads = (value: unknown): string[] => {
+      if (Array.isArray(value)) return value.flatMap(subjectReads);
+      if (!value || typeof value !== "object") return [];
+      const object = value as Record<string, unknown>;
+      return [
+        ...(object.source === "subject_field" && typeof object.field === "string" ? [object.field] : []),
+        ...Object.values(object).flatMap(subjectReads),
+      ];
+    };
+    for (const source of sources) {
+      if (source.kind !== "module") continue;
+      for (const action of source.body.actions) {
+        const policy = source.body.permissions.find((permission) => permission.key === action.permission)!.field_policy!;
+        const changes = action.effects.flatMap((effect) => effect.kind === "set_field" ? [effect.field] : []);
+        const relationshipReads = action.effects.flatMap((effect) => effect.kind === "copy_relationships" ? effect.relationships : []);
+        const reads = [...new Set([...changes, ...relationshipReads, ...subjectReads(action.effects)])];
+        expect([...policy.readable_fields].sort(), action.key).toEqual(reads.sort());
+        expect([...policy.changeable_fields].sort(), action.key).toEqual([...new Set(changes)].sort());
+      }
+    }
+  });
+
+  it("keeps the approved Case Summary narrower than native Case field access", () => {
+    const cases = sources.find((source) => source.kind === "module" && source.key === "vortex.service_desk.cases");
+    if (!cases || cases.kind !== "module") throw new Error("Case fixture required");
+    const readPolicy = cases.body.permissions.find((entry) => entry.key.endsWith(".case.read"))!.field_policy!;
+    const updatePolicy = cases.body.permissions.find((entry) => entry.key.endsWith(".case.update"))!.field_policy!;
+    const scenario = read("scenarios/cross-application-sharing.json") as {
+      body: { inter_application_grant: { readable_fields: string[]; changeable_fields: string[] } };
+    };
+    const grant = scenario.body.inter_application_grant;
+    expect(grant.readable_fields.filter((field) => readPolicy.readable_fields.includes(field))).toEqual([
+      "case_number", "subject", "status", "priority", "customer_company", "resolved_at",
+    ]);
+    expect(grant.changeable_fields.filter((field) => updatePolicy.changeable_fields.includes(field))).toEqual(["status", "priority"]);
+    expect(grant.readable_fields).not.toContain("description");
+    expect(grant.readable_fields).not.toContain("attachments");
+  });
+
   it("contains no retired application name", () => {
     const prohibited = new RegExp("sales" + "[ _-]" + "hub", "i");
     for (const file of ["fixture-set.json", ...manifest.files]) {

@@ -298,6 +298,35 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "company_number",
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ],
+          "changeable_fields": [
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ]
         }
       },
       {
@@ -314,6 +343,23 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "company_number",
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -329,6 +375,35 @@
             {
               "kind": "all_records"
             }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "company_number",
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ],
+          "changeable_fields": [
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
           ]
         }
       },
@@ -346,6 +421,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -362,6 +441,10 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
         }
       },
       {
@@ -378,6 +461,23 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "company_number",
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ],
+          "changeable_fields": []
         }
       },
       {
@@ -395,6 +495,12 @@
               "kind": "all_records"
             }
           ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "parent_company"
+          ],
+          "changeable_fields": []
         }
       }
     ],
