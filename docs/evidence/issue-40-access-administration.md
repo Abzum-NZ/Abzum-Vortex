@@ -2,6 +2,8 @@
 
 ## Temporary and delegated access removal — locally verified candidate
 
+Source delivery: [PR #330](https://github.com/Abzum-NZ/Abzum-Vortex/pull/330) merged normally into Testing at `2026-09-07T05:00:47Z`, after both preview checks passed. Reviewed source `41ea316aa841563524670dd92fe71dfd7da97528` merged as `b56daf903e802d7b63d8b688f75a03aeeeae2aa4`. A separate delivery-boundary review confirmed no dependency on the excluded assignment-revocation or structural draft migrations. Exact hosted database/security/concurrency receipt verification remains pending; preview success is not that receipt. The connected Vercel inspection tool lacked access to the project scope, so the normal GitHub checks supplied preview status without a credential or infrastructure change.
+
 Final local database lint passes all six selected schemas without errors. The same eight existing warnings remain; this candidate adds no lint warning.
 
 The candidate adds protected self-deactivation and administrator revocation of temporary role activations, plus protected revocation of delegation. It reuses the existing governance-first transaction, current authority decision, revision-checked writers and atomic Activity append. Self-deactivation requires no administration permission; administrator deactivation uses the activation's exact immutable role revision, while delegation removal uses its exact current stored scope. No grant, renewal, generic dispatcher or new approval journey is added.

@@ -1,6 +1,6 @@
 # Phase 3 — Row-policy composition
 
-Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites: [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), complete, and [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), still required. This is a technical dependency, not a user hold.
+Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites: [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), complete, and [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), whose source is complete and delivered through [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326). Its exact hosted receipt remains unverified. The source dependency is available for local implementation; hosted integration and closure must still verify the actual delivered prerequisites. Keep the requested delivery priority of finishing current [access administration #40](issue-40-protected-access-administration.md) before this implementation. This is sequencing and a technical dependency, not a user hold.
 
 ## Outcome
 
@@ -16,6 +16,13 @@ Permission to perform an action and permission to see or change a particular rec
 6. Extend only the trusted record-operation binding to a nonempty, unique, canonical set of alternative exact permissions. This lets one action serve people with own-record permission and people with all-record permission without duplicate screens or role-specific code. Keep historical singular bindings readable and leave non-record #34 operations unchanged. New record-operation publication resolves every alternative to the exact subject record type, owner and action; named actions also match the exact owner-scoped named action. Normal operation meaning/version comparison applies.
 
 For a record, the decision is `OR(permission eligibility AND that same permission's complete row scope)` across the declared alternatives. It is never `ANY eligibility AND ANY scope`. Each permission retains #36's own base routes and optional condition; an alternative cannot supply missing authority to another. UPDATE applies this complete-pair test to both the old and proposed row. Carry independently complete matched contributions to #37; field bounds may combine only those complete contributions, never an incomplete alternative or an arbitrary first witness. This is an extension of the current decision, not another permission evaluator or policy registry.
+
+## Implementation sequence
+
+1. Extend the trusted record-operation contract and publication/compiler mapping with canonical permission alternatives, retaining existing singular bindings and normal meaning/version comparison.
+2. Extend the existing private central decision compatibly: its current non-record path explicitly excludes record catalogue entries and cannot be reused unchanged for a record. Select the exact current record permission and keep its `record_scope`, identity, context and validity deadline bound to that eligibility result. Preserve the existing non-record operation contract and behavior.
+3. Compose each eligible alternative with its own complete visibility scope through the existing predicates. Keep only complete matches and their conservative validity deadline for the field-access consumer. Reuse the published cycle-free relationship graph for recursion; add no parallel policy registry or authority cache.
+4. Apply and verify the four fixed policy shapes below on neutral business-row tables, followed by whole-scope review and exact hosted evidence. Generated storage and field projection remain downstream consumers.
 
 ## Relationship-route composition
 
