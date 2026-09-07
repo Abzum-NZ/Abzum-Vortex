@@ -1,6 +1,6 @@
 # Phase 3 — Row-policy composition
 
-Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites: [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), complete, and [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), whose source is complete and delivered through [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326). Its exact hosted receipt remains unverified. The source dependency is available for local implementation; hosted integration and closure must still verify the actual delivered prerequisites. Keep the requested delivery priority of finishing current [access administration #40](issue-40-protected-access-administration.md) before this implementation. This is sequencing and a technical dependency, not a user hold.
+Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites: [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), complete, and [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), whose source is complete and delivered through [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326). Its exact hosted receipt remains unverified. The source dependency is available for local implementation; hosted integration and closure must still verify the actual delivered prerequisites. The available [access administration #40](issue-40-protected-access-administration.md) compositions were delivered first through [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332). Its isolated cleanup authorization and exact hosted receipt remain open, but neither supplies a dependency of this local implementation. Continue this available engine work rather than creating a new whole-project hold.
 
 ## Outcome
 
@@ -33,7 +33,9 @@ For a record, the decision is `OR(permission eligibility AND that same permissio
 | [Central decision contracts](../../contracts/src/organization-access-decision.ts) and existing database eligibility implementation | Add the record-aware branch through shared existing eligibility logic, with one locked context/Access version and conservative time evidence. Preserve non-record callers. Do not repeatedly combine independent eligibility calls with drifting facts or relax the current non-record filter alone. |
 | Existing eligibility, record-scope, ownership, share and relationship SQL proofs | Reuse fixtures and add the complete-pair, old/new UPDATE, alternative contribution and isolation cases unique to this task. No new test framework; #45 still owns generated tables and #37 field combination. |
 
-This is implementation preparation only. Current #40 delivery remains first; neither these source locations nor passing earlier predicate tests constitute delivered record policies.
+Preserve the existing authored `permission` and compiled `permissionKey` shapes for single-permission actions. Add mutually exclusive authored `permission_alternatives` and compiled `permissionKeys` only for two or more canonical unique alternatives. Normalize both to a permission set for reference checks, semantic comparison and trusted Access declarations; preserve the original artifact representation and normal hashing, without rewriting historical bytes. This is authorization metadata only: #250 still owns flow/action execution, and an interface's separate exposure permission cannot be mixed into the target action's row authority.
+
+Neither this implementation map nor passing earlier predicate tests constitutes delivered record policies. Contract/compiler work precedes the complete database decision and fixed-policy proof.
 
 ## Relationship-route composition
 
