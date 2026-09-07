@@ -1,5 +1,34 @@
 # Record visibility implementation evidence
 
+## Exact hosted completion verified — 8 September 2026
+
+The architect read the saved Testing receipt after the user renewed the existing
+Edge session. Namespace `vortex.operations`, key
+`database-testing-e813def92071799c99df739f65b1549c2efe9b04` records `succeeded`
+for exact [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326) merge
+`e813def92071799c99df739f65b1549c2efe9b04`, with 60 applied migrations.
+The [actual execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6g7wQLV8rAGNVSpWyX8qgp/logs)
+also reports successful apply/verify and successful receipt publication.
+
+All receipt fingerprints were independently recomputed from that exact Git source:
+
+| Evidence | Matching SHA-256 |
+| --- | --- |
+| 60-file migration inventory | `c510ed99fc419e6938b09983175bbc15c591ea10ea85a659039c7c4f21e3e2e6` |
+| Commit-selected verification runner | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Verification manifest | `a26e8c400ebb3d9047338c78c345244fd45254aad62d5c6b0460504c9b965b2c` |
+| Selected concurrency/lint coverage | `d8b50477b1a382ba6b37349326fb37fe8f594aa839af1b5f0095e68f8a91bcd9` |
+
+The completed concurrency list equals all 24 selected proofs, including private
+direct-share changes; all six selected schemas completed the existing lint gate.
+The exact runner requires the full SQL suite to pass before those checks and the
+successful receipt. This verifies the delivered ownership/visibility primitives,
+not later public sharing, generated record storage or full field enforcement.
+Together with the independently reviewed whole-task scope and local evidence
+below, this satisfies [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36).
+Earlier notes saying the receipt was unverified are historical and superseded by
+this observation. No Production promotion or new security-advisor run is claimed.
+
 ## Current Testing source delivery — 7 September 2026
 
 The final reviewed C/D implementation merged normally through [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326) at `2026-09-07T03:52:34Z`, after both preview checks passed. Reviewed source `d89ecc380808cfe187c8184734bdc11ad5762465` and Testing merge `e813def92071799c99df739f65b1549c2efe9b04` have the identical tree `720fdd56c53a91bb3d1b9b4dc6058c46b8c5885b`. Unapproved #40 work is absent from this merge. Exact hosted Testing SQL/concurrency verification is still required before #36 closes; a source merge alone does not establish it.
