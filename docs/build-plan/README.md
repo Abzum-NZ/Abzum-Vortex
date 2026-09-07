@@ -2,7 +2,9 @@
 
 The [7 September whole-platform architecture review](architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
 
-**Status:** Approved build plan 2.22
+**Status:** Approved build plan 2.23
+
+**Current delivery order: engines before designer.** Follow the [engine-first application delivery plan](engine-first-application-delivery.md): define complete applications in files, validate/publish/install them, and prove their real browser pages, data, permissions and configured flows before implementing the App Designer. Preserve the existing HTML prototype but defer further expansion. Runtime rendering and registered components are engine work, not dependent on a visual editor. Later designer and MCP authoring reuse the same protected definition operations and runtime; task numbers or phase labels do not override these corrected dependencies.
 
 **Date:** 7 September 2026
 
@@ -44,6 +46,8 @@ complete; #34's exact hosted completion now clears implementation to start.
 The [corrected dependency and coverage map](architecture-review.md) is part of this plan. It identifies contract gaps, the Fluid adaptation boundary, the ordinary HR example and the separation between early service proofs and later complete-application evidence. New contract work is #249/#250; HR is #251; reusable foundations are #252/#253; complete integration is #254; full archive/restore is #255.
 
 ## Version history
+
+Version 2.23 (7 September 2026) makes complete file-defined application execution precede App Designer work. Runtime block registration, draft/publication and application installation no longer depend on their visual-editor consumer; see the [engine-first task ownership](engine-first-application-delivery.md).
 
 | Version | Status   | Date             | Summary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------- | -------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -352,6 +356,8 @@ Before adapting Fluid UI source, complete the [implementation handoff](../specif
 
 **Outcome:** Builders can compose and publish complete applications that people can use on desktop and phone.
 
+**Engine-first split:** [application runtime #64](issue-64-application-runtime.md), [registered blocks #66](issue-66-registered-block-runtime.md), [draft/publication #73](issue-73-definition-publication.md) and their data/form/flow dependencies run before visual authoring. [App Designer #65](issue-65-app-designer.md), module editor #52 and the remaining prototype come after the [complete file-defined runtime proof](engine-first-application-delivery.md). Later-numbered workflow/connection engines may therefore precede the designer. Phase epics summarize scope; they must not introduce a backwards dependency from an engine onto this unfinished designer.
+
 Build:
 
 - Version-pinned module and connection bindings, exact one-for-one resolved-dependency manifests, application roles, navigation and application resolution. Publication requires each declared version requirement to accept its resolved version and each connection binding to supply the exact caller-snapshot artifact and operation catalogue.
@@ -368,7 +374,7 @@ Build:
 
 Exit proof:
 
-- CRM, Service Desk and HR fixture definitions compile/publish as appropriate with exact module dependencies; #74/#251 prove the available local record/query/form/rendering behavior. Later workflow/file/connection/grant/MCP execution is #254 and does not block Phase 6.
+- CRM, Service Desk and HR fixture definitions compile/publish with exact module dependencies. File-defined runtime proof must exercise the complete declared capabilities before designer work, including later-numbered workflow and connection engines where used. [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) retains the broader final cross-phase and MCP proof; [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) retains the later editable HR builder proof. Neither a compiled fixture nor a partial Phase 6 screenshot substitutes for the engine-first runtime proof.
 - Every fixture page passes desktop, phone, keyboard, validation, empty, refused, conflict and failure checks that apply.
 - Internal navigation never performs a routine full document reload; slow routes and blocks show immediate local feedback, and refreshing data updates only affected components and dependent totals without losing unrelated state.
 - A delayed response or unfinished animation for an obsolete record, page, or access state never flashes or replaces the current authorised state; no feature defines its own motion timing or spring.

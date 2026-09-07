@@ -1,5 +1,9 @@
 # Record visibility implementation evidence
 
+## Current Testing source delivery — 7 September 2026
+
+The final reviewed C/D implementation merged normally through [PR #326](https://github.com/Abzum-NZ/Abzum-Vortex/pull/326) at `2026-09-07T03:52:34Z`, after both preview checks passed. Reviewed source `d89ecc380808cfe187c8184734bdc11ad5762465` and Testing merge `e813def92071799c99df739f65b1549c2efe9b04` have the identical tree `720fdd56c53a91bb3d1b9b4dc6058c46b8c5885b`. Unapproved #40 work is absent from this merge. Exact hosted Testing SQL/concurrency verification is still required before #36 closes; a source merge alone does not establish it.
+
 Task: [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36). Scope and acceptance: [implementation plan](../build-plan/issue-36-ownership-and-visibility.md).
 
 ## Definition and contract checkpoint — 6 September 2026
@@ -145,12 +149,12 @@ The approved C checkpoint validates published inherited-ownership chains in Defi
 
 A rollback-only neutral-row proof composes the witness with the existing direct account/current-Group ownership predicate. It covers one- and two-hop inheritance, membership deadlines, account ownership without an artificial deadline, and refusal of reversed, duplicate, foreign, wrong-type, wrong-application and unbound evidence. Parent visibility or a parent share is not treated as child ownership. Independent Sol review approved these four exact files:
 
-| Frozen C file                                                                | SHA-256                                                            |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `runtime/definition/src/validation.ts`                                       | `394b78e52d2505a3ba660dbcec0baec3cc256be255d6d0e3b7615cad3a0a8add` |
-| `runtime/definition/test/compiler.test.ts`                                   | `01af58d2f1141791a4c30b617ec1d39a020a49984f3deb2cdd6f1c6639963f2c` |
+| Frozen C file                                                                           | SHA-256                                                            |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `runtime/definition/src/validation.ts`                                                  | `394b78e52d2505a3ba660dbcec0baec3cc256be255d6d0e3b7615cad3a0a8add` |
+| `runtime/definition/test/compiler.test.ts`                                              | `01af58d2f1141791a4c30b617ec1d39a020a49984f3deb2cdd6f1c6639963f2c` |
 | `supabase/migrations/20260907021442_evaluate_inherited_record_relationship_witness.sql` | `92830b9e6b4aa4c693fca31f47521304fc48ecccfcc7e5a657fbc6f4512abe19` |
-| `supabase/tests/400_inherited_record_relationship_witness.test.sql`          | `0486fb6627349b46724712300d3a35c20bb26986611a76dbd1c32284c9b8329b` |
+| `supabase/tests/400_inherited_record_relationship_witness.test.sql`                     | `0486fb6627349b46724712300d3a35c20bb26986611a76dbd1c32284c9b8329b` |
 
 This completes the bounded C primitive, not complete relationship-route authorization. [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) must still evaluate the named source permission and its complete row scope before consuming this witness. [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) still supplies generated physical record storage. Exact hosted delivery and whole-repository verification for this combined checkpoint remain pending, so #36 is not Done.
 
@@ -162,16 +166,16 @@ Until #45 supplies real generated storage, ownership transfer is proven only thr
 
 Focused local checks currently pass **98 contract tests**, **49 assertions across the Access-reason and D SQL suites**, all **5 manifest tests**, and three deterministic competing-change cases: same-ID grant, same-revision revoke and same-record-revision neutral ownership transfer. Local history contains **61 migrations** through `20260907025834`; no reset was used. The separate reason migration was mechanically checked: removing its single `record_ownership_changed` accepted literal yields the byte-identical current 2,498-byte Access-version function definition. The hosted database was not changed by this checkpoint.
 
-| Frozen D candidate file                                                       | SHA-256                                                            |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `contracts/src/identity-access.ts`                                            | `a531c0d1279a44dd57305c7b6f016029d37b576024090ab6a5093751608cb697` |
-| `contracts/test/domain-contracts.test.ts`                                     | `470b649523a61861488722698981aaeda0373d38b6e0fcf8cf71d869ecd42978` |
-| `supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql` | `1c698af7aade5fec3c3ab9e17135088a753c510ba8b6e0ab4cb32b7161b0941c` |
+| Frozen D candidate file                                                             | SHA-256                                                            |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `contracts/src/identity-access.ts`                                                  | `a531c0d1279a44dd57305c7b6f016029d37b576024090ab6a5093751608cb697` |
+| `contracts/test/domain-contracts.test.ts`                                           | `470b649523a61861488722698981aaeda0373d38b6e0fcf8cf71d869ecd42978` |
+| `supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql`    | `1c698af7aade5fec3c3ab9e17135088a753c510ba8b6e0ab4cb32b7161b0941c` |
 | `supabase/migrations/20260907025834_add_record_ownership_changed_access_reason.sql` | `470f8c814cf162ac8a64b6c5d0e9d69e0e20ad0ea607defdf021d547bdcfcea1` |
-| `supabase/tests/195_access_version_role_catalogue_reason.test.sql`            | `934caedaa9e9b527ea4860b6bbabeb59d088a3b4f7e77721c2a9be109f6f38e0` |
-| `supabase/tests/405_private_direct_record_share_changes.test.sql`             | `06ed82facc40c449dc1c805af8e4fd85a12c1ceb66773f69d5c97a812d452677` |
-| `supabase/tests/private-direct-record-share-change-concurrency.test.sh`       | `6fe0f4cb61718ee125ace1bb2a03d00d735b2e5e65d6927be08f4b6be8c85db2` |
-| `workflows/kestra/database-verification.json`                                | `a26e8c400ebb3d9047338c78c345244fd45254aad62d5c6b0460504c9b965b2c` |
+| `supabase/tests/195_access_version_role_catalogue_reason.test.sql`                  | `934caedaa9e9b527ea4860b6bbabeb59d088a3b4f7e77721c2a9be109f6f38e0` |
+| `supabase/tests/405_private_direct_record_share_changes.test.sql`                   | `06ed82facc40c449dc1c805af8e4fd85a12c1ceb66773f69d5c97a812d452677` |
+| `supabase/tests/private-direct-record-share-change-concurrency.test.sh`             | `6fe0f4cb61718ee125ace1bb2a03d00d735b2e5e65d6927be08f4b6be8c85db2` |
+| `workflows/kestra/database-verification.json`                                       | `a26e8c400ebb3d9047338c78c345244fd45254aad62d5c6b0460504c9b965b2c` |
 
 Independent Sol actual-patch review approved D with no findings, including the final revocation Activity-source preservation and unchanged-owner refusal corrections. The later integration gate mechanically formatted only `domain-contracts.test.ts`; its refreshed hash is recorded above and awaits exact-byte review, without a functional or production change. Complete row-policy composition remains #35, complete field enforcement and protected share invocation remain #37, and generated storage remains #45. Exact hosted receipt and final task review remain pending. #36 therefore remains In progress, with no record editor, sharing screen, public endpoint or MCP transport claimed.
 
