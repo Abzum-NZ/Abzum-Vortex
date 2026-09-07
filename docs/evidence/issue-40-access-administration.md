@@ -1,6 +1,16 @@
 # Protected Access administration evidence
 
+## Private membership and assignment composition — 7 September 2026
+
+The next private engine family composes Group membership addition, restoration and renewal, and role-assignment grants from the existing governed writers. It binds the current organisation, person and correlation to verified context, checks complete affected authority, preserves the trusted Activity source and commits one Access/Activity result atomically. These functions are owner-only: public, anonymous, authenticated, service, runtime and request roles receive no execution grant. A working user-facing grant journey still belongs to [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267); verified session alone is not its invocation boundary.
+
+The migration was applied locally and the focused SQL415 proof passes **30 assertions**. Independent Sol actual-work review approves the exact executed bytes. Execution corrected a SQL CASE parsing ambiguity by binding the existing operation key once, replaced an invalid expired fixture with a coordinator-created membership followed by real expiry, and aligned an Activity-collision assertion with the existing `22023` contract while retaining atomic rollback checks. No production permission or constraint was relaxed. This is local private composition evidence, not source delivery, hosted verification or whole-task completion.
+
+Frozen SHA-256: migration `20260907051411_protect_private_membership_assignment_composition.sql` is `e306adcab72e2af3b28e839e1b8bc163765638c8b9b071524923cf7f24aa973f`; SQL415 is `d0282a1904fcc68c3b93497e62e225df0ed1492fffb157cdfdf5d394306c5637`. This family depends on the delivered structural authority helper, not the excluded assignment-revocation draft. Remaining role/delegation and other private compositions continue separately before the combined checkpoint is delivered.
+
 ## Structural administration — 7 September 2026
+
+Source delivery: [PR #331](https://github.com/Abzum-NZ/Abzum-Vortex/pull/331) merged normally into Testing at `2026-09-07T05:33:43Z`, after both preview checks passed. Reviewed source `433f7cd78dcddb155e9fdbba933414e37c285d0f` merged as `8ac071fa4fcc85b25d0820324ddbe1c0bfc93a2a`. No protection was bypassed. The exact hosted database/security/concurrency receipt remains unverified; this merge does not complete the whole task.
 
 Permitted administrators can retire a Group, remove a membership, edit a role's label/description without altering its permissions or policy, and retire a role. Group changes evaluate the complete retained assignment/delegation scope, including scheduled or expired retained facts. Role metadata uses the existing canonical preparation within the same transaction; all four changes retain current revision, tenant, permission and final-steward safeguards with one atomic Access/Activity result.
 
