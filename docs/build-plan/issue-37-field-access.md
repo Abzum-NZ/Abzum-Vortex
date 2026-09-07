@@ -2,6 +2,8 @@
 
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Prerequisites: completed [central Access #34](issue-34-access-decision.md), completed [ownership and visibility #36](issue-36-ownership-and-visibility.md), and [final record/row decision #35](issue-35-row-policy-composition.md). The [definition-to-catalogue checkpoint](../evidence/issue-37-field-access.md#definition-to-catalogue-checkpoint--8-september-2026) is implemented, locally verified and independently reviewed. Source declarations, compiler/provenance, publication/version impact and catalogue persistence now carry explicit field policies. The field resolver and projection/write contracts can proceed alongside #35; complete record integration and protected sharing still require #35's final exact-record decision and trusted fixed-adapter handoff. This whole task remains in progress, and the new checkpoint is not yet verified on hosted Testing.
 
+The [pure field-resolution checkpoint](../evidence/issue-37-field-access.md#pure-field-resolution-checkpoint--8-september-2026) is implemented and independently reviewed: complete contribution union, share intersection, current-evidence binding, projection and whole-write validation. Actual neutral database enforcement and protected sharing remain required; passing pure helpers does not deliver the later executors.
+
 ## Outcome
 
 A person receives only fields they may read and changes only fields they may change. Sharing a local record cannot give someone else field access the grantor does not have.

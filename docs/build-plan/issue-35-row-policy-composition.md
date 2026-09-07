@@ -8,6 +8,8 @@ Recheck the latest delivered migration at that time: the field-catalogue migrati
 in [PR #336](https://github.com/Abzum-NZ/Abzum-Vortex/pull/336) may be delivered
 first. Migration ordering follows actual delivery, not an earlier local filename.
 
+The [typed exact-record handoff](../evidence/issue-35-record-access-enforcement.md#typed-exact-record-handoff--8-september-2026) is implemented and independently reviewed. This source checkpoint adds no default database adapter and does not complete the still-unmerged SQL delivery or its narrow fixed-limit authorization.
+
 ## Outcome
 
 Permission to perform an action and permission to see or change a particular record are both enforced by the database. Neither check can substitute for the other.
