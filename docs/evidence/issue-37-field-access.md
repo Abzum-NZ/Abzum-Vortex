@@ -2,6 +2,28 @@
 
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and acceptance: [implementation plan](../build-plan/issue-37-field-access.md).
 
+## Isolated source delivery — 8 September 2026
+
+[PR #336](https://github.com/Abzum-NZ/Abzum-Vortex/pull/336) merged normally into
+Testing at `2026-09-07T23:17:58Z`, after both preview checks passed on reviewed head
+`968c7712ce1ee27f6e34a727191fceab40be45b1`. Testing merge:
+`eaef6ce34e46cdc977705068c77822b96e0d5bd8`.
+
+The architect created a clean detached checkout of that exact reviewed head,
+installed the frozen lockfile from the local package cache, and verified:
+
+- 90 test files passed, two skipped; 1,328 tests passed, three skipped.
+- Complete fixture gate: 12/12 passed.
+- All 23 package type checks and import boundaries passed.
+- All 23 package builds passed, including the Next.js production build.
+- No tracked checkout changes; no unfinished #35 source was included.
+
+The independent reviewer confirmed no committed #37 dependency on the excluded
+#35 changes. This replaces the earlier shared-worktree qualification with exact
+isolated source evidence. It does not claim hosted database verification of the
+new field-catalogue migration; its exact Testing receipt remains to be checked.
+No Production promotion occurred, and the whole #37 enforcement task stays open.
+
 ## Definition-to-catalogue checkpoint — 8 September 2026
 
 The next bounded slice is implemented and independently source-approved. Module

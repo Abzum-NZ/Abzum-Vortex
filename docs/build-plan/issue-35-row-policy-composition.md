@@ -4,6 +4,10 @@ Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites: 
 
 Before delivering #35, generate fresh timestamps for its two still-unapplied local migrations so they follow the repaired Testing migration `20260907221412`. Preserve their reviewed SQL and apply the normal migration gate; do not use history repair or an out-of-order bypass.
 
+Recheck the latest delivered migration at that time: the field-catalogue migration
+in [PR #336](https://github.com/Abzum-NZ/Abzum-Vortex/pull/336) may be delivered
+first. Migration ordering follows actual delivery, not an earlier local filename.
+
 ## Outcome
 
 Permission to perform an action and permission to see or change a particular record are both enforced by the database. Neither check can substitute for the other.
@@ -69,6 +73,27 @@ The pre-policy [direct-ownership proof](../evidence/issue-36-record-visibility.m
 - [ ] Independent review and local/hosted verification cover the delivered scope. Evidence explicitly identifies the neutral test tables; it does not claim generated-table or end-user application delivery.
 
 ## Integration ownership
+
+### Trusted record adapters — 8 September 2026
+
+The existing runtime connection becomes the restricted `vortex_request` role
+inside the verified transaction. It cannot call the private record evaluator,
+and must not receive an owner connection or a generic wrapper accepting permission,
+ownership, row or relationship JSON from a caller.
+
+#35 supplies a typed operation-specific adapter seam and exact-result
+orchestration, plus the actual four-policy proof using fixed neutral adapters in
+SQL430. The neutral adapter fixes the operation and storage binding, loads rows
+and edges itself, and invokes the private evaluator. Unit tests of the TypeScript
+seam are not a permanent generated database adapter.
+
+[#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) generates permanent
+storage-specific adapters and policies from verified definitions. They accept
+only the normal target and operation payload; they select the exact declaration,
+physical storage and relationship facts on the trusted side. #35 and #37 do not
+wait for #45 to prove their engines on controlled neutral tables, and #45 does
+not receive a bypass around those engines. No second driver, authority store,
+caller-selected helper or generic dispatcher is required.
 
 ### Narrow implementation authorization — 8 September 2026
 
