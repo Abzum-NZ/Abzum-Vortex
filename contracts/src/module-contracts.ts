@@ -710,7 +710,8 @@ export const actionDefinitionSchema = z
     key: namespacedKeySchema,
     label: labelSchema,
     subjectRecordTypeId: recordTypeIdSchema,
-    permissionKey: namespacedKeySchema,
+    permissionKey: namespacedKeySchema.optional(),
+    permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
     sharing: z.enum(["refused", "allowed"]),
     inputs: z.array(actionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
@@ -718,6 +719,30 @@ export const actionDefinitionSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["permissionKeys"],
+        message: "An action requires either one permission or canonical alternatives",
+      });
+    if (value.permissionKeys) {
+      if (new Set(value.permissionKeys).size !== value.permissionKeys.length)
+        context.addIssue({
+          code: "custom",
+          path: ["permissionKeys"],
+          message: "Action permission alternatives must be unique",
+        });
+      if (
+        value.permissionKeys.some(
+          (permission, index) => index > 0 && value.permissionKeys![index - 1]! >= permission,
+        )
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["permissionKeys"],
+          message: "Action permission alternatives must use canonical order",
+        });
+    }
     if (new Set(value.inputs.map((input) => input.key)).size !== value.inputs.length)
       context.addIssue({
         code: "custom",

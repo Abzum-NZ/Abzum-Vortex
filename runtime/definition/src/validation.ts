@@ -113,6 +113,34 @@ const failure = (
 
 const object = (value: unknown) => value as JsonObject;
 const array = (value: unknown) => value as JsonObject[];
+const actionPermissionKeys = (action: JsonObject): string[] =>
+  action.permissionKeys === undefined
+    ? action.permissionKey === undefined
+      ? []
+      : [String(action.permissionKey)]
+    : array(action.permissionKeys).map(String);
+const actionPermissionsMatch = (
+  action: JsonObject,
+  permissionsByKey: ReadonlyMap<string, JsonObject>,
+  permissionOwnersByKey?: ReadonlyMap<string, string>,
+): boolean => {
+  if (action.permissionKeys === undefined)
+    return action.permissionKey !== undefined && permissionsByKey.has(String(action.permissionKey));
+  const permissions = actionPermissionKeys(action).map((key) => permissionsByKey.get(key));
+  const first = permissions[0];
+  if (first === undefined || String(first.recordTypeId) !== String(action.subjectRecordTypeId))
+    return false;
+  const firstOwner = permissionOwnersByKey?.get(String(first.key));
+  return permissions.every(
+    (permission) =>
+      permission !== undefined &&
+      String(permission.recordTypeId) === String(action.subjectRecordTypeId) &&
+      permission.actionKind === first.actionKind &&
+      String(permission.namedAction ?? "") === String(first.namedAction ?? "") &&
+      (first.actionKind !== "named" ||
+        permissionOwnersByKey?.get(String(permission.key)) === firstOwner),
+  );
+};
 
 const schemaFailureFamily = {
   definition_required_value: "required_value",
@@ -493,7 +521,16 @@ function sourceLocalReferenceRule(
         const inputs = new Map(
           array(action.inputs).map((input) => [String(input.key), String(input.type)]),
         );
-        if (!record || !permissions.has(String(action.permission))) valid = false;
+        const actionPermissions =
+          action.permission_alternatives === undefined
+            ? [String(action.permission)]
+            : (action.permission_alternatives as string[]);
+        if (
+          !record ||
+          actionPermissions.length === 0 ||
+          actionPermissions.some((key) => !permissions.has(key))
+        )
+          valid = false;
         if (
           action.precondition &&
           !conditionValid(action.precondition, fields, new Set(inputs.keys()))
@@ -1474,7 +1511,9 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       array(content.recordTypes).map((record) => [String(record.recordTypeId), record]),
     );
     const modulePermissions = array(content.permissions);
-    const permissions = new Set(modulePermissions.map((permission) => String(permission.key)));
+    const modulePermissionsByKey = new Map(
+      modulePermissions.map((permission) => [String(permission.key), permission]),
+    );
     const actionsById = new Map(
       array(content.actions).map((action) => [String(action.actionId), action]),
     );
@@ -1738,7 +1777,8 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       );
       let valid =
         subject !== undefined &&
-        permissions.has(String(action.permissionKey)) &&
+        actionPermissionKeys(action).length > 0 &&
+        actionPermissionsMatch(action, modulePermissionsByKey) &&
         fieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
           conditionTypesValid(action.precondition, fieldMap, inputTypes));
@@ -2294,6 +2334,17 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const permissionMap = new Map(
       permissionEntries.map((permission) => [String(permission.key), permission]),
     );
+    const applicationRootId = String(object(object(output.canonical).envelope).rootId);
+    const permissionOwnersByKey = new Map([
+      ...array(content.permissions).map(
+        (permission) => [String(permission.key), `application:${applicationRootId}`] as const,
+      ),
+      ...boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).permissions).map(
+          (permission) => [String(permission.key), `module:${module.artifact.rootId}`] as const,
+        ),
+      ),
+    ]);
     const permissions = new Set(permissionMap.keys());
     const applicationPermissions = new Map(
       array(content.permissions).map((permission) => [String(permission.key), permission]),
@@ -2356,7 +2407,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         !subjectRecord ||
         (expectedSubjectRecordId !== undefined &&
           String(action.subjectRecordTypeId) !== expectedSubjectRecordId) ||
-        !publicPermissionSafe(action.permissionKey)
+        actionPermissionKeys(action).length === 0 ||
+        !actionPermissionKeys(action).every(publicPermissionSafe)
       )
         return false;
 
@@ -2565,7 +2617,9 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       );
       let valid =
         subject !== undefined &&
-        permissions.has(String(action.permissionKey)) &&
+        actionPermissionKeys(action).length > 0 &&
+        permissionEntries.length === permissionMap.size &&
+        actionPermissionsMatch(action, permissionMap, permissionOwnersByKey) &&
         applicationFieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
           conditionTypesValid(action.precondition, fieldMap, inputTypes));

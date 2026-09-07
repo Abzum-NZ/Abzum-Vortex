@@ -1862,6 +1862,51 @@ describe("definition version impact", () => {
     });
   });
 
+  test("treats a canonical action permission set as one semantic permission change", () => {
+    const draft = moduleDraft();
+    draft.content.actions.push(sampleAction());
+    const request = requestAfter(draft);
+    const action = request.candidate.content.actions[0]!;
+    delete action.permissionKey;
+    action.permissionKeys = ["sample.record.read", "sample.record.update"];
+
+    const result = compareDefinitionVersionImpact(request);
+    expect(result).toMatchObject({ outcome: "release_required", impact: "major" });
+    expect(result.reasons).toEqual([
+      expect.objectContaining({
+        code: "permission_changed",
+        location: expect.objectContaining({ componentKind: "action", property: "permission" }),
+      }),
+    ]);
+  });
+
+  test("treats a changed plural action permission set as one major change", () => {
+    const draft = moduleDraft();
+    const action = sampleAction();
+    delete action.permissionKey;
+    action.permissionKeys = ["sample.record.read_all", "sample.record.read_own"];
+    draft.content.actions.push(action);
+    const unchanged = requestAfter(draft);
+    expect(compareDefinitionVersionImpact(unchanged)).toMatchObject({
+      outcome: "no_change",
+      reasons: [],
+    });
+
+    const changed = requestAfter(draft);
+    changed.candidate.content.actions[0]!.permissionKeys = [
+      "sample.record.read_all",
+      "sample.record.read_shared",
+    ];
+    const result = compareDefinitionVersionImpact(changed);
+    expect(result).toMatchObject({ outcome: "release_required", impact: "major" });
+    expect(result.reasons).toEqual([
+      expect.objectContaining({
+        code: "permission_changed",
+        location: expect.objectContaining({ componentKind: "action", property: "permission" }),
+      }),
+    ]);
+  });
+
   test.each(["text", "number", "date", "date_time"] as const)(
     "treats omitted and empty %s action-input validation as equivalent",
     (type) => {

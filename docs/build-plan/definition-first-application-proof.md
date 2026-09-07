@@ -26,6 +26,7 @@ The proof also depends on [workflow run views and permitted controls #86](https:
 ## Acceptance criteria
 
 - [ ] Every declared capability in both complete applications has a real executor and passing evidence; no sample-only handler or silent omission.
+- [ ] The files include and exercise both module-owned and application-owned actions, including an application action bound to a module's permissions. Preserve supported singular bindings and prove same-action alternatives through the completed [record-access engine #35](issue-35-row-policy-composition.md); matching labels or ambiguous permission keys never substitute for exact references.
 - [ ] Files → validation/publication → explicit installation → real browser use → upgrade/withdrawal works without a visual editor.
 - [ ] Pages, data, forms, frontend/background flows, pipelines, files/search, governed access, connections and interfaces work in the declared application context.
 - [ ] Shared-record identity, limited Case Summary collaboration/revocation and both organisation isolation directions pass.

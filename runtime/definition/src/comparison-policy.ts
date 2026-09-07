@@ -566,6 +566,11 @@ const compareAction = (
   candidate: RecordValue,
 ): void => {
   const id = candidate.actionId;
+  const normalizedPermissions = (action: RecordValue): string[] =>
+    (action.permissionKeys === undefined
+      ? [String(action.permissionKey)]
+      : (action.permissionKeys as unknown[]).map(String)
+    ).sort(compareCanonicalStrings);
   pushChange(
     reasons,
     previous.key,
@@ -586,17 +591,25 @@ const compareAction = (
     "name",
     id,
   );
-  for (const key of ["subjectRecordTypeId", "permissionKey", "sharing", "precondition", "effects"])
+  pushChange(
+    reasons,
+    normalizedPermissions(previous),
+    normalizedPermissions(candidate),
+    "major",
+    "permission_changed",
+    "action",
+    "permission",
+    id,
+  );
+  for (const key of ["subjectRecordTypeId", "sharing", "precondition", "effects"])
     pushChange(
       reasons,
       previous[key],
       candidate[key],
       "major",
-      key === "permissionKey" || key === "sharing"
-        ? "permission_changed"
-        : "existing_behavior_changed",
+      key === "sharing" ? "permission_changed" : "existing_behavior_changed",
       "action",
-      key === "permissionKey" || key === "sharing" ? "permission" : "behavior",
+      key === "sharing" ? "permission" : "behavior",
       id,
     );
   compareKeyed(

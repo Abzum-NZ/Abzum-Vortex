@@ -795,13 +795,40 @@ const moduleSourceBodySchema = z
           key: namespacedKeySchema,
           label: z.string().min(1).max(120),
           record_type: builderKeySchema,
-          permission: namespacedKeySchema,
+          permission: namespacedKeySchema.optional(),
+          permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
           shareable: z.boolean(),
           inputs: z.array(actionInputSchema),
           precondition: sourceConditionSchema.optional(),
           effects: z.array(sourceActionEffectSchema).min(1).max(10),
         })
-        .strict(),
+        .strict()
+        .superRefine((value, context) => {
+          if ((value.permission === undefined) === (value.permission_alternatives === undefined))
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "An action requires either one permission or canonical alternatives",
+            });
+          const alternatives = value.permission_alternatives;
+          if (!alternatives) return;
+          if (new Set(alternatives).size !== alternatives.length)
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "Action permission alternatives must be unique",
+            });
+          if (
+            alternatives.some(
+              (permission, index) => index > 0 && alternatives[index - 1]! >= permission,
+            )
+          )
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "Action permission alternatives must use canonical order",
+            });
+        }),
     ),
     events: z.array(
       z

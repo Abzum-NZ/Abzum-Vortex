@@ -181,6 +181,7 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   activity: "activityKey",
   application_root_required: "applicationRootIdRequired",
   permission: "permissionKey",
+  permission_alternatives: "permissionKeys",
   event: "eventKey",
   message: "messageKey",
   component: "componentId",
@@ -1318,7 +1319,7 @@ const moduleSourceTransformPatterns = [
 
 const applicationSourceTransformPatterns = [
   /^root_alias$/,
-  /^body\/(?:permissions|roles|block_registrations|pages|pipelines|workflows|interfaces|public_addresses)\/#\/id$/,
+  /^body\/(?:permissions|actions|roles|block_registrations|pages|pipelines|workflows|interfaces|public_addresses)\/#\/id$/,
   /^body\/workflows\/#\/nodes\/#\/id$/,
   /^body\/interfaces\/#\/operations\/#\/id$/,
   /^body\/pages\/#\/steps\/#\/id$/,
@@ -2408,7 +2409,9 @@ function compileModule(
       key: action.key,
       label: action.label,
       subjectRecordTypeId: resolution.recordType(record).recordTypeId,
-      permissionKey: action.permission,
+      ...(action.permission_alternatives
+        ? { permissionKeys: action.permission_alternatives }
+        : { permissionKey: action.permission }),
       sharing: action.shareable ? "allowed" : "refused",
       inputs: (action.inputs as JsonObject[]).map((input) => actionInput(input, resolution)),
       ...(action.precondition ? { precondition: condition(action.precondition, localField) } : {}),
@@ -3366,7 +3369,9 @@ function compileApplication(
           key: action.key,
           label: action.label,
           subjectRecordTypeId: resolution.recordType(record).recordTypeId,
-          permissionKey: action.permission,
+          ...(action.permission_alternatives
+            ? { permissionKeys: action.permission_alternatives }
+            : { permissionKey: action.permission }),
           sharing: action.sharing,
           inputs: (action.inputs as JsonObject[]).map((input) => actionInput(input, resolution)),
           ...(action.precondition
