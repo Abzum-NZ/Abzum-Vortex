@@ -26,6 +26,10 @@ For a record, the decision is `OR(permission eligibility AND that same permissio
 
 ## Implementation ownership verified against current source
 
+The reviewed implementation keeps the existing non-record declaration and eligibility function signature unchanged. A separate strict record declaration carries the exact application and installed module/record-type/storage binding, canonical required permissions, action and recent-authentication requirement; it allows ordinary permission authority only, not delegated-management scopes. A private shared eligibility core reuses current catalogue and role-path logic for both wrappers. Each wrapper validates its context and takes one Access-version observation and time sample; request roles cannot call the core directly or supply those internal facts. The first checkpoint proves candidate-bound eligibility and legacy equivalence only. It must not report a final record allow result before the row-scope composition is implemented.
+
+The complete record decision retains each independently successful permission contribution and each applicable direct share's own field bounds and expiry. Its validity cannot outlive any contribution it reports. Immutable Definition releases and their exact dependencies supply conditions and relationship declarations; a fixed protected adapter supplies actual rows and edges. No caller selects a table, predicate or source permission. Relationship recursion uses the same decision and refuses cycles; inherited ownership remains a separate factual owner route. These are private implementation seams, not another catalogue, cache or public endpoint.
+
 | Existing area | Required change |
 | --- | --- |
 | [Module authored actions](../../contracts/src/module-source-contracts.ts), [application authored actions](../../contracts/src/application-source-contracts.ts), [compiled actions](../../contracts/src/module-contracts.ts) | Extend record-action permission binding to canonical alternatives while retaining historical singular definitions. Do not broaden unrelated navigation, interface or non-record bindings into caller-selected permission lists. |
@@ -35,7 +39,7 @@ For a record, the decision is `OR(permission eligibility AND that same permissio
 
 Preserve the existing authored `permission` and compiled `permissionKey` shapes for single-permission actions. Add mutually exclusive authored `permission_alternatives` and compiled `permissionKeys` only for two or more canonical unique alternatives. Normalize both to a permission set for reference checks, semantic comparison and trusted Access declarations; preserve the original artifact representation and normal hashing, without rewriting historical bytes. This is authorization metadata only: #250 still owns flow/action execution, and an interface's separate exposure permission cannot be mixed into the target action's row authority.
 
-Neither this implementation map nor passing earlier predicate tests constitutes delivered record policies. Contract/compiler work precedes the complete database decision and fixed-policy proof.
+Neither this implementation map nor passing earlier predicate tests constitutes delivered record policies. Contract/compiler work precedes the complete database decision and fixed-policy proof. The eligibility-only SQL checkpoint stays unmerged until it participates in a complete record decision and neutral policy proof. Compatible contract/compiler metadata may be reviewed separately, but no runtime or interface may execute alternative bindings before the complete-pair database enforcement is available.
 
 ## Relationship-route composition
 
