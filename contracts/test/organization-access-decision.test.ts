@@ -4,6 +4,9 @@ import {
   organizationAccessDeclarationSchema,
   organizationAccessManagementScopeSchema,
   organizationPermissionEligibilitySchema,
+  organizationRecordAccessDecisionSchema,
+  organizationRecordAccessDeclarationSchema,
+  organizationRecordPermissionEligibilitySchema,
   safeOrganizationAccessRefusalSchema,
 } from "../src/organization-access-decision";
 import { describe, expect, it } from "vitest";
@@ -59,6 +62,100 @@ const evidence = () => ({
   validUntil: "2026-09-06T06:05:00.000Z",
   correlationId: id("c", 12),
 });
+
+const recordBinding = () => ({
+  moduleRootId: id("e", 5),
+  recordTypeId: id("a", 13),
+  storageContractId: id("b", 14),
+  storageScope: "application_contained" as const,
+});
+
+const recordDeclaration = () => ({
+  operationKey: "module.records.read",
+  action: { actionKind: "read" as const },
+  target: { kind: "application" as const, applicationRootId: id("c", 3) },
+  requiredPermissions: [applicationPermission(), modulePermission()].sort((left, right) => {
+    const identity = (permission: {
+      applicationRootId: string;
+      ownerKind: string;
+      ownerId: string;
+      permissionId: string;
+    }) =>
+      [
+        permission.applicationRootId.toLowerCase(),
+        permission.ownerKind,
+        permission.ownerId.toLowerCase(),
+        permission.permissionId.toLowerCase(),
+      ].join(":");
+    return identity(left).localeCompare(identity(right));
+  }),
+  recordBinding: recordBinding(),
+  recentAuthentication: { kind: "none" as const },
+  authority: { kind: "permission" as const },
+});
+
+const recordPermissionEligibility = () => ({
+  outcome: "eligible" as const,
+  operationKey: "module.records.read",
+  target: { kind: "application" as const, applicationRootId: id("c", 3) },
+  organizationId: id("a", 10),
+  organizationAccountId: id("b", 11),
+  accessVersion: 12,
+  checkedAt: "2026-09-06T06:00:00.000Z",
+  validUntil: "2026-09-06T06:04:00.000Z",
+  correlationId: id("c", 12),
+  recordBinding: recordBinding(),
+  eligiblePermissions: [
+    {
+      permission: modulePermission(),
+      recordScope: { routes: [{ kind: "ownership" as const }] },
+      source: {
+        kind: "module" as const,
+        definitionKey: "module.records",
+        rootId: id("e", 5),
+        releaseVersion: "1.2.3",
+        releaseRevision: 7,
+        validationContractVersion: "1.0.0",
+        contentFingerprint: `sha256:${"a".repeat(64)}`,
+        resolutionFingerprint: `sha256:${"b".repeat(64)}`,
+      },
+      validUntil: "2026-09-06T06:04:00.000Z",
+    },
+    {
+      permission: applicationPermission(),
+      recordScope: { routes: [{ kind: "all_records" as const }] },
+      source: {
+        kind: "application" as const,
+        definitionKey: "application.records",
+        rootId: id("c", 3),
+        releaseVersion: "2.0.0",
+        releaseRevision: 9,
+        validationContractVersion: "1.0.0",
+        contentFingerprint: `sha256:${"c".repeat(64)}`,
+        resolutionFingerprint: `sha256:${"d".repeat(64)}`,
+      },
+      validUntil: "2026-09-06T06:05:00.000Z",
+    },
+  ],
+});
+
+const recordAccessDecision = () => {
+  const eligibility = recordPermissionEligibility();
+  return {
+    ...eligibility,
+    outcome: "allowed" as const,
+    recordId: id("d", 84),
+    action: { actionKind: "read" as const },
+    matchedContributions: [
+      {
+        ...eligibility.eligiblePermissions[0]!,
+        route: { kind: "ownership" as const },
+      },
+    ],
+    validUntil: eligibility.eligiblePermissions[0]!.validUntil,
+    eligiblePermissions: undefined,
+  };
+};
 
 describe("organization access decision contracts", () => {
   it("accepts exact organization, application and module operation bindings", () => {
@@ -219,6 +316,180 @@ describe("organization access decision contracts", () => {
     expect(organizationAccessDecisionSchema.safeParse(allowed).success).toBe(true);
     expect(organizationAccessDecisionSchema.safeParse(eligible).success).toBe(false);
     expect(organizationPermissionEligibilitySchema.safeParse(allowed).success).toBe(false);
+  });
+
+  it("accepts a closed canonical record eligibility declaration", () => {
+    expect(organizationRecordAccessDeclarationSchema.safeParse(recordDeclaration()).success).toBe(
+      true,
+    );
+    const declaration = recordDeclaration();
+    for (const candidate of [
+      { ...declaration, requiredPermissions: [] },
+      {
+        ...declaration,
+        requiredPermissions: [applicationPermission(), applicationPermission()],
+      },
+      { ...declaration, requiredPermissions: [...declaration.requiredPermissions].reverse() },
+      { ...declaration, requiredPermissions: [platformPermission()] },
+      {
+        ...declaration,
+        requiredPermissions: [
+          { ...applicationPermission(), applicationRootId: id("d", 80), ownerId: id("d", 80) },
+        ],
+      },
+      {
+        ...declaration,
+        requiredPermissions: [{ ...modulePermission(), ownerId: id("f", 83) }],
+      },
+      { ...declaration, authority: { kind: "delegated_management" } },
+      { ...declaration, recordId: id("a", 81) },
+      { ...declaration, recordBinding: { ...recordBinding(), predicate: "caller_choice" } },
+    ])
+      expect(organizationRecordAccessDeclarationSchema.safeParse(candidate).success).toBe(false);
+
+    expect(
+      organizationRecordAccessDeclarationSchema.safeParse({
+        ...declaration,
+        action: { actionKind: "named", namedAction: "approve" },
+        requiredPermissions: [modulePermission()],
+      }).success,
+    ).toBe(true);
+    expect(
+      organizationRecordAccessDeclarationSchema.safeParse({
+        ...declaration,
+        action: { actionKind: "named", namedAction: "approve" },
+        requiredPermissions: recordDeclaration().requiredPermissions,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps each eligible record permission bound to its own scope, source and deadline", () => {
+    const eligible = recordPermissionEligibility();
+    expect(organizationRecordPermissionEligibilitySchema.safeParse(eligible).success).toBe(true);
+    for (const candidate of [
+      { ...eligible, outcome: "allowed" },
+      { ...eligible, eligiblePermissions: [] },
+      { ...eligible, validUntil: "2026-09-06T06:05:00.000Z" },
+      {
+        ...eligible,
+        eligiblePermissions: [
+          {
+            ...eligible.eligiblePermissions[0],
+            recordScope: undefined,
+          },
+        ],
+      },
+      {
+        ...eligible,
+        eligiblePermissions: [
+          {
+            ...eligible.eligiblePermissions[0],
+            source: { ...eligible.eligiblePermissions[0]!.source, rootId: id("f", 82) },
+          },
+        ],
+      },
+      {
+        ...eligible,
+        eligiblePermissions: [
+          {
+            ...eligible.eligiblePermissions[0],
+            validUntil: eligible.checkedAt,
+          },
+        ],
+        validUntil: eligible.checkedAt,
+      },
+      { ...eligible, rowAllowed: true },
+      { ...eligible, matchedContributions: [] },
+    ])
+      expect(organizationRecordPermissionEligibilitySchema.safeParse(candidate).success).toBe(
+        false,
+      );
+
+    const refusalEvidence: Omit<typeof eligible, "validUntil" | "eligiblePermissions"> &
+      Partial<Pick<typeof eligible, "validUntil" | "eligiblePermissions">> = { ...eligible };
+    delete refusalEvidence.validUntil;
+    delete refusalEvidence.eligiblePermissions;
+    expect(eligible.eligiblePermissions).toHaveLength(2);
+    expect(
+      organizationRecordPermissionEligibilitySchema.safeParse({
+        ...refusalEvidence,
+        outcome: "refused",
+        reasonCode: "permission_not_effective",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts only complete permission-and-row contributions", () => {
+    const allowed: Omit<ReturnType<typeof recordAccessDecision>, "eligiblePermissions"> &
+      Partial<Pick<ReturnType<typeof recordAccessDecision>, "eligiblePermissions">> = {
+      ...recordAccessDecision(),
+    };
+    delete allowed.eligiblePermissions;
+    expect(organizationRecordAccessDecisionSchema.safeParse(allowed).success).toBe(true);
+
+    for (const candidate of [
+      { ...allowed, outcome: "eligible" },
+      { ...allowed, matchedContributions: [] },
+      { ...allowed, validUntil: "2026-09-06T06:05:00.000Z" },
+      {
+        ...allowed,
+        matchedContributions: [
+          {
+            ...allowed.matchedContributions[0]!,
+            route: { kind: "all_records" },
+          },
+        ],
+      },
+      {
+        ...allowed,
+        action: { actionKind: "delete" },
+        matchedContributions: [
+          {
+            ...allowed.matchedContributions[0]!,
+            recordScope: { routes: [{ kind: "direct_share" }] },
+            route: {
+              kind: "direct_share",
+              directShareId: id("d", 90),
+              directShareRevision: 1,
+              readableFieldIds: [id("e", 91)],
+              changeableFieldIds: [],
+            },
+          },
+        ],
+      },
+      {
+        ...allowed,
+        matchedContributions: [
+          {
+            ...allowed.matchedContributions[0]!,
+            recordScope: { routes: [{ kind: "direct_share" }] },
+            route: {
+              kind: "direct_share",
+              directShareId: id("d", 90),
+              directShareRevision: 1,
+              readableFieldIds: [id("f", 92), id("e", 91)],
+              changeableFieldIds: [id("a", 93)],
+            },
+          },
+        ],
+      },
+      { ...allowed, eligiblePermissions: [] },
+      { ...allowed, rowAllowed: true },
+    ])
+      expect(organizationRecordAccessDecisionSchema.safeParse(candidate).success).toBe(false);
+
+    const evidenceOnly: Omit<typeof allowed, "validUntil" | "matchedContributions"> &
+      Partial<Pick<typeof allowed, "validUntil" | "matchedContributions">> = { ...allowed };
+    delete evidenceOnly.validUntil;
+    delete evidenceOnly.matchedContributions;
+    expect(allowed.matchedContributions).toHaveLength(1);
+    expect(
+      organizationRecordAccessDecisionSchema.safeParse({
+        ...evidenceOnly,
+        outcome: "refused",
+        reasonCode: "record_scope_refused",
+      }).success,
+    ).toBe(true);
   });
 
   it("requires safe finite transaction-bound decision evidence", () => {
