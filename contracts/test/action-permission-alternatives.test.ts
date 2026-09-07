@@ -5,7 +5,7 @@ import {
   actionDefinitionSchema,
   applicationSourceDocumentSchema,
   moduleSourceDocumentSchema,
-} from "@vortex/contracts";
+} from "../src/index.js";
 
 const fixture = (relativePath: string): unknown =>
   JSON.parse(
