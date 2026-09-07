@@ -3,6 +3,8 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import {
   activityIdSchema,
+  changeOrganizationAdministrationDelegationAuthorityResultSchema,
+  changeOrganizationAdministrationRoleActivationResultSchema,
   changeOrganizationAdministrationGroupResultSchema,
   createOrganizationAdministrationGroupCommandSchema,
   groupIdSchema,
@@ -39,7 +41,11 @@ import {
   readOrganizationAdministrationRoleAssignmentCommandSchema,
   readOrganizationAdministrationRoleAssignmentResultSchema,
   renameOrganizationAdministrationGroupCommandSchema,
+  deactivateOrganizationAdministrationRoleActivationCommandSchema,
+  revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   type ChangeOrganizationAdministrationGroupResult,
+  type ChangeOrganizationAdministrationDelegationAuthorityResult,
+  type ChangeOrganizationAdministrationRoleActivationResult,
   type CreateOrganizationAdministrationGroupCommand,
   type IdentitySession,
   type ListOrganizationAdministrationGroupsCommand,
@@ -76,6 +82,8 @@ import {
   type ReadOrganizationAdministrationRoleAssignmentCommand,
   type ReadOrganizationAdministrationRoleAssignmentResult,
   type RenameOrganizationAdministrationGroupCommand,
+  type DeactivateOrganizationAdministrationRoleActivationCommand,
+  type RevokeOrganizationAdministrationDelegationAuthorityCommand,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
 import {
@@ -176,6 +184,18 @@ type RoleAssignmentDetailRow = DatabaseRow & {
   organization_id: unknown;
   outcome: unknown;
   assignment_summary: unknown;
+  access_version: unknown;
+};
+
+type DelegationAuthorityChangeRow = DatabaseRow & {
+  organization_id: unknown;
+  delegation_summary: unknown;
+  access_version: unknown;
+};
+
+type RoleActivationChangeRow = DatabaseRow & {
+  organization_id: unknown;
+  activation_summary: unknown;
   access_version: unknown;
 };
 
@@ -450,6 +470,101 @@ export const createOrganizationAccessAdministrationService = (
           },
         ),
       );
+    },
+
+    deactivateRoleActivation: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: DeactivateOrganizationAdministrationRoleActivationCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleActivationResult>
+    > => {
+      const command =
+        deactivateOrganizationAdministrationRoleActivationCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+      return requests.runChange(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<RoleActivationChangeRow>`
+          select organization_id, activation_summary, access_version
+          from vortex_access.deactivate_organization_role_activation_for_administration(
+            ${command.data.roleActivationId}::uuid,
+            ${command.data.expectedActivationRevision}::bigint,
+            ${activityId}::uuid
+          )`,
+        );
+        const parsed = changeOrganizationAdministrationRoleActivationResultSchema.safeParse({
+          activation: normalizeRoleActivation(row.activation_summary),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          !parsed.success ||
+          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          !sameUuid(parsed.data.activation.roleActivationId, command.data.roleActivationId) ||
+          parsed.data.activation.revision !== command.data.expectedActivationRevision + 1 ||
+          parsed.data.activation.state !== "revoked" ||
+          parsed.data.activation.temporalState !== "revoked"
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return parsed.data;
+      });
+    },
+
+    revokeDelegationAuthority: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      commandCandidate: RevokeOrganizationAdministrationDelegationAuthorityCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<ChangeOrganizationAdministrationDelegationAuthorityResult>
+    > => {
+      const command =
+        revokeOrganizationAdministrationDelegationAuthorityCommandSchema.safeParse(
+          commandCandidate,
+        );
+      if (!command.success) return { kind: "unavailable" };
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+      return requests.runChange(session, candidate, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<DelegationAuthorityChangeRow>`
+          select organization_id, delegation_summary, access_version
+          from vortex_access.revoke_organization_delegation_authority_for_administration(
+            ${command.data.delegationAuthorityId}::uuid,
+            ${command.data.expectedDelegationRevision}::bigint,
+            ${activityId}::uuid
+          )`,
+        );
+        const parsed = changeOrganizationAdministrationDelegationAuthorityResultSchema.safeParse({
+          delegation: normalizeAssignmentLedgerFact(row.delegation_summary),
+          accessVersion: revision(row.access_version),
+        });
+        if (
+          typeof row.organization_id !== "string" ||
+          !sameUuid(row.organization_id, scope.organizationId) ||
+          !parsed.success ||
+          parsed.data.accessVersion !== scope.accessVersion + 1 ||
+          !sameUuid(
+            parsed.data.delegation.delegationAuthorityId,
+            command.data.delegationAuthorityId,
+          ) ||
+          parsed.data.delegation.revision !== command.data.expectedDelegationRevision + 1 ||
+          parsed.data.delegation.state !== "revoked" ||
+          parsed.data.delegation.temporalState !== "revoked"
+        )
+          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+        return parsed.data;
+      });
     },
 
     listGroups: async (

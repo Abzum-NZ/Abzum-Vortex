@@ -648,6 +648,47 @@ select throws_ok(
   '22023'::char(5), 'Organization delegation authority page input is invalid',
   'delegation list refuses an oversized page'
 );
+select throws_ok(
+  $$ select * from vortex_access.revoke_organization_delegation_authority_for_administration(
+    '83800000-0000-4000-8000-000000000010', 1,
+    'a3800000-0000-4000-8000-000000000088') $$,
+  '40001'::char(5), null,
+  'a same-tenant foreign delegation is unavailable through the protected writer'
+);
+select throws_ok(
+  $$ select * from vortex_access.revoke_organization_delegation_authority_for_administration(
+    '83800000-0000-4000-8000-000000000001', 1,
+    'a3800000-0000-4000-8000-000000000089') $$,
+  '23514'::char(5), 'An adopted organization requires a permanent steward',
+  'the protected writer preserves the final permanent-steward delegation'
+);
+
+select is(
+  (select (delegation_summary ->> 'state') || '|' ||
+      (delegation_summary ->> 'revision') || '|' || access_version::text
+   from vortex_access.revoke_organization_delegation_authority_for_administration(
+     '83800000-0000-4000-8000-000000000030', 1,
+     'a3800000-0000-4000-8000-000000000090')),
+  'revoked|2|11',
+  'an administrator revokes the exact stored bounded delegation scope'
+);
+reset role;
+select is(
+  (select count(*)::text || '|' || min(action)
+   from vortex_activity.organization_activity_entries
+   where organization_id = '23800000-0000-4000-8000-000000000001'
+     and activity_id = 'a3800000-0000-4000-8000-000000000090'),
+  '1|revoke_delegation',
+  'delegation revocation appends exactly one atomic Activity entry'
+);
+set local role vortex_request;
+select throws_ok(
+  $$ select * from vortex_access.revoke_organization_delegation_authority_for_administration(
+    '83800000-0000-4000-8000-000000000030', 1,
+    'a3800000-0000-4000-8000-000000000091') $$,
+  '42501'::char(5), null,
+  'an already revoked delegation cannot replay through its stale request context'
+);
 
 reset role;
 select pg_temp.install_assignment_ledger_context(
@@ -675,6 +716,13 @@ select throws_ok(
   $$,
   '42501'::char(5), 'Organization assignment ledger is unavailable',
   'an active account without assignments-read authority cannot inspect delegations'
+);
+select throws_ok(
+  $$ select * from vortex_access.revoke_organization_delegation_authority_for_administration(
+    '83800000-0000-4000-8000-000000000001', 1,
+    'a3800000-0000-4000-8000-000000000092') $$,
+  '42501'::char(5), null,
+  'delegation administration has no self-revocation shortcut'
 );
 
 reset role;

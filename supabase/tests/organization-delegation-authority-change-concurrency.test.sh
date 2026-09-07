@@ -58,6 +58,7 @@ readonly correlation_r4_stale_grant="ef${run_uuid:2}"
 readonly correlation_r5_replace="f1${run_uuid:2}"
 readonly correlation_seed="f2${run_uuid:2}"
 readonly correlation_platform="f3${run_uuid:2}"
+readonly activity_r2_revoke="f4${run_uuid:2}"
 
 fixture_claimed=0
 declare -a worker_pids=()
@@ -518,9 +519,16 @@ PGAPPNAME="vortex-delegation-r2-revoke-$fixture_name_token" "${psql_command[@]}"
 \set VERBOSITY verbose
 begin; set local lock_timeout='30s'; set local statement_timeout='45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/r2-revoke.pid'
-select * from vortex_access.coordinate_organization_delegation_authority_change(
-  'revoke_delegation','$organization_id','$transition_delegation_id',1,
-  null,null,null,null,null,null,null,null,'$actor_id','$correlation_r2_revoke');
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'callerKind','human','identityAuthorityId','$actor_id','tenantId','$tenant_id',
+  'organizationId','$organization_id','organizationAccountId','$account_id',
+  'identityId','$identity_id','sessionId','$correlation_r2_revoke',
+  'authenticationStrength','multi_factor','issuedAt',pg_catalog.clock_timestamp(),
+  'expiresAt',pg_catalog.clock_timestamp() + interval '5 minutes',
+  'accessVersion',$before_r2,'correlationId','$correlation_r2_revoke'));
+set role vortex_request;
+select * from vortex_access.revoke_organization_delegation_authority_for_administration(
+  '$transition_delegation_id',1,'$activity_r2_revoke');
 commit;
 SQL
 r2_revoke=$!; worker_pids+=("$r2_revoke")
@@ -529,7 +537,7 @@ wait_for_database_blocker "$r2_revoke_db" "$r2_replace_db"
 touch "$proof_root/r2-release"
 wait_owned_worker "$r2_holder"; wait_owned_worker "$r2_replace"
 if wait_owned_worker "$r2_revoke"; then echo 'stale competing revoke unexpectedly committed' >&2; exit 1; fi
-grep -q '40001' "$proof_root/r2-revoke.log" || { echo 'stale competing revoke lacked 40001' >&2; exit 1; }
+grep -q '42501' "$proof_root/r2-revoke.log" || { echo 'stale protected revoke lacked 42501' >&2; exit 1; }
 r2_state="$(run_sql "select pg_catalog.concat_ws('|',version.current_version,delegation.revision,delegation.state,delegation.scope_kind) from vortex_access.organization_access_versions version join vortex_access.organization_delegation_authorities delegation on delegation.organization_id=version.organization_id and delegation.delegation_authority_id='$transition_delegation_id' where version.organization_id='$organization_id';")"
 [ "$r2_state" = "$((before_r2+1))|2|live|bounded" ] || { printf 'replace-versus-revoke race left unexpected state: %q\n' "$r2_state" >&2; exit 1; }
 

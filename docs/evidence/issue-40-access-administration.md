@@ -1,5 +1,19 @@
 # Protected Access administration evidence
 
+## Temporary and delegated access removal — locally verified candidate
+
+Final local database lint passes all six selected schemas without errors. The same eight existing warnings remain; this candidate adds no lint warning.
+
+The candidate adds protected self-deactivation and administrator revocation of temporary role activations, plus protected revocation of delegation. It reuses the existing governance-first transaction, current authority decision, revision-checked writers and atomic Activity append. Self-deactivation requires no administration permission; administrator deactivation uses the activation's exact immutable role revision, while delegation removal uses its exact current stored scope. No grant, renewal, generic dispatcher or new approval journey is added.
+
+The full working-tree repository gate passed formatting, lint, all 23 package typechecks, boundaries, **1,299 tests with three existing skips**, eight fixture checks and all 23 builds. This working tree also contains the separately excluded assignment-revocation work; that gate is not approval of its known SQL failure. Git index packaging isolates the four activation/delegation TypeScript changes without modifying or stashing the other work. Whole-task approval, exact candidate database proof and source/hosted delivery remain separate requirements.
+
+Independent review found that the first historical-scope test did not distinguish historical from changed permissions, and that the existing raw-writer races did not prove the new protected invocation path. Both were corrected. The final independent Sol review approved the exact staged nine-file candidate after an operation-key result-binding correction; no new evaluator, counter or mock framework was needed.
+
+After that correction, the complete staged-source SQL suite passes **55 files / 2,492 assertions**, and all **24 manifest-registered concurrency proofs** pass, including protected activation/source-change and delegation replacement/revocation contention. The existing test corpus was exported from the Git index to a disposable local directory; the unapproved assignment fixture, its expanded Group/role tests and the structural draft were not selected because they are not part of this delivery. The separate failed working-tree assignment proof remains recorded and unresolved, not skipped and called repaired. Local database history includes undelivered work, so source/migration arrival and exact hosted verification remain separate from these local results.
+
+The focused combined activation/delegation SQL proof passes 99 assertions. It distinguishes original two-permission activation authority from a different current role scope; complete original coverage allows removal and partial coverage refuses. It also proves self-deactivation without administration/read authority, foreign/stale/replay refusal, final-steward delegation protection and Activity-collision rollback. The exact candidate migration SHA-256 is `7ecc4c2eb65bd875d839e4cab4c739f0d6d4660bcf39b9cf240511d625df3e9e`; SQL390 is `aba9f0f5fcb25ff58d057172fac078353ed6ed903b289c5a070d3452eafeb4d2`, activation race is `378c430f0abbc2072019bbcb1e6a5f1da997afdc5a0caf290d75e6705c1af94d`, and delegation race is `91c4937f066627b0163ad3998ec6096995e03e17f034ea58d4f8eaa3feab15bb`. Source delivery and exact hosted receipt are still pending at this checkpoint; the whole #40 task remains open.
+
 Task: [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). Scope and acceptance: [implementation plan](../build-plan/issue-40-protected-access-administration.md).
 
 ## First implementation checkpoint — 6 September 2026
@@ -136,6 +150,14 @@ This is local checkpoint evidence. Final direct-share test expansion, combined i
 | `390_organization_role_activation_administration.test.sql`               | `f72b387e3789a0aae74866920e96eaf461c3c69b6f0e8975b8a1d1214e240f80` |
 
 Final independent Sol actual-work review approves the activation and direct-share checkpoint with no findings. The final aggregate database result is **53 files / 2,418 assertions**, after the direct-share suite gained its restricted-role proof. The preceding aggregate attempt encountered an intermittent failure in an unchanged stewardship check; [the direct-share evidence](issue-36-record-visibility.md#current-direct-share-contributions--7-september-2026) and [#318](https://github.com/Abzum-NZ/Abzum-Vortex/issues/318#issuecomment-5563910662) retain the failed run and successful isolated/bounded aggregate retry. This is not an unqualified first-run pass or a repair of that separate observation.
+
+## Activation/share Testing source delivery — 7 September 2026
+
+Both normal preview checks passed before [PR #324](https://github.com/Abzum-NZ/Abzum-Vortex/pull/324) merged into Testing at `2026-09-07T02:05:53Z`. Reviewed source `ad3eac494c328317e80c42a1b38ce9cc23dbee93` merged as `e1d9159445c913115618af7e0525b7111320d0ee`; no protection was bypassed. This source contains the reviewed activation ledger and current direct-share contributions, not the subsequent assignment-revocation work.
+
+Read-only inspection through the connected Supabase tool confirms that the intended Testing project contains all 57 migrations through `20260906152638`. This proves schema arrival, not completion of the hosted SQL/concurrency gate. The saved exact-commit Kestra receipt is still unverified: browser inventory shows its existing tab at sign-in, and two bounded attempts to select it timed out. A nonblocking request asks the user to renew the existing session; core implementation continues. No new credential, reset, Production promotion or Kestra change was made.
+
+The Testing security advisor at `2026-09-07T02:10:59.517Z` reports intentional private-table deny-by-default RLS notices, a mutable-search-path warning on the temporary test function `pg_temp_58.vortex_private_schema_assertions`, and the existing hosted Auth leaked-password-protection warning. The new share store has no public/request table grant; do not add a permissive policy to silence its [no-policy notice](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy). The temporary-function warning requires a post-suite recheck rather than a product migration. [Hosted password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) remains tracked by [security readiness #171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not an assignment-removal change. These observations are not described as a clean advisor report or a completed hosted gate.
 
 ## First checkpoint database bytes (historical)
 

@@ -154,7 +154,9 @@ Independent Sol review recommends a narrower documented behavior: only a current
 
 Explicit authorization was requested from the user on 7 September 2026 because the tool safety check requires it. Only this exception is held; other Phase 3 work continues. Until authorization and actual proof, the proposed exception is not normative and the full assignment-revocation checkpoint is not approved. The real withdrawal fixture currently fails with `Organization role-assignment authority is stale or unavailable`; retain that result rather than claiming the new harness passed. If approved, update this plan's empty-snapshot rule, prove catalogue success/bounded refusal/invalid-lifecycle refusal and one atomic Access/Activity result, then obtain a superseding actual-patch review.
 
-## Next coherent delivery: end temporary and delegated authority
+## Locally verified delivery: end temporary and delegated authority
+
+The activation/delegation implementation and its restricted-caller and concurrency coverage are complete and independently approved at source level. [The evidence](../evidence/issue-40-access-administration.md#temporary-and-delegated-access-removal--locally-verified-candidate) records the exact candidate proof. Source delivery and exact hosted verification remain separate; this does not close the whole task. The structural-reduction family below is the next available implementation work.
 
 Complete activation and delegation revocation together using the existing transaction and writer patterns. These operations are available engineering work; they do not depend on the isolated unavailable/empty-role assignment-cleanup authorization above. Keep that assignment exception unchanged rather than silently widening this delivery.
 

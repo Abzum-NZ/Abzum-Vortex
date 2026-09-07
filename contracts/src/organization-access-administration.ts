@@ -583,6 +583,20 @@ export const readOrganizationAdministrationDelegationAuthorityResultSchema = z.d
   ],
 );
 
+export const revokeOrganizationAdministrationDelegationAuthorityCommandSchema = z
+  .object({
+    delegationAuthorityId: delegationAuthorityIdSchema,
+    expectedDelegationRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const changeOrganizationAdministrationDelegationAuthorityResultSchema = z
+  .object({
+    delegation: organizationAdministrationDelegationAuthoritySchema,
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
 export const organizationAdministrationRoleActivationTemporalStateSchema = z.enum([
   "active",
   "expired",
@@ -692,6 +706,20 @@ export const readOrganizationAdministrationRoleActivationResultSchema = z.discri
       .strict(),
   ],
 );
+
+export const deactivateOrganizationAdministrationRoleActivationCommandSchema = z
+  .object({
+    roleActivationId: roleActivationIdSchema,
+    expectedActivationRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+export const changeOrganizationAdministrationRoleActivationResultSchema = z
+  .object({
+    activation: organizationAdministrationRoleActivationSummarySchema,
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
 
 export type OrganizationAdministrationGroup = z.infer<typeof organizationAdministrationGroupSchema>;
 export type ListOrganizationAdministrationGroupsCommand = z.infer<
@@ -814,6 +842,12 @@ export type ReadOrganizationAdministrationDelegationAuthorityCommand = z.infer<
 export type ReadOrganizationAdministrationDelegationAuthorityResult = z.infer<
   typeof readOrganizationAdministrationDelegationAuthorityResultSchema
 >;
+export type RevokeOrganizationAdministrationDelegationAuthorityCommand = z.infer<
+  typeof revokeOrganizationAdministrationDelegationAuthorityCommandSchema
+>;
+export type ChangeOrganizationAdministrationDelegationAuthorityResult = z.infer<
+  typeof changeOrganizationAdministrationDelegationAuthorityResultSchema
+>;
 export type OrganizationAdministrationRoleActivationSummary = z.infer<
   typeof organizationAdministrationRoleActivationSummarySchema
 >;
@@ -831,4 +865,10 @@ export type ReadOrganizationAdministrationRoleActivationCommand = z.infer<
 >;
 export type ReadOrganizationAdministrationRoleActivationResult = z.infer<
   typeof readOrganizationAdministrationRoleActivationResultSchema
+>;
+export type DeactivateOrganizationAdministrationRoleActivationCommand = z.infer<
+  typeof deactivateOrganizationAdministrationRoleActivationCommandSchema
+>;
+export type ChangeOrganizationAdministrationRoleActivationResult = z.infer<
+  typeof changeOrganizationAdministrationRoleActivationResultSchema
 >;

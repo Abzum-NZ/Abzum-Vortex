@@ -133,7 +133,8 @@ begin
     continuity_revision, meaning_fingerprint
   )
   select entry.organization_id, p_activation_role_id, 1,
-    entry.entry_ordinal, 'custom', null, entry.application_root_id,
+    pg_catalog.row_number() over (order by entry.entry_ordinal),
+    'custom', null, entry.application_root_id,
     entry.owner_kind, entry.owner_id, entry.permission_id,
     entry.registration_kind, entry.registration_owner_id,
     entry.accepted_registration_revision, entry.catalogue_fingerprint,
@@ -141,7 +142,11 @@ begin
   from vortex_access.organization_role_permission_entries as entry
   where entry.organization_id = p_organization_id
     and entry.role_id = p_steward_role_id
-    and entry.role_revision = 1;
+    and entry.role_revision = 1
+    and entry.permission_id in (
+      '687d5649-62ee-43dd-b684-b8af3a5394c1'::uuid,
+      '9901c0dc-8bac-45c7-be0b-3642cb839bb1'::uuid
+    );
 
   insert into vortex_access.organization_role_revisions (
     organization_id, role_id, revision, role_kind, application_root_id,
@@ -393,6 +398,43 @@ select * from vortex_access.coordinate_organization_role_assignment_change(
   'a3900000-0000-4000-8000-000000000071'
 );
 
+select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant', '23900000-0000-4000-8000-000000000001',
+  '73900000-0000-4000-8000-000000000095', null,
+  '63900000-0000-4000-8000-000000000030', 1,
+  'organization_account', '53900000-0000-4000-8000-000000000001', null,
+  'eligible', pg_catalog.clock_timestamp(), null,
+  '93900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000095'
+);
+select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant', '23900000-0000-4000-8000-000000000001',
+  '73900000-0000-4000-8000-000000000096', null,
+  '63900000-0000-4000-8000-000000000030', 1,
+  'organization_account', '53900000-0000-4000-8000-000000000001', null,
+  'eligible', pg_catalog.clock_timestamp(), null,
+  '93900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000096'
+);
+select * from vortex_access.coordinate_organization_role_activation_change(
+  'activate_role', '23900000-0000-4000-8000-000000000001',
+  '63900000-0000-4000-8000-000000000095', null,
+  '53900000-0000-4000-8000-000000000001',
+  '63900000-0000-4000-8000-000000000030', 1, 3600, 'direct',
+  '73900000-0000-4000-8000-000000000095', 1, null, null,
+  '93900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000097'
+);
+select * from vortex_access.coordinate_organization_role_activation_change(
+  'activate_role', '23900000-0000-4000-8000-000000000001',
+  '63900000-0000-4000-8000-000000000096', null,
+  '53900000-0000-4000-8000-000000000001',
+  '63900000-0000-4000-8000-000000000030', 1, 3600, 'direct',
+  '73900000-0000-4000-8000-000000000096', 1, null, null,
+  '93900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000098'
+);
+
 insert into vortex_access.organization_role_activation_policy_revisions (
   organization_id, role_id, activation_policy_id, revision,
   policy_fingerprint, maximum_activation_duration_seconds,
@@ -415,7 +457,8 @@ insert into vortex_access.organization_role_permission_entries (
   accepted_registration_revision, catalogue_fingerprint,
   continuity_revision, meaning_fingerprint
 )
-select entry.organization_id, entry.role_id, 2, entry.entry_ordinal,
+select entry.organization_id, '63900000-0000-4000-8000-000000000030',
+  2, entry.entry_ordinal,
   entry.role_kind, entry.role_application_root_id, entry.application_root_id,
   entry.owner_kind, entry.owner_id, entry.permission_id,
   entry.registration_kind, entry.registration_owner_id,
@@ -423,8 +466,9 @@ select entry.organization_id, entry.role_id, 2, entry.entry_ordinal,
   entry.continuity_revision, entry.meaning_fingerprint
 from vortex_access.organization_role_permission_entries as entry
 where entry.organization_id = '23900000-0000-4000-8000-000000000001'
-  and entry.role_id = '63900000-0000-4000-8000-000000000030'
-  and entry.role_revision = 1;
+  and entry.role_id = '63900000-0000-4000-8000-000000000001'
+  and entry.role_revision = 1
+  and entry.permission_id = '156d01f3-8f80-45fb-8fc8-b31c47dbb1df';
 insert into vortex_access.organization_role_revisions (
   organization_id, role_id, revision, role_kind, application_root_id,
   lifecycle, privilege_classification, assignment_policy,
@@ -440,7 +484,7 @@ insert into vortex_access.organization_role_revisions (
 ) values (
   '23900000-0000-4000-8000-000000000001',
   '63900000-0000-4000-8000-000000000030', 2, 'custom', null,
-  'active', 'privileged', 'activation_required', 2, 1,
+  'active', 'privileged', 'activation_required', 2, 2,
   '64900000-0000-4000-8000-000000000030', 2,
   'sha256:' || pg_catalog.repeat('4', 64),
   'activation_reader_activation', 'Updated activation role',
@@ -497,10 +541,10 @@ select results_eq(
     select pg_catalog.jsonb_array_length(activations),
       next_after_role_activation_id
     from vortex_access.list_organization_role_activations_for_administration(
-      '63900000-0000-4000-8000-000000000091', 2
+      '63900000-0000-4000-8000-000000000091', 10
     )
   $$,
-  $$ values (1, null::uuid) $$,
+  $$ values (3, null::uuid) $$,
   'the next activation page completes the stable activation-ID order'
 );
 select is(
@@ -517,7 +561,9 @@ select is(
   ),
   '63900000-0000-4000-8000-000000000090:direct:active,' ||
   '63900000-0000-4000-8000-000000000091:direct:expired,' ||
-  '63900000-0000-4000-8000-000000000092:group:revoked',
+  '63900000-0000-4000-8000-000000000092:group:revoked,' ||
+  '63900000-0000-4000-8000-000000000095:direct:active,' ||
+  '63900000-0000-4000-8000-000000000096:direct:active',
   'summary timing is descriptive with revoked taking precedence over expiry'
 );
 select is(
@@ -624,6 +670,172 @@ select throws_ok(
   $$ select * from vortex_access.read_organization_role_activation_for_administration('00000000-0000-0000-0000-000000000000') $$,
   '22023'::char(5), null,
   'a nil activation detail identity is refused'
+);
+select throws_ok(
+  $$ select * from vortex_access.deactivate_organization_role_activation_for_administration(
+    '63900000-0000-4000-8000-000000000099', 1,
+    'a3900000-0000-4000-8000-000000000088') $$,
+  '40001'::char(5), null,
+  'a same-tenant foreign activation is unavailable through the protected writer'
+);
+
+reset role;
+select vortex_activity.append_organization_activity_entry(
+  '23900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000089', pg_catalog.clock_timestamp(),
+  'organization_account', '53900000-0000-4000-8000-000000000001',
+  'fixture_collision', array['63900000-0000-4000-8000-000000000090'::uuid],
+  array[]::uuid[], 'system', 'a3900000-0000-4000-8000-000000000089', 'completed'
+);
+set local role vortex_request;
+select throws_ok(
+  $$ select * from vortex_access.deactivate_organization_role_activation_for_administration(
+    '63900000-0000-4000-8000-000000000090', 1,
+    'a3900000-0000-4000-8000-000000000089') $$,
+  '22023'::char(5), null,
+  'an Activity collision rolls activation and Access changes back atomically'
+);
+reset role;
+select is(
+  (select state || '|' || revision::text
+   from vortex_access.organization_role_activations
+   where organization_id = '23900000-0000-4000-8000-000000000001'
+     and role_activation_id = '63900000-0000-4000-8000-000000000090'),
+  'live|1',
+  'the failed Activity append leaves the activation unchanged'
+);
+set local role vortex_request;
+
+select is(
+  (select (activation_summary ->> 'state') || '|' ||
+      (activation_summary ->> 'revision') || '|' || access_version::text
+   from vortex_access.deactivate_organization_role_activation_for_administration(
+     '63900000-0000-4000-8000-000000000090', 1,
+     'a3900000-0000-4000-8000-000000000090')),
+  'revoked|2|17',
+  'an administrator deactivates another beneficiary using the immutable historical role scope'
+);
+reset role;
+select is(
+  (select count(*)::text || '|' || min(action)
+   from vortex_activity.organization_activity_entries
+   where organization_id = '23900000-0000-4000-8000-000000000001'
+     and activity_id = 'a3900000-0000-4000-8000-000000000090'),
+  '1|revoke_role_activation',
+  'activation deactivation appends exactly one atomic Activity entry'
+);
+select pg_temp.install_activation_read_context(
+  '43900000-0000-4000-8000-000000000002',
+  '23900000-0000-4000-8000-000000000001',
+  '53900000-0000-4000-8000-000000000002'
+);
+set local role vortex_request;
+select is(
+  (select (activation_summary ->> 'state') || '|' || access_version::text
+   from vortex_access.deactivate_organization_role_activation_for_administration(
+     '63900000-0000-4000-8000-000000000091', 1,
+     'a3900000-0000-4000-8000-000000000091')),
+  'revoked|18',
+  'a beneficiary immediately ends their own retained activation without administration permission'
+);
+select throws_ok(
+  $$ select * from vortex_access.deactivate_organization_role_activation_for_administration(
+    '63900000-0000-4000-8000-000000000091', 1,
+    'a3900000-0000-4000-8000-000000000092') $$,
+  '42501'::char(5), null,
+  'an already deactivated activation cannot replay through its stale request context'
+);
+
+reset role;
+select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant', '23900000-0000-4000-8000-000000000001',
+  '73900000-0000-4000-8000-000000000094', null,
+  '63900000-0000-4000-8000-000000000001', 1,
+  'organization_account', '53900000-0000-4000-8000-000000000002', null,
+  'standing', pg_catalog.clock_timestamp(), null,
+  '93900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000094'
+);
+create temporary table activation_old_scope on commit drop as
+select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+  'kind', 'exact',
+  'ownerKind', entry.owner_kind,
+  'ownerId', entry.owner_id,
+  'permissionId', entry.permission_id,
+  'acceptedRegistrationRevision', entry.accepted_registration_revision,
+  'catalogueFingerprint', entry.catalogue_fingerprint,
+  'continuityRevision', entry.continuity_revision,
+  'meaningFingerprint', entry.meaning_fingerprint
+) order by entry.entry_ordinal) as value
+from vortex_access.organization_role_permission_entries as entry
+where entry.organization_id = '23900000-0000-4000-8000-000000000001'
+  and entry.role_id = '63900000-0000-4000-8000-000000000030'
+  and entry.role_revision = 1;
+
+select * from vortex_access.coordinate_organization_delegation_authority_change(
+  'grant_delegation', '23900000-0000-4000-8000-000000000001',
+  '83900000-0000-4000-8000-000000000095', null,
+  'organization_account', '53900000-0000-4000-8000-000000000002', null,
+  'bounded', (select value from activation_old_scope),
+  'sha256:' || pg_catalog.repeat('8', 64),
+  pg_catalog.clock_timestamp(), null,
+  '93900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000100'
+);
+select pg_temp.install_activation_read_context(
+  '43900000-0000-4000-8000-000000000002',
+  '23900000-0000-4000-8000-000000000001',
+  '53900000-0000-4000-8000-000000000002'
+);
+set local role vortex_request;
+select is(
+  (select activation_summary ->> 'state'
+   from vortex_access.deactivate_organization_role_activation_for_administration(
+     '63900000-0000-4000-8000-000000000095', 1,
+     'a3900000-0000-4000-8000-000000000101')),
+  'revoked',
+  'bounded administration uses the immutable historical activation scope rather than the different live role scope'
+);
+
+reset role;
+select * from vortex_access.coordinate_organization_delegation_authority_change(
+  'revoke_delegation', '23900000-0000-4000-8000-000000000001',
+  '83900000-0000-4000-8000-000000000095', 1,
+  null, null, null, null, null, null, null, null,
+  '93900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000102'
+);
+select * from vortex_access.coordinate_organization_delegation_authority_change(
+  'grant_delegation', '23900000-0000-4000-8000-000000000001',
+  '83900000-0000-4000-8000-000000000096', null,
+  'organization_account', '53900000-0000-4000-8000-000000000002', null,
+  'bounded', pg_catalog.jsonb_build_array((select value -> 0 from activation_old_scope)),
+  'sha256:' || pg_catalog.repeat('9', 64),
+  pg_catalog.clock_timestamp(), null,
+  '93900000-0000-4000-8000-000000000001',
+  'a3900000-0000-4000-8000-000000000103'
+);
+select pg_temp.install_activation_read_context(
+  '43900000-0000-4000-8000-000000000002',
+  '23900000-0000-4000-8000-000000000001',
+  '53900000-0000-4000-8000-000000000002'
+);
+set local role vortex_request;
+select throws_ok(
+  $$ select * from vortex_access.deactivate_organization_role_activation_for_administration(
+    '63900000-0000-4000-8000-000000000096', 1,
+    'a3900000-0000-4000-8000-000000000104') $$,
+  '42501'::char(5), null,
+  'partial coverage of the immutable historical activation scope is refused'
+);
+reset role;
+select is(
+  (select state || '|' || revision::text
+   from vortex_access.organization_role_activations
+   where organization_id = '23900000-0000-4000-8000-000000000001'
+     and role_activation_id = '63900000-0000-4000-8000-000000000096'),
+  'live|1',
+  'partial historical-scope refusal leaves the activation unchanged'
 );
 
 reset role;
