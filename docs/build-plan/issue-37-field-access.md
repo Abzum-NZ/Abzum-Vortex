@@ -1,6 +1,6 @@
 # Phase 3 — Field access and protected local sharing
 
-Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Prerequisites: completed [central Access #34](issue-34-access-decision.md), [ownership and visibility #36](issue-36-ownership-and-visibility.md), and [final record/row decision #35](issue-35-row-policy-composition.md). The authored and canonical permission contracts do not yet contain field-access declarations. Their contract, compiler, provenance and version-impact work can proceed alongside #35; integration with the record boundary and the complete protected invocation require #35's final exact-record decision and callable runtime/request-role handoff.
+Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Prerequisites: completed [central Access #34](issue-34-access-decision.md), completed [ownership and visibility #36](issue-36-ownership-and-visibility.md), and [final record/row decision #35](issue-35-row-policy-composition.md). The [canonical contract checkpoint](../evidence/issue-37-field-access.md#canonical-permission-policy--8-september-2026) is implemented and independently reviewed. Authored-source declarations, compiler, provenance and version-impact work remain and can proceed alongside #35; integration with the record boundary and the complete protected invocation require #35's final exact-record decision and callable runtime/request-role handoff.
 
 ## Outcome
 
