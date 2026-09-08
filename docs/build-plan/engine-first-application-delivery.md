@@ -73,6 +73,18 @@ organisation/application binding only after the required capabilities are ready.
 The user-facing application lifecycle remains with [#64](issue-64-application-runtime.md).
 Publication alone must not create an installed application; detaching a binding
 must not delete its records.
+
+[Reading records #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) then
+depends on actual [protected storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45)
+and [headless bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250),
+not the whole Phase 4 epic. Storage retains the Module, field-value and Access
+prerequisites above. Coordinate related-record reads with
+[#49](https://github.com/Abzum-NZ/Abzum-Vortex/issues/49) when required by a query;
+unrelated deletion or extension-point work must not delay a base-list query.
+Derived stored values remain owned by
+[#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48), not a second calculator
+inside Query. These delivery slices do not waive whole-task acceptance or make
+an unimplemented capability available.
 The [coordinated provisioning plan](module-record-provisioning.md) defines the
 actual access prerequisites, event-registration handoff and failure behavior.
 It does not require the whole Access epic or a mock completed installation before

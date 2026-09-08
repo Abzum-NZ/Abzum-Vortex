@@ -181,6 +181,31 @@ new services, registries or release-approval mechanisms. A schema-only slice may
 be tested independently but does not advertise Module V2 as publishable/installable
 until its corresponding full pipeline is operational.
 
+### Draft conversion without another approval workflow
+
+Use a pure Module V1-to-V2 source converter, followed by the existing
+revision-checked draft save. Return converted source or field-path diagnostics
+for meaning that the old source did not retain. Decimal/money bounds and
+amount-only defaults convert mechanically to exact text. A polymorphic record
+identifier requires its allowed target; a currency-bearing record-value literal
+using an organisation-default field requires its currency. Definition money
+defaults do not require a currency selection because they retain the field policy.
+
+Conversion reads no current organisation currency or mutable external catalogue.
+It therefore needs no separate prepare/confirm command, approval token or new
+fingerprint. Ordinary draft save already validates the supplied V2 source,
+derives its fingerprint and refuses a stale expected revision without writing.
+Publication retains the existing release validation and major-version assessment;
+published bytes and historical V1 reads remain unchanged.
+
+Convert all eight editable Module fixtures and their exact Module dependencies,
+then update the two Application fixtures and resolution snapshot only where their
+Module references change. Keep Application source versions, component/theme and
+connection versions unchanged unless their actual definitions require a change.
+The current fixture values need no new target or currency choice. Prove the
+converted files through actual V2 compilation/publication/read/restore and the
+existing complete-application scenarios; schema parsing alone is insufficient.
+
 ### Rule consumer handoff
 
 Select V2 evaluation from the exact Module contract pair, never from a value that

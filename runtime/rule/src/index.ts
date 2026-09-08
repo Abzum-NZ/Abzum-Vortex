@@ -4,3 +4,4 @@ export const RuleService = Object.freeze({
 });
 
 export * from "./typed-condition";
+export * from "./typed-condition-v2";
