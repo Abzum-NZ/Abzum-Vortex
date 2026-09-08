@@ -4,7 +4,7 @@ import { resolve, sep } from "node:path";
 const manifestRelativePath = "workflows/kestra/database-verification.json";
 const migrationPattern = /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/;
 const proofPattern = /^supabase\/tests\/[a-z0-9-]+-concurrency\.test\.sh$/;
-const schemaPattern = /^(?:public|vortex_[a-z0-9_]+)$/;
+const schemaPattern = /^(?:public|record_data|vortex_[a-z0-9_]+)$/;
 
 const sameValues = (left, right) =>
   left.length === right.length && left.every((value, index) => value === right[index]);
@@ -89,7 +89,7 @@ export const loadDatabaseVerificationManifest = async (root) => {
   for (const migrationName of migrationNames) {
     const sql = await readFile(resolve(root, "supabase/migrations", migrationName), "utf8");
     for (const match of sql.matchAll(
-      /\bcreate\s+schema\s+(?:if\s+not\s+exists\s+)?(vortex_[a-z0-9_]+)/gi,
+      /\bcreate\s+schema\s+(?:if\s+not\s+exists\s+)?(record_data|vortex_[a-z0-9_]+)\b/gi,
     ))
       createdSchemas.add(match[1].toLowerCase());
   }

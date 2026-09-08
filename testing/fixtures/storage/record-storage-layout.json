@@ -8,8 +8,8 @@
     "owning_service": "record",
     "physical_schema": "record_data",
     "allocation_unit": "storage_contract_id",
-    "table_name_rule": "rt_<immutable_storage_token>",
-    "field_name_rule": "f_<immutable_field_token>",
+    "table_name_rule": "rt_<complete_storage_contract_uuid_hex>",
+    "field_name_rule": "f_<complete_field_uuid_hex>",
     "uses_display_names": false,
     "system_columns": [
       "organisation_id",
@@ -20,7 +20,7 @@
       "application_root_id",
       "definition_revision",
       "owner_organisation_account_id",
-      "owner_team_id",
+      "owner_group_id",
       "lifecycle_state",
       "concurrency_number",
       "created_at",
@@ -32,24 +32,24 @@
       "removal_due_at"
     ],
     "scope_keys": {
-      "organisation_shared": ["organisation_id"],
+      "organization_shared": ["organisation_id"],
       "application_contained": ["organisation_id", "application_root_id"]
     },
     "tables": [
-      {"record_type":"vortex.crm.organisations:company","storage_contract_id":"srt_00000001","table":"record_data.rt_srt_00000001","storage_scope":"organisation_shared"},
-      {"record_type":"vortex.crm.people:contact","storage_contract_id":"srt_00000002","table":"record_data.rt_srt_00000002","storage_scope":"organisation_shared"},
-      {"record_type":"vortex.crm.people:lead","storage_contract_id":"srt_00000003","table":"record_data.rt_srt_00000003","storage_scope":"application_contained"},
-      {"record_type":"vortex.crm.opportunities:opportunity","storage_contract_id":"srt_00000004","table":"record_data.rt_srt_00000004","storage_scope":"application_contained"},
-      {"record_type":"vortex.crm.opportunities:opportunity_contact","storage_contract_id":"srt_00000005","table":"record_data.rt_srt_00000005","storage_scope":"application_contained"},
-      {"record_type":"vortex.crm.activities:activity","storage_contract_id":"srt_00000006","table":"record_data.rt_srt_00000006","storage_scope":"application_contained"},
-      {"record_type":"vortex.crm.tags:tag","storage_contract_id":"srt_00000007","table":"record_data.rt_srt_00000007","storage_scope":"organisation_shared"},
-      {"record_type":"vortex.crm.tags:record_tag","storage_contract_id":"srt_00000008","table":"record_data.rt_srt_00000008","storage_scope":"organisation_shared"},
-      {"record_type":"vortex.service_desk.sla:business_calendar","storage_contract_id":"srt_00000009","table":"record_data.rt_srt_00000009","storage_scope":"organisation_shared"},
-      {"record_type":"vortex.service_desk.sla:service_level","storage_contract_id":"srt_00000010","table":"record_data.rt_srt_00000010","storage_scope":"organisation_shared"},
-      {"record_type":"vortex.service_desk.cases:case","storage_contract_id":"srt_00000011","table":"record_data.rt_srt_00000011","storage_scope":"application_contained"},
-      {"record_type":"vortex.service_desk.cases:case_comment","storage_contract_id":"srt_00000012","table":"record_data.rt_srt_00000012","storage_scope":"application_contained"},
-      {"record_type":"vortex.service_desk.knowledge:article","storage_contract_id":"srt_00000013","table":"record_data.rt_srt_00000013","storage_scope":"application_contained"},
-      {"record_type":"vortex.service_desk.knowledge:article_case","storage_contract_id":"srt_00000014","table":"record_data.rt_srt_00000014","storage_scope":"application_contained"}
+      {"record_type":"vortex.crm.organisations:company","storage_contract_id":"8da10692-8152-4163-a3e4-502662afada9","table":"record_data.rt_8da1069281524163a3e4502662afada9","storage_scope":"organization_shared"},
+      {"record_type":"vortex.crm.people:contact","storage_contract_id":"0ac55d2a-f8a0-4d76-a679-eda5e26914ee","table":"record_data.rt_0ac55d2af8a04d76a679eda5e26914ee","storage_scope":"organization_shared"},
+      {"record_type":"vortex.crm.people:lead","storage_contract_id":"8b97fa35-a43f-45e3-a265-fa334cb62281","table":"record_data.rt_8b97fa35a43f45e3a265fa334cb62281","storage_scope":"application_contained"},
+      {"record_type":"vortex.crm.opportunities:opportunity","storage_contract_id":"969a6867-b91c-4eeb-a039-707126fef302","table":"record_data.rt_969a6867b91c4eeba039707126fef302","storage_scope":"application_contained"},
+      {"record_type":"vortex.crm.opportunities:opportunity_contact","storage_contract_id":"7fd5f4de-bc41-435a-ad93-ef278bd2f8c7","table":"record_data.rt_7fd5f4debc41435aad93ef278bd2f8c7","storage_scope":"application_contained"},
+      {"record_type":"vortex.crm.activities:activity","storage_contract_id":"075dc551-a222-4c64-a4ea-005dfa61f39c","table":"record_data.rt_075dc551a2224c64a4ea005dfa61f39c","storage_scope":"application_contained"},
+      {"record_type":"vortex.crm.tags:tag","storage_contract_id":"a7c51ab1-578f-4410-a5dc-816ae2b28101","table":"record_data.rt_a7c51ab1578f4410a5dc816ae2b28101","storage_scope":"organization_shared"},
+      {"record_type":"vortex.crm.tags:record_tag","storage_contract_id":"115e54e7-cd0c-449d-a39e-8fba9f52f778","table":"record_data.rt_115e54e7cd0c449da39e8fba9f52f778","storage_scope":"organization_shared"},
+      {"record_type":"vortex.service_desk.sla:business_calendar","storage_contract_id":"6ae021ee-dac8-4976-ae1f-7d33d7b1be9c","table":"record_data.rt_6ae021eedac84976ae1f7d33d7b1be9c","storage_scope":"organization_shared"},
+      {"record_type":"vortex.service_desk.sla:service_level","storage_contract_id":"64106586-e60a-4d41-a105-2a1f641769a8","table":"record_data.rt_64106586e60a4d41a1052a1f641769a8","storage_scope":"organization_shared"},
+      {"record_type":"vortex.service_desk.cases:case","storage_contract_id":"8e480e9b-0c3f-47b4-a8eb-0710b02e9884","table":"record_data.rt_8e480e9b0c3f47b4a8eb0710b02e9884","storage_scope":"application_contained"},
+      {"record_type":"vortex.service_desk.cases:case_comment","storage_contract_id":"b594c8da-d3e3-4626-a4dc-65b4457efba2","table":"record_data.rt_b594c8dad3e34626a4dc65b4457efba2","storage_scope":"application_contained"},
+      {"record_type":"vortex.service_desk.knowledge:article","storage_contract_id":"fedffa2b-8d1c-4160-a29b-5b82ca5c1093","table":"record_data.rt_fedffa2b8d1c4160a29b5b82ca5c1093","storage_scope":"application_contained"},
+      {"record_type":"vortex.service_desk.knowledge:article_case","storage_contract_id":"edc43f17-6da1-47f5-a65c-66e6103110ab","table":"record_data.rt_edc43f176da147f5a65c66e6103110ab","storage_scope":"application_contained"}
     ],
     "application_roots": [
       {"organisation_id":"org_fixture_alpha","application_definition":"vortex.app.crm","application_root_id":"app_root_alpha_crm","display_name":"CRM"},
@@ -57,20 +57,20 @@
       {"organisation_id":"org_fixture_beta","application_definition":"vortex.app.crm","application_root_id":"app_root_beta_crm","display_name":"CRM"}
     ],
     "row_examples": [
-      {"record_type":"vortex.crm.organisations:company","record_id":"company_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":null,"physical_table":"record_data.rt_srt_00000001"},
-      {"record_type":"vortex.crm.organisations:company","record_id":"company_fixture_beta","organisation_id":"org_fixture_beta","application_root_id":null,"physical_table":"record_data.rt_srt_00000001"},
-      {"record_type":"vortex.crm.people:contact","record_id":"contact_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":null,"physical_table":"record_data.rt_srt_00000002"},
-      {"record_type":"vortex.crm.opportunities:opportunity","record_id":"opportunity_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":"app_root_alpha_crm","physical_table":"record_data.rt_srt_00000004"},
-      {"record_type":"vortex.service_desk.cases:case","record_id":"case_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":"app_root_alpha_service_desk","physical_table":"record_data.rt_srt_00000011"}
+      {"record_type":"vortex.crm.organisations:company","record_id":"company_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":null,"physical_table":"record_data.rt_8da1069281524163a3e4502662afada9"},
+      {"record_type":"vortex.crm.organisations:company","record_id":"company_fixture_beta","organisation_id":"org_fixture_beta","application_root_id":null,"physical_table":"record_data.rt_8da1069281524163a3e4502662afada9"},
+      {"record_type":"vortex.crm.people:contact","record_id":"contact_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":null,"physical_table":"record_data.rt_0ac55d2af8a04d76a679eda5e26914ee"},
+      {"record_type":"vortex.crm.opportunities:opportunity","record_id":"opportunity_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":"app_root_alpha_crm","physical_table":"record_data.rt_969a6867b91c4eeba039707126fef302"},
+      {"record_type":"vortex.service_desk.cases:case","record_id":"case_fixture_alpha","organisation_id":"org_fixture_alpha","application_root_id":"app_root_alpha_service_desk","physical_table":"record_data.rt_8e480e9b0c3f47b4a8eb0710b02e9884"}
     ],
     "fork_example": {
       "display_application_name": "CRM",
       "display_module_name": "CRM Organisations",
       "display_record_type_name": "Company",
-      "source_storage_contract_id": "srt_00000001",
-      "forked_storage_contract_id": "srt_90000001",
-      "source_table": "record_data.rt_srt_00000001",
-      "forked_table": "record_data.rt_srt_90000001"
+      "source_storage_contract_id": "8da10692-8152-4163-a3e4-502662afada9",
+      "forked_storage_contract_id": "90000001-0000-4000-8000-000000000001",
+      "source_table": "record_data.rt_8da1069281524163a3e4502662afada9",
+      "forked_table": "record_data.rt_90000001000040008000000000000001"
     },
     "assertions": [
       "every_record_type_has_exactly_one_table",

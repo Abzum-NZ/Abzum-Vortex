@@ -1,19 +1,30 @@
 import { z } from "zod";
 import {
+  applicationRootIdSchema,
   fieldIdSchema,
   fingerprintSchema,
-  migrationIdSchema,
   moduleRootIdSchema,
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
 } from "./identifiers";
 
-export const physicalStorageTokenSchema = z
+export const recordStorageSchemaTokenSchema = z.literal("record_data");
+
+export const recordStorageTableTokenSchema = z
   .string()
-  .min(5)
-  .max(63)
-  .regex(/^vtx_[a-z0-9_]+$/, "Physical tokens are opaque PostgreSQL-safe values");
+  .length(35)
+  .regex(/^rt_[a-f0-9]{32}$/, "Record table tokens retain the complete storage identity");
+
+export const recordStorageColumnTokenSchema = z
+  .string()
+  .length(34)
+  .regex(/^f_[a-f0-9]{32}$/, "Record field tokens retain the complete field identity");
+
+export const physicalStorageTokenSchema = z.union([
+  recordStorageTableTokenSchema,
+  recordStorageColumnTokenSchema,
+]);
 
 export const compatibleRevisionRangeSchema = z
   .object({ firstRevision: revisionSchema, lastRevision: revisionSchema.optional() })
@@ -29,13 +40,14 @@ export const storageCatalogEntrySchema = z
   .object({
     storageContractId: storageContractIdSchema,
     owningService: z.literal("record"),
-    physicalSchemaToken: physicalStorageTokenSchema,
-    physicalTableToken: physicalStorageTokenSchema,
+    physicalSchemaToken: recordStorageSchemaTokenSchema,
+    physicalTableToken: recordStorageTableTokenSchema,
     moduleRootId: moduleRootIdSchema,
     recordTypeId: recordTypeIdSchema,
+    storageScope: z.enum(["organization_shared", "application_contained"]),
     compatibleRevisions: compatibleRevisionRangeSchema,
     state: z.enum(["planned", "active", "retired"]),
-    creationMigrationId: migrationIdSchema,
+    generatorContractVersion: z.literal("1.0.0"),
     contentFingerprint: fingerprintSchema,
   })
   .strict();
@@ -44,7 +56,7 @@ export const fieldStorageMappingSchema = z
   .object({
     storageContractId: storageContractIdSchema,
     fieldId: fieldIdSchema,
-    physicalColumnToken: physicalStorageTokenSchema,
+    physicalColumnToken: recordStorageColumnTokenSchema,
     databaseValueType: z.enum([
       "boolean",
       "date",
@@ -55,12 +67,108 @@ export const fieldStorageMappingSchema = z
       "timestamp_with_time_zone",
       "uuid",
     ]),
-    introductionMigrationId: migrationIdSchema,
-    retirementMigrationId: migrationIdSchema.optional(),
+    introducedByModuleRootId: moduleRootIdSchema,
+    introducedAtReleaseRevision: revisionSchema,
+    retiredByModuleRootId: moduleRootIdSchema.optional(),
+    retiredAtReleaseRevision: revisionSchema.optional(),
     state: z.enum(["planned", "active", "retired"]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      (value.retiredByModuleRootId === undefined) !==
+      (value.retiredAtReleaseRevision === undefined)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["retiredAtReleaseRevision"],
+        message: "Field retirement requires one exact owning module release",
+      });
+    if (value.state === "retired" && value.retiredAtReleaseRevision === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["state"],
+        message: "A retired field mapping requires retirement provenance",
+      });
+    if (value.state !== "retired" && value.retiredAtReleaseRevision !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["state"],
+        message: "Only a retired field mapping carries retirement provenance",
+      });
+  });
+
+const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
+
+export const moduleInstallationStorageCommandSchema = z
+  .object({
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseRevision: javascriptSafeRevisionSchema,
+    expectedBindingRevision: javascriptSafeRevisionSchema.nullable(),
+  })
+  .strict();
+
+const canonicalStorageContractIdsSchema = z
+  .array(storageContractIdSchema)
+  .min(1)
+  .max(500)
+  .superRefine((values, context) => {
+    if (new Set(values).size !== values.length)
+      context.addIssue({ code: "custom", message: "Storage contract identities must be unique" });
+    if (values.some((value, index) => index > 0 && values[index - 1]! >= value))
+      context.addIssue({
+        code: "custom",
+        message: "Storage contract identities must use canonical order",
+      });
+  });
+
+export const moduleInstallationStorageResultSchema = z
+  .object({
+    state: z.literal("provisioned"),
+    changed: z.boolean(),
+    bindingRevision: javascriptSafeRevisionSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseRevision: javascriptSafeRevisionSchema,
+    contentFingerprint: fingerprintSchema,
+    resolutionFingerprint: fingerprintSchema,
+    generatorContractVersion: z.literal("1.0.0"),
+    storageContractIds: canonicalStorageContractIdsSchema,
+  })
+  .strict();
+
+export const moduleInstallationStorageErrorCodeSchema = z.enum([
+  "INVALID_MODULE_INSTALLATION_STORAGE_COMMAND",
+  "MODULE_INSTALLATION_AUTHORITY_REFUSED",
+  "MODULE_INSTALLATION_RELEASE_UNAVAILABLE",
+  "MODULE_INSTALLATION_RELEASE_MISMATCH",
+  "MODULE_INSTALLATION_BINDING_CONFLICT",
+  "RECORD_STORAGE_INCOMPATIBLE",
+  "RECORD_STORAGE_PROVISIONING_FAILED",
+]);
+
+export const recordStorageReleaseProvisionSchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    releaseRevision: javascriptSafeRevisionSchema,
+    contentFingerprint: fingerprintSchema,
+    resolutionFingerprint: fingerprintSchema,
+    generatorContractVersion: z.literal("1.0.0"),
+    storageContractIds: canonicalStorageContractIdsSchema,
   })
   .strict();
 
 export type StorageCatalogEntry = z.infer<typeof storageCatalogEntrySchema>;
 export type FieldStorageMapping = z.infer<typeof fieldStorageMappingSchema>;
 export type CompatibleRevisionRange = z.infer<typeof compatibleRevisionRangeSchema>;
+export type ModuleInstallationStorageCommand = z.infer<
+  typeof moduleInstallationStorageCommandSchema
+>;
+export type ModuleInstallationStorageResult = z.infer<typeof moduleInstallationStorageResultSchema>;
+export type ModuleInstallationStorageErrorCode = z.infer<
+  typeof moduleInstallationStorageErrorCodeSchema
+>;
+export type RecordStorageReleaseProvision = z.infer<typeof recordStorageReleaseProvisionSchema>;

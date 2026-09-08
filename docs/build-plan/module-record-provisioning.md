@@ -69,6 +69,13 @@ for initial creation. Test the generic operation with fixture definitions as
 inputs, not hardcoded business-schema migrations. This decision was independently
 reviewed before implementation; the actual implementation still requires review.
 
+The first provisioning proof must distinguish locally owned Application roots
+from shared Module dependencies, support response-lost retries of the original
+first command, and prove real simultaneous first-request convergence. It must
+also prove that an older exact release can reuse newer compatible nullable
+storage without rolling back the shared mappings. These use the existing
+transaction, exact release and binding revision model.
+
 ### Integration prerequisites
 
 Co-deliver the concrete [Application lifecycle permission/caller slice](issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)

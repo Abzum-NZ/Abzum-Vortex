@@ -319,6 +319,11 @@ can install a not-yet-active application; an active application context is not a
 circular prerequisite. Caller-selected actors, SQL, physical names, permission
 declarations and record graphs are never inputs.
 
+The Application root must belong to the intended organisation. A globally
+readable published release does not make another organisation's Application
+installable under that root. An exact shared Module dependency may belong to a
+different organisation; this does not transfer ownership of either Application.
+
 The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
 is the organisation-scoped platform permission
 `platform.organization.applications.manage`. The operation binds the exact
@@ -368,6 +373,14 @@ requires an explicit compatibility comparison and the appropriate structure
 change, not silent reuse or automatic refusal of every compatible addition.
 Exact release content/resolution evidence records what was provisioned. No extra
 plan fingerprint, receipt counter or second platform migration ledger is needed.
+
+An unchanged retry of the original first-provision command may return the same
+inactive provisioned binding after a lost response, even though its expected
+revision was initially absent. It must recheck current authority and match the
+same exact releases and state; it cannot retarget or reactivate a binding.
+Concurrent first requests serialize on these same identities. An older pinned
+release may reuse a newer compatible storage shape containing additional nullable
+fields, without removing those mappings or downgrading the shared catalogue.
 
 Activation rechecks current authority and binding revision after the required
 registrations exist. Failure cannot expose a partial active installation and

@@ -24,6 +24,7 @@ const createFixture = async ({
     entry(secondMigration, secondProof, "Second"),
   ],
   lintSchemas = ["public", "vortex_fixture"],
+  migrationSql = "create schema vortex_fixture authorization postgres;\n",
 } = {}) => {
   const root = await mkdtemp(join(tmpdir(), "vortex-database-manifest-"));
   temporaryDirectories.push(root);
@@ -33,10 +34,7 @@ const createFixture = async ({
     mkdir(join(root, "workflows", "kestra"), { recursive: true }),
   ]);
   await Promise.all([
-    writeFile(
-      join(root, ...firstMigration.split("/")),
-      "create schema vortex_fixture authorization postgres;\n",
-    ),
+    writeFile(join(root, ...firstMigration.split("/")), migrationSql),
     writeFile(join(root, ...secondMigration.split("/")), "select 1;\n"),
     writeFile(join(root, ...firstProof.split("/")), "exit 0\n"),
     writeFile(join(root, ...secondProof.split("/")), "exit 0\n"),
@@ -49,6 +47,26 @@ const createFixture = async ({
 };
 
 describe("Database verification manifest", () => {
+  test("includes the generated record-data schema in database lint", async () => {
+    const root = await createFixture({
+      lintSchemas: ["public", "vortex_fixture", "record_data"],
+      migrationSql:
+        "create schema vortex_fixture; create schema if not exists record_data authorization postgres;\n",
+    });
+
+    expect((await loadDatabaseVerificationManifest(root)).lintSchemas).toContain("record_data");
+  });
+
+  test("refuses omission of the generated record-data schema", async () => {
+    const root = await createFixture({
+      migrationSql: "create schema vortex_fixture; create schema record_data;\n",
+    });
+
+    await expect(loadDatabaseVerificationManifest(root)).rejects.toThrow(
+      "must list every operated schema exactly once",
+    );
+  });
+
   test("refuses a schema created by migrations but omitted from lint", async () => {
     const root = await createFixture({ lintSchemas: ["public"] });
 
