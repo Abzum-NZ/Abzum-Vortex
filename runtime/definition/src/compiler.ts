@@ -1250,6 +1250,14 @@ function explicitSourceTargets(
       sourcePath[3] === "fields" &&
       typeof sourcePath[4] === "number" &&
       sourcePath[5] === "settings" &&
+      sourcePath.length === 7 &&
+      sourcePath[6] === "decimal_places"
+    )
+      return [[...base, "fields", sourcePath[4], "settings", "decimalPlaces"]];
+    if (
+      sourcePath[3] === "fields" &&
+      typeof sourcePath[4] === "number" &&
+      sourcePath[5] === "settings" &&
       sourcePath[6] === "expression"
     ) {
       const fieldBase: Path = [...base, "fields", sourcePath[4], "settings"];
@@ -1404,6 +1412,7 @@ const moduleSourceTransformPatterns = [
   /^body\/record_types\/#\/(?:storage_contract_id|title_field|ownership_relationship)$/,
   /^body\/record_types\/#\/fields\/#\/default(?:\/.*)?$/,
   /^body\/record_types\/#\/fields\/#\/settings\/(?:minimum|maximum)$/,
+  /^body\/record_types\/#\/fields\/#\/settings\/decimal_places$/,
   /^body\/record_types\/#\/fields\/#\/settings\/columns\/#\/settings\/(?:minimum|maximum)$/,
   /^body\/record_types\/#\/relationships\/#\/(?:from_field|to_record_type|to_record_types\/#)$/,
   /^body\/record_types\/#\/fields\/#\/settings\/(?:application_root_required|audience|currency_mode|field|relationship|target|targets\/#)$/,
@@ -2703,6 +2712,9 @@ function fieldSettings(
       }
       return {
         resultType: settings.result_type,
+        ...(settings.decimal_places !== undefined
+          ? { decimalPlaces: settings.decimal_places }
+          : {}),
         expression: compiled,
         dependencyFieldIds: dependencies,
       };
@@ -2727,6 +2739,9 @@ function fieldSettings(
         relationshipId: resolution.relationship(relationshipRecord, relationshipAlias),
         operation: settings.operation,
         resultType: settings.result_type,
+        ...(settings.decimal_places !== undefined
+          ? { decimalPlaces: settings.decimal_places }
+          : {}),
         ...(settings.field ? { fieldId: aggregateField(String(settings.field)) } : {}),
         ...(settings.filter
           ? { filter: condition(settings.filter, aggregateField, aggregateValueContext) }

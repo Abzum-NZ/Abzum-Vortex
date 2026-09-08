@@ -401,6 +401,9 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../rule
       server-only:
         specifier: 0.0.1
         version: 0.0.1

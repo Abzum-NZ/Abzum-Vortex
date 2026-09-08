@@ -95,6 +95,11 @@ decision, row and field enforcement from
 Catalogue and generic provisioning development may proceed before those integrated
 checks complete; no active installation or protected data path is claimed early.
 
+The next read-only slice supplies [exact active installation evidence](issue-43-active-installation-read.md),
+including locally owned Applications with exact shared external Modules. It does
+not activate bindings or require installation-management permission for ordinary
+runtime discovery. Protected operations still check their own current authority.
+
 Treat #43, #45 and #50's registration slice as coordinated work, not a sequence
 requiring a fake completed install before its storage exists. Likewise, #44's
 value preparation precedes storage, while its full save/readback acceptance is
@@ -113,14 +118,16 @@ binding state, not a distributed rollback or additional recovery programme.
 
 #### Package wiring and bounded delivery
 
-Record owns the protected save operation. Its required Event participant receives
-the existing request transaction and shared occurrence contracts; Event implements
-that participant and the higher-level application composition wires it. The
-participant is a closed, named Record-owned interface, not an arbitrary callback
-registry or caller-supplied function. Access opens the request transaction;
-Record controls its save sequence. Do not export a lower-level writer that lets
-another caller omit Activity or event participation. Record
-does not import Event, and neither participant starts or commits a second
+Record owns the protected save operation. Its required Event participant prepares
+occurrences using the existing request transaction and exact installation/release
+evidence; Event implements that participant and the higher-level application
+composition wires it. The participant is a closed, named Record-owned interface,
+not an arbitrary callback registry or caller-supplied function. It prepares a
+closed plan and does not itself append events. Access opens the request
+transaction; Record controls its save sequence. The fixed protected database save
+unconditionally invokes the private Event append helper. Do not export a
+lower-level writer that lets another caller omit Activity or event participation.
+Record does not import Event, and neither participant starts or commits a second
 transaction. There is no optional or successful no-op event hook. This preserves
 the [core contract boundary](../specification/appendices/core-contract-boundary.md) while using the
 existing request transaction rather than introducing another transaction framework.
@@ -152,6 +159,50 @@ whole save task closes. Its transactional totals and concurrent-save proof are
 co-delivered with [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), not
 deferred until after a supposedly complete save engine. These are delivery
 boundaries, not claims that the missing integrations already exist.
+
+#### Event append authority
+
+Independent review rejected a request-callable Event batch append: describing
+TypeScript inputs as trusted would not stop that database role from fabricating
+events outside a save. Only the non-login role owning the protected Record save
+operation may call the private Event helper. Browser, request and runtime roles
+receive no direct append, outbox or queue capability. This is the intentional
+database composition boundary; it creates no reverse TypeScript package import.
+
+The helper checks the actual binding/release and derives scope, actor, time and
+sequence from database-controlled operation facts. It accepts no caller-selected
+queue, sequence or `saveSucceeded` claim. The existing Record row lock serializes
+sequence allocation from the prior outbox maximum; the uniqueness key follows
+the actual record identity, without adding Application scope to an
+organisation-shared record. Each real occurrence receives its own identifier.
+An exact command-receipt retry returns the stored outcome without appending again.
+
+Use one [Basic logged Supabase Queue](https://supabase.com/docs/guides/queues/quickstart#queue-types)
+and a private immutable outbox. The minimal V2 queue message carries contract
+version and `occurrenceId`; pgmq's message identifier is transport metadata.
+Preserve legacy `eventId` contracts and declaration identifiers unchanged.
+Fresh user saves have no causation identifier and internal causal depth zero.
+Before caused workflow events are supported, #60 must define a trusted parent
+handoff and explicitly extend/version the external depth contract; do not accept
+a caller-authored parent or reinterpret the current V2 envelope silently.
+
+The existing TypeScript Rule/Record engines still evaluate business rules and
+calculations. This design does not duplicate them in PostgreSQL. The fixed writer
+enforces database-authoritative context, access, binding, revision, field/reference
+constraints and receipt handling, then persists Record, Activity and Event effects
+atomically. Resolving the final-value handoff remains part of the real protected
+writer in #45/#47, not a successful validation flag supplied by a caller.
+
+Concrete missing integrations are the Module active-binding reader/activation,
+protected Record writer and 30-day command receipt, the private Event queue/outbox
+migration, and Application composition. Co-deliver these required parts; a new
+reviewed migration is ordinary implementation work, not a user approval gate.
+Dispatcher, webhook, consumer and Kestra work are outside this first append slice.
+
+Prove direct request-role event fabrication fails, a committed save creates its
+matching effects, a forced append failure rolls all of them back, exact retries
+create no duplicates, and concurrent saves maintain per-record sequence. A mocked
+participant is not evidence of database atomicity.
 
 Co-deliver the protected [save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)
 with the transactional enqueue slice of [event delivery #60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60)

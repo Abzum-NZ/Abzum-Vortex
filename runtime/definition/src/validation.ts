@@ -16,6 +16,7 @@ import {
   sourceMoneyValueV2Schema,
   moduleFieldValueV2Schemas,
   sourceModuleFieldValueV2Schemas,
+  parseExactDecimal,
   workflowDefinitionSchema,
   jsonValueSchema,
   walkDefinitionContract,
@@ -1349,6 +1350,84 @@ function fieldValueTypeV2(field: JsonObject | undefined): string | undefined {
   return field ? semanticFieldTypeV2(fieldDeclaredResultType(field)) : undefined;
 }
 
+type NumericDimensionV2 = "dimensionless" | "money";
+
+const numericDimensionV2 = (field: JsonObject | undefined): NumericDimensionV2 | undefined => {
+  const type = fieldValueTypeV2(field);
+  if (type === "whole_number" || type === "decimal_number") return "dimensionless";
+  return type === "money" ? "money" : undefined;
+};
+
+const exactIntegerLiteralV2 = (value: unknown): boolean => {
+  const parsed = parseExactDecimal(value);
+  return parsed !== undefined && parsed.scale === 0;
+};
+
+const calculationDependencyFieldIdsV2 = (expression: JsonObject): string[] => {
+  const dependencies: string[] = [];
+  const add = (value: unknown) => {
+    if (typeof value === "string" && !dependencies.includes(value)) dependencies.push(value);
+  };
+  const visitCondition = (value: unknown): void => {
+    if (value === null || typeof value !== "object") return;
+    if (!Array.isArray(value) && object(value).source === "field") add(object(value).fieldId);
+    for (const child of Array.isArray(value) ? value : Object.values(value)) visitCondition(child);
+  };
+  if (expression.kind === "join_text")
+    for (const fieldId of expression.fieldIds as string[]) add(fieldId);
+  if (expression.kind === "numeric")
+    for (const operand of array(expression.operands))
+      if (operand.source === "field") add(operand.fieldId);
+  if (expression.kind === "subtract_percentage") {
+    add(expression.amountFieldId);
+    add(expression.percentageFieldId);
+  }
+  if (expression.kind === "condition") visitCondition(expression.condition);
+  if (expression.kind === "date_offset") {
+    add(expression.dateFieldId);
+    const amount = object(expression.amount);
+    if (amount.source === "field") add(amount.fieldId);
+  }
+  if (expression.kind === "deadline_passed") {
+    add(expression.dueFieldId);
+    add(expression.statusFieldId);
+  }
+  return dependencies;
+};
+
+const numericExpressionValidV2 = (
+  expression: JsonObject,
+  resultType: string,
+  fields: ReadonlyMap<string, JsonObject>,
+): boolean => {
+  const operands = array(expression.operands);
+  const dimensions = operands.map((operand) =>
+    operand.source === "literal"
+      ? exactDecimalTextV2Schema.safeParse(operand.value).success
+        ? ("dimensionless" as const)
+        : undefined
+      : numericDimensionV2(fields.get(String(operand.fieldId))),
+  );
+  if (dimensions.some((dimension) => dimension === undefined)) return false;
+  const moneyPositions = dimensions.flatMap((dimension, index) =>
+    dimension === "money" ? [index] : [],
+  );
+  const operation = String(expression.operation);
+  const dimensionValid =
+    operation === "add" || operation === "subtract"
+      ? moneyPositions.length === 0 || moneyPositions.length === dimensions.length
+      : operation === "multiply"
+        ? moneyPositions.length <= 1
+        : operation === "divide"
+          ? moneyPositions.length === 0 || (moneyPositions.length === 1 && moneyPositions[0] === 0)
+          : false;
+  if (!dimensionValid) return false;
+  const resultIsMoney = moneyPositions.length > 0;
+  return resultIsMoney
+    ? resultType === "money"
+    : resultType === "whole_number" || resultType === "decimal_number";
+};
+
 function valueMatchesTypeV2(
   value: unknown,
   type: string,
@@ -2113,9 +2192,19 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
           );
         if (field.type === "calculation") {
           const expression = object(settings.expression);
+          const expectedDependencies = moduleV2
+            ? calculationDependencyFieldIdsV2(expression)
+            : undefined;
           valid =
             (settings.dependencyFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
-            fieldReferencesValid(settings.expression, fields);
+            fieldReferencesValid(settings.expression, fields) &&
+            (!moduleV2 ||
+              JSON.stringify([...new Set(settings.dependencyFieldIds as string[])]) ===
+                JSON.stringify(expectedDependencies)) &&
+            (!moduleV2 ||
+              (["decimal_number", "money"].includes(String(settings.resultType))
+                ? settings.decimalPlaces !== undefined
+                : settings.decimalPlaces === undefined));
           if (expression.kind === "join_text")
             valid =
               valid &&
@@ -2125,22 +2214,33 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
           if (expression.kind === "numeric")
             valid =
               valid &&
-              array(expression.operands).every(
-                (operand) =>
-                  (operand.source === "literal" &&
-                    (!moduleV2 || exactDecimalTextV2Schema.safeParse(operand.value).success)) ||
-                  (operand.source === "field" &&
-                    moduleNumericField(fieldMap.get(String(operand.fieldId)))),
-              );
-          if (expression.kind === "subtract_percentage")
-            valid =
-              valid &&
-              moduleNumericField(fieldMap.get(String(expression.amountFieldId))) &&
               (moduleV2
-                ? ["whole_number", "decimal_number"].includes(
-                    fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
-                  )
-                : fieldValueType(fieldMap.get(String(expression.percentageFieldId))) === "number");
+                ? numericExpressionValidV2(expression, String(settings.resultType), fieldMap)
+                : array(expression.operands).every(
+                    (operand) =>
+                      operand.source === "literal" ||
+                      (operand.source === "field" &&
+                        moduleNumericField(fieldMap.get(String(operand.fieldId)))),
+                  ));
+          if (expression.kind === "subtract_percentage")
+            if (moduleV2) {
+              const amountDimension = numericDimensionV2(
+                fieldMap.get(String(expression.amountFieldId)),
+              );
+              valid =
+                valid &&
+                amountDimension !== undefined &&
+                ["whole_number", "decimal_number"].includes(
+                  fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
+                ) &&
+                (amountDimension === "money"
+                  ? settings.resultType === "money"
+                  : settings.resultType === "decimal_number");
+            } else
+              valid =
+                valid &&
+                moduleNumericField(fieldMap.get(String(expression.amountFieldId))) &&
+                fieldValueType(fieldMap.get(String(expression.percentageFieldId))) === "number";
           if (expression.kind === "condition")
             valid =
               valid &&
@@ -2154,21 +2254,37 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
               ["date", "date_time"].includes(
                 moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
               ) &&
+              (!moduleV2 ||
+                moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ===
+                  settings.resultType) &&
               ((amount.source === "literal" &&
-                (!moduleV2 || exactDecimalTextV2Schema.safeParse(amount.value).success)) ||
+                (!moduleV2 || exactIntegerLiteralV2(amount.value))) ||
                 (amount.source === "field" &&
-                  moduleNumericField(fieldMap.get(String(amount.fieldId)))));
+                  (moduleV2
+                    ? fieldValueTypeV2(fieldMap.get(String(amount.fieldId))) === "whole_number"
+                    : moduleNumericField(fieldMap.get(String(amount.fieldId))))));
           }
-          if (expression.kind === "deadline_passed")
+          if (expression.kind === "deadline_passed") {
+            const statusField =
+              expression.statusFieldId === undefined
+                ? undefined
+                : fieldMap.get(String(expression.statusFieldId));
             valid =
               valid &&
               ["date", "date_time"].includes(
                 moduleFieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
               ) &&
               (expression.statusFieldId === undefined ||
-                ["text", "choice"].includes(
-                  moduleFieldValueType(fieldMap.get(String(expression.statusFieldId))) ?? "",
+                ["text", "choice"].includes(moduleFieldValueType(statusField) ?? "")) &&
+              (!moduleV2 ||
+                expression.statusFieldId !== undefined ||
+                array(expression.terminalStatusValues).length === 0) &&
+              (!moduleV2 ||
+                statusField === undefined ||
+                array(expression.terminalStatusValues).every((value) =>
+                  fieldValueMatchesV2(value, statusField, "canonical"),
                 ));
+          }
         }
         if (field.type === "total") {
           const aggregateRelationship = [...records.values()]
@@ -2236,7 +2352,12 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
                 (aggregateResultType === "money" ? "money" : "decimal_number")) ||
             (["sum", "minimum", "maximum"].includes(String(settings.operation)) &&
               declaredResultType === aggregateResultType);
-          valid = valid && resultTypeValid;
+          const precisionValid = moduleV2
+            ? settings.operation === "average"
+              ? settings.decimalPlaces !== undefined
+              : settings.decimalPlaces === undefined
+            : true;
+          valid = valid && resultTypeValid && precisionValid;
         }
         if (!valid)
           failures.push(
