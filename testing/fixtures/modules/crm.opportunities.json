@@ -1,8 +1,8 @@
 {
-  "source_contract_version": "1.0.0",
-  "kind": "module",
+  "source_contract_version": "2.0.0",
   "root_alias": "mod_crm_opportunities",
   "key": "vortex.crm.opportunities",
+  "kind": "module",
   "body": {
     "name": "CRM Opportunities",
     "description": "Sales opportunities, stakeholders and commercial values.",
@@ -12,7 +12,7 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       },
       {
@@ -20,20 +20,20 @@
         "module": "vortex.crm.people",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       }
     ],
     "record_types": [
       {
         "id": "rt_crm_opportunity",
-        "storage_contract_id": "srt_00000004",
         "key": "opportunity",
         "name": "Opportunity",
         "plural_name": "Opportunities",
+        "title_field": "name",
+        "storage_contract_id": "srt_00000004",
         "storage_scope": "application_contained",
         "ownership_mode": "team",
-        "title_field": "name",
         "standard_actions": [
           "create",
           "read",
@@ -42,11 +42,13 @@
           "restore",
           "export"
         ],
+        "custom_actions": [
+          "act_opp_mark_won"
+        ],
         "fields": [
           {
             "id": "fld_opp_number",
             "key": "opportunity_number",
-            "type": "reference_number",
             "label": "Opportunity number",
             "required": true,
             "unique": true,
@@ -55,6 +57,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "reference_number",
             "settings": {
               "prefix": "OPP-",
               "digits": 7
@@ -63,7 +66,6 @@
           {
             "id": "fld_opp_name",
             "key": "name",
-            "type": "text",
             "label": "Opportunity name",
             "required": true,
             "unique": false,
@@ -72,6 +74,7 @@
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "text",
             "settings": {
               "max_length": 255
             }
@@ -79,7 +82,6 @@
           {
             "id": "fld_opp_company",
             "key": "company",
-            "type": "link",
             "label": "Company",
             "required": true,
             "unique": false,
@@ -88,6 +90,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.organisations:company",
               "reverse_key": "opportunities",
@@ -97,7 +100,6 @@
           {
             "id": "fld_opp_contact",
             "key": "primary_contact",
-            "type": "link",
             "label": "Primary contact",
             "required": false,
             "unique": false,
@@ -106,6 +108,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.people:contact",
               "reverse_key": "primary_opportunities",
@@ -115,7 +118,6 @@
           {
             "id": "fld_opp_value",
             "key": "value",
-            "type": "money",
             "label": "Value",
             "required": true,
             "unique": false,
@@ -123,15 +125,15 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "money",
             "settings": {
               "currency_mode": "organisation_default",
-              "minimum": 0
+              "minimum": "0"
             }
           },
           {
             "id": "fld_opp_discount",
             "key": "discount_percent",
-            "type": "decimal_number",
             "label": "Discount percentage",
             "required": true,
             "unique": false,
@@ -139,18 +141,18 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "decimal_number",
             "settings": {
-              "minimum": 0,
-              "maximum": 100,
+              "digits_before_decimal": 18,
               "decimal_places": 2,
-              "digits_before_decimal": 18
+              "minimum": "0",
+              "maximum": "100"
             },
-            "default": 0
+            "default": "0"
           },
           {
             "id": "fld_opp_net",
             "key": "net_value",
-            "type": "calculation",
             "label": "Net value",
             "required": true,
             "unique": false,
@@ -158,6 +160,7 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "calculation",
             "settings": {
               "result_type": "money",
               "expression": {
@@ -170,7 +173,6 @@
           {
             "id": "fld_opp_probability",
             "key": "probability",
-            "type": "whole_number",
             "label": "Probability",
             "required": true,
             "unique": false,
@@ -178,6 +180,7 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "whole_number",
             "settings": {
               "minimum": 0,
               "maximum": 100
@@ -187,7 +190,6 @@
           {
             "id": "fld_opp_stage",
             "key": "stage",
-            "type": "choice",
             "label": "Stage",
             "required": true,
             "unique": false,
@@ -196,6 +198,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -230,7 +233,6 @@
           {
             "id": "fld_opp_close",
             "key": "expected_close_date",
-            "type": "date",
             "label": "Expected close date",
             "required": true,
             "unique": false,
@@ -238,12 +240,12 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date",
             "settings": {}
           },
           {
             "id": "fld_opp_schedule",
             "key": "payment_schedule",
-            "type": "table",
             "label": "Payment schedule",
             "required": false,
             "unique": false,
@@ -251,20 +253,23 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "table",
             "settings": {
               "minimum_rows": 0,
               "maximum_rows": 24,
               "columns": [
                 {
                   "key": "milestone",
-                  "type": "text",
                   "required": true,
-                  "settings": { "max_length": 120 }
+                  "type": "text",
+                  "settings": {
+                    "max_length": 120
+                  }
                 },
                 {
                   "key": "amount",
-                  "type": "money",
                   "required": true,
+                  "type": "money",
                   "settings": {
                     "currency_mode": "fixed",
                     "currency": "NZD"
@@ -272,14 +277,14 @@
                 },
                 {
                   "key": "due_date",
-                  "type": "date",
                   "required": true,
+                  "type": "date",
                   "settings": {}
                 },
                 {
                   "key": "paid",
-                  "type": "yes_no",
                   "required": true,
+                  "type": "yes_no",
                   "settings": {}
                 }
               ]
@@ -288,7 +293,6 @@
           {
             "id": "fld_opp_docs",
             "key": "documents",
-            "type": "attachment",
             "label": "Documents",
             "required": false,
             "unique": false,
@@ -296,6 +300,7 @@
             "sortable": false,
             "personal_data": "sensitive",
             "public_display": "refused",
+            "type": "attachment",
             "settings": {
               "allowed_kinds": [
                 "image",
@@ -313,9 +318,6 @@
               "max_files": 20
             }
           }
-        ],
-        "custom_actions": [
-          "act_opp_mark_won"
         ],
         "relationships": [
           {
@@ -338,14 +340,14 @@
       },
       {
         "id": "rt_crm_opportunity_contact",
-        "storage_contract_id": "srt_00000005",
         "key": "opportunity_contact",
         "name": "Opportunity contact",
         "plural_name": "Opportunity contacts",
+        "title_field": "role",
+        "storage_contract_id": "srt_00000005",
         "storage_scope": "application_contained",
         "ownership_mode": "inherited",
         "ownership_relationship": "opportunity",
-        "title_field": "role",
         "standard_actions": [
           "create",
           "read",
@@ -354,11 +356,11 @@
           "restore",
           "export"
         ],
+        "custom_actions": [],
         "fields": [
           {
             "id": "fld_oc_opp",
             "key": "opportunity",
-            "type": "link",
             "label": "Opportunity",
             "required": true,
             "unique": false,
@@ -366,6 +368,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.opportunities:opportunity",
               "reverse_key": "stakeholders",
@@ -375,7 +378,6 @@
           {
             "id": "fld_oc_contact",
             "key": "contact",
-            "type": "link",
             "label": "Contact",
             "required": true,
             "unique": false,
@@ -384,6 +386,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.people:contact",
               "reverse_key": "opportunity_roles",
@@ -393,7 +396,6 @@
           {
             "id": "fld_oc_role",
             "key": "role",
-            "type": "choice",
             "label": "Role",
             "required": true,
             "unique": false,
@@ -402,6 +404,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -424,7 +427,6 @@
             }
           }
         ],
-        "custom_actions": [],
         "relationships": [
           {
             "id": "fld_oc_opp_relationship",
@@ -842,6 +844,7 @@
         "label": "Mark opportunity won",
         "record_type": "opportunity",
         "permission": "vortex.crm.opportunities.opportunity.mark_won",
+        "shareable": false,
         "inputs": [],
         "effects": [
           {
@@ -856,8 +859,7 @@
             "kind": "announce_event",
             "event": "vortex.crm.opportunities.opportunity.won"
           }
-        ],
-        "shareable": false
+        ]
       }
     ],
     "events": [
@@ -906,7 +908,7 @@
         "condition": {
           "field": "discount_percent",
           "operator": "greater_than",
-          "value": 15
+          "value": "15"
         },
         "effect": {
           "kind": "warn",

@@ -248,6 +248,17 @@ convert V2 fixtures to invent V1 evidence, silently update historical expectatio
 or leave the current application gate validating only its old baseline. This is
 test evidence preservation, not a second Record engine or fixture framework.
 
+The complete mixed-version bundle must use explicit checked-in resolution
+envelopes for its supported Application V1 and Module V2 request contracts, each
+with its own verified fingerprint and matching dependency/identity selections.
+Fix any consumer that wrongly requires a dependency's own resolution fingerprint
+to equal the parent's: preserve each artifact's own integrity and the exact
+parent-to-dependency selection, rather than restamping evidence or converting
+the Application just to pass. Prove the legitimate mixed pair succeeds and a
+wrong root, version, content or internally inconsistent artifact remains refused.
+This correction belongs to the actual compile/publication/readback proof, not a
+fixture-only adapter or a relaxation of release integrity.
+
 ### Rule consumer handoff
 
 Select V2 evaluation from the exact Module contract pair, never from a value that

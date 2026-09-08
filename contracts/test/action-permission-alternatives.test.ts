@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   actionDefinitionSchema,
   applicationSourceDocumentSchema,
-  moduleSourceDocumentSchema,
+  moduleSourceDocumentV2Schema,
 } from "../src/index.js";
 
 const fixture = (relativePath: string): unknown =>
@@ -34,7 +34,7 @@ describe("record action permission alternatives", () => {
   it("preserves singular authored actions and accepts canonical alternatives", () => {
     const moduleSource = fixture("modules/service-desk.cases.json") as MutableSource;
     const applicationSource = fixture("applications/service-desk.json") as MutableSource;
-    expect(moduleSourceDocumentSchema.parse(moduleSource)).toEqual(moduleSource);
+    expect(moduleSourceDocumentV2Schema.parse(moduleSource)).toEqual(moduleSource);
     expect(applicationSourceDocumentSchema.parse(applicationSource)).toEqual(applicationSource);
 
     const moduleKeys = [
@@ -42,7 +42,7 @@ describe("record action permission alternatives", () => {
       `${String(moduleSource.body.actions[0]!.permission)}_alternative`,
     ].sort();
     expect(
-      moduleSourceDocumentSchema.safeParse(replaceActionPermission(moduleSource, moduleKeys))
+      moduleSourceDocumentV2Schema.safeParse(replaceActionPermission(moduleSource, moduleKeys))
         .success,
     ).toBe(true);
 
@@ -82,7 +82,7 @@ describe("record action permission alternatives", () => {
       replaceActionPermission(source, [keys[0]!, keys[0]!]),
       replaceActionPermission(source, [...keys].reverse()),
     ])
-      expect(moduleSourceDocumentSchema.safeParse(candidate).success).toBe(false);
+      expect(moduleSourceDocumentV2Schema.safeParse(candidate).success).toBe(false);
   });
 
   it("keeps compiled singular bytes and makes plural alternatives exclusive", () => {

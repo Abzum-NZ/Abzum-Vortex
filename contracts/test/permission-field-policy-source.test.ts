@@ -8,8 +8,11 @@ import {
 import { applicationSourceDocumentSchema } from "../src/application-source-contracts";
 
 const fixtureRoot = path.resolve(import.meta.dirname, "../../testing/fixtures");
+const historicalFixtureRoot = path.join(fixtureRoot, "historical/module-v1");
 const fixture = (relativePath: string): unknown =>
   JSON.parse(fs.readFileSync(path.join(fixtureRoot, relativePath), "utf8"));
+const historicalFixture = (relativePath: string): unknown =>
+  JSON.parse(fs.readFileSync(path.join(historicalFixtureRoot, relativePath), "utf8"));
 
 describe("authored permission field policy", () => {
   test("accepts explicit empty and exact alias sets", () => {
@@ -38,7 +41,9 @@ describe("authored permission field policy", () => {
   });
 
   test("preserves historical omission and forbids policy on non-record permissions", () => {
-    const module = moduleSourceDocumentSchema.parse(fixture("modules/service-desk.cases.json"));
+    const module = moduleSourceDocumentSchema.parse(
+      historicalFixture("modules/service-desk.cases.json"),
+    );
     delete module.body.permissions[0]!.field_policy;
     expect(moduleSourceDocumentSchema.safeParse(module).success).toBe(true);
 

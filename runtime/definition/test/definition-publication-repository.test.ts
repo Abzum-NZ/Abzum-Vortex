@@ -25,7 +25,10 @@ import {
   type SourceIdentityRequirement,
 } from "../src/source-identities";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const source = definitionSourceDocumentSchema.parse(
   JSON.parse(fs.readFileSync(path.join(fixtureRoot, "modules", "crm.organisations.json"), "utf8")),
 );

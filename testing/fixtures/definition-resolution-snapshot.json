@@ -1,54 +1,54 @@
 {
   "contractVersion": "1.0.0",
-  "fingerprint": "sha256:f5a28a5241a80ba966db4ad884f0d782ce2c23a4832a56fbdcfd56053e447bac",
+  "fingerprint": "sha256:26d1e6c6fd9609374ca0b2d8c09839dcf9bfdbfb1c1bf828b19cbafdeed0d302",
   "definitions": [
     {
       "kind": "module",
       "key": "vortex.crm.activities",
       "rootId": "306fc9b1-3fe3-47ba-a181-1ae82211612c",
-      "exactVersion": "1.0.0"
+      "exactVersion": "2.0.0"
     },
     {
       "kind": "module",
       "key": "vortex.crm.opportunities",
       "rootId": "c9ad7c0b-9c35-4bcb-ab55-9736ec2b42f4",
-      "exactVersion": "1.0.0"
+      "exactVersion": "2.0.0"
     },
     {
       "kind": "module",
       "key": "vortex.crm.organisations",
       "rootId": "995bbd00-cb2e-475c-a15b-39efe1a29f9f",
-      "exactVersion": "1.0.0"
+      "exactVersion": "2.0.0"
     },
     {
       "kind": "module",
       "key": "vortex.crm.people",
       "rootId": "3b8d60a8-a7aa-4636-aaa4-68dc5c1dac11",
-      "exactVersion": "1.0.0"
+      "exactVersion": "2.0.0"
     },
     {
       "kind": "module",
       "key": "vortex.crm.tags",
       "rootId": "960e7337-2d0f-403b-ad70-a2b2fdd68ed9",
-      "exactVersion": "1.0.0"
+      "exactVersion": "2.0.0"
     },
     {
       "kind": "module",
       "key": "vortex.service_desk.cases",
       "rootId": "96594075-c780-4b7a-abb3-c54e89e76d1a",
-      "exactVersion": "1.0.0"
+      "exactVersion": "2.0.0"
     },
     {
       "kind": "module",
       "key": "vortex.service_desk.knowledge",
       "rootId": "696cb40e-4336-4394-ad51-3ed7a171b0d3",
-      "exactVersion": "1.0.0"
+      "exactVersion": "2.0.0"
     },
     {
       "kind": "module",
       "key": "vortex.service_desk.sla",
       "rootId": "1973e51f-4801-4a92-a783-248354defca5",
-      "exactVersion": "1.0.0"
+      "exactVersion": "2.0.0"
     },
     {
       "kind": "application",

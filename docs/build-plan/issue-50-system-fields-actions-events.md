@@ -104,6 +104,20 @@ classified field may still change and produce a lifecycle fact containing the
 safe identifiers; its classified values are omitted, not copied into an event.
 Consumers re-read current permitted information when needed.
 
+Keep value validation with Record's existing field semantics; the Event consumer
+reuses them rather than maintaining another field-type/settings switch inside
+Definition. Definition owns the pure exact-release catalogue projection. A
+state-change payload must represent both setting an absent value and clearing a
+present value, using the existing absence representation, without inventing a
+persisted null value. Classified values remain omitted in either case.
+
+Custom declaration identity includes its owning Application or Module root.
+Do not reject identical event keys in different owners unless the owning
+publication contract explicitly requires that wider uniqueness. Occurrence and
+declaration identifiers have separate meanings and slots; allocation and retry
+handling in the committed save path provide occurrence identity, not an arbitrary
+cross-namespace UUID inequality check.
+
 ## Boundaries and verification
 
 - No second event catalogue, queue or registration ledger merely to copy

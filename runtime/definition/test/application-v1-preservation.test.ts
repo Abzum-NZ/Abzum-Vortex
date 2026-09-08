@@ -19,7 +19,10 @@ import { describe, expect, it } from "vitest";
 import { canonicalJson, fingerprintCanonicalValue } from "../src/canonical-json";
 import { compileDefinition } from "../src/compiler";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const sourceCandidate = JSON.parse(
   fs.readFileSync(path.join(fixtureRoot, "applications/crm.json"), "utf8"),
 ) as unknown;

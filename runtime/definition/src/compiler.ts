@@ -2453,8 +2453,7 @@ function applicationPermissionSharingConditions(
     !compatibleVersion(requirement, expectedModule.exactVersion) ||
     output.artifact.rootId !== expectedModule.rootId ||
     output.artifact.exactVersion !== expectedModule.exactVersion ||
-    output.artifact.resolutionFingerprint !== resolution.snapshot.fingerprint ||
-    output.resolutionFingerprint !== resolution.snapshot.fingerprint ||
+    output.artifact.resolutionFingerprint !== output.resolutionFingerprint ||
     envelope.rootId !== expectedModule.rootId ||
     envelope.key !== moduleKey ||
     envelope.organizationId !== organizationId ||

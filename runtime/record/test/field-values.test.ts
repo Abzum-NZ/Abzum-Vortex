@@ -1,11 +1,12 @@
 import {
+  fieldDefinitionSchema,
   moduleFieldV2Schema,
   recordTypeDefinitionV2Schema,
   type ModuleFieldV2,
   type RecordTypeDefinitionV2,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
-import { prepareRecordFieldValuesV2 } from "../src";
+import { persistedRecordFieldValueMatches, prepareRecordFieldValuesV2 } from "../src";
 
 const id = (value: number) => `70000000-0000-4000-8000-${value.toString().padStart(12, "0")}`;
 
@@ -787,5 +788,103 @@ describe("prepareRecordFieldValuesV2", () => {
       clearFieldIds: [fieldIds.decimal],
       pendingChecks: [],
     });
+  });
+});
+
+describe("persistedRecordFieldValueMatches", () => {
+  it("reuses canonical V2 value and static reference-target semantics", () => {
+    const definitions = fields();
+    const byId = new Map(definitions.map((candidate) => [candidate.fieldId, candidate]));
+    expect(
+      persistedRecordFieldValueMatches({
+        validationContractVersion: "2.0.0",
+        field: byId.get(fieldIds.reference)!,
+        value: "00000042",
+      }),
+    ).toBe(true);
+    expect(
+      persistedRecordFieldValueMatches({
+        validationContractVersion: "2.0.0",
+        field: byId.get(fieldIds.attachment)!,
+        value: [fileId],
+      }),
+    ).toBe(true);
+    expect(
+      persistedRecordFieldValueMatches({
+        validationContractVersion: "2.0.0",
+        field: byId.get(fieldIds.link)!,
+        value: { recordTypeId: otherRecordTypeId, recordId: id(201) },
+      }),
+    ).toBe(false);
+    expect(
+      persistedRecordFieldValueMatches({
+        validationContractVersion: "2.0.0",
+        field: byId.get(fieldIds.decimal)!,
+        value: "1.00",
+      }),
+    ).toBe(false);
+  });
+
+  it("checks accepted V1 persisted values against their historical field settings", () => {
+    const base = {
+      fieldId: id(300),
+      key: "historical",
+      label: "Historical",
+      required: false,
+      unique: false,
+      filterable: true,
+      sortable: true,
+      personalData: "none" as const,
+      publicDisplay: "refused" as const,
+    };
+    const text = fieldDefinitionSchema.parse({
+      ...base,
+      type: "text",
+      settings: { maxLength: 3 },
+    });
+    const whole = fieldDefinitionSchema.parse({
+      ...base,
+      fieldId: id(301),
+      type: "whole_number",
+      settings: { minimum: 1, maximum: 9, step: 2 },
+    });
+    const attachment = fieldDefinitionSchema.parse({
+      ...base,
+      fieldId: id(302),
+      type: "attachment",
+      settings: {
+        allowedKinds: ["document"],
+        maxFileSizeMb: 20,
+        multiple: false,
+      },
+    });
+    expect(
+      persistedRecordFieldValueMatches({
+        validationContractVersion: "1.0.0",
+        field: text,
+        value: "old",
+      }),
+    ).toBe(true);
+    expect(
+      persistedRecordFieldValueMatches({
+        validationContractVersion: "1.0.0",
+        field: text,
+        value: "long",
+      }),
+    ).toBe(false);
+    expect(
+      persistedRecordFieldValueMatches({
+        validationContractVersion: "1.0.0",
+        field: whole,
+        value: 4,
+      }),
+    ).toBe(false);
+    expect(
+      persistedRecordFieldValueMatches({
+        validationContractVersion: "1.0.0",
+        field: attachment,
+        value: [fileId],
+      }),
+    ).toBe(true);
   });
 });

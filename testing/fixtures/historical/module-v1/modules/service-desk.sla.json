@@ -1,0 +1,651 @@
+{
+  "source_contract_version": "1.0.0",
+  "kind": "module",
+  "root_alias": "mod_service_desk_sla",
+  "key": "vortex.service_desk.sla",
+  "body": {
+    "name": "Service Desk Service Levels",
+    "description": "Business calendars and service-level targets used by cases.",
+    "dependencies": [],
+    "record_types": [
+      {
+        "id": "rt_sd_calendar",
+        "storage_contract_id": "srt_00000009",
+        "key": "business_calendar",
+        "name": "Business calendar",
+        "plural_name": "Business calendars",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "team",
+        "title_field": "name",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_calendar_name",
+            "key": "name",
+            "type": "text",
+            "label": "Name",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_calendar_tz",
+            "key": "time_zone",
+            "type": "choice",
+            "label": "Time zone",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "options": [
+                {
+                  "value": "Pacific/Auckland",
+                  "label": "Auckland"
+                },
+                {
+                  "value": "Australia/Sydney",
+                  "label": "Sydney"
+                },
+                {
+                  "value": "UTC",
+                  "label": "UTC"
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_calendar_hours",
+            "key": "working_hours",
+            "type": "table",
+            "label": "Working hours",
+            "required": true,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "minimum_rows": 1,
+              "maximum_rows": 14,
+              "columns": [
+                {
+                  "key": "day",
+                  "type": "choice",
+                  "required": true,
+                  "settings": {
+                    "options": [
+                      { "value": "monday", "label": "Monday" },
+                      { "value": "tuesday", "label": "Tuesday" },
+                      { "value": "wednesday", "label": "Wednesday" },
+                      { "value": "thursday", "label": "Thursday" },
+                      { "value": "friday", "label": "Friday" },
+                      { "value": "saturday", "label": "Saturday" },
+                      { "value": "sunday", "label": "Sunday" }
+                    ]
+                  }
+                },
+                {
+                  "key": "starts_at",
+                  "type": "text",
+                  "required": true,
+                  "settings": { "max_length": 5 }
+                },
+                {
+                  "key": "ends_at",
+                  "type": "text",
+                  "required": true,
+                  "settings": { "max_length": 5 }
+                }
+              ]
+            }
+          },
+          {
+            "id": "fld_calendar_exclusions",
+            "key": "excluded_dates",
+            "type": "table",
+            "label": "Excluded dates",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "minimum_rows": 0,
+              "maximum_rows": 100,
+              "columns": [
+                {
+                  "key": "date",
+                  "type": "date",
+                  "required": true,
+                  "settings": {}
+                },
+                {
+                  "key": "reason",
+                  "type": "text",
+                  "required": true,
+                  "settings": { "max_length": 200 }
+                }
+              ]
+            }
+          }
+        ],
+        "custom_actions": [],
+        "relationships": []
+      },
+      {
+        "id": "rt_sd_service_level",
+        "storage_contract_id": "srt_00000010",
+        "key": "service_level",
+        "name": "Service level",
+        "plural_name": "Service levels",
+        "storage_scope": "organisation_shared",
+        "ownership_mode": "team",
+        "title_field": "name",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore",
+          "export"
+        ],
+        "fields": [
+          {
+            "id": "fld_sla_name",
+            "key": "name",
+            "type": "text",
+            "label": "Name",
+            "required": true,
+            "unique": true,
+            "filterable": true,
+            "sortable": true,
+            "search_priority": "first",
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "max_length": 120
+            }
+          },
+          {
+            "id": "fld_sla_calendar",
+            "key": "calendar",
+            "type": "link",
+            "label": "Business calendar",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "search_priority": "normal",
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {
+              "target": "vortex.service_desk.sla:business_calendar",
+              "reverse_key": "service_levels",
+              "on_parent_delete": "refuse"
+            }
+          },
+          {
+            "id": "fld_sla_response",
+            "key": "first_response_minutes",
+            "type": "whole_number",
+            "label": "First response minutes",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "minimum": 1
+            }
+          },
+          {
+            "id": "fld_sla_resolution",
+            "key": "resolution_minutes",
+            "type": "whole_number",
+            "label": "Resolution minutes",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "allowed",
+            "settings": {
+              "minimum": 1
+            }
+          },
+          {
+            "id": "fld_sla_active",
+            "key": "active",
+            "type": "yes_no",
+            "label": "Active",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "settings": {},
+            "default": true
+          }
+        ],
+        "custom_actions": [
+          "act_sla_pause"
+        ],
+        "relationships": [
+          {
+            "id": "fld_sla_calendar_relationship",
+            "key": "calendar",
+            "from_field": "calendar",
+            "to_record_type": "vortex.service_desk.sla:business_calendar",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "refuse"
+          }
+        ]
+      }
+    ],
+    "permissions": [
+      {
+        "id": "perm_business_calendar_create",
+        "key": "vortex.service_desk.sla.business_calendar.create",
+        "label": "Create business calendar",
+        "description": "Allows the standard create operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "time_zone",
+            "working_hours",
+            "excluded_dates"
+          ],
+          "changeable_fields": [
+            "name",
+            "time_zone",
+            "working_hours",
+            "excluded_dates"
+          ]
+        }
+      },
+      {
+        "id": "perm_business_calendar_read",
+        "key": "vortex.service_desk.sla.business_calendar.read",
+        "label": "Read business calendar",
+        "description": "Allows the standard read operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "time_zone",
+            "working_hours",
+            "excluded_dates"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_business_calendar_update",
+        "key": "vortex.service_desk.sla.business_calendar.update",
+        "label": "Update business calendar",
+        "description": "Allows the standard update operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "time_zone",
+            "working_hours",
+            "excluded_dates"
+          ],
+          "changeable_fields": [
+            "name",
+            "time_zone",
+            "working_hours",
+            "excluded_dates"
+          ]
+        }
+      },
+      {
+        "id": "perm_business_calendar_soft_delete",
+        "key": "vortex.service_desk.sla.business_calendar.soft_delete",
+        "label": "Soft Delete business calendar",
+        "description": "Allows the standard soft_delete operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "delete",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_business_calendar_restore",
+        "key": "vortex.service_desk.sla.business_calendar.restore",
+        "label": "Restore business calendar",
+        "description": "Allows the standard restore operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "restore",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_business_calendar_export",
+        "key": "vortex.service_desk.sla.business_calendar.export",
+        "label": "Export business calendar",
+        "description": "Allows the standard export operation for business calendars.",
+        "record_type": "business_calendar",
+        "action_kind": "export",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "time_zone",
+            "working_hours",
+            "excluded_dates"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_service_level_create",
+        "key": "vortex.service_desk.sla.service_level.create",
+        "label": "Create service level",
+        "description": "Allows the standard create operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "calendar",
+            "first_response_minutes",
+            "resolution_minutes",
+            "active"
+          ],
+          "changeable_fields": [
+            "name",
+            "calendar",
+            "first_response_minutes",
+            "resolution_minutes",
+            "active"
+          ]
+        }
+      },
+      {
+        "id": "perm_service_level_read",
+        "key": "vortex.service_desk.sla.service_level.read",
+        "label": "Read service level",
+        "description": "Allows the standard read operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "calendar",
+            "first_response_minutes",
+            "resolution_minutes",
+            "active"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_service_level_update",
+        "key": "vortex.service_desk.sla.service_level.update",
+        "label": "Update service level",
+        "description": "Allows the standard update operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "calendar",
+            "first_response_minutes",
+            "resolution_minutes",
+            "active"
+          ],
+          "changeable_fields": [
+            "name",
+            "calendar",
+            "first_response_minutes",
+            "resolution_minutes",
+            "active"
+          ]
+        }
+      },
+      {
+        "id": "perm_service_level_soft_delete",
+        "key": "vortex.service_desk.sla.service_level.soft_delete",
+        "label": "Soft Delete service level",
+        "description": "Allows the standard soft_delete operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "delete",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_service_level_restore",
+        "key": "vortex.service_desk.sla.service_level.restore",
+        "label": "Restore service level",
+        "description": "Allows the standard restore operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "restore",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_service_level_export",
+        "key": "vortex.service_desk.sla.service_level.export",
+        "label": "Export service level",
+        "description": "Allows the standard export operation for service levels.",
+        "record_type": "service_level",
+        "action_kind": "export",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "calendar",
+            "first_response_minutes",
+            "resolution_minutes",
+            "active"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_named_1_manage",
+        "key": "vortex.service_desk.sla.service_level.manage",
+        "label": "Manage service levels",
+        "description": "Allows the named manage operation.",
+        "record_type": "service_level",
+        "action_kind": "named",
+        "named_action": "manage",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "active"
+          ],
+          "changeable_fields": [
+            "active"
+          ]
+        }
+      }
+    ],
+    "actions": [
+      {
+        "id": "act_sla_pause",
+        "key": "vortex.service_desk.sla.service_level.pause",
+        "label": "Pause service level",
+        "record_type": "service_level",
+        "permission": "vortex.service_desk.sla.service_level.manage",
+        "inputs": [],
+        "effects": [
+          {
+            "kind": "set_field",
+            "field": "active",
+            "value": {
+              "source": "literal",
+              "value": false
+            }
+          },
+          {
+            "kind": "announce_event",
+            "event": "vortex.service_desk.sla.service_level.changed"
+          }
+        ],
+        "shareable": false
+      }
+    ],
+    "events": [
+      {
+        "id": "evt_sla_changed",
+        "key": "vortex.service_desk.sla.service_level.changed",
+        "record_type": "service_level",
+        "carries": [
+          "name",
+          "first_response_minutes",
+          "resolution_minutes",
+          "active"
+        ],
+        "personal_or_sensitive_values_allowed": false
+      }
+    ],
+    "rules": [],
+    "extension_points": [
+      {
+        "id": "ext_sla_fields",
+        "key": "service_level_fields",
+        "record_type": "service_level",
+        "accepts": [
+          "field"
+        ]
+      }
+    ],
+    "sharing_conditions": []
+  }
+}
+

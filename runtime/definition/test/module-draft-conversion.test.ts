@@ -24,7 +24,10 @@ const fixtureNames = [
 const fixture = (name: (typeof fixtureNames)[number]): ModuleSourceDocumentV1 =>
   moduleSourceDocumentV1Schema.parse(
     JSON.parse(
-      readFileSync(new URL(`../../../testing/fixtures/modules/${name}`, import.meta.url), "utf8"),
+      readFileSync(
+        new URL(`../../../testing/fixtures/historical/module-v1/modules/${name}`, import.meta.url),
+        "utf8",
+      ),
     ),
   );
 

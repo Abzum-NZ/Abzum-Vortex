@@ -271,12 +271,19 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/definition':
+        specifier: workspace:*
+        version: link:../definition
       '@vortex/record':
         specifier: workspace:*
         version: link:../record
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   runtime/file:
     dependencies:
@@ -470,6 +477,9 @@ importers:
       '@vortex/modules':
         specifier: workspace:*
         version: link:../modules
+      '@vortex/record':
+        specifier: workspace:*
+        version: link:../runtime/record
     devDependencies:
       vitest:
         specifier: 4.1.11

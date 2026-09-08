@@ -50,7 +50,10 @@ import { extractApplicationSourceIdentityRequirementsV2 } from "../src/source-id
 import { createApplicationResolutionSnapshotV2 } from "../src/application-v2-resolution";
 import { validateDefinitionSet, validateDefinitionSource } from "../src/validation";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const baseSource = JSON.parse(
   fs.readFileSync(path.join(fixtureRoot, "applications/crm.json"), "utf8"),
 ) as { root_alias: string; key: string; body: Record<string, unknown> };

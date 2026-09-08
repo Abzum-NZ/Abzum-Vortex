@@ -18,7 +18,10 @@ import {
   prepareApplicationDraftV2Conversion,
 } from "../src/application-draft-conversion";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures/applications");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1/applications",
+);
 const id = (suffix: number) => `00000000-0000-4000-8000-${String(suffix).padStart(12, "0")}`;
 const fingerprint = (letter: string) => `sha256:${letter.repeat(64)}`;
 const release = (suffix: number, query = false): PlatformBlockReleaseV2 => ({

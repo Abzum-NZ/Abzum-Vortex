@@ -47,6 +47,17 @@ tests in twenty-two files; two additional suites could not load because the
 separate, uncommitted current-fixture conversion still used V1-only test loaders.
 Those failures were returned to the fixture owner and are not reported as passes.
 
-No Testing merge or hosted database completion is claimed by this record yet.
-The isolated database verification rolled back; unfinished storage provisioning
-was excluded and no full ordered migration-set success is claimed.
+## Testing delivery receipt
+
+[PR #360](https://github.com/Abzum-NZ/Abzum-Vortex/pull/360) merged into Testing
+at `2026-09-08T14:14:18Z`, producing merge revision
+`7ad93a91df47cc8670adfba319b09b3e21b556c8`. The independently reviewed source
+revision was `23c2395c0c1e5ab0a05924d9c95623de4e358802`; its
+[actual Vercel preview build](https://vercel.com/abzumdevteam/abzum-vortex/BR2L4ei1YjWgDs96D7haHbBLvnSr)
+reached Ready after 5 minutes 56 seconds, and GitHub reported the required check
+successful before the normal protected merge.
+
+This receipt proves source-build and Testing-branch delivery, not hosted database
+completion or Production promotion. The isolated database verification rolled
+back; unfinished storage provisioning was excluded and no full ordered
+migration-set success is claimed.
