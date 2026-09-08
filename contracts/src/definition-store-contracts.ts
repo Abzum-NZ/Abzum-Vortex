@@ -8,6 +8,7 @@ import {
 import {
   actorIdSchema,
   applicationRootIdSchema,
+  blockIdSchema,
   connectionTypeIdSchema,
   fingerprintSchema,
   moduleRootIdSchema,
@@ -151,6 +152,15 @@ export const exactDefinitionDependencySchema = z.discriminatedUnion("kind", [
       catalogueFingerprint: fingerprintSchema,
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("platform_block"),
+      blockId: blockIdSchema,
+      releaseVersion: stableDefinitionReleaseVersionSchema,
+      contentFingerprint: fingerprintSchema,
+      catalogueFingerprint: fingerprintSchema,
+    })
+    .strict(),
 ]);
 
 const dependencyManifestSchema = z
@@ -160,7 +170,9 @@ const dependencyManifestSchema = z
     const subjects = entries.map((entry) =>
       entry.kind === "platform_theme"
         ? `${entry.kind}:${entry.catalogueThemeId}`
-        : `${entry.kind}:${entry.key}`,
+        : entry.kind === "platform_block"
+          ? `${entry.kind}:${entry.blockId}`
+          : `${entry.kind}:${entry.key}`,
     );
     if (new Set(subjects).size !== subjects.length)
       context.addIssue({

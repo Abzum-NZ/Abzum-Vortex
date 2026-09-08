@@ -459,11 +459,6 @@ describe("Definition history and restore", () => {
         intrinsicSourceContractVersion: "1.0.0",
       },
       {
-        sourceContractVersion: "2.0.0",
-        validationContractVersion: "2.0.0",
-        intrinsicSourceContractVersion: "2.0.0",
-      },
-      {
         sourceContractVersion: "1.0.0",
         validationContractVersion: "1.0.0",
         intrinsicSourceContractVersion: "2.0.0",

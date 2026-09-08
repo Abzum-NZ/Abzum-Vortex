@@ -187,7 +187,24 @@ insert into vortex_definition.releases (
   'sha256:' || pg_catalog.repeat('b', 64),
   'sha256:' || pg_catalog.repeat('a', 64),
   '1.0.0', 'sha256:' || pg_catalog.repeat('c', 64), '[]',
-  'Consumer application release', pg_catalog.statement_timestamp(),
+  'Consumer application V1 release', pg_catalog.statement_timestamp(),
+  '91000000-0000-4000-8000-000000000070'
+),
+(
+  '31000000-0000-4000-8000-000000000071', 2, '2.0.0',
+  '{"source_contract_version":"2.0.0","kind":"application","key":"example.consumer_application","body":{"shells":[],"pages":[]}}',
+  'sha256:' || pg_catalog.repeat('d', 64), '2.0.0',
+  '{"kind":"application","validationContractVersion":"2.0.0","canonical":{"content":{"shells":[],"pages":[]}}}',
+  pg_catalog.jsonb_build_object(
+    'contractVersion', '2.0.0',
+    'fingerprint', 'sha256:' || pg_catalog.repeat('e', 64),
+    'identities', '[]'::jsonb,
+    'definitions', '[]'::jsonb
+  ),
+  'sha256:' || pg_catalog.repeat('f', 64),
+  'sha256:' || pg_catalog.repeat('e', 64),
+  '2.0.0', 'sha256:' || pg_catalog.repeat('0', 64), '[]',
+  'Consumer application V2 release', pg_catalog.statement_timestamp(),
   '91000000-0000-4000-8000-000000000070'
 ),
 (
@@ -207,16 +224,36 @@ insert into vortex_definition.release_dependencies (
   root_id, release_revision, dependency_kind, dependency_reference,
   dependency_version, dependency_content_fingerprint, evidence_fingerprint,
   target_root_id, target_release_revision, catalogue_item_id
-) values (
+) values
+(
   '31000000-0000-4000-8000-000000000071', 1, 'module',
+  'example.consumer_module', '1.0.0', 'sha256:' || pg_catalog.repeat('3', 64),
+  'sha256:' || pg_catalog.repeat('2', 64),
+  '31000000-0000-4000-8000-000000000070', 1, null
+),
+(
+  '31000000-0000-4000-8000-000000000071', 2, 'module',
   'example.consumer_module', '1.0.0', 'sha256:' || pg_catalog.repeat('3', 64),
   'sha256:' || pg_catalog.repeat('2', 64),
   '31000000-0000-4000-8000-000000000070', 1, null
 );
 
+insert into vortex_definition.release_dependencies (
+  root_id, release_revision, dependency_kind, dependency_reference,
+  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
+  target_root_id, target_release_revision, catalogue_item_id
+) values (
+  '31000000-0000-4000-8000-000000000071', 2, 'platform_block',
+  '61000000-0000-4000-8000-000000000070', '2.1.0',
+  'sha256:' || pg_catalog.repeat('8', 64),
+  'sha256:' || pg_catalog.repeat('9', 64),
+  null, null, '61000000-0000-4000-8000-000000000070'
+);
+
 update vortex_definition.roots
 set current_release_revision = case
   when root_id = '31000000-0000-4000-8000-000000000070'::uuid then 2
+  when root_id = '31000000-0000-4000-8000-000000000071'::uuid then 2
   else 1
 end
 where root_id in (
@@ -284,6 +321,46 @@ select is(
 select is(
   vortex_definition.read_consumer_release(
     'application', '31000000-0000-4000-8000-000000000071', 1
+  ) ->> 'sourceContractVersion',
+  '1.0.0',
+  'consumer evidence preserves the exact historical V1 application source contract version'
+);
+select is(
+  vortex_definition.read_consumer_release(
+    'application', '31000000-0000-4000-8000-000000000071', 1
+  ) ->> 'contentFingerprint',
+  'sha256:' || pg_catalog.repeat('b', 64),
+  'the later V2 release does not rewrite the exact historical V1 application fingerprint'
+);
+select is(
+  vortex_definition.read_consumer_release(
+    'application', '31000000-0000-4000-8000-000000000071', 2
+  ) ->> 'sourceContractVersion',
+  '2.0.0',
+  'consumer evidence preserves the exact later V2 application source contract version'
+);
+select is(
+  (
+    select item.value
+    from pg_catalog.jsonb_array_elements(
+      vortex_definition.read_consumer_release(
+        'application', '31000000-0000-4000-8000-000000000071', 2
+      ) -> 'dependencyManifest'
+    ) as item(value)
+    where item.value ->> 'kind' = 'platform_block'
+  ),
+  pg_catalog.jsonb_build_object(
+    'kind', 'platform_block',
+    'blockId', '61000000-0000-4000-8000-000000000070'::uuid,
+    'releaseVersion', '2.1.0',
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('8', 64),
+    'catalogueFingerprint', 'sha256:' || pg_catalog.repeat('9', 64)
+  ),
+  'consumer evidence reproduces the exact stored platform-block dependency'
+);
+select is(
+  vortex_definition.read_consumer_release(
+    'application', '31000000-0000-4000-8000-000000000071', 2
   ) -> 'moduleDependencyTargets' -> 0 ->> 'releaseVersion',
   '1.0.0',
   'the consumer evidence joins the exact immutable Module target release'

@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  applicationDefinitionConsumerReadResultV1Schema,
   applicationRootIdSchema,
   pageIdSchema,
   revisionSchema,
@@ -78,7 +79,12 @@ export const createStoredV1PageCapabilityService = (
     source
       .readExact()
       .then(({ applicationRelease: release, permissionRegistration: registration }) => {
-        const pages = release.content.pages.filter((page) => sameUuid(page.pageId, selectedPageId));
+        const parsedRelease = applicationDefinitionConsumerReadResultV1Schema.safeParse(release);
+        if (!parsedRelease.success) throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
+        const v1Release = parsedRelease.data;
+        const pages = v1Release.content.pages.filter((page) =>
+          sameUuid(page.pageId, selectedPageId),
+        );
         if (pages.length !== 1 || pages[0] === undefined)
           throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
         const page = pages[0];
@@ -97,7 +103,7 @@ export const createStoredV1PageCapabilityService = (
               : [];
         return {
           page,
-          sourceCorrelationId: release.correlationId,
+          sourceCorrelationId: v1Release.correlationId,
           pagePermission: {
             permissionKey: page.accessPermissionKey,
             declaration: declaration("application.page.discover", applicationRootId, pageEntry),

@@ -314,6 +314,41 @@ insert into vortex_definition.releases (
   'Foreign generic release', pg_catalog.statement_timestamp(),
   '98000000-0000-4000-8000-000000000080'
 );
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+) values (
+  '38000000-0000-4000-8000-000000000081', 1, '1.0.0',
+  '{"source_contract_version":"2.0.0","kind":"application","key":"example.history_restore","body":{"shells":[],"pages":[]}}'::jsonb,
+  'sha256:' || pg_catalog.repeat('a', 64), '2.0.0',
+  '{"kind":"application","validationContractVersion":"2.0.0","canonical":{"content":{"shells":[],"pages":[]}}}'::jsonb,
+  pg_catalog.jsonb_build_object(
+    'contractVersion', '2.0.0',
+    'fingerprint', 'sha256:' || pg_catalog.repeat('b', 64),
+    'identities', '[]'::jsonb,
+    'definitions', '[]'::jsonb
+  ),
+  'sha256:' || pg_catalog.repeat('c', 64), 'sha256:' || pg_catalog.repeat('b', 64),
+  '2.0.0', 'sha256:' || pg_catalog.repeat('d', 64), '[]'::jsonb,
+  'Native application release', pg_catalog.statement_timestamp(),
+  '98000000-0000-4000-8000-000000000080'
+);
+
+insert into vortex_definition.release_dependencies (
+  root_id, release_revision, dependency_kind, dependency_reference,
+  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
+  target_root_id, target_release_revision, catalogue_item_id
+) values (
+  '38000000-0000-4000-8000-000000000081', 1, 'platform_block',
+  '68000000-0000-4000-8000-000000000080', '3.0.0',
+  'sha256:' || pg_catalog.repeat('e', 64),
+  'sha256:' || pg_catalog.repeat('f', 64),
+  null, null, '68000000-0000-4000-8000-000000000080'
+);
+
 update vortex_definition.roots
 set current_release_revision = case root_id
   when '38000000-0000-4000-8000-000000000080'::uuid then 3
@@ -464,6 +499,25 @@ select is(
   ) -> 'authoredSource' -> 'body' ->> 'marker',
   'old',
   'restore evidence contains the exact immutable authored source only through its narrow operation'
+);
+select is(
+  (
+    select item.value
+    from pg_catalog.jsonb_array_elements(
+      vortex_definition.read_restore_release_evidence(
+        'application', '38000000-0000-4000-8000-000000000081', 1
+      ) -> 'dependencyManifest'
+    ) as item(value)
+    where item.value ->> 'kind' = 'platform_block'
+  ),
+  pg_catalog.jsonb_build_object(
+    'kind', 'platform_block',
+    'blockId', '68000000-0000-4000-8000-000000000080'::uuid,
+    'releaseVersion', '3.0.0',
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('e', 64),
+    'catalogueFingerprint', 'sha256:' || pg_catalog.repeat('f', 64)
+  ),
+  'restore evidence reproduces the exact platform-block dependency for a stored V2 release'
 );
 select is(
   vortex_definition.list_release_history(

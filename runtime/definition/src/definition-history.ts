@@ -5,13 +5,13 @@ import {
   definitionReleaseHistoryResultSchema,
   definitionReleaseMetadataCommandSchema,
   definitionReleaseMetadataResultSchema,
-  definitionSourceDocumentSchema,
+  storedDefinitionSourceSchema,
   fingerprintSchema,
   restoreDefinitionDraftCommandSchema,
   selectApplicationContractPair,
   selectStoredApplicationSourceContract,
   sessionContextSchema,
-  sourceIdentityAssignmentSchema,
+  sourceIdentityAssignmentV2Schema,
   storedDefinitionDraftSchema,
   type DefinitionReleaseHistoryCommand,
   type DefinitionReleaseHistoryResult,
@@ -34,7 +34,7 @@ import {
 } from "./definition-consumer-read";
 import { hasAuthenticStoredCustomerDefinitionRelease } from "./definition-release-integrity";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
-import { extractSourceIdentityRequirements } from "./source-identities";
+import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 
 export const definitionHistoryErrorCodes = [
@@ -62,22 +62,22 @@ export class DefinitionHistoryError extends Error {
   }
 }
 
-const currentIdentityEvidenceSchema = sourceIdentityAssignmentSchema
+const currentIdentityEvidenceSchema = sourceIdentityAssignmentV2Schema
   .extend({ ownerScope: z.string().min(1).max(500) })
   .strict();
 
 type RestoreEvidence = StoredConsumerReleaseEvidence & {
-  authoredSource: z.infer<typeof definitionSourceDocumentSchema>;
+  authoredSource: z.infer<typeof storedDefinitionSourceSchema>;
   sourceFingerprint: z.infer<typeof fingerprintSchema>;
-  sourceContractVersion: "1.0.0";
+  sourceContractVersion: "1.0.0" | "2.0.0";
   identityEvidence: readonly z.infer<typeof currentIdentityEvidenceSchema>[];
 };
 
 const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
-    authoredSource: definitionSourceDocumentSchema,
+    authoredSource: storedDefinitionSourceSchema,
     sourceFingerprint: fingerprintSchema,
-    sourceContractVersion: z.literal("1.0.0"),
+    sourceContractVersion: z.enum(["1.0.0", "2.0.0"]),
     identityEvidence: z.array(currentIdentityEvidenceSchema),
   })
   .strict();
@@ -251,7 +251,7 @@ const ownerIdentifierKey = (identity: {
   ]);
 
 const identitiesMatchSource = (release: RestoreEvidence): boolean => {
-  const requirements = extractSourceIdentityRequirements(release.authoredSource);
+  const requirements = extractStoredSourceIdentityRequirements(release.authoredSource);
   const expected = requirements.flatMap((requirement) =>
     requirement.aliases.map((alias) => ({
       plain: identifierKey({
@@ -324,7 +324,6 @@ const verifyRestoreEvidence = async (
     source.kind !== release.kind ||
     source.key !== release.key ||
     source.source_contract_version !== release.sourceContractVersion ||
-    release.sourceContractVersion !== "1.0.0" ||
     fingerprintCanonicalValue(source) !== release.sourceFingerprint ||
     !validateDefinitionSource(source).valid ||
     release.compilationOutput.kind === "connection_type" ||
@@ -334,6 +333,8 @@ const verifyRestoreEvidence = async (
       key: release.key,
       rootId: release.rootId,
       releaseVersion: release.releaseVersion,
+      sourceContractVersion: release.sourceContractVersion,
+      validationContractVersion: release.validationContractVersion,
       contentFingerprint: release.contentFingerprint,
       resolutionFingerprint: release.resolutionFingerprint,
       compilationOutput: release.compilationOutput,
@@ -350,6 +351,7 @@ const verifyRestoreEvidence = async (
     catalogueResult = await verifyDefinitionCatalogueDependencies(
       release.dependencyManifest,
       catalogue,
+      release.validationContractVersion,
     );
   } catch {
     throw new DefinitionHistoryError("DEFINITION_RESTORE_FAILED");
@@ -359,7 +361,7 @@ const verifyRestoreEvidence = async (
 
   return {
     sourceFingerprint: release.sourceFingerprint,
-    identityRequirements: extractSourceIdentityRequirements(source),
+    identityRequirements: extractStoredSourceIdentityRequirements(source),
   };
 };
 

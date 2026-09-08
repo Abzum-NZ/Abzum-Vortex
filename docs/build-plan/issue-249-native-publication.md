@@ -3,7 +3,10 @@
 Task: [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249).
 Preceding slice: [native draft storage](issue-249-native-draft-storage.md).
 Specification: [page composition](../specification/appendices/page-builder-contracts.md).
-Status: planned; not implemented.
+Status: implementation and independent Sol review complete; normal Testing
+delivery and exact hosted verification remain. The coordinated runtime and SQL
+acceptance is recorded in the [publication evidence](../evidence/issue-249-native-publication.md).
+This does not complete the remaining conversion and adapter work in #249.
 
 ## Outcome
 
@@ -68,7 +71,13 @@ This slice does not add a designer, conversion command, installation, new public
   - canonical content fingerprint;
   - resolution-snapshot fingerprint and exact permanent identities;
   - complete dependency-manifest equality, including platform blocks;
-  - V2 compiler provenance and exact catalogue evidence.
+  - exact catalogue evidence for the content used by the consumer.
+- Validate exact source-to-canonical compiler provenance during compilation and
+  publication. Do not transport authored source to a canonical-only consumer or
+  recompile the application on every read merely to reproduce diagnostic provenance.
+  Consumer output does not expose or use provenance as authority. Restore checks
+  the exact authored source and identity evidence before creating an editable
+  draft; subsequent publication recompiles it through the same validation path.
 - In `runtime/definition/src/definition-publication-repository.ts`:
   - decode each Application release in mixed history using that release's stored validation version;
   - preserve revision/version ordering and the existing first-release `1.0.0` invariant;
@@ -131,6 +140,11 @@ Replace the closed kind, reference-shape and target-shape constraints to admit e
 
 No new table, column, index, grant, RLS policy or public function is required. Existing private-table privileges and request-role operation grants remain unchanged.
 
+Use same-signature function replacement, preserving each function's existing
+security and configuration properties. PostgreSQL retains ownership and permissions
+for replacement; it does not retain unspecified function properties automatically.
+See [official CREATE FUNCTION guidance](https://www.postgresql.org/docs/current/sql-createfunction.html).
+
 ## Representation-transition rules
 
 - V1 latest + V1 candidate: existing V1 comparator.
@@ -164,7 +178,9 @@ Do not merge a state where `append_release` can store a platform-block row that 
 - Homogeneous V2 follow-up uses native V2 comparison, not the transition rule.
 - Missing, extra, duplicate or substituted platform-block dependency refuses.
 - Wrong block version, content fingerprint or catalogue fingerprint refuses.
-- Tampered V2 canonical content, output, provenance, resolution or identity evidence refuses.
+- Tampered V2 canonical content, used output, resolution or identity evidence
+  refuses at the relevant storage/read boundary. Invalid source-to-canonical
+  provenance refuses during compilation/publication, where that evidence is used.
 - Stale confirmation/draft revision and concurrent root publication preserve existing refusal and atomicity.
 - Consumer reads exact V1 and V2 revisions from one mixed history.
 - Restore exact V1 and V2 authored bytes; wrong pair or tampered dependency evidence refuses before draft mutation.
@@ -183,4 +199,19 @@ Do not merge a state where `append_release` can store a platform-block row that 
 
 - Installed/deployed Application adoption remains [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) / [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327).
 - The explicit revision-checked V1-to-V2 conversion action and editor adapter follow this working publication path; they are not simulated here.
+- Before conversion, complete the identified
+  [placement compatibility gap](issue-249-placement-compatibility.md) so existing
+  conditional visibility and explicit query bindings are not lost. This is a
+  bounded follow-up, not richer binding execution or an extra publication gate.
 - No business ambiguity remains: both exact representations are supported, both transitions are major, and restore returns exact historical authored source. The only implementation constraint is that platform-block persistence must be enabled atomically with all corresponding readback and integrity paths.
+
+## Proportional integrity decision
+
+Architect and independent Sol agreed that canonical-only reads must not gain raw
+authored-source transport or per-read recompilation. Those additions would add
+coupling and cost without addressing a demonstrated authority failure. The reader
+verifies the immutable content, resolution, manifest and current catalogue it
+actually consumes. Compiler provenance is verified where source is compiled for
+publication. Restore does not activate anything; publishing the restored draft
+repeats compilation. This clarifies acceptance ownership, not a bypass of
+permissions, exact dependency checks or publication validation.

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { applicationContentV1Schema } from "./application-contracts";
+import { applicationContentV1Schema, applicationContentV2Schema } from "./application-contracts";
 import { correlationIdSchema } from "./common";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
 import {
@@ -47,7 +47,9 @@ export const definitionConsumerReadCommandSchema = z.discriminatedUnion("kind", 
 const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema>): string =>
   entry.kind === "platform_theme"
     ? `${entry.kind}:${entry.catalogueThemeId}`
-    : `${entry.kind}:${entry.key}`;
+    : entry.kind === "platform_block"
+      ? `${entry.kind}:${entry.blockId}`
+      : `${entry.kind}:${entry.key}`;
 
 /** A complete manifest in canonical subject order, using the publication contract's exact entries. */
 export const definitionConsumerReadDependencyManifestSchema = z
@@ -89,10 +91,21 @@ export const applicationDefinitionConsumerReadResultV1Schema = z
     rootId: applicationRootIdSchema,
     content: applicationContentV1Schema,
     ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("1.0.0"),
   })
   .strict();
 
-export const definitionConsumerReadResultSchema = z.discriminatedUnion("kind", [
+export const applicationDefinitionConsumerReadResultV2Schema = z
+  .object({
+    kind: z.literal("application"),
+    rootId: applicationRootIdSchema,
+    content: applicationContentV2Schema,
+    ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("2.0.0"),
+  })
+  .strict();
+
+export const definitionConsumerReadResultSchema = z.union([
   z
     .object({
       kind: z.literal("module"),
@@ -102,6 +115,7 @@ export const definitionConsumerReadResultSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   applicationDefinitionConsumerReadResultV1Schema,
+  applicationDefinitionConsumerReadResultV2Schema,
 ]);
 
 export type DefinitionConsumerReadCommand = z.infer<typeof definitionConsumerReadCommandSchema>;

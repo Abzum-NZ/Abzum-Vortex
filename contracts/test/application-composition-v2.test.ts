@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   applicationCanonicalDocumentV2Schema,
+  applicationCompilationOutputV1Schema,
   applicationCompilationOutputV2Schema,
   applicationCompilationRequestV2Schema,
   applicationContentV2Schema,
@@ -661,7 +662,7 @@ describe("Application V2 composition contracts", () => {
     expect(applicationCompilationOutputV2Schema.safeParse(output).success).toBe(true);
   });
 
-  it("keeps every generic V1 decoder closed to V2-only envelopes and identity kinds", () => {
+  it("keeps explicit V1 decoders closed while the generic output dispatches exact V2", () => {
     expect(sourceIdentityKindV2Schema.safeParse("shell").success).toBe(true);
     expect(sourceIdentityKindSchema.safeParse("shell").success).toBe(false);
     expect(sourceIdentityKindSchema.safeParse("shell_content_slot").success).toBe(false);
@@ -687,25 +688,25 @@ describe("Application V2 composition contracts", () => {
         },
       }).success,
     ).toBe(false);
-    expect(
-      definitionCompilationOutputSchema.safeParse({
+    const v2Output = {
+      kind: "application",
+      validationContractVersion: "2.0.0",
+      canonical: canonicalDraftV2,
+      artifact: {
         kind: "application",
-        validationContractVersion: "2.0.0",
-        canonical: canonicalDraftV2,
-        artifact: {
-          kind: "application",
-          definitionKey: "example.application",
-          rootId: id(650),
-          exactVersion: "1.0.0",
-          contentFingerprint: fingerprint("7"),
-          resolutionFingerprint: resolutionV2.fingerprint,
-        },
-        provenance: [],
-        dependencyOrder: ["example.application"],
-        resolvedDependencies: [],
+        definitionKey: "example.application",
+        rootId: id(650),
+        exactVersion: "1.0.0",
+        contentFingerprint: fingerprint("7"),
         resolutionFingerprint: resolutionV2.fingerprint,
-      }).success,
-    ).toBe(false);
+      },
+      provenance: [],
+      dependencyOrder: ["example.application"],
+      resolvedDependencies: [],
+      resolutionFingerprint: resolutionV2.fingerprint,
+    };
+    expect(applicationCompilationOutputV1Schema.safeParse(v2Output).success).toBe(false);
+    expect(definitionCompilationOutputSchema.safeParse(v2Output).success).toBe(true);
   });
 
   it("requires exact trusted V2 request metadata without inferring from source shape", () => {
@@ -947,10 +948,8 @@ describe("Application V2 composition contracts", () => {
     );
   });
 
-  it("does not enable the V2 selector before compiler and runtime support exist", () => {
-    expect(() => selectApplicationContractPair("2.0.0", "2.0.0")).toThrowError(
-      expect.objectContaining({ code: "APPLICATION_CONTRACT_DECODER_NOT_IMPLEMENTED" }),
-    );
+  it("selects the exact coordinated V2 contract pair", () => {
+    expect(selectApplicationContractPair("2.0.0", "2.0.0")).toMatchObject({ schema: "v2" });
   });
 
   it("requires a complete unique order at each declared breakpoint", () => {

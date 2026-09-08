@@ -5,7 +5,8 @@ import {
   definitionCompilationOutputSchema,
   definitionKindSchema,
   definitionResolutionSnapshotSchema,
-  definitionSourceDocumentSchema,
+  definitionResolutionSnapshotV2Schema,
+  storedDefinitionSourceSchema,
   exactDefinitionDependencySchema,
   fingerprintSchema,
   moduleRootIdSchema,
@@ -19,6 +20,7 @@ import {
   publishedModuleReferenceSchema,
   revisionSchema,
   semanticVersionSchema,
+  selectApplicationContractPair,
   stableDefinitionReleaseVersionSchema,
   sourceIdentityAssignmentSchema,
   sourceIdentityAssignmentV2Schema,
@@ -67,7 +69,9 @@ const exactManifestSchema = z
     const subjects = entries.map((entry) =>
       entry.kind === "platform_theme"
         ? `${entry.kind}:${entry.catalogueThemeId}`
-        : `${entry.kind}:${entry.key}`,
+        : entry.kind === "platform_block"
+          ? `${entry.kind}:${entry.blockId}`
+          : `${entry.kind}:${entry.key}`,
     );
     if (new Set(subjects).size !== subjects.length)
       context.addIssue({ code: "custom", message: "Dependency subjects must be unique" });
@@ -95,11 +99,14 @@ const publicationRootSchema = z
 
 const storedReleaseEvidenceSchema = z
   .object({
-    authoredSource: definitionSourceDocumentSchema,
+    authoredSource: storedDefinitionSourceSchema,
     authoredSourceFingerprint: fingerprintSchema,
     sourceContractVersion: semanticVersionSchema,
     compilationOutput: definitionCompilationOutputSchema,
-    resolutionSnapshot: definitionResolutionSnapshotSchema,
+    resolutionSnapshot: z.union([
+      definitionResolutionSnapshotSchema,
+      definitionResolutionSnapshotV2Schema,
+    ]),
     resolutionFingerprint: fingerprintSchema,
     comparisonFingerprint: fingerprintSchema,
     impactReasons: z.array(versionImpactReasonSchema),
@@ -334,6 +341,28 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     for (const release of releases) {
       const output = release.evidence.compilationOutput;
       const resolution = release.evidence.resolutionSnapshot;
+      if (kind === "application") {
+        if (
+          release.evidence.authoredSource.kind !== "application" ||
+          output.kind !== "application" ||
+          release.publication.kind !== "application"
+        )
+          return invalidStorage();
+        let schema: "v1" | "v2";
+        try {
+          schema = selectApplicationContractPair(
+            release.evidence.sourceContractVersion,
+            release.publication.validationContractVersion,
+          ).schema;
+        } catch {
+          return invalidStorage();
+        }
+        if (
+          (schema === "v2") !== "validationContractVersion" in output ||
+          (schema === "v2") !== (resolution.contractVersion === "2.0.0")
+        )
+          return invalidStorage();
+      }
       const ownResolution = resolution.definitions.filter(
         (definition) =>
           definition.kind === kind &&
@@ -365,6 +394,19 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           release.evidence.sourceContractVersion ||
         release.evidence.authoredSource.kind !== kind ||
         release.evidence.authoredSource.key !== key ||
+        !hasAuthenticStoredCustomerDefinitionRelease({
+          organizationId: this.context.organizationId,
+          kind,
+          key,
+          rootId,
+          releaseVersion: release.publication.releaseVersion,
+          sourceContractVersion: release.evidence.sourceContractVersion,
+          validationContractVersion: release.publication.validationContractVersion,
+          contentFingerprint: release.publication.contentFingerprint,
+          resolutionFingerprint: release.evidence.resolutionFingerprint,
+          compilationOutput: output,
+          resolutionSnapshot: resolution,
+        }) ||
         !sameCanonicalJson(output.canonical.content, release.content)
       )
         return invalidStorage();
@@ -430,6 +472,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         key: release.key,
         rootId: release.rootId,
         releaseVersion: release.releaseVersion,
+        sourceContractVersion: "1.0.0",
+        validationContractVersion: "1.0.0",
         contentFingerprint: release.contentFingerprint,
         resolutionFingerprint: release.resolutionFingerprint,
         compilationOutput: output,

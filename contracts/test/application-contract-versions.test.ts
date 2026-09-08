@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   applicationContractPairV1,
+  applicationContractPairV2,
   applicationSourceDocumentSchema,
   applicationSourceDocumentV1Schema,
   selectApplicationContractPair,
@@ -79,10 +80,13 @@ describe("Application contract version selection", () => {
     ).toBe(false);
   });
 
-  it("selects only the exact implemented V1 source, validation and pair", () => {
+  it("selects only the exact implemented V1 and V2 source, validation and pairs", () => {
     expect(selectApplicationSourceContract("1.0.0")).toBe("v1");
     expect(selectApplicationValidationContract("1.0.0")).toBe("v1");
     expect(selectApplicationContractPair("1.0.0", "1.0.0")).toBe(applicationContractPairV1);
+    expect(selectApplicationSourceContract("2.0.0")).toBe("v2");
+    expect(selectApplicationValidationContract("2.0.0")).toBe("v2");
+    expect(selectApplicationContractPair("2.0.0", "2.0.0")).toBe(applicationContractPairV2);
   });
 
   it("rejects unknown versions rather than inferring from shape or semantic-version major", () => {
@@ -96,7 +100,7 @@ describe("Application contract version selection", () => {
     );
   });
 
-  it("distinguishes unsupported pairs from the reserved but unimplemented V2 pair", () => {
+  it("rejects unsupported mixed contract pairs", () => {
     expectVersionError(
       () => selectApplicationContractPair("1.0.0", "2.0.0"),
       "UNSUPPORTED_APPLICATION_CONTRACT_VERSION_PAIR",
@@ -104,10 +108,6 @@ describe("Application contract version selection", () => {
     expectVersionError(
       () => selectApplicationContractPair("2.0.0", "1.0.0"),
       "UNSUPPORTED_APPLICATION_CONTRACT_VERSION_PAIR",
-    );
-    expectVersionError(
-      () => selectApplicationContractPair("2.0.0", "2.0.0"),
-      "APPLICATION_CONTRACT_DECODER_NOT_IMPLEMENTED",
     );
   });
 

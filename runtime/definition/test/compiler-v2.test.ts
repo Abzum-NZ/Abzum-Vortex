@@ -3,7 +3,13 @@ import path from "node:path";
 import {
   applicationCompositionCatalogueSnapshotV2Schema,
   applicationSourceDocumentV2Schema,
+  connectionTypeSourceDocumentSchema,
   definitionResolutionSnapshotSchema,
+  definitionSourceDocumentSchema,
+  moduleSourceDocumentSchema,
+  publishedApplicationDefinitionV1Schema,
+  publishedApplicationDefinitionV2Schema,
+  publishedModuleDefinitionSchema,
   sessionContextSchema,
   selectApplicationContractPair,
   selectApplicationValidationContract,
@@ -12,17 +18,27 @@ import {
   type ApplicationSourceDocumentV2,
   type BlockPlacementV2Contract,
   type PageCompositionV2,
+  type PublishDefinitionResult,
 } from "@vortex/contracts";
 import type { DatabaseRow, DatabaseValue, RequestDatabaseTransaction } from "@vortex/db";
 import { describe, expect, it } from "vitest";
 import { compileDefinition } from "../src/compiler";
 import { createDefinitionStore } from "../src/definition-store";
+import { createDefinitionConsumerReadService } from "../src/definition-consumer-read";
+import {
+  createDefinitionHistoryService,
+  type DefinitionHistoryRepository,
+} from "../src/definition-history";
+import { createImmutableDefinitionPublicationCatalogue } from "../src/definition-publication-catalogue";
 import {
   createDefinitionPublicationService,
   type DefinitionPublicationCandidate,
   type DefinitionPublicationCatalogue,
   type DefinitionPublicationReader,
   type DefinitionPublicationRepository,
+  type DefinitionPublicationTransaction,
+  type DefinitionReleaseAppend,
+  type ResolvableModuleRelease,
 } from "../src/definition-publication";
 import {
   compareDefinitionVersionImpact,
@@ -32,7 +48,7 @@ import { fingerprintCanonicalValue } from "../src/canonical-json";
 import { DefinitionVersionImpactError } from "../src/version-impact-error";
 import { extractApplicationSourceIdentityRequirementsV2 } from "../src/source-identities";
 import { createApplicationResolutionSnapshotV2 } from "../src/application-v2-resolution";
-import { validateDefinitionSource } from "../src/validation";
+import { validateDefinitionSet, validateDefinitionSource } from "../src/validation";
 
 const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
 const baseSource = JSON.parse(
@@ -990,12 +1006,8 @@ describe("native Application V2 version impact", () => {
       "content_fingerprint_mismatch",
     );
 
-    expect(() => selectApplicationValidationContract("2.0.0")).toThrow(
-      "APPLICATION_CONTRACT_DECODER_NOT_IMPLEMENTED",
-    );
-    expect(() => selectApplicationContractPair("2.0.0", "2.0.0")).toThrow(
-      "APPLICATION_CONTRACT_DECODER_NOT_IMPLEMENTED",
-    );
+    expect(selectApplicationValidationContract("2.0.0")).toBe("v2");
+    expect(selectApplicationContractPair("2.0.0", "2.0.0").schema).toBe("v2");
   });
 
   it("is deterministic, does not mutate input, and confirms only the exact V2 decision", () => {
@@ -1308,6 +1320,185 @@ const v2StoreRunner = (rows: readonly DatabaseRow[]) => {
   return { calls, transaction };
 };
 
+const fixtureJson = (relativePath: string): unknown =>
+  JSON.parse(fs.readFileSync(path.join(fixtureRoot, relativePath), "utf8"));
+
+const dependencyModuleReleases = (): ResolvableModuleRelease[] => {
+  const sources = fs
+    .readdirSync(path.join(fixtureRoot, "modules"))
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => moduleSourceDocumentSchema.parse(fixtureJson(`modules/${name}`)));
+  const outputs = sources.map((source) => {
+    const output = compileDefinition({
+      source,
+      resolution: baseResolution,
+      draftMetadata: metadata,
+      savedConditionRevisions: [
+        { conditionId: "a4b5546d-8a54-4003-adc4-ddb8b0d7257d", revision: 1 },
+      ],
+    });
+    if (output.kind !== "module") throw new Error("Module output required");
+    return output;
+  });
+  const references = new Map(
+    outputs.map((output) => [
+      String(output.artifact.rootId),
+      {
+        kind: "module" as const,
+        rootId: output.artifact.rootId,
+        revision: 1,
+        releaseVersion: "1.0.0",
+        contentFingerprint: output.artifact.contentFingerprint,
+        publishedAt: metadata.createdAt,
+        publishedBy: metadata.createdBy,
+        validationContractVersion: "1.0.0" as const,
+      },
+    ]),
+  );
+  return outputs.map((output) => {
+    const dependencyManifest = output.canonical.content.dependencies.map((dependency) => {
+      const reference = references.get(String(dependency.moduleRootId));
+      if (!reference) throw new Error("Module dependency fixture missing");
+      return reference;
+    });
+    return {
+      organizationId: metadata.organizationId,
+      key: output.canonical.envelope.key,
+      rootId: output.artifact.rootId,
+      releaseRevision: 1,
+      releaseVersion: "1.0.0",
+      contentFingerprint: output.artifact.contentFingerprint,
+      resolutionFingerprint: output.resolutionFingerprint,
+      published: publishedModuleDefinitionSchema.parse({
+        publication: references.get(String(output.artifact.rootId)),
+        content: output.canonical.content,
+        dependencyManifest,
+        releaseNote: "Fixture module release",
+      }),
+      compilationOutput: output,
+      resolutionSnapshot: baseResolution,
+    };
+  });
+};
+
+const publicationCatalogueV2 = async () => {
+  const seed = createCatalogueSnapshot();
+  const catalogue = createImmutableDefinitionPublicationCatalogue({
+    connectionTypeReleases: ["email.json", "calendar.json"].map((name) => {
+      const source = connectionTypeSourceDocumentSchema.parse(
+        fixtureJson(`connection-types/${name}`),
+      );
+      const resolved = baseResolution.definitions.find(
+        (definition) => definition.kind === "connection_type" && definition.key === source.key,
+      );
+      if (resolved?.kind !== "connection_type") throw new Error("Connection fixture missing");
+      return { source, rootId: resolved.rootId, releaseVersion: "1.0.0" };
+    }),
+    platformThemeReleases: [],
+    applicationCompositionV2: {
+      compositionPolicy: seed.platformBlocks.compositionPolicy,
+      platformBlockReleases: seed.platformBlocks.releases.map((release) => ({
+        blockId: release.blockId,
+        key: release.key,
+        releaseVersion: release.releaseVersion,
+        name: release.name,
+        icon: release.icon,
+        paletteGroup: release.paletteGroup,
+        rendererKey: release.rendererKey,
+        properties: release.properties,
+        slots: release.slots,
+        capabilities: release.capabilities,
+      })),
+      platformThemeReleases: [
+        {
+          catalogueThemeId: seed.platformTheme.catalogueThemeId,
+          releaseVersion: seed.platformTheme.releaseVersion,
+          tokens: seed.platformTheme.tokens,
+        },
+      ],
+    },
+  });
+  const source = createSource();
+  for (const dependency of source.body.platform_block_dependencies) {
+    const release = await catalogue.readPlatformBlockReleaseV2(
+      dependency.block_id,
+      dependency.release_version,
+    );
+    if (!release) throw new Error("Platform-block fixture missing");
+    dependency.content_fingerprint = release.contentFingerprint;
+    dependency.catalogue_fingerprint = release.catalogueFingerprint;
+  }
+  const theme = await catalogue.readPlatformThemeReleaseV2(
+    source.body.theme.base.catalogue_theme_id,
+    source.body.theme.base.release_version,
+  );
+  if (!theme) throw new Error("Platform-theme fixture missing");
+  source.body.theme.base.content_fingerprint = theme.contentFingerprint;
+  source.body.theme.base.catalogue_fingerprint = theme.catalogueFingerprint;
+  return { source, catalogue };
+};
+
+class V2PublicationRepository
+  implements
+    DefinitionPublicationRepository,
+    DefinitionPublicationReader,
+    DefinitionPublicationTransaction
+{
+  appended?: DefinitionReleaseAppend;
+
+  constructor(
+    readonly candidate: DefinitionPublicationCandidate,
+    readonly modules: readonly ResolvableModuleRelease[],
+  ) {}
+
+  read<Result>(
+    _context: Parameters<DefinitionPublicationRepository["read"]>[0],
+    operation: (reader: DefinitionPublicationReader) => Promise<Result>,
+  ): Promise<Result> {
+    return operation(this);
+  }
+
+  transaction<Result>(
+    _context: Parameters<DefinitionPublicationRepository["transaction"]>[0],
+    operation: (transaction: DefinitionPublicationTransaction) => Promise<Result>,
+  ): Promise<Result> {
+    return operation(this);
+  }
+
+  async readCandidate() {
+    return structuredClone(this.candidate);
+  }
+
+  async lockCandidate() {
+    return structuredClone(this.candidate);
+  }
+
+  async listModuleReleases(_organizationId: string, key: string) {
+    return this.modules.filter((release) => release.key === key);
+  }
+
+  async readModuleRelease(_organizationId: string, rootId: string, releaseRevision: number) {
+    return this.modules.find(
+      (release) => String(release.rootId) === rootId && release.releaseRevision === releaseRevision,
+    );
+  }
+
+  async appendRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {
+    this.appended = release;
+    return {
+      rootId: release.draft.rootId,
+      releaseRevision: release.draft.draftRevision,
+      releaseVersion: release.assignedVersion,
+      contentFingerprint: release.compilationOutput.artifact.contentFingerprint,
+      resolutionFingerprint: release.compilationOutput.resolutionFingerprint,
+      comparisonFingerprint: release.comparisonFingerprint,
+      dependencyManifest: [...release.dependencyManifest],
+      publishedAt: metadata.updatedAt,
+      publishedBy: metadata.updatedBy,
+    };
+  }
+}
+
 describe("native Application V2 draft storage", () => {
   it("creates and saves the complete source with exact shell and content-slot identities", async () => {
     const source = createSource();
@@ -1379,11 +1570,16 @@ describe("native Application V2 draft storage", () => {
     );
   });
 
-  it("keeps V2 release preparation closed after accepting the stored draft", async () => {
-    const source = createSource();
+  it("publishes, consumes, and restores one exact native V2 application", async () => {
+    const { source, catalogue } = await publicationCatalogueV2();
+    const sourceResolution = createResolution(source);
+    const own = sourceResolution.definitions.find(
+      (definition) => definition.kind === "application" && definition.key === source.key,
+    );
+    if (own?.kind !== "application") throw new Error("Application fixture missing");
     const draft = storedDefinitionDraftSchema.parse({
       kind: "application",
-      rootId: id(1200),
+      rootId: own.rootId,
       source,
       organizationId: metadata.organizationId,
       key: source.key,
@@ -1397,28 +1593,12 @@ describe("native Application V2 draft storage", () => {
     });
     const candidate: DefinitionPublicationCandidate = {
       draft,
-      identities: createResolution(source).identities,
+      identities: sourceResolution.identities.filter(
+        (identity) => identity.definitionKey === source.key,
+      ),
       history: { kind: "application", definitionKey: source.key, history: [] },
     };
-    const reader: DefinitionPublicationReader = {
-      readCandidate: async () => candidate,
-      listModuleReleases: async () => [],
-      readModuleRelease: async () => undefined,
-    };
-    const repository: DefinitionPublicationRepository = {
-      read: async <Result>(
-        _context: Parameters<DefinitionPublicationRepository["read"]>[0],
-        operation: (value: DefinitionPublicationReader) => Promise<Result>,
-      ) => operation(reader),
-      transaction: async <Result>(): Promise<Result> => {
-        throw new Error("V2 publication must not enter a transaction");
-      },
-    };
-    const catalogue: DefinitionPublicationCatalogue = {
-      listConnectionTypeReleases: async () => [],
-      readConnectionTypeRelease: async () => undefined,
-      readPlatformThemeRelease: async () => undefined,
-    };
+    const repository = new V2PublicationRepository(candidate, dependencyModuleReleases());
     const context = sessionContextSchema.parse({
       callerKind: "system",
       tenantId: id(1201),
@@ -1426,17 +1606,389 @@ describe("native Application V2 draft storage", () => {
       systemActorId: metadata.createdBy,
       sessionId: id(1202),
       authenticationStrength: "service",
-      issuedAt: "2026-09-01T00:00:00Z",
-      expiresAt: "2026-09-01T01:00:00Z",
+      issuedAt: new Date(Date.now() - 1_000).toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
       accessVersion: 1,
       correlationId: id(1203),
     });
+    const publication = createDefinitionPublicationService(repository, catalogue);
+    const prepared = await publication.prepare(context, {
+      rootId: draft.rootId,
+      expectedDraftRevision: 1,
+    });
+    expect(prepared.confirmation).toMatchObject({
+      outcome: "initial_release",
+      assignedVersion: "1.0.0",
+    });
+    expect(
+      prepared.confirmation.dependencyManifest.filter((entry) => entry.kind === "platform_block"),
+    ).toHaveLength(2);
+    await publication.publish(context, {
+      confirmation: prepared.confirmation,
+      releaseNote: "Native V2 application release",
+    });
+    const appended = repository.appended;
+    if (!appended || !("validationContractVersion" in appended.compilationOutput))
+      throw new Error("V2 append required");
+    expect(appended.validationContractVersion).toBe("2.0.0");
 
+    const evidence = {
+      organizationId: metadata.organizationId,
+      kind: "application" as const,
+      key: source.key,
+      rootId: draft.rootId,
+      releaseRevision: 1,
+      releaseVersion: "1.0.0",
+      sourceContractVersion: "2.0.0",
+      validationContractVersion: "2.0.0",
+      contentFingerprint: appended.compilationOutput.artifact.contentFingerprint,
+      resolutionFingerprint: appended.compilationOutput.resolutionFingerprint,
+      compilationOutput: appended.compilationOutput,
+      resolutionSnapshot: appended.resolutionSnapshot,
+      dependencyManifest: appended.dependencyManifest,
+      moduleDependencyTargets: appended.dependencyManifest
+        .filter((entry) => entry.kind === "module")
+        .map((entry) => ({
+          rootId: entry.rootId,
+          releaseRevision: entry.releaseRevision,
+          releaseVersion: entry.releaseVersion,
+          contentFingerprint: entry.contentFingerprint,
+          resolutionFingerprint: entry.resolutionFingerprint,
+        })),
+    };
+    const read = await createDefinitionConsumerReadService(
+      { read: async () => evidence },
+      catalogue,
+    ).read(context, {
+      kind: "application",
+      rootId: draft.rootId,
+      selector: { selection: "revision", releaseRevision: 1 },
+    });
+    expect(read).toMatchObject({
+      validationContractVersion: "2.0.0",
+      content: appended.compilationOutput.canonical.content,
+    });
+
+    const tamperedCanonical = structuredClone(evidence);
+    tamperedCanonical.compilationOutput.canonical.content.description += " Tampered.";
+    const tamperedResolution = structuredClone(evidence);
+    tamperedResolution.resolutionSnapshot.identities.pop();
+    const missingBlock = structuredClone(evidence);
+    missingBlock.dependencyManifest = missingBlock.dependencyManifest.filter(
+      (entry) => entry.kind !== "platform_block",
+    );
+    const extraBlock = structuredClone(evidence);
+    const existingBlock = extraBlock.dependencyManifest.find(
+      (entry) => entry.kind === "platform_block",
+    );
+    if (!existingBlock || existingBlock.kind !== "platform_block")
+      throw new Error("Platform-block manifest fixture missing");
+    extraBlock.dependencyManifest.push({ ...existingBlock, blockId: id(1998) });
+    const substitutedBlock = structuredClone(evidence);
+    const substituted = substitutedBlock.dependencyManifest.find(
+      (entry) => entry.kind === "platform_block",
+    );
+    if (!substituted || substituted.kind !== "platform_block")
+      throw new Error("Platform-block manifest fixture missing");
+    substituted.catalogueFingerprint = fingerprint("9");
+    for (const candidateEvidence of [
+      tamperedCanonical,
+      tamperedResolution,
+      missingBlock,
+      extraBlock,
+      substitutedBlock,
+    ])
+      await expect(
+        createDefinitionConsumerReadService(
+          { read: async () => candidateEvidence },
+          catalogue,
+        ).read(context, {
+          kind: "application",
+          rootId: draft.rootId,
+          selector: { selection: "revision", releaseRevision: 1 },
+        }),
+      ).rejects.toMatchObject({ code: "DEFINITION_RELEASE_INTEGRITY_FAILED" });
+
+    const unavailableCatalogue: DefinitionPublicationCatalogue = {
+      ...catalogue,
+      readPlatformBlockReleaseV2: async () => undefined,
+    };
     await expect(
-      createDefinitionPublicationService(repository, catalogue).prepare(context, {
+      createDefinitionConsumerReadService(
+        { read: async () => evidence },
+        unavailableCatalogue,
+      ).read(context, {
+        kind: "application",
         rootId: draft.rootId,
+        selector: { selection: "revision", releaseRevision: 1 },
+      }),
+    ).rejects.toMatchObject({ code: "DEFINITION_DEPENDENCY_UNAVAILABLE" });
+
+    const tamperedProvenance = structuredClone(appended.compilationOutput);
+    tamperedProvenance.provenance.pop();
+    const catalogueSnapshot = await catalogue.readApplicationCompositionCatalogueSnapshotV2({
+      platformBlocks: source.body.platform_block_dependencies.map((entry) => ({
+        blockId: entry.block_id,
+        releaseVersion: entry.release_version,
+      })),
+      platformTheme: {
+        catalogueThemeId: source.body.theme.base.catalogue_theme_id,
+        releaseVersion: source.body.theme.base.release_version,
+      },
+    });
+    if (!catalogueSnapshot) throw new Error("V2 catalogue snapshot fixture missing");
+    expect(
+      validateDefinitionSet({
+        requests: [
+          {
+            sourceContractVersion: "2.0.0",
+            validationContractVersion: "2.0.0",
+            source,
+            resolution: appended.resolutionSnapshot,
+            catalogueSnapshot,
+            draftMetadata: metadata,
+          },
+        ],
+        outputs: [tamperedProvenance],
+        publishedHistories: [{ kind: "application", definitionKey: source.key, history: [] }],
+      }).failures,
+    ).toContainEqual(
+      expect.objectContaining({ ruleCode: "vortex.definition.provenance_complete" }),
+    );
+
+    const requirements = extractApplicationSourceIdentityRequirementsV2(source);
+    const identityEvidence = requirements.flatMap((requirement) =>
+      requirement.aliases.map((alias) => {
+        const identity = appended.resolutionSnapshot.identities.find(
+          (entry) =>
+            entry.definitionKey === source.key &&
+            entry.scope === requirement.scope &&
+            entry.kind === requirement.kind &&
+            entry.componentOwner === requirement.componentOwner &&
+            entry.alias === alias,
+        );
+        if (!identity) throw new Error("Restore identity fixture missing");
+        return { ...identity, ownerScope: requirement.ownerScope };
+      }),
+    );
+    const restored = storedDefinitionDraftSchema.parse({
+      ...draft,
+      draftRevision: 2,
+      publishedRevision: 1,
+      restoredFromReleaseRevision: 1,
+      restoredFromSourceFingerprint: draft.sourceFingerprint,
+      restoredBy: context.systemActorId,
+      restoredAt: metadata.updatedAt,
+      restoreCorrelationId: context.correlationId,
+    });
+    const historyRepository: DefinitionHistoryRepository = {
+      list: async () => undefined,
+      readMetadata: async () => undefined,
+      restore: async (_context, _command, verify) => {
+        await verify({
+          ...evidence,
+          authoredSource: source,
+          sourceFingerprint: draft.sourceFingerprint,
+          identityEvidence,
+        });
+        return { outcome: "restored", draft: restored };
+      },
+    };
+    await expect(
+      createDefinitionHistoryService(historyRepository, catalogue).restoreDraft(context, {
+        kind: "application",
+        rootId: draft.rootId,
+        targetReleaseRevision: 1,
         expectedDraftRevision: 1,
       }),
-    ).rejects.toMatchObject({ code: "DEFINITION_COMPILATION_REFUSED" });
+    ).resolves.toMatchObject({ sourceContractVersion: "2.0.0", source });
+
+    let restoreMutated = false;
+    const unavailableRestoreRepository: DefinitionHistoryRepository = {
+      list: async () => undefined,
+      readMetadata: async () => undefined,
+      restore: async (_context, _command, verify) => {
+        await verify({
+          ...evidence,
+          authoredSource: source,
+          sourceFingerprint: draft.sourceFingerprint,
+          identityEvidence,
+        });
+        restoreMutated = true;
+        return { outcome: "restored", draft: restored };
+      },
+    };
+    await expect(
+      createDefinitionHistoryService(
+        unavailableRestoreRepository,
+        unavailableCatalogue,
+      ).restoreDraft(context, {
+        kind: "application",
+        rootId: draft.rootId,
+        targetReleaseRevision: 1,
+        expectedDraftRevision: 1,
+      }),
+    ).rejects.toMatchObject({ code: "DEFINITION_RELEASE_INTEGRITY_FAILED" });
+    expect(restoreMutated).toBe(false);
+  });
+
+  it("publishes symmetric representation transitions as major and a native V2 follow-up natively", async () => {
+    const { source: sourceV2, catalogue } = await publicationCatalogueV2();
+    const modules = dependencyModuleReleases();
+    const context = sessionContextSchema.parse({
+      callerKind: "system",
+      tenantId: id(1201),
+      organizationId: metadata.organizationId,
+      systemActorId: metadata.createdBy,
+      sessionId: id(1202),
+      authenticationStrength: "service",
+      issuedAt: new Date(Date.now() - 1_000).toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      accessVersion: 1,
+      correlationId: id(1203),
+    });
+    const legacySource = definitionSourceDocumentSchema.parse(baseSource);
+    if (legacySource.kind !== "application") throw new Error("Legacy Application fixture required");
+    const legacyOutput = compileDefinition({
+      source: legacySource,
+      resolution: baseResolution,
+      draftMetadata: metadata,
+    });
+    if (legacyOutput.kind !== "application") throw new Error("Legacy output required");
+    const legacyRelease = publishedApplicationDefinitionV1Schema.parse({
+      publication: {
+        kind: "application",
+        rootId: legacyOutput.artifact.rootId,
+        revision: 1,
+        releaseVersion: "1.0.0",
+        contentFingerprint: legacyOutput.artifact.contentFingerprint,
+        publishedAt: metadata.createdAt,
+        publishedBy: metadata.createdBy,
+        validationContractVersion: "1.0.0",
+      },
+      content: legacyOutput.canonical.content,
+      dependencyManifest: [],
+      releaseNote: "Legacy release",
+    });
+    const resolutionV2 = createResolution(sourceV2);
+    const own = resolutionV2.definitions.find(
+      (definition) => definition.kind === "application" && definition.key === sourceV2.key,
+    );
+    if (own?.kind !== "application") throw new Error("Application fixture missing");
+    const v2Candidate: DefinitionPublicationCandidate = {
+      draft: storedDefinitionDraftSchema.parse({
+        kind: "application",
+        rootId: own.rootId,
+        organizationId: metadata.organizationId,
+        key: sourceV2.key,
+        draftRevision: 2,
+        publishedRevision: 1,
+        sourceContractVersion: "2.0.0",
+        sourceFingerprint: fingerprintCanonicalValue(sourceV2),
+        source: sourceV2,
+        createdAt: metadata.createdAt,
+        createdBy: metadata.createdBy,
+        updatedAt: metadata.updatedAt,
+        updatedBy: metadata.updatedBy,
+      }),
+      identities: resolutionV2.identities.filter(
+        (identity) => identity.definitionKey === sourceV2.key,
+      ),
+      history: {
+        kind: "application",
+        definitionKey: sourceV2.key,
+        history: [legacyRelease],
+      },
+    };
+    const toV2Repository = new V2PublicationRepository(v2Candidate, modules);
+    const toV2 = createDefinitionPublicationService(toV2Repository, catalogue);
+    const toV2Prepared = await toV2.prepare(context, {
+      rootId: own.rootId,
+      expectedDraftRevision: 2,
+    });
+    expect(toV2Prepared.confirmation).toMatchObject({ impact: "major", assignedVersion: "2.0.0" });
+    await toV2.publish(context, {
+      confirmation: toV2Prepared.confirmation,
+      releaseNote: "Move the existing application to native V2",
+    });
+    const v2Output = toV2Repository.appended?.compilationOutput;
+    if (!v2Output || v2Output.kind !== "application" || !("validationContractVersion" in v2Output))
+      throw new Error("V2 transition output required");
+    const v2Release = publishedApplicationDefinitionV2Schema.parse({
+      publication: {
+        ...legacyRelease.publication,
+        revision: 2,
+        releaseVersion: "2.0.0",
+        contentFingerprint: v2Output.artifact.contentFingerprint,
+        validationContractVersion: "2.0.0",
+      },
+      content: v2Output.canonical.content,
+      dependencyManifest: [],
+      releaseNote: "Native V2 release",
+    });
+    const v2FollowUpSource = structuredClone(sourceV2);
+    v2FollowUpSource.body.description = `${v2FollowUpSource.body.description} Updated.`;
+    const v2FollowUpResolution = createResolution(v2FollowUpSource);
+    const v2FollowUpRepository = new V2PublicationRepository(
+      {
+        draft: storedDefinitionDraftSchema.parse({
+          ...v2Candidate.draft,
+          draftRevision: 3,
+          publishedRevision: 2,
+          source: v2FollowUpSource,
+          sourceFingerprint: fingerprintCanonicalValue(v2FollowUpSource),
+        }),
+        identities: v2FollowUpResolution.identities.filter(
+          (identity) => identity.definitionKey === sourceV2.key,
+        ),
+        history: {
+          kind: "application",
+          definitionKey: sourceV2.key,
+          history: [legacyRelease, v2Release],
+        },
+      },
+      modules,
+    );
+    const v2FollowUp = await createDefinitionPublicationService(
+      v2FollowUpRepository,
+      catalogue,
+    ).prepare(context, { rootId: own.rootId, expectedDraftRevision: 3 });
+    expect(v2FollowUp.confirmation).toMatchObject({ impact: "patch", assignedVersion: "2.0.1" });
+
+    const restoredV1Source = structuredClone(legacySource);
+    restoredV1Source.body.description = `${restoredV1Source.body.description} Restored.`;
+    const restoredV1Repository = new V2PublicationRepository(
+      {
+        draft: storedDefinitionDraftSchema.parse({
+          kind: "application",
+          rootId: own.rootId,
+          organizationId: metadata.organizationId,
+          key: restoredV1Source.key,
+          draftRevision: 3,
+          publishedRevision: 2,
+          sourceContractVersion: "1.0.0",
+          sourceFingerprint: fingerprintCanonicalValue(restoredV1Source),
+          source: restoredV1Source,
+          createdAt: metadata.createdAt,
+          createdBy: metadata.createdBy,
+          updatedAt: metadata.updatedAt,
+          updatedBy: metadata.updatedBy,
+        }),
+        identities: baseResolution.identities.filter(
+          (identity) => identity.definitionKey === restoredV1Source.key,
+        ),
+        history: {
+          kind: "application",
+          definitionKey: restoredV1Source.key,
+          history: [legacyRelease, v2Release],
+        },
+      },
+      modules,
+    );
+    const restoredV1 = await createDefinitionPublicationService(
+      restoredV1Repository,
+      catalogue,
+    ).prepare(context, { rootId: own.rootId, expectedDraftRevision: 3 });
+    expect(restoredV1.confirmation).toMatchObject({ impact: "major", assignedVersion: "3.0.0" });
   });
 });
