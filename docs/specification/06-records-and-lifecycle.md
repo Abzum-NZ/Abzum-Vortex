@@ -41,6 +41,14 @@ sequenceDiagram
     Record-->>Person: Return saved record and new concurrency number
 ```
 
+The diagram describes runtime collaboration, not a reverse package import.
+Record owns this operation; Event implements a required transaction-local
+participant, defined by Record and wired by the higher-level application
+composition, never an arbitrary callback supplied by a request. Both use the
+same existing request transaction. Event cannot commit separately, and a missing
+participant cannot be replaced with a successful no-op. The concrete delivery
+sequence is recorded in the [installation and save plan](../build-plan/module-record-provisioning.md#package-wiring-and-bounded-delivery).
+
 The save transaction performs these steps in order:
 
 1. Confirm session, organisation account, and [access](04-access-and-permissions.md).

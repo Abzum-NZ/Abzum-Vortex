@@ -125,6 +125,11 @@
       "migration": "supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql",
       "proof": "supabase/tests/private-direct-record-share-change-concurrency.test.sh",
       "label": "Private direct record-share changes"
+    },
+    {
+      "migration": "supabase/migrations/20260908122641_record_storage_provisioning.sql",
+      "proof": "supabase/tests/module-storage-provisioning-concurrency.test.sh",
+      "label": "Module storage provisioning"
     }
   ],
   "lintSchemas": [
@@ -133,6 +138,9 @@
     "vortex_identity",
     "vortex_definition",
     "vortex_access",
-    "vortex_activity"
+    "vortex_activity",
+    "vortex_module",
+    "vortex_record",
+    "record_data"
   ]
 }

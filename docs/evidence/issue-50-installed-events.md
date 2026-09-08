@@ -39,5 +39,14 @@ The real binding reader and protected save must supply verified context;
 [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and
 [#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60) still own atomic persistence,
 queueing and delivery. No second event registry, queue or readiness flag was added.
-The whole #50 task remains open, and no Testing deployment or Production promotion
-is claimed by this local review record.
+The whole #50 task remains open.
+
+## Testing delivery receipt
+
+[PR #361](https://github.com/Abzum-NZ/Abzum-Vortex/pull/361) merged into Testing at
+`2026-09-08T14:37:12Z`, yielding `f0594760b2c64c87af3ff471d5b7e0ac635cc4c9`.
+Its source `2d627be8221f8d8bf77a757a27648288b8ed4673` completed the actual
+[preview build](https://vercel.com/abzumdevteam/abzum-vortex/G44McRaLQywmAj2dq7rsPZaFUWSM)
+in 6 minutes 39 seconds; GitHub reported the required check successful before the
+normal protected merge. This is a source-build and Testing-branch receipt, not a
+hosted database, active installation or Production promotion claim.

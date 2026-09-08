@@ -203,6 +203,28 @@ or recover precision already lost in a historical number.
 
 ## Calculations and totals
 
+The [calculation-engine plan](../build-plan/issue-48-calculation-engine.md) defines
+the first executable arithmetic and missing-value meanings. Decimal/money
+calculations and average totals declare result precision from zero to twelve
+decimal places and use half-even rounding once at the final result. Ordinary
+non-terminating division is supported at that precision; division by zero is not.
+This is calculation precision, separate from display formatting. Preserve money
+currency and reject mixed currencies or undefined money dimensions.
+
+For universal stored values, the protected Record operation uses the complete
+declared authoritative dependency set, not a caller-filtered subset. A hidden
+dependency does not by itself invalidate an otherwise permitted edit. The caller
+still cannot submit derived values or change unwritable inputs, and readable
+projection must not disclose hidden dependencies through calculated results,
+errors, events or activity. Internal dependency reads are confined to the owning
+operation's declared scope, not a general permission bypass.
+
+A calculated field is disclosed only when that field and its recursive input
+dependencies are readable to the viewer. Apply the same restriction to query
+filters, sorting, grouping/aggregation, search, event/activity output, interfaces
+and MCP. Computing from authoritative inputs and omitting disallowed output is
+different from computing from a redacted subset or refusing a permitted save.
+
 - A calculation is deterministic and cannot perform network calls, change records, or read data the current operation is not allowed to read.
 - The first release uses only six closed calculation forms: join named text fields, apply one of four numeric operations to named field/literal operands, subtract a named percentage field from a named amount field, evaluate a typed condition, offset a named date/date-time field by a named/literal amount, or determine whether a named deadline has passed while excluding explicitly listed terminal status values. The declared result type must match that form. Arbitrary objects, scripts, and user-defined expressions are refused.
 - Calculation dependencies are known at publication and cycles are refused.

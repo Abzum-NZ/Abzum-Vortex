@@ -69,6 +69,13 @@ for initial creation. Test the generic operation with fixture definitions as
 inputs, not hardcoded business-schema migrations. This decision was independently
 reviewed before implementation; the actual implementation still requires review.
 
+The first provisioning proof must distinguish locally owned Application roots
+from shared Module dependencies, support response-lost retries of the original
+first command, and prove real simultaneous first-request convergence. It must
+also prove that an older exact release can reuse newer compatible nullable
+storage without rolling back the shared mappings. These use the existing
+transaction, exact release and binding revision model.
+
 ### Integration prerequisites
 
 Co-deliver the concrete [Application lifecycle permission/caller slice](issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
@@ -103,6 +110,48 @@ binding state, not a distributed rollback or additional recovery programme.
 ## Verification
 
 ### Save and event integration
+
+#### Package wiring and bounded delivery
+
+Record owns the protected save operation. Its required Event participant receives
+the existing request transaction and shared occurrence contracts; Event implements
+that participant and the higher-level application composition wires it. The
+participant is a closed, named Record-owned interface, not an arbitrary callback
+registry or caller-supplied function. Access opens the request transaction;
+Record controls its save sequence. Do not export a lower-level writer that lets
+another caller omit Activity or event participation. Record
+does not import Event, and neither participant starts or commits a second
+transaction. There is no optional or successful no-op event hook. This preserves
+the [core contract boundary](../specification/appendices/core-contract-boundary.md) while using the
+existing request transaction rather than introducing another transaction framework.
+
+Deliver the missing pieces in this order:
+
+1. Complete the fixed protected storage adapters and their row/field checks in
+   [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
+2. Define the protected save command/result and its existing specified retry
+   receipt, including refusal of a reused command identity with different inputs.
+3. Add the private outbox and logged queue append required by
+   [#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60). Use the existing
+   per-record event sequence contract: one save can announce several occurrences,
+   so its record concurrency number alone cannot uniquely order those occurrences.
+   Allocate their sequence in the locked record transaction; do not introduce a
+   separate authorization counter or timestamp ordering rule.
+4. Resolve the actual active installation and exact Definition release in that
+   same transaction, reusing the delivered event catalogue and value validation.
+   Align the queued occurrence contract with V2 `occurrenceId` and causal-chain
+   depth rather than silently reinterpreting the older `eventId` contract.
+5. Integrate field preparation, live reference/choice/person/file checks,
+   uniqueness, reference allocation, immediate rules, calculations and totals;
+   revalidate the final values before the fixed writer commits them with Activity
+   and event/queue entries. Queue dispatch remains strictly after commit.
+
+The pure typed calculation work in
+[#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) can proceed before the
+whole save task closes. Its transactional totals and concurrent-save proof are
+co-delivered with [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), not
+deferred until after a supposedly complete save engine. These are delivery
+boundaries, not claims that the missing integrations already exist.
 
 Co-deliver the protected [save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)
 with the transactional enqueue slice of [event delivery #60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60)

@@ -489,14 +489,35 @@ describe("complete fixture set", () => {
     expect(new Set(body.tables.map((entry: any) => entry.table)).size).toBe(body.tables.length);
     for (const mapping of body.tables) {
       const record = recordTypes.get(mapping.record_type)!;
-      expect(mapping.storage_contract_id).toBe(record.storage_contract_id);
-      expect(mapping.storage_scope).toBe(record.storage_scope);
-      expect(mapping.table).toMatch(/^record_data\.rt_srt_[a-z0-9_]+$/);
+      const [definitionKey] = mapping.record_type.split(":");
+      const storageIdentity = resolutionV2.identities.find(
+        (identity) =>
+          identity.definitionKey === definitionKey &&
+          identity.kind === "storage_contract" &&
+          identity.alias === record.storage_contract_id,
+      );
+      expect(storageIdentity).toBeDefined();
+      expect(mapping.storage_contract_id).toBe(storageIdentity!.identifier);
+      expect(mapping.storage_scope).toBe(
+        record.storage_scope === "organisation_shared"
+          ? "organization_shared"
+          : "application_contained",
+      );
+      expect(mapping.table).toBe(
+        `record_data.rt_${storageIdentity!.identifier.replaceAll("-", "")}`,
+      );
       expect(mapping.table.length).toBeLessThanOrEqual(63);
       const columns = new Set<string>();
       for (const field of record.fields) {
-        const column = `f_${field.id}`;
-        expect(column).toMatch(/^[a-z][a-z0-9_]*$/);
+        const fieldIdentity = resolutionV2.identities.find(
+          (identity) =>
+            identity.definitionKey === definitionKey &&
+            identity.kind === "field" &&
+            identity.alias === field.id,
+        );
+        expect(fieldIdentity).toBeDefined();
+        const column = `f_${fieldIdentity!.identifier.replaceAll("-", "")}`;
+        expect(column).toMatch(/^f_[a-f0-9]{32}$/);
         expect(column.length).toBeLessThanOrEqual(63);
         expect(columns.has(column)).toBe(false);
         columns.add(column);
@@ -507,12 +528,12 @@ describe("complete fixture set", () => {
     expect(body.allocation_unit).toBe("storage_contract_id");
     expect(body.uses_display_names).toBe(false);
     expect(body.scope_keys).toEqual({
-      organisation_shared: ["organisation_id"],
+      organization_shared: ["organisation_id"],
       application_contained: ["organisation_id", "application_root_id"],
     });
     expect(body.system_columns).toEqual([
       "organisation_id", "module_root_id", "record_type_id", "storage_contract_id", "record_id",
-      "application_root_id", "definition_revision", "owner_organisation_account_id", "owner_team_id", "lifecycle_state",
+      "application_root_id", "definition_revision", "owner_organisation_account_id", "owner_group_id", "lifecycle_state",
       "concurrency_number", "created_at", "created_by", "updated_at", "updated_by", "deleted_at",
       "deleted_by", "removal_due_at",
     ]);

@@ -18,8 +18,11 @@ Published Module and Application contracts already contain actions and custom
 event declarations. Definition resolves their identifiers and rejects carried
 fields that are missing, personal or sensitive. Reuse this implementation and
 improve its event/field diagnostics; do not add another definition format or
-publication validator. The Event package is currently a boundary stub, not a
-working event registry or dispatcher.
+publication validator. The delivered Event slice validates installed event
+catalogues and occurrences against exact definitions; see the
+[reviewed delivery evidence](../evidence/issue-50-installed-events.md). Real active
+binding resolution, transactional occurrence creation and dispatch remain to be
+integrated. A pure catalogue or validation result is not proof of delivery.
 
 Record already defines creation/change metadata and optional account/Group
 ownership. Expose those real values rather than duplicate them as editable
