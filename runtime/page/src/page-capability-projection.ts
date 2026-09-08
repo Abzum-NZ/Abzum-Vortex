@@ -1,11 +1,7 @@
 import "server-only";
 
-import {
-  pageDefinitionSchema,
-  pageDefinitionV2Schema,
-  type PageDefinition,
-  type PageDefinitionV2,
-} from "@vortex/contracts";
+import type { PageDefinition, PageDefinitionV2 } from "@vortex/contracts";
+import type { ResolvedPageComposition } from "./page-composition-resolution";
 
 export type PlacementCapabilityState = Readonly<{
   viewAllowed: boolean;
@@ -43,7 +39,11 @@ const projectV2Slot = (
     Object.entries(placements).flatMap(([placementId, candidate]) => {
       const state = states[placementId];
       const placement = object(candidate);
-      if (placement.viewPermissionKey !== undefined && state?.viewAllowed !== true) return [];
+      if (
+        (placement.viewPermissionKey !== undefined && state?.viewAllowed !== true) ||
+        (placement.visibilityCondition !== undefined && state?.conditionAllowed !== true)
+      )
+        return [];
       const effectiveState: PlacementCapabilityState = {
         viewAllowed: true,
         useAllowed: placement.usePermissionKey === undefined || state?.useAllowed === true,
@@ -59,7 +59,11 @@ const projectV2Slot = (
         [
           placementId,
           {
-            ...withoutKeys(placement, ["viewPermissionKey", "usePermissionKey"]),
+            ...withoutKeys(placement, [
+              "viewPermissionKey",
+              "usePermissionKey",
+              "visibilityCondition",
+            ]),
             slots,
             ...placementAvailability(effectiveState, placement.usePermissionKey !== undefined),
           },
@@ -132,44 +136,23 @@ const projectV1 = (page: PageDefinition, states: PageCapabilityState["placements
 };
 
 const projectV2 = (
-  page: PageDefinitionV2,
+  resolved: Extract<ResolvedPageComposition, { version: "2" }>,
   states: PageCapabilityState["placements"],
 ): JsonObject => {
+  const page: PageDefinitionV2 = resolved.page;
   const source = object(page);
-  const composition = object(page.composition);
-  if ("main" in composition)
+  if (resolved.roots.kind === "page")
     return {
       ...withoutKeys(source, ["accessPermissionKey"]),
-      composition: { ...composition, main: projectV2Slot(composition.main, states) },
-    };
-  if ("content" in composition)
-    return {
-      ...withoutKeys(source, ["accessPermissionKey"]),
-      composition: {
-        ...composition,
-        content: Object.fromEntries(
-          Object.entries(object(composition.content)).map(([key, slot]) => [
-            key,
-            projectV2Slot(slot, states),
-          ]),
-        ),
-      },
+      composition: { main: projectV2Slot(resolved.roots.main, states) },
     };
   return {
     ...withoutKeys(source, ["accessPermissionKey"]),
     composition: {
-      ...composition,
       stepContent: Object.fromEntries(
-        Object.entries(object(composition.stepContent)).map(([stepId, candidate]) => [
+        Object.entries(resolved.roots.stepContent).map(([stepId, root]) => [
           stepId,
-          "placements" in object(candidate)
-            ? projectV2Slot(candidate, states)
-            : Object.fromEntries(
-                Object.entries(object(candidate)).map(([slotId, slot]) => [
-                  slotId,
-                  projectV2Slot(slot, states),
-                ]),
-              ),
+          projectV2Slot(root, states),
         ]),
       ),
     },
@@ -181,12 +164,11 @@ const projectV2 = (
  * permission results. Callers never supply this state directly.
  */
 export const projectPageCapability = (
-  pageCandidate: unknown,
+  resolved: ResolvedPageComposition,
   capability: PageCapabilityState,
 ): ProjectedPageCapability => {
   if (!capability.pageAllowed) return undefined;
-  const v2 = pageDefinitionV2Schema.safeParse(pageCandidate);
-  if (v2.success) return projectV2(v2.data, capability.placements);
-  const v1 = pageDefinitionSchema.parse(pageCandidate);
-  return projectV1(v1, capability.placements);
+  return resolved.version === "2"
+    ? projectV2(resolved, capability.placements)
+    : projectV1(resolved.page, capability.placements);
 };

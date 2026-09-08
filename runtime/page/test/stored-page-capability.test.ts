@@ -1,6 +1,6 @@
 import type { OrganizationAccessDeclaration, SessionContext } from "@vortex/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createStoredV1PageCapabilityService } from "../src/stored-v1-page-capability";
+import { createStoredPageCapabilityService } from "../src/stored-page-capability";
 
 vi.mock("server-only", () => ({}));
 
@@ -158,7 +158,7 @@ const release = {
   },
 };
 
-describe("stored V1 page capability adapter", () => {
+describe("stored page capability adapter", () => {
   beforeEach(() => {
     readExact.mockReset().mockResolvedValue({
       applicationRelease: release,
@@ -181,7 +181,7 @@ describe("stored V1 page capability adapter", () => {
   });
 
   const service = (selectedPageId = pageId) => ({
-    service: createStoredV1PageCapabilityService({
+    service: createStoredPageCapabilityService({
       identityAuthorityId: id(40),
       systemContext,
       selection: { applicationRootId, releaseRevision: 5, pageId: selectedPageId },
@@ -228,9 +228,113 @@ describe("stored V1 page capability adapter", () => {
     ).rejects.toThrow("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
   });
 
-  it("refuses an explicitly V2 application release", async () => {
+  it("reads an exact V2 release, resolves its selected shell, and binds shell and page permissions", async () => {
+    const shellPlacementId = id(60);
+    const contentPlacementId = id(61);
+    const shellId = id(62);
+    const slotId = id(63);
+    const shellPermission = permission(id(64), "example.shell.view");
+    const contentPermission = permission(id(65), "example.content.view");
+    const responsive = {
+      desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } },
+      tablet: { visible: true, width: { kind: "fill" }, height: { kind: "content" } },
+      phone: { visible: true, width: { kind: "fill" }, height: { kind: "content" } },
+    };
+    const placement = (viewPermissionKey: string, slots: Record<string, unknown> = {}) => ({
+      block: { blockId: id(70), releaseVersion: "1.0.0" },
+      viewPermissionKey,
+      settings: {},
+      themeOverrides: {},
+      responsive,
+      slots,
+    });
+    const empty = { placements: {}, order: { desktop: [], tablet: [], phone: [] } };
+    const shell = {
+      shellId,
+      key: "workspace",
+      name: "Workspace",
+      layout: {
+        placements: {
+          [shellPlacementId]: placement(shellPermission.permission.key, { main: empty }),
+        },
+        order: {
+          desktop: [shellPlacementId],
+          tablet: [shellPlacementId],
+          phone: [shellPlacementId],
+        },
+      },
+      contentSlots: [
+        {
+          slotId,
+          key: "main",
+          label: "Main",
+          required: true,
+          allowedChildCategories: ["content"],
+          parentPlacementId: shellPlacementId,
+          parentSlotKey: "main",
+        },
+      ],
+    };
+    const v2Page = {
+      pageId,
+      key: "overview",
+      name: "Overview",
+      type: "dashboard",
+      accessPermissionKey: pagePermission.permission.key,
+      states: ["normal"],
+      composition: {
+        shellKind: "application",
+        shellId,
+        content: {
+          [slotId]: {
+            placements: {
+              [contentPlacementId]: placement(contentPermission.permission.key),
+            },
+            order: {
+              desktop: [contentPlacementId],
+              tablet: [contentPlacementId],
+              phone: [contentPlacementId],
+            },
+          },
+        },
+      },
+    };
+    const { blockRegistrations: _blocks, theme: _theme, ...shared } = release.content;
+    const v2Release = {
+      ...release,
+      validationContractVersion: "2.0.0" as const,
+      content: {
+        ...shared,
+        platformBlockDependencies: [
+          {
+            kind: "platform_block" as const,
+            blockId: id(70),
+            releaseVersion: "1.0.0",
+            contentFingerprint: "sha256:" + "f".repeat(64),
+            catalogueFingerprint: "sha256:" + "1".repeat(64),
+          },
+        ],
+        shells: [shell],
+        pages: [v2Page],
+        permissions: [
+          pagePermission.permission,
+          shellPermission.permission,
+          contentPermission.permission,
+        ],
+        theme: {
+          base: {
+            kind: "platform_theme" as const,
+            catalogueThemeId: id(80),
+            releaseVersion: "1.0.0",
+            contentFingerprint: "sha256:" + "d".repeat(64),
+            catalogueFingerprint: "sha256:" + "e".repeat(64),
+          },
+          tokens: {},
+        },
+      },
+    };
     readExact.mockResolvedValueOnce({
-      applicationRelease: { ...release, validationContractVersion: "2.0.0" },
+      applicationRelease: v2Release,
       permissionRegistration: {
         organizationId,
         applicationRootId,
@@ -242,12 +346,31 @@ describe("stored V1 page capability adapter", () => {
           contentFingerprint: release.contentFingerprint,
           resolutionFingerprint: release.resolutionFingerprint,
         },
-        entries: [pagePermission, blockPermission],
+        entries: [pagePermission, shellPermission, contentPermission],
       },
     });
     await expect(
       service().service.project({} as never, { organizationId, applicationRootId }),
-    ).rejects.toThrow("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        pageId,
+        composition: {
+          main: {
+            placements: {
+              [shellPlacementId]: {
+                slots: { main: { placements: { [contentPlacementId]: {} } } },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(accessDeclarations.map((entry) => entry.requiredPermission.permissionId)).toEqual([
+      pagePermission.permission.permissionId,
+      shellPermission.permission.permissionId,
+      contentPermission.permission.permissionId,
+    ]);
   });
 
   it("refuses human Access evidence from a different server correlation", async () => {

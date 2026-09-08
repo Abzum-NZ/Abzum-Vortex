@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { projectPageCapability } from "../src/page-capability-projection";
+import { resolvePageComposition } from "../src/page-composition-resolution";
 
 vi.mock("server-only", () => ({}));
 
@@ -52,14 +53,24 @@ const page = {
 
 describe("page capability projection", () => {
   it("returns no page or metadata when page discovery is refused", () => {
-    expect(projectPageCapability(page, { pageAllowed: false, placements: {} })).toBeUndefined();
+    expect(
+      projectPageCapability(resolvePageComposition(page as never), {
+        pageAllowed: false,
+        placements: {},
+      }),
+    ).toBeUndefined();
   });
 
   it("inherits the admitted page gate for historical V2 placements without explicit keys", () => {
     const historical = structuredClone(page);
     const historicalParent = historical.composition.main.placements[parent];
     delete historicalParent.viewPermissionKey;
-    expect(projectPageCapability(historical, { pageAllowed: true, placements: {} })).toMatchObject({
+    expect(
+      projectPageCapability(resolvePageComposition(historical as never), {
+        pageAllowed: true,
+        placements: {},
+      }),
+    ).toMatchObject({
       composition: {
         main: {
           placements: {
@@ -71,7 +82,7 @@ describe("page capability projection", () => {
   });
 
   it("removes a refused parent and its independently allowed subtree", () => {
-    const projected = projectPageCapability(page, {
+    const projected = projectPageCapability(resolvePageComposition(page as never), {
       pageAllowed: true,
       placements: {
         [parent]: { viewAllowed: false, useAllowed: false, operationBound: false },
@@ -87,7 +98,7 @@ describe("page capability projection", () => {
   });
 
   it("retains an allowed sibling, prunes orders and exposes safe unavailability", () => {
-    const projected = projectPageCapability(page, {
+    const projected = projectPageCapability(resolvePageComposition(page as never), {
       pageAllowed: true,
       placements: {
         [parent]: { viewAllowed: true, useAllowed: true, operationBound: false },

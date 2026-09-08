@@ -3,6 +3,7 @@ import "server-only";
 import {
   pageDefinitionSchema,
   pageDefinitionV2Schema,
+  type ApplicationShellV2,
   type IdentitySession,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
@@ -22,6 +23,10 @@ import {
   type PageCapabilityState,
   type ProjectedPageCapability,
 } from "./page-capability-projection";
+import {
+  resolvePageComposition,
+  type ResolvedPageComposition,
+} from "./page-composition-resolution";
 
 type PermissionBinding = Readonly<{
   permissionKey: string;
@@ -30,6 +35,7 @@ type PermissionBinding = Readonly<{
 
 export type FixedAuthenticatedPageCapability = Readonly<{
   page: PageDefinition | PageDefinitionV2;
+  applicationShells?: readonly ApplicationShellV2[];
   sourceCorrelationId?: string;
   pagePermission: PermissionBinding;
   placements: Readonly<
@@ -81,8 +87,9 @@ const collectV2Slot = (slot: Record<string, unknown>, result: RequiredPlacement[
   }
 };
 
-const requiredPlacements = (page: PageDefinition | PageDefinitionV2): RequiredPlacement[] => {
+const requiredPlacements = (resolved: ResolvedPageComposition): RequiredPlacement[] => {
   const result: RequiredPlacement[] = [];
+  const page = resolved.page;
   if ("layout" in page) {
     const placements =
       page.type === "guided_form"
@@ -98,18 +105,12 @@ const requiredPlacements = (page: PageDefinition | PageDefinitionV2): RequiredPl
         : { usePermissionKey: placement.usePermissionKey }),
     }));
   }
-  const composition = page.composition;
-  if ("main" in composition)
-    collectV2Slot(composition.main as unknown as Record<string, unknown>, result);
-  else if ("content" in composition)
-    for (const slot of Object.values(composition.content))
-      collectV2Slot(slot as unknown as Record<string, unknown>, result);
+  if (resolved.version !== "2") return result;
+  if (resolved.roots.kind === "page")
+    collectV2Slot(resolved.roots.main as unknown as Record<string, unknown>, result);
   else
-    for (const step of Object.values(composition.stepContent))
-      if ("placements" in step) collectV2Slot(step as unknown as Record<string, unknown>, result);
-      else
-        for (const slot of Object.values(step))
-          collectV2Slot(slot as unknown as Record<string, unknown>, result);
+    for (const root of Object.values(resolved.roots.stepContent))
+      collectV2Slot(root as unknown as Record<string, unknown>, result);
   return result;
 };
 
@@ -145,6 +146,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
         const loaded = await dependencies.adapter.load(transaction, scope, command);
         const parsed = pageDefinitionV2Schema.safeParse(loaded.page);
         const page = parsed.success ? parsed.data : pageDefinitionSchema.parse(loaded.page);
+        const resolved = resolvePageComposition(page, loaded.applicationShells);
         if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
           throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
 
@@ -157,7 +159,8 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             : [loaded.sourceCorrelationId.toLowerCase()]),
         ]);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
-        for (const required of requiredPlacements(page)) {
+        for (const required of requiredPlacements(resolved)) {
+          if (states[required.placementId] !== undefined) continue;
           const binding = loaded.placements[required.placementId];
           if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
           const view =
@@ -188,7 +191,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
           };
         }
         if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
-        return projectPageCapability(page, { pageAllowed: true, placements: states });
+        return projectPageCapability(resolved, { pageAllowed: true, placements: states });
       }),
   });
 };
