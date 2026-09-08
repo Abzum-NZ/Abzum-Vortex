@@ -497,6 +497,45 @@ The Record service owns a `data_version` for each organisation, storage contract
 
 Unique values remain reserved while `lifecycle_state` is `soft_deleted` or `removal_pending` and are released only by permanent removal.
 
+## Record save command and result
+
+Forms, flow nodes, imports and MCP use one strict create/update command, defined
+in the [Record contracts](../../../contracts/src/records.ts) and delivered through
+[save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47). The
+[implementation plan](../../build-plan/issue-47-save-command.md) distinguishes the
+contract prerequisite from the protected save implementation.
+
+Both operations carry contract version `2.0.0`, command identifier, record-type
+identifier and submitted values keyed by permanent field identifiers. Create has
+no existing record identifier or expected concurrency number; update requires
+both. Omitted fields remain untouched on update, null requests a clear, and an
+empty field map is valid. Exact decimal text is preserved. The server supplies
+organisation, application, actor, installed definitions and generated values;
+none are caller-provided authority properties.
+
+Every result carries the same contract version. A saved result contains the
+record identifier, new concurrency number, currently readable values, correlation
+identifier, and background delivery `none` or `pending`. A correction result
+contains safe field locations and the meanings `invalid_value`, `required_value`
+or `field_refused`. Other refusals reuse the existing safe operation-error
+contract. Conflict responses may include current readable values only when
+current access permits; they never promise disclosure of a now-inaccessible row.
+The same current-access rule applies when an internal command receipt is replayed.
+
+These schemas describe messages, not successful authorization or persistence.
+The [save sequence](../06-records-and-lifecycle.md#save-sequence) remains the one
+owning operation for validation, rules, calculations, relationships, Activity and
+Events. No preliminary save engine or second transaction is introduced.
+
+```mermaid
+flowchart LR
+    UI[Forms and flow nodes] --> C[Shared save command]
+    API[Imports and MCP] --> C
+    C --> S[Protected Record save]
+    S --> R[Readable saved result]
+    S --> E[Safe corrections or refusal]
+```
+
 ## Direct record-share contract
 
 A direct share applies to one record and one recipient inside the record's organisation:
