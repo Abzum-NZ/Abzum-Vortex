@@ -37,6 +37,39 @@ fixtures for the representation of money, dates, references, formatted content,
 table cells and defaults. Resolve contradictions at their owning specification or
 contract instead of inventing an incompatible value format in this runtime.
 
+### Concrete preparation boundary
+
+Use one `prepareRecordFieldValuesV2` operation with canonical field-identifier maps,
+the trusted V2 record-type definition, create/update mode and existing values for
+an update. Never accept mutable field keys as record-value identities. Return only
+the prepared set patch and cleared field identifiers, not a rewritten full row.
+Check required presence against the existing values plus the patch; omitted update
+fields are not cleared or reset. Required generated fields are completed by their
+owning operation, not demanded from the caller before generation.
+
+An explicit request-level `null` clears an optional field. On create it leaves the
+field absent; on update it becomes a clear instruction. It is not a persisted V2
+field value. Required writable fields cannot be cleared. Supplied generated-field
+values, including a clear instruction, are refused. Existing field settings retain
+their meaning; do not add a blanket rule treating every empty string, table or
+formatted document as a request to clear it. Required attachments cannot be emptied.
+An explicitly submitted table replaces that field value; it is not an implicit
+per-row patch protocol.
+
+Reuse the owning leaf and field-setting schemas and exact decimal codec rather
+than maintain a second validation catalogue. Structural preparation returns the
+specific permission and record/person/file references needing protected checks;
+it does not claim those checks passed. Current field access, reference existence,
+uniqueness and file eligibility remain in the owning protected operation.
+
+Resolve the trusted organisation currency only when an omitted create default
+needs it, including an amount-only money cell in a table default. Explicit money
+input always contains amount and currency. For `organisation_default` retain that
+currency without comparing it with today's organisation setting; for `fixed`,
+require the declared currency. This follows the
+[money-value specification](../specification/05-modules-fields-and-relationships.md#record-value-formats)
+and needs no conversion approval or table-row history mechanism.
+
 ## Files and proportionate verification
 
 Use `runtime/record/src/field-values.ts`, its public export and focused tests in

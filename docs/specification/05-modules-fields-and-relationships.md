@@ -154,6 +154,15 @@ claim that Record execution is already delivered.
   default to an installation's currency; record creation resolves and stores the
   currency once. The same rule applies to money cells in table defaults. Submitted
   and persisted money values carry both amount and currency.
+  `organisation_default` supplies the currency for an omitted amount-only default;
+  it is not a permanent restriction to today's organisation currency. Explicitly
+  submitted amount-and-currency pairs retain their stated currency on create and
+  update. Fixed-currency fields require their declared currency. Editing an old
+  amount therefore does not force a currency change after the organisation default
+  changes. A submitted replacement pair does not cause an automatic exchange-rate
+  calculation or relabel any other stored value. Table money cells follow the same
+  rule; replacing a table supplies explicit pairs, while an omitted update leaves
+  the stored table unchanged.
 - Formatted content uses the same safe structured text primitives as page
   properties, with Record-specific table and attachment blocks where allowed by
   the field. It is not executable HTML. Allowed-block and visible-text length
