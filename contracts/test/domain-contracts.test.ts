@@ -443,7 +443,7 @@ const fieldSettings: Record<(typeof fieldTypeKeys)[number], unknown> = {
   phone_number: { defaultCountry: "NZ" },
   web_address: { allowedSchemes: ["https"] },
   table: {
-    columns: [{ key: "quantity", type: "whole_number", required: true }],
+    columns: [{ key: "quantity", type: "whole_number", required: true, settings: { minimum: 1 } }],
     minimumRows: 0,
     maximumRows: 20,
   },
@@ -755,6 +755,87 @@ describe("closed catalogues and discriminated contracts", () => {
         settings: { options: [{ value: "open", label: "Open" }] },
       }).success,
     ).toBe(false);
+  });
+
+  test("keeps choice gates and table-column settings typed without rewriting legacy history", () => {
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "choice",
+        settings: {
+          options: [
+            {
+              value: "restricted",
+              label: "Restricted",
+              requiredPermissionId: id(70),
+            },
+          ],
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "table",
+        default: [{ amount: "not-money" }],
+        settings: {
+          columns: [
+            {
+              key: "amount",
+              type: "money",
+              required: true,
+              settings: { currencyMode: "fixed", currency: "NZD" },
+            },
+          ],
+          minimumRows: 0,
+          maximumRows: 20,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "table",
+        settings: {
+          columns: [
+            {
+              key: "amount",
+              type: "money",
+              required: true,
+              settings: { currencyMode: "fixed", currency: "NZD" },
+            },
+          ],
+          minimumRows: 0,
+          maximumRows: 20,
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "table",
+        settings: {
+          columns: [
+            { key: "duplicate", type: "text", required: false, settings: { maxLength: 120 } },
+            { key: "duplicate", type: "yes_no", required: false, settings: {} },
+          ],
+          minimumRows: 0,
+          maximumRows: 20,
+        },
+      }).success,
+    ).toBe(false);
+    // The historical shape remains parseable only so immutable releases can be compared.
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "table",
+        settings: {
+          columns: [{ key: "legacy", type: "text", required: false }],
+          minimumRows: 0,
+          maximumRows: 20,
+        },
+      }).success,
+    ).toBe(true);
   });
 
   test.each(workflowNodeTypeKeys)("accepts and strictly validates the %s workflow node", (type) => {
@@ -2447,6 +2528,46 @@ describe("complete definition-source fixture set", () => {
         }
       }
     }
+  });
+
+  test("requires typed settings and unique keys for authored table columns", async () => {
+    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
+    const parsed = definitionSourceDocumentSchema.parse(
+      JSON.parse(await readFile(resolve(fixtureRoot, "modules/service-desk.sla.json"), "utf8")),
+    );
+    if (parsed.kind !== "module") throw new Error("Module fixture required");
+    const module = structuredClone(parsed);
+    const table = module.body.record_types
+      .flatMap((recordType) => recordType.fields)
+      .find((field) => field.type === "table");
+    expect(table).toBeDefined();
+    if (!table || table.type !== "table") throw new Error("Table field required");
+    table.default = [{ day: "monday", starts_at: "09:00", ends_at: "17:00" }];
+    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(true);
+
+    const invalidDefault = structuredClone(module);
+    const invalidDefaultTable = invalidDefault.body.record_types
+      .flatMap((recordType) => recordType.fields)
+      .find((field) => field.type === "table");
+    if (!invalidDefaultTable || invalidDefaultTable.type !== "table")
+      throw new Error("Table field required");
+    invalidDefaultTable.default = [{ day: "not_a_weekday", starts_at: "09:00" }];
+    expect(definitionSourceDocumentSchema.safeParse(invalidDefault).success).toBe(false);
+
+    const missingSettings = structuredClone(module);
+    const missingTable = missingSettings.body.record_types
+      .flatMap((recordType) => recordType.fields)
+      .find((field) => field.type === "table");
+    if (!missingTable || missingTable.type !== "table") throw new Error("Table field required");
+    delete (missingTable.settings.columns[0] as { settings?: unknown }).settings;
+    // Stored V1 source remains readable, but semantic publication validation
+    // must refuse this legacy-incomplete column.
+    expect(definitionSourceDocumentSchema.safeParse(missingSettings).success).toBe(true);
+    missingTable.settings.columns[1]!.key = missingTable.settings.columns[0]!.key;
+    expect(definitionSourceDocumentSchema.safeParse(missingSettings).success).toBe(true);
+
+    table.settings.columns[1]!.key = table.settings.columns[0]!.key;
+    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(false);
   });
 
   test("refuses an unknown workflow condition operator in definition-source JSON", async () => {

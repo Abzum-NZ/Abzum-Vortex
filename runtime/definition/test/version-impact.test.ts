@@ -1064,31 +1064,41 @@ const fieldPolicyDirectionCases: readonly FieldPolicyCase[] = [
   [
     "table optional column added",
     policyField("table", {
-      columns: [{ key: "first", type: "text", required: false }],
+      columns: [{ key: "first", type: "text", required: false, settings: { maxLength: 120 } }],
       minimumRows: 0,
       maximumRows: 20,
     }),
     (item) =>
-      (item.settings.columns as unknown[]).push({ key: "second", type: "yes_no", required: false }),
+      (item.settings.columns as unknown[]).push({
+        key: "second",
+        type: "yes_no",
+        required: false,
+        settings: {},
+      }),
     "minor",
   ],
   [
     "table required column added",
     policyField("table", {
-      columns: [{ key: "first", type: "text", required: false }],
+      columns: [{ key: "first", type: "text", required: false, settings: { maxLength: 120 } }],
       minimumRows: 0,
       maximumRows: 20,
     }),
     (item) =>
-      (item.settings.columns as unknown[]).push({ key: "second", type: "yes_no", required: true }),
+      (item.settings.columns as unknown[]).push({
+        key: "second",
+        type: "yes_no",
+        required: true,
+        settings: {},
+      }),
     "major",
   ],
   [
     "table column removed",
     policyField("table", {
       columns: [
-        { key: "first", type: "text", required: false },
-        { key: "second", type: "yes_no", required: false },
+        { key: "first", type: "text", required: false, settings: { maxLength: 120 } },
+        { key: "second", type: "yes_no", required: false, settings: {} },
       ],
       minimumRows: 0,
       maximumRows: 20,
@@ -1360,6 +1370,113 @@ describe("definition version impact", () => {
       });
     },
   );
+
+  test("classifies choice permission gates as authority changes", () => {
+    const draft = moduleDraft();
+    draft.content.recordTypes[0]!.fields.push({
+      ...field(id(11)),
+      type: "choice",
+      settings: { options: [{ value: "first", label: "First" }] },
+    });
+    const request = requestAfter(draft);
+    const option = (
+      request.candidate.content.recordTypes[0]!.fields[1]!.settings as {
+        options: Array<Record<string, unknown>>;
+      }
+    ).options[0]!;
+    option.requiredPermissionId = id(12);
+    expect(compareDefinitionVersionImpact(request)).toMatchObject({
+      outcome: "release_required",
+      impact: "major",
+      reasons: [
+        expect.objectContaining({
+          impact: "major",
+          code: "permission_changed",
+          location: expect.objectContaining({ property: "permission" }),
+        }),
+      ],
+    });
+  });
+
+  test("compares typed table-column constraints and explicit legacy completion", () => {
+    const typed = moduleDraft();
+    typed.content.recordTypes[0]!.fields.push({
+      ...field(id(11)),
+      type: "table",
+      settings: {
+        columns: [{ key: "first", type: "text", required: false, settings: { maxLength: 120 } }],
+        minimumRows: 0,
+        maximumRows: 20,
+      },
+    });
+    const widened = requestAfter(typed);
+    const typedColumn = (
+      widened.candidate.content.recordTypes[0]!.fields[1]!.settings as {
+        columns: Array<{ settings?: { maxLength?: number } }>;
+      }
+    ).columns[0]!;
+    if (!typedColumn.settings) throw new Error("Typed column settings required");
+    typedColumn.settings.maxLength = 240;
+    expect(compareDefinitionVersionImpact(widened)).toMatchObject({
+      outcome: "release_required",
+      impact: "minor",
+      reasons: [expect.objectContaining({ code: "constraint_widened" })],
+    });
+
+    const legacy = moduleDraft();
+    legacy.content.recordTypes[0]!.fields.push({
+      ...field(id(11)),
+      type: "table",
+      settings: {
+        columns: [{ key: "first", type: "text", required: false }],
+        minimumRows: 0,
+        maximumRows: 20,
+      },
+    });
+    const completed = requestAfter(legacy);
+    const legacyColumn = (
+      completed.candidate.content.recordTypes[0]!.fields[1]!.settings as {
+        columns: Array<Record<string, unknown>>;
+      }
+    ).columns[0]!;
+    legacyColumn.settings = { maxLength: 120 };
+    expect(compareDefinitionVersionImpact(completed)).toMatchObject({
+      outcome: "release_required",
+      impact: "major",
+      reasons: [expect.objectContaining({ code: "existing_behavior_changed" })],
+    });
+
+    const tableChoice = moduleDraft();
+    tableChoice.content.recordTypes[0]!.fields.push({
+      ...field(id(11)),
+      type: "table",
+      settings: {
+        columns: [
+          {
+            key: "state",
+            type: "choice",
+            required: false,
+            settings: { options: [{ value: "first", label: "First" }] },
+          },
+        ],
+        minimumRows: 0,
+        maximumRows: 20,
+      },
+    });
+    const gated = requestAfter(tableChoice);
+    const gatedColumn = (
+      gated.candidate.content.recordTypes[0]!.fields[1]!.settings as {
+        columns: Array<{ settings?: { options?: Array<Record<string, unknown>> } }>;
+      }
+    ).columns[0]!;
+    if (!gatedColumn.settings?.options) throw new Error("Table choice options required");
+    gatedColumn.settings.options[0]!.requiredPermissionId = id(12);
+    expect(compareDefinitionVersionImpact(gated)).toMatchObject({
+      outcome: "release_required",
+      impact: "major",
+      reasons: [expect.objectContaining({ code: "permission_changed" })],
+    });
+  });
 
   test.each(fieldPolicyDirectionCases)(
     "classifies field policy direction: %s",

@@ -91,6 +91,168 @@ const leafPathKeys = (value: unknown, path: readonly (string | number)[] = []): 
       : [JSON.stringify(path)];
 
 describe("authored definition compiler", () => {
+  it("compiles typed table settings and resolves choice gates from exact dependency ownership", () => {
+    const source = structuredClone(
+      sources.find(
+        (candidate) => candidate.kind === "module" && candidate.key === "vortex.crm.opportunities",
+      ),
+    );
+    const dependency = sources.find(
+      (candidate) => candidate.kind === "module" && candidate.key === "vortex.crm.organisations",
+    );
+    if (!source || source.kind !== "module" || !dependency || dependency.kind !== "module")
+      throw new Error("Opportunity and organisation modules required");
+    const dependencyPermission = dependency.body.permissions[0]!;
+    const opportunity = source.body.record_types.find((record) => record.key === "opportunity")!;
+    const recordIndex = source.body.record_types.indexOf(opportunity);
+    const stage = opportunity.fields.find((field) => field.type === "choice");
+    if (!stage || stage.type !== "choice") throw new Error("Stage choice required");
+    const stageIndex = opportunity.fields.indexOf(stage);
+    stage.settings.options[0]!.required_permission = dependencyPermission.key;
+    const paymentSchedule = opportunity.fields.find((field) => field.key === "payment_schedule");
+    if (!paymentSchedule || paymentSchedule.type !== "table")
+      throw new Error("Payment schedule required");
+    const paymentScheduleIndex = opportunity.fields.indexOf(paymentSchedule);
+    const amountIndex = paymentSchedule.settings.columns.findIndex(
+      (column) => column.key === "amount",
+    );
+
+    const request = requestFor(source);
+    const output = compileDefinition(request);
+    if (output.kind !== "module") throw new Error("Compiled module required");
+    const compiledOpportunity = output.canonical.content.recordTypes.find(
+      (record) => record.key === "opportunity",
+    )!;
+    const compiledStage = compiledOpportunity.fields.find((field) => field.key === stage.key);
+    const table = compiledOpportunity.fields.find((field) => field.type === "table");
+    if (!compiledStage || compiledStage.type !== "choice" || !table || table.type !== "table")
+      throw new Error("Compiled choice and table required");
+    const expectedPermissionId = resolution.identities.find(
+      (identity) =>
+        identity.definitionKey === dependency.key &&
+        identity.kind === "permission" &&
+        identity.alias === dependencyPermission.key,
+    )?.identifier;
+    expect(expectedPermissionId).toBeDefined();
+    expect(compiledStage.settings.options[0]).toMatchObject({
+      value: stage.settings.options[0]!.value,
+      label: stage.settings.options[0]!.label,
+      requiredPermissionId: expectedPermissionId,
+    });
+    expect(compiledStage.settings.options[1]).not.toHaveProperty("requiredPermissionId");
+    expect(table.settings.columns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "amount",
+          type: "money",
+          settings: { currencyMode: "fixed", currency: "NZD" },
+        }),
+      ]),
+    );
+    expect(output.provenance).toContainEqual(
+      expect.objectContaining({
+        sourcePath: [
+          "body",
+          "record_types",
+          recordIndex,
+          "fields",
+          stageIndex,
+          "settings",
+          "options",
+          0,
+          "required_permission",
+        ],
+        canonicalPath: [
+          "content",
+          "recordTypes",
+          recordIndex,
+          "fields",
+          stageIndex,
+          "settings",
+          "options",
+          0,
+          "requiredPermissionId",
+        ],
+        origin: "resolved",
+      }),
+    );
+    expect(output.provenance).toContainEqual(
+      expect.objectContaining({
+        sourcePath: [
+          "body",
+          "record_types",
+          recordIndex,
+          "fields",
+          paymentScheduleIndex,
+          "settings",
+          "columns",
+          amountIndex,
+          "settings",
+          "currency_mode",
+        ],
+        canonicalPath: [
+          "content",
+          "recordTypes",
+          recordIndex,
+          "fields",
+          paymentScheduleIndex,
+          "settings",
+          "columns",
+          amountIndex,
+          "settings",
+          "currencyMode",
+        ],
+        origin: "source",
+      }),
+    );
+
+    const amendedRequests = sources.map((candidate) =>
+      requestFor(candidate.kind === "module" && candidate.key === source.key ? source : candidate),
+    );
+    const amendedOutputs = amendedRequests.map(compileDefinition);
+    expect(
+      validateDefinitionSet(publicationContext(amendedRequests, amendedOutputs)).failures,
+    ).toEqual([]);
+  });
+
+  it("loads and deterministically compiles legacy V1 table source but refuses republication", () => {
+    const source = structuredClone(
+      sources.find(
+        (candidate) => candidate.kind === "module" && candidate.key === "vortex.service_desk.sla",
+      ),
+    );
+    if (!source || source.kind !== "module") throw new Error("SLA module required");
+    const table = source.body.record_types
+      .flatMap((record) => record.fields)
+      .find((field) => field.type === "table");
+    if (!table || table.type !== "table") throw new Error("Table field required");
+    table.default = [{ day: "monday", starts_at: "09:00", ends_at: "17:00" }];
+    delete (table.settings.columns[0] as { settings?: unknown }).settings;
+    table.settings.columns[1]!.key = table.settings.columns[0]!.key;
+    const legacy = definitionSourceDocumentSchema.parse(source);
+    const request = requestFor(legacy);
+    const first = compileDefinition(request);
+    const second = compileDefinition(requestFor(structuredClone(legacy)));
+    expect(first.canonical).toEqual(second.canonical);
+    expect(first.provenance).toEqual(second.provenance);
+    if (first.kind !== "module") throw new Error("Compiled module required");
+    const compiledTable = first.canonical.content.recordTypes
+      .flatMap((record) => record.fields)
+      .find((field) => field.type === "table");
+    if (!compiledTable || compiledTable.type !== "table")
+      throw new Error("Compiled table required");
+    expect(compiledTable.default).toEqual(table.default);
+    expect(compiledTable.settings.columns[0]).not.toHaveProperty("settings");
+    expect(validateDefinitionSource(legacy).failures.map((failure) => failure.ruleCode)).toContain(
+      "vortex.definition.local_references",
+    );
+    expect(
+      validateDefinitionSet(publicationContext([request], [first])).failures.map(
+        (failure) => failure.ruleCode,
+      ),
+    ).toContain("vortex.definition.module_field_references");
+  });
+
   it("preserves singular action bindings and compiles plural alternatives without rewriting", () => {
     const source = structuredClone(
       sources.find(

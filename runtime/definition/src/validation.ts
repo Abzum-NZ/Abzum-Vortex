@@ -520,6 +520,31 @@ function sourceLocalReferenceRule(
           }
           if (field.type === "total" && !qualifiedRelationshipValid(settings.relationship))
             valid = false;
+          if (
+            field.type === "table" &&
+            array(settings.columns).some((column) => column.settings === undefined)
+          )
+            valid = false;
+          const choiceSettings = [
+            ...(["choice", "several_choices"].includes(String(field.type)) ? [settings] : []),
+            ...(field.type === "table"
+              ? array(settings.columns)
+                  .filter((column) => column.type === "choice" && column.settings !== undefined)
+                  .map((column) => object(column.settings))
+              : []),
+          ];
+          for (const choice of choiceSettings)
+            for (const option of array(choice.options)) {
+              if (option.required_permission === undefined) continue;
+              const requiredPermission = String(option.required_permission);
+              if (
+                !permissions.has(requiredPermission) &&
+                ![...dependencies].some((dependency) =>
+                  requiredPermission.startsWith(`${dependency}.`),
+                )
+              )
+                valid = false;
+            }
         }
       }
       for (const permission of array(body.permissions)) {
@@ -1456,6 +1481,17 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
   const availableModuleOutputs = allValidationOutputs(context).filter(
     (output) => output.kind === "module",
   );
+  const permissionOwnersById = new Map<string, Set<string>>();
+  for (const output of availableModuleOutputs) {
+    const canonical = object(output.canonical);
+    const moduleRootId = String(object(canonical.envelope).rootId);
+    for (const permission of array(object(canonical.content).permissions)) {
+      const permissionId = String(permission.permissionId);
+      const owners = permissionOwnersById.get(permissionId) ?? new Set<string>();
+      owners.add(moduleRootId);
+      permissionOwnersById.set(permissionId, owners);
+    }
+  }
   const recordIdentity = (moduleRootId: string, recordTypeId: string): string =>
     `${moduleRootId}:${recordTypeId}`;
   const records = new Map<
@@ -1555,6 +1591,10 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       moduleRootId,
       ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
     ]);
+    const choicePermissionValid = (permissionId: unknown): boolean => {
+      const owners = permissionOwnersById.get(String(permissionId));
+      return owners !== undefined && owners.size === 1 && allowedModuleRoots.has([...owners][0]!);
+    };
     const moduleRecords = new Map(
       array(content.recordTypes).map((record) => [String(record.recordTypeId), record]),
     );
@@ -1650,6 +1690,26 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       for (const field of array(record.fields)) {
         const settings = object(field.settings);
         let valid = true;
+        const choiceSettings = [
+          ...(["choice", "several_choices"].includes(String(field.type)) ? [settings] : []),
+          ...(field.type === "table"
+            ? array(settings.columns)
+                .filter((column) => column.type === "choice" && column.settings !== undefined)
+                .map((column) => object(column.settings))
+            : []),
+        ];
+        if (
+          choiceSettings.some((choice) =>
+            array(choice.options).some(
+              (option) =>
+                option.requiredPermissionId !== undefined &&
+                !choicePermissionValid(option.requiredPermissionId),
+            ),
+          ) ||
+          (field.type === "table" &&
+            array(settings.columns).some((column) => column.settings === undefined))
+        )
+          valid = false;
         if (field.type === "link")
           valid = recordReference(settings.target, allowedModuleRoots) !== undefined;
         if (field.type === "link_to_one_of_several")

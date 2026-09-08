@@ -88,17 +88,30 @@
                 {
                   "key": "day",
                   "type": "choice",
-                  "required": true
+                  "required": true,
+                  "settings": {
+                    "options": [
+                      { "value": "monday", "label": "Monday" },
+                      { "value": "tuesday", "label": "Tuesday" },
+                      { "value": "wednesday", "label": "Wednesday" },
+                      { "value": "thursday", "label": "Thursday" },
+                      { "value": "friday", "label": "Friday" },
+                      { "value": "saturday", "label": "Saturday" },
+                      { "value": "sunday", "label": "Sunday" }
+                    ]
+                  }
                 },
                 {
                   "key": "starts_at",
                   "type": "text",
-                  "required": true
+                  "required": true,
+                  "settings": { "max_length": 5 }
                 },
                 {
                   "key": "ends_at",
                   "type": "text",
-                  "required": true
+                  "required": true,
+                  "settings": { "max_length": 5 }
                 }
               ]
             }
@@ -121,12 +134,14 @@
                 {
                   "key": "date",
                   "type": "date",
-                  "required": true
+                  "required": true,
+                  "settings": {}
                 },
                 {
                   "key": "reason",
                   "type": "text",
-                  "required": true
+                  "required": true,
+                  "settings": { "max_length": 200 }
                 }
               ]
             }
