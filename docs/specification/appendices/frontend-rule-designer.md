@@ -351,6 +351,13 @@ requirements and warnings accumulate. A refusal stops the sequence with no
 applicable write patch. The shared Rule entry point owns this order, rather than
 each caller inventing its own order.
 
+Require-field checks are returned to Record and evaluated against the final
+candidate after owning generators, not while traversing that node. Initial
+typed decoding must let later nodes supply required values or correct an
+intermediate value that is outside a field's configured policy. The complete
+final candidate must still satisfy all owning field and access rules before any
+write. See the [save sequence](../06-records-and-lifecycle.md#save-sequence).
+
 Module-exposed query contracts and their complete Definition lifecycle belong to [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54). Headless component/managed-flow/actor-binding descriptors belong to [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250); private execution grants and their trusted resolution belong to [#322](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322). Flow execution consumes these prerequisites, never implements a competing Query or Access engine.
 
 The existing single-effect rule representation remains an immutable legacy contract. [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) owns the explicit versioned rule-flow source/canonical schema extension, compiler, node catalogue validation and headless execution; [#57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) owns shared condition extensions. [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) owns form-response, journey submission and workflow-operation binding contracts. Use existing Definition source/validation version selection; do not infer graph support from JSON shape or invent a parallel version store.
