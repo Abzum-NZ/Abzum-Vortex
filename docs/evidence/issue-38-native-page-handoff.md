@@ -60,13 +60,41 @@ failed at 2026-09-08T07:03:43.932Z: invitation tests 47/51 expected one account
 but observed two, and role-storage test 35 also failed. The run executed 60 files
 and 2,670 assertions; it did not issue a success receipt or complete the later
 concurrency gate. Investigation of the existing fixture assumptions is underway.
-This is not a successful hosted verification, and the task remains open.
+That run was not a successful hosted verification; the task stayed open at that point.
+
+## Successful hosted verification
+
+The bounded populated-Testing fixture repair in
+[PR #351](https://github.com/Abzum-NZ/Abzum-Vortex/pull/351) retained the original
+assertions and removed their unrelated-organisation count assumptions. The next
+[hosted Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6WIfY1e5pRWu8lkswspG6M/outputs)
+completed successfully for `c89ae494a98edb4f2815004329ffc737d824667e`.
+Its complete, untruncated `delivery-evidence.json` preview records:
+
+- 68 tracked migrations and status `succeeded`.
+- All 25 selected concurrency proofs completed, with no omitted proof.
+- All six selected schema checks completed: `public`, `vortex_context`,
+  `vortex_identity`, `vortex_definition`, `vortex_access`, `vortex_activity`.
+- Runner SHA-256
+  `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046`.
+- Manifest SHA-256
+  `0cfcb4d9995f0c79b132b479a4ec56448d504fa097520fc6610908d21c99dfc8`.
+- Migration-set SHA-256
+  `f3e6f03a936fc32f27b37c9858bbcf19e013d9edc3ed5b6d8253a8cd0309130b`.
+
+Root checked the runner and manifest hashes and the complete proof/schema lists
+against that exact Git commit, not the unfinished working tree. The logs also
+recorded all 60 database test files and 2,670 assertions passing. The reviewed
+Page source `bb9fa094947018ebe53332dfe2665640c9dde5bc` is an ancestor of the
+verified commit, and `runtime/page` has no changes between them. Together with
+the independent actual-work review and normal source checks above, this satisfies
+the remaining #38 verification requirement. No Production completion is claimed.
 
 ## Scope and remaining delivery
 
 This completes the remaining engine implementation, not a live application page.
-Source delivery is recorded above; exact hosted verification remains required
-before task closure.
+Source delivery and exact hosted verification are recorded above; the Page engine
+task can close without misrepresenting the later application interface as delivered.
 The already reviewed earlier contract/compiler/projector work is not duplicated.
 
 - [#64](../build-plan/issue-64-application-runtime.md) supplies installed release
