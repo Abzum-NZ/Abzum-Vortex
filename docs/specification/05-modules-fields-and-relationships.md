@@ -230,7 +230,26 @@ different from computing from a redacted subset or refusing a permitted save.
 - Calculation dependencies are known at publication and cycles are refused.
 - A total names the relationship with its exact `module:record_type.relationship` owner, plus an operation, explicit result type, optional aggregate-source field, and optional aggregate-source filter expressed through the same closed typed condition tree used by rules. The relationship must point from its source records to the record that owns the total. This makes reverse totals unambiguous, resolves fields and filters in the related source record rather than the total-owning record, and refuses unrelated outgoing relationships and arbitrary filter objects.
 - Supported operations are count, sum, minimum, maximum, and average where the source type permits them. Count produces a whole number; sum, minimum, and maximum preserve the compatible source-field type; average produces a decimal number, or money when averaging money. Publication checks the declared result against the referenced field instead of treating every calculated or total value as a number.
-- A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable error that identifies the currency codes present. Vortex never silently converts or splits the total.
+- A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable internal diagnostic identifying the currency codes present; caller-visible errors must not reveal hidden inputs. Vortex never silently converts or splits the total.
+
+The [relationship-total delivery plan](../build-plan/issue-48-calculation-engine.md#next-delivery-relationship-totals)
+defines the executable meanings. Count counts filtered related records; field
+operations ignore absent/null inputs but do not silently ignore invalid values.
+Empty count and dimensionless sum are zero; empty minimum, maximum and average
+are absent. An empty money sum needs an explicit currency to produce zero.
+Minimum/maximum use exact numeric/instant comparison, Unicode code-point text
+ordering, and `false` before `true` for yes/no values. Money's declared currency
+rules apply equally to derived money fields. Internal currency diagnostics must
+not expose hidden related inputs through caller-visible errors. Persisted totals
+use the complete authoritative related set; readable output is separately limited
+by both input-field and related-record visibility.
+
+Related totals may form valid finite hierarchies even when their record types
+refer back to themselves. A type-level cycle is not automatically a forbidden
+record-level cycle. The protected save checks the actual record/field dependency
+graph, updates affected old/new parents and dependent totals atomically, and
+refuses a real cycle without partial changes. Follow the reviewed
+[integrated totals rules](../build-plan/issue-48-calculation-engine.md#integrated-totals-dependency-and-transaction-rules).
 
 ## Relationships
 

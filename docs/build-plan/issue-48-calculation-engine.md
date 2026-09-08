@@ -118,3 +118,77 @@ sum is absent unless the definition supplies its currency unambiguously. Query
 aggregates filtered for a viewer remain viewer-specific and are not persisted as
 universal totals. The existing mixed-currency and access/concurrency acceptance
 remains required before the whole task closes.
+
+## Next delivery: relationship totals
+
+Implement one pure Record evaluator over the existing exact total definition,
+source relationship and source record type, and selected related record values.
+These values are ordinary inputs, not proof of access or authoritative selection.
+The protected save owns that selection using the exact installed definition and
+current transaction. There is no new query service, callback registry or
+caller-supplied `verified` flag.
+
+- Count includes each related record that passes the declared typed filter.
+  Field operations exclude absent/null values, but refuse invalid present values.
+  Reuse the Rule evaluator; do not create a second filter language.
+- Empty count and dimensionless sum are zero. Empty minimum, maximum and average
+  are absent. Empty money sum is zero in an explicitly declared currency, or
+  absent without one. A required absent total fails final value validation.
+- Sum remains exact. Average divides the exact sum by the included value count
+  and rounds once, half-even, at its declared precision. Whole-number results
+  must remain safe exact integers.
+- Minimum/maximum compare numeric amounts exactly, text by Unicode code-point
+  order, dates chronologically and date-times by their exact instant. For the
+  already supported yes/no type, `false` sorts before `true`. This ordering is
+  deterministic and does not depend on browser language or display formatting.
+- Money values must have one currency; an explicit sum currency must match it.
+  Derived money fields support the same declared currency as ordinary money
+  fields. Reuse their declared result type rather than restricting this to a
+  physical money input field.
+- Internal mixed-currency diagnostics may identify sorted currency codes. The
+  protected operation must omit those codes from caller-visible errors when
+  they could reveal hidden inputs. Universal totals are not computed from a
+  caller-filtered subset. Disclosure requires readable aggregate/filter inputs
+  and related source records as well as the total field itself.
+
+First deliver the evaluator, the minimal derived-money publication correction and
+focused tests using the existing arithmetic and value-validation helpers. No
+database or contract-shape change is needed for this pure slice. Integration in
+#47 must prove actual related-record selection, updates to affected old/new
+parents, derived recalculation, current revisions and atomic Activity/Event
+effects. Supplied related-record fixtures are not evidence of that integration.
+
+### Integrated totals: dependency and transaction rules
+
+Independent Sol review approved the pure choices above and the following save
+integration model. Keep the existing same-record calculation-cycle publication
+check. Do not reject a total merely because its related record type points back
+to itself or another type: a valid finite hierarchy can have a cyclic type-level
+diagram. Reject actual cyclic record/field dependencies during the protected
+save, not every potentially recursive definition.
+
+The owning save discovers the union of the old and proposed dependency sets.
+It includes old/new parents when a relationship moves, create/delete/restore
+membership, aggregate and filter dependencies, dependent calculations and
+upstream totals. Use concrete organisation/storage/application-scoped record
+identity plus field identity, not record-type identity alone.
+
+Lock the discovered source and affected record rows in canonical identity order,
+then re-read revisions, relationships and the dependency set. Every writer that
+changes relationship membership or contributing values follows the same
+source/parent locking protocol. Use a fresh post-wait `READ COMMITTED` snapshot.
+If the dependency set changes, abort/retry the transaction rather than taking
+new locks out of order or calculating from the earlier read. This uses existing
+record revisions and transactions, not an aggregate counter or lock framework.
+
+Then apply the proposed row/relationship changes, read the final transaction-visible
+related sets, calculate in dependency order and validate the final values. Each
+changed parent receives its own revision and matching Activity/Event effects in
+the same command transaction. A failure rolls back the source and parents
+together. Concurrent child changes serialize through the common parent, and a
+response-lost retry reuses the existing command receipt.
+
+Actual save proofs must cover valid self-type hierarchies, an actual refused
+record-level cycle, a relationship move updating both parents, concurrent child
+changes and rollback without partial totals or events. These are #47 integration
+requirements; this pure evaluator does not implement them.
