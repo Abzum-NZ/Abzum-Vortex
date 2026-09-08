@@ -1,20 +1,31 @@
 import {
   savedConditionRevisionAssignmentSchema,
-  type PublishedModuleDefinition,
   type SavedConditionRevisionAssignment,
-  type SavedSharingCondition,
 } from "@vortex/contracts";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json";
 import { refuseVersionImpact } from "./version-impact-error";
 
-export type SavedConditionRevisionInput = Readonly<{
-  rootId: string;
-  conditions: readonly SavedSharingCondition[];
-  history: readonly PublishedModuleDefinition[];
+type SavedConditionLike = Readonly<{
+  conditionId: string;
+  publishedRevision: number;
+  contractFingerprint: string;
+  declaredFieldIds: readonly string[];
+}> &
+  Readonly<Record<string, unknown>>;
+
+type PublishedModuleLike = Readonly<{
+  publication: Readonly<{ rootId: string; revision: number }>;
+  content: Readonly<{ sharingConditions: readonly SavedConditionLike[] }>;
 }>;
 
-const revisionShape = (condition: SavedSharingCondition) => {
-  const contract: Partial<SavedSharingCondition> = { ...condition };
+export type SavedConditionRevisionInput = Readonly<{
+  rootId: string;
+  conditions: readonly SavedConditionLike[];
+  history: readonly PublishedModuleLike[];
+}>;
+
+const revisionShape = (condition: SavedConditionLike) => {
+  const contract: Record<string, unknown> = { ...condition };
   delete contract.publishedRevision;
   delete contract.contractFingerprint;
   return {
@@ -23,7 +34,7 @@ const revisionShape = (condition: SavedSharingCondition) => {
   };
 };
 
-const sameContract = (left: SavedSharingCondition, right: SavedSharingCondition): boolean =>
+const sameContract = (left: SavedConditionLike, right: SavedConditionLike): boolean =>
   canonicalJson(revisionShape(left)) === canonicalJson(revisionShape(right));
 
 const nextRevision = (previous: number): number => {
@@ -42,7 +53,7 @@ export const deriveSavedConditionRevisions = ({
   conditions,
   history,
 }: SavedConditionRevisionInput): SavedConditionRevisionAssignment[] => {
-  const latestById = new Map<string, SavedSharingCondition>();
+  const latestById = new Map<string, SavedConditionLike>();
   let previousReleaseIds = new Set<string>();
   let previousReleaseRevision = 0;
 

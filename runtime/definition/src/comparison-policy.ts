@@ -6,6 +6,8 @@ import type {
   VersionImpactReason,
 } from "@vortex/contracts";
 import {
+  compareExactDecimals,
+  parseExactDecimal,
   versionImpactComponentKinds,
   versionImpactProperties,
   versionImpactReasonCodes,
@@ -130,16 +132,31 @@ const compareBound = (
   direction: "minimum" | "maximum",
   componentKind: ComponentKind,
   componentId: unknown,
+  exact = false,
 ): void => {
   if (same(previous, candidate)) return;
   const previousNumber = typeof previous === "number" ? previous : undefined;
   const candidateNumber = typeof candidate === "number" ? candidate : undefined;
+  const previousExact = exact ? parseExactDecimal(previous) : undefined;
+  const candidateExact = exact ? parseExactDecimal(candidate) : undefined;
+  const exactComparison =
+    previousExact !== undefined && candidateExact !== undefined
+      ? compareExactDecimals(candidateExact, previousExact)
+      : undefined;
   const widened =
     direction === "minimum"
-      ? candidateNumber === undefined ||
-        (previousNumber !== undefined && candidateNumber < previousNumber)
-      : candidateNumber === undefined ||
-        (previousNumber !== undefined && candidateNumber > previousNumber);
+      ? candidate === undefined ||
+        (exactComparison !== undefined
+          ? exactComparison < 0
+          : previousNumber !== undefined &&
+            candidateNumber !== undefined &&
+            candidateNumber < previousNumber)
+      : candidate === undefined ||
+        (exactComparison !== undefined
+          ? exactComparison > 0
+          : previousNumber !== undefined &&
+            candidateNumber !== undefined &&
+            candidateNumber > previousNumber);
   reasons.push(
     makeReason(
       widened ? "minor" : "major",
@@ -240,8 +257,8 @@ const compareFieldSettings = (
       );
       break;
     case "decimal_number":
-      compareBound(reasons, before.minimum, after.minimum, "minimum", "field", fieldId);
-      compareBound(reasons, before.maximum, after.maximum, "maximum", "field", fieldId);
+      compareBound(reasons, before.minimum, after.minimum, "minimum", "field", fieldId, true);
+      compareBound(reasons, before.maximum, after.maximum, "maximum", "field", fieldId, true);
       for (const key of ["digitsBeforeDecimal", "decimalPlaces"])
         pushChange(
           reasons,
@@ -255,8 +272,8 @@ const compareFieldSettings = (
         );
       break;
     case "money":
-      compareBound(reasons, before.minimum, after.minimum, "minimum", "field", fieldId);
-      compareBound(reasons, before.maximum, after.maximum, "maximum", "field", fieldId);
+      compareBound(reasons, before.minimum, after.minimum, "minimum", "field", fieldId, true);
+      compareBound(reasons, before.maximum, after.maximum, "maximum", "field", fieldId, true);
       if (!same(currencyConfiguration(before), currencyConfiguration(after)))
         reasons.push(makeReason("major", "storage_contract_changed", "field", "storage", fieldId));
       break;
@@ -698,10 +715,11 @@ const compareActionInput = (
   if (previous.type === candidate.type && !same(previous.validation, candidate.validation)) {
     const before = asRecord(previous.validation ?? {});
     const after = asRecord(candidate.validation ?? {});
+    const exact = candidate.type === "decimal_number" || candidate.type === "money";
     for (const key of ["minimumLength", "minimum"])
-      compareBound(reasons, before[key], after[key], "minimum", "action_input", actionId);
+      compareBound(reasons, before[key], after[key], "minimum", "action_input", actionId, exact);
     for (const key of ["maximumLength", "maximum"])
-      compareBound(reasons, before[key], after[key], "maximum", "action_input", actionId);
+      compareBound(reasons, before[key], after[key], "maximum", "action_input", actionId, exact);
     if (candidate.type === "date" || candidate.type === "date_time") {
       compareDateBound(
         reasons,

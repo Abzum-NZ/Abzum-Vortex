@@ -2,9 +2,20 @@ import {
   applicationDraftSchema,
   applicationDraftV2Schema,
   applicationSourceDocumentV2Schema,
+  applicationCompilationRequestV2Schema,
   moduleDraftSchema,
+  moduleDraftV2Schema,
+  moduleSourceDocumentV2Schema,
+  moduleCompilationRequestV2Schema,
+  savedSharingConditionV2Schema,
   savedSharingConditionSchema,
   connectionTypeSchema,
+  exactDecimalTextV2Schema,
+  moneyValueV2Schema,
+  sourceExactDecimalTextV2Schema,
+  sourceMoneyValueV2Schema,
+  moduleFieldValueV2Schemas,
+  sourceModuleFieldValueV2Schemas,
   workflowDefinitionSchema,
   jsonValueSchema,
   walkDefinitionContract,
@@ -21,6 +32,9 @@ import {
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
+  type ModuleCompilationRequestV2,
+  type ModuleSourceDocumentV2,
+  type ModuleFieldV2,
   type ApplicationSourceDocumentV2,
   type ConditionNode,
   type DefinitionSourceDocument,
@@ -34,8 +48,10 @@ import {
 import type { z } from "zod";
 import {
   evaluateTypedCondition,
+  evaluateTypedConditionV2,
   TypedConditionEvaluationError,
   type TypedConditionParameterDeclaration,
+  type TypedConditionParameterDeclarationV2,
 } from "@vortex/rule";
 import { satisfies } from "semver";
 import { compileDefinitionWithContext } from "./compiler";
@@ -46,15 +62,24 @@ import { createContractValueWalker } from "./contract-value-walker";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
-type PublicationCompilationRequest = DefinitionCompilationRequest | ApplicationCompilationRequestV2;
+type PublicationCompilationRequest =
+  DefinitionCompilationRequest | ApplicationCompilationRequestV2 | ModuleCompilationRequestV2;
 type DefinitionPath = readonly (string | number)[];
-type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocumentV2;
+type EditSaveSource =
+  DefinitionSourceDocument | ApplicationSourceDocumentV2 | ModuleSourceDocumentV2;
 
 const isV2ApplicationSource = (source: unknown): boolean =>
   source !== null &&
   typeof source === "object" &&
   !Array.isArray(source) &&
   (source as JsonObject).kind === "application" &&
+  (source as JsonObject).source_contract_version === "2.0.0";
+
+const isV2ModuleSource = (source: unknown): boolean =>
+  source !== null &&
+  typeof source === "object" &&
+  !Array.isArray(source) &&
+  (source as JsonObject).kind === "module" &&
   (source as JsonObject).source_contract_version === "2.0.0";
 
 const parseEditSaveSource = (
@@ -68,7 +93,9 @@ const parseEditSaveSource = (
   | Readonly<{ success: false; error: z.ZodError }> => {
   const schema = isV2ApplicationSource(source)
     ? applicationSourceDocumentV2Schema
-    : definitionSourceDocumentSchema;
+    : isV2ModuleSource(source)
+      ? moduleSourceDocumentV2Schema
+      : definitionSourceDocumentSchema;
   const parsed = schema.safeParse(source);
   return parsed.success
     ? { success: true, data: parsed.data, schema }
@@ -106,7 +133,9 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
     allValidationOutputs(context).map((output) => ({
       schema:
         output.kind === "module"
-          ? moduleDraftSchema
+          ? "validationContractVersion" in output
+            ? moduleDraftV2Schema
+            : moduleDraftSchema
           : output.kind === "application"
             ? "validationContractVersion" in output
               ? applicationDraftV2Schema
@@ -837,9 +866,10 @@ function sourceTypeCompatibilityRule(
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const raw of context.rawSources ?? context.requests.map((request) => request.source)) {
-    const parsed = definitionSourceDocumentSchema.safeParse(raw);
+    const parsed = parseEditSaveSource(raw);
     if (!parsed.success || parsed.data.kind !== "module") continue;
     const source = parsed.data;
+    const moduleV2 = source.source_contract_version === "2.0.0";
     const body = object(source.body);
     const records = new Map(
       array(body.record_types).map((record) => [String(record.key), record] as const),
@@ -891,9 +921,15 @@ function sourceTypeCompatibilityRule(
             ? settings.field !== undefined
             : aggregateField === undefined) ||
           (["sum", "average"].includes(String(settings.operation)) &&
-            fieldValueType(aggregateField) !== "number") ||
+            (moduleV2
+              ? !["whole_number", "decimal_number", "money"].includes(
+                  fieldValueTypeV2(aggregateField) ?? "",
+                )
+              : fieldValueType(aggregateField) !== "number")) ||
           (settings.filter !== undefined &&
-            !sourceConditionTypesValid(settings.filter, aggregateFields)) ||
+            !(moduleV2
+              ? conditionTypesValidV2(settings.filter, aggregateFields, new Map(), "source")
+              : sourceConditionTypesValid(settings.filter, aggregateFields))) ||
           !resultTypeValid
         )
           valid = false;
@@ -905,11 +941,19 @@ function sourceTypeCompatibilityRule(
         array(action.inputs).map((input) => [String(input.key), input] as const),
       );
       const inputTypes = new Map(
-        [...inputs].map(([key, input]) => [key, semanticFieldType(input.type) ?? ""] as const),
+        [...inputs].map(
+          ([key, input]) =>
+            [
+              key,
+              (moduleV2 ? semanticFieldTypeV2(input.type) : semanticFieldType(input.type)) ?? "",
+            ] as const,
+        ),
       );
       if (
         action.precondition &&
-        !sourceConditionTypesValid(action.precondition, subjectFields, inputTypes)
+        !(moduleV2
+          ? conditionTypesValidV2(action.precondition, subjectFields, inputTypes, "source")
+          : sourceConditionTypesValid(action.precondition, subjectFields, inputTypes))
       )
         valid = false;
       const valueType = (candidate: unknown): string | undefined => {
@@ -940,6 +984,15 @@ function sourceTypeCompatibilityRule(
         return undefined;
       };
       const sourceValueCompatible = (candidate: unknown, targetField: JsonObject | undefined) => {
+        if (moduleV2)
+          return actionValueCompatibleV2(
+            candidate,
+            targetField,
+            subjectFields,
+            inputs,
+            subjectRecordType,
+            "source",
+          );
         const compatible = valueTypeCompatible(valueType(candidate), fieldValueType(targetField));
         const expectedRecordTypes = fieldRecordTypeIds(targetField);
         if (!compatible || expectedRecordTypes === undefined) return compatible;
@@ -982,14 +1035,21 @@ function sourceTypeCompatibilityRule(
     }
     for (const rule of array(body.rules)) {
       const fields = fieldsFor(records.get(String(rule.record_type)));
-      if (!sourceConditionTypesValid(rule.condition, fields)) valid = false;
+      if (
+        !(moduleV2
+          ? conditionTypesValidV2(rule.condition, fields, new Map(), "source")
+          : sourceConditionTypesValid(rule.condition, fields))
+      )
+        valid = false;
       const effect = object(rule.effect);
       if (
         effect.kind === "set_value" &&
-        !valueTypeCompatible(
-          literalValueType(effect.value),
-          fieldValueType(fields.get(String(effect.field))),
-        )
+        !(moduleV2
+          ? fieldValueMatchesV2(effect.value, fields.get(String(effect.field)), "source")
+          : valueTypeCompatible(
+              literalValueType(effect.value),
+              fieldValueType(fields.get(String(effect.field))),
+            ))
       )
         valid = false;
     }
@@ -1000,7 +1060,12 @@ function sourceTypeCompatibilityRule(
           (parameter) => [String(parameter.key), String(parameter.type)] as const,
         ),
       );
-      if (!sourceConditionTypesValid(sharingCondition.condition, fields, parameters)) valid = false;
+      if (
+        !(moduleV2
+          ? conditionTypesValidV2(sharingCondition.condition, fields, parameters, "source")
+          : sourceConditionTypesValid(sharingCondition.condition, fields, parameters))
+      )
+        valid = false;
     }
     const sharingConditions = new Map(
       array(body.sharing_conditions).map((condition) => [String(condition.key), condition]),
@@ -1029,7 +1094,9 @@ function sourceTypeCompatibilityRule(
             expected === undefined ||
             (binding.source === "current_organization_account_id"
               ? !["text", "organization_account_reference"].includes(expected)
-              : !valueMatchesType(binding.value, expected))
+              : !(moduleV2
+                  ? valueMatchesTypeV2(binding.value, expected, "source")
+                  : valueMatchesType(binding.value, expected)))
           );
         })
       )
@@ -1232,6 +1299,257 @@ function fieldValueType(field: JsonObject | undefined): string | undefined {
   return "text";
 }
 
+type ModuleV2ValueDialect = "source" | "canonical";
+type ModuleV2ValueDeclaration = Readonly<{
+  field?: JsonObject;
+  type?: string;
+}>;
+
+function semanticFieldTypeV2(type: unknown): string | undefined {
+  const value = String(type);
+  if (
+    [
+      "whole_number",
+      "decimal_number",
+      "money",
+      "number",
+      "boolean",
+      "date",
+      "date_time",
+      "record_reference",
+      "organization_account_reference",
+    ].includes(value)
+  )
+    return value;
+  if (value === "yes_no") return "boolean";
+  if (["link", "link_to_one_of_several"].includes(value)) return "record_reference";
+  if (["link_to_person", "organisation_account_reference"].includes(value))
+    return "organization_account_reference";
+  if (value === "several_choices") return "text_collection";
+  if (["table", "attachment", "formatted_text"].includes(value)) return "opaque_json";
+  if (
+    [
+      "text",
+      "long_text",
+      "choice",
+      "reference_number",
+      "email_address",
+      "phone_number",
+      "web_address",
+    ].includes(value)
+  )
+    return "text";
+  return undefined;
+}
+
+function fieldValueTypeV2(field: JsonObject | undefined): string | undefined {
+  return field ? semanticFieldTypeV2(fieldDeclaredResultType(field)) : undefined;
+}
+
+function valueMatchesTypeV2(
+  value: unknown,
+  type: string,
+  dialect: ModuleV2ValueDialect = "canonical",
+): boolean {
+  if (type === "text") return typeof value === "string";
+  if (type === "number") return typeof value === "number" && Number.isFinite(value);
+  if (type === "whole_number") return typeof value === "number" && Number.isInteger(value);
+  if (type === "decimal_number")
+    return (
+      dialect === "source" ? sourceExactDecimalTextV2Schema : exactDecimalTextV2Schema
+    ).safeParse(value).success;
+  if (type === "money")
+    return (dialect === "source" ? sourceMoneyValueV2Schema : moneyValueV2Schema).safeParse(value)
+      .success;
+  if (type === "boolean") return typeof value === "boolean";
+  if (type === "organization_account_reference") return platformIdSchema.safeParse(value).success;
+  if (type === "date") return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (type === "date_time") return typeof value === "string" && !Number.isNaN(Date.parse(value));
+  if (type === "record_reference")
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      (dialect === "source"
+        ? typeof object(value).record_type === "string" &&
+          platformIdSchema.safeParse(object(value).record_id).success
+        : platformIdSchema.safeParse(object(value).recordTypeId).success &&
+          platformIdSchema.safeParse(object(value).recordId).success)
+    );
+  if (type === "text_collection")
+    return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  return type === "opaque_json" && jsonValueSchema.safeParse(value).success;
+}
+
+function fieldValueMatchesV2(
+  value: unknown,
+  field: JsonObject | undefined,
+  dialect: ModuleV2ValueDialect,
+): boolean {
+  if (!field) return false;
+  if (field.type === "calculation" || field.type === "total") {
+    const resultType = fieldValueTypeV2(field);
+    return resultType !== undefined && valueMatchesTypeV2(value, resultType, dialect);
+  }
+  const schemas =
+    dialect === "source" ? sourceModuleFieldValueV2Schemas : moduleFieldValueV2Schemas;
+  const schema = schemas[String(field.type) as keyof typeof schemas];
+  if (schema === undefined || !schema.safeParse(value).success) return false;
+  const expectedRecordTypeIds = fieldRecordTypeIds(field);
+  if (expectedRecordTypeIds === undefined) return true;
+  const actualRecordTypeId = object(value)[dialect === "source" ? "record_type" : "recordTypeId"];
+  return (
+    typeof actualRecordTypeId === "string" && expectedRecordTypeIds.includes(actualRecordTypeId)
+  );
+}
+
+const typesCompatibleV2 = (actual: string | undefined, expected: string | undefined): boolean =>
+  actual !== undefined &&
+  expected !== undefined &&
+  (actual === expected || (expected === "text" && (actual === "date" || actual === "date_time")));
+
+const conditionTypesCompatibleV2 = (left: string | undefined, right: string | undefined): boolean =>
+  left !== undefined &&
+  right !== undefined &&
+  (left === right ||
+    (["number", "whole_number", "decimal_number"].includes(left) &&
+      ["number", "whole_number", "decimal_number"].includes(right)));
+
+const conditionCollectionElementTypeV2 = (type: string | undefined): type is string =>
+  type !== undefined && type !== "text_collection" && type !== "opaque_json";
+
+function naturalLiteralTypeV2(value: unknown): string | undefined {
+  if (value === null) return undefined;
+  if (typeof value === "number") return "number";
+  if (typeof value === "boolean") return "boolean";
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return "date";
+    if (!Number.isNaN(Date.parse(value))) return "date_time";
+    return "text";
+  }
+  if (Array.isArray(value) && value.every((entry) => typeof entry === "string"))
+    return "text_collection";
+  return "opaque_json";
+}
+
+function conditionTypesValidV2(
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  parameters: ReadonlyMap<string, string> = new Map(),
+  dialect: ModuleV2ValueDialect = "canonical",
+): boolean {
+  if (value === null || value === undefined) return true;
+  const condition = object(value);
+  const all =
+    dialect === "source"
+      ? condition.all
+      : condition.kind === "all"
+        ? condition.conditions
+        : undefined;
+  const any =
+    dialect === "source"
+      ? condition.any
+      : condition.kind === "any"
+        ? condition.conditions
+        : undefined;
+  const not =
+    dialect === "source"
+      ? condition.not
+      : condition.kind === "not"
+        ? condition.condition
+        : undefined;
+  if (all)
+    return array(all).every((entry) => conditionTypesValidV2(entry, fields, parameters, dialect));
+  if (any)
+    return array(any).every((entry) => conditionTypesValidV2(entry, fields, parameters, dialect));
+  if (not) return conditionTypesValidV2(not, fields, parameters, dialect);
+  if (dialect === "canonical" && condition.kind !== "comparison") return false;
+
+  const authoredLeft =
+    dialect === "source" && condition.left === undefined
+      ? { source: "field", field: condition.field }
+      : condition.left;
+  const authoredRight =
+    dialect === "source" && condition.right === undefined
+      ? condition.parameter !== undefined
+        ? { source: "parameter", parameter: condition.parameter }
+        : { source: "value", value: condition.value }
+      : condition.right;
+  const declaration = (operandValue: unknown): ModuleV2ValueDeclaration | undefined => {
+    const operand = object(operandValue);
+    if (operand.source === "field") {
+      const field = fields.get(String(operand[dialect === "source" ? "field" : "fieldId"]));
+      if (!field) return undefined;
+      const type = fieldValueTypeV2(field);
+      return { field, ...(type === undefined ? {} : { type }) };
+    }
+    if (operand.source === "parameter") {
+      const type = parameters.get(String(operand[dialect === "source" ? "parameter" : "key"]));
+      if (!type) return undefined;
+      const semanticType = semanticFieldTypeV2(type);
+      return semanticType === undefined ? undefined : { type: semanticType };
+    }
+    return operand.source === "value" ? {} : undefined;
+  };
+  const literal = (operandValue: unknown): unknown => {
+    const operand = object(operandValue);
+    return operand.source === "value" ? operand.value : undefined;
+  };
+  const matches = (literalValue: unknown, expected: ModuleV2ValueDeclaration | undefined) =>
+    literalValue === null ||
+    (expected?.field
+      ? fieldValueMatchesV2(literalValue, expected.field, dialect)
+      : expected?.type !== undefined && valueMatchesTypeV2(literalValue, expected.type, dialect));
+  const leftDeclaration = declaration(authoredLeft);
+  if (!leftDeclaration) return false;
+  const operator = String(condition.operator);
+  if (operator === "is_empty" || operator === "is_not_empty") return authoredRight === undefined;
+  const rightDeclaration = declaration(authoredRight);
+  if (!rightDeclaration) return false;
+  const leftLiteral = literal(authoredLeft);
+  const rightLiteral = literal(authoredRight);
+  const leftIsLiteral = object(authoredLeft).source === "value";
+  const rightIsLiteral = object(authoredRight).source === "value";
+
+  if (["in", "not_in"].includes(operator)) {
+    const elementType = leftDeclaration.type ?? naturalLiteralTypeV2(leftLiteral);
+    if (!conditionCollectionElementTypeV2(elementType)) return false;
+    if (!rightIsLiteral)
+      return rightDeclaration.type === "text_collection" && elementType === "text";
+    if (!Array.isArray(rightLiteral)) return false;
+    return rightLiteral.every((entry) =>
+      leftDeclaration.type
+        ? matches(entry, leftDeclaration)
+        : valueMatchesTypeV2(entry, elementType, dialect),
+    );
+  }
+  if (["contains", "not_contains"].includes(operator)) {
+    if (Array.isArray(leftLiteral))
+      return leftLiteral.every((entry) => matches(entry, rightDeclaration));
+    if (rightLiteral !== undefined) {
+      if (leftDeclaration.type === "text_collection") return typeof rightLiteral === "string";
+      if (leftDeclaration.type === "text") return typeof rightLiteral === "string";
+    }
+  }
+  if (leftIsLiteral && !matches(leftLiteral, rightDeclaration)) return false;
+  if (rightIsLiteral && !matches(rightLiteral, leftDeclaration)) return false;
+  const leftType = leftDeclaration.type ?? rightDeclaration.type;
+  const rightType = rightDeclaration.type ?? leftDeclaration.type;
+  if (!leftType || !rightType) return false;
+  if (["contains", "not_contains"].includes(operator))
+    return (leftType === "text" && rightType === "text") || leftType === "text_collection";
+  if (
+    ["greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal"].includes(operator)
+  )
+    return (
+      conditionTypesCompatibleV2(leftType, rightType) &&
+      ["number", "whole_number", "decimal_number", "money", "date", "date_time", "text"].includes(
+        leftType,
+      )
+    );
+  return conditionTypesCompatibleV2(leftType, rightType);
+}
+
 function fieldRecordTypeIds(field: JsonObject | undefined): string[] | undefined {
   if (!field) return undefined;
   const settings = object(field.settings);
@@ -1324,7 +1642,7 @@ function actionValueRecordTypeIds(
 ): string[] | undefined {
   const entry = object(value);
   if (entry.source === "input") {
-    const input = inputs.get(String(entry.inputKey));
+    const input = inputs.get(String(entry.inputKey ?? entry.input));
     if (input?.type !== "record_reference") return undefined;
     const references = array(input.recordTypes ?? input.record_types);
     return references.map((reference) =>
@@ -1335,6 +1653,56 @@ function actionValueRecordTypeIds(
     return fieldRecordTypeIds(fields.get(String(entry.fieldId ?? entry.field)));
   if (entry.source === "subject_record") return [subjectRecordTypeId];
   return undefined;
+}
+
+function actionValueTypeV2(
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  inputs: ReadonlyMap<string, JsonObject>,
+  dialect: ModuleV2ValueDialect,
+): string | undefined {
+  const entry = object(value);
+  if (entry.source === "input") {
+    const inputType = inputs.get(String(entry[dialect === "source" ? "input" : "inputKey"]))?.type;
+    return inputType === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(inputType);
+  }
+  if (entry.source === "subject_field") {
+    const field = fields.get(String(entry[dialect === "source" ? "field" : "fieldId"]));
+    return ["formatted_text", "table", "attachment"].includes(String(field?.type))
+      ? String(field!.type)
+      : fieldValueTypeV2(field);
+  }
+  if (entry.source === "subject_record") return "record_reference";
+  if (entry.source === "current_actor") return "organization_account_reference";
+  if (entry.source === "current_time") return "date_time";
+  return undefined;
+}
+
+function actionValueCompatibleV2(
+  value: unknown,
+  targetField: JsonObject | undefined,
+  fields: ReadonlyMap<string, JsonObject>,
+  inputs: ReadonlyMap<string, JsonObject>,
+  subjectRecordTypeId: string,
+  dialect: ModuleV2ValueDialect = "canonical",
+): boolean {
+  const entry = object(value);
+  const expectedType = ["formatted_text", "table", "attachment"].includes(String(targetField?.type))
+    ? String(targetField!.type)
+    : fieldValueTypeV2(targetField);
+  const compatible =
+    entry.source === "literal"
+      ? fieldValueMatchesV2(entry.value, targetField, dialect)
+      : typesCompatibleV2(actionValueTypeV2(value, fields, inputs, dialect), expectedType);
+  const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
+  if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+  if (entry.source === "literal") return compatible;
+  const actualRecordTypeIds = actionValueRecordTypeIds(value, fields, inputs, subjectRecordTypeId);
+  return (
+    actualRecordTypeIds !== undefined &&
+    actualRecordTypeIds.length > 0 &&
+    actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
+  );
 }
 
 function actionValueCompatible(
@@ -1373,6 +1741,7 @@ function permissionRecordScopesValid(
   sharingConditions: ReadonlyMap<string, JsonObject> = new Map(),
   savedConditionsAllowed = false,
   availablePermissions: readonly JsonObject[] = permissions,
+  v2SavedConditionIds: ReadonlySet<string> = new Set(),
 ): boolean {
   const permissionsById = new Map(
     availablePermissions.map((permission) => [String(permission.permissionId), permission]),
@@ -1439,6 +1808,7 @@ function permissionRecordScopesValid(
         : [],
     );
     const bindings = array(restriction.parameterBindings);
+    const savedConditionV2 = v2SavedConditionIds.has(String(restriction.conditionId));
     if (
       !savedConditionsAllowed ||
       !saved ||
@@ -1453,7 +1823,13 @@ function permissionRecordScopesValid(
           expected === undefined ||
           (binding.source === "current_organization_account_id"
             ? !["text", "organization_account_reference"].includes(expected)
-            : !valueMatchesType(binding.value, expected))
+            : !(savedConditionV2
+                ? expected === "decimal_number"
+                  ? exactDecimalTextV2Schema.safeParse(binding.value).success
+                  : expected === "money"
+                    ? moneyValueV2Schema.safeParse(binding.value).success
+                    : valueMatchesType(binding.value, expected)
+                : valueMatchesType(binding.value, expected)))
         );
       })
     )
@@ -1583,6 +1959,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
   };
 
   for (const output of moduleOutputs) {
+    const moduleV2 = "validationContractVersion" in output;
     const canonical = object(output.canonical);
     const envelope = object(canonical.envelope);
     const content = object(canonical.content);
@@ -1625,6 +2002,8 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         relationships,
         sharingConditions,
         true,
+        modulePermissions,
+        moduleV2 ? new Set(sharingConditions.keys()) : new Set(),
       )
     )
       failures.push(
@@ -1689,6 +2068,14 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       }
       for (const field of array(record.fields)) {
         const settings = object(field.settings);
+        const moduleFieldValueType = (candidate: JsonObject | undefined) =>
+          moduleV2 ? fieldValueTypeV2(candidate) : fieldValueType(candidate);
+        const moduleNumericField = (candidate: JsonObject | undefined) =>
+          moduleV2
+            ? ["whole_number", "decimal_number", "money"].includes(
+                fieldValueTypeV2(candidate) ?? "",
+              )
+            : fieldValueType(candidate) === "number";
         let valid = true;
         const choiceSettings = [
           ...(["choice", "several_choices"].includes(String(field.type)) ? [settings] : []),
@@ -1725,42 +2112,54 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
             valid =
               valid &&
               (expression.fieldIds as string[]).every((id) =>
-                ["text", "choice"].includes(fieldValueType(fieldMap.get(id)) ?? ""),
+                ["text", "choice"].includes(moduleFieldValueType(fieldMap.get(id)) ?? ""),
               );
           if (expression.kind === "numeric")
             valid =
               valid &&
               array(expression.operands).every(
                 (operand) =>
-                  operand.source === "literal" ||
-                  fieldValueType(fieldMap.get(String(operand.fieldId))) === "number",
+                  (operand.source === "literal" &&
+                    (!moduleV2 || exactDecimalTextV2Schema.safeParse(operand.value).success)) ||
+                  (operand.source === "field" &&
+                    moduleNumericField(fieldMap.get(String(operand.fieldId)))),
               );
           if (expression.kind === "subtract_percentage")
             valid =
               valid &&
-              fieldValueType(fieldMap.get(String(expression.amountFieldId))) === "number" &&
-              fieldValueType(fieldMap.get(String(expression.percentageFieldId))) === "number";
+              moduleNumericField(fieldMap.get(String(expression.amountFieldId))) &&
+              (moduleV2
+                ? ["whole_number", "decimal_number"].includes(
+                    fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
+                  )
+                : fieldValueType(fieldMap.get(String(expression.percentageFieldId))) === "number");
           if (expression.kind === "condition")
-            valid = valid && conditionTypesValid(expression.condition, fieldMap);
+            valid =
+              valid &&
+              (moduleV2
+                ? conditionTypesValidV2(expression.condition, fieldMap)
+                : conditionTypesValid(expression.condition, fieldMap));
           if (expression.kind === "date_offset") {
             const amount = object(expression.amount);
             valid =
               valid &&
               ["date", "date_time"].includes(
-                fieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
+                moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
               ) &&
-              (amount.source === "literal" ||
-                fieldValueType(fieldMap.get(String(amount.fieldId))) === "number");
+              ((amount.source === "literal" &&
+                (!moduleV2 || exactDecimalTextV2Schema.safeParse(amount.value).success)) ||
+                (amount.source === "field" &&
+                  moduleNumericField(fieldMap.get(String(amount.fieldId)))));
           }
           if (expression.kind === "deadline_passed")
             valid =
               valid &&
               ["date", "date_time"].includes(
-                fieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
+                moduleFieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
               ) &&
               (expression.statusFieldId === undefined ||
                 ["text", "choice"].includes(
-                  fieldValueType(fieldMap.get(String(expression.statusFieldId))) ?? "",
+                  moduleFieldValueType(fieldMap.get(String(expression.statusFieldId))) ?? "",
                 ));
         }
         if (field.type === "total") {
@@ -1800,7 +2199,9 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
           const filterValid =
             settings.filter === undefined ||
             (fieldReferencesValid(settings.filter, aggregateFields) &&
-              conditionTypesValid(settings.filter, aggregateFieldMap));
+              (moduleV2
+                ? conditionTypesValidV2(settings.filter, aggregateFieldMap)
+                : conditionTypesValid(settings.filter, aggregateFieldMap)));
           const currencyValid =
             settings.currency === undefined ||
             (settings.operation === "sum" && aggregateField?.type === "money");
@@ -1813,7 +2214,11 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
               ? settings.fieldId === undefined
               : aggregateField !== undefined) &&
             (!["sum", "average"].includes(String(settings.operation)) ||
-              fieldValueType(aggregateField) === "number");
+              (moduleV2
+                ? ["whole_number", "decimal_number", "money"].includes(
+                    fieldValueTypeV2(aggregateField) ?? "",
+                  )
+                : fieldValueType(aggregateField) === "number"));
           const declaredResultType = String(settings.resultType);
           const aggregateResultType = fieldDeclaredResultType(aggregateField);
           const resultTypeValid =
@@ -1881,7 +2286,10 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       const inputMap = new Map(array(action.inputs).map((input) => [String(input.key), input]));
       const inputKeys = new Set(inputMap.keys());
       const inputTypes = new Map(
-        [...inputMap].map(([key, input]) => [key, semanticFieldType(input.type) ?? ""]),
+        [...inputMap].map(([key, input]) => [
+          key,
+          (moduleV2 ? semanticFieldTypeV2(input.type) : semanticFieldType(input.type)) ?? "",
+        ]),
       );
       let valid =
         subject !== undefined &&
@@ -1889,7 +2297,9 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         actionPermissionsMatch(action, modulePermissionsByKey) &&
         fieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          conditionTypesValid(action.precondition, fieldMap, inputTypes));
+          (moduleV2
+            ? conditionTypesValidV2(action.precondition, fieldMap, inputTypes)
+            : conditionTypesValid(action.precondition, fieldMap, inputTypes)));
       for (const input of array(action.inputs))
         if (
           input.type === "record_reference" &&
@@ -1902,7 +2312,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         if (
           effect.kind === "set_field" &&
           (!fields.has(String(effect.fieldId)) ||
-            !actionValueCompatible(
+            !(moduleV2 ? actionValueCompatibleV2 : actionValueCompatible)(
               effect.value,
               fieldMap.get(String(effect.fieldId)),
               fieldMap,
@@ -1932,7 +2342,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
             Object.entries(object(effect.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
-                !actionValueCompatible(
+                !(moduleV2 ? actionValueCompatibleV2 : actionValueCompatible)(
                   value,
                   targetFields.get(id),
                   fieldMap,
@@ -1965,13 +2375,17 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         !subject ||
         !fieldReferencesValid(rule.condition, fields) ||
         !fieldReferencesValid(rule.effect, fields) ||
-        !conditionTypesValid(rule.condition, fieldMap) ||
+        !(moduleV2
+          ? conditionTypesValidV2(rule.condition, fieldMap)
+          : conditionTypesValid(rule.condition, fieldMap)) ||
         ["show_or_hide", "start_background_work"].includes(String(effect.kind)) ||
         (effect.kind === "set_value" &&
-          !valueTypeCompatible(
-            literalValueType(effect.value),
-            fieldValueType(fieldMap.get(String(effect.fieldId))),
-          ))
+          !(moduleV2
+            ? fieldValueMatchesV2(effect.value, fieldMap.get(String(effect.fieldId)), "canonical")
+            : valueTypeCompatible(
+                literalValueType(effect.value),
+                fieldValueType(fieldMap.get(String(effect.fieldId))),
+              )))
       )
         failures.push(
           failure(output, "vortex.definition.module_rule_references", "broken_reference"),
@@ -2013,16 +2427,25 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         record !== undefined &&
         (condition.declaredFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
         fieldReferencesValid(condition.condition, fields) &&
-        conditionTypesValid(condition.condition, fieldMap, parameterTypes);
+        (moduleV2
+          ? conditionTypesValidV2(condition.condition, fieldMap, parameterTypes)
+          : conditionTypesValid(condition.condition, fieldMap, parameterTypes));
       try {
         for (const publicationTest of array(condition.publicationTests))
           if (
-            evaluateSavedSharingCondition(
-              condition,
-              object(publicationTest.fieldValues),
-              object(publicationTest.parameters),
-              [...fieldMap.values()] as FieldDefinition[],
-            ) !== publicationTest.expected
+            (moduleV2
+              ? evaluateSavedSharingConditionV2(
+                  condition,
+                  object(publicationTest.fieldValues),
+                  object(publicationTest.parameters),
+                  [...fieldMap.values()] as ModuleFieldV2[],
+                )
+              : evaluateSavedSharingCondition(
+                  condition,
+                  object(publicationTest.fieldValues),
+                  object(publicationTest.parameters),
+                  [...fieldMap.values()] as FieldDefinition[],
+                )) !== publicationTest.expected
           )
             valid = false;
       } catch {
@@ -2464,6 +2887,15 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const savedConditions = new Map(
       savedConditionEntries.map((condition) => [String(condition.conditionId), condition] as const),
     );
+    const v2SavedConditionIds = new Set(
+      boundModules
+        .filter((module) => "validationContractVersion" in module)
+        .flatMap((module) =>
+          array(object(object(module.canonical).content).sharingConditions).map((condition) =>
+            String(condition.conditionId),
+          ),
+        ),
+    );
     if (savedConditions.size !== savedConditionEntries.length)
       failures.push(
         failure(output, "vortex.definition.application_action_references", "scope_conflict"),
@@ -2476,6 +2908,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         savedConditions,
         true,
         permissionEntries,
+        v2SavedConditionIds,
       )
     )
       failures.push(
@@ -4355,6 +4788,9 @@ function publicationCompatibilityRule(
         output.kind === "module" && history.kind === "module"
           ? compareDefinitionVersionImpact({
               kind: "module",
+              ...("validationContractVersion" in output
+                ? { validationContractVersion: "2.0.0" as const }
+                : {}),
               history: history.history,
               candidate: output.canonical,
             })
@@ -4677,7 +5113,45 @@ export function evaluateSavedSharingCondition(
   return result;
 }
 
-function dependencyKeys(request: DefinitionCompilationRequest): string[] {
+export function evaluateSavedSharingConditionV2(
+  input: unknown,
+  fieldValues: Readonly<Record<string, unknown>>,
+  parameters: Readonly<Record<string, unknown>>,
+  sourceRecordFields: readonly ModuleFieldV2[],
+): boolean {
+  const candidate = object(input);
+  let result: boolean;
+  try {
+    result = evaluateTypedConditionV2({
+      condition: candidate.condition as ConditionNode,
+      sourceRecordFields,
+      declaredFieldIds: candidate.declaredFieldIds as string[],
+      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclarationV2[],
+      fieldValues,
+      parameterValues: parameters,
+    });
+  } catch (error) {
+    if (!(error instanceof TypedConditionEvaluationError)) throw error;
+    const mapping = {
+      input_refused: "vortex.definition.sharing_condition_input_refused",
+      field_refused: "vortex.definition.sharing_condition_field_refused",
+      parameter_refused: "vortex.definition.sharing_condition_parameter_refused",
+      operator_refused: "vortex.definition.sharing_condition_operator_refused",
+    } as const;
+    throw new DefinitionCompilationError(
+      mapping[error.reason],
+      error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
+    );
+  }
+  if (!savedSharingConditionV2Schema.safeParse(input).success)
+    throw new DefinitionCompilationError(
+      "vortex.definition.sharing_condition_input_refused",
+      "scope_conflict",
+    );
+  return result;
+}
+
+function dependencyKeys(request: PublicationCompilationRequest): string[] {
   const source = request.source as unknown as JsonObject;
   const body = object(source.body);
   if (source.kind === "module")
@@ -4691,7 +5165,7 @@ function dependencyKeys(request: DefinitionCompilationRequest): string[] {
 }
 
 export function compileDefinitionSet(
-  inputs: readonly DefinitionCompilationRequest[],
+  inputs: readonly PublicationCompilationRequest[],
   options?: DefinitionPublicationContext,
 ): Output[] {
   if (!Array.isArray(inputs))
@@ -4711,7 +5185,13 @@ export function compileDefinitionSet(
       "invalid_value",
     );
   const publicationContext = parsedContext.data;
-  const parsedInputs = inputs.map((input) => definitionCompilationRequestSchema.safeParse(input));
+  const parsedInputs = inputs.map((input) => {
+    const source = object(input).source;
+    if (isV2ModuleSource(source)) return moduleCompilationRequestV2Schema.safeParse(input);
+    if (isV2ApplicationSource(source))
+      return applicationCompilationRequestV2Schema.safeParse(input);
+    return definitionCompilationRequestSchema.safeParse(input);
+  });
   if (parsedInputs.some((result) => !result.success))
     throw new DefinitionCompilationError(
       "vortex.definition.invalid_compilation_request",
@@ -4721,7 +5201,7 @@ export function compileDefinitionSet(
   const byKey = new Map(requests.map((input) => [input.source.key, input]));
   if (byKey.size !== requests.length)
     throw new DefinitionCompilationError("vortex.definition.duplicate_source_key", "duplicate_key");
-  const ordered: DefinitionCompilationRequest[] = [];
+  const ordered: PublicationCompilationRequest[] = [];
   const visiting = new Set<string>();
   const visited = new Set<string>();
   const visit = (key: string) => {
@@ -4745,9 +5225,13 @@ export function compileDefinitionSet(
   if (dependencyOutputs.some((output) => inputKeys.has(output.artifact.definitionKey)))
     throw new DefinitionCompilationError("vortex.definition.duplicate_source_key", "duplicate_key");
   const outputs: Output[] = [];
+  const compilePublicationRequest = compileDefinitionWithContext as (
+    request: PublicationCompilationRequest,
+    context: { dependencyOutputs: readonly Output[] },
+  ) => Output;
   for (const request of ordered)
     outputs.push(
-      compileDefinitionWithContext(request, {
+      compilePublicationRequest(request, {
         dependencyOutputs: [...dependencyOutputs, ...outputs],
       }),
     );

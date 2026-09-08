@@ -3,7 +3,6 @@ import { correlationIdSchema } from "./common";
 import {
   applicationSourceDocumentV1Schema,
   applicationSourceDocumentV2Schema,
-  moduleSourceDocumentV1Schema,
   moduleSourceDocumentV2Schema,
   moduleSourceDocumentVersionedSchema,
 } from "./definition-source";
@@ -33,7 +32,7 @@ export const storedApplicationSourceDocumentSchema = z.discriminatedUnion(
 );
 export const storedModuleSourceDocumentSchema = moduleSourceDocumentVersionedSchema;
 export const storedDefinitionSourceSchema = z.union([
-  moduleSourceDocumentV1Schema,
+  storedModuleSourceDocumentSchema,
   storedApplicationSourceDocumentSchema,
 ]);
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -126,12 +125,12 @@ const validateStoredDraftEvidence = (draft: StoredDraftEvidence, context: z.Refi
 };
 
 export const storedDefinitionDraftSchema = z
-  .discriminatedUnion("kind", [
+  .union([
     z
       .object({
         kind: z.literal("module"),
         rootId: moduleRootIdSchema,
-        source: moduleSourceDocumentV1Schema,
+        source: storedModuleSourceDocumentSchema,
         ...storedDraftMetadata,
       })
       .strict(),

@@ -128,6 +128,7 @@ export const moduleDefinitionConsumerReadResultV2Schema = z
 
 export const definitionConsumerReadResultSchema = z.union([
   moduleDefinitionConsumerReadResultV1Schema,
+  moduleDefinitionConsumerReadResultV2Schema,
   applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
 ]);

@@ -9,6 +9,7 @@ import {
   fingerprintSchema,
   restoreDefinitionDraftCommandSchema,
   selectApplicationContractPair,
+  selectModuleContractPair,
   selectStoredApplicationSourceContract,
   sessionContextSchema,
   sourceIdentityAssignmentV2Schema,
@@ -138,9 +139,9 @@ const withoutOptionalNulls = (candidate: unknown): unknown => {
 const asString = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 
-const selectApplicationRestoreContract = (candidate: unknown): void => {
+const selectRestoreContract = (candidate: unknown): void => {
   const record = asCandidate(candidate);
-  if (record?.kind !== "application") return;
+  if (record?.kind !== "application" && record?.kind !== "module") return;
   const source = asCandidate(record.authoredSource);
   const sourceContractVersion = asString(record.sourceContractVersion);
   const validationContractVersion = asString(record.validationContractVersion);
@@ -152,23 +153,33 @@ const selectApplicationRestoreContract = (candidate: unknown): void => {
   )
     throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   try {
-    selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
-    selectApplicationContractPair(sourceContractVersion, validationContractVersion);
+    if (sourceContractVersion !== intrinsicSourceContractVersion)
+      throw new TypeError("Stored source version mismatch");
+    if (record.kind === "application") {
+      selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
+      selectApplicationContractPair(sourceContractVersion, validationContractVersion);
+    } else selectModuleContractPair(sourceContractVersion, validationContractVersion);
   } catch {
     throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   }
 };
 
-const selectStoredApplicationDraftContract = (candidate: unknown): void => {
+const selectStoredDraftContract = (candidate: unknown): void => {
   const record = asCandidate(candidate);
-  if (record?.kind !== "application") return;
+  if (record?.kind !== "application" && record?.kind !== "module") return;
   const source = asCandidate(record.source);
   const sourceContractVersion = asString(record.sourceContractVersion);
   const intrinsicSourceContractVersion = asString(source?.source_contract_version);
   if (sourceContractVersion === undefined || intrinsicSourceContractVersion === undefined)
     throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   try {
-    selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
+    if (record.kind === "application")
+      selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
+    else {
+      if (sourceContractVersion !== intrinsicSourceContractVersion)
+        throw new TypeError("Stored source version mismatch");
+      selectModuleContractPair(sourceContractVersion, sourceContractVersion);
+    }
   } catch {
     throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   }
@@ -301,8 +312,8 @@ const identitiesMatchSource = (release: RestoreEvidence): boolean => {
 };
 
 const parseRestoreEvidence = (candidate: unknown): RestoreEvidence => {
-  // Select the Application source/canonical pair before either V1 payload is decoded.
-  selectApplicationRestoreContract(candidate);
+  // Select the exact source/canonical pair before either versioned payload is decoded.
+  selectRestoreContract(candidate);
   const parsed = restoreEvidenceSchema.safeParse(candidate);
   if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   return parsed.data;
@@ -372,7 +383,7 @@ const parseRestoredDraft = (
   verified: VerifiedRestoreInput,
 ): StoredDefinitionDraft => {
   const withoutNulls = withoutOptionalNulls(candidate);
-  selectStoredApplicationDraftContract(withoutNulls);
+  selectStoredDraftContract(withoutNulls);
   const parsed = storedDefinitionDraftSchema.safeParse(withoutNulls);
   if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   const draft = parsed.data;
