@@ -4,6 +4,13 @@ Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Governing scope
 
 ## Typed exact-record handoff — 8 September 2026
 
+Delivered through [PR #337](https://github.com/Abzum-NZ/Abzum-Vortex/pull/337),
+merged normally into Testing at `2026-09-07T23:45:25Z`. Reviewed source:
+`800c3abdc6cd6df3f37ef7b84ab385b6a766be7e`; Testing merge:
+`480ee21f6ba8349919f676a861aa6418168f5c01`. The isolated source verification
+passed 1,356 tests (three skipped), 12 fixture checks, and all 23 package
+typechecks, boundaries and builds. The unfinished SQL candidate is excluded.
+
 The bounded contract/runtime checkpoint distinguishes candidate permission
 eligibility from a complete record decision. Complete decisions retain the exact
 record, storage binding, action and independently matched permission/row
