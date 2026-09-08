@@ -32,8 +32,24 @@ is guessed, and no temporary refusal of all accessible blocks was introduced.
 Independent Sol review approved the actual final compiler and contract files.
 Root's focused contract/compiler checks passed 51 tests, Definition typechecking
 and scoped lint. The final full Definition suite passed 307 tests and the full
-contracts suite passed 501 tests. Full exact-source repository and normal delivery checks remain
-to be recorded; these local results are not hosted publication evidence.
+contracts suite passed 501 tests.
+
+Root verified exact source `92c5baa083732e26f3e2fb903295ba9ed5ff870d` in a
+clean isolated worktree: 100 test files / 1,386 tests passed (two files and three
+tests retain existing skips), all 23 package typechecks, import boundaries and
+builds passed, including Next.js. Changed-code formatting, lint and diff checks
+passed. [PR #341](https://github.com/Abzum-NZ/Abzum-Vortex/pull/341) passed the
+normal preview checks and merged into Testing at `2026-09-08T02:25:37Z`, merge
+`73f33ecc7db97d912a15f1e71b8efec44c8cdb4c`. Hosted verification is now verified:
+[execution DS5ol9X2h0Cb0Cld4ErEN](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/DS5ol9X2h0Cb0Cld4ErEN)
+succeeded at `2026-09-08T03:18:47.665Z`; its exact-commit schema-2 receipt was
+published at `2026-09-08T03:18:47.629Z`. Root inspected all receipt fields: 66
+migrations, all 25 selected concurrency proofs and all six lint schemas completed.
+The migration-set, runner, manifest and coverage hashes match the preceding
+verified delivery; this merge changes no Supabase or Kestra verification inputs.
+A browser screenshot of the successful execution was captured. No settings were
+changed. Neither these results nor the merge enable V2
+stored publication or close this task.
 
 | Reviewed file | SHA-256 |
 | --- | --- |

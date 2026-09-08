@@ -4,11 +4,21 @@ import {
   applicationCompositionCatalogueSnapshotV2Schema,
   applicationSourceDocumentV2Schema,
   definitionResolutionSnapshotSchema,
+  selectApplicationContractPair,
+  selectApplicationValidationContract,
+  type ApplicationDraftV2,
   type ApplicationSourceDocumentV2,
+  type BlockPlacementV2Contract,
+  type PageCompositionV2,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
 import { compileDefinition } from "../src/compiler";
+import {
+  compareDefinitionVersionImpact,
+  confirmDefinitionVersionImpact,
+} from "../src/version-impact";
 import { fingerprintCanonicalValue } from "../src/canonical-json";
+import { DefinitionVersionImpactError } from "../src/version-impact-error";
 import { extractApplicationSourceIdentityRequirementsV2 } from "../src/source-identities";
 import { createApplicationResolutionSnapshotV2 } from "../src/application-v2-resolution";
 
@@ -752,4 +762,506 @@ describe("native Application V2 compiler", () => {
       compileDefinition({ ...request, catalogueSnapshot: optionalMissing }),
     ).not.toThrow();
   });
+});
+
+type PlacementSlotV2 = Extract<PageCompositionV2, { shellKind: "default" }>["main"];
+
+const compiledV2Draft = (): ApplicationDraftV2 => compileDefinition(requestFor()).canonical;
+
+const publishedV2 = (draft: ApplicationDraftV2, version = "1.0.0", revision = 1) => ({
+  publication: {
+    kind: "application" as const,
+    rootId: draft.envelope.rootId,
+    revision,
+    releaseVersion: version,
+    contentFingerprint: fingerprintCanonicalValue(draft.content),
+    publishedAt: metadata.createdAt,
+    publishedBy: metadata.createdBy,
+    validationContractVersion: "2.0.0" as const,
+  },
+  content: structuredClone(draft.content),
+  dependencyManifest: [],
+  releaseNote: "Published native V2 application.",
+});
+
+const v2RequestAfter = (draft: ApplicationDraftV2) => {
+  const candidate = structuredClone(draft);
+  candidate.envelope.draftRevision = 2;
+  candidate.envelope.publishedRevision = 1;
+  return {
+    kind: "application" as const,
+    validationContractVersion: "2.0.0" as const,
+    history: [publishedV2(draft)],
+    candidate,
+  };
+};
+
+const expectVersionImpactCode = (operation: () => unknown, code: string): void => {
+  try {
+    operation();
+    throw new Error("Expected version-impact refusal");
+  } catch (error) {
+    expect(error).toBeInstanceOf(DefinitionVersionImpactError);
+    expect((error as DefinitionVersionImpactError).code).toBe(code);
+  }
+};
+
+const applicationDashboardV2 = (draft: ApplicationDraftV2) => {
+  const page = draft.content.pages.find(
+    (candidate) =>
+      candidate.type === "dashboard" && candidate.composition.shellKind === "application",
+  );
+  if (page === undefined || page.composition.shellKind !== "application")
+    throw new Error("Application-shell dashboard required");
+  return page;
+};
+
+type PublicPageV2 = Extract<ApplicationDraftV2["content"]["pages"][number], { type: "public" }>;
+
+const publicPageV2 = (draft: ApplicationDraftV2, pageId = id(989)): PublicPageV2 => {
+  const dashboard = applicationDashboardV2(draft);
+  return {
+    ...structuredClone(dashboard),
+    pageId,
+    key: "public_view",
+    name: "Public view",
+    type: "public",
+    composition: { shellKind: "default", main: canonicalEmptySlotV2() },
+    publicFieldIds: [],
+    rateLimitPerMinute: 60,
+  };
+};
+
+const dashboardPrimaryV2 = (draft: ApplicationDraftV2): PlacementSlotV2 => {
+  const page = applicationDashboardV2(draft);
+  const result = Object.values(page.composition.content)[0];
+  if (result === undefined) throw new Error("Dashboard content slot required");
+  return result;
+};
+
+const presentationPlacementV2 = (draft: ApplicationDraftV2): BlockPlacementV2Contract => {
+  const listSlot = rootSlotsForPageV2(draft, "list")[0];
+  const placementId = listSlot?.order.desktop[0];
+  const placement = placementId === undefined ? undefined : listSlot.placements[placementId];
+  if (placement === undefined) throw new Error("Compiled content placement required");
+  const result = structuredClone(placement);
+  delete result.viewPermissionKey;
+  delete result.usePermissionKey;
+  delete result.settings.field;
+  delete result.settings.opaque_group;
+  return result;
+};
+
+const addPlacementV2 = (
+  slotValue: PlacementSlotV2,
+  placementId: string,
+  placementValue: BlockPlacementV2Contract,
+): void => {
+  slotValue.placements[placementId] = placementValue;
+  for (const breakpoint of ["desktop", "tablet", "phone"] as const)
+    slotValue.order[breakpoint].push(placementId);
+};
+
+const removePlacementV2 = (slotValue: PlacementSlotV2, placementId: string): void => {
+  delete slotValue.placements[placementId];
+  for (const breakpoint of ["desktop", "tablet", "phone"] as const)
+    slotValue.order[breakpoint] = slotValue.order[breakpoint].filter(
+      (candidate) => candidate !== placementId,
+    );
+};
+
+const reidentifyPlacementSlotV2 = (
+  slotValue: PlacementSlotV2,
+  nextId: { value: number },
+): PlacementSlotV2 => {
+  const identities = new Map(
+    Object.keys(slotValue.placements).map((placementId) => [placementId, id(nextId.value++)]),
+  );
+  return {
+    placements: Object.fromEntries(
+      Object.entries(slotValue.placements).map(([placementId, placement]) => [
+        identities.get(placementId)!,
+        {
+          ...structuredClone(placement),
+          slots: Object.fromEntries(
+            Object.entries(placement.slots).map(([slotKey, childSlot]) => [
+              slotKey,
+              reidentifyPlacementSlotV2(childSlot, nextId),
+            ]),
+          ),
+        },
+      ]),
+    ),
+    order: {
+      desktop: slotValue.order.desktop.map((placementId) => identities.get(placementId)!),
+      tablet: slotValue.order.tablet.map((placementId) => identities.get(placementId)!),
+      phone: slotValue.order.phone.map((placementId) => identities.get(placementId)!),
+    },
+  };
+};
+
+const reidentifyPagePlacementsV2 = (
+  page: ApplicationDraftV2["content"]["pages"][number],
+  firstId: number,
+): void => {
+  const nextId = { value: firstId };
+  const composition = page.composition;
+  if ("stepContent" in composition) {
+    composition.stepContent = Object.fromEntries(
+      Object.entries(composition.stepContent).map(([stepId, stepContent]) => [
+        stepId,
+        composition.shellKind === "default"
+          ? reidentifyPlacementSlotV2(stepContent, nextId)
+          : Object.fromEntries(
+              Object.entries(stepContent).map(([slotId, slotValue]) => [
+                slotId,
+                reidentifyPlacementSlotV2(slotValue, nextId),
+              ]),
+            ),
+      ]),
+    ) as typeof composition.stepContent;
+  } else if (composition.shellKind === "default")
+    composition.main = reidentifyPlacementSlotV2(composition.main, nextId);
+  else
+    composition.content = Object.fromEntries(
+      Object.entries(composition.content).map(([slotId, slotValue]) => [
+        slotId,
+        reidentifyPlacementSlotV2(slotValue, nextId),
+      ]),
+    );
+};
+
+const rootSlotsForPageV2 = (draft: ApplicationDraftV2, pageType: string): PlacementSlotV2[] => {
+  const page = draft.content.pages.find((candidate) => candidate.type === pageType);
+  if (page === undefined) throw new Error(`${pageType} page required`);
+  const composition = page.composition;
+  if ("stepContent" in composition)
+    return Object.values(composition.stepContent).flatMap((step) =>
+      composition.shellKind === "default" ? [step] : Object.values(step),
+    );
+  return composition.shellKind === "default"
+    ? [composition.main]
+    : Object.values(composition.content);
+};
+
+describe("native Application V2 version impact", () => {
+  it("uses strict homogeneous V2 metadata while stored V2 selectors remain closed", () => {
+    const draft = compiledV2Draft();
+    expect(
+      compareDefinitionVersionImpact({
+        kind: "application",
+        validationContractVersion: "2.0.0",
+        history: [],
+        candidate: draft,
+      }),
+    ).toMatchObject({ outcome: "initial_release", assignedVersion: "1.0.0" });
+
+    const missingOuter = v2RequestAfter(draft) as Record<string, unknown>;
+    delete missingOuter.validationContractVersion;
+    expectVersionImpactCode(() => compareDefinitionVersionImpact(missingOuter), "invalid_request");
+
+    const unknownOuter = { ...v2RequestAfter(draft), validationContractVersion: "3.0.0" };
+    expectVersionImpactCode(() => compareDefinitionVersionImpact(unknownOuter), "invalid_request");
+
+    const wrongHistory = v2RequestAfter(draft);
+    wrongHistory.history[0]!.publication.validationContractVersion = "1.0.0" as "2.0.0";
+    expectVersionImpactCode(() => compareDefinitionVersionImpact(wrongHistory), "invalid_request");
+
+    const staleFingerprint = v2RequestAfter(draft);
+    staleFingerprint.history[0]!.content.theme.tokens.brand = {
+      kind: "color_pair",
+      light: "#000000",
+      dark: "#ffffff",
+    };
+    expectVersionImpactCode(
+      () => compareDefinitionVersionImpact(staleFingerprint),
+      "content_fingerprint_mismatch",
+    );
+
+    expect(() => selectApplicationValidationContract("2.0.0")).toThrow(
+      "APPLICATION_CONTRACT_DECODER_NOT_IMPLEMENTED",
+    );
+    expect(() => selectApplicationContractPair("2.0.0", "2.0.0")).toThrow(
+      "APPLICATION_CONTRACT_DECODER_NOT_IMPLEMENTED",
+    );
+  });
+
+  it("is deterministic, does not mutate input, and confirms only the exact V2 decision", () => {
+    const request = v2RequestAfter(compiledV2Draft());
+    const before = structuredClone(request);
+    const unchanged = compareDefinitionVersionImpact(request);
+    expect(unchanged).toMatchObject({ outcome: "no_change", currentVersion: "1.0.0" });
+    expect(request).toEqual(before);
+
+    const changed = structuredClone(request);
+    changed.candidate.content.theme.tokens.brand = {
+      kind: "color_pair",
+      light: "#654321",
+      dark: "#abcdef",
+    };
+    const first = compareDefinitionVersionImpact(changed);
+    const repeated = compareDefinitionVersionImpact(structuredClone(changed));
+    expect(first).toEqual(repeated);
+    expect(first).toMatchObject({
+      outcome: "release_required",
+      impact: "patch",
+      assignedVersion: "1.0.1",
+    });
+    if (first.outcome !== "release_required") throw new Error("Release-required result expected");
+    expect(
+      confirmDefinitionVersionImpact(changed, {
+        subject: first.subject,
+        comparisonFingerprint: first.comparisonFingerprint,
+        assignedVersion: first.assignedVersion,
+      }),
+    ).toEqual(first);
+    expectVersionImpactCode(
+      () =>
+        confirmDefinitionVersionImpact(changed, {
+          subject: first.subject,
+          comparisonFingerprint: fingerprint("9"),
+          assignedVersion: first.assignedVersion,
+        }),
+      "confirmation_mismatch",
+    );
+  });
+
+  it("classifies responsive geometry and same-slot breakpoint order as patch", () => {
+    const draft = compiledV2Draft();
+    const slotValue = dashboardPrimaryV2(draft);
+    addPlacementV2(slotValue, id(990), presentationPlacementV2(draft));
+
+    const geometry = v2RequestAfter(draft);
+    const geometrySlot = dashboardPrimaryV2(geometry.candidate);
+    const geometryId = geometrySlot.order.desktop[0]!;
+    geometrySlot.placements[geometryId]!.responsive.desktop.width = { kind: "content" };
+    expect(compareDefinitionVersionImpact(geometry)).toMatchObject({ impact: "patch" });
+
+    const order = v2RequestAfter(draft);
+    dashboardPrimaryV2(order.candidate).order.phone.reverse();
+    expect(compareDefinitionVersionImpact(order)).toMatchObject({ impact: "patch" });
+  });
+
+  it("classifies reparenting, permission, setting and dependency changes as major", () => {
+    const draft = compiledV2Draft();
+    const primary = dashboardPrimaryV2(draft);
+    const parentId = primary.order.desktop[0]!;
+    const parent = primary.placements[parentId]!;
+    const childSlot = parent.slots.body;
+    if (childSlot === undefined) throw new Error("Nested body slot required");
+    const childId = childSlot.order.desktop[0]!;
+
+    const reparented = v2RequestAfter(draft);
+    const nextPrimary = dashboardPrimaryV2(reparented.candidate);
+    const nextParent = nextPrimary.placements[parentId]!;
+    const moved = nextParent.slots.body!.placements[childId]!;
+    removePlacementV2(nextParent.slots.body!, childId);
+    addPlacementV2(nextPrimary, childId, moved);
+    expect(compareDefinitionVersionImpact(reparented)).toMatchObject({ impact: "major" });
+
+    for (const permission of ["viewPermissionKey", "usePermissionKey"] as const) {
+      const request = v2RequestAfter(draft);
+      dashboardPrimaryV2(request.candidate).placements[parentId]![permission] =
+        "application.crm.open";
+      expect(compareDefinitionVersionImpact(request)).toMatchObject({ impact: "major" });
+    }
+
+    const setting = v2RequestAfter(draft);
+    const top = dashboardPrimaryV2(setting.candidate).placements[parentId]!;
+    top.settings.title = { kind: "text", value: "Changed title" };
+    expect(compareDefinitionVersionImpact(setting)).toMatchObject({ impact: "major" });
+
+    const dependency = v2RequestAfter(draft);
+    dependency.candidate.content.platformBlockDependencies[0]!.catalogueFingerprint =
+      fingerprint("8");
+    expect(compareDefinitionVersionImpact(dependency)).toMatchObject({ impact: "major" });
+  });
+
+  it("distinguishes optional presentation additions from semantic, public and guided additions", () => {
+    const draft = compiledV2Draft();
+    const defaultSlot = rootSlotsForPageV2(draft, "list")[0]!;
+    const parentId = defaultSlot.order.desktop[0]!;
+    defaultSlot.placements[parentId]!.slots.body = canonicalEmptySlotV2();
+    const emptyChild = defaultSlot.placements[parentId]!.slots.body;
+    if (emptyChild === undefined || emptyChild.order.desktop.length !== 0)
+      throw new Error("Empty optional child slot required");
+
+    const optionalChild = v2RequestAfter(draft);
+    const optionalTarget = rootSlotsForPageV2(optionalChild.candidate, "list")[0]!.placements[
+      parentId
+    ]!.slots.body!;
+    const heading = presentationPlacementV2(optionalChild.candidate);
+    heading.settings.title = { kind: "text", value: "Optional heading" };
+    addPlacementV2(optionalTarget, id(991), heading);
+    expect(compareDefinitionVersionImpact(optionalChild)).toMatchObject({ impact: "minor" });
+
+    const semantic = v2RequestAfter(draft);
+    const semanticTarget = rootSlotsForPageV2(semantic.candidate, "list")[0]!.placements[parentId]!
+      .slots.body!;
+    const semanticPlacement = presentationPlacementV2(semantic.candidate);
+    semanticPlacement.settings.field = structuredClone(
+      Object.values(dashboardPrimaryV2(draft).placements)[0]!.settings.field!,
+    );
+    addPlacementV2(semanticTarget, id(992), semanticPlacement);
+    expect(compareDefinitionVersionImpact(semantic)).toMatchObject({ impact: "major" });
+
+    const publicBase = structuredClone(draft);
+    publicBase.content.pages.push(publicPageV2(publicBase));
+    const publicRequest = v2RequestAfter(publicBase);
+    addPlacementV2(
+      rootSlotsForPageV2(publicRequest.candidate, "public")[0]!,
+      id(993),
+      presentationPlacementV2(publicBase),
+    );
+    expect(compareDefinitionVersionImpact(publicRequest)).toMatchObject({ impact: "major" });
+
+    const guided = v2RequestAfter(draft);
+    addPlacementV2(
+      rootSlotsForPageV2(guided.candidate, "guided_form")[0]!,
+      id(994),
+      presentationPlacementV2(draft),
+    );
+    expect(compareDefinitionVersionImpact(guided)).toMatchObject({ impact: "major" });
+  });
+
+  it("classifies page and shell consumer additions without using names", () => {
+    const draft = compiledV2Draft();
+    const listPage = draft.content.pages.find((page) => page.type === "list");
+    const guidedPage = draft.content.pages.find((page) => page.type === "guided_form");
+    if (listPage === undefined || guidedPage === undefined)
+      throw new Error("List and guided pages required");
+
+    const optionalPage = v2RequestAfter(draft);
+    const clonedList = {
+      ...structuredClone(listPage),
+      pageId: id(995),
+      key: "optional_view",
+      name: "Not a policy signal",
+    };
+    reidentifyPagePlacementsV2(clonedList, 1100);
+    optionalPage.candidate.content.pages.push(clonedList);
+    expect(compareDefinitionVersionImpact(optionalPage)).toMatchObject({ impact: "minor" });
+
+    const guidedAddition = v2RequestAfter(draft);
+    const clonedGuided = {
+      ...structuredClone(guidedPage),
+      pageId: id(996),
+      key: "optional_guided_view",
+      name: "Optional guided capability",
+    };
+    reidentifyPagePlacementsV2(clonedGuided, 1200);
+    guidedAddition.candidate.content.pages.push(clonedGuided);
+    expect(compareDefinitionVersionImpact(guidedAddition)).toMatchObject({ impact: "minor" });
+
+    const publicAddition = v2RequestAfter(draft);
+    publicAddition.candidate.content.pages.push(publicPageV2(publicAddition.candidate, id(997)));
+    expect(compareDefinitionVersionImpact(publicAddition)).toMatchObject({ impact: "major" });
+
+    const replacementAddition = v2RequestAfter(draft);
+    const replacement = {
+      ...structuredClone(listPage),
+      pageId: id(998),
+      key: "replacement_view",
+      name: "Standard replacement",
+      standardPageReplacement: {
+        standardPage: "list" as const,
+        recordType: structuredClone(listPage.recordType),
+      },
+    };
+    reidentifyPagePlacementsV2(replacement, 1300);
+    replacementAddition.candidate.content.pages.push(replacement);
+    expect(compareDefinitionVersionImpact(replacementAddition)).toMatchObject({ impact: "major" });
+
+    const movedExisting = v2RequestAfter(draft);
+    const oldSlot = rootSlotsForPageV2(movedExisting.candidate, "list")[0]!;
+    const movedId = oldSlot.order.desktop[0]!;
+    const placement = oldSlot.placements[movedId]!;
+    removePlacementV2(oldSlot, movedId);
+    const newPage = {
+      ...structuredClone(listPage),
+      pageId: id(999),
+      key: "moved_view",
+      name: "Moved existing content",
+      composition: { shellKind: "default" as const, main: canonicalEmptySlotV2() },
+    };
+    addPlacementV2(newPage.composition.main, movedId, placement);
+    movedExisting.candidate.content.pages.push(newPage);
+    expect(compareDefinitionVersionImpact(movedExisting)).toMatchObject({ impact: "major" });
+
+    const shellConsumer = v2RequestAfter(draft);
+    const shell = shellConsumer.candidate.content.shells[0]!;
+    addPlacementV2(shell.layout, id(1000), presentationPlacementV2(draft));
+    expect(compareDefinitionVersionImpact(shellConsumer)).toMatchObject({ impact: "major" });
+  });
+
+  it("applies explicit shell-slot widening, narrowing and empty binding ownership policy", () => {
+    const draft = compiledV2Draft();
+    const shell = draft.content.shells[0]!;
+    const shellRoot = Object.values(shell.layout.placements)[0]!;
+    shellRoot.slots.extra = canonicalEmptySlotV2();
+
+    const optionalSlot = v2RequestAfter(draft);
+    optionalSlot.candidate.content.shells[0]!.contentSlots.push({
+      slotId: id(998),
+      key: "extra",
+      label: "Optional content",
+      required: false,
+      allowedChildCategories: ["content"],
+      parentPlacementId: shell.layout.order.desktop[0]!,
+      parentSlotKey: "extra",
+    });
+    expect(compareDefinitionVersionImpact(optionalSlot)).toMatchObject({ impact: "minor" });
+
+    const widenedBase = compiledV2Draft();
+    widenedBase.content.shells[0]!.contentSlots[0]!.allowedChildCategories.push("layout");
+    const narrowed = v2RequestAfter(widenedBase);
+    narrowed.candidate.content.shells[0]!.contentSlots[0]!.allowedChildCategories = ["content"];
+    expect(compareDefinitionVersionImpact(narrowed)).toMatchObject({ impact: "major" });
+
+    const widened = v2RequestAfter(compiledV2Draft());
+    widened.candidate.content.shells[0]!.contentSlots[0]!.allowedChildCategories.push("layout");
+    expect(compareDefinitionVersionImpact(widened)).toMatchObject({ impact: "minor" });
+
+    const reorderedBase = compiledV2Draft();
+    reorderedBase.content.shells[0]!.contentSlots[0]!.allowedChildCategories.push("layout");
+    const reordered = v2RequestAfter(reorderedBase);
+    reordered.candidate.content.shells[0]!.contentSlots[0]!.allowedChildCategories.reverse();
+    expect(compareDefinitionVersionImpact(reordered)).toMatchObject({ outcome: "no_change" });
+
+    const emptyBinding = v2RequestAfter(compiledV2Draft());
+    applicationDashboardV2(emptyBinding.candidate).composition.content[
+      emptyBinding.candidate.content.shells[0]!.contentSlots[1]!.slotId
+    ] = canonicalEmptySlotV2();
+    expect(compareDefinitionVersionImpact(emptyBinding)).toMatchObject({ impact: "minor" });
+
+    const removalBase = compiledV2Draft();
+    applicationDashboardV2(removalBase).composition.content[
+      removalBase.content.shells[0]!.contentSlots[1]!.slotId
+    ] = canonicalEmptySlotV2();
+    const removedBinding = v2RequestAfter(removalBase);
+    delete applicationDashboardV2(removedBinding.candidate).composition.content[
+      removedBinding.candidate.content.shells[0]!.contentSlots[1]!.slotId
+    ];
+    expect(compareDefinitionVersionImpact(removedBinding)).toMatchObject({ impact: "major" });
+  });
+
+  it("normalises semantically empty internal slot containers without changing the caller", () => {
+    const draft = compiledV2Draft();
+    const baselineSlot = rootSlotsForPageV2(draft, "list")[0]!;
+    const baselineParent = baselineSlot.placements[baselineSlot.order.desktop[0]!]!;
+    baselineParent.slots.body = canonicalEmptySlotV2();
+    const request = v2RequestAfter(draft);
+    const pageSlot = rootSlotsForPageV2(request.candidate, "list")[0]!;
+    const parent = pageSlot.placements[pageSlot.order.desktop[0]!]!;
+    expect(parent.slots.body).toBeDefined();
+    delete parent.slots.body;
+    const before = structuredClone(request);
+    expect(compareDefinitionVersionImpact(request)).toMatchObject({ outcome: "no_change" });
+    expect(request).toEqual(before);
+  });
+});
+
+const canonicalEmptySlotV2 = (): PlacementSlotV2 => ({
+  placements: {},
+  order: { desktop: [], tablet: [], phone: [] },
 });
