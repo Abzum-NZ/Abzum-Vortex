@@ -54,13 +54,21 @@ The save transaction performs these steps in order:
 1. Confirm session, organisation account, and [access](04-access-and-permissions.md).
 2. Load one published definition set for the full request.
 3. Refuse unknown or unwritable fields.
-4. Validate required values, formats, choices, relationships, uniqueness, and application bindings.
+4. Decode and normalize submitted values using their declared types, merge unchanged values and create defaults, and reject malformed or ineligible inputs. Do not reject missing required fields or field-specific value policy before configured rules can supply or correct them.
 5. Compare the submitted concurrency number with the current number.
 6. Run eligible immediate [rules](08-forms-actions-rules-and-events.md).
-7. Revalidate any values changed by rules.
+7. Run the owning reference-number, calculation and total generators in their declared dependency order. Validate the complete final candidate, including required fields and accumulated rule requirements, choices, currency/precision/row settings, live reference and file eligibility, uniqueness and application bindings. Refuse all writes if final validation fails.
 8. Save the record, relationship changes, reference number, and [activity entry](14-activity-privacy-and-retention.md) in one database transaction.
 9. Write [events](08-forms-actions-rules-and-events.md#delivery-guarantees) to the outbox and logged queue in that same transaction. Dispatch and external work begin only after commit.
 10. Return the fields the person may read and the new concurrency number.
+
+Initial typed decoding and final field-policy validation are two internal stages
+of the same Record value handling, not different validators or caller-selectable
+validation modes. Only final changed references, choices and files need the
+corresponding live checks; intermediate values overwritten by later rules are
+not saved. A Require-field node accumulates a check until the final candidate
+exists, including any generated value. Explicit Refuse still stops immediately.
+See the [save integration plan](../build-plan/issue-47-save-command.md#candidate-preparation-and-final-validation).
 
 This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). In the target runtime, a configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. The actual protected Record execution and receipt boundary remains owned by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47); this flow description does not claim it is delivered.
 

@@ -38,11 +38,11 @@ current Access before accepting its values.
 
 Every variant carries the explicit V2 contract version:
 
-| Outcome | Content and meaning |
-| --- | --- |
-| Saved | Record identifier, new safe concurrency number, current readable field values, correlation identifier, and background delivery `none` or `pending` according to actual queued work. Never the complete private stored row. |
+| Outcome             | Content and meaning                                                                                                                                                                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Saved               | Record identifier, new safe concurrency number, current readable field values, correlation identifier, and background delivery `none` or `pending` according to actual queued work. Never the complete private stored row.              |
 | Correction required | Correlation identifier and a nonempty list of safe field corrections: `invalid_value`, `required_value` or `field_refused`, with a field identifier and optional nested value location. Return all safely reportable problems together. |
-| Refused | The existing safe operation-error response. An optional current readable record projection is permitted only for a conflict, and only when current access permits disclosure. |
+| Refused             | The existing safe operation-error response. An optional current readable record projection is permitted only for a conflict, and only when current access permits disclosure.                                                           |
 
 Nested correction locations contain only declared value keys and row indices,
 not an internal definition path, permission name, submitted content or foreign
@@ -84,3 +84,43 @@ Use a small focused set of table-driven tests and the existing package checks.
 An independent Sol reviewer reviews the actual patch. The whole #47 remains open
 until its real database, rules, reference, totals, Activity, Event and concurrency
 acceptance is complete.
+
+## Candidate preparation and final validation
+
+The existing field-preparation entry point combines normalization, field policy,
+requiredness and pending reference checks. Calling it unchanged before Rule
+would reject a missing required field that a configured node intends to supply.
+It would also reject an intermediate choice/currency/range value before a later
+node can correct it. This is a demonstrated integration gap, not a reason to add
+a second save engine.
+
+Reuse the existing Record normalization internals in two owning-engine stages:
+
+1. Build the initial candidate from typed submitted values, unchanged stored
+   values and create defaults. Refuse unknown fields, malformed typed data and
+   caller-supplied generated fields. Defer requiredness and owning field policy.
+2. Run the [shared Rule interpreter](issue-58-shared-rule-graph-foundation.md).
+   Apply its proposed changes only in memory and accumulate requirements/warnings;
+   an explicit refusal exposes no applicable write patch.
+3. Run authoritative reference numbering, calculations and totals in their
+   existing dependency order. Callers and Set-field nodes cannot provide these
+   generated values.
+4. Validate the complete final candidate against field policy and requiredness,
+   including accumulated Rule requirements. Derive final changes and perform the
+   live choice, reference, person and file checks for those changes. Failure
+   prevents Record, Activity and Event writes together.
+
+Keep the existing public `prepareRecordFieldValuesV2` behavior and tests as a
+compatibility wrapper. Do not add caller-selected validation phases, successful
+validation flags, a second validator, or a preliminary save orchestrator. Pure
+candidate preparation remains distinct from the protected database operation.
+Named package helpers are acceptable; they are not public request operations and
+their inputs must be supplied by the owning protected service. Do not move the
+whole codec implementation solely to hide an internal engine helper from a barrel
+export.
+
+Prove missing-then-supplied required values, invalid-then-corrected intermediate
+values, omission versus clear-then-set, generated requirement targets, and final
+live checks on the final changed references rather than overwritten intermediates.
+Actual commit/rollback with Activity/Event remains this task's integrated
+acceptance, not a claim made by pure tests.

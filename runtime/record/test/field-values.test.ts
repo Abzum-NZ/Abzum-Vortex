@@ -6,7 +6,12 @@ import {
   type RecordTypeDefinitionV2,
 } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
-import { persistedRecordFieldValueMatches, prepareRecordFieldValuesV2 } from "../src";
+import {
+  finalizeRecordFieldCandidateV2,
+  persistedRecordFieldValueMatches,
+  prepareInitialRecordFieldCandidateV2,
+  prepareRecordFieldValuesV2,
+} from "../src";
 
 const id = (value: number) => `70000000-0000-4000-8000-${value.toString().padStart(12, "0")}`;
 
@@ -787,6 +792,255 @@ describe("prepareRecordFieldValuesV2", () => {
       setValues: {},
       clearFieldIds: [fieldIds.decimal],
       pendingChecks: [],
+    });
+  });
+});
+
+describe("two-phase Record field candidate preparation", () => {
+  it("defers requiredness and field policy so later rule output can correct the candidate", () => {
+    const configuredFields = fields();
+    const requiredTitle = { ...configuredFields[0] } as Record<string, unknown>;
+    delete requiredTitle.default;
+    configuredFields[0] = moduleFieldV2Schema.parse(requiredTitle);
+    const configured = recordType({ fields: configuredFields });
+    const initial = prepareInitialRecordFieldCandidateV2({
+      operation: "create",
+      recordType: configured,
+      submittedValues: {
+        [fieldIds.decimal]: "1.23456",
+        [fieldIds.money]: { amount: "2000.00", currency: "USD" },
+        [fieldIds.choice]: "not_configured",
+      },
+    });
+    expect(initial).toMatchObject({
+      success: true,
+      candidate: {
+        candidateValues: {
+          [fieldIds.decimal]: "1.23456",
+          [fieldIds.money]: { amount: "2000", currency: "USD" },
+          [fieldIds.choice]: "not_configured",
+        },
+      },
+    });
+    if (!initial.success) return;
+
+    const requirement = {
+      fieldId: fieldIds.text,
+      code: "title_required",
+      message: "Enter a title.",
+    };
+    expect(
+      finalizeRecordFieldCandidateV2({
+        recordType: configured,
+        initialCandidate: initial.candidate,
+        candidateValues: initial.candidate.candidateValues,
+        requirements: [requirement],
+      }),
+    ).toMatchObject({
+      success: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ fieldId: fieldIds.decimal, code: "invalid_value" }),
+        expect.objectContaining({ fieldId: fieldIds.money, code: "invalid_value" }),
+        expect.objectContaining({ fieldId: fieldIds.choice, code: "invalid_value" }),
+        expect.objectContaining({
+          fieldId: fieldIds.text,
+          code: "required_field_missing",
+          requirement: { code: "title_required", message: "Enter a title." },
+        }),
+      ]),
+    });
+
+    const finalized = finalizeRecordFieldCandidateV2({
+      recordType: configured,
+      initialCandidate: initial.candidate,
+      candidateValues: {
+        ...initial.candidate.candidateValues,
+        [fieldIds.text]: "Corrected",
+        [fieldIds.decimal]: "1.2345",
+        [fieldIds.money]: { amount: "100", currency: "NZD" },
+        [fieldIds.choice]: "open",
+      },
+      requirements: [requirement],
+    });
+    expect(finalized).toMatchObject({
+      success: true,
+      setValues: {
+        [fieldIds.text]: "Corrected",
+        [fieldIds.decimal]: "1.2345",
+        [fieldIds.money]: { amount: "100", currency: "NZD" },
+        [fieldIds.choice]: "open",
+      },
+    });
+  });
+
+  it("uses presence for ordered requirements and keeps false and zero as legitimate values", () => {
+    const configured = recordType({
+      fields: fields().map((candidate) =>
+        candidate.fieldId === fieldIds.whole
+          ? moduleFieldV2Schema.parse({
+              ...candidate,
+              settings: { minimum: 0, maximum: 20, step: 1 },
+            })
+          : candidate,
+      ),
+    });
+    const initial = prepareInitialRecordFieldCandidateV2({
+      operation: "create",
+      recordType: configured,
+      submittedValues: {
+        [fieldIds.yesNo]: false,
+        [fieldIds.whole]: 0,
+      },
+    });
+    if (!initial.success) throw new Error("Expected a typed initial candidate");
+    expect(
+      finalizeRecordFieldCandidateV2({
+        recordType: configured,
+        initialCandidate: initial.candidate,
+        candidateValues: initial.candidate.candidateValues,
+        requirements: [
+          { fieldId: fieldIds.yesNo, code: "boolean_required", message: "Choose yes or no." },
+          { fieldId: fieldIds.whole, code: "count_required", message: "Enter a count." },
+        ],
+      }),
+    ).toMatchObject({ success: true });
+
+    const missing = finalizeRecordFieldCandidateV2({
+      recordType: configured,
+      initialCandidate: initial.candidate,
+      candidateValues: initial.candidate.candidateValues,
+      requirements: [
+        { fieldId: fieldIds.longText, code: "first", message: "First requirement." },
+        { fieldId: fieldIds.longText, code: "second", message: "Second requirement." },
+      ],
+    });
+    expect(missing).toMatchObject({
+      success: false,
+      issues: [
+        expect.objectContaining({
+          requirement: expect.objectContaining({ code: "first" }),
+        }),
+        expect.objectContaining({
+          requirement: expect.objectContaining({ code: "second" }),
+        }),
+      ],
+    });
+  });
+
+  it("derives final changed-value checks and preserves submitted no-op behavior", () => {
+    const originalLink = { recordTypeId: targetRecordTypeId, recordId: id(801) };
+    const replacementLink = { recordTypeId: targetRecordTypeId, recordId: id(802) };
+    const initial = prepareInitialRecordFieldCandidateV2({
+      operation: "update",
+      recordType: recordType(),
+      submittedValues: {},
+      existingValues: { [fieldIds.text]: "Existing", [fieldIds.link]: originalLink },
+    });
+    if (!initial.success) throw new Error("Expected a typed initial candidate");
+
+    const changed = finalizeRecordFieldCandidateV2({
+      recordType: recordType(),
+      initialCandidate: initial.candidate,
+      candidateValues: { ...initial.candidate.candidateValues, [fieldIds.link]: replacementLink },
+    });
+    expect(changed).toMatchObject({
+      success: true,
+      setValues: { [fieldIds.link]: replacementLink },
+      pendingChecks: [
+        expect.objectContaining({ kind: "record_reference", recordId: replacementLink.recordId }),
+      ],
+    });
+
+    expect(
+      finalizeRecordFieldCandidateV2({
+        recordType: recordType(),
+        initialCandidate: initial.candidate,
+        candidateValues: initial.candidate.candidateValues,
+      }),
+    ).toEqual({ success: true, setValues: {}, clearFieldIds: [], pendingChecks: [] });
+
+    expect(
+      update({ [fieldIds.link]: originalLink }, { [fieldIds.link]: originalLink }),
+    ).toMatchObject({
+      success: true,
+      setValues: { [fieldIds.link]: originalLink },
+      pendingChecks: [expect.objectContaining({ kind: "record_reference" })],
+    });
+  });
+
+  it("accepts generator output only after caller input preparation", () => {
+    const configured = recordType();
+    const rejected = prepareInitialRecordFieldCandidateV2({
+      operation: "create",
+      recordType: configured,
+      submittedValues: { [fieldIds.reference]: "00000001" },
+    });
+    expect(rejected).toMatchObject({
+      success: false,
+      issues: [expect.objectContaining({ code: "generated_field_input" })],
+    });
+
+    const requiredGenerated = recordType({
+      fields: fields().map((candidate) =>
+        generatedFieldTypesForTest.has(candidate.type)
+          ? moduleFieldV2Schema.parse({ ...candidate, required: true })
+          : candidate,
+      ),
+    });
+    const missingGenerated = prepareInitialRecordFieldCandidateV2({
+      operation: "create",
+      recordType: requiredGenerated,
+      submittedValues: {},
+    });
+    if (!missingGenerated.success) throw new Error("Expected an initial generated candidate");
+    expect(
+      finalizeRecordFieldCandidateV2({
+        recordType: requiredGenerated,
+        initialCandidate: missingGenerated.candidate,
+        candidateValues: missingGenerated.candidate.candidateValues,
+      }),
+    ).toMatchObject({
+      success: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "required_field_missing",
+          fieldId: fieldIds.reference,
+        }),
+        expect.objectContaining({
+          code: "required_field_missing",
+          fieldId: fieldIds.calculation,
+        }),
+        expect.objectContaining({
+          code: "required_field_missing",
+          fieldId: fieldIds.total,
+        }),
+      ]),
+    });
+
+    const initial = prepareInitialRecordFieldCandidateV2({
+      operation: "create",
+      recordType: configured,
+      submittedValues: {},
+    });
+    if (!initial.success) throw new Error("Expected a typed initial candidate");
+    expect(
+      finalizeRecordFieldCandidateV2({
+        recordType: configured,
+        initialCandidate: initial.candidate,
+        candidateValues: {
+          ...initial.candidate.candidateValues,
+          [fieldIds.reference]: "00000001",
+          [fieldIds.calculation]: "2",
+          [fieldIds.total]: { amount: "4", currency: "NZD" },
+        },
+      }),
+    ).toMatchObject({
+      success: true,
+      setValues: {
+        [fieldIds.reference]: "00000001",
+        [fieldIds.calculation]: "2",
+        [fieldIds.total]: { amount: "4", currency: "NZD" },
+      },
     });
   });
 });

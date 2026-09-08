@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import {
   currencyCodeV2Schema,
   exactDecimalTextV2Schema,
@@ -11,6 +12,7 @@ import {
   parseExactDecimal,
   recordTypeDefinitionV2Schema,
   sourceExactDecimalTextV2Schema,
+  sourceModuleFieldValueV2Schemas,
   sourceMoneyValueV2Schema,
   timestampSchema,
   type FieldDefinition,
@@ -40,6 +42,7 @@ export type RecordFieldValuePreparationIssue = Readonly<{
   code: RecordFieldValuePreparationIssueCode;
   fieldId?: string;
   path: ValuePath;
+  requirement?: Readonly<{ code: string; message: string }>;
 }>;
 
 export type RecordFieldValuePendingCheck =
@@ -94,13 +97,44 @@ export type PrepareRecordFieldValuesV2Result =
       issues: readonly RecordFieldValuePreparationIssue[];
     }>;
 
+export type RecordFieldValueRequirementV2 = Readonly<{
+  fieldId: string;
+  code: string;
+  message: string;
+}>;
+
+type RecordFieldValueOriginV2 = "submitted" | "existing" | "default";
+
+export type InitialRecordFieldCandidateV2 = Readonly<{
+  operation: "create" | "update";
+  recordTypeId: string;
+  originalValues: ValueMap;
+  candidateValues: Readonly<Record<string, JsonValue>>;
+  valueOrigins: Readonly<Record<string, RecordFieldValueOriginV2>>;
+  submittedFieldIds: readonly string[];
+  submittedClearFieldIds: readonly string[];
+}>;
+
+export type PrepareInitialRecordFieldCandidateV2Result =
+  | Readonly<{ success: true; candidate: InitialRecordFieldCandidateV2 }>
+  | Readonly<{ success: false; issues: readonly RecordFieldValuePreparationIssue[] }>;
+
+export type FinalizeRecordFieldCandidateV2Input = Readonly<{
+  recordType: RecordTypeDefinitionV2;
+  initialCandidate: InitialRecordFieldCandidateV2;
+  candidateValues: ValueMap;
+  requirements?: readonly RecordFieldValueRequirementV2[];
+  organizationCurrency?: string;
+}>;
+
 type PreparationContext = {
   readonly issues: RecordFieldValuePreparationIssue[];
   readonly pendingChecks: RecordFieldValuePendingCheck[];
   readonly organizationCurrency?: string;
 };
 
-type ValueOrigin = "submitted" | "existing" | "default";
+type ValueOrigin = RecordFieldValueOriginV2 | "candidate";
+type FieldPolicyMode = "structural" | "final";
 
 export type PersistedRecordFieldValueInput =
   | Readonly<{
@@ -221,15 +255,28 @@ const issue = (
   code: RecordFieldValuePreparationIssueCode,
   path: ValuePath,
   fieldId?: string,
+  requirement?: Readonly<{ code: string; message: string }>,
 ): undefined => {
-  context.issues.push({ code, ...(fieldId === undefined ? {} : { fieldId }), path });
+  context.issues.push({
+    code,
+    ...(fieldId === undefined ? {} : { fieldId }),
+    path,
+    ...(requirement === undefined ? {} : { requirement }),
+  });
   return undefined;
 };
 
 const valueRoot = (origin: ValueOrigin, fieldId: string): ValuePath =>
   origin === "default"
     ? ["recordType", "fields", fieldId, "default"]
-    : [origin === "submitted" ? "submittedValues" : "existingValues", fieldId];
+    : [
+        origin === "submitted"
+          ? "submittedValues"
+          : origin === "existing"
+            ? "existingValues"
+            : "candidateValues",
+        fieldId,
+      ];
 
 const validateExactBounds = (
   value: string,
@@ -287,12 +334,12 @@ const normalizeMoney = (
   origin: ValueOrigin,
   path: ValuePath,
   context: PreparationContext,
+  policy: FieldPolicyMode,
 ): JsonValue | undefined => {
   const invalidCode = origin === "existing" ? "invalid_existing_value" : "invalid_value";
-  if (origin === "default") {
+  if (origin === "default" && policy === "structural") {
     const amount = exactDecimalTextV2Schema.safeParse(value);
-    if (!amount.success || !validateExactBounds(amount.data, field.settings))
-      return issue(context, invalidCode, path, field.fieldId);
+    if (!amount.success) return issue(context, invalidCode, path, field.fieldId);
     const currency =
       field.settings.currencyMode === "fixed"
         ? field.settings.currency
@@ -308,9 +355,13 @@ const normalizeMoney = (
       : moneyValueV2Schema.safeParse(value);
   if (!parsed.success) return issue(context, invalidCode, path, field.fieldId);
   const amount = normalizeExactDecimal(parsed.data.amount);
-  if (amount === undefined || !validateExactBounds(amount, field.settings))
+  if (amount === undefined || (policy === "final" && !validateExactBounds(amount, field.settings)))
     return issue(context, invalidCode, path, field.fieldId);
-  if (field.settings.currencyMode === "fixed" && parsed.data.currency !== field.settings.currency)
+  if (
+    policy === "final" &&
+    field.settings.currencyMode === "fixed" &&
+    parsed.data.currency !== field.settings.currency
+  )
     return issue(context, invalidCode, path, field.fieldId);
   return { amount, currency: parsed.data.currency };
 };
@@ -335,11 +386,12 @@ const normalizeTableMoney = (
   origin: ValueOrigin,
   path: ValuePath,
   context: PreparationContext,
+  policy: FieldPolicyMode,
 ): JsonValue | undefined => {
   const invalidCode = origin === "existing" ? "invalid_existing_value" : "invalid_value";
   let amount: string;
   let currency: string | undefined;
-  if (origin === "default") {
+  if (origin === "default" && policy === "structural") {
     const parsed = exactDecimalTextV2Schema.safeParse(value);
     if (!parsed.success) return issue(context, invalidCode, path, parent.fieldId);
     amount = parsed.data;
@@ -359,10 +411,14 @@ const normalizeTableMoney = (
     if (normalized === undefined) return issue(context, invalidCode, path, parent.fieldId);
     amount = normalized;
     currency = parsed.data.currency;
-    if (column.settings.currencyMode === "fixed" && currency !== column.settings.currency)
+    if (
+      policy === "final" &&
+      column.settings.currencyMode === "fixed" &&
+      currency !== column.settings.currency
+    )
       return issue(context, invalidCode, path, parent.fieldId);
   }
-  if (!validateExactBounds(amount, column.settings))
+  if (policy === "final" && !validateExactBounds(amount, column.settings))
     return issue(context, invalidCode, path, parent.fieldId);
   return { amount, currency: currency! };
 };
@@ -373,17 +429,31 @@ const normalizeTable = (
   origin: ValueOrigin,
   path: ValuePath,
   context: PreparationContext,
+  policy: FieldPolicyMode,
   collectPending: boolean,
 ): JsonValue | undefined => {
   const invalidCode = origin === "existing" ? "invalid_existing_value" : "invalid_value";
-  if (!Array.isArray(value)) return issue(context, invalidCode, path, field.fieldId);
-  if (value.length < field.settings.minimumRows || value.length > field.settings.maximumRows)
+  let tableValue = value;
+  if (policy === "structural" && origin !== "default") {
+    const parsed =
+      origin === "submitted"
+        ? sourceModuleFieldValueV2Schemas.table.safeParse(value)
+        : moduleFieldValueV2Schemas.table.safeParse(value);
+    if (!parsed.success) return issue(context, invalidCode, path, field.fieldId);
+    tableValue = parsed.data;
+  }
+  if (!Array.isArray(tableValue)) return issue(context, invalidCode, path, field.fieldId);
+  if (
+    policy === "final" &&
+    (tableValue.length < field.settings.minimumRows ||
+      tableValue.length > field.settings.maximumRows)
+  )
     return issue(context, invalidCode, path, field.fieldId);
 
   const columns = new Map(field.settings.columns.map((column) => [column.key, column]));
   const result: Record<string, JsonValue>[] = [];
   let valid = true;
-  for (const [rowIndex, candidate] of value.entries()) {
+  for (const [rowIndex, candidate] of tableValue.entries()) {
     const rowPath = [...path, rowIndex];
     if (!isValueMap(candidate)) {
       issue(context, invalidCode, rowPath, field.fieldId);
@@ -393,13 +463,15 @@ const normalizeTable = (
     const row: Record<string, JsonValue> = {};
     for (const key of Object.keys(candidate))
       if (!columns.has(key)) {
-        issue(context, invalidCode, [...rowPath, key], field.fieldId);
-        valid = false;
+        if (policy === "final") {
+          issue(context, invalidCode, [...rowPath, key], field.fieldId);
+          valid = false;
+        } else row[key] = candidate[key] as JsonValue;
       }
     for (const column of field.settings.columns) {
       const cellPath = [...rowPath, column.key];
       if (!hasOwn(candidate, column.key)) {
-        if (column.required) {
+        if (policy === "final" && column.required) {
           issue(context, invalidCode, cellPath, field.fieldId);
           valid = false;
         }
@@ -413,12 +485,19 @@ const normalizeTable = (
             ? sourceExactDecimalTextV2Schema.safeParse(raw)
             : exactDecimalTextV2Schema.safeParse(raw);
         const decimal = parsed.success ? normalizeExactDecimal(parsed.data) : undefined;
-        if (decimal === undefined || !tableCellAccepts(field, column, decimal))
+        if (
+          decimal === undefined ||
+          (policy === "final" && !tableCellAccepts(field, column, decimal))
+        )
           normalized = issue(context, invalidCode, cellPath, field.fieldId);
         else normalized = decimal;
       } else if (column.type === "money") {
-        normalized = normalizeTableMoney(field, column, raw, origin, cellPath, context);
-      } else if (tableCellAccepts(field, column, raw)) {
+        normalized = normalizeTableMoney(field, column, raw, origin, cellPath, context, policy);
+      } else if (
+        policy === "final"
+          ? tableCellAccepts(field, column, raw)
+          : moduleFieldValueV2Schemas[column.type].safeParse(raw).success
+      ) {
         normalized = raw as JsonValue;
       } else normalized = issue(context, invalidCode, cellPath, field.fieldId);
 
@@ -464,6 +543,7 @@ const normalizeValue = (
   value: unknown,
   origin: ValueOrigin,
   context: PreparationContext,
+  policy: FieldPolicyMode,
   collectPending: boolean,
 ): JsonValue | undefined => {
   const path = valueRoot(origin, field.fieldId);
@@ -475,9 +555,9 @@ const normalizeValue = (
     );
     return parsed ?? issue(context, "invalid_existing_value", path, field.fieldId);
   }
-  if (field.type === "money") return normalizeMoney(field, value, origin, path, context);
+  if (field.type === "money") return normalizeMoney(field, value, origin, path, context, policy);
   if (field.type === "table")
-    return normalizeTable(field, value, origin, path, context, collectPending);
+    return normalizeTable(field, value, origin, path, context, policy, collectPending);
 
   let candidate = value;
   if (field.type === "decimal_number") {
@@ -497,7 +577,9 @@ const normalizeValue = (
 
   const leaf = moduleFieldValueV2Schemas[field.type].safeParse(candidate);
   const settingsValid =
-    field.type === "attachment" || syntheticFieldAcceptsDefault(field, leaf.data);
+    policy === "structural" ||
+    field.type === "attachment" ||
+    syntheticFieldAcceptsDefault(field, leaf.data);
   if (!leaf.success || !settingsValid)
     return issue(
       context,
@@ -506,7 +588,7 @@ const normalizeValue = (
       field.fieldId,
     );
   const normalized = leaf.data as JsonValue;
-  if (field.type === "attachment") {
+  if (field.type === "attachment" && policy === "final") {
     const files = normalized as FileId[];
     if (
       (!field.settings.multiple && files.length > 1) ||
@@ -524,79 +606,84 @@ const normalizeValue = (
         field.fieldId,
       );
   }
-  if (!collectPending) return normalized;
-
   switch (field.type) {
     case "choice":
-      collectChoicePermission(
-        field.fieldId,
-        normalized as string,
-        field.settings.options,
-        path,
-        context,
-      );
-      break;
-    case "several_choices":
-      for (const [index, selected] of (normalized as string[]).entries())
+      if (collectPending)
         collectChoicePermission(
           field.fieldId,
-          selected,
+          normalized as string,
           field.settings.options,
-          [...path, index],
+          path,
           context,
         );
+      break;
+    case "several_choices":
+      if (collectPending)
+        for (const [index, selected] of (normalized as string[]).entries())
+          collectChoicePermission(
+            field.fieldId,
+            selected,
+            field.settings.options,
+            [...path, index],
+            context,
+          );
       break;
     case "link":
     case "link_to_one_of_several": {
       const link = normalized as { recordTypeId: string; recordId: string };
       const targets = field.type === "link" ? [field.settings.target] : field.settings.targets;
-      if (targets.some((target) => target.state !== "resolved"))
+      if (policy === "final" && targets.some((target) => target.state !== "resolved"))
         return issue(context, "unresolved_record_target", path, field.fieldId);
       if (
+        policy === "final" &&
         !targets.some(
           (target) => target.state === "resolved" && target.recordTypeId === link.recordTypeId,
         )
       )
         return issue(context, "invalid_value", path, field.fieldId);
-      context.pendingChecks.push({
-        kind: "record_reference",
-        fieldId: field.fieldId,
-        path,
-        recordTypeId: link.recordTypeId,
-        recordId: link.recordId,
-      });
+      if (collectPending)
+        context.pendingChecks.push({
+          kind: "record_reference",
+          fieldId: field.fieldId,
+          path,
+          recordTypeId: link.recordTypeId,
+          recordId: link.recordId,
+        });
       break;
     }
     case "link_to_person": {
       const person = normalized as { organizationAccountId: string };
-      context.pendingChecks.push({
-        kind: "person_reference",
-        fieldId: field.fieldId,
-        path,
-        organizationAccountId: person.organizationAccountId,
-        audience: field.settings.audience,
-        applicationRootIdRequired: field.settings.applicationRootIdRequired,
-      });
+      if (collectPending)
+        context.pendingChecks.push({
+          kind: "person_reference",
+          fieldId: field.fieldId,
+          path,
+          organizationAccountId: person.organizationAccountId,
+          audience: field.settings.audience,
+          applicationRootIdRequired: field.settings.applicationRootIdRequired,
+        });
       break;
     }
     case "attachment": {
       const files = normalized as FileId[];
-      for (const [index, fileId] of files.entries())
-        context.pendingChecks.push({
-          kind: "file_reference",
-          fieldId: field.fieldId,
-          path: [...path, index],
-          fileId,
-        });
+      if (collectPending)
+        for (const [index, fileId] of files.entries())
+          context.pendingChecks.push({
+            kind: "file_reference",
+            fieldId: field.fieldId,
+            path: [...path, index],
+            fileId,
+          });
       break;
     }
     case "formatted_text":
-      collectRichTextFileChecks(
-        normalized as Extract<JsonValue, { blocks?: unknown }>,
-        field.fieldId,
-        path,
-        context,
-      );
+      if (collectPending)
+        collectRichTextFileChecks(
+          normalized as Extract<JsonValue, { blocks?: unknown }>,
+          field.fieldId,
+          path,
+          context,
+        );
       break;
   }
   return normalized;
@@ -618,22 +705,26 @@ export const persistedRecordFieldValueMatches = (
   const field = moduleFieldV2Schema.safeParse(input.field);
   if (!field.success) return false;
   const context: PreparationContext = { issues: [], pendingChecks: [] };
-  return normalizeValue(field.data, input.value, "existing", context, true) !== undefined;
+  return normalizeValue(field.data, input.value, "existing", context, "final", true) !== undefined;
 };
 
-export const prepareRecordFieldValuesV2 = (
+const preparationContext = (organizationCurrency: string | undefined): PreparationContext => ({
+  issues: [],
+  pendingChecks: [],
+  ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
+});
+
+/**
+ * Builds the typed in-memory candidate used by trusted Record-owned engines.
+ * This is not a request or authority boundary: field policies and requiredness
+ * are deliberately applied by `finalizeRecordFieldCandidateV2` after rules and
+ * owning generators have produced the final candidate.
+ */
+export const prepareInitialRecordFieldCandidateV2 = (
   input: PrepareRecordFieldValuesV2Input,
-): PrepareRecordFieldValuesV2Result => {
+): PrepareInitialRecordFieldCandidateV2Result => {
   const trustedRecordType = recordTypeDefinitionV2Schema.parse(input.recordType);
-  const issues: RecordFieldValuePreparationIssue[] = [];
-  const pendingChecks: RecordFieldValuePendingCheck[] = [];
-  const context: PreparationContext = {
-    issues,
-    pendingChecks,
-    ...(input.organizationCurrency === undefined
-      ? {}
-      : { organizationCurrency: input.organizationCurrency }),
-  };
+  const context = preparationContext(input.organizationCurrency);
   if (!isValueMap(input.submittedValues)) issue(context, "invalid_input", ["submittedValues"]);
   if (input.operation === "update" && !isValueMap(input.existingValues))
     issue(context, "invalid_input", ["existingValues"]);
@@ -642,16 +733,17 @@ export const prepareRecordFieldValuesV2 = (
     !currencyCodeV2Schema.safeParse(input.organizationCurrency).success
   )
     issue(context, "invalid_input", ["organizationCurrency"]);
-  if (issues.length > 0) return { success: false, issues };
+  if (context.issues.length > 0) return { success: false, issues: context.issues };
 
   const submittedValues = input.submittedValues;
   const existingValues = input.existingValues ?? {};
   const fieldsById = new Map<string, ModuleFieldV2>(
     trustedRecordType.fields.map((field) => [field.fieldId, field]),
   );
-  const setValues: Record<string, JsonValue> = {};
-  const clearFieldIds: string[] = [];
-  const present = new Set<string>();
+  const candidateValues: Record<string, JsonValue> = {};
+  const valueOrigins: Record<string, RecordFieldValueOriginV2> = {};
+  const submittedFieldIds: string[] = [];
+  const submittedClearFieldIds: string[] = [];
 
   if (input.operation === "update") {
     for (const [fieldId, value] of Object.entries(existingValues)) {
@@ -665,8 +757,11 @@ export const prepareRecordFieldValuesV2 = (
         issue(context, "invalid_existing_value", ["existingValues", fieldId], fieldId);
         continue;
       }
-      if (normalizeValue(field, value, "existing", context, false) !== undefined)
-        present.add(fieldId);
+      const normalized = normalizeValue(field, value, "existing", context, "structural", false);
+      if (normalized !== undefined) {
+        candidateValues[fieldId] = normalized;
+        valueOrigins[fieldId] = "existing";
+      }
     }
   }
 
@@ -680,40 +775,191 @@ export const prepareRecordFieldValuesV2 = (
       issue(context, "generated_field_input", ["submittedValues", fieldId], fieldId);
       continue;
     }
+    submittedFieldIds.push(fieldId);
     if (value === null) {
-      present.delete(fieldId);
-      if (field.required)
-        issue(context, "required_field_clear", ["submittedValues", fieldId], fieldId);
-      else if (input.operation === "update") clearFieldIds.push(fieldId);
+      submittedClearFieldIds.push(fieldId);
       continue;
     }
-    const normalized = normalizeValue(field, value, "submitted", context, true);
+    const normalized = normalizeValue(field, value, "submitted", context, "structural", false);
     if (normalized !== undefined) {
-      setValues[fieldId] = normalized;
-      present.add(fieldId);
+      candidateValues[fieldId] = normalized;
+      valueOrigins[fieldId] = "submitted";
     }
   }
 
   if (input.operation === "create")
     for (const field of trustedRecordType.fields) {
       if (hasOwn(submittedValues, field.fieldId) || field.default === undefined) continue;
-      const normalized = normalizeValue(field, field.default, "default", context, true);
+      const normalized = normalizeValue(
+        field,
+        field.default,
+        "default",
+        context,
+        "structural",
+        false,
+      );
       if (normalized !== undefined) {
-        setValues[field.fieldId] = normalized;
-        present.add(field.fieldId);
+        candidateValues[field.fieldId] = normalized;
+        valueOrigins[field.fieldId] = "default";
       }
     }
 
-  for (const field of trustedRecordType.fields)
-    if (field.required && !generatedFieldTypes.has(field.type) && !present.has(field.fieldId))
+  return context.issues.length > 0
+    ? { success: false, issues: context.issues }
+    : {
+        success: true,
+        candidate: {
+          operation: input.operation,
+          recordTypeId: trustedRecordType.recordTypeId,
+          originalValues: input.operation === "update" ? structuredClone(existingValues) : {},
+          candidateValues,
+          valueOrigins,
+          submittedFieldIds,
+          submittedClearFieldIds,
+        },
+      };
+};
+
+/**
+ * Applies the owning field policy to one final Record-owned candidate and
+ * derives its write patch. The candidate may contain trusted rule/calculation/
+ * total output; this function is not evidence of Access or database checks.
+ */
+const finalizeRecordFieldCandidateV2Internal = (
+  input: FinalizeRecordFieldCandidateV2Input,
+  requireGeneratedFields: boolean,
+): PrepareRecordFieldValuesV2Result => {
+  const trustedRecordType = recordTypeDefinitionV2Schema.parse(input.recordType);
+  const context = preparationContext(input.organizationCurrency);
+  if (!isValueMap(input.candidateValues)) issue(context, "invalid_input", ["candidateValues"]);
+  if (input.initialCandidate.recordTypeId !== trustedRecordType.recordTypeId)
+    issue(context, "invalid_input", ["initialCandidate", "recordTypeId"]);
+  if (
+    input.organizationCurrency !== undefined &&
+    !currencyCodeV2Schema.safeParse(input.organizationCurrency).success
+  )
+    issue(context, "invalid_input", ["organizationCurrency"]);
+  if (context.issues.length > 0) return { success: false, issues: context.issues };
+
+  const fieldsById = new Map<string, ModuleFieldV2>(
+    trustedRecordType.fields.map((field) => [field.fieldId, field]),
+  );
+  const submittedFieldIds = new Set(input.initialCandidate.submittedFieldIds);
+  const normalizedCandidate: Record<string, JsonValue> = {};
+  const changedFieldIds = new Set<string>();
+
+  for (const [fieldId, value] of Object.entries(input.candidateValues)) {
+    const field = fieldsById.get(fieldId);
+    if (field === undefined) {
+      issue(context, "unknown_field", ["candidateValues", fieldId], fieldId);
+      continue;
+    }
+    if (value === null) {
+      issue(context, "invalid_value", ["candidateValues", fieldId], fieldId);
+      continue;
+    }
+    const changed =
+      submittedFieldIds.has(fieldId) ||
+      !hasOwn(input.initialCandidate.originalValues, fieldId) ||
+      !isDeepStrictEqual(input.initialCandidate.originalValues[fieldId], value);
+    if (changed) changedFieldIds.add(fieldId);
+
+    if (generatedFieldTypes.has(field.type)) {
+      const normalized = normalizeGeneratedExisting(
+        field as Extract<ModuleFieldV2, { type: "reference_number" | "calculation" | "total" }>,
+        value,
+      );
+      if (normalized === undefined)
+        issue(context, "invalid_value", ["candidateValues", fieldId], fieldId);
+      else normalizedCandidate[fieldId] = normalized;
+      continue;
+    }
+
+    const initialValue = input.initialCandidate.candidateValues[fieldId];
+    const unchangedFromInitial =
+      hasOwn(input.initialCandidate.candidateValues, fieldId) &&
+      isDeepStrictEqual(initialValue, value);
+    const origin = unchangedFromInitial
+      ? (input.initialCandidate.valueOrigins[fieldId] ?? "candidate")
+      : "candidate";
+    const normalized = normalizeValue(field, value, origin, context, "final", changed);
+    if (normalized !== undefined) normalizedCandidate[fieldId] = normalized;
+  }
+
+  const submittedClears = new Set(input.initialCandidate.submittedClearFieldIds);
+  for (const field of trustedRecordType.fields) {
+    const present = hasOwn(normalizedCandidate, field.fieldId);
+    if (submittedClears.has(field.fieldId) && field.required && !present)
+      issue(context, "required_field_clear", ["submittedValues", field.fieldId], field.fieldId);
+    if (
+      field.required &&
+      (requireGeneratedFields || !generatedFieldTypes.has(field.type)) &&
+      !present
+    )
       issue(
         context,
         "required_field_missing",
         ["recordType", "fields", field.fieldId],
         field.fieldId,
       );
+  }
 
-  return issues.length > 0
-    ? { success: false, issues }
-    : { success: true, setValues, clearFieldIds, pendingChecks };
+  for (const requirement of input.requirements ?? []) {
+    if (!fieldsById.has(requirement.fieldId)) {
+      issue(context, "unknown_field", ["requirements", requirement.fieldId], requirement.fieldId);
+      continue;
+    }
+    if (!hasOwn(normalizedCandidate, requirement.fieldId))
+      issue(
+        context,
+        "required_field_missing",
+        ["candidateValues", requirement.fieldId],
+        requirement.fieldId,
+        { code: requirement.code, message: requirement.message },
+      );
+  }
+
+  if (context.issues.length > 0) return { success: false, issues: context.issues };
+
+  const setValues: Record<string, JsonValue> = {};
+  for (const [fieldId, value] of Object.entries(normalizedCandidate))
+    if (changedFieldIds.has(fieldId)) setValues[fieldId] = value;
+
+  const clearFieldIds: string[] = [];
+  const addClear = (fieldId: string) => {
+    if (
+      ((input.initialCandidate.operation === "update" &&
+        input.initialCandidate.submittedClearFieldIds.includes(fieldId)) ||
+        hasOwn(input.initialCandidate.originalValues, fieldId)) &&
+      !hasOwn(normalizedCandidate, fieldId) &&
+      !clearFieldIds.includes(fieldId)
+    )
+      clearFieldIds.push(fieldId);
+  };
+  input.initialCandidate.submittedClearFieldIds.forEach(addClear);
+  Object.keys(input.initialCandidate.originalValues).forEach(addClear);
+
+  return { success: true, setValues, clearFieldIds, pendingChecks: context.pendingChecks };
+};
+
+export const finalizeRecordFieldCandidateV2 = (
+  input: FinalizeRecordFieldCandidateV2Input,
+): PrepareRecordFieldValuesV2Result => finalizeRecordFieldCandidateV2Internal(input, true);
+
+export const prepareRecordFieldValuesV2 = (
+  input: PrepareRecordFieldValuesV2Input,
+): PrepareRecordFieldValuesV2Result => {
+  const initial = prepareInitialRecordFieldCandidateV2(input);
+  if (!initial.success) return initial;
+  return finalizeRecordFieldCandidateV2Internal(
+    {
+      recordType: input.recordType,
+      initialCandidate: initial.candidate,
+      candidateValues: initial.candidate.candidateValues,
+      ...(input.organizationCurrency === undefined
+        ? {}
+        : { organizationCurrency: input.organizationCurrency }),
+    },
+    false,
+  );
 };

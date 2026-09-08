@@ -68,9 +68,10 @@ flowchart LR
 | Refuse        | Terminal safe refusal, optionally located at a declared field.               |
 | Finish        | Terminal evaluation result; never a database commit.                         |
 
-Require field records a requirement checked against the final candidate: a later
-Set field may satisfy it. It is not an early refusal of a value that the same
-configured flow is about to supply. Explicit Refuse remains terminal. Previous
+Require field records a requirement returned to the owning Record save for
+checking against its final candidate, after all graphs and owning generators:
+a later Set field or generated value may satisfy it. It is not an early refusal
+of a value that the same configured operation is about to supply. Explicit Refuse remains terminal. Previous
 field values are unavailable during creation, not invented null values.
 
 Exactly one Start and one active path; all nodes must be reachable. Refuse and
@@ -150,6 +151,12 @@ warnings, or a terminal refusal with safe field issues. A refused run exposes no
 applicable write patch. Messages are configured safe text/codes, not submitted
 values echoed into errors. The owning Record operation applies nothing unless
 the whole operation passes; no caller authority flag is introduced.
+
+The initial candidate contains decoded typed values, not a claim that required
+fields and all field-specific policies already pass. Record owns the engine's
+initial/final preparation stages and evaluates returned requirements after its
+generators; Rule never imports Record or duplicates final field validation. See
+the [candidate integration plan](issue-47-save-command.md#candidate-preparation-and-final-validation).
 
 - Complete source/canonical fixtures and all eight nodes before runtime code.
 - Prove explicit branch order, field changes observed downstream, variable

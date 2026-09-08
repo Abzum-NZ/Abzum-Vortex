@@ -686,9 +686,9 @@ The first implementation profile is the shared graph's `before_save` profile,
 embedded in the explicit Module source/validation pair `3.0.0`. It reuses V2
 field values and defines Start, Condition, Set variable, Set field, Require field,
 Warn, Refuse and Finish nodes. Typed run-local variables are not infrastructure
-environment variables or secrets. Requirements apply to the final candidate
-after the applicable graphs run in ascending priority and permanent rule-ID
-order. Definition carries the exact pair through compilation, semantic validation,
+environment variables or secrets. Graphs run in ascending priority and permanent
+rule-ID order. Require-field nodes return checks for the owning Record save's
+final candidate, after all applicable graphs and owning generators. Definition carries the exact pair through compilation, semantic validation,
 publication, consumer reads and restore, retaining node/input/variable identities
 inside their permanent rule owner. Complete local lifecycle tests exercise those
 operations; they do not establish hosted delivery or execution. The

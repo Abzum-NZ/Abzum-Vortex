@@ -133,3 +133,14 @@ not a full compiled-application installation or a hosted publication journey.
 Both runs rolled back, and a subsequent constraint inspection confirmed no
 graph kind remained installed locally. No migration history was written. These
 results establish local compatibility, not application to Testing or Production.
+
+Independent Sol reviewed the exact two-file storage slice and repeated both
+rollback-only suites: **14 + 49 assertions passed**, with no findings. Root's
+combined conversion regression passed **1,130 tests in 81 files** and all **23
+package type checks**; scoped lint/formatting, boundaries and diff checks passed.
+
+The converter and identity compatibility change merged to Testing through
+[PR #368](https://github.com/Abzum-NZ/Abzum-Vortex/pull/368) at
+`b8156f1df9044d80f4657be2ba1d855213594b51`, after normal preview checks passed.
+Hosted database verification remains a separate delivery result, not inferred
+from that merge or the preview build.
