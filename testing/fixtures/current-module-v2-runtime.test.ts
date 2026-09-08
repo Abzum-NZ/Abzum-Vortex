@@ -30,7 +30,7 @@ import {
   type ResolvableModuleRelease,
 } from "@vortex/definition";
 import { compileDefinition, compileDefinitionSet } from "@vortex/definition/compiler";
-import { prepareRecordFieldValuesV2 } from "@vortex/record";
+import { evaluateRecordCalculationsV2, prepareRecordFieldValuesV2 } from "@vortex/record";
 import { describe, expect, it } from "vitest";
 
 const fixtureRoot = path.resolve("testing/fixtures");
@@ -524,6 +524,9 @@ describe("current Module V2 fixture runtime", () => {
     const caseRecord = moduleRead("vortex.service_desk.cases").content.recordTypes.find(
       (recordType) => recordType.key === "case",
     )!;
+    const opportunity = moduleRead("vortex.crm.opportunities").content.recordTypes.find(
+      (recordType) => recordType.key === "opportunity",
+    )!;
     const companyPrepared = prepareRecordFieldValuesV2({
       operation: "create",
       recordType: company,
@@ -582,10 +585,57 @@ describe("current Module V2 fixture runtime", () => {
     });
     expect(contactPrepared).toMatchObject({ success: true });
     expect(casePrepared).toMatchObject({ success: true });
+    if (!contactPrepared.success) throw new Error("Contact values must prepare");
     if (!casePrepared.success) throw new Error("Case values must prepare");
     expect(casePrepared.pendingChecks.filter((check) => check.kind === "record_reference")).toHaveLength(
       3,
     );
+    const calculationClock = {
+      instant: "2026-09-09T09:30:00+12:00",
+      organizationLocalDate: "2026-09-09",
+    } as const;
+    expect(
+      evaluateRecordCalculationsV2({
+        recordType: contact,
+        authoritativeFieldValues: contactPrepared.setValues,
+        clock: calculationClock,
+      }),
+    ).toMatchObject({
+      success: true,
+      setValues: {
+        [contact.fields.find((field) => field.key === "full_name")!.fieldId]: "Aroha Ngata",
+      },
+    });
+    expect(
+      evaluateRecordCalculationsV2({
+        recordType: opportunity,
+        authoritativeFieldValues: fieldValues(opportunity, {
+          value: { amount: "100", currency: "NZD" },
+          discount_percent: "12.5",
+        }),
+        clock: calculationClock,
+      }),
+    ).toMatchObject({
+      success: true,
+      setValues: {
+        [opportunity.fields.find((field) => field.key === "net_value")!.fieldId]: {
+          amount: "87.5",
+          currency: "NZD",
+        },
+      },
+    });
+    expect(
+      evaluateRecordCalculationsV2({
+        recordType: caseRecord,
+        authoritativeFieldValues: casePrepared.setValues,
+        clock: calculationClock,
+      }),
+    ).toMatchObject({
+      success: true,
+      setValues: {
+        [caseRecord.fields.find((field) => field.key === "breached")!.fieldId]: false,
+      },
+    });
 
     const scenario = read(fixtureRoot, "scenarios/cross-application-sharing.json") as {
       body: {
@@ -609,7 +659,7 @@ describe("current Module V2 fixture runtime", () => {
     expect(readableIds).not.toContain(
       caseRecord.fields.find((field) => field.key === "attachments")!.fieldId,
     );
-  });
+  }, 15_000);
 
   it("keeps dependency-owned resolution evidence while refusing substituted releases", async () => {
     const candidates = [...currentModules, ...currentApplications].map(candidateFor);

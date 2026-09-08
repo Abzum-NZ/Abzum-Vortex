@@ -1,6 +1,7 @@
 import "server-only";
 
 export * from "./field-values";
+export * from "./calculations";
 
 export const RecordService = Object.freeze({
   key: "record",

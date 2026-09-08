@@ -312,6 +312,7 @@ const sourceCalculationSettingsV2Schema = z
       "date",
       "date_time",
     ]),
+    decimal_places: z.number().int().min(0).max(12).optional(),
     expression: sourceCalculationExpressionV2Schema,
   })
   .strict()
@@ -331,6 +332,16 @@ const sourceCalculationSettingsV2Schema = z
         path: ["result_type"],
         message: "Calculation result type must match its operation",
       });
+    if (
+      value.decimal_places !== undefined &&
+      value.result_type !== "decimal_number" &&
+      value.result_type !== "money"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["decimal_places"],
+        message: "Only decimal and money calculations declare result precision",
+      });
   });
 const sourceTotalSettingsV2Schema = z
   .object({
@@ -348,6 +359,7 @@ const sourceTotalSettingsV2Schema = z
     field: builderKeySchema.optional(),
     filter: sourceConditionSchema.optional(),
     currency: currencyCodeV2Schema.optional(),
+    decimal_places: z.number().int().min(0).max(12).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -363,6 +375,12 @@ const sourceTotalSettingsV2Schema = z
         code: "custom",
         path: ["currency"],
         message: "Currency is supported only for sum totals",
+      });
+    if (value.decimal_places !== undefined && value.operation !== "average")
+      context.addIssue({
+        code: "custom",
+        path: ["decimal_places"],
+        message: "Only average totals declare result precision",
       });
     if (value.operation === "count" && value.result_type !== "whole_number")
       context.addIssue({

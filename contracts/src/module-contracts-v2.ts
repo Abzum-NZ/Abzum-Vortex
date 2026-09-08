@@ -307,6 +307,7 @@ const calculationSettingsV2Schema = z
       "date",
       "date_time",
     ]),
+    decimalPlaces: z.number().int().min(0).max(12).optional(),
     expression: calculationExpressionV2Schema,
     dependencyFieldIds: z.array(fieldIdSchema).min(1),
   })
@@ -318,15 +319,27 @@ const calculationSettingsV2Schema = z
       (value.expression.kind === "date_offset" &&
         (value.resultType === "date" || value.resultType === "date_time")) ||
       (value.expression.kind === "deadline_passed" && value.resultType === "yes_no") ||
-      ((value.expression.kind === "numeric" || value.expression.kind === "subtract_percentage") &&
+      (value.expression.kind === "numeric" &&
         (value.resultType === "whole_number" ||
           value.resultType === "decimal_number" ||
-          value.resultType === "money"));
+          value.resultType === "money")) ||
+      (value.expression.kind === "subtract_percentage" &&
+        (value.resultType === "decimal_number" || value.resultType === "money"));
     if (!valid)
       context.addIssue({
         code: "custom",
         path: ["resultType"],
         message: "Calculation result type must match its closed expression kind",
+      });
+    if (
+      value.decimalPlaces !== undefined &&
+      value.resultType !== "decimal_number" &&
+      value.resultType !== "money"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["decimalPlaces"],
+        message: "Only decimal and money calculations declare result precision",
       });
   });
 const totalSettingsV2Schema = z
@@ -345,8 +358,17 @@ const totalSettingsV2Schema = z
     fieldId: fieldIdSchema.optional(),
     filter: conditionNodeSchema.optional(),
     currency: currencyCodeV2Schema.optional(),
+    decimalPlaces: z.number().int().min(0).max(12).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.decimalPlaces !== undefined && value.operation !== "average")
+      context.addIssue({
+        code: "custom",
+        path: ["decimalPlaces"],
+        message: "Only average totals declare result precision",
+      });
+  });
 const attachmentSettingsV2Schema = z
   .object({
     allowedKinds: z

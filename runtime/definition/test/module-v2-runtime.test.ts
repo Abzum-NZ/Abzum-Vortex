@@ -28,7 +28,11 @@ import {
   type DefinitionReleaseAppend,
 } from "../src/definition-publication";
 import { extractStoredSourceIdentityRequirements } from "../src/source-identities";
-import { compileDefinitionSet, evaluateSavedSharingConditionV2 } from "../src/validation";
+import {
+  compileDefinitionSet,
+  evaluateSavedSharingConditionV2,
+  validateDefinitionSet,
+} from "../src/validation";
 
 const fixtureRoot = path.resolve(
   import.meta.dirname,
@@ -156,6 +160,7 @@ const sourceV2 = (exactValues = false): ModuleSourceDocumentV2 => {
       public_display: "refused",
       settings: {
         result_type: "decimal_number",
+        decimal_places: 4,
         expression: {
           operation: "numeric",
           numeric_operation: "add",
@@ -586,6 +591,9 @@ describe("Module V2 Definition runtime", () => {
         },
       },
     });
+    expect(fields.find((field) => field.key === "exact_calculation")).toMatchObject({
+      settings: { decimalPlaces: 4 },
+    });
     const total = output.canonical.content.recordTypes
       .find((record) => record.key === "business_calendar")!
       .fields.find((field) => field.key === "total_response");
@@ -679,6 +687,99 @@ describe("Module V2 Definition runtime", () => {
         (condition) => condition.key === "total_above_floor",
       )?.publicationTests[0]?.fieldValues,
     ).toEqual({ [total!.fieldId]: "3.5" });
+  });
+
+  it("requires explicit execution precision and valid numeric dimensions at V2 publication", () => {
+    const compile = (source: ModuleSourceDocumentV2) => {
+      const resolution = resolutionV2(source);
+      return compileDefinitionSet(
+        [
+          {
+            sourceContractVersion: "2.0.0",
+            validationContractVersion: "2.0.0",
+            source,
+            resolution,
+            draftMetadata: metadata,
+            savedConditionRevisions: savedConditionRevisionsV2(source, resolution),
+          },
+        ],
+        { publishedHistories: [{ kind: "module", definitionKey: source.key, history: [] }] },
+      );
+    };
+
+    const missingCalculationPrecision = sourceV2(true);
+    const serviceLevel = missingCalculationPrecision.body.record_types.find(
+      (record) => record.key === "service_level",
+    )!;
+    const exactCalculation = serviceLevel.fields.find(
+      (field) => field.key === "exact_calculation",
+    )! as unknown as { settings: Record<string, unknown> };
+    delete exactCalculation.settings.decimal_places;
+    expect(() => compile(missingCalculationPrecision)).toThrow();
+
+    const invalidDimensions = sourceV2(true);
+    const invalidServiceLevel = invalidDimensions.body.record_types.find(
+      (record) => record.key === "service_level",
+    )!;
+    const invalidCalculation = invalidServiceLevel.fields.find(
+      (field) => field.key === "exact_calculation",
+    )! as unknown as { settings: Record<string, unknown> };
+    invalidCalculation.settings.result_type = "money";
+    invalidCalculation.settings.decimal_places = 2;
+    invalidCalculation.settings.expression = {
+      operation: "numeric",
+      numeric_operation: "add",
+      operands: [
+        { source: "field", field: "resolution_minutes" },
+        { source: "field", field: "first_response_minutes" },
+      ],
+    };
+    expect(() => compile(invalidDimensions)).toThrow();
+
+    const average = sourceV2(true);
+    const calendar = average.body.record_types.find(
+      (record) => record.key === "business_calendar",
+    )!;
+    const total = calendar.fields.find((field) => field.key === "total_response")! as unknown as {
+      settings: Record<string, unknown>;
+    };
+    total.settings.operation = "average";
+    total.settings.decimal_places = 3;
+    expect(compile(average)).toHaveLength(1);
+    delete total.settings.decimal_places;
+    expect(() => compile(average)).toThrow();
+  });
+
+  it("refuses a compiled V2 calculation whose dependency evidence diverges from its expression", () => {
+    const source = sourceV2(true);
+    const resolution = resolutionV2(source);
+    const request = {
+      sourceContractVersion: "2.0.0" as const,
+      validationContractVersion: "2.0.0" as const,
+      source,
+      resolution,
+      draftMetadata: metadata,
+      savedConditionRevisions: savedConditionRevisionsV2(source, resolution),
+    };
+    const output = structuredClone(compileDefinition(request));
+    if (output.kind !== "module" || !("validationContractVersion" in output))
+      throw new Error("Module V2 output required");
+    const calculated = output.canonical.content.recordTypes
+      .find((record) => record.key === "service_level")!
+      .fields.find((field) => field.key === "exact_calculation")!;
+    if (calculated.type !== "calculation") throw new Error("Calculation field required");
+    calculated.settings.dependencyFieldIds = [];
+    const validation = validateDefinitionSet({
+      requests: [request],
+      outputs: [output],
+      publishedHistories: [{ kind: "module", definitionKey: source.key, history: [] }],
+    });
+    expect(validation).toMatchObject({
+      valid: false,
+      failures: expect.arrayContaining([
+        expect.objectContaining({ ruleCode: "vortex.definition.module_field_references" }),
+      ]),
+    });
   });
 
   it("refuses action and rule link literals outside the field's declared target", () => {

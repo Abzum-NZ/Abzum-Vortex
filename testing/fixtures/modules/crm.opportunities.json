@@ -163,6 +163,7 @@
             "type": "calculation",
             "settings": {
               "result_type": "money",
+              "decimal_places": 2,
               "expression": {
                 "operation": "subtract_percentage",
                 "amount_field": "value",
