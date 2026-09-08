@@ -46,7 +46,10 @@ const historyResult = {
   correlationId: ids.correlation,
 } as const;
 
-const moduleFixtureDirectory = path.resolve(import.meta.dirname, "../../testing/fixtures/modules");
+const moduleFixtureDirectory = path.resolve(
+  import.meta.dirname,
+  "../../testing/fixtures/historical/module-v1/modules",
+);
 const moduleSource = JSON.parse(
   fs.readFileSync(
     path.join(moduleFixtureDirectory, fs.readdirSync(moduleFixtureDirectory).sort()[0]!),

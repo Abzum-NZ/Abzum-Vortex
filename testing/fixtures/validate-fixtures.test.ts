@@ -3,8 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   definitionResolutionSnapshotSchema,
+  definitionResolutionSnapshotV2Schema,
   definitionSourceDocumentSchema,
   fieldTypeKeys,
+  moduleSourceDocumentV2Schema,
+  publishedModuleDefinitionSchema,
   workflowNodeTypeKeys,
 } from "@vortex/contracts";
 import { compileDefinitionSet } from "@vortex/definition/compiler";
@@ -12,6 +15,9 @@ import { compileDefinitionSet } from "@vortex/definition/compiler";
 const root = path.resolve("testing/fixtures");
 const read = (relative: string): unknown =>
   JSON.parse(fs.readFileSync(path.join(root, relative), "utf8"));
+const historicalRoot = path.join(root, "historical/module-v1");
+const readHistorical = (relative: string): unknown =>
+  JSON.parse(fs.readFileSync(path.join(historicalRoot, relative), "utf8"));
 const manifest = read("fixture-set.json") as {
   files: string[];
   requiredFieldTypes: string[];
@@ -28,9 +34,24 @@ const manifest = read("fixture-set.json") as {
 const definitionFiles = manifest.files.filter((file) =>
   /^(modules|applications|connection-types)\/.+\.json$/.test(file),
 );
-const sources = definitionFiles.map((file) => definitionSourceDocumentSchema.parse(read(file)));
-const resolution = definitionResolutionSnapshotSchema.parse(
+const sources = definitionFiles.map((file) => {
+  const candidate = read(file);
+  return typeof candidate === "object" && candidate !== null && "kind" in candidate &&
+    candidate.kind === "module"
+    ? moduleSourceDocumentV2Schema.parse(candidate)
+    : definitionSourceDocumentSchema.parse(candidate);
+});
+const resolutionV1 = definitionResolutionSnapshotSchema.parse(
   read("definition-resolution-snapshot.json"),
+);
+const resolutionV2 = definitionResolutionSnapshotV2Schema.parse(
+  read("module-v2-definition-resolution-snapshot.json"),
+);
+const historicalSources = definitionFiles.map((file) =>
+  definitionSourceDocumentSchema.parse(readHistorical(file)),
+);
+const historicalResolution = definitionResolutionSnapshotSchema.parse(
+  readHistorical("definition-resolution-snapshot.json"),
 );
 const draftMetadata = {
   organizationId: "10000000-0000-4000-a000-000000000001",
@@ -40,12 +61,88 @@ const draftMetadata = {
   updatedAt: "2026-09-01T00:00:00+00:00",
   updatedBy: "10000000-0000-4000-a000-000000000002",
 } as const;
-const savedConditionRevisions = [
+const currentDraftMetadata = {
+  ...draftMetadata,
+  draftRevision: 2,
+  publishedRevision: 1,
+} as const;
+const savedConditionRevisions = (
+  source: Extract<(typeof sources)[number] | (typeof historicalSources)[number], { kind: "module" }>,
+  resolution: typeof resolutionV1 | typeof resolutionV2,
+) =>
+  source.body.sharing_conditions.map((condition) => {
+    const identity = resolution.identities.find(
+      (candidate) =>
+        candidate.definitionKey === source.key &&
+        candidate.kind === "sharing_condition" &&
+        candidate.componentOwner === condition.id,
+    );
+    if (!identity) throw new Error(`Sharing-condition identity required for ${source.key}`);
+    return { conditionId: identity.identifier, revision: 1 };
+  });
+const historicalOutputs = compileDefinitionSet(
+  historicalSources.map((source) => ({
+    source,
+    resolution: historicalResolution,
+    ...(source.kind === "connection_type" ? {} : { draftMetadata }),
+    ...(source.kind === "module"
+      ? { savedConditionRevisions: savedConditionRevisions(source, historicalResolution) }
+      : {}),
+  })),
   {
-    conditionId: "a4b5546d-8a54-4003-adc4-ddb8b0d7257d",
-    revision: 1,
+    publishedHistories: historicalSources
+      .filter((source) => source.kind === "module" || source.kind === "application")
+      .map((source) => ({ kind: source.kind, definitionKey: source.key, history: [] })),
   },
-] as const;
+);
+const historicalModulePublications = new Map(
+  historicalOutputs
+    .filter((output) => output.kind === "module")
+    .map((output) => [
+      output.artifact.definitionKey,
+      {
+        kind: "module" as const,
+        rootId: output.artifact.rootId,
+        revision: 1,
+        releaseVersion: "1.0.0",
+        contentFingerprint: output.artifact.contentFingerprint,
+        publishedAt: draftMetadata.createdAt,
+        publishedBy: draftMetadata.createdBy,
+        validationContractVersion: "1.0.0",
+      },
+    ]),
+);
+const historicalPublishedHistories = historicalOutputs
+  .filter((output) => output.kind === "module")
+  .map((output) => {
+    const entry = {
+        publication: {
+          kind: output.kind,
+          rootId: output.artifact.rootId,
+          revision: 1,
+          releaseVersion: "1.0.0",
+          contentFingerprint: output.artifact.contentFingerprint,
+          publishedAt: draftMetadata.createdAt,
+          publishedBy: draftMetadata.createdBy,
+          validationContractVersion: "1.0.0",
+        },
+        content: output.canonical.content,
+        dependencyManifest: output.resolvedDependencies.flatMap((dependency) => {
+          if (dependency.kind !== "module") return [];
+          const publication = historicalModulePublications.get(dependency.key);
+          if (!publication)
+            throw new Error(`Historical Module publication required for ${dependency.key}`);
+          return [publication];
+        }),
+        releaseNote: "Historical Module V1 fixture baseline",
+      };
+    const history = publishedModuleDefinitionSchema.parse(entry);
+    return {
+      kind: output.kind,
+      definitionKey: output.artifact.definitionKey,
+      history: [history],
+    };
+  });
 
 describe("complete fixture set", () => {
   it("lists every JSON fixture exactly once", () => {
@@ -58,26 +155,84 @@ describe("complete fixture set", () => {
             ? [relative]
             : [];
       });
-    const actual = visit("").filter((file) => file !== "fixture-set.json").sort();
+    const actual = visit("")
+      .filter((file) => file !== "fixture-set.json" && !file.startsWith("historical/"))
+      .sort();
     expect([...manifest.files].sort()).toEqual(actual);
     expect(new Set(manifest.files).size).toBe(manifest.files.length);
   });
 
-  it("parses, compiles and publishes all thirteen definitions through shipping code", () => {
+  it("keeps the current pair-specific snapshots and historical Module V1 baseline explicit", () => {
+    expect(resolutionV2.definitions).toEqual(resolutionV1.definitions);
+    expect(resolutionV2.identities).toEqual(resolutionV1.identities);
+    expect(resolutionV2.fingerprint).not.toBe(resolutionV1.fingerprint);
+    expect(
+      resolutionV2.definitions
+        .filter((definition) => definition.kind === "module")
+        .every((definition) => definition.exactVersion === "2.0.0"),
+    ).toBe(true);
+    expect(
+      resolutionV1.definitions
+        .filter((definition) => definition.kind === "module")
+        .every((definition) => definition.exactVersion === "2.0.0"),
+    ).toBe(true);
+    expect(
+      historicalResolution.definitions
+        .filter((definition) => definition.kind === "module")
+        .every((definition) => definition.exactVersion === "1.0.0"),
+    ).toBe(true);
+    expect(
+      sources
+        .filter((source) => source.kind === "module")
+        .every((source) => source.source_contract_version === "2.0.0"),
+    ).toBe(true);
+    expect(
+      historicalSources
+        .filter((source) => source.kind === "module")
+        .every((source) => source.source_contract_version === "1.0.0"),
+    ).toBe(true);
+  });
+
+  it("parses, compiles and validates all thirteen definitions through shipping code", () => {
     expect(sources).toHaveLength(13);
-    const outputs = compileDefinitionSet(
-      sources.map((source) => ({
+    let outputs: ReturnType<typeof compileDefinitionSet>;
+    try {
+      outputs = compileDefinitionSet(
+        sources.map((source) => ({
         source,
-        resolution,
-        ...(source.kind === "connection_type" ? {} : { draftMetadata }),
-        ...(source.kind === "module" ? { savedConditionRevisions } : {}),
-      })),
-      {
-        publishedHistories: sources
-          .filter((source) => source.kind === "module" || source.kind === "application")
-          .map((source) => ({ kind: source.kind, definitionKey: source.key, history: [] })),
-      },
-    );
+        resolution: source.kind === "module" ? resolutionV2 : resolutionV1,
+        ...(source.kind === "module"
+          ? {
+              sourceContractVersion: "2.0.0" as const,
+              validationContractVersion: "2.0.0" as const,
+            }
+          : {}),
+        ...(source.kind === "connection_type"
+          ? {}
+          : { draftMetadata: source.kind === "module" ? currentDraftMetadata : draftMetadata }),
+        ...(source.kind === "module"
+              ? { savedConditionRevisions: savedConditionRevisions(source, resolutionV2) }
+          : {}),
+        })),
+        {
+          publishedHistories: [
+            ...historicalPublishedHistories,
+            ...sources
+              .filter((source) => source.kind === "application")
+              .map((source) => ({
+                kind: "application" as const,
+                definitionKey: source.key,
+                history: [],
+              })),
+          ],
+        },
+      );
+    } catch (error) {
+      const detail = error as { message?: string; family?: string; location?: unknown };
+      throw new Error(
+        `${detail.message ?? "fixture compilation failed"}:${detail.family ?? "unknown"}:${JSON.stringify(detail.location)}`,
+      );
+    }
     expect(outputs).toHaveLength(13);
     expect(outputs.filter((output) => output.kind === "module")).toHaveLength(8);
     expect(outputs.filter((output) => output.kind === "application")).toHaveLength(2);

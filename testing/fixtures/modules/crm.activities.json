@@ -1,8 +1,8 @@
 {
-  "source_contract_version": "1.0.0",
-  "kind": "module",
+  "source_contract_version": "2.0.0",
   "root_alias": "mod_crm_activities",
   "key": "vortex.crm.activities",
+  "kind": "module",
   "body": {
     "name": "CRM Activities",
     "description": "Calls, meetings, messages and tasks linked to CRM records.",
@@ -12,7 +12,7 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       },
       {
@@ -20,7 +20,7 @@
         "module": "vortex.crm.people",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       },
       {
@@ -28,20 +28,20 @@
         "module": "vortex.crm.opportunities",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       }
     ],
     "record_types": [
       {
         "id": "rt_crm_activity",
-        "storage_contract_id": "srt_00000006",
         "key": "activity",
         "name": "Activity",
         "plural_name": "Activities",
+        "title_field": "subject",
+        "storage_contract_id": "srt_00000006",
         "storage_scope": "application_contained",
         "ownership_mode": "organisation_account",
-        "title_field": "subject",
         "standard_actions": [
           "create",
           "read",
@@ -50,11 +50,13 @@
           "restore",
           "export"
         ],
+        "custom_actions": [
+          "act_activity_complete"
+        ],
         "fields": [
           {
             "id": "fld_activity_subject",
             "key": "subject",
-            "type": "text",
             "label": "Subject",
             "required": true,
             "unique": false,
@@ -63,6 +65,7 @@
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "text",
             "settings": {
               "max_length": 255
             }
@@ -70,7 +73,6 @@
           {
             "id": "fld_activity_type",
             "key": "activity_type",
-            "type": "choice",
             "label": "Type",
             "required": true,
             "unique": false,
@@ -79,6 +81,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -103,7 +106,6 @@
           {
             "id": "fld_activity_due",
             "key": "due_at",
-            "type": "date_time",
             "label": "Due at",
             "required": true,
             "unique": false,
@@ -111,12 +113,12 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date_time",
             "settings": {}
           },
           {
             "id": "fld_activity_complete",
             "key": "completed",
-            "type": "yes_no",
             "label": "Completed",
             "required": true,
             "unique": false,
@@ -124,13 +126,13 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "yes_no",
             "settings": {},
             "default": false
           },
           {
             "id": "fld_activity_duration",
             "key": "duration_minutes",
-            "type": "whole_number",
             "label": "Duration in minutes",
             "required": false,
             "unique": false,
@@ -138,6 +140,7 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "whole_number",
             "settings": {
               "minimum": 0
             }
@@ -145,7 +148,6 @@
           {
             "id": "fld_activity_regarding",
             "key": "regarding",
-            "type": "link_to_one_of_several",
             "label": "Regarding",
             "required": true,
             "unique": false,
@@ -154,6 +156,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link_to_one_of_several",
             "settings": {
               "targets": [
                 "vortex.crm.organisations:company",
@@ -167,7 +170,6 @@
           {
             "id": "fld_activity_owner",
             "key": "owner",
-            "type": "link_to_person",
             "label": "Owner",
             "required": true,
             "unique": false,
@@ -175,16 +177,16 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link_to_person",
             "settings": {
               "audience": "application_accounts",
-              "on_person_deactivation": "retain_reference",
-              "application_root_required": true
+              "application_root_required": true,
+              "on_person_deactivation": "retain_reference"
             }
           },
           {
             "id": "fld_activity_notes",
             "key": "notes",
-            "type": "formatted_text",
             "label": "Notes",
             "required": false,
             "unique": false,
@@ -193,6 +195,7 @@
             "search_priority": "normal",
             "personal_data": "personal",
             "public_display": "refused",
+            "type": "formatted_text",
             "settings": {
               "allowed_blocks": [
                 "paragraph",
@@ -201,9 +204,6 @@
               ]
             }
           }
-        ],
-        "custom_actions": [
-          "act_activity_complete"
         ],
         "relationships": [
           {
@@ -430,6 +430,7 @@
         "label": "Complete activity",
         "record_type": "activity",
         "permission": "vortex.crm.activities.activity.complete",
+        "shareable": false,
         "inputs": [],
         "effects": [
           {
@@ -444,8 +445,7 @@
             "kind": "announce_event",
             "event": "vortex.crm.activities.activity.completed"
           }
-        ],
-        "shareable": false
+        ]
       }
     ],
     "events": [

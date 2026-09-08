@@ -57,6 +57,7 @@ import {
   workflowNodeTypeKeys,
   workflowNodeTypeSchema,
   definitionSourceDocumentSchema,
+  moduleSourceDocumentV2Schema,
   definitionPublicationContextSchema,
   directRecordShareSchema,
   sourceBlockSettingValueSchema,
@@ -2517,7 +2518,9 @@ describe("complete definition-source fixture set", () => {
     expect(definitionFiles).toHaveLength(13);
     for (const file of definitionFiles) {
       const document = JSON.parse(await readFile(resolve(fixtureRoot, file), "utf8"));
-      const result = definitionSourceDocumentSchema.safeParse(document);
+      const result = file.startsWith("modules/")
+        ? moduleSourceDocumentV2Schema.safeParse(document)
+        : definitionSourceDocumentSchema.safeParse(document);
       expect(
         result.success,
         result.success ? undefined : `${file}: ${JSON.stringify(result.error.issues)}`,
@@ -2532,7 +2535,7 @@ describe("complete definition-source fixture set", () => {
 
   test("requires typed settings and unique keys for authored table columns", async () => {
     const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
-    const parsed = definitionSourceDocumentSchema.parse(
+    const parsed = moduleSourceDocumentV2Schema.parse(
       JSON.parse(await readFile(resolve(fixtureRoot, "modules/service-desk.sla.json"), "utf8")),
     );
     if (parsed.kind !== "module") throw new Error("Module fixture required");
@@ -2543,7 +2546,7 @@ describe("complete definition-source fixture set", () => {
     expect(table).toBeDefined();
     if (!table || table.type !== "table") throw new Error("Table field required");
     table.default = [{ day: "monday", starts_at: "09:00", ends_at: "17:00" }];
-    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(true);
+    expect(moduleSourceDocumentV2Schema.safeParse(module).success).toBe(true);
 
     const invalidDefault = structuredClone(module);
     const invalidDefaultTable = invalidDefault.body.record_types
@@ -2552,7 +2555,7 @@ describe("complete definition-source fixture set", () => {
     if (!invalidDefaultTable || invalidDefaultTable.type !== "table")
       throw new Error("Table field required");
     invalidDefaultTable.default = [{ day: "not_a_weekday", starts_at: "09:00" }];
-    expect(definitionSourceDocumentSchema.safeParse(invalidDefault).success).toBe(false);
+    expect(moduleSourceDocumentV2Schema.safeParse(invalidDefault).success).toBe(false);
 
     const missingSettings = structuredClone(module);
     const missingTable = missingSettings.body.record_types
@@ -2562,12 +2565,12 @@ describe("complete definition-source fixture set", () => {
     delete (missingTable.settings.columns[0] as { settings?: unknown }).settings;
     // Stored V1 source remains readable, but semantic publication validation
     // must refuse this legacy-incomplete column.
-    expect(definitionSourceDocumentSchema.safeParse(missingSettings).success).toBe(true);
+    expect(moduleSourceDocumentV2Schema.safeParse(missingSettings).success).toBe(false);
     missingTable.settings.columns[1]!.key = missingTable.settings.columns[0]!.key;
-    expect(definitionSourceDocumentSchema.safeParse(missingSettings).success).toBe(true);
+    expect(moduleSourceDocumentV2Schema.safeParse(missingSettings).success).toBe(false);
 
     table.settings.columns[1]!.key = table.settings.columns[0]!.key;
-    expect(definitionSourceDocumentSchema.safeParse(module).success).toBe(false);
+    expect(moduleSourceDocumentV2Schema.safeParse(module).success).toBe(false);
   });
 
   test("refuses an unknown workflow condition operator in definition-source JSON", async () => {

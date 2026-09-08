@@ -246,15 +246,49 @@ the original source build. Unreviewed storage, permission-catalogue and #35/#250
 work was not included. This is a Testing merge receipt, not hosted database
 verification or Production promotion.
 
+## Reviewed complete editable application fixtures
+
+The eight editable Module fixtures now use the supported V2 contract and exact
+`2.0.0` module dependencies. Both Application sources retain V1; their module
+bindings select those V2 releases. Separate checked-in resolution envelopes keep
+the appropriate versioned contract and their own fingerprints. Thirteen historical
+V1 sources preserve the original JSON content (with a trailing newline added);
+the historical resolution snapshot is byte-identical to the prior baseline.
+
+The complete fixture test invokes the existing compile, publish and consumer-read
+services through an in-memory repository for all eight Modules and both
+Applications. It prepares Company, Contact and Case values using the actual
+compiled Record definitions, proves shared Company/Contact definition identities,
+and checks the configured six readable/two changeable Case Summary fields.
+These are definition and preparation proofs, not live shared-record access tests.
+
+The owning Definition correction preserves each dependency's authentic resolution
+fingerprint instead of requiring or rewriting it to match the parent's. Exact
+organisation, root, key, version, content and immutable dependency-manifest checks
+remain enforced. A compact unary V2 condition regression also now passes through
+the actual compiler. Both Access Definition adapter suites consume current V2
+fixtures rather than falling back to the historical baseline.
+
+A different GPT-5.6 Sol reviewer approved the frozen 58-file slice against
+`23c2395c0c1e5ab0a05924d9c95623de4e358802`, with no findings. Its independent run
+passed 16 fixture tests, 362 currently discovered Definition tests, 374 Access
+tests and 120 scoped Contracts tests. The author's earlier 365 Definition count
+was not reproduced and is not asserted as the current reviewed count. Root also
+reran both complete-fixture suites successfully (16 tests). The author reported
+affected package typechecks, scoped lint/format and all 23 boundaries passing.
+
+This slice is reviewed locally; its Testing delivery receipt is not established
+by this section. Unfinished storage, Event and unrelated Access/flow-binding
+changes were excluded from this review.
+
 ## Remaining integrated work
 
-The whole #44 task stays open. The current complete editable fixture bundle still
-needs its coordinated V2 migration and compiled Record-value proof; database
-predicate parity and real protected save/readback are not delivered by these
-pure/Definition slices. The new Testing revision's hosted database execution has not
+The whole #44 task stays open. Database predicate parity and real protected
+save/readback are not delivered by these pure/Definition slices. The new Testing
+revision's hosted database execution has not
 yet been verified here; an older successful receipt is not a new-revision claim.
 The [new Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6asr83WskOIDv67Xx4LCCr)
-is running. Its logs confirm exact revision
+was running at the recorded inspection. Its inspected logs confirmed exact revision
 `0b9fe19c0e590dce1ac7ec4c5131918726a04563` and migration-set hash
 `f3e6f03a936fc32f27b37c9858bbcf19e013d9edc3ed5b6d8253a8cd0309130b`.
 This is revision-matching progress evidence, not a successful completion receipt.

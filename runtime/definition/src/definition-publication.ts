@@ -797,13 +797,7 @@ const compileCandidate = (
   const dependencyOutputs = [
     ...dependencies.modules.map((release) => release.compilationOutput),
     ...dependencies.connections.map((release) => release.compilationOutput),
-  ].map((output) =>
-    definitionCompilationOutputSchema.parse({
-      ...output,
-      artifact: { ...output.artifact, resolutionFingerprint: resolution.fingerprint },
-      resolutionFingerprint: resolution.fingerprint,
-    }),
-  );
+  ].map((output) => definitionCompilationOutputSchema.parse(output));
   if (
     candidate.draft.source.kind === "application" &&
     candidate.draft.source.source_contract_version === "2.0.0"

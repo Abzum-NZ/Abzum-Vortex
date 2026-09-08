@@ -8,8 +8,10 @@ import {
 import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
 import {
   actionIdSchema,
+  applicationRootIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
+  eventDeclarationIdSchema,
   eventIdSchema,
   fieldIdSchema,
   fingerprintSchema,
@@ -915,6 +917,63 @@ export const eventDefinitionSchema = z
   })
   .strict();
 
+export const standardInstalledEventKindSchema = z.enum([
+  "created",
+  "changed",
+  "deleted",
+  "linked",
+  "unlinked",
+  "reassigned",
+  "state_changed",
+]);
+
+const canonicalCarriedFieldIdsSchema = z
+  .array(fieldIdSchema)
+  .max(30)
+  .superRefine((fieldIds, context) => {
+    if (new Set(fieldIds).size !== fieldIds.length)
+      context.addIssue({ code: "custom", message: "Carried field identities must be unique" });
+    if (fieldIds.some((fieldId, index) => index > 0 && fieldIds[index - 1]! >= fieldId))
+      context.addIssue({
+        code: "custom",
+        message: "Carried field identities must use canonical order",
+      });
+  });
+
+const installedEventOwnerSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("application"), applicationRootId: applicationRootIdSchema }).strict(),
+  z.object({ kind: z.literal("module"), moduleRootId: moduleRootIdSchema }).strict(),
+]);
+
+export const standardInstalledEventDescriptorSchema = z
+  .object({
+    kind: z.literal("standard"),
+    eventKind: standardInstalledEventKindSchema,
+    recordTypeId: recordTypeIdSchema,
+  })
+  .strict();
+
+export const declaredInstalledEventDescriptorSchema = z
+  .object({
+    kind: z.literal("declared"),
+    owner: installedEventOwnerSchema,
+    declarationId: eventDeclarationIdSchema,
+    key: namespacedKeySchema,
+    recordTypeId: recordTypeIdSchema,
+    carriedFieldIds: canonicalCarriedFieldIdsSchema,
+  })
+  .strict();
+
+/**
+ * Closed declaration identity projected from immutable installed definitions.
+ * Installation binding and exact release evidence are catalogue context, not
+ * synthetic properties of this reusable descriptor.
+ */
+export const installedEventDescriptorSchema = z.discriminatedUnion("kind", [
+  standardInstalledEventDescriptorSchema,
+  declaredInstalledEventDescriptorSchema,
+]);
+
 export const recordTypeDefinitionSchema = z
   .object({
     recordTypeId: recordTypeIdSchema,
@@ -1079,4 +1138,12 @@ export type PublishedModuleDefinition = z.infer<typeof publishedModuleDefinition
 export type ActionDefinition = z.infer<typeof actionDefinitionSchema>;
 export type RuleDefinition = z.infer<typeof ruleDefinitionSchema>;
 export type EventDefinition = z.infer<typeof eventDefinitionSchema>;
+export type StandardInstalledEventKind = z.infer<typeof standardInstalledEventKindSchema>;
+export type StandardInstalledEventDescriptor = z.infer<
+  typeof standardInstalledEventDescriptorSchema
+>;
+export type DeclaredInstalledEventDescriptor = z.infer<
+  typeof declaredInstalledEventDescriptorSchema
+>;
+export type InstalledEventDescriptor = z.infer<typeof installedEventDescriptorSchema>;
 export type SavedSharingCondition = z.infer<typeof savedSharingConditionSchema>;

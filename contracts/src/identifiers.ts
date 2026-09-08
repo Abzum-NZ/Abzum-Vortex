@@ -42,6 +42,10 @@ export const grantConsentDecisionIdSchema = stableId<"GrantConsentDecisionId">()
 export const actionIdSchema = stableId<"ActionId">();
 export const ruleIdSchema = stableId<"RuleId">();
 export const eventIdSchema = stableId<"EventId">();
+/** Permanent published event-declaration identity. Historical EventId remains unchanged. */
+export const eventDeclarationIdSchema = stableId<"EventDeclarationId">();
+/** Unique identity of one committed occurrence, distinct from its declaration. */
+export const eventOccurrenceIdSchema = stableId<"EventOccurrenceId">();
 export const queryIdSchema = stableId<"QueryId">();
 export const pageIdSchema = stableId<"PageId">();
 export const shellIdSchema = stableId<"ShellId">();
@@ -123,6 +127,8 @@ export type GrantConsentDecisionId = z.infer<typeof grantConsentDecisionIdSchema
 export type ActionId = z.infer<typeof actionIdSchema>;
 export type RuleId = z.infer<typeof ruleIdSchema>;
 export type EventId = z.infer<typeof eventIdSchema>;
+export type EventDeclarationId = z.infer<typeof eventDeclarationIdSchema>;
+export type EventOccurrenceId = z.infer<typeof eventOccurrenceIdSchema>;
 export type QueryId = z.infer<typeof queryIdSchema>;
 export type PageId = z.infer<typeof pageIdSchema>;
 export type ShellId = z.infer<typeof shellIdSchema>;

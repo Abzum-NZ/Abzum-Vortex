@@ -1,9 +1,14 @@
 {
   "fixtureSet": "vortex.complete.examples",
-  "sourceContractVersion": "1.0.0",
+  "sourceContractVersions": {
+    "module": "2.0.0",
+    "application": "1.0.0",
+    "connection_type": "1.0.0"
+  },
   "description": "Complete, self-contained definition fixtures for the CRM and Service Desk applications.",
   "files": [
     "definition-resolution-snapshot.json",
+    "module-v2-definition-resolution-snapshot.json",
     "connection-types/email.json",
     "connection-types/calendar.json",
     "connection-types/webhook.json",

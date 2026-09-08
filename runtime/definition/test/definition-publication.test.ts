@@ -26,7 +26,10 @@ import {
   type ResolvableModuleRelease,
 } from "../src/definition-publication";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const sourceNamed = (name: string) =>
   definitionSourceDocumentSchema.parse(
     JSON.parse(fs.readFileSync(path.join(fixtureRoot, "modules", name), "utf8")),

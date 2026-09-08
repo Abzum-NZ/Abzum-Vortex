@@ -2,6 +2,8 @@ import {
   currencyCodeV2Schema,
   exactDecimalTextV2Schema,
   exactDecimalWithinBoundsV2,
+  fieldDefinitionSchema,
+  fileIdSchema,
   moduleFieldV2Schema,
   moduleFieldValueV2Schemas,
   moneyValueV2Schema,
@@ -10,6 +12,8 @@ import {
   recordTypeDefinitionV2Schema,
   sourceExactDecimalTextV2Schema,
   sourceMoneyValueV2Schema,
+  timestampSchema,
+  type FieldDefinition,
   type FileId,
   type JsonValue,
   type ModuleFieldV2,
@@ -98,11 +102,113 @@ type PreparationContext = {
 
 type ValueOrigin = "submitted" | "existing" | "default";
 
+export type PersistedRecordFieldValueInput =
+  | Readonly<{
+      validationContractVersion: "1.0.0";
+      field: FieldDefinition;
+      value: unknown;
+    }>
+  | Readonly<{
+      validationContractVersion: "2.0.0";
+      field: ModuleFieldV2;
+      value: unknown;
+    }>;
+
 const generatedFieldTypes = new Set<ModuleFieldV2["type"]>([
   "reference_number",
   "calculation",
   "total",
 ]);
+
+const finiteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const calculatedV1ValueMatches = (
+  resultType: Extract<FieldDefinition, { type: "calculation" | "total" }>["settings"]["resultType"],
+  value: unknown,
+): boolean => {
+  if (resultType === "whole_number") return Number.isInteger(value);
+  if (resultType === "decimal_number" || resultType === "money") return finiteNumber(value);
+  if (resultType === "yes_no") return typeof value === "boolean";
+  if (resultType === "date") return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (resultType === "date_time") return timestampSchema.safeParse(value).success;
+  return typeof value === "string";
+};
+
+const decimalV1ValueMatches = (
+  value: unknown,
+  settings: Extract<FieldDefinition, { type: "decimal_number" }>["settings"],
+): boolean => {
+  if (!finiteNumber(value) || String(value).toLowerCase().includes("e")) return false;
+  const [whole, fraction = ""] = String(Math.abs(value)).split(".");
+  return (
+    whole!.length <= settings.digitsBeforeDecimal &&
+    fraction.length <= settings.decimalPlaces &&
+    (settings.minimum === undefined || value >= settings.minimum) &&
+    (settings.maximum === undefined || value <= settings.maximum)
+  );
+};
+
+const persistedV1FieldValueMatches = (field: FieldDefinition, value: unknown): boolean => {
+  if (field.type === "reference_number") return typeof value === "string";
+  if (field.type === "calculation" || field.type === "total")
+    return calculatedV1ValueMatches(field.settings.resultType, value);
+  if (field.type === "attachment") {
+    if (!Array.isArray(value) || !value.every((entry) => fileIdSchema.safeParse(entry).success))
+      return false;
+    return (
+      (field.settings.multiple || value.length <= 1) &&
+      (field.settings.maxFiles === undefined || value.length <= field.settings.maxFiles) &&
+      (!field.required || value.length > 0)
+    );
+  }
+  if (!fieldDefinitionSchema.safeParse({ ...field, default: value }).success) return false;
+  switch (field.type) {
+    case "text":
+    case "long_text":
+      return (value as string).length <= field.settings.maxLength;
+    case "formatted_text":
+      return (
+        field.settings.maxLength === undefined ||
+        (value as string).length <= field.settings.maxLength
+      );
+    case "whole_number":
+      return (
+        (field.settings.minimum === undefined || (value as number) >= field.settings.minimum) &&
+        (field.settings.maximum === undefined || (value as number) <= field.settings.maximum) &&
+        (field.settings.step === undefined ||
+          ((value as number) - (field.settings.minimum ?? 0)) % field.settings.step === 0)
+      );
+    case "decimal_number":
+      return decimalV1ValueMatches(value, field.settings);
+    case "money":
+      return (
+        (field.settings.minimum === undefined || (value as number) >= field.settings.minimum) &&
+        (field.settings.maximum === undefined || (value as number) <= field.settings.maximum)
+      );
+    case "date":
+      return (
+        (field.settings.earliest === undefined || (value as string) >= field.settings.earliest) &&
+        (field.settings.latest === undefined || (value as string) <= field.settings.latest)
+      );
+    case "several_choices":
+      return (
+        field.settings.maximumSelections === undefined ||
+        (value as string[]).length <= field.settings.maximumSelections
+      );
+    case "yes_no":
+    case "date_time":
+    case "choice":
+    case "email_address":
+    case "phone_number":
+    case "web_address":
+    case "table":
+    case "link":
+    case "link_to_one_of_several":
+    case "link_to_person":
+      return true;
+  }
+};
 
 const hasOwn = (value: object, key: PropertyKey): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
@@ -494,6 +600,25 @@ const normalizeValue = (
       break;
   }
   return normalized;
+};
+
+/**
+ * Checks one value already stored in a record against its owning published field.
+ * Reference existence, permissions, file eligibility and other current facts stay
+ * with the protected caller; this operation checks only canonical value semantics.
+ */
+export const persistedRecordFieldValueMatches = (
+  input: PersistedRecordFieldValueInput,
+): boolean => {
+  if (input.validationContractVersion === "1.0.0") {
+    const field = fieldDefinitionSchema.safeParse(input.field);
+    return field.success && persistedV1FieldValueMatches(field.data, input.value);
+  }
+
+  const field = moduleFieldV2Schema.safeParse(input.field);
+  if (!field.success) return false;
+  const context: PreparationContext = { issues: [], pendingChecks: [] };
+  return normalizeValue(field.data, input.value, "existing", context, true) !== undefined;
 };
 
 export const prepareRecordFieldValuesV2 = (

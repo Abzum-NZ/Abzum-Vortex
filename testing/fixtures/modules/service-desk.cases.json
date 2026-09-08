@@ -1,8 +1,8 @@
 {
-  "source_contract_version": "1.0.0",
-  "kind": "module",
+  "source_contract_version": "2.0.0",
   "root_alias": "mod_service_desk_cases",
   "key": "vortex.service_desk.cases",
+  "kind": "module",
   "body": {
     "name": "Service Desk Cases",
     "description": "Customer cases, conversations and controlled case summaries.",
@@ -12,7 +12,7 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       },
       {
@@ -20,7 +20,7 @@
         "module": "vortex.crm.people",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       },
       {
@@ -28,20 +28,20 @@
         "module": "vortex.service_desk.sla",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       }
     ],
     "record_types": [
       {
         "id": "rt_sd_case",
-        "storage_contract_id": "srt_00000011",
         "key": "case",
         "name": "Case",
         "plural_name": "Cases",
+        "title_field": "subject",
+        "storage_contract_id": "srt_00000011",
         "storage_scope": "application_contained",
         "ownership_mode": "team",
-        "title_field": "subject",
         "standard_actions": [
           "create",
           "read",
@@ -50,11 +50,15 @@
           "restore",
           "export"
         ],
+        "custom_actions": [
+          "act_case_assign",
+          "act_case_resolve",
+          "act_case_public_comment"
+        ],
         "fields": [
           {
             "id": "fld_case_number",
             "key": "case_number",
-            "type": "reference_number",
             "label": "Case number",
             "required": true,
             "unique": true,
@@ -63,6 +67,7 @@
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "reference_number",
             "settings": {
               "prefix": "CAS-",
               "digits": 7
@@ -71,7 +76,6 @@
           {
             "id": "fld_case_subject",
             "key": "subject",
-            "type": "text",
             "label": "Subject",
             "required": true,
             "unique": false,
@@ -80,6 +84,7 @@
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "text",
             "settings": {
               "max_length": 255
             }
@@ -87,7 +92,6 @@
           {
             "id": "fld_case_description",
             "key": "description",
-            "type": "formatted_text",
             "label": "Description",
             "required": true,
             "unique": false,
@@ -96,6 +100,7 @@
             "search_priority": "normal",
             "personal_data": "personal",
             "public_display": "refused",
+            "type": "formatted_text",
             "settings": {
               "allowed_blocks": [
                 "paragraph",
@@ -109,7 +114,6 @@
           {
             "id": "fld_case_company",
             "key": "customer_company",
-            "type": "link",
             "label": "Customer company",
             "required": true,
             "unique": false,
@@ -118,6 +122,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.organisations:company",
               "reverse_key": "service_cases",
@@ -127,7 +132,6 @@
           {
             "id": "fld_case_requester",
             "key": "requester",
-            "type": "link",
             "label": "Requester",
             "required": true,
             "unique": false,
@@ -136,6 +140,7 @@
             "search_priority": "normal",
             "personal_data": "personal",
             "public_display": "allowed",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.people:contact",
               "reverse_key": "requested_cases",
@@ -145,7 +150,6 @@
           {
             "id": "fld_case_owner",
             "key": "owner",
-            "type": "link_to_person",
             "label": "Owner",
             "required": false,
             "unique": false,
@@ -153,16 +157,16 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link_to_person",
             "settings": {
               "audience": "application_accounts",
-              "on_person_deactivation": "empty_optional",
-              "application_root_required": true
+              "application_root_required": true,
+              "on_person_deactivation": "empty_optional"
             }
           },
           {
             "id": "fld_case_status",
             "key": "status",
-            "type": "choice",
             "label": "Status",
             "required": true,
             "unique": false,
@@ -171,6 +175,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -204,7 +209,6 @@
           {
             "id": "fld_case_priority",
             "key": "priority",
-            "type": "choice",
             "label": "Priority",
             "required": true,
             "unique": false,
@@ -213,6 +217,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -238,7 +243,6 @@
           {
             "id": "fld_case_sla",
             "key": "service_level",
-            "type": "link",
             "label": "Service level",
             "required": true,
             "unique": false,
@@ -247,6 +251,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "link",
             "settings": {
               "target": "vortex.service_desk.sla:service_level",
               "reverse_key": "cases",
@@ -256,7 +261,6 @@
           {
             "id": "fld_case_opened",
             "key": "opened_at",
-            "type": "date_time",
             "label": "Opened at",
             "required": true,
             "unique": false,
@@ -264,12 +268,12 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "date_time",
             "settings": {}
           },
           {
             "id": "fld_case_response_due",
             "key": "first_response_due_at",
-            "type": "date_time",
             "label": "First response due",
             "required": true,
             "unique": false,
@@ -277,12 +281,12 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date_time",
             "settings": {}
           },
           {
             "id": "fld_case_resolution_due",
             "key": "resolution_due_at",
-            "type": "date_time",
             "label": "Resolution due",
             "required": true,
             "unique": false,
@@ -290,12 +294,12 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date_time",
             "settings": {}
           },
           {
             "id": "fld_case_resolved",
             "key": "resolved_at",
-            "type": "date_time",
             "label": "Resolved at",
             "required": false,
             "unique": false,
@@ -303,12 +307,12 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "date_time",
             "settings": {}
           },
           {
             "id": "fld_case_breached",
             "key": "breached",
-            "type": "calculation",
             "label": "Service level breached",
             "required": true,
             "unique": false,
@@ -316,12 +320,13 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "calculation",
             "settings": {
               "result_type": "yes_no",
               "expression": {
                 "operation": "deadline_passed",
-                "status_field": "status",
                 "due_field": "resolution_due_at",
+                "status_field": "status",
                 "terminal_status_values": [
                   "resolved",
                   "closed"
@@ -332,7 +337,6 @@
           {
             "id": "fld_case_files",
             "key": "attachments",
-            "type": "attachment",
             "label": "Attachments",
             "required": false,
             "unique": false,
@@ -340,6 +344,7 @@
             "sortable": false,
             "personal_data": "sensitive",
             "public_display": "refused",
+            "type": "attachment",
             "settings": {
               "allowed_kinds": [
                 "image",
@@ -357,11 +362,6 @@
               "max_files": 30
             }
           }
-        ],
-        "custom_actions": [
-          "act_case_assign",
-          "act_case_resolve",
-          "act_case_public_comment"
         ],
         "relationships": [
           {
@@ -392,14 +392,14 @@
       },
       {
         "id": "rt_sd_comment",
-        "storage_contract_id": "srt_00000012",
         "key": "case_comment",
         "name": "Case comment",
         "plural_name": "Case comments",
+        "title_field": "created_at",
+        "storage_contract_id": "srt_00000012",
         "storage_scope": "application_contained",
         "ownership_mode": "inherited",
         "ownership_relationship": "case",
-        "title_field": "created_at",
         "standard_actions": [
           "create",
           "read",
@@ -408,11 +408,11 @@
           "restore",
           "export"
         ],
+        "custom_actions": [],
         "fields": [
           {
             "id": "fld_comment_case",
             "key": "case",
-            "type": "link",
             "label": "Case",
             "required": true,
             "unique": false,
@@ -420,6 +420,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.service_desk.cases:case",
               "reverse_key": "comments",
@@ -429,7 +430,6 @@
           {
             "id": "fld_comment_body",
             "key": "body",
-            "type": "formatted_text",
             "label": "Comment",
             "required": true,
             "unique": false,
@@ -438,6 +438,7 @@
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "refused",
+            "type": "formatted_text",
             "settings": {
               "allowed_blocks": [
                 "paragraph",
@@ -450,7 +451,6 @@
           {
             "id": "fld_comment_public",
             "key": "customer_visible",
-            "type": "yes_no",
             "label": "Customer visible",
             "required": true,
             "unique": false,
@@ -458,13 +458,13 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "yes_no",
             "settings": {},
             "default": false
           },
           {
             "id": "fld_comment_by",
             "key": "created_by",
-            "type": "link_to_person",
             "label": "Created by",
             "required": true,
             "unique": false,
@@ -472,16 +472,16 @@
             "sortable": false,
             "personal_data": "personal",
             "public_display": "refused",
+            "type": "link_to_person",
             "settings": {
               "audience": "organisation_identities_and_external_requesters",
-              "on_person_deactivation": "retain_reference",
-              "application_root_required": false
+              "application_root_required": false,
+              "on_person_deactivation": "retain_reference"
             }
           },
           {
             "id": "fld_comment_at",
             "key": "created_at",
-            "type": "date_time",
             "label": "Created at",
             "required": true,
             "unique": false,
@@ -489,10 +489,10 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date_time",
             "settings": {}
           }
         ],
-        "custom_actions": [],
         "relationships": [
           {
             "id": "fld_comment_case_relationship",
@@ -955,6 +955,7 @@
         "label": "Assign case",
         "record_type": "case",
         "permission": "vortex.service_desk.cases.case.assign",
+        "shareable": false,
         "inputs": [
           {
             "key": "owner",
@@ -976,8 +977,7 @@
             "kind": "announce_event",
             "event": "vortex.service_desk.cases.case.assigned"
           }
-        ],
-        "shareable": false
+        ]
       },
       {
         "id": "act_case_resolve",
@@ -985,6 +985,7 @@
         "label": "Resolve case",
         "record_type": "case",
         "permission": "vortex.service_desk.cases.case.resolve",
+        "shareable": false,
         "inputs": [
           {
             "key": "resolution",
@@ -1036,8 +1037,7 @@
             "kind": "announce_event",
             "event": "vortex.service_desk.cases.case.resolved"
           }
-        ],
-        "shareable": false
+        ]
       },
       {
         "id": "act_case_public_comment",
@@ -1045,6 +1045,7 @@
         "label": "Add public comment",
         "record_type": "case",
         "permission": "vortex.service_desk.cases.case.add_public_comment",
+        "shareable": true,
         "inputs": [
           {
             "key": "body",
@@ -1081,8 +1082,7 @@
             "kind": "announce_event",
             "event": "vortex.service_desk.cases.case.public_comment_added"
           }
-        ],
-        "shareable": true
+        ]
       }
     ],
     "events": [

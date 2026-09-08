@@ -2,7 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   definitionResolutionSnapshotSchema,
+  definitionResolutionSnapshotV2Schema,
   definitionSourceDocumentSchema,
+  moduleSourceDocumentV2Schema,
   sessionContextSchema,
   type ApplicationPermissionCatalogueSnapshot,
   type DefinitionConsumerReadCommand,
@@ -12,6 +14,7 @@ import {
   type PermissionCatalogueLookupResult,
   type PreparedApplicationPermissionRegistration,
   type SessionContext,
+  type ModuleSourceDocumentV2,
 } from "@vortex/contracts";
 import {
   compareCanonicalStrings,
@@ -44,29 +47,55 @@ const resolution = definitionResolutionSnapshotSchema.parse(
     fs.readFileSync(path.join(fixtureRoot, "definition-resolution-snapshot.json"), "utf8"),
   ),
 );
+const moduleResolution = definitionResolutionSnapshotV2Schema.parse(
+  JSON.parse(
+    fs.readFileSync(
+      path.join(fixtureRoot, "module-v2-definition-resolution-snapshot.json"),
+      "utf8",
+    ),
+  ),
+);
 
-const readSource = (folder: "modules" | "applications", filename: string) =>
+const readApplicationSource = (filename: string) =>
   definitionSourceDocumentSchema.parse(
-    JSON.parse(fs.readFileSync(path.join(fixtureRoot, folder, filename), "utf8")),
+    JSON.parse(fs.readFileSync(path.join(fixtureRoot, "applications", filename), "utf8")),
+  );
+const readModuleSource = (filename: string) =>
+  moduleSourceDocumentV2Schema.parse(
+    JSON.parse(fs.readFileSync(path.join(fixtureRoot, "modules", filename), "utf8")),
   );
 
-const compileSource = (source: DefinitionSourceDocument) =>
-  compileDefinition({
-    source,
-    resolution,
-    draftMetadata: {
-      organizationId,
-      draftRevision: 1,
-      createdAt: "2026-09-05T00:00:00.000Z",
-      createdBy: actorId,
-      updatedAt: "2026-09-05T00:00:00.000Z",
-      updatedBy: actorId,
-    },
-    savedConditionRevisions: source.kind === "module" ? savedConditionRevisions : [],
-  });
-
-const compileFixture = (folder: "modules" | "applications", filename: string) =>
-  compileSource(readSource(folder, filename));
+const compileSource = (source: DefinitionSourceDocument | ModuleSourceDocumentV2) =>
+  source.kind === "module"
+    ? compileDefinition({
+        sourceContractVersion: "2.0.0",
+        validationContractVersion: "2.0.0",
+        source,
+        resolution: moduleResolution,
+        draftMetadata: {
+          organizationId,
+          draftRevision: 2,
+          publishedRevision: 1,
+          createdAt: "2026-09-05T00:00:00.000Z",
+          createdBy: actorId,
+          updatedAt: "2026-09-05T00:00:00.000Z",
+          updatedBy: actorId,
+        },
+        savedConditionRevisions,
+      })
+    : compileDefinition({
+        source,
+        resolution,
+        draftMetadata: {
+          organizationId,
+          draftRevision: 1,
+          createdAt: "2026-09-05T00:00:00.000Z",
+          createdBy: actorId,
+          updatedAt: "2026-09-05T00:00:00.000Z",
+          updatedBy: actorId,
+        },
+        savedConditionRevisions: [],
+      });
 
 const moduleFiles = [
   "crm.activities.json",
@@ -79,7 +108,7 @@ const moduleFiles = [
   "service-desk.sla.json",
 ] as const;
 const moduleOutputs = moduleFiles.map((filename) => {
-  const output = compileFixture("modules", filename);
+  const output = compileSource(readModuleSource(filename));
   if (output.kind !== "module") throw new Error("Module fixture required");
   return output;
 });
@@ -117,10 +146,10 @@ const dependencyManifestFor = (
           kind: "module",
           key: definitionKeyFor("module", binding.moduleRootId),
           rootId: binding.moduleRootId,
-          releaseRevision: 1,
+          releaseRevision: 2,
           releaseVersion: binding.resolvedVersion,
           contentFingerprint: fingerprintCanonicalValue(output.canonical.content),
-          resolutionFingerprint: resolution.fingerprint,
+          resolutionFingerprint: output.resolutionFingerprint,
         };
       },
     ),
@@ -139,17 +168,17 @@ const resultFor = (
     organizationId,
     definitionKey: output.canonical.envelope.key,
     rootId: output.canonical.envelope.rootId,
-    releaseRevision: 1,
-    releaseVersion: "1.0.0",
-    validationContractVersion: "1.0.0",
+    releaseRevision: output.kind === "module" ? 2 : 1,
+    releaseVersion: output.kind === "module" ? "2.0.0" : "1.0.0",
+    validationContractVersion: output.kind === "module" ? "2.0.0" : "1.0.0",
     contentFingerprint: fingerprintCanonicalValue(output.canonical.content),
-    resolutionFingerprint: resolution.fingerprint,
+    resolutionFingerprint: output.resolutionFingerprint,
     content: output.canonical.content,
     dependencyManifest: [...dependencyManifest],
     correlationId,
   }) as DefinitionConsumerReadResult;
 
-const applicationOutput = compileFixture("applications", "crm.json");
+const applicationOutput = compileSource(readApplicationSource("crm.json"));
 if (applicationOutput.kind !== "application") throw new Error("Application fixture required");
 const applicationResult = resultFor(applicationOutput, dependencyManifestFor(applicationOutput));
 if (applicationResult.kind !== "application") throw new Error("Application result required");
@@ -272,7 +301,7 @@ const expectCode = async (
 };
 
 const wildcardApplication = (onlyExport = false) => {
-  const source = structuredClone(readSource("applications", "crm.json")) as Extract<
+  const source = structuredClone(readApplicationSource("crm.json")) as Extract<
     DefinitionSourceDocument,
     { kind: "application" }
   >;

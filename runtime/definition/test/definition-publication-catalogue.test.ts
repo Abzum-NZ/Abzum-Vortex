@@ -12,7 +12,10 @@ import { describe, expect, it } from "vitest";
 import { fingerprintCanonicalValue } from "../src/canonical-json";
 import { createImmutableDefinitionPublicationCatalogue } from "../src/definition-publication-catalogue";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const source = connectionTypeSourceDocumentSchema.parse(
   JSON.parse(fs.readFileSync(path.join(fixtureRoot, "connection-types/email.json"), "utf8")),
 );

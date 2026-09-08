@@ -21,7 +21,10 @@ import {
   workflowValueCompatible,
 } from "../src/validation";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const fixturePaths = ["modules", "applications", "connection-types"].flatMap((directory) =>
   fs
     .readdirSync(path.join(fixtureRoot, directory))
@@ -1172,7 +1175,6 @@ describe("authored definition compiler", () => {
       {
         ...moduleOutput,
         artifact: { ...moduleOutput.artifact, resolutionFingerprint: `sha256:${"1".repeat(64)}` },
-        resolutionFingerprint: `sha256:${"1".repeat(64)}`,
       },
     ])
       expect(() =>
@@ -3565,7 +3567,7 @@ describe("authored definition compiler", () => {
       );
     });
 
-    it("requires each connection binding to use the exact complete caller-snapshot artifact", () => {
+    it("requires each connection binding to use an exact internally consistent artifact", () => {
       const requests = sources.map(requestFor);
       const baseline = requests.map(compileDefinition);
       const application = baseline.find(
@@ -3595,7 +3597,7 @@ describe("authored definition compiler", () => {
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
       foreignConnection.resolutionFingerprint = foreignConnection.artifact.resolutionFingerprint;
       expect(failureCodes(requests, foreignSnapshot)).toContain(
-        "vortex.definition.application_connection_operations",
+        "vortex.definition.artifact_binding",
       );
 
       const incompleteOperations = structuredClone(baseline);
@@ -3636,7 +3638,7 @@ describe("authored definition compiler", () => {
       );
     });
 
-    it("refuses a dependency artifact that is self-consistent but bound to a different caller snapshot", () => {
+    it("accepts dependency-owned evidence from a different caller resolution envelope", () => {
       const application = sources.find((source) => source.key === "vortex.app.crm");
       if (!application || application.kind !== "application")
         throw new Error("Expected application fixture");
@@ -3661,9 +3663,7 @@ describe("authored definition compiler", () => {
         dependencyOutputs: dependencies,
         publishedHistories: [{ kind: "application", definitionKey: application.key, history: [] }],
       }).failures;
-      expect(callerSnapshotFailures).toContainEqual(
-        expect.objectContaining({ ruleCode: "vortex.definition.application_module_bindings" }),
-      );
+      expect(callerSnapshotFailures).toEqual([]);
     });
 
     it("binds a connection canonical version to its exact artifact version", () => {

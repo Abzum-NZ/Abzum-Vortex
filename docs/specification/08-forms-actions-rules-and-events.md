@@ -164,6 +164,13 @@ type/release. Never infer either identity from a display label. Introduce the
 explicit versioned runtime envelope before delivery; preserve historical envelope
 contracts rather than silently changing their meaning.
 
+Event keys are resolved within their owning Application or Module; an identical
+key in another owner is not the same declaration. Validate carried values with
+the same field meanings used by Record, not a separate event-specific validator.
+A state change can set a previously absent value or clear a present one. Its
+before/after representation must preserve that absence distinction; classified
+values remain omitted while the safe record and field identifiers are retained.
+
 ## Starting durable work
 
 A synchronous action or rule may request a published [workflow](09-workflows-and-pipelines.md), but it never calls Kestra while the record transaction is open. If the operation saves a record, the record changes, declared event, and exact durable workflow-start intent or event are written in the same transaction. A refusal, stale revision, validation failure, or rollback writes none of them. After commit, the dispatcher hands the recorded fact to the private workflow adapter with duplicate protection.

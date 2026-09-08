@@ -1215,9 +1215,10 @@ function dependencyRule(context: DefinitionSetValidationContext): DefinitionRule
         target?.kind === "module" ? object(object(target.canonical).content) : undefined;
       const exactBinding =
         target?.kind === "module" &&
-        snapshotDefinition !== undefined &&
-        snapshotDefinition?.rootId === dependency.moduleRootId &&
-        snapshotDefinition.exactVersion === dependency.resolvedVersion &&
+        (request === undefined ||
+          (snapshotDefinition !== undefined &&
+            snapshotDefinition.rootId === dependency.moduleRootId &&
+            snapshotDefinition.exactVersion === dependency.resolvedVersion)) &&
         versionRequirementAccepts(
           dependency.version as VersionRequirement,
           String(dependency.resolvedVersion),
@@ -1227,13 +1228,15 @@ function dependencyRule(context: DefinitionSetValidationContext): DefinitionRule
         target.artifact.rootId === dependency.moduleRootId &&
         target.artifact.exactVersion === dependency.resolvedVersion &&
         target.artifact.contentFingerprint === fingerprintCanonicalValue(targetContent) &&
-        target.artifact.resolutionFingerprint === request?.resolution.fingerprint &&
-        target.resolutionFingerprint === request?.resolution.fingerprint;
+        target.artifact.resolutionFingerprint === target.resolutionFingerprint;
       if (!exactBinding)
         failures.push(
           failure(output, "vortex.definition.module_dependency_resolved", "unresolved_reference"),
         );
-      else visit(String(dependency.moduleRootId), target);
+      else if (
+        context.requests.some((candidate) => candidate.source.key === target.artifact.definitionKey)
+      )
+        visit(String(dependency.moduleRootId), target);
     }
     visiting.delete(rootId);
     visited.add(rootId);
@@ -1503,7 +1506,12 @@ function conditionTypesValidV2(
   const leftDeclaration = declaration(authoredLeft);
   if (!leftDeclaration) return false;
   const operator = String(condition.operator);
-  if (operator === "is_empty" || operator === "is_not_empty") return authoredRight === undefined;
+  if (operator === "is_empty" || operator === "is_not_empty")
+    return dialect === "source"
+      ? condition.left === undefined &&
+          condition.parameter === undefined &&
+          condition.value === undefined
+      : authoredRight === undefined;
   const rightDeclaration = declaration(authoredRight);
   if (!rightDeclaration) return false;
   const leftLiteral = literal(authoredLeft);
@@ -2828,7 +2836,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         expected?.key === module.artifact.definitionKey &&
         expected.exactVersion === module.artifact.exactVersion &&
         module.artifact.rootId === rootId &&
-        module.artifact.resolutionFingerprint === request?.resolution.fingerprint &&
+        module.artifact.resolutionFingerprint === module.resolutionFingerprint &&
         module.artifact.contentFingerprint ===
           fingerprintCanonicalValue(object(module.canonical).content)
       );
@@ -3127,7 +3135,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             expected?.key === connection.artifact.definitionKey &&
             expected.exactVersion === connection.artifact.exactVersion &&
             connection.artifact.rootId === canonical.connectionTypeId &&
-            connection.artifact.resolutionFingerprint === request?.resolution.fingerprint &&
+            connection.artifact.resolutionFingerprint === connection.resolutionFingerprint &&
             connection.artifact.contentFingerprint === fingerprintCanonicalValue(canonical)
           );
         })
@@ -3152,7 +3160,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             module.artifact.rootId === binding.moduleRootId &&
             module.artifact.definitionKey === available?.key &&
             module.artifact.exactVersion === binding.resolvedVersion &&
-            module.artifact.resolutionFingerprint === request?.resolution.fingerprint &&
+            module.artifact.resolutionFingerprint === module.resolutionFingerprint &&
             module.artifact.contentFingerprint ===
               fingerprintCanonicalValue(object(module.canonical).content),
         );

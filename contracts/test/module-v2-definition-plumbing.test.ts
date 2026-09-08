@@ -41,14 +41,19 @@ const timestamp = "2026-09-08T00:00:00Z";
 
 const moduleSourceV1 = JSON.parse(
   fs.readFileSync(
+    path.resolve(
+      import.meta.dirname,
+      "../../testing/fixtures/historical/module-v1/modules/crm.tags.json",
+    ),
+    "utf8",
+  ),
+);
+const moduleSourceV2 = JSON.parse(
+  fs.readFileSync(
     path.resolve(import.meta.dirname, "../../testing/fixtures/modules/crm.tags.json"),
     "utf8",
   ),
 );
-const moduleSourceV2 = {
-  ...structuredClone(moduleSourceV1),
-  source_contract_version: "2.0.0",
-};
 
 const draftMetadata = {
   organizationId: ids.organization,

@@ -30,7 +30,10 @@ import {
 import { extractStoredSourceIdentityRequirements } from "../src/source-identities";
 import { compileDefinitionSet, evaluateSavedSharingConditionV2 } from "../src/validation";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const baseResolution = definitionResolutionSnapshotSchema.parse(
   JSON.parse(
     fs.readFileSync(path.join(fixtureRoot, "definition-resolution-snapshot.json"), "utf8"),
@@ -763,6 +766,50 @@ describe("Module V2 Definition runtime", () => {
         ),
       ).toThrow();
     }
+  });
+
+  it("accepts compact V2 unary conditions and refuses a supplied right operand", () => {
+    const valid = sourceV2(true);
+    valid.body.rules[0]!.condition = { field: "name", operator: "is_empty" };
+    const validResolution = resolutionV2(valid);
+    expect(() =>
+      compileDefinitionSet(
+        [
+          {
+            sourceContractVersion: "2.0.0",
+            validationContractVersion: "2.0.0",
+            source: valid,
+            resolution: validResolution,
+            draftMetadata: metadata,
+            savedConditionRevisions: savedConditionRevisionsV2(valid, validResolution),
+          },
+        ],
+        { publishedHistories: [{ kind: "module", definitionKey: valid.key, history: [] }] },
+      ),
+    ).not.toThrow();
+
+    const invalid = structuredClone(valid) as unknown as Record<string, unknown> & {
+      body: { rules: Array<{ condition: unknown }> };
+    };
+    invalid.body.rules[0]!.condition = {
+      operator: "is_empty",
+      left: { source: "field", field: "name" },
+      right: { source: "value", value: "not allowed" },
+    };
+    expect(() =>
+      compileDefinitionSet(
+        [
+          {
+            sourceContractVersion: "2.0.0",
+            validationContractVersion: "2.0.0",
+            source: invalid,
+            resolution: validResolution,
+            draftMetadata: metadata,
+          },
+        ],
+        { publishedHistories: [{ kind: "module", definitionKey: valid.key, history: [] }] },
+      ),
+    ).toThrow();
   });
 
   it("refuses cross-shape assignments between distinct opaque V2 value families", () => {
