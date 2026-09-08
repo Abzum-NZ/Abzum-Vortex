@@ -140,6 +140,25 @@ has the identical Git tree. Its skipped-not-affected check did not substitute fo
 the original source build. This is Testing merge evidence, not a new hosted
 database completion receipt or Production promotion.
 
+## Reviewed deliberate Module source conversion
+
+The pure Module V1-to-V2 converter preserves the value already represented by a
+finite old number while producing exact, non-exponent decimal text. Amount-only
+money definition defaults remain portable. Known record-value literal contexts
+retain explicit currency and reference targets; missing target/currency meaning
+returns a source-path diagnostic rather than guessing. Formatted strings become
+plain paragraph content. An external total-filter literal without its field type
+also returns a diagnostic; conversion does not consult a mutable catalogue.
+
+A different GPT-5.6 Sol reviewer approved the frozen implementation and tests,
+with 13/13 focused tests and Definition type checking passing. Those tests include
+conversion of all eight current editable Module fixtures without user choices and
+verify no mutation of the input. This helper does not save or publish a draft;
+the existing revision-checked draft save remains the only save path. Conversion
+does not change published V1 bytes, dependency versions or historical semantics.
+The current complete-fixture bundle still needs its coordinated V2 migration and
+actual Definition execution proof before it is treated as delivered.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,

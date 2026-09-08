@@ -239,6 +239,15 @@ The current fixture values need no new target or currency choice. Prove the
 converted files through actual V2 compilation/publication/read/restore and the
 existing complete-application scenarios; schema parsing alone is insufficient.
 
+Before replacing editable fixture sources, preserve the V1 definition inputs still
+used by historical compilation, publication, read/restore and conversion tests in
+an explicitly historical test-fixture location. Those suites currently read the
+same editable files. Point the historical cases at that fixed baseline and move
+the current complete-fixture gate to the supported V2 Module path. Do not reverse-
+convert V2 fixtures to invent V1 evidence, silently update historical expectations,
+or leave the current application gate validating only its old baseline. This is
+test evidence preservation, not a second Record engine or fixture framework.
+
 ### Rule consumer handoff
 
 Select V2 evaluation from the exact Module contract pair, never from a value that
