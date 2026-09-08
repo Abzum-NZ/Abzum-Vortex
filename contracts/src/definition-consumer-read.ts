@@ -12,6 +12,7 @@ import {
   semanticVersionSchema,
 } from "./identifiers";
 import { moduleContentSchema } from "./module-contracts";
+import { moduleContentV2Schema } from "./module-contracts-v2";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -105,15 +106,28 @@ export const applicationDefinitionConsumerReadResultV2Schema = z
   })
   .strict();
 
+export const moduleDefinitionConsumerReadResultV1Schema = z
+  .object({
+    kind: z.literal("module"),
+    rootId: moduleRootIdSchema,
+    content: moduleContentSchema,
+    ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("1.0.0"),
+  })
+  .strict();
+
+export const moduleDefinitionConsumerReadResultV2Schema = z
+  .object({
+    kind: z.literal("module"),
+    rootId: moduleRootIdSchema,
+    content: moduleContentV2Schema,
+    ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("2.0.0"),
+  })
+  .strict();
+
 export const definitionConsumerReadResultSchema = z.union([
-  z
-    .object({
-      kind: z.literal("module"),
-      rootId: moduleRootIdSchema,
-      content: moduleContentSchema,
-      ...definitionConsumerReadResultCommon,
-    })
-    .strict(),
+  moduleDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
 ]);
@@ -124,3 +138,9 @@ export type DefinitionConsumerReadDependencyManifest = z.infer<
   typeof definitionConsumerReadDependencyManifestSchema
 >;
 export type DefinitionConsumerReadResult = z.infer<typeof definitionConsumerReadResultSchema>;
+export type ModuleDefinitionConsumerReadResultV1 = z.infer<
+  typeof moduleDefinitionConsumerReadResultV1Schema
+>;
+export type ModuleDefinitionConsumerReadResultV2 = z.infer<
+  typeof moduleDefinitionConsumerReadResultV2Schema
+>;

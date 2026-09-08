@@ -72,6 +72,29 @@ prerequisites through the normal Testing merge at `2026-09-08T09:38:35Z`, produc
 not a skipped-not-affected result. This does not claim that its subsequent hosted
 database verification has completed.
 
+## Reviewed Module V2 contracts
+
+The explicit Module V2 source, canonical and field-value contracts cover all
+twenty-two field types. They carry exact decimal values and bounds, amount-only
+portable money defaults, resolved amount/currency record values, typed links,
+ordered file references and Record rich-text values. Action inputs and saved
+condition parameters can describe exact decimals and money without changing the
+historical `number` parameter meaning.
+
+Definition contracts now describe the corresponding source, draft, compilation,
+consumer and version-impact evidence. These are standalone V2 contracts; the
+operational aggregate selectors deliberately remain on the supported runtime
+until compilation, publication, read and restore are implemented together.
+
+A different GPT-5.6 Sol reviewer approved the actual ten-file implementation and
+the four associated public exports. The reviewer caught a canonical money value
+map that still accepted authored, non-normalized amounts; the owning map and its
+regression coverage were corrected. The final review found no remaining issue.
+Developer verification passed 166 focused owning-contract tests; independent
+plumbing verification passed 31 tests. Root reran both new suites (19 tests),
+Contracts type checking and all 23 package boundaries successfully. This is not
+a claim of a working Record save or installable Module V2 runtime.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
