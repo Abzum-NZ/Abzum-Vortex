@@ -1,7 +1,10 @@
 import {
   definitionResolutionSnapshotV2Schema,
+  type ConditionNode,
   type DefinitionResolutionSnapshotV2,
+  type sourceQualifiedConditionSchema,
 } from "@vortex/contracts";
+import type { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 
 export type ApplicationCompositionResolutionV2 = Readonly<{
@@ -21,6 +24,7 @@ export type ApplicationCompositionResolutionV2 = Readonly<{
   relationship(reference: string): string;
   action(reference: string): string;
   permission(reference: string): string;
+  condition(authored: z.infer<typeof sourceQualifiedConditionSchema>): ConditionNode;
   recordType(reference: string): Readonly<{
     state: "resolved";
     moduleRootId: string;

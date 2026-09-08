@@ -105,6 +105,8 @@ const placement = (
     slots?: Record<string, unknown>;
     viewPermission?: string;
     usePermission?: string;
+    visibilityCondition?: unknown;
+    query?: string;
     tablet?: ReturnType<typeof layout>;
     themeOverrides?: Record<string, unknown>;
   } = {},
@@ -112,6 +114,8 @@ const placement = (
   block: { block_id: block.block_id, release_version: block.release_version },
   ...(options.viewPermission ? { view_permission: options.viewPermission } : {}),
   ...(options.usePermission ? { use_permission: options.usePermission } : {}),
+  ...(options.visibilityCondition ? { visibility_condition: options.visibilityCondition } : {}),
+  ...(options.query ? { query: options.query } : {}),
   settings: options.settings ?? {},
   theme_overrides: options.themeOverrides ?? {},
   responsive: {
@@ -160,6 +164,11 @@ const createSource = (): ApplicationSourceDocumentV2 => {
                   "guided_" + stepIndex,
                   placement(contentBlock, {
                     viewPermission: "application.crm.open",
+                    visibilityCondition: {
+                      field: "vortex.crm.people:lead.display_name",
+                      operator: "is_not_empty",
+                    },
+                    query: "crm_leads",
                     tablet: layout(stepIndex % 2 === 0, 2),
                   }),
                 ),
@@ -179,6 +188,12 @@ const createSource = (): ApplicationSourceDocumentV2 => {
             shell_primary: slot(
               "dashboard_content",
               placement(contentBlock, {
+                visibilityCondition: {
+                  field: "vortex.crm.people:contact.full_name",
+                  operator: "equals",
+                  value: "active",
+                },
+                query: "crm_contacts",
                 settings: {
                   field: {
                     kind: "field_reference",
@@ -204,6 +219,11 @@ const createSource = (): ApplicationSourceDocumentV2 => {
                     placement(contentBlock, {
                       viewPermission: "application.crm.open",
                       usePermission: "application.crm.open",
+                      visibilityCondition: {
+                        field: "vortex.crm.people:contact.full_name",
+                        operator: "is_not_empty",
+                      },
+                      query: "crm_contacts",
                       tablet: layout(false, 3),
                       themeOverrides: {
                         kind: { ...sourceTypography, size_rem: 1.25 },
@@ -515,6 +535,29 @@ describe("native Application V2 compiler", () => {
     const top = Object.values(primary.placements)[0]!;
     const nested = Object.values(top.slots.body!.placements)[0]!;
     expect(top.settings.title).toEqual({ kind: "text", value: "Default title" });
+    expect(top.visibilityCondition).toEqual({
+      kind: "comparison",
+      operator: "equals",
+      left: { source: "field", fieldId: expect.any(String) },
+      right: { source: "value", value: "active" },
+    });
+    expect(top.queryId).toEqual(expect.any(String));
+    const expectedQueryId = request.resolution.identities.find(
+      (identity) => identity.kind === "query" && identity.alias === "crm_contacts",
+    )?.identifier;
+    const expectedFieldId = request.resolution.identities.find(
+      (identity) => identity.kind === "field" && identity.alias === "full_name",
+    )?.identifier;
+    const expectedLeadQueryId = request.resolution.identities.find(
+      (identity) => identity.kind === "query" && identity.alias === "crm_leads",
+    )?.identifier;
+    const expectedLeadFieldId = request.resolution.identities.find(
+      (identity) => identity.kind === "field" && identity.alias === "display_name",
+    )?.identifier;
+    expect(top.queryId).toBe(expectedQueryId);
+    if (top.visibilityCondition.kind !== "comparison")
+      throw new Error("Placement comparison condition required");
+    expect(top.visibilityCondition.left).toEqual({ source: "field", fieldId: expectedFieldId });
     expect(top.settings.field).toEqual(
       expect.objectContaining({ kind: "field_reference", fieldId: expect.any(String) }),
     );
@@ -534,7 +577,24 @@ describe("native Application V2 compiler", () => {
     expect(nested).toMatchObject({
       viewPermissionKey: "application.crm.open",
       usePermissionKey: "application.crm.open",
+      visibilityCondition: {
+        kind: "comparison",
+        operator: "is_not_empty",
+        left: { source: "field", fieldId: expectedFieldId },
+      },
+      queryId: expectedQueryId,
     });
+    for (const stepContent of Object.values(guided.composition.stepContent)) {
+      const stepPlacement = Object.values(Object.values(stepContent)[0]!.placements)[0]!;
+      expect(stepPlacement).toMatchObject({
+        visibilityCondition: {
+          kind: "comparison",
+          operator: "is_not_empty",
+          left: { source: "field", fieldId: expectedLeadFieldId },
+        },
+        queryId: expectedLeadQueryId,
+      });
+    }
     expect(nested.themeOverrides.kind).toEqual({
       kind: "typography",
       family: "body",
@@ -574,6 +634,17 @@ describe("native Application V2 compiler", () => {
     );
     expect(permission).toMatchObject({ origin: "resolved" });
     expect(permission?.canonicalPath.at(-1)).toBe("viewPermissionKey");
+    const visibilityField = output.provenance.find(
+      (entry) =>
+        entry.sourcePath?.includes("visibility_condition") &&
+        entry.sourcePath.at(-1) === "field" &&
+        entry.canonicalPath.at(-1) === "fieldId",
+    );
+    expect(visibilityField).toMatchObject({ origin: "resolved" });
+    const placementQuery = output.provenance.find(
+      (entry) => entry.sourcePath?.at(-1) === "query" && entry.canonicalPath.at(-1) === "queryId",
+    );
+    expect(placementQuery).toMatchObject({ origin: "resolved" });
     const commitAction = output.provenance.find(
       (entry) => entry.sourcePath?.at(-1) === "commit_action",
     );
@@ -658,6 +729,43 @@ describe("native Application V2 compiler", () => {
     });
     expect(() =>
       compileDefinition({ ...request, source, resolution: foreignResolution }),
+    ).toThrowError("vortex.definition.missing_identity");
+
+    const unknownQuery = createSource();
+    const unknownQueryPage = unknownQuery.body.pages[0]!;
+    if (
+      unknownQueryPage.type === "guided_form" ||
+      unknownQueryPage.composition.shell_kind !== "application"
+    )
+      throw new Error("Dashboard application-shell source required");
+    Object.values(unknownQueryPage.composition.content.shell_primary!.placements)[0]!.query =
+      "missing_query";
+    expect(() =>
+      compileDefinition({
+        ...requestFor(unknownQuery),
+        resolution: createResolution(unknownQuery),
+      }),
+    ).toThrowError("vortex.definition.missing_identity");
+
+    const unknownCondition = createSource();
+    const unknownConditionPage = unknownCondition.body.pages[0]!;
+    if (
+      unknownConditionPage.type === "guided_form" ||
+      unknownConditionPage.composition.shell_kind !== "application"
+    )
+      throw new Error("Dashboard application-shell source required");
+    Object.values(
+      unknownConditionPage.composition.content.shell_primary!.placements,
+    )[0]!.visibility_condition = {
+      field: "vortex.crm.people:contact.missing_field",
+      operator: "equals",
+      value: "active",
+    };
+    expect(() =>
+      compileDefinition({
+        ...requestFor(unknownCondition),
+        resolution: createResolution(unknownCondition),
+      }),
     ).toThrowError("vortex.definition.missing_identity");
   });
 
@@ -1089,6 +1197,22 @@ describe("native Application V2 version impact", () => {
         "application.crm.open";
       expect(compareDefinitionVersionImpact(request)).toMatchObject({ impact: "major" });
     }
+
+    const visibility = v2RequestAfter(draft);
+    const visibilityCondition = dashboardPrimaryV2(visibility.candidate).placements[parentId]!
+      .visibilityCondition;
+    if (
+      !visibilityCondition ||
+      visibilityCondition.kind !== "comparison" ||
+      !visibilityCondition.right
+    )
+      throw new Error("Placement comparison condition required");
+    visibilityCondition.right = { source: "value", value: "inactive" };
+    expect(compareDefinitionVersionImpact(visibility)).toMatchObject({ impact: "major" });
+
+    const query = v2RequestAfter(draft);
+    dashboardPrimaryV2(query.candidate).placements[parentId]!.queryId = id(1997);
+    expect(compareDefinitionVersionImpact(query)).toMatchObject({ impact: "major" });
 
     const setting = v2RequestAfter(draft);
     const top = dashboardPrimaryV2(setting.candidate).placements[parentId]!;
@@ -1667,6 +1791,19 @@ describe("native Application V2 draft storage", () => {
     expect(read).toMatchObject({
       validationContractVersion: "2.0.0",
       content: appended.compilationOutput.canonical.content,
+    });
+    const readDashboard = read.content.pages[0]!;
+    if (
+      readDashboard.composition.shellKind !== "application" ||
+      !("content" in readDashboard.composition)
+    )
+      throw new Error("Readback dashboard composition required");
+    const readPlacement = Object.values(
+      Object.values(readDashboard.composition.content)[0]!.placements,
+    )[0]!;
+    expect(readPlacement).toMatchObject({
+      visibilityCondition: { kind: "comparison" },
+      queryId: expect.any(String),
     });
 
     const tamperedCanonical = structuredClone(evidence);

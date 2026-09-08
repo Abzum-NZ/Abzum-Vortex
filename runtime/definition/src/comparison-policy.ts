@@ -2287,6 +2287,8 @@ const presentationPropertyValueV2 = (value: unknown): boolean => {
 const placementSubtreeIsOptionalPresentationV2 = (placement: RecordValue): boolean =>
   placement.viewPermissionKey === undefined &&
   placement.usePermissionKey === undefined &&
+  placement.visibilityCondition === undefined &&
+  placement.queryId === undefined &&
   Object.values(asRecord(placement.settings)).every(presentationPropertyValueV2) &&
   Object.values(asRecord(placement.slots)).every((slot) =>
     Object.values(asRecord(asRecord(slot).placements)).every((child) =>
@@ -2478,6 +2480,26 @@ const comparePlacementsV2 = (
         "permission",
         id,
       );
+    pushChange(
+      reasons,
+      before.placement.visibilityCondition,
+      after.placement.visibilityCondition,
+      "major",
+      "permission_changed",
+      "block_placement",
+      "visibility",
+      id,
+    );
+    pushChange(
+      reasons,
+      before.placement.queryId,
+      after.placement.queryId,
+      "major",
+      "existing_behavior_changed",
+      "block_placement",
+      "behavior",
+      id,
+    );
     for (const key of ["block", "settings"])
       pushChange(
         reasons,

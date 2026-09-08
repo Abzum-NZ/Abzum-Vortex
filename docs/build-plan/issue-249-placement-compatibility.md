@@ -67,3 +67,21 @@ arbitrary requirement that their version strings match.
 
 This slice is not permission to build the designer before the complete
 [file-defined application runtime proof](engine-first-application-delivery.md).
+
+## Implementation checkpoint — 8 September 2026
+
+The seven-file implementation now retains the optional condition and query leaves
+through compilation, exact reference provenance, version comparison and the
+existing publication/read/restore path. Nested placements and guided-step content
+use the same traversal. Omitted properties remain omitted, V1 preservation checks
+remain unchanged, and public-surface restrictions still apply.
+
+An independent Sol agent reviewed the actual seven-file patch against this plan
+and approved it with no remaining findings. Root matched all seven reviewed file
+hashes. The implementer ran 224 focused checks, both affected type checks and
+focused lint successfully; the reviewer did not independently execute those tests.
+Root also ran the broader affected contracts, Definition and Access suites:
+1,194 tests across 74 files passed. All 23 package boundaries and formatting of
+the seven implementation files passed. No database migration, new evaluator, authority path or
+application-specific runtime behaviour was added. Source delivery is pending;
+the whole task remains open for explicit conversion and the headless adapter.

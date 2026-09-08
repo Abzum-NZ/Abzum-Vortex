@@ -592,6 +592,12 @@ describe("Application V2 composition contracts", () => {
     Object.assign(authoredPagePlacement, {
       view_permission: "example.pages.section.view",
       use_permission: "example.pages.section.use",
+      visibility_condition: {
+        field: "example.people:person.status",
+        operator: "equals",
+        value: "active",
+      },
+      query: "people",
     });
     expect(applicationSourceDocumentV2Schema.safeParse(authored).success).toBe(true);
 
@@ -606,6 +612,13 @@ describe("Application V2 composition contracts", () => {
     Object.assign(canonicalPagePlacement, {
       viewPermissionKey: "example.pages.section.view",
       usePermissionKey: "example.pages.section.use",
+      visibilityCondition: {
+        kind: "comparison",
+        operator: "equals",
+        left: { source: "field", fieldId: id(700) },
+        right: { source: "value", value: "active" },
+      },
+      queryId: id(701),
     });
     expect(applicationContentV2Schema.safeParse(canonical).success).toBe(true);
 
