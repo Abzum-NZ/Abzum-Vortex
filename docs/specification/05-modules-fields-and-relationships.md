@@ -148,6 +148,12 @@ claim that Record execution is already delivered.
   currency is resolved when creating the value and stored with it. Later default
   changes do not reinterpret existing money; conversions require an explicit
   operation, never a display preference.
+  A money field's definition default is an exact amount string, using the currency
+  policy already declared in its settings. Both fixed-currency and organisation-
+  default fields may declare an amount default. Publication does not bind that
+  default to an installation's currency; record creation resolves and stores the
+  currency once. The same rule applies to money cells in table defaults. Submitted
+  and persisted money values carry both amount and currency.
 - Formatted content uses the same safe structured text primitives as page
   properties, with Record-specific table and attachment blocks where allowed by
   the field. It is not executable HTML. Allowed-block and visible-text length
