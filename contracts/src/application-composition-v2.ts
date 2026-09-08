@@ -898,6 +898,8 @@ export const applicationCompositionCatalogueSnapshotV2Schema = z
 
 type BlockPlacementV2 = {
   block: z.infer<typeof platformBlockReferenceV2Schema>;
+  viewPermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
+  usePermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
   settings: Record<string, BlockPropertyValueV2Contract>;
   themeOverrides: Record<string, z.infer<typeof themeTokenValueV2Schema>>;
   responsive: z.infer<typeof responsivePlacementV2Schema>;
@@ -910,6 +912,8 @@ type PlacementSlotV2 = {
 
 type SourceBlockPlacementV2 = {
   block: z.infer<typeof sourcePlatformBlockReferenceV2Schema>;
+  view_permission?: z.infer<typeof namespacedKeySchema> | undefined;
+  use_permission?: z.infer<typeof namespacedKeySchema> | undefined;
   settings: Record<string, SourceBlockPropertyValueV2Contract>;
   theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueV2Schema>>;
   responsive: z.infer<typeof sourceResponsivePlacementV2Schema>;
@@ -929,6 +933,8 @@ export const blockPlacementV2Schema: z.ZodType<BlockPlacementV2> = z.lazy(() =>
   z
     .object({
       block: platformBlockReferenceV2Schema,
+      viewPermissionKey: namespacedKeySchema.optional(),
+      usePermissionKey: namespacedKeySchema.optional(),
       settings: z.record(builderKeySchema, blockPropertyValueV2Schema),
       themeOverrides: z.record(builderKeySchema, themeTokenValueV2Schema),
       responsive: responsivePlacementV2Schema,
@@ -966,6 +972,8 @@ export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z
   z
     .object({
       block: sourcePlatformBlockReferenceV2Schema,
+      view_permission: namespacedKeySchema.optional(),
+      use_permission: namespacedKeySchema.optional(),
       settings: z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
       theme_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
       responsive: sourceResponsivePlacementV2Schema,
