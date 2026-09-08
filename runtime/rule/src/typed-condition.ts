@@ -9,6 +9,15 @@ import {
   type FieldDefinition,
   type JsonValue,
 } from "@vortex/contracts";
+import {
+  codePointCompare,
+  evaluateResolvedTypedCondition,
+  exactJsonEqual,
+  instantMicros,
+  type ResolvedTypedConditionOperand,
+  validDate,
+  validText,
+} from "./typed-condition-core";
 
 export const typedConditionEvaluationErrorReasons = [
   "input_refused",
@@ -52,11 +61,7 @@ type SemanticType =
   | "record_reference"
   | "organization_account_reference";
 
-type Operand = Readonly<{
-  type?: SemanticType;
-  literal?: JsonValue;
-  value: JsonValue;
-}>;
+type Operand = ResolvedTypedConditionOperand<SemanticType>;
 
 const refuse = (reason: TypedConditionEvaluationErrorReason): never => {
   throw new TypedConditionEvaluationError(reason);
@@ -93,64 +98,6 @@ const containsUnsupportedOperator = (value: unknown): boolean => {
   if ((value.kind === "all" || value.kind === "any") && Array.isArray(value.conditions))
     return value.conditions.some(containsUnsupportedOperator);
   return value.kind === "not" && containsUnsupportedOperator(value.condition);
-};
-
-const validDate = (value: unknown): value is string => {
-  if (typeof value !== "string") return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(0);
-  date.setUTCHours(0, 0, 0, 0);
-  date.setUTCFullYear(year, month - 1, day);
-  return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-  );
-};
-
-const validText = (value: unknown): value is string => {
-  if (typeof value !== "string" || value.includes("\0")) return false;
-  return [...value].every((entry) => {
-    const point = entry.codePointAt(0)!;
-    return point < 0xd800 || point > 0xdfff;
-  });
-};
-
-const instantMicros = (value: unknown): bigint | undefined => {
-  if (typeof value !== "string") return undefined;
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(
-      value,
-    );
-  if (!match) return undefined;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const hour = Number(match[4]);
-  const minute = Number(match[5]);
-  const second = Number(match[6]);
-  if (hour > 23 || minute > 59 || second > 59) return undefined;
-  const local = new Date(0);
-  local.setUTCHours(hour, minute, second, 0);
-  local.setUTCFullYear(year, month - 1, day);
-  if (
-    local.getUTCFullYear() !== year ||
-    local.getUTCMonth() !== month - 1 ||
-    local.getUTCDate() !== day
-  )
-    return undefined;
-  const zone = match[8]!;
-  let offsetMinutes = 0;
-  if (zone !== "Z") {
-    const offsetHours = Number(zone.slice(1, 3));
-    const offsetRemainder = Number(zone.slice(4, 6));
-    if (offsetHours > 23 || offsetRemainder > 59) return undefined;
-    offsetMinutes = (offsetHours * 60 + offsetRemainder) * (zone[0] === "+" ? 1 : -1);
-  }
-  const fractionalMicros = BigInt((match[7] ?? "").padEnd(6, "0"));
-  return BigInt(local.getTime() - offsetMinutes * 60_000) * 1_000n + fractionalMicros;
 };
 
 const semanticTypeForField = (field: FieldDefinition): SemanticType => {
@@ -210,38 +157,6 @@ const valueMatchesType = (value: JsonValue, type: SemanticType): boolean => {
     case "opaque_json":
       return jsonValueSchema.safeParse(value).success;
   }
-};
-
-const exactJsonEqual = (left: JsonValue, right: JsonValue): boolean => {
-  if (left === null || right === null || typeof left !== "object" || typeof right !== "object")
-    return left === right;
-  if (Array.isArray(left) || Array.isArray(right))
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((entry, index) => exactJsonEqual(entry, right[index]!))
-    );
-  const leftKeys = Object.keys(left).sort();
-  const rightKeys = Object.keys(right).sort();
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] && exactJsonEqual(left[key]!, right[rightKeys[index]!]!),
-    )
-  );
-};
-
-const codePointCompare = (left: string, right: string): number => {
-  const leftPoints = [...left].map((entry) => entry.codePointAt(0)!);
-  const rightPoints = [...right].map((entry) => entry.codePointAt(0)!);
-  const length = Math.min(leftPoints.length, rightPoints.length);
-  for (let index = 0; index < length; index += 1) {
-    const difference = leftPoints[index]! - rightPoints[index]!;
-    if (difference !== 0) return difference;
-  }
-  return leftPoints.length - rightPoints.length;
 };
 
 const scalarEqual = (left: Operand, right: Operand, type: SemanticType): boolean => {
@@ -444,105 +359,80 @@ export function evaluateTypedCondition(input: TypedConditionEvaluationInput): bo
     return { literal: value.value as JsonValue, value: value.value as JsonValue };
   };
 
-  type ConditionObject = {
-    kind: string;
-    conditions?: unknown[];
-    condition?: unknown;
-    operator?: string;
-    left?: unknown;
-    right?: unknown;
-  };
-
-  const validate = (candidate: unknown): void => {
-    const condition = candidate as ConditionObject;
-    if (condition.kind === "all" || condition.kind === "any") {
-      condition.conditions!.forEach(validate);
-      return;
-    }
-    if (condition.kind === "not") {
-      validate(condition.condition!);
-      return;
-    }
-    const left = operand(condition.left);
-    if (condition.operator === "is_empty" || condition.operator === "is_not_empty") return;
-    const right = operand(condition.right);
-    if (condition.operator === "equals" || condition.operator === "not_equals") {
-      if (!sharedType(left, right)) refuse("operator_refused");
-      return;
-    }
-    if (condition.operator === "contains" || condition.operator === "not_contains") {
-      const validText = valueCanBeType(left, "text") && valueCanBeType(right, "text");
-      const elementType = collectionElementType(left, right.type);
-      if (!validText && (!elementType || !valueCanBeType(right, elementType)))
+  return evaluateResolvedTypedCondition(parsedCondition.data!, {
+    resolveOperand: operand,
+    validateComparison: (operator, left, right) => {
+      if (operator === "is_empty" || operator === "is_not_empty") return;
+      const binaryRight = right ?? refuse("input_refused");
+      if (operator === "equals" || operator === "not_equals") {
+        if (!sharedType(left, binaryRight)) refuse("operator_refused");
+        return;
+      }
+      if (operator === "contains" || operator === "not_contains") {
+        const validTextOperands =
+          valueCanBeType(left, "text") && valueCanBeType(binaryRight, "text");
+        const elementType = collectionElementType(left, binaryRight.type);
+        if (!validTextOperands && (!elementType || !valueCanBeType(binaryRight, elementType)))
+          refuse("operator_refused");
+        return;
+      }
+      if (operator === "in" || operator === "not_in") {
+        const elementType = collectionElementType(binaryRight, left.type);
+        if (!elementType || !valueCanBeType(left, elementType)) refuse("operator_refused");
+        return;
+      }
+      const type = sharedType(left, binaryRight);
+      if (!type || !["text", "number", "date", "date_time"].includes(type))
         refuse("operator_refused");
-      return;
-    }
-    if (condition.operator === "in" || condition.operator === "not_in") {
-      const elementType = collectionElementType(right, left.type);
-      if (!elementType || !valueCanBeType(left, elementType)) refuse("operator_refused");
-      return;
-    }
-    const type = sharedType(left, right);
-    if (!type || !["text", "number", "date", "date_time"].includes(type))
-      refuse("operator_refused");
-  };
-
-  validate(parsedCondition.data!);
-
-  const evaluate = (candidate: unknown): boolean => {
-    const condition = candidate as ConditionObject;
-    if (condition.kind === "all") return condition.conditions!.map(evaluate).every(Boolean);
-    if (condition.kind === "any") return condition.conditions!.map(evaluate).some(Boolean);
-    if (condition.kind === "not") return !evaluate(condition.condition!);
-    const left = operand(condition.left);
-    if (condition.operator === "is_empty") return left.value === null || left.value === "";
-    if (condition.operator === "is_not_empty") return left.value !== null && left.value !== "";
-    const right = operand(condition.right);
-    const type = sharedType(left, right)!;
-    if (condition.operator === "equals" || condition.operator === "not_equals") {
-      const equal = scalarEqual(left, right, type);
-      return condition.operator === "equals" ? equal : !equal;
-    }
-    if (condition.operator === "contains" || condition.operator === "not_contains") {
-      const elementType = collectionElementType(left, right.type);
-      const contains =
-        left.value !== null &&
-        right.value !== null &&
-        (typeof left.value === "string"
-          ? left.value.includes(String(right.value))
-          : Array.isArray(left.value) &&
-            left.value.some((entry) =>
-              scalarEqual({ literal: entry, value: entry }, right, elementType!),
-            ));
-      return condition.operator === "contains" ? contains : !contains;
-    }
-    if (condition.operator === "in" || condition.operator === "not_in") {
-      const elementType = collectionElementType(right, left.type)!;
-      const included =
-        left.value !== null &&
-        right.value !== null &&
-        Array.isArray(right.value) &&
-        right.value.some((entry) =>
-          scalarEqual(left, { literal: entry, value: entry }, elementType),
-        );
-      return condition.operator === "in" ? included : !included;
-    }
-    if (left.value === null || right.value === null) return false;
-    let comparison: number;
-    if (type === "number") comparison = Number(left.value) - Number(right.value);
-    else if (type === "date_time")
-      comparison =
-        instantMicros(left.value)! < instantMicros(right.value)!
-          ? -1
-          : instantMicros(left.value)! > instantMicros(right.value)!
-            ? 1
-            : 0;
-    else comparison = codePointCompare(String(left.value), String(right.value));
-    if (condition.operator === "greater_than") return comparison > 0;
-    if (condition.operator === "greater_than_or_equal") return comparison >= 0;
-    if (condition.operator === "less_than") return comparison < 0;
-    return comparison <= 0;
-  };
-
-  return evaluate(parsedCondition.data!);
+    },
+    evaluateComparison: (operator, left, right) => {
+      if (operator === "is_empty") return left.value === null || left.value === "";
+      if (operator === "is_not_empty") return left.value !== null && left.value !== "";
+      const binaryRight = right ?? refuse("input_refused");
+      const type = sharedType(left, binaryRight)!;
+      if (operator === "equals" || operator === "not_equals") {
+        const equal = scalarEqual(left, binaryRight, type);
+        return operator === "equals" ? equal : !equal;
+      }
+      if (operator === "contains" || operator === "not_contains") {
+        const elementType = collectionElementType(left, binaryRight.type);
+        const contains =
+          left.value !== null &&
+          binaryRight.value !== null &&
+          (typeof left.value === "string"
+            ? left.value.includes(String(binaryRight.value))
+            : Array.isArray(left.value) &&
+              left.value.some((entry) =>
+                scalarEqual({ literal: entry, value: entry }, binaryRight, elementType!),
+              ));
+        return operator === "contains" ? contains : !contains;
+      }
+      if (operator === "in" || operator === "not_in") {
+        const elementType = collectionElementType(binaryRight, left.type)!;
+        const included =
+          left.value !== null &&
+          binaryRight.value !== null &&
+          Array.isArray(binaryRight.value) &&
+          binaryRight.value.some((entry) =>
+            scalarEqual(left, { literal: entry, value: entry }, elementType),
+          );
+        return operator === "in" ? included : !included;
+      }
+      if (left.value === null || binaryRight.value === null) return false;
+      let comparison: number;
+      if (type === "number") comparison = Number(left.value) - Number(binaryRight.value);
+      else if (type === "date_time")
+        comparison =
+          instantMicros(left.value)! < instantMicros(binaryRight.value)!
+            ? -1
+            : instantMicros(left.value)! > instantMicros(binaryRight.value)!
+              ? 1
+              : 0;
+      else comparison = codePointCompare(String(left.value), String(binaryRight.value));
+      if (operator === "greater_than") return comparison > 0;
+      if (operator === "greater_than_or_equal") return comparison >= 0;
+      if (operator === "less_than") return comparison < 0;
+      return comparison <= 0;
+    },
+  });
 }

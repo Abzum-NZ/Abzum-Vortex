@@ -108,6 +108,27 @@ No admin override or skipped-not-affected result substituted for these checks.
 This records Testing merge evidence, not a new-revision hosted database receipt
 or Production promotion.
 
+## Reviewed exact-value condition engine
+
+The Rule engine now evaluates conditions using the owning Module V2 field and
+parameter types. Decimal comparisons retain exact precision; money comparisons
+retain currency meaning. Text is not guessed to be numeric. Full-tree validation
+still runs before evaluation, and the existing V1 evaluator retains its semantics.
+Five ordinary semantic helpers are shared privately between the two adapters;
+there is no second condition framework.
+
+A different GPT-5.6 Sol reviewer approved the final five-file implementation.
+The reviewer found and the author corrected one concrete mismatch: an
+organization-account parameter must be a direct UUID, while a person-link field
+retains its declared object shape. Developer, independent and root verification
+each passed the 20 focused V1/V2 tests. Rule type checking and root scoped lint
+passed, and root matched all five final reviewed SHA-256 hashes before staging.
+
+This is the pure evaluation prerequisite for
+[#44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44) and
+[#57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57), not delivery of the
+Conditions Designer, database evaluation parity or protected Record persistence.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
