@@ -84,7 +84,17 @@ import boundaries and all 23 builds including Next.js. Focused formatting and
 lint passed. The initial missing Vitest dependency declaration was corrected
 using the existing workspace pattern and independently reviewed before this
 successful run. No unreviewed compiler or SQL changes were included.
-Hosted verification of this merge is not yet inspected.
+Hosted verification of this merge is verified. Execution
+[`X7L9Jhbh3E01oymULH5HD`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/X7L9Jhbh3E01oymULH5HD)
+finished successfully at `2026-09-08T02:38:40.565Z`. Its schema-2 receipt was
+published at `2026-09-08T02:38:40.536Z` for exact Testing commit
+`52e432ccbf4046fd4fc1c973707e68f25569e9de`, with 66 migrations, all 25 selected
+concurrency proofs completed and all six selected lint schemas completed.
+Root read the complete receipt through the signed-in browser and closed its
+inspection dialog without saving. Migration-set, runner, manifest and coverage
+hashes match the preceding verified receipt; the repository diff between
+`a308ed54` and `52e432cc` contains no Supabase or Kestra verification changes.
+This is hosted regression evidence, not proof of a new installed page route.
 
 ## Stored V1 adapter checkpoint — 8 September 2026
 
