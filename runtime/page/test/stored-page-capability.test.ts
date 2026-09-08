@@ -299,7 +299,11 @@ describe("stored page capability adapter", () => {
         },
       },
     };
-    const { blockRegistrations: _blocks, theme: _theme, ...shared } = release.content;
+    const shared = Object.fromEntries(
+      Object.entries(release.content).filter(
+        ([key]) => key !== "blockRegistrations" && key !== "theme",
+      ),
+    );
     const v2Release = {
       ...release,
       validationContractVersion: "2.0.0" as const,

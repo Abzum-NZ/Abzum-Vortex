@@ -36,6 +36,23 @@ diagnostic came from restricted worktree dependency access: the permitted build
 environment resolves the existing dependency and passes the same type check.
 Nothing was reinstalled or changed to work around that diagnostic.
 
+## Exact source verification
+
+Source `7ba07de6ff5617bc749a770a0abf89b5a01bfb1f` is in
+[PR #346](https://github.com/Abzum-NZ/Abzum-Vortex/pull/346). An isolated checkout
+excluded the concurrent unfinished conversion work and passed 1,405 tests across
+101 test files. Three existing opt-in identity integration tests were skipped.
+All 23 package boundaries passed.
+
+Normal preview and root lint both identified two unused bindings in the stored
+page test fixture. The developer replaced only that fixture's property omission
+construction, preserving its meaning and every runtime file. The independent Sol
+reviewer accepted this one-file delta and directly passed its five tests, lint
+and diff check. Reviewed SHA-256:
+`75A074316BE5B770635D1E9E07BD0BB8139BE1945DBFC7CE8EA3DBD961FEC145`.
+No lint rule or test expectation was weakened. Normal final-source checks and
+hosted verification remain required.
+
 ## Scope and remaining delivery
 
 This completes the remaining engine implementation, not a live application page.
