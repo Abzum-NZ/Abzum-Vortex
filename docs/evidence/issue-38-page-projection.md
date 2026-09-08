@@ -138,12 +138,27 @@ Final reviewed Page adapter:
 `97c01c21d762b021cb6d955983757320fe13fc1904212565ca70676864e37b10`;
 Page test: `80b1a66e042bda9947e74babe2c4949ec656853545763eda61e855331ed20f22`.
 
+### Corrected checkpoint delivered to Testing
+
+[PR #341](https://github.com/Abzum-NZ/Abzum-Vortex/pull/341) passed normal preview
+checks and merged at `2026-09-08T02:25:37Z`. Reviewed source:
+`92c5baa083732e26f3e2fb903295ba9ed5ff870d`; Testing merge:
+`73f33ecc7db97d912a15f1e71b8efec44c8cdb4c`.
+Root's clean isolated exact-source verification passed 100 test files / 1,386
+tests (two files and three tests retain existing skips), all 23 package
+typechecks, boundaries and builds including Next.js, and changed-code lint,
+formatting and diff checks. This includes the corrected Access-owned read and
+the independently reviewed native V2 compiler checkpoint. No SQL candidate or
+new grant was included. Hosted verification of this merge is not yet inspected.
+
 ## Remaining work
 
-The V2 compiler, publication and stored readers remain owned by the open
-[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249). Current executable
-Definition paths select V1; V2 contract parsing alone does not implement that
-pipeline. Whole #38 remains open until the complete acceptance is proved.
+The native V2 compiler checkpoint is delivered through
+[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249), but V2 publication
+and stored readers remain unfinished there. Current stored Definition paths
+select V1; compiler coverage alone does not implement that publication pipeline.
+Whole [#38](https://github.com/Abzum-NZ/Abzum-Vortex/issues/38) remains open until
+the complete acceptance is proved.
 
 No SQL migration, database reset, production promotion, page renderer or MCP
 transport is delivered by these bounded checkpoints. The unrelated uncommitted

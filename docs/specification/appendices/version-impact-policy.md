@@ -199,3 +199,39 @@ Version impact does not prove installed dependant compatibility, resolve authore
 ## Page-representation completion
 
 [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) extends this policy together with source/canonical schemas, compiler and retained immutable-release readers. Shell/slot identity, binding context, typed operation input/output and access changes receive explicit classification. Pure presentation changes may remain patch; no structural migration may silently lower executable or access impact. Legacy releases remain immutable, and conversion occurs only in a new draft under [page-builder contracts](page-builder-contracts.md#compatibility-and-proof).
+
+### Native V2 composition comparison
+
+The following rules apply to the explicitly selected V2 representation. They do
+not reinterpret V1 releases or change existing V1 comparison fingerprints.
+
+| Change | Impact and reason |
+| --- | --- |
+| Geometry, responsive display settings, same-slot sibling order or breakpoint display-order override | Patch: presentation only. Preserve authored order when comparing; do not sort it away. |
+| Move an existing placement across parents, slots, shells, pages or guided steps; replace a selected shell | Major: inherited access, binding context or form meaning can change. This is not merely moving its displayed position. |
+| Placement or ancestor view/use permission added, removed or changed | Major: access meaning changes, including removal of a restriction. |
+| Existing setting literal/reference or exact platform-block dependency/release/fingerprint changes | Major: the current contract declares no property-specific presentation-only downgrade. Never infer one from a setting name. |
+| Optional, non-public, non-guided presentation-only placement added | Minor only when its complete subtree introduces no access gate, executable/data reference or required-slot effect; otherwise major. |
+| Empty optional shell slot added; allowed child categories widened; a slot made optional | Minor: a compatible extension or relaxation. |
+| Required slot added; slot removed, retargeted or made required; allowed categories narrowed; permanent identity/key replaced | Major: existing composition requirements or meaning change. |
+| Labels, names and theme presentation | Patch; this does not downgrade an accompanying access, dependency or behaviour change. |
+
+Match permanent identities across the complete shell, page, nested-placement and
+guided-step trees, retaining owner and parent context. Normalize only collections
+whose order is explicitly irrelevant. One presentation-only change never hides
+another major reason in the same revision.
+
+V2 comparison requires exact `validationContractVersion: "2.0.0"` metadata on
+the request and each supplied V2 history entry. Unknown, missing or mixed
+representation metadata is refused by this native-V2 comparison path. It uses
+its own comparison-policy version; the existing V1 policy remains unchanged.
+Both representations use the same compare-and-confirm operation, including
+exact content fingerprints and stale-confirmation checks. Comparison evidence
+alone is not permission to publish or decode a stored V2 release.
+
+The later coordinated conversion/publication step must separately handle a root
+with V1 history followed by V2 content. Preserve its immutable history and
+continuous application release numbering; never reset it to `1.0.0`, relabel old
+content as V2, or accept mixed history through shape inference. That transition
+requires explicit version-selected comparison evidence before V2 publication is
+enabled; the native-V2 comparison checkpoint does not complete it.
