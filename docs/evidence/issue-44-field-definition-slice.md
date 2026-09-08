@@ -95,6 +95,19 @@ plumbing verification passed 31 tests. Root reran both new suites (19 tests),
 Contracts type checking and all 23 package boundaries successfully. This is not
 a claim of a working Record save or installable Module V2 runtime.
 
+[PR #355](https://github.com/Abzum-NZ/Abzum-Vortex/pull/355) merged normally into
+Testing at `2026-09-08T10:36:29Z`, producing
+`b7d1b46812614d1e3ff11ffa1d5142e7931d5b00`. Reviewed contract source
+`9c0918c3c9a1512158024985d495d72b1c1f10d8` received an actual successful
+[preview build](https://vercel.com/abzumdevteam/abzum-vortex/FExdZDceDQbDiDJx1ydZuFDoW2L9)
+with all 23 package builds successful. The normal Testing-base merge changed no
+source bytes. Final PR head `9442cf58f8ebcf50a52ea4423151a20f00e1f744` additionally
+carried the independently checked Rule-specification handoff and received its own
+completed successful [preview deployment](https://vercel.com/abzumdevteam/abzum-vortex/H3zHJC5TctGZ7E6sxvNw9CqbiVWe).
+No admin override or skipped-not-affected result substituted for these checks.
+This records Testing merge evidence, not a new-revision hosted database receipt
+or Production promotion.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
