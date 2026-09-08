@@ -228,3 +228,15 @@ export const moduleFieldValueV2Schemas = {
   link_to_one_of_several: recordLinkValueV2Schema,
   link_to_person: personLinkValueV2Schema,
 } as const satisfies Record<(typeof fieldTypeKeys)[number], z.ZodType>;
+
+/** Cell types already supported by the V2 table field; values reuse the maps above. */
+export const tableCellTypeKeysV2 = [
+  "text",
+  "whole_number",
+  "decimal_number",
+  "money",
+  "yes_no",
+  "date",
+  "date_time",
+  "choice",
+] as const;

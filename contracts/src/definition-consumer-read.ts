@@ -13,6 +13,7 @@ import {
 } from "./identifiers";
 import { moduleContentSchema } from "./module-contracts";
 import { moduleContentV2Schema } from "./module-contracts-v2";
+import { moduleContentV3Schema } from "./module-contracts-v3";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -126,9 +127,20 @@ export const moduleDefinitionConsumerReadResultV2Schema = z
   })
   .strict();
 
+export const moduleDefinitionConsumerReadResultV3Schema = z
+  .object({
+    kind: z.literal("module"),
+    rootId: moduleRootIdSchema,
+    content: moduleContentV3Schema,
+    ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("3.0.0"),
+  })
+  .strict();
+
 export const definitionConsumerReadResultSchema = z.union([
   moduleDefinitionConsumerReadResultV1Schema,
   moduleDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultV3Schema,
   applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
 ]);
@@ -144,6 +156,7 @@ const applicationDefinitionConsumerReadResultSchema = z.union([
 const moduleDefinitionConsumerReadResultSchema = z.union([
   moduleDefinitionConsumerReadResultV1Schema,
   moduleDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultV3Schema,
 ]);
 
 export const applicationBoundReleaseSetResultSchema = z
@@ -179,4 +192,7 @@ export type ModuleDefinitionConsumerReadResultV1 = z.infer<
 >;
 export type ModuleDefinitionConsumerReadResultV2 = z.infer<
   typeof moduleDefinitionConsumerReadResultV2Schema
+>;
+export type ModuleDefinitionConsumerReadResultV3 = z.infer<
+  typeof moduleDefinitionConsumerReadResultV3Schema
 >;

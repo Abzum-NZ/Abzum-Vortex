@@ -1,6 +1,10 @@
 import type { DefinitionRuleFailureFamily, DefinitionValidationLocation } from "@vortex/contracts";
 
 export const definitionCompilerRefusalCodes = Object.freeze([
+  "vortex.definition.rule_graph_topology",
+  "vortex.definition.rule_graph_references",
+  "vortex.definition.rule_graph_value_types",
+  "vortex.definition.rule_graph_variable_availability",
   "vortex.definition.ambiguous_definition",
   "vortex.definition.ambiguous_identity",
   "vortex.definition.application_action_references",

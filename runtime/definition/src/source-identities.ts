@@ -1,9 +1,12 @@
 import type {
   ApplicationSourceDocumentV2,
   DefinitionSourceDocument,
+  ModuleSourceDocumentV2,
+  ModuleSourceDocumentV3,
   StoredDefinitionSource,
   SourceIdentityKind,
   SourceIdentityKindV2,
+  SourceIdentityKindV3,
 } from "@vortex/contracts";
 
 export type SourceIdentityRequirement = Readonly<{
@@ -22,6 +25,15 @@ export type SourceIdentityRequirementV2 = Readonly<{
   ownerScope: string;
   scope: string;
   kind: SourceIdentityKindV2;
+  componentOwner: string;
+  aliases: readonly string[];
+}>;
+
+export type SourceIdentityRequirementV3 = Readonly<{
+  definitionKey: string;
+  ownerScope: string;
+  scope: string;
+  kind: SourceIdentityKindV3;
   componentOwner: string;
   aliases: readonly string[];
 }>;
@@ -53,7 +65,7 @@ const objectValue = (value: unknown): SourceObject | undefined =>
  * Source `id` values are owners; mutable keys and paths are aliases of that owner.
  */
 export function extractSourceIdentityRequirements(
-  source: DefinitionSourceDocument,
+  source: DefinitionSourceDocument | ModuleSourceDocumentV2 | ModuleSourceDocumentV3,
 ): SourceIdentityRequirement[] {
   const sourceObject = source as unknown as SourceObject;
   const definitionKey = source.key;
@@ -179,6 +191,41 @@ export function extractSourceIdentityRequirements(
       );
   }
 
+  return requirements;
+}
+
+/** Adds graph-owned identities without changing the historical V1/V2 vocabulary. */
+export function extractModuleSourceIdentityRequirementsV3(
+  source: ModuleSourceDocumentV3,
+): SourceIdentityRequirementV3[] {
+  const requirements: SourceIdentityRequirementV3[] = extractSourceIdentityRequirements(source).map(
+    (requirement) => ({ ...requirement }),
+  );
+  const add = (
+    kind: Extract<SourceIdentityKindV3, "rule_input" | "rule_variable" | "rule_node">,
+    ownerScope: string,
+    scope: string,
+    componentOwner: string,
+    aliases: readonly string[],
+  ) =>
+    requirements.push({
+      definitionKey: source.key,
+      ownerScope,
+      scope,
+      kind,
+      componentOwner,
+      aliases: uniqueStrings(aliases),
+    });
+
+  for (const rule of source.body.rules) {
+    const ownerScope = `rule_owner:${rule.id}`;
+    const scope = `rule:${rule.key}`;
+    for (const input of rule.inputs)
+      add("rule_input", ownerScope, scope, input.id, [input.id, input.key]);
+    for (const variable of rule.variables)
+      add("rule_variable", ownerScope, scope, variable.id, [variable.id, variable.key]);
+    for (const node of rule.nodes) add("rule_node", ownerScope, scope, node.id, [node.id]);
+  }
   return requirements;
 }
 
@@ -324,4 +371,6 @@ export function extractApplicationSourceIdentityRequirementsV2(
 export const extractStoredSourceIdentityRequirements = (source: StoredDefinitionSource) =>
   source.kind === "application" && source.source_contract_version === "2.0.0"
     ? extractApplicationSourceIdentityRequirementsV2(source)
-    : extractSourceIdentityRequirements(source as DefinitionSourceDocument);
+    : source.kind === "module" && source.source_contract_version === "3.0.0"
+      ? extractModuleSourceIdentityRequirementsV3(source)
+      : extractSourceIdentityRequirements(source);

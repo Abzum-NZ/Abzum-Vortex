@@ -20,11 +20,18 @@ import {
   type ModuleSourceDocumentV2,
 } from "./module-source-contracts-v2";
 import { moduleValidationContractVersionV2 } from "./module-contracts-v2";
+import {
+  moduleSourceContractVersionV3,
+  moduleSourceDocumentV3Schema,
+  type ModuleSourceDocumentV3,
+} from "./module-source-contracts-v3";
+import { moduleValidationContractVersionV3 } from "./module-contracts-v3";
 import { sourceConditionSchema, sourceQualifiedConditionSchema } from "./definition-source-common";
 
 export const moduleSourceDocumentVersionedSchema = z.discriminatedUnion("source_contract_version", [
   moduleSourceDocumentSchema,
   moduleSourceDocumentV2Schema,
+  moduleSourceDocumentV3Schema,
 ]);
 
 export const moduleContractPairV1 = {
@@ -39,9 +46,16 @@ export const moduleContractPairV2 = {
   validationContractVersion: moduleValidationContractVersionV2,
 } as const;
 
-export type ModuleContractPair = typeof moduleContractPairV1 | typeof moduleContractPairV2;
+export const moduleContractPairV3 = {
+  schema: "v3",
+  sourceContractVersion: moduleSourceContractVersionV3,
+  validationContractVersion: moduleValidationContractVersionV3,
+} as const;
 
-/** Selects only implemented Module source/validation pairs; mixed and unknown pairs refuse. */
+export type ModuleContractPair =
+  typeof moduleContractPairV1 | typeof moduleContractPairV2 | typeof moduleContractPairV3;
+
+/** Selects exact known pairs; each runtime operation separately gates implemented support. */
 export const selectModuleContractPair = (
   sourceContractVersion: string,
   validationContractVersion: string,
@@ -53,10 +67,19 @@ export const selectModuleContractPair = (
     validationContractVersion === moduleValidationContractVersionV2
   )
     return moduleContractPairV2;
+  if (
+    sourceContractVersion === moduleSourceContractVersionV3 &&
+    validationContractVersion === moduleValidationContractVersionV3
+  )
+    return moduleContractPairV3;
   throw new TypeError("Unsupported Module source and validation contract version pair");
 };
 
-export { moduleSourceDocumentSchema as moduleSourceDocumentV1Schema, moduleSourceDocumentV2Schema };
+export {
+  moduleSourceDocumentSchema as moduleSourceDocumentV1Schema,
+  moduleSourceDocumentV2Schema,
+  moduleSourceDocumentV3Schema,
+};
 
 export {
   applicationSourceDocumentSchema,
@@ -86,6 +109,7 @@ export type DefinitionSourceDocument = z.infer<typeof definitionSourceDocumentSc
 export type {
   ApplicationSourceDocumentV2,
   ModuleSourceDocumentV2,
+  ModuleSourceDocumentV3,
   SourceApplicationBodyV2,
   SourcePageDefinitionV2,
 };

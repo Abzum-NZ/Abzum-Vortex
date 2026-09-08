@@ -5,8 +5,11 @@ import {
   applicationCompilationRequestV2Schema,
   moduleDraftSchema,
   moduleDraftV2Schema,
+  moduleDraftV3Schema,
   moduleSourceDocumentV2Schema,
+  moduleSourceDocumentV3Schema,
   moduleCompilationRequestV2Schema,
+  moduleCompilationRequestV3Schema,
   savedSharingConditionV2Schema,
   savedSharingConditionSchema,
   connectionTypeSchema,
@@ -34,7 +37,9 @@ import {
   type DefinitionCompilationRequest,
   type ApplicationCompilationRequestV2,
   type ModuleCompilationRequestV2,
+  type ModuleCompilationRequestV3,
   type ModuleSourceDocumentV2,
+  type ModuleSourceDocumentV3,
   type ModuleFieldV2,
   type ApplicationSourceDocumentV2,
   type ConditionNode,
@@ -60,14 +65,21 @@ import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compareDefinitionVersionImpact } from "./version-impact";
 import { createContractValueWalker } from "./contract-value-walker";
+import { validateRuleGraph, ruleGraphValidationCodes } from "./rule-graph-validation";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
 type PublicationCompilationRequest =
-  DefinitionCompilationRequest | ApplicationCompilationRequestV2 | ModuleCompilationRequestV2;
+  | DefinitionCompilationRequest
+  | ApplicationCompilationRequestV2
+  | ModuleCompilationRequestV2
+  | ModuleCompilationRequestV3;
 type DefinitionPath = readonly (string | number)[];
 type EditSaveSource =
-  DefinitionSourceDocument | ApplicationSourceDocumentV2 | ModuleSourceDocumentV2;
+  | DefinitionSourceDocument
+  | ApplicationSourceDocumentV2
+  | ModuleSourceDocumentV2
+  | ModuleSourceDocumentV3;
 
 const isV2ApplicationSource = (source: unknown): boolean =>
   source !== null &&
@@ -83,6 +95,13 @@ const isV2ModuleSource = (source: unknown): boolean =>
   (source as JsonObject).kind === "module" &&
   (source as JsonObject).source_contract_version === "2.0.0";
 
+const isV3ModuleSource = (source: unknown): boolean =>
+  source !== null &&
+  typeof source === "object" &&
+  !Array.isArray(source) &&
+  (source as JsonObject).kind === "module" &&
+  (source as JsonObject).source_contract_version === "3.0.0";
+
 const parseEditSaveSource = (
   source: unknown,
 ):
@@ -94,9 +113,11 @@ const parseEditSaveSource = (
   | Readonly<{ success: false; error: z.ZodError }> => {
   const schema = isV2ApplicationSource(source)
     ? applicationSourceDocumentV2Schema
-    : isV2ModuleSource(source)
-      ? moduleSourceDocumentV2Schema
-      : definitionSourceDocumentSchema;
+    : isV3ModuleSource(source)
+      ? moduleSourceDocumentV3Schema
+      : isV2ModuleSource(source)
+        ? moduleSourceDocumentV2Schema
+        : definitionSourceDocumentSchema;
   const parsed = schema.safeParse(source);
   return parsed.success
     ? { success: true, data: parsed.data, schema }
@@ -135,7 +156,9 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
       schema:
         output.kind === "module"
           ? "validationContractVersion" in output
-            ? moduleDraftV2Schema
+            ? output.validationContractVersion === "3.0.0"
+              ? moduleDraftV3Schema
+              : moduleDraftV2Schema
             : moduleDraftSchema
           : output.kind === "application"
             ? "validationContractVersion" in output
@@ -370,7 +393,13 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
     if (!parsed.success) continue;
     walkDefinitionContract(parsed.schema, parsed.data, (schema, value) => {
       if (schema === jsonValueSchema) return;
-      if (Array.isArray(value)) {
+      const definition = (schema as z.core.$ZodTypes)._zod.def;
+      // A table row is user data, not a declaration: columns named id/key may repeat.
+      if (
+        Array.isArray(value) &&
+        definition.type === "array" &&
+        definition.element._zod.def.type !== "record"
+      ) {
         for (const property of ["id", "key"] as const) {
           const values = value
             .filter(
@@ -642,6 +671,15 @@ function sourceLocalReferenceRule(
         }
       }
       for (const rule of array(body.rules)) {
+        if (isV3ModuleSource(source)) {
+          if (
+            !array(body.record_types).some(
+              (record) => record.key === rule.record_type || record.id === rule.record_type,
+            )
+          )
+            valid = false;
+          continue; // Graph references are resolved and checked by the graph publication rule.
+        }
         const record = records.get(String(rule.record_type));
         const fields = new Set(
           record ? array(record.fields).map((field) => String(field.key)) : [],
@@ -870,7 +908,7 @@ function sourceTypeCompatibilityRule(
     const parsed = parseEditSaveSource(raw);
     if (!parsed.success || parsed.data.kind !== "module") continue;
     const source = parsed.data;
-    const moduleV2 = source.source_contract_version === "2.0.0";
+    const moduleV2 = source.source_contract_version === "2.0.0" || isV3ModuleSource(source);
     const body = object(source.body);
     const records = new Map(
       array(body.record_types).map((record) => [String(record.key), record] as const),
@@ -1035,6 +1073,7 @@ function sourceTypeCompatibilityRule(
       }
     }
     for (const rule of array(body.rules)) {
+      if (isV3ModuleSource(source)) continue;
       const fields = fieldsFor(records.get(String(rule.record_type)));
       if (
         !(moduleV2
@@ -2634,6 +2673,8 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
     }
 
     for (const rule of array(content.rules)) {
+      if ("validationContractVersion" in output && output.validationContractVersion === "3.0.0")
+        continue;
       const subject = moduleRecords.get(String(rule.subjectRecordTypeId));
       const fieldMap = new Map(
         subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
@@ -5303,7 +5344,7 @@ function publicationCompatibilityRule(
           ? compareDefinitionVersionImpact({
               kind: "module",
               ...("validationContractVersion" in output
-                ? { validationContractVersion: "2.0.0" as const }
+                ? { validationContractVersion: output.validationContractVersion }
                 : {}),
               history: history.history,
               candidate: output.canonical,
@@ -5387,6 +5428,49 @@ function semanticAggregateRule(
   };
 }
 
+function moduleRuleGraphRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
+  const failures: DefinitionRuleFailure[] = [];
+  for (const output of context.outputs) {
+    if (
+      output.kind !== "module" ||
+      !("validationContractVersion" in output) ||
+      output.validationContractVersion !== "3.0.0"
+    )
+      continue;
+    const content = output.canonical.content;
+    const allowedRoots = new Set([
+      output.canonical.envelope.rootId,
+      ...content.dependencies.map((dependency) => dependency.moduleRootId),
+    ]);
+    const availableRecordTypeIds = new Set(
+      allValidationOutputs(context).flatMap((dependency) =>
+        dependency.kind === "module" && allowedRoots.has(dependency.canonical.envelope.rootId)
+          ? dependency.canonical.content.recordTypes.map((record) => String(record.recordTypeId))
+          : [],
+      ),
+    );
+    for (const graph of content.rules) {
+      const subjectRecordType = content.recordTypes.find(
+        (record) => record.recordTypeId === graph.subjectRecordTypeId,
+      );
+      if (!subjectRecordType) {
+        failures.push(
+          failure(output, ruleGraphValidationCodes.references, "broken_reference", {
+            kind: "rule",
+            key: graph.key,
+          }),
+        );
+        continue;
+      }
+      for (const issue of validateRuleGraph({ graph, subjectRecordType, availableRecordTypeIds }))
+        failures.push(
+          failure(output, issue.ruleCode, issue.family, { kind: "rule", key: graph.key }),
+        );
+    }
+  }
+  return failures;
+}
+
 export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
   {
     ruleId: "vortex.definition.source_shape",
@@ -5450,6 +5534,15 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     ["compiled_set"],
     "module",
     dependencyRule,
+  ),
+  semanticAggregateRule(
+    "vortex.definition.module_rule_graphs",
+    Object.values(ruleGraphValidationCodes),
+    "publish",
+    ["module"],
+    ["compiled_set"],
+    "rule",
+    moduleRuleGraphRule,
   ),
   semanticAggregateRule(
     "vortex.definition.module_references",
@@ -5701,6 +5794,7 @@ export function compileDefinitionSet(
   const publicationContext = parsedContext.data;
   const parsedInputs = inputs.map((input) => {
     const source = object(input).source;
+    if (isV3ModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
     if (isV2ModuleSource(source)) return moduleCompilationRequestV2Schema.safeParse(input);
     if (isV2ApplicationSource(source))
       return applicationCompilationRequestV2Schema.safeParse(input);

@@ -5,8 +5,11 @@ import {
   applicationVersionImpactRequestV2Schema,
   moduleContentSchema,
   moduleContentV2Schema,
+  moduleContentV3Schema,
   moduleVersionImpactPolicyVersionV2,
+  moduleVersionImpactPolicyVersionV3,
   moduleVersionImpactRequestV2Schema,
+  moduleVersionImpactRequestV3Schema,
   unresolvedRecordTypeReferencePaths,
   definitionVersionConfirmationSchema,
   definitionVersionImpactRequestSchema,
@@ -19,6 +22,7 @@ import {
   type DefinitionVersionSubject,
   type ApplicationVersionImpactRequestV2,
   type ModuleVersionImpactRequestV2,
+  type ModuleVersionImpactRequestV3,
   type PublishedApplicationDefinition,
   type VersionImpact,
 } from "@vortex/contracts";
@@ -38,7 +42,10 @@ import { assignNextDefinitionVersion, compareStableVersions } from "./semantic-v
 import { refuseVersionImpact } from "./version-impact-error";
 
 type SupportedVersionImpactRequest =
-  DefinitionVersionImpactRequest | ApplicationVersionImpactRequestV2 | ModuleVersionImpactRequestV2;
+  | DefinitionVersionImpactRequest
+  | ApplicationVersionImpactRequestV2
+  | ModuleVersionImpactRequestV2
+  | ModuleVersionImpactRequestV3;
 
 const isApplicationV2Request = (
   request: SupportedVersionImpactRequest,
@@ -54,6 +61,13 @@ const isModuleV2Request = (
   "validationContractVersion" in request &&
   request.validationContractVersion === "2.0.0";
 
+const isModuleV3Request = (
+  request: SupportedVersionImpactRequest,
+): request is ModuleVersionImpactRequestV3 =>
+  request.kind === "module" &&
+  "validationContractVersion" in request &&
+  request.validationContractVersion === "3.0.0";
+
 const isApplicationV2Release = (
   release: PublishedApplicationDefinition,
 ): release is Extract<
@@ -64,6 +78,10 @@ const isApplicationV2Release = (
 const isModuleV2Release = (release: {
   publication: { validationContractVersion: string };
 }): boolean => release.publication.validationContractVersion === "2.0.0";
+
+const isModuleV3Release = (release: {
+  publication: { validationContractVersion: string };
+}): boolean => release.publication.validationContractVersion === "3.0.0";
 
 const subjectOf = (request: SupportedVersionImpactRequest): DefinitionVersionSubject =>
   request.kind === "module"
@@ -92,9 +110,14 @@ const assertHistory = (request: SupportedVersionImpactRequest): void => {
       refuseVersionImpact("content_fingerprint_mismatch");
     if (request.kind === "module") {
       const releaseV2 = isModuleV2Release(release);
+      const releaseV3 = isModuleV3Release(release);
       if (
         unresolvedRecordTypeReferencePaths(
-          releaseV2 ? moduleContentV2Schema : moduleContentSchema,
+          releaseV3
+            ? moduleContentV3Schema
+            : releaseV2
+              ? moduleContentV2Schema
+              : moduleContentSchema,
           release.content,
         ).length > 0
       )
@@ -145,7 +168,8 @@ const comparisonFingerprint = (
   resultWithoutFingerprint: unknown,
   policyVersion:
     | typeof versionImpactPolicyVersion
-    | typeof applicationVersionImpactPolicyVersionV2 = versionImpactPolicyVersion,
+    | typeof applicationVersionImpactPolicyVersionV2
+    | typeof moduleVersionImpactPolicyVersionV3 = versionImpactPolicyVersion,
 ): `sha256:${string}` =>
   fingerprintCanonicalValue({
     policyVersion,
@@ -176,7 +200,9 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
       : undefined;
   const parsed =
     explicitKind === "module"
-      ? moduleVersionImpactRequestV2Schema.safeParse(input)
+      ? (input as { validationContractVersion?: unknown }).validationContractVersion === "3.0.0"
+        ? moduleVersionImpactRequestV3Schema.safeParse(input)
+        : moduleVersionImpactRequestV2Schema.safeParse(input)
       : explicitKind === "application"
         ? applicationVersionImpactRequestV2Schema.safeParse(input)
         : definitionVersionImpactRequestSchema.safeParse(input);
@@ -192,9 +218,11 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
   if (
     unresolvedRecordTypeReferencePaths(
       request.kind === "module"
-        ? isModuleV2Request(request)
-          ? moduleContentV2Schema
-          : moduleContentSchema
+        ? isModuleV3Request(request)
+          ? moduleContentV3Schema
+          : isModuleV2Request(request)
+            ? moduleContentV2Schema
+            : moduleContentSchema
         : isApplicationV2Request(request)
           ? applicationContentV2Schema
           : applicationContentSchema,
@@ -214,15 +242,17 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
 
   const normalisedCandidate =
     request.kind === "module"
-      ? normaliseModuleContent(request.candidate.content as never)
+      ? normaliseModuleContent(request.candidate.content)
       : isApplicationV2Request(request)
         ? normaliseApplicationContentV2(request.candidate.content)
         : normaliseApplicationContent(request.candidate.content);
   const policyVersion = isApplicationV2Request(request)
     ? applicationVersionImpactPolicyVersionV2
-    : isModuleV2Request(request)
-      ? moduleVersionImpactPolicyVersionV2
-      : versionImpactPolicyVersion;
+    : isModuleV3Request(request)
+      ? moduleVersionImpactPolicyVersionV3
+      : isModuleV2Request(request)
+        ? moduleVersionImpactPolicyVersionV2
+        : versionImpactPolicyVersion;
 
   if (latest === undefined) {
     const resultWithoutFingerprint = {
@@ -248,9 +278,12 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
   let representationChanged = false;
   if (request.kind === "module") {
     const latestModule = request.history.at(-1)!;
-    const candidateV2 = isModuleV2Request(request);
-    const latestV2 = isModuleV2Release(latestModule);
-    representationChanged = candidateV2 !== latestV2;
+    const candidateVersion = isModuleV3Request(request)
+      ? "3.0.0"
+      : isModuleV2Request(request)
+        ? "2.0.0"
+        : "1.0.0";
+    representationChanged = candidateVersion !== latestModule.publication.validationContractVersion;
     if (representationChanged) {
       normalisedPrevious = latestModule.content;
       reasons = [
@@ -261,12 +294,17 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
         },
       ];
     } else {
-      normalisedPrevious = normaliseModuleContent(latestModule.content as never);
+      const latestContent =
+        candidateVersion === "3.0.0"
+          ? moduleContentV3Schema.parse(latestModule.content)
+          : candidateVersion === "2.0.0"
+            ? moduleContentV2Schema.parse(latestModule.content)
+            : moduleContentSchema.parse(latestModule.content);
+      const comparablePrevious = normaliseModuleContent(latestContent);
+      const comparableCandidate = normaliseModuleContent(request.candidate.content);
+      normalisedPrevious = comparablePrevious;
       assertUnambiguousModuleContent(latestModule.content);
-      reasons = compareModuleContents(
-        normalisedPrevious as ReturnType<typeof normaliseModuleContent>,
-        normalisedCandidate as ReturnType<typeof normaliseModuleContent>,
-      );
+      reasons = compareModuleContents(comparablePrevious, comparableCandidate);
     }
   } else {
     const latestApplication = request.history.at(-1)! as PublishedApplicationDefinition;

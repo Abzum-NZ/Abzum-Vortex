@@ -12,7 +12,7 @@ import {
   selectModuleContractPair,
   selectStoredApplicationSourceContract,
   sessionContextSchema,
-  sourceIdentityAssignmentV2Schema,
+  sourceIdentityAssignmentV3Schema,
   storedDefinitionDraftSchema,
   type DefinitionReleaseHistoryCommand,
   type DefinitionReleaseHistoryResult,
@@ -63,14 +63,14 @@ export class DefinitionHistoryError extends Error {
   }
 }
 
-const currentIdentityEvidenceSchema = sourceIdentityAssignmentV2Schema
+const currentIdentityEvidenceSchema = sourceIdentityAssignmentV3Schema
   .extend({ ownerScope: z.string().min(1).max(500) })
   .strict();
 
 type RestoreEvidence = StoredConsumerReleaseEvidence & {
   authoredSource: z.infer<typeof storedDefinitionSourceSchema>;
   sourceFingerprint: z.infer<typeof fingerprintSchema>;
-  sourceContractVersion: "1.0.0" | "2.0.0";
+  sourceContractVersion: "1.0.0" | "2.0.0" | "3.0.0";
   identityEvidence: readonly z.infer<typeof currentIdentityEvidenceSchema>[];
 };
 
@@ -78,7 +78,7 @@ const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
     authoredSource: storedDefinitionSourceSchema,
     sourceFingerprint: fingerprintSchema,
-    sourceContractVersion: z.enum(["1.0.0", "2.0.0"]),
+    sourceContractVersion: z.enum(["1.0.0", "2.0.0", "3.0.0"]),
     identityEvidence: z.array(currentIdentityEvidenceSchema),
   })
   .strict();

@@ -4,6 +4,7 @@ import {
   applicationSourceDocumentV1Schema,
   applicationSourceDocumentV2Schema,
   moduleSourceDocumentV2Schema,
+  moduleSourceDocumentV3Schema,
   moduleSourceDocumentVersionedSchema,
 } from "./definition-source";
 import {
@@ -58,6 +59,18 @@ export const saveModuleDraftCommandV2Schema = z
     rootId: moduleRootIdSchema,
     expectedDraftRevision: javascriptSafeRevisionSchema,
     source: moduleSourceDocumentV2Schema,
+  })
+  .strict();
+
+export const createModuleRootCommandV3Schema = z
+  .object({ source: moduleSourceDocumentV3Schema })
+  .strict();
+
+export const saveModuleDraftCommandV3Schema = z
+  .object({
+    rootId: moduleRootIdSchema,
+    expectedDraftRevision: javascriptSafeRevisionSchema,
+    source: moduleSourceDocumentV3Schema,
   })
   .strict();
 
@@ -150,6 +163,16 @@ export const storedModuleDefinitionDraftV2Schema = z
     kind: z.literal("module"),
     rootId: moduleRootIdSchema,
     source: moduleSourceDocumentV2Schema,
+    ...storedDraftMetadata,
+  })
+  .strict()
+  .superRefine(validateStoredDraftEvidence);
+
+export const storedModuleDefinitionDraftV3Schema = z
+  .object({
+    kind: z.literal("module"),
+    rootId: moduleRootIdSchema,
+    source: moduleSourceDocumentV3Schema,
     ...storedDraftMetadata,
   })
   .strict()
@@ -293,10 +316,13 @@ export type CreateDefinitionRootCommand = z.infer<typeof createDefinitionRootCom
 export type SaveDefinitionDraftCommand = z.infer<typeof saveDefinitionDraftCommandSchema>;
 export type CreateModuleRootCommandV2 = z.infer<typeof createModuleRootCommandV2Schema>;
 export type SaveModuleDraftCommandV2 = z.infer<typeof saveModuleDraftCommandV2Schema>;
+export type CreateModuleRootCommandV3 = z.infer<typeof createModuleRootCommandV3Schema>;
+export type SaveModuleDraftCommandV3 = z.infer<typeof saveModuleDraftCommandV3Schema>;
 export type StoredDefinitionSource = z.infer<typeof storedDefinitionSourceSchema>;
 export type StoredModuleSourceDocument = z.infer<typeof storedModuleSourceDocumentSchema>;
 export type StoredDefinitionDraft = z.infer<typeof storedDefinitionDraftSchema>;
 export type StoredModuleDefinitionDraftV2 = z.infer<typeof storedModuleDefinitionDraftV2Schema>;
+export type StoredModuleDefinitionDraftV3 = z.infer<typeof storedModuleDefinitionDraftV3Schema>;
 export type ExactDefinitionDependency = z.infer<typeof exactDefinitionDependencySchema>;
 export type PrepareDefinitionPublicationCommand = z.infer<
   typeof prepareDefinitionPublicationCommandSchema

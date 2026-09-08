@@ -5,6 +5,7 @@ import {
   type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
   type DefinitionResolutionSnapshotV2,
+  type DefinitionResolutionSnapshotV3,
   type ExactDefinitionDependency,
   type Fingerprint,
   type OrganizationId,
@@ -13,7 +14,8 @@ import {
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
 
 type CustomerDefinitionOutput = Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
-type CustomerDefinitionResolution = DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2;
+type CustomerDefinitionResolution =
+  DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
 
 export type StoredCustomerDefinitionReleaseEvidence = Readonly<{
   organizationId: OrganizationId;
@@ -201,15 +203,17 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
     } catch {
       return false;
     }
+    const expectedVersion = pair === "v2" ? "2.0.0" : "1.0.0";
+    const outputVersion =
+      "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
     if (
-      (pair === "v2") !== "validationContractVersion" in output ||
-      (pair === "v2") !== (snapshot.contractVersion === "2.0.0") ||
-      ("validationContractVersion" in output &&
-        output.validationContractVersion !== release.validationContractVersion)
+      outputVersion !== expectedVersion ||
+      snapshot.contractVersion !== expectedVersion ||
+      outputVersion !== release.validationContractVersion
     )
       return false;
   } else {
-    let pair: "v1" | "v2";
+    let pair: "v1" | "v2" | "v3";
     try {
       pair = selectModuleContractPair(
         release.sourceContractVersion,
@@ -218,11 +222,13 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
     } catch {
       return false;
     }
+    const expectedVersion = pair === "v3" ? "3.0.0" : pair === "v2" ? "2.0.0" : "1.0.0";
+    const outputVersion =
+      "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
     if (
-      (pair === "v2") !== "validationContractVersion" in output ||
-      (pair === "v2") !== (snapshot.contractVersion === "2.0.0") ||
-      ("validationContractVersion" in output &&
-        output.validationContractVersion !== release.validationContractVersion)
+      outputVersion !== expectedVersion ||
+      snapshot.contractVersion !== expectedVersion ||
+      outputVersion !== release.validationContractVersion
     )
       return false;
   }

@@ -124,6 +124,74 @@ export const recordTypeReferenceSchema = z.discriminatedUnion("state", [
   resolvedRecordTypeReferenceSchema,
 ]);
 
+const parsedOutputOptionMatches = (schema: z.core.$ZodType, value: unknown): boolean => {
+  const definition = (schema as z.core.$ZodTypes)._zod.def;
+  switch (definition.type) {
+    case "object": {
+      if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+      const record = value as Record<string, unknown>;
+      const shape = definition.shape as Record<string, z.core.$ZodType>;
+      for (const [key, child] of Object.entries(shape))
+        if (!parsedOutputOptionMatches(child, record[key])) return false;
+      for (const [key, entry] of Object.entries(record)) {
+        if (key in shape) continue;
+        if (
+          definition.catchall === undefined ||
+          !parsedOutputOptionMatches(definition.catchall, entry)
+        )
+          return false;
+      }
+      return true;
+    }
+    case "array": {
+      if (!Array.isArray(value)) return false;
+      const bounds = (schema as z.core.$ZodTypes)._zod.bag;
+      if (typeof bounds.minimum === "number" && value.length < bounds.minimum) return false;
+      if (typeof bounds.maximum === "number" && value.length > bounds.maximum) return false;
+      return value.every((entry) => parsedOutputOptionMatches(definition.element, entry));
+    }
+    case "tuple": {
+      if (!Array.isArray(value)) return false;
+      if (definition.rest === null && value.length > definition.items.length) return false;
+      return (
+        definition.items.every((child, index) => parsedOutputOptionMatches(child, value[index])) &&
+        value
+          .slice(definition.items.length)
+          .every(
+            (entry) =>
+              definition.rest !== null && parsedOutputOptionMatches(definition.rest, entry),
+          )
+      );
+    }
+    case "record":
+      return (
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        Object.entries(value).every(
+          ([key, entry]) =>
+            parsedOutputOptionMatches(definition.keyType, key) &&
+            parsedOutputOptionMatches(definition.valueType, entry),
+        )
+      );
+    case "pipe":
+      return parsedOutputOptionMatches(definition.out, value);
+    case "lazy":
+      return parsedOutputOptionMatches(definition.getter(), value);
+    case "optional":
+      return value === undefined || parsedOutputOptionMatches(definition.innerType, value);
+    case "nullable":
+      return value === null || parsedOutputOptionMatches(definition.innerType, value);
+    case "default":
+    case "readonly":
+      return parsedOutputOptionMatches(definition.innerType, value);
+    case "union":
+      return definition.options.some((option) => parsedOutputOptionMatches(option, value));
+    default:
+      return z.core.safeParse(schema, value).success;
+  }
+};
+
 /**
  * Walk already-parsed contract data, not arbitrary JSON shapes.
  * JSON payloads are opaque. See https://zod.dev/packages/core#internals.
@@ -175,7 +243,7 @@ export const walkDefinitionContract = (
             z.core.safeParse(tag, (value as Record<string, unknown>)[discriminator]).success
           );
         }
-        return z.core.safeParse(child, value).success;
+        return parsedOutputOptionMatches(child, value);
       });
       // The owning schema validator reports malformed branches. Never guess a
       // reference position from a value that does not match a declared branch.
@@ -185,6 +253,11 @@ export const walkDefinitionContract = (
     }
     case "lazy":
       walk(definition.getter(), value);
+      return;
+    case "pipe":
+      // Values here are already parsed: traverse the declared output shape,
+      // not a preprocessing input or a second execution of its transform.
+      walk(definition.out, value);
       return;
     case "optional":
     case "nullable":
