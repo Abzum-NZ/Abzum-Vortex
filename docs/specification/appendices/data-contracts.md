@@ -698,6 +698,16 @@ or publishing a graph alone does not execute it. The other interactive and
 effectful nodes remain required extensions of this same engine, not a second
 designer or interpreter.
 
+Explicit draft conversion preserves supported legacy create/change triggers,
+recursive conditions, rule identity and priority, field assignments and clears,
+requirements, warnings and refusals. Existing warning/refusal codes are retained;
+missing safe messages require an explicit author-supplied resolution. V1 field
+conversion uses the existing V1-to-V2 converter before graph conversion. An
+unsupported trigger, effect or write to a generated field returns a located
+diagnostic rather than silently losing behavior or claiming a usable graph.
+Conversion changes no stored draft or release by itself; normal draft authoring
+and publication remain necessary. See the [conversion implementation](../../../runtime/definition/src/module-v3-draft-conversion.ts).
+
 Flow table inputs, variables and standalone table literals are self-describing:
 each column declares its key, existing V2 cell type and whether a cell is required.
 Canonical columns use key order while rows retain their meaningful order. Cell

@@ -40,6 +40,9 @@ flowchart LR
 3. Carry graphs through source identity resolution, compilation, provenance,
    reference validation, version impact, publication, consumer reads and restore.
    Complete authored/canonical fixtures cover every supported node and outcome.
+   The real Definition identity store must accept the same node/input/variable
+   kinds. Prove the existing draft allocator persists those identities; service
+   tests with in-memory repositories do not establish database compatibility.
 4. Convert supported V1/V2 rules into a new Module 3 draft, preserving the original
    trigger, condition and effect. Report unsupported behavior at its source path;
    never silently discard a rule or rewrite an immutable release. Reuse the
@@ -156,6 +159,9 @@ the whole operation passes; no caller authority flag is introduced.
   and incompatible field/variable mappings refuse.
 - Prove compile → publish → consumer read → restore, including historical V1/V2
   preservation and explicit new-draft conversion without rewriting releases.
+- Prove graph node/input/variable identities through the existing database draft
+  allocator. Extend its supported-kind constraint only; keep existing ownership,
+  alias history, organisation isolation and privileges unchanged.
 - Prove the interpreter against actual Definition-returned graphs, not an
   invented standalone runtime shape.
 - Independent Sol review covers the actual patch before delivery. Keep full

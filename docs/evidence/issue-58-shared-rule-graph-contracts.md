@@ -82,6 +82,54 @@ integration and approved it after the reference-default and parsed-data traversa
 corrections; its final focused run passed **43 tests in 8 files**. The next draft
 conversion slice is excluded from this frozen integration receipt.
 
-Explicit new-draft conversion of older rules is next. Shared execution and the
+This milestone merged into Testing through [PR #367](https://github.com/Abzum-NZ/Abzum-Vortex/pull/367)
+at `87fa4d596dce50a02e77ec3bd50849a8114847f3`, after its ordinary preview check
+passed. A preview build is not a hosted database or user-journey verification.
+
+Read-only storage follow-up found that the database's existing identity-kind
+constraint did not include graph nodes, inputs or variables. The storage proof
+below addresses that gap separately; the local service receipt above does not
+imply database compatibility. No new privilege or storage system is required.
+
+Explicit new-draft conversion of older rules is next alongside that storage proof. Shared execution and the
 protected save remain unfinished under [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58)
 and [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47).
+
+## Explicit draft conversion milestone
+
+The pure V2-to-V3 converter preserves supported triggers, recursive conditions,
+rule identity/priority, typed assignments and clears, requirements, warnings and
+refusals. The V1 entry point reuses existing V1-to-V2 field conversion. Both
+preserve their input and return a new source document, not a stored publication.
+Unsupported behavior and missing safe messages produce located diagnostics.
+Writes to generated reference numbers, calculations and totals are diagnosed,
+including clears; conversion does not make those fields ordinarily writable.
+
+Independent Sol actual-patch review approved the exact three-file converter
+slice after correcting the generated-field diagnostic. Its verification passed
+**48 tests in 3 files**, covering both converter generations and actual Module 3
+compilation/semantic validation. The author's converter-only run passed 29 tests;
+Definition type checking, scoped lint/formatting and all 23 package boundaries
+also passed. Database persistence and Rule execution are not implied by this
+receipt.
+
+## Database identity compatibility proof
+
+The migration adds exactly `rule_node`, `rule_input` and `rule_variable` to the
+existing `source_identities_kind_valid` constraint, preserving all older kinds.
+It changes no functions, grants or row policies. Supabase CLI 2.116.0 generated
+the migration filename.
+
+The author verified the exact local Vortex project/container
+`supabase_db_Abzum-Vortex` (PostgreSQL 17). The migration and focused pgTAP suite
+ran together inside a rollback-only transaction: **14 assertions passed**. The
+same harness passed the existing source-identity suite's **49 assertions**.
+The proof exercises ordinary root creation, revision-checked draft editing and
+restore with stable graph child identities, retained alias history, refusal of
+foreign-organisation edits and atomic refusal of unsupported identity kinds.
+Minimal storage fixtures and a seeded release isolate the allocator; this is
+not a full compiled-application installation or a hosted publication journey.
+
+Both runs rolled back, and a subsequent constraint inspection confirmed no
+graph kind remained installed locally. No migration history was written. These
+results establish local compatibility, not application to Testing or Production.
