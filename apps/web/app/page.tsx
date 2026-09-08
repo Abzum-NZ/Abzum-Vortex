@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { serviceRegistry } from "../src/foundation";
+import { identitySessionNavigationHint } from "./auth/_lib/session-request-state";
 
 const layers = [
   {
@@ -19,7 +21,15 @@ const layers = [
   },
 ];
 
-export default function FoundationPage() {
+export default async function FoundationPage() {
+  const sessionState = identitySessionNavigationHint(await headers());
+  const accountLink =
+    sessionState === "verified"
+      ? { href: "/signed-in", label: "Continue to Vortex" }
+      : sessionState === "missing" || sessionState === "invalid"
+        ? { href: "/auth/sign-in", label: "Secure sign in" }
+        : { href: "/auth/sign-in", label: "Account access" };
+
   return (
     <main>
       <section className="hero">
@@ -71,7 +81,7 @@ export default function FoundationPage() {
 
       <footer>
         <span>VORTEX</span>
-        <Link href="/auth/sign-in">Secure sign in</Link>
+        <Link href={accountLink.href}>{accountLink.label}</Link>
       </footer>
     </main>
   );

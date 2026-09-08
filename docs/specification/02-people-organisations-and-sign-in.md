@@ -147,6 +147,23 @@ The [verified recent-authentication contract](appendices/recent-authentication.m
 
 ## Organisation launcher and sign-in experience
 
+Public entry pages must reflect the current request's session state. A verified
+browser session receives a **Continue to Vortex** link on the public homepage;
+opening the sign-in page proceeds to the organisation launcher instead of asking
+for credentials again. Missing or invalid sessions retain the sign-in journey.
+If verification is temporarily unavailable, the interface offers a neutral retry
+without claiming the person is signed out or removing their session. Previously
+opened tabs reflect the new state on their next navigation or reload.
+
+This navigation uses the existing server-verified session hint, not another
+database lookup or a separate browser session store. It grants no access: the
+launcher and destination still perform their existing live identity and
+organisation checks. Session-dependent navigation is request-specific and is not
+shared between visitors. [Entry-page repair #350](https://github.com/Abzum-NZ/Abzum-Vortex/issues/350)
+implements this behaviour using the standard Next.js
+[request headers](https://nextjs.org/docs/app/api-reference/functions/headers) and
+[redirect](https://nextjs.org/docs/app/api-reference/functions/redirect) APIs.
+
 The neutral launcher is a minimum safe projection of the organisations the current verified identity may enter. Each entry contains only the tenant and organisation display names and permanent organisation identifier, plus the organisation-account display name when one exists. It does not expose tenant or account identifiers, hierarchy, lifecycle state, logos, applications, roles, groups, permissions, commercial details, or another identity's account. Entries use display-name ordering with permanent identifiers as stable tie-breakers.
 
 No active account shows a neutral empty state; one active account redirects directly to its organisation address; several active accounts show the launcher. Identity or storage unavailability shows a retryable neutral state and does not pretend the account list is empty. An unknown, foreign, suspended, closed, or otherwise unavailable selection has one indistinguishable unavailable result.
