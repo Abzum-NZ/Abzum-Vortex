@@ -159,6 +159,16 @@ does not change published V1 bytes, dependency versions or historical semantics.
 The current complete-fixture bundle still needs its coordinated V2 migration and
 actual Definition execution proof before it is treated as delivered.
 
+[PR #357](https://github.com/Abzum-NZ/Abzum-Vortex/pull/357) merged normally into
+Testing at `2026-09-08T11:27:43Z`, producing
+`990b6c3d1d4a116f9aa79becf0459fc1f848da98`. Root verified an actual completed
+successful [source preview](https://vercel.com/abzumdevteam/abzum-vortex/4uxM9HU4BYwJHCWaqMb2cHej2RrD)
+for `25ef0e655ee955a23638592924cad313d2872689` before merging. The final normal
+Testing-base merge `acb8b00589f730c10393b06cc52d4c372be0fd2e` has the identical
+Git tree; its skipped check was not substituted for that successful source build.
+The one-line public export received its own independent approval. Unreviewed
+Definition execution and Record preparation were excluded from this delivery.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
