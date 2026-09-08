@@ -324,6 +324,13 @@ readable published release does not make another organisation's Application
 installable under that root. An exact shared Module dependency may belong to a
 different organisation; this does not transfer ownership of either Application.
 
+Runtime installation reads follow the same distinction. A context-bound read
+returns the complete exact active Application dependency set, including its
+explicitly pinned shared Modules, without a general cross-organisation definition
+lookup. Ordinary discovery does not require installation-management permission
+and grants no record access. Unrelated detached history does not invalidate a
+complete current installation. See the [active installation read plan](../build-plan/issue-43-active-installation-read.md).
+
 The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
 is the organisation-scoped platform permission
 `platform.organization.applications.manage`. The operation binds the exact

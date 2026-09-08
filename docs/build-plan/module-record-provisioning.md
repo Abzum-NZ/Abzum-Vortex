@@ -95,6 +95,11 @@ decision, row and field enforcement from
 Catalogue and generic provisioning development may proceed before those integrated
 checks complete; no active installation or protected data path is claimed early.
 
+The next read-only slice supplies [exact active installation evidence](issue-43-active-installation-read.md),
+including locally owned Applications with exact shared external Modules. It does
+not activate bindings or require installation-management permission for ordinary
+runtime discovery. Protected operations still check their own current authority.
+
 Treat #43, #45 and #50's registration slice as coordinated work, not a sequence
 requiring a fake completed install before its storage exists. Likewise, #44's
 value preparation precedes storage, while its full save/readback acceptance is
