@@ -88,6 +88,35 @@ Discoverability and invocability are separate. A page, field, choice or control 
 
 A page or platform screen cannot ship a meaningful operation that exists only as handwritten click behaviour. Configurable application actions bind to application-owned [Frontend Flows](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions); their nodes delegate to stable platform operations. Form input and ordinary browser behaviour remain generic registered capabilities. Keyboard submission, web action controls and MCP invoke the same declared action binding, not separate save paths.
 
+### Page and nested placement permissions
+
+Every page retains its required access permission. A nested V2 placement may add
+an explicit view permission and use permission. Without an explicit view
+permission it inherits the page and every enclosing placement's view gates;
+an explicit permission can only narrow that inherited access. A refused parent
+removes its complete subtree, including labels, settings, binding metadata and
+responsive order entries. A permitted child cannot reopen a refused parent.
+Sections are ordinary nested placements, not a separate permission-bearing entity.
+
+An omitted use permission adds no placement-specific restriction, but never grants
+permission to perform an operation. The operation's own binding and current Access
+decision remain required. A viewable control refused by an explicit use gate may
+remain visible with a safe fixed unavailable reason, without an invocable binding.
+Missing bindings are not executable. Conditions and data/field checks may further
+restrict the result; they cannot override permission refusal.
+
+Historical V2 omission inherits the existing page gate without rewriting immutable
+releases; legacy required V1 keys remain required. Permission changes participate
+in the existing permission-semantic version comparison. Runtime filtering may
+leave an otherwise permitted layout empty: that result is not a new published
+definition and is not rejected by authoring-time required-slot rules.
+
+The [page projection engine](../build-plan/issue-38-page-capability-projection.md)
+uses the exact published page and current authenticated organisation/application
+context. Installed-page selection, actual web rendering, anonymous public
+authority and MCP transport remain the explicit later consumer integrations in
+that plan; no client supplies its own permission map.
+
 ### Configure flows while composing pages
 
 The App Builder lists Pages and Frontend Flows within the same application. Dropping an action component opens an Action inspector to choose a quick one-node flow, select an existing compatible flow, or create/edit a custom flow in the shared Frontend Rule Designer. A Submit button can default to Save form only when its exact form and commit operation are unambiguous. A message button can simply show a popup and finish without saving. The [complete authoring and execution rules](appendices/frontend-rule-designer.md#configure-a-component-without-leaving-the-app-builder) also cover reusable flows, keyboard submission, record gestures, revision checks and MCP authoring.

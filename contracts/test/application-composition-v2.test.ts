@@ -569,6 +569,42 @@ describe("Application V2 composition contracts", () => {
     expect(applicationContentV2Schema.safeParse(canonicalApplication).success).toBe(true);
   });
 
+  it("preserves optional permission gates on shell, page and nested placements", () => {
+    const authored = structuredClone(sourceApplication);
+    const authoredShell = Object.values(authored.body.shells[0]!.layout.placements)[0]!;
+    Object.assign(authoredShell, { view_permission: "example.pages.shell.view" });
+    const authoredPage = authored.body.pages[0]!;
+    if (!("content" in authoredPage.composition)) throw new Error("Shell page fixture required");
+    const authoredPagePlacement = Object.values(
+      Object.values(authoredPage.composition.content)[0]!.placements,
+    )[0]!;
+    Object.assign(authoredPagePlacement, {
+      view_permission: "example.pages.section.view",
+      use_permission: "example.pages.section.use",
+    });
+    expect(applicationSourceDocumentV2Schema.safeParse(authored).success).toBe(true);
+
+    const canonical = structuredClone(canonicalApplication);
+    const canonicalShellPlacement = Object.values(canonical.shells[0]!.layout.placements)[0]!;
+    Object.assign(canonicalShellPlacement, { viewPermissionKey: "example.pages.shell.view" });
+    const canonicalPage = canonical.pages[0]!;
+    if (!("content" in canonicalPage.composition)) throw new Error("Shell page fixture required");
+    const canonicalPagePlacement = Object.values(
+      Object.values(canonicalPage.composition.content)[0]!.placements,
+    )[0]!;
+    Object.assign(canonicalPagePlacement, {
+      viewPermissionKey: "example.pages.section.view",
+      usePermissionKey: "example.pages.section.use",
+    });
+    expect(applicationContentV2Schema.safeParse(canonical).success).toBe(true);
+
+    const historical = applicationSourceDocumentV2Schema.parse(sourceApplication);
+    expect(Object.values(historical.body.shells[0]!.layout.placements)[0]).not.toHaveProperty(
+      "view_permission",
+    );
+    expect(applicationContentV2Schema.parse(canonicalApplication)).toEqual(canonicalApplication);
+  });
+
   it("exposes V2-only canonical, resolution, compilation request and output envelopes", () => {
     const request = {
       sourceContractVersion: "2.0.0",

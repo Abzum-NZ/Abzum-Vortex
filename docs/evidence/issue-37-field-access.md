@@ -2,7 +2,52 @@
 
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and acceptance: [implementation plan](../build-plan/issue-37-field-access.md).
 
+## Reviewed neutral database candidate — 8 September 2026
+
+The local candidate implements private field resolution, protected projection and
+whole-write validation over #35's complete exact-record contributions. It reuses
+current context, Access version, source/catalogue policy and validity evidence.
+Per-share limits intersect before union; missing and empty policies grant no
+fields. Actual restricted-role proof withholds raw content-table and helper
+access and uses fixed operation adapters with no caller-selectable authority.
+
+The protected grant proof requires exact share authority and read ceiling, and
+only evaluates an update ceiling when changeable fields are proposed. Revocation
+checks the stored complete application/module/type/storage/record scope and
+revision without requiring the old field ceiling. Existing governance ordering
+and the single private writer's Access/Activity change remain authoritative.
+
+Independent Sol actual-work review approved the final candidate after closing
+the reported binding, SQL-null and test-adapter issues. The author reports
+rollback-only SQL430 + SQL440 + SQL445 passing 88 assertions; SQL445 alone passed
+23. Root matched the final file hashes, without repeating the approved review.
+
+| Candidate | SHA-256 |
+| --- | --- |
+| Private field migration | `00a5e2756fbbf37efb09d4858dd1effc39d84f29591ae274eb54be7bc2f2d5d6` |
+| SQL440 field proof | `a601c2c37f8780eabc9b79287525198614a95dcfbf9c6412e5cba1f94ddd4b1b` |
+| SQL445 protected sharing proof | `bfbe34647e263a30f921049f1fb648429489de9c4e634905ab304c3909841a88` |
+| Shared neutral fixture | `f36321dcfc1ca416fef728b25de5f3fae2e89ae70a3bd11aa557b3784a6a534a` |
+| Extracted SQL430 row proof | `5e358040f3e9d58b5ee48d162f1ecd5ae9e173aa53cfb4509658939490c11ecc` |
+
+This candidate remains uncommitted and undelivered because its #35 SQL prerequisite
+is unfinished, including the separately recorded fixed-limit authorization. The
+existing cutoff was not changed. Migration versions must follow the current
+Testing history when this combined dependency is delivered. Permanent generated
+adapters belong to #45; no screen, transport or whole #37 completion is claimed.
+
+The author rebuilt only the disposable local Supabase database to apply the
+candidate, then used rollback-only tests. This was not a hosted reset; no
+Production database change occurred. Local-only pre-reset data is not restored
+by the test scripts. Further reset runs were stopped by the architect.
+
 ## Protected-share typed operation — 8 September 2026
+
+[PR #338](https://github.com/Abzum-NZ/Abzum-Vortex/pull/338) merged normally into
+Testing at `2026-09-08T00:02:44Z` after preview success. Reviewed source:
+`95254d8cbab50784d2b372a60afe5aa365e90c80`; Testing merge:
+`62a19dc4c30b111dcb43475e297115ac390d726c`. All 23 package builds also passed.
+No unfinished SQL was included and no hosted receipt is claimed for this merge.
 
 The strict grant/revoke commands accept normal record, recipient, field, time and
 revision inputs, never caller-supplied authority or field ceilings. Grant and
@@ -66,6 +111,32 @@ candidate is not delivered with this checkpoint.
 
 ## Isolated source delivery — 8 September 2026
 
+### Hosted Testing result
+
+The exact PR #336 Testing merge `eaef6ce34e46cdc977705068c77822b96e0d5bd8`
+passed [execution 6DEAIaJH6yyc4Elwd8Ul5G](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6DEAIaJH6yyc4Elwd8Ul5G).
+Its stored `database-testing-eaef6ce34e46cdc977705068c77822b96e0d5bd8`
+receipt reports `succeeded`, 66 applied migrations, all 25 selected concurrency
+proofs completed, and all six selected lint schemas completed. Logs confirm
+60 database test files and 2,649 assertions passed. Receipt publication was
+`2026-09-07T23:58:11.548Z`.
+
+Root independently calculated all four fingerprints from that exact Git revision
+and matched the receipt:
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Migration set | `ec6b40803297598bfda603618d5178b7cccc3c6d8d673859d409fd47b72d07c2` |
+| Committed verification runner | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Verification manifest | `0cfcb4d9995f0c79b132b479a4ec56448d504fa097520fc6610908d21c99dfc8` |
+| Selected verification coverage | `7345fd22aa5f8040ddb4356965377e8863dbb5f6ff51bb666d6bc16c8c605f0e` |
+
+This closes the hosted-receipt qualification for the definition-to-catalogue
+checkpoint below, not the later PR #337/#338 checkpoints or the unfinished
+database enforcement. No Production promotion occurred. Whole #37 remains open.
+
+### Source verification
+
 [PR #336](https://github.com/Abzum-NZ/Abzum-Vortex/pull/336) merged normally into
 Testing at `2026-09-07T23:17:58Z`, after both preview checks passed on reviewed head
 `968c7712ce1ee27f6e34a727191fceab40be45b1`. Testing merge:
@@ -83,7 +154,7 @@ installed the frozen lockfile from the local package cache, and verified:
 The independent reviewer confirmed no committed #37 dependency on the excluded
 #35 changes. This replaces the earlier shared-worktree qualification with exact
 isolated source evidence. It does not claim hosted database verification of the
-new field-catalogue migration; its exact Testing receipt remains to be checked.
+new field-catalogue migration by itself; the later exact receipt is recorded above.
 No Production promotion occurred, and the whole #37 enforcement task stays open.
 
 ## Definition-to-catalogue checkpoint — 8 September 2026

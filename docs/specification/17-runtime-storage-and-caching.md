@@ -383,9 +383,11 @@ flowchart TD
     DEF -- No --> DBDEF[Load revision from database and cache by organisation and revision]
     DBDEF --> RESOLVE
     RESOLVE --> DATA{Safe data-result cache allowed?}
-    DATA -- Yes --> CHECK[Use organisation, person, access version and data version key]
+    DATA -- Yes --> CHECK{Current account, application, authority, data and query key match?}
     DATA -- No --> QUERY[Run authorised query]
-    CHECK --> QUERY
+    CHECK -- No --> QUERY
+    CHECK -- Yes --> HIT[Recheck current permission and field scope before reuse]
+    HIT --> PAGE
     QUERY --> PAGE[Return private non-shared response]
 ```
 
@@ -396,8 +398,8 @@ The allowed layers are:
 | Built application assets       | [Vercel CDN](https://vercel.com/docs/caching/cdn-cache), keyed by content hash                                                                          | May be shared across organisations because the content is identical and contains no organisation data. This is the explicit exception to organisation-keyed caches. |
 | Request-local values           | One server request                                                                                                                                      | Session context, access version, explicitly requested discovery pointers, and repeated calculations may be reused only within that request.                         |
 | Immutable definition revisions | Shared [Vercel cache](https://vercel.com/docs/caching), keyed by organisation, root key, revision and content fingerprint                               | Revisions never change. Cross-organisation keys are structurally impossible.                                                                                        |
-| Resolved application and theme | Shared cache, keyed by organisation, the exact releases pinned by the owning installation or operation, person where needed, and current access version | Existing consumers keep their pinned releases. A current pointer is read only during explicit discovery, installation, or upgrade.                                  |
-| Initial data-block result      | Shared cache only when explicitly allowed; keyed by organisation, person, access version, record-type data versions and query fingerprint               | Never stores sensitive fields. A record save increments the owning Record service's data version, making old results unreachable.                                   |
+| Resolved application and theme | Shared cache, keyed by organisation, application context, exact pinned releases/fingerprints, organisation account where permission-varying, and current Access version | Existing consumers keep their pinned releases. A current pointer is read only during explicit discovery, installation, or upgrade.                                  |
+| Initial data-block result      | Shared cache only when explicitly allowed; keyed by organisation, organisation account, application, current Access version, exact pinned releases/fingerprints, all relevant record-type data versions and complete query fingerprint | Never stores sensitive fields. A record save increments the owning Record service's data version, making old results unreachable.                                   |
 
 Current published pointers, current organisation-account state, current access version, permission decisions, secrets, and responses containing sensitive fields are never served from a cross-request cache.
 
@@ -406,11 +408,20 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 ## Cache correctness
 
 - A cache-writing function requires an organisation identifier except for content-hashed application assets.
-- Cached values that differ by person require the person identifier and access version.
+- Permission-varying values require the organisation-account identifier, application context and current Access version, not a global identity alone. Query-result keys also include exact pinned releases/fingerprints and the complete query parameters.
 - Data cache keys name every record-type data version used by the query.
+- Read current account, session, Access and relevant data versions before lookup. A hit never bypasses current permission or field checks. Reuse ends at the earliest cache-policy lifetime, authority validity or session/context expiry; there is no fixed 60-second security policy.
+- Permission-administration and Activity responses are not cross-request cached. Provider failure falls back to the ordinary authorised query, never unverifiable stale content.
 - Publication does not retarget an existing consumer. It invalidates discovery and Studio views of the root's current release; installed applications, grants, workflows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them.
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
+
+Implement [permission-safe query caching #39](../build-plan/issue-39-permission-safe-query-caching.md)
+with the actual [query engine #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
+in Phase 5, before [live refresh #56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56).
+No dormant Phase 3 cache framework or duplicate version counter is required.
+The [application runtime #64](../build-plan/issue-64-application-runtime.md) owns
+its later immutable-definition and resolved-application cache integration.
 
 ### Grant cache invalidation
 

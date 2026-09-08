@@ -2,6 +2,21 @@
 
 Task: [#315](https://github.com/Abzum-NZ/Abzum-Vortex/issues/315). Requirement: [invitations and Groups](../specification/02-people-organisations-and-sign-in.md#invitations-and-groups). This is a bounded correction discovered during [Access administration](issue-40-access-administration.md), not a reopening of [approved Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33).
 
+## Hosted completion — 8 September 2026
+
+The verified later Testing revision `eaef6ce34e46cdc977705068c77822b96e0d5bd8`
+contains the exact reviewed migration, regression and concurrency script: root
+recomputed all three Git-blob hashes and matched the frozen values below.
+[Execution 6DEAIaJH6yyc4Elwd8Ul5G](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6DEAIaJH6yyc4Elwd8Ul5G)
+succeeded with all 60 SQL files/2,649 assertions, all 25 concurrency proofs
+(including invitation access), and all six lint schemas. The
+[exact stored receipt and matched fingerprints](issue-37-field-access.md#hosted-testing-result)
+prove that delivered revision, not merely a preview deployment. Existing actual
+patch review and local failure/repair evidence remain valid; no duplicate review
+or new implementation was needed. All task acceptance criteria are satisfied.
+This supersedes the historical unverified-receipt status below. No Production
+promotion is claimed.
+
 ## Reviewed correction — 7 September 2026
 
 The existing invitation writer sampled statement-start audit time before serialization waits. Locked invitation/account facts could already contain a later audit time, causing an otherwise valid next revision to be rejected. The correction retains the supported path's fresh post-lock expiry check, then clamps only the written audit time against the locked invitation and account audit values. It leaves the existing signature, privileges, protectors, revision rules, account eligibility and accepted replay unchanged. No clock configuration, service restart, additional authority counter or approval mechanism is involved.

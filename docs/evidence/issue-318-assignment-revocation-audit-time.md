@@ -2,6 +2,22 @@
 
 Task: [#318](https://github.com/Abzum-NZ/Abzum-Vortex/issues/318). This is a bounded correction to the delivered [Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) writer, not a new authorisation mechanism or infrastructure investigation.
 
+## Hosted completion — 8 September 2026
+
+The verified later Testing revision `eaef6ce34e46cdc977705068c77822b96e0d5bd8`
+contains the exact reviewed migration and SQL375 regression: root recomputed both
+Git-blob hashes and matched the frozen values below.
+[Execution 6DEAIaJH6yyc4Elwd8Ul5G](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6DEAIaJH6yyc4Elwd8Ul5G)
+succeeded with 60 SQL files/2,649 assertions, all 25 selected concurrency proofs
+in one run, and all six lint schemas. The
+[stored receipt and matched fingerprints](issue-37-field-access.md#hosted-testing-result)
+establish exact hosted coverage. Existing independent actual-patch review and
+local baseline/repair proof satisfy the remaining acceptance criteria, without
+another review or implementation. The historical local concurrency observation
+below is retained, not rewritten as an uninterrupted local success. All task
+acceptance criteria are satisfied; the historical unverified hosted status is
+superseded. No Production promotion is claimed.
+
 ## Demonstrated failure and correction — 7 September 2026
 
 The existing private assignment coordinator locked and revision-checked a live assignment, but wrote an unqualified current clock value during revocation. If the predecessor's stored audit timestamp was later than that observation, the existing transition protector rejected the otherwise valid revocation. The original assignment SQL suite exposed this intermittently during record-condition verification.
