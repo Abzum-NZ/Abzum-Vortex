@@ -40,6 +40,10 @@ bounded, database-free engine slice; it does not build the App Designer.
   data/action/access-bearing or required additions.
 - Slot requirement/category widening and narrowing are classified in the correct
   direction. Theme-only changes remain patch.
+- A complete new non-public standalone page (including a guided form) is one
+  minor optional capability. Its new descendants do not separately force major;
+  public/replacement pages, moved existing placements, changed shared shells and
+  independent dependency changes retain their normal classification.
 - A representative V1 fingerprint remains exact; existing V1 comparison and
   publication/history/consumer suites still pass. Stored V2 paths remain closed.
 - Independent review covers the actual patch and the whole bounded acceptance;

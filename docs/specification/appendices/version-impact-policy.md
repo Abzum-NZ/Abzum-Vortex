@@ -216,10 +216,30 @@ not reinterpret V1 releases or change existing V1 comparison fingerprints.
 | Required slot added; slot removed, retargeted or made required; allowed categories narrowed; permanent identity/key replaced | Major: existing composition requirements or meaning change. |
 | Labels, names and theme presentation | Patch; this does not downgrade an accompanying access, dependency or behaviour change. |
 
+Adding a whole non-public standalone page, including a guided form, is a minor
+optional capability, as in the existing application policy. Its newly created
+descendants belong to that page addition; their ordinary field, query and action
+references do not independently make the addition major. New public or standard
+replacement pages remain major. This exception applies only to new descendants
+owned by that new page: moving an existing placement there, changing a shared
+shell or changing a runtime dependency is still compared independently. Adding
+content to an existing page follows the placement rules above.
+
 Match permanent identities across the complete shell, page, nested-placement and
 guided-step trees, retaining owner and parent context. Normalize only collections
 whose order is explicitly irrelevant. One presentation-only change never hides
 another major reason in the same revision.
+
+A newly added optional heading can contain text and still be a minor addition.
+For new placements, use the closed typed presentation-value kinds (including
+nested groups/lists), not empty settings or guessed property names, to distinguish
+literal presentation from data/action references. This does not relax the major
+classification of changes to an existing placement's settings or an accompanying
+platform-block dependency change. Empty internal placement containers have no
+display effect and are omitted only for semantic comparison; child changes and
+exposed shell-slot declarations carry their own meaning. Page-to-shell content
+bindings remain explicitly compared. Exact authored/canonical fingerprints and
+stored releases are never rewritten by comparison normalization.
 
 V2 comparison requires exact `validationContractVersion: "2.0.0"` metadata on
 the request and each supplied V2 history entry. Unknown, missing or mixed

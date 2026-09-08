@@ -1,8 +1,14 @@
 import { z } from "zod";
 import {
+  applicationContentV2Schema,
+  applicationDraftV2Schema,
   applicationDraftSchema,
   publishedApplicationDefinitionSchema,
 } from "./application-contracts";
+import {
+  publishedApplicationReferenceSchema,
+  publishedDefinitionReferenceSchema,
+} from "./definitions";
 import {
   applicationRootIdSchema,
   fingerprintSchema,
@@ -14,6 +20,7 @@ import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-con
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const versionImpactPolicyVersion = "1.0.0" as const;
+export const applicationVersionImpactPolicyVersionV2 = "2.0.0" as const;
 export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine(
   (value) => !value.includes("-") && !value.includes("+"),
   "Published definition versions must be stable major.minor.patch versions",
@@ -68,6 +75,10 @@ export const versionImpactComponentKinds = [
   "interface",
   "public_address",
   "theme",
+  "platform_block_dependency",
+  "shell",
+  "shell_content_slot",
+  "block_placement",
 ] as const;
 export const versionImpactComponentKindSchema = z.enum(versionImpactComponentKinds);
 
@@ -177,6 +188,30 @@ export const applicationVersionImpactRequestSchema = z
   })
   .strict();
 
+/**
+ * Comparator-only native V2 history evidence. Stored publication selection
+ * remains closed until coordinated persistence and consumer work is complete.
+ */
+export const applicationVersionImpactHistoryEntryV2Schema = z
+  .object({
+    publication: publishedApplicationReferenceSchema.extend({
+      validationContractVersion: z.literal("2.0.0"),
+    }),
+    content: applicationContentV2Schema,
+    dependencyManifest: z.array(publishedDefinitionReferenceSchema),
+    releaseNote: z.string().min(1).max(2_000),
+  })
+  .strict();
+
+export const applicationVersionImpactRequestV2Schema = z
+  .object({
+    kind: z.literal("application"),
+    validationContractVersion: z.literal("2.0.0"),
+    history: z.array(applicationVersionImpactHistoryEntryV2Schema).max(historyLimit),
+    candidate: applicationDraftV2Schema,
+  })
+  .strict();
+
 export const definitionVersionImpactRequestSchema = z.discriminatedUnion("kind", [
   moduleVersionImpactRequestSchema,
   applicationVersionImpactRequestSchema,
@@ -272,5 +307,8 @@ export type DefinitionVersionImpactFailureCode = z.infer<
   typeof definitionVersionImpactFailureCodeSchema
 >;
 export type DefinitionVersionImpactRequest = z.infer<typeof definitionVersionImpactRequestSchema>;
+export type ApplicationVersionImpactRequestV2 = z.infer<
+  typeof applicationVersionImpactRequestV2Schema
+>;
 export type DefinitionVersionImpactResult = z.infer<typeof definitionVersionImpactResultSchema>;
 export type DefinitionVersionConfirmation = z.infer<typeof definitionVersionConfirmationSchema>;

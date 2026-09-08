@@ -246,6 +246,27 @@ const applicationRequestAfter = (draft: ReturnType<typeof applicationDraft>) => 
 };
 
 describe("literal/reference version regression", () => {
+  test("preserves the representative V1 comparison fingerprint and reason bytes", () => {
+    const request = applicationRequestAfter(applicationDraft());
+    request.candidate.content.description = "A changed neutral application definition.";
+    expect(compareDefinitionVersionImpact(request)).toEqual({
+      outcome: "release_required",
+      subject: { definitionKind: "application", rootId: id(20) },
+      comparisonFingerprint:
+        "sha256:818a1405cf5bd1c43860a5bbb471242210e136e1925c71f1bd48afa2c88728ec",
+      currentVersion: "1.0.0",
+      impact: "patch",
+      assignedVersion: "1.0.1",
+      reasons: [
+        {
+          impact: "patch",
+          code: "definition_text_changed",
+          location: { componentKind: "application", property: "description" },
+        },
+      ],
+    });
+  });
+
   test("round-trips page literal JSON through publication contracts and compares its changes", () => {
     const draft = applicationDraft();
     const page = draft.content.pages[0]!;

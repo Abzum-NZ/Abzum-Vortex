@@ -159,7 +159,15 @@ tests (two files and three tests retain existing skips), all 23 package
 typechecks, boundaries and builds including Next.js, and changed-code lint,
 formatting and diff checks. This includes the corrected Access-owned read and
 the independently reviewed native V2 compiler checkpoint. No SQL candidate or
-new grant was included. Hosted verification of this merge is not yet inspected.
+new grant was included. Hosted verification is now verified: execution
+[`DS5ol9X2h0Cb0Cld4ErEN`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/DS5ol9X2h0Cb0Cld4ErEN)
+succeeded at `2026-09-08T03:18:47.665Z`, with schema-2 receipt published at
+`2026-09-08T03:18:47.629Z` for this exact Testing merge. Root read the complete
+receipt: 66 migrations, all 25 selected concurrency proofs and six lint schemas
+completed, and matching migration-set/runner/manifest/coverage hashes. The diff
+from the preceding verified Testing merge changes no Supabase or Kestra inputs.
+The successful run was screenshotted without changing any settings. This remains
+regression evidence, not an installed application renderer or live page route.
 
 ## Remaining work
 
