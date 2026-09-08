@@ -8,9 +8,10 @@ An application can use the published field definitions to check user-entered
 record values, explain which field needs correction and preserve valid values.
 The runtime is generic: example application names and rules remain in fixtures.
 
-The catalogue, source/canonical definitions and publication checks already exist.
-Do not recreate them. Implement their runtime use in `@vortex/record`, then wire
-that same behavior into actual protected saves and reads.
+The catalogue and Definition publication pipeline already exist. Reuse them and
+preserve V1 rather than recreating the engine. Add the explicit Module V2
+source/canonical contracts required by the value-format decision below, then
+implement their runtime use in `@vortex/record` and actual protected saves/reads.
 
 ## First implementation: value preparation
 
@@ -137,6 +138,42 @@ meanings are rewritten. Update the editable complete fixtures and prove their
 new publication path. Do not build a second obsolete Record execution engine
 solely for historical releases that never had an installed record runtime; define
 the supported installation version explicitly in the coordinated implementation.
+
+### Coordinated implementation sequence
+
+1. Finish and review the additive table-column and choice-gate corrections above.
+   Then extract the existing safe rich-text primitives into a neutral contract
+   file. Keep Page V2's accepted blocks unchanged; importing Application composition
+   directly into Module would create an existing Application-to-Module cycle.
+2. Add explicit Module V2 source, canonical and value schemas and exact version-pair
+   selection in the existing Definition contracts. Preserve the current Module V1
+   schemas. Existing JSON storage and version columns do not require a new database
+   schema merely to store this representation.
+3. Extend the existing compiler by definition kind and supported version pair.
+   Its current version-field presence check routes to Application V2 and is not
+   sufficient for Module V2. Complete source identities/provenance, semantic
+   validation, publication, integrity and consumer readback together. Remove the
+   current non-Application assumption of validation version `1.0.0` only through
+   explicit supported-pair selection, not a permissive version fallback.
+4. Complete Module comparison, exact history/read/restore and explicit draft
+   conversion. A representation transition is major; same-version changes retain
+   their existing classifications. Preserve immutable V1 evidence without building
+   a V1 Record executor. Missing polymorphic targets require explicit conversion
+   input, and any unresolved currency must be supplied rather than guessed.
+5. Implement the supported V2 Record value preparation and the matching Rule
+   condition/publication-test semantics. Both use one exact decimal codec, including
+   calculation literals. Money comparisons must respect currency. Keep the existing
+   V1 Rule evaluator for historical Definition evidence.
+6. Convert editable fixtures and prove the real compile/publication/consumer/
+   restore/version-impact path before claiming the new runtime. Application
+   definitions change only for affected exact module dependencies. Later storage,
+   calculations, totals and Query reuse these representations; File still owns
+   actual file eligibility and Access owns current caller authority.
+
+These are cohesive implementation slices inside the existing owning tasks, not
+new services, registries or release-approval mechanisms. A schema-only slice may
+be tested independently but does not advertise Module V2 as publishable/installable
+until its corresponding full pipeline is operational.
 
 ```mermaid
 flowchart LR
