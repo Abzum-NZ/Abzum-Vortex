@@ -32,6 +32,9 @@ request connection database-owner permissions.
    of [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) can be co-delivered here;
    its system-field and protected-action completion still needs real record storage.
    This does not require a new event queue or a successful mock registration.
+   The [event availability plan](issue-50-system-fields-actions-events.md) uses
+   exact immutable definitions and real binding state, not a copied catalogue
+   or a boolean claiming registration succeeded.
 4. Activate the exact organisation/application binding only when its required
    mappings, registrations and protected operations are ready. A retry reuses the
    existing compatible storage and registration identities.
