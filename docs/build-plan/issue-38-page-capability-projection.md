@@ -3,9 +3,11 @@
 Task: [#38](https://github.com/Abzum-NZ/Abzum-Vortex/issues/38).
 Engine prerequisites: completed [permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32)
 and [current Access #34](issue-34-access-decision.md).
-Final V2 authored-to-published integration requires the still-open
-[page-composition compiler #249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249).
-That technical prerequisite does not hold the independent contract/projector slice.
+Final V2 authored-to-published integration requires the coordinated publication
+and readback slice of [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249),
+normally merged in [PR #344](https://github.com/Abzum-NZ/Abzum-Vortex/pull/344).
+Its exact hosted Testing verification is running. This handoff does not wait
+for the remaining draft conversion, Puck adapter or App Designer.
 
 ## Outcome
 
@@ -100,6 +102,27 @@ permission evaluator, cache, SQL store or visual designer.
 
 ## Acceptance criteria
 
+### Implementation decision — selected shell and page handoff
+
+Resolve the exact published shell and its named-slot page attachments into one
+internal runtime tree before permission collection and recursive filtering. A
+guided form resolves that tree for each step. Published canonical data is not
+mutated or republished; the runtime output contains only permitted resolved
+content. The existing recursive projector handles both shell and page ancestors.
+
+Generalize the current internal V1-only stored-page adapter to one exact V1/V2
+adapter. It consumes the existing Definition/Access source and registration;
+there is no second reader, authority issuer, database store or permission engine.
+Validate the trusted boundary once and check the structural facts needed for
+slot attachment, without repeatedly revalidating an entire application at each
+recursive step. Review the actual completed Page changes independently with Sol.
+
+### Completion checks
+
+- [ ] Resolve the selected published shell layout and its exact named-slot
+      attachments before returning page capabilities. A refused shell ancestor
+      removes injected page descendants, including guided-step content and
+      responsive-order references; do not refuse all custom shells instead.
 - [ ] V2 authored/canonical permission references compile with exact provenance,
       owner/reference validation and permission-semantic version impact.
 - [ ] Historical omission inherits page/ancestor authority; V1 semantics and
@@ -122,19 +145,20 @@ permission evaluator, cache, SQL store or visual designer.
 
 ## Later integration ownership — not reverse engine dependencies
 
-| Owner | Required integration |
-| --- | --- |
-| [#249 page-composition foundation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) | Finish V2 comparison and publication/persistence/readback after the delivered native compiler/provenance, including #38 permission meaning. This is a real prerequisite for final V2 integration, not designer UI. |
-| [#64 application runtime](issue-64-application-runtime.md) | Bind the installed active application and exact release to the trusted page adapter. |
-| [#69 page permissions](https://github.com/Abzum-NZ/Abzum-Vortex/issues/69) | Real navigation, direct addresses, render responses and live access-ended continuity use the projection. |
-| [#250 semantic bindings](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) | Complete form/query/flow/operation bindings determine actual invocable controls. |
-| [#35 record access](issue-35-row-policy-composition.md), [#37 fields](issue-37-field-access.md) | Independently enforce every actual data read/change; page admission grants no record/field access. |
-| [#107 public access](https://github.com/Abzum-NZ/Abzum-Vortex/issues/107) | Implement the distinct anonymous authority and explicit public-operation/field allowlist, then compose public page projection. Do not fabricate an organisation account. |
-| [#200 MCP](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) | Use the same filtered capabilities and owning operations; prove actual discovery/invocation parity. |
+| Owner                                                                                           | Required integration                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [#249 page-composition foundation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249)         | Finish V2 comparison and publication/persistence/readback after the delivered native compiler/provenance, including #38 permission meaning. This is a real prerequisite for final V2 integration, not designer UI. |
+| [#64 application runtime](issue-64-application-runtime.md)                                      | Bind the installed active application and exact release to the trusted page adapter.                                                                                                                               |
+| [#69 page permissions](https://github.com/Abzum-NZ/Abzum-Vortex/issues/69)                      | Real navigation, direct addresses, render responses and live access-ended continuity use the projection.                                                                                                           |
+| [#250 semantic bindings](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250)                   | Complete form/query/flow/operation bindings determine actual invocable controls.                                                                                                                                   |
+| [#35 record access](issue-35-row-policy-composition.md), [#37 fields](issue-37-field-access.md) | Independently enforce every actual data read/change; page admission grants no record/field access.                                                                                                                 |
+| [#107 public access](https://github.com/Abzum-NZ/Abzum-Vortex/issues/107)                       | Implement the distinct anonymous authority and explicit public-operation/field allowlist, then compose public page projection. Do not fabricate an organisation account.                                           |
+| [#200 MCP](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200)                                 | Use the same filtered capabilities and owning operations; prove actual discovery/invocation parity.                                                                                                                |
 
 ```mermaid
 flowchart LR
-    D[Exact published page and nested placements] --> A[Current page and placement permissions]
+    D[Exact published page and selected shared layout] --> R[Resolve content into its actual parents]
+    R --> A[Current page and placement permissions]
     A --> P[Prune refused subtrees]
     P --> V[Permitted presentation]
     P --> C[Visible controls and safe availability]
@@ -147,3 +171,8 @@ References: [Access](../specification/04-access-and-permissions.md),
 [semantic interface map](../specification/07-applications-pages-and-themes.md#semantic-interface-map),
 [nested placement contracts](../specification/appendices/page-builder-contracts.md#composition),
 and [engine-first delivery](engine-first-application-delivery.md).
+
+The [final native handoff evidence](../evidence/issue-38-native-page-handoff.md)
+records the completed implementation, independent actual-work review and its
+delivery status. The reviewer independently passed 19 Page tests and the Page
+type check. Source delivery and exact hosted verification remain before closure.

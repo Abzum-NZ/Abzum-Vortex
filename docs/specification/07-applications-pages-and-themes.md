@@ -98,6 +98,15 @@ removes its complete subtree, including labels, settings, binding metadata and
 responsive order entries. A permitted child cannot reopen a refused parent.
 Sections are ordinary nested placements, not a separate permission-bearing entity.
 
+For a page using an application shell, resolve its declared content-slot bindings
+into that shell's layout before collecting or applying placement permissions.
+The shared layout and injected page content form one parent/child tree, so a
+refused shell ancestor also removes its injected page content. Guided forms use
+the same layout with each step's own content. This is an internal runtime view:
+the published shell, page and their stable identities stay unchanged. Reuse the
+same recursive filtering for default layouts and custom shells; do not reject
+custom shells or maintain a separate shell permission engine.
+
 An omitted use permission adds no placement-specific restriction, but never grants
 permission to perform an operation. The operation's own binding and current Access
 decision remain required. A viewable control refused by an explicit use gate may

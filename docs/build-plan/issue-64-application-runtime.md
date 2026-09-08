@@ -18,6 +18,12 @@ Task: [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64). This is engine 
 
 ## Acceptance criteria
 
+- [ ] Consume the page adapter's resolved, permission-filtered shell and page
+      composition, including each guided step and responsive order. Do not attach
+      an unfiltered shell or page subtree again after projection. Preserve allowed
+      empty runtime layouts. Actual queries, forms and operations still use their
+      owning services; resolved presentation is not data or operation authority.
+
 - [ ] Supply the real trusted application-service context and installed exact
       release selector to the [page adapter #38](issue-38-page-capability-projection.md).
       Reuse the existing Definition consumer reader; its system-context release

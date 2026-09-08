@@ -83,5 +83,11 @@ focused lint successfully; the reviewer did not independently execute those test
 Root also ran the broader affected contracts, Definition and Access suites:
 1,194 tests across 74 files passed. All 23 package boundaries and formatting of
 the seven implementation files passed. No database migration, new evaluator, authority path or
-application-specific runtime behaviour was added. Source delivery is pending;
-the whole task remains open for explicit conversion and the headless adapter.
+application-specific runtime behaviour was added.
+
+Source `51cb08b67626ad7c9d395163e40614c7909c034e` passed both normal preview
+checks in [PR #345](https://github.com/Abzum-NZ/Abzum-Vortex/pull/345), merged to
+Testing at `2026-09-08T06:06:46Z` as
+`32d40f09b022dd292978d60a87f5c5052b9708b1`. Exact hosted verification remains
+pending; the whole task remains open for
+[explicit conversion](issue-249-draft-conversion.md) and the headless adapter.

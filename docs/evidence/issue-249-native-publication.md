@@ -8,8 +8,7 @@ Specification: [page composition](../specification/appendices/page-builder-contr
 
 Independent Sol approved the actual combined publication, readback, restore and
 storage changes, including the final downstream compatibility corrections. Root
-matched all 24 reviewed source, test and SQL file hashes. No publication delivery or
-hosted result is claimed yet. Final repository verification passes: **1,401 tests
+matched all 24 reviewed source, test and SQL file hashes. Final repository verification passes: **1,401 tests
 across 100 files**, with three existing skipped tests across two files. The full
 suite ran sequentially without changing any test timeout or assertion.
 
@@ -89,6 +88,28 @@ records this boundary explicitly.
 
 ## Remaining delivery
 
-- Deliver through normal Testing checks and verify its exact hosted receipt.
+- Verify the exact hosted receipt for the Testing delivery below.
 - Keep whole #249 open for placement compatibility, explicit draft conversion
   and the headless adapter.
+
+## Testing delivery
+
+Source `752abdc13b3a46e294c45a0ab0f0d11d1dfc4e71` was committed and pushed.
+[PR #344](https://github.com/Abzum-NZ/Abzum-Vortex/pull/344) passed both normal
+preview checks and merged to Testing at `2026-09-08T05:40:35Z`, merge
+`ba7289beeb8286e7485ae445f2ee57d6dc28101f`. No check was bypassed.
+
+[Hosted execution 7B4lfifIp4AKiMXjf0D5SC](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/7B4lfifIp4AKiMXjf0D5SC)
+started at `05:40:38.412Z` on unchanged flow revision 7. The visible log confirms
+that exact Testing commit and successful application of only the new publication
+migration; verification is still running. This is not yet a successful receipt.
+Root recomputed expected evidence from the exact merged Git revision, excluding
+unrelated uncommitted Local files: 68 migrations, 25 concurrency proofs and six
+lint schemas.
+
+| Expected hosted evidence | SHA-256                                                            |
+| ------------------------ | ------------------------------------------------------------------ |
+| Migration set            | `f3e6f03a936fc32f27b37c9858bbcf19e013d9edc3ed5b6d8253a8cd0309130b` |
+| Runner                   | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Manifest                 | `0cfcb4d9995f0c79b132b479a4ec56448d504fa097520fc6610908d21c99dfc8` |
+| Coverage                 | `7345fd22aa5f8040ddb4356965377e8863dbb5f6ff51bb666d6bc16c8c605f0e` |
