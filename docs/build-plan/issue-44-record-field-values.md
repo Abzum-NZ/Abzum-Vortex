@@ -198,6 +198,16 @@ through the shared exact codec. Do not add an arithmetic engine merely to valida
 these definitions. Verify the real V2 compile/publication-test path and retain the
 existing V1 historical evaluator tests unchanged.
 
+The same versioned semantics must reach the database-backed saved-condition path
+before Module V2 is activated for records. Its current V1 implementation maps
+decimal and money fields to `number` and uses double-precision comparisons.
+[Row enforcement #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) must select
+the supported Module pair from trusted definition evidence and use exact numeric
+comparison for V2 decimal/money values, with matching currency and parameter
+rules. Reuse the existing evaluator boundary and parity tests; do not infer a
+version from a JSON value or reinterpret historical V1 evidence. This is an
+integration prerequisite, not delivered by the schema-only slice.
+
 ```mermaid
 flowchart LR
     D[Published field definitions] --> V[Prepare submitted values]

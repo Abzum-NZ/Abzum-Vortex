@@ -630,6 +630,15 @@ User-facing action and data-component bindings reference an exact application-ow
 
 An action contains identifier, key, label, subject record type, permission binding, sharing setting (`refused` by default or `allowed`), uniquely keyed typed inputs, precondition, and one to ten ordered effects. Each input has a label and required flag. Its validation contract is discriminated by type: plain/formatted text, number, Boolean, date, date-time, one-or-more record-type reference, or organisation-account reference. One input cannot accept another type's settings. Effects are `set_field`, `create_record`, `copy_relationships`, `soft_delete_subject`, or `announce_event`. A relationship-copy effect names every source relationship and its target-record input; it never means “all relationships.” A shared action executes wholly in the source organisation and cannot create a relationship to recipient-owned data.
 
+The coordinated Module V2 [field-value contract](../05-modules-fields-and-relationships.md#record-value-formats)
+adds explicit `decimal_number` and `money` action inputs with exact-text amount
+bounds. Money input values carry amount and currency; the target field's currency
+policy still applies. V2 formatted inputs use the Record rich-text format,
+including an allowed table block, without expanding the Page format. Typed record
+references and organisation-account references remain distinct. Historical V1
+input meaning is unchanged. A consumer resolves input/value semantics from the
+exact owning Module contract, not from a string or object's appearance.
+
 [Row-policy composition #35](../../build-plan/issue-35-row-policy-composition.md) extends that permission binding without rewriting published content: keep authored `permission` and compiled `permissionKey` for one permission; use mutually exclusive authored `permission_alternatives` and compiled `permissionKeys` for two or more unique, canonically ordered alternatives. Every alternative resolves to its exact declaring owner and the same subject record type and action meaning. Named alternatives additionally share the same declaring owner; matching names in different modules do not establish the same authority. An application action may reference a bound module's permissions, so the action's containing application is not automatically the permission owner. Each alternative must independently supply both current authority and its own complete record scope; an interface exposure permission cannot substitute for either. The action's flow execution remains owned by [page/action bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), not this metadata extension.
 
 A rule flow contains identifier, owner/subject context, explicit contract version, trigger binding, optional condition, priority, typed input/variable declarations, registered versioned nodes, labelled edges and terminal/submission outcomes. The [Frontend Rule Designer contract](frontend-rule-designer.md#contracts-and-compatibility-delivery) governs the complete versioned extension and fixtures. The existing single-effect representation remains readable as immutable legacy content; conversion produces a new versioned draft, never a rewritten release. Module rules retain their record-only context; application rules can additionally refer to owned pages, forms and workflows. There is no separate permission-approval rule.
@@ -641,6 +650,15 @@ Target Interactive Show form bindings declare exact form/flow/node identity, typ
 A condition node has an operator and typed field, value, or parameter operands. Either side of a binary comparison may use any of those operands, so field-to-field comparison is explicit rather than encoded as a value. Boolean groups use `all`, `any`, or `not`. Every authored and canonical condition is limited to ten nesting levels and one hundred total operands. Publication also enforces the relevant relationship-hop limit and refuses wrong unary/binary arity, an operator/type mismatch, or an unknown operand source.
 
 A saved sharing condition belongs to one source record type and contains permanent identifier, key, system-derived published revision and contract fingerprint, typed parameter declarations, a closed condition tree, declared local field dependencies, and publication tests. Every test provides explicit source-field values, parameter values, and an expected result. It cannot traverse relationships in the first release, read recipient data, execute code, call a connection, or accept an undeclared parameter. Definition derives revisions from the permanent condition identifier and complete immutable Module history: first appearance is `1`, unchanged resolved content retains its revision, changed content increments once, removal adds no mutable state, and reintroduction after any absent release increments once. A grant pins its revision and values; later publication does not change an active grant.
+
+Module V2 saved conditions explicitly support `decimal_number` and `money`
+parameters. Decimal comparison is exact; money equality and membership include
+currency, and ordering across different currencies is refused rather than treated
+as false. Authored values normalize before canonical evaluation; the historical
+`number` parameter retains its previous meaning. Definition publication tests,
+Rule execution and database-backed permission conditions must agree before the
+new format is activated for records. The [coordinated implementation plan](../../build-plan/issue-44-record-field-values.md#rule-consumer-handoff)
+tracks that complete delivery; standalone schemas do not establish runtime support.
 
 ## Definition publication storage contract
 
