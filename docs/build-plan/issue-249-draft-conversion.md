@@ -5,6 +5,24 @@ Follows [native publication](issue-249-native-publication.md) and
 [placement compatibility](issue-249-placement-compatibility.md).
 This is a file-defined application operation, not App Designer work.
 
+## Delivery checkpoint — 8 September 2026
+
+The six-file conversion implementation is complete and independently Sol-approved.
+Preparation reads the existing draft and exact catalogue selections without writes;
+confirmation recomputes the same preview and saves through the existing revision
+and identity transaction. Mapped settings, public/capability constraints,
+guided/custom-slot content and shell-only release dependencies are preserved or
+reported as incompatible rather than silently discarded. No database migration,
+publication, installation or designer interface is included.
+
+The implementer passed 267 regression tests. The independent reviewer directly
+passed the eight focused conversion tests, both affected package type checks,
+scoped lint and diff checks against the final six-file snapshot. The broader
+Contracts/Definition regression run passed all 830 tests across 52 files.
+Source `4696ba534fea528145a1d7d032375620aeb648aa` contains only those six
+reviewed files. Normal delivery follows; this checkpoint does not claim that
+this conversion is deployed or that the whole task is complete.
+
 ## Outcome
 
 Prepare a readable conversion of a current V1 application draft to authored V2,
