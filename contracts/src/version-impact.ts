@@ -8,6 +8,8 @@ import {
 import {
   publishedApplicationReferenceSchema,
   publishedDefinitionReferenceSchema,
+  publishedModuleReferenceSchema,
+  requireResolvedRecordTypeReferences,
 } from "./definitions";
 import {
   applicationRootIdSchema,
@@ -17,10 +19,12 @@ import {
   semanticVersionSchema,
 } from "./identifiers";
 import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-contracts";
+import { moduleContentV2Schema, moduleDraftV2Schema } from "./module-contracts-v2";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const versionImpactPolicyVersion = "1.0.0" as const;
 export const applicationVersionImpactPolicyVersionV2 = "2.0.0" as const;
+export const moduleVersionImpactPolicyVersionV2 = "2.0.0" as const;
 export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine(
   (value) => !value.includes("-") && !value.includes("+"),
   "Published definition versions must be stable major.minor.patch versions",
@@ -212,6 +216,39 @@ export const applicationVersionImpactRequestV2Schema = z
   })
   .strict();
 
+/** Comparator-only Module V2 history evidence; it does not enable publication selection. */
+export const moduleVersionImpactHistoryEntryV2Schema = z
+  .object({
+    publication: publishedModuleReferenceSchema.extend({
+      validationContractVersion: z.literal("2.0.0"),
+    }),
+    content: moduleContentV2Schema,
+    dependencyManifest: z.array(publishedDefinitionReferenceSchema),
+    releaseNote: z.string().min(1).max(2_000),
+  })
+  .strict()
+  .superRefine((value, context) =>
+    requireResolvedRecordTypeReferences(moduleContentV2Schema, value.content, context, ["content"]),
+  );
+
+const moduleVersionImpactHistoryEntryV1Schema = publishedModuleDefinitionSchema.refine(
+  (value) => value.publication.validationContractVersion === "1.0.0",
+  "Module V1 history must use validation contract version 1.0.0",
+);
+
+export const moduleVersionImpactRequestV2Schema = z
+  .object({
+    kind: z.literal("module"),
+    validationContractVersion: z.literal(moduleVersionImpactPolicyVersionV2),
+    history: z
+      .array(
+        z.union([moduleVersionImpactHistoryEntryV1Schema, moduleVersionImpactHistoryEntryV2Schema]),
+      )
+      .max(historyLimit),
+    candidate: moduleDraftV2Schema,
+  })
+  .strict();
+
 export const definitionVersionImpactRequestSchema = z.discriminatedUnion("kind", [
   moduleVersionImpactRequestSchema,
   applicationVersionImpactRequestSchema,
@@ -309,6 +346,10 @@ export type DefinitionVersionImpactFailureCode = z.infer<
 export type DefinitionVersionImpactRequest = z.infer<typeof definitionVersionImpactRequestSchema>;
 export type ApplicationVersionImpactRequestV2 = z.infer<
   typeof applicationVersionImpactRequestV2Schema
+>;
+export type ModuleVersionImpactRequestV2 = z.infer<typeof moduleVersionImpactRequestV2Schema>;
+export type ModuleVersionImpactHistoryEntryV2 = z.infer<
+  typeof moduleVersionImpactHistoryEntryV2Schema
 >;
 export type DefinitionVersionImpactResult = z.infer<typeof definitionVersionImpactResultSchema>;
 export type DefinitionVersionConfirmation = z.infer<typeof definitionVersionConfirmationSchema>;

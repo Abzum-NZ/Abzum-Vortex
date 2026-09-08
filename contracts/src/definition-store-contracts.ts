@@ -3,7 +3,9 @@ import { correlationIdSchema } from "./common";
 import {
   applicationSourceDocumentV1Schema,
   applicationSourceDocumentV2Schema,
-  moduleSourceDocumentSchema,
+  moduleSourceDocumentV1Schema,
+  moduleSourceDocumentV2Schema,
+  moduleSourceDocumentVersionedSchema,
 } from "./definition-source";
 import {
   actorIdSchema,
@@ -29,8 +31,9 @@ export const storedApplicationSourceDocumentSchema = z.discriminatedUnion(
   "source_contract_version",
   [applicationSourceDocumentV1Schema, applicationSourceDocumentV2Schema],
 );
+export const storedModuleSourceDocumentSchema = moduleSourceDocumentVersionedSchema;
 export const storedDefinitionSourceSchema = z.union([
-  moduleSourceDocumentSchema,
+  moduleSourceDocumentV1Schema,
   storedApplicationSourceDocumentSchema,
 ]);
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -44,6 +47,18 @@ export const saveDefinitionDraftCommandSchema = z
     rootId: platformIdSchema,
     expectedDraftRevision: javascriptSafeRevisionSchema,
     source: storedDefinitionSourceSchema,
+  })
+  .strict();
+
+export const createModuleRootCommandV2Schema = z
+  .object({ source: moduleSourceDocumentV2Schema })
+  .strict();
+
+export const saveModuleDraftCommandV2Schema = z
+  .object({
+    rootId: moduleRootIdSchema,
+    expectedDraftRevision: javascriptSafeRevisionSchema,
+    source: moduleSourceDocumentV2Schema,
   })
   .strict();
 
@@ -65,13 +80,58 @@ const storedDraftMetadata = {
   restoreCorrelationId: correlationIdSchema.optional(),
 };
 
+type StoredDraftEvidence = {
+  sourceContractVersion: string;
+  source: { source_contract_version: string };
+  updatedBy: string;
+  updatedAt: string;
+  restoredFromReleaseRevision?: number | undefined;
+  restoredFromSourceFingerprint?: string | undefined;
+  restoredBy?: string | undefined;
+  restoredAt?: string | undefined;
+  restoreCorrelationId?: string | undefined;
+};
+
+const validateStoredDraftEvidence = (draft: StoredDraftEvidence, context: z.RefinementCtx) => {
+  if (draft.source.source_contract_version !== draft.sourceContractVersion)
+    context.addIssue({
+      code: "custom",
+      path: ["sourceContractVersion"],
+      message: "Stored source metadata must match its authored source",
+      input: draft,
+    });
+  const provenance = [
+    draft.restoredFromReleaseRevision,
+    draft.restoredFromSourceFingerprint,
+    draft.restoredBy,
+    draft.restoredAt,
+    draft.restoreCorrelationId,
+  ];
+  const populatedCount = provenance.filter((value) => value !== undefined).length;
+  if (populatedCount !== 0 && populatedCount !== provenance.length)
+    context.addIssue({
+      code: "custom",
+      message: "Restore provenance must be either complete or absent",
+      input: draft,
+    });
+  if (
+    populatedCount === provenance.length &&
+    (draft.restoredBy !== draft.updatedBy || draft.restoredAt !== draft.updatedAt)
+  )
+    context.addIssue({
+      code: "custom",
+      message: "Restore provenance must match the draft update evidence",
+      input: draft,
+    });
+};
+
 export const storedDefinitionDraftSchema = z
   .discriminatedUnion("kind", [
     z
       .object({
         kind: z.literal("module"),
         rootId: moduleRootIdSchema,
-        source: moduleSourceDocumentSchema,
+        source: moduleSourceDocumentV1Schema,
         ...storedDraftMetadata,
       })
       .strict(),
@@ -84,38 +144,17 @@ export const storedDefinitionDraftSchema = z
       })
       .strict(),
   ])
-  .superRefine((draft, context) => {
-    if (
-      draft.kind === "application" &&
-      draft.source.source_contract_version !== draft.sourceContractVersion
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["sourceContractVersion"],
-        message: "Stored Application source metadata must match its authored source",
-      });
-    const provenance = [
-      draft.restoredFromReleaseRevision,
-      draft.restoredFromSourceFingerprint,
-      draft.restoredBy,
-      draft.restoredAt,
-      draft.restoreCorrelationId,
-    ];
-    const populatedCount = provenance.filter((value) => value !== undefined).length;
-    if (populatedCount !== 0 && populatedCount !== provenance.length)
-      context.addIssue({
-        code: "custom",
-        message: "Restore provenance must be either complete or absent",
-      });
-    if (
-      populatedCount === provenance.length &&
-      (draft.restoredBy !== draft.updatedBy || draft.restoredAt !== draft.updatedAt)
-    )
-      context.addIssue({
-        code: "custom",
-        message: "Restore provenance must match the draft update evidence",
-      });
-  });
+  .superRefine(validateStoredDraftEvidence);
+
+export const storedModuleDefinitionDraftV2Schema = z
+  .object({
+    kind: z.literal("module"),
+    rootId: moduleRootIdSchema,
+    source: moduleSourceDocumentV2Schema,
+    ...storedDraftMetadata,
+  })
+  .strict()
+  .superRefine(validateStoredDraftEvidence);
 
 const exactDependencyCommon = {
   key: namespacedKeySchema,
@@ -253,8 +292,12 @@ export const publishDefinitionResultSchema = z
 
 export type CreateDefinitionRootCommand = z.infer<typeof createDefinitionRootCommandSchema>;
 export type SaveDefinitionDraftCommand = z.infer<typeof saveDefinitionDraftCommandSchema>;
+export type CreateModuleRootCommandV2 = z.infer<typeof createModuleRootCommandV2Schema>;
+export type SaveModuleDraftCommandV2 = z.infer<typeof saveModuleDraftCommandV2Schema>;
 export type StoredDefinitionSource = z.infer<typeof storedDefinitionSourceSchema>;
+export type StoredModuleSourceDocument = z.infer<typeof storedModuleSourceDocumentSchema>;
 export type StoredDefinitionDraft = z.infer<typeof storedDefinitionDraftSchema>;
+export type StoredModuleDefinitionDraftV2 = z.infer<typeof storedModuleDefinitionDraftV2Schema>;
 export type ExactDefinitionDependency = z.infer<typeof exactDefinitionDependencySchema>;
 export type PrepareDefinitionPublicationCommand = z.infer<
   typeof prepareDefinitionPublicationCommandSchema

@@ -32,6 +32,25 @@ Every selected, filtered, grouped, totalled, or sorted field must permit that op
 
 A module-exposed query is this same closed query contract published under a stable module-owned identity and exact release. A Frontend Flow may invoke only a query exposed by its resolved module dependency; it cannot supply raw SQL, broaden the projection, or infer a query from a label. The query executes for the node's Access-resolved effective actor. If a different initiating viewer receives its result, the runtime applies the viewer's current readable projection before returning it, and any later write is authorised independently. [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) owns the actual protected Query execution and receipt boundary; [record actions and events #50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) owns record-operation and event declarations. These target flow semantics do not claim either runtime is delivered.
 
+## Exact field values in queries
+
+Read value meaning from the exact published Module contract and its field settings,
+as defined in [Record value formats](05-modules-fields-and-relationships.md).
+For Module V2, decimal values travel as exact decimal text but filter, sort and
+aggregate as numbers: `2` precedes `10`, not the reverse. Do not convert them
+through a JavaScript floating-point number, including in continuation tokens or
+returned totals. Text fields containing the same characters remain text.
+
+Money results retain both exact amount and resolved currency. Amount comparisons
+follow the [Rule semantics](../build-plan/issue-44-record-field-values.md#rule-consumer-handoff):
+equality includes currency, and ordering amounts across currencies is refused.
+The existing mixed-currency total refusal below remains unchanged. Query, Rule
+and database-backed conditions must agree for the same typed operands. Formatting
+for display never changes filtering, ordering or the stored value.
+
+These requirements belong to [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
+and its real storage path, not to a browser-only correction after rows are paged.
+
 ## Pagination and limits
 
 - Results use stable continuation tokens rather than unbounded offsets for large datasets.

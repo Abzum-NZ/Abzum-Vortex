@@ -1,11 +1,16 @@
 import { z } from "zod";
 import { applicationDraftV1Schema, applicationDraftV2Schema } from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotV2Schema } from "./application-composition-v2";
-import { applicationSourceDocumentV2Schema } from "./application-source-contracts";
+import {
+  applicationSourceDocumentSchema,
+  applicationSourceDocumentV2Schema,
+} from "./application-source-contracts";
 import { publishedApplicationDefinitionSchema } from "./application-contracts";
+import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
 import { connectionTypeSchema } from "./integration-contracts";
 import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-contracts";
-import { definitionSourceDocumentSchema } from "./definition-source";
+import { moduleContractVersionPairV2Schema, moduleDraftV2Schema } from "./module-contracts-v2";
+import { moduleSourceDocumentV1Schema, moduleSourceDocumentV2Schema } from "./definition-source";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -146,11 +151,28 @@ export const savedConditionRevisionAssignmentSchema = z
   })
   .strict();
 
+const legacyDefinitionCompilationSourceSchema = z.discriminatedUnion("kind", [
+  moduleSourceDocumentV1Schema,
+  applicationSourceDocumentSchema,
+  connectionTypeSourceDocumentSchema,
+]);
+
 export const definitionCompilationRequestSchema = z
   .object({
-    source: definitionSourceDocumentSchema,
+    source: legacyDefinitionCompilationSourceSchema,
     resolution: definitionResolutionSnapshotSchema,
     draftMetadata: definitionDraftMetadataSchema.optional(),
+    savedConditionRevisions: z.array(savedConditionRevisionAssignmentSchema).optional(),
+  })
+  .strict();
+
+/** Explicit Module V2 request; runtime dispatch must select this exact version pair. */
+export const moduleCompilationRequestV2Schema = z
+  .object({
+    ...moduleContractVersionPairV2Schema.shape,
+    source: moduleSourceDocumentV2Schema,
+    resolution: definitionResolutionSnapshotV2Schema,
+    draftMetadata: definitionDraftMetadataSchema,
     savedConditionRevisions: z.array(savedConditionRevisionAssignmentSchema).optional(),
   })
   .strict();
@@ -247,18 +269,33 @@ export const applicationCompilationOutputV2Schema = z
   })
   .strict();
 
+export const moduleCompilationOutputV1Schema = z
+  .object({
+    kind: z.literal("module"),
+    canonical: moduleDraftSchema,
+    artifact: compiledModuleArtifactSchema,
+    provenance: z.array(definitionProvenanceEntrySchema),
+    dependencyOrder: z.array(namespacedKeySchema),
+    resolvedDependencies: z.array(resolvedDefinitionSchema),
+    resolutionFingerprint: fingerprintSchema,
+  })
+  .strict();
+
+export const moduleCompilationOutputV2Schema = z
+  .object({
+    kind: z.literal("module"),
+    validationContractVersion: z.literal("2.0.0"),
+    canonical: moduleDraftV2Schema,
+    artifact: compiledModuleArtifactSchema,
+    provenance: z.array(definitionProvenanceEntrySchema),
+    dependencyOrder: z.array(namespacedKeySchema),
+    resolvedDependencies: z.array(resolvedDefinitionSchema),
+    resolutionFingerprint: fingerprintSchema,
+  })
+  .strict();
+
 export const definitionCompilationOutputSchema = z.union([
-  z
-    .object({
-      kind: z.literal("module"),
-      canonical: moduleDraftSchema,
-      artifact: compiledModuleArtifactSchema,
-      provenance: z.array(definitionProvenanceEntrySchema),
-      dependencyOrder: z.array(namespacedKeySchema),
-      resolvedDependencies: z.array(resolvedDefinitionSchema),
-      resolutionFingerprint: fingerprintSchema,
-    })
-    .strict(),
+  moduleCompilationOutputV1Schema,
   applicationCompilationOutputV1Schema,
   applicationCompilationOutputV2Schema,
   z
@@ -360,8 +397,11 @@ export type SavedConditionRevisionAssignment = z.infer<
   typeof savedConditionRevisionAssignmentSchema
 >;
 export type DefinitionCompilationRequest = z.input<typeof definitionCompilationRequestSchema>;
+export type ModuleCompilationRequestV2 = z.input<typeof moduleCompilationRequestV2Schema>;
 export type ApplicationCompilationRequestV2 = z.input<typeof applicationCompilationRequestV2Schema>;
 export type DefinitionCompilationOutput = z.infer<typeof definitionCompilationOutputSchema>;
+export type ModuleCompilationOutputV1 = z.infer<typeof moduleCompilationOutputV1Schema>;
+export type ModuleCompilationOutputV2 = z.infer<typeof moduleCompilationOutputV2Schema>;
 export type ApplicationCompilationOutputV2 = z.infer<typeof applicationCompilationOutputV2Schema>;
 export type CompiledDefinitionArtifact = z.infer<typeof compiledDefinitionArtifactSchema>;
 export type DefinitionProvenanceEntry = z.infer<typeof definitionProvenanceEntrySchema>;
