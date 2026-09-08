@@ -338,12 +338,18 @@ importers:
 
   runtime/page:
     dependencies:
+      '@vortex/access':
+        specifier: workspace:*
+        version: link:../access
       '@vortex/app':
         specifier: workspace:*
         version: link:../app
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/db':
+        specifier: workspace:*
+        version: link:../../db
       '@vortex/query':
         specifier: workspace:*
         version: link:../query

@@ -11,8 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vortex/access": "workspace:*",
     "@vortex/app": "workspace:*",
     "@vortex/contracts": "workspace:*",
+    "@vortex/db": "workspace:*",
     "@vortex/query": "workspace:*",
     "@vortex/theme": "workspace:*",
     "server-only": "0.0.1"
