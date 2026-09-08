@@ -335,6 +335,22 @@ The [Redoo Start reference](https://documentation.redoo.support/redoo-networks-m
 
 ## Contracts and compatibility delivery
 
+The first executable graph profile is `before_save`, delivered through an explicit
+Module source/validation pair `3.0.0` and the shared versioned graph type. Its
+complete node catalogue is Start, Condition, Set variable, Set field, Require
+field, Warn, Refuse and Finish. Complete this profile's definitions, fixtures and
+publication/read/restore path before its interpreter. Subsequent profiles extend
+the same graph contract and engine as their owning adapters become available;
+the full catalogue specified above remains required, not silently narrowed.
+Existing V1/V2 single-effect releases retain their immutable meaning. See the
+[bounded delivery plan](../../build-plan/issue-58-shared-rule-graph-foundation.md).
+
+Applicable before-save graphs run in ascending priority, with permanent rule ID
+as the canonical lexical tie-break. Each receives the preceding candidate;
+requirements and warnings accumulate. A refusal stops the sequence with no
+applicable write patch. The shared Rule entry point owns this order, rather than
+each caller inventing its own order.
+
 Module-exposed query contracts and their complete Definition lifecycle belong to [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54). Headless component/managed-flow/actor-binding descriptors belong to [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250); private execution grants and their trusted resolution belong to [#322](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322). Flow execution consumes these prerequisites, never implements a competing Query or Access engine.
 
 The existing single-effect rule representation remains an immutable legacy contract. [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) owns the explicit versioned rule-flow source/canonical schema extension, compiler, node catalogue validation and headless execution; [#57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) owns shared condition extensions. [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) owns form-response, journey submission and workflow-operation binding contracts. Use existing Definition source/validation version selection; do not infer graph support from JSON shape or invent a parallel version store.

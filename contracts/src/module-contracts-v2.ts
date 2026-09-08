@@ -33,7 +33,7 @@ import { moduleSourceContractVersionV2 } from "./module-source-contracts-v2";
 
 export const moduleValidationContractVersionV2 = "2.0.0" as const;
 
-/** A standalone candidate pair; Definition dispatch does not consume it yet. */
+/** Exact V2 pair supported by Definition compilation and publication. */
 export const moduleContractVersionPairV2Schema = z
   .object({
     sourceContractVersion: z.literal(moduleSourceContractVersionV2),
@@ -944,7 +944,7 @@ export const moduleDraftV2Schema = z
   .object({ envelope: moduleDefinitionEnvelopeSchema, content: moduleContentV2Schema })
   .strict();
 
-/** Standalone V2 canonical content is not part of Definition dispatch or publication yet. */
+/** Canonical V2 content; historical releases retain this exact field model. */
 export const moduleCanonicalDocumentV2Schema = z
   .object({
     validationContractVersion: z.literal(moduleValidationContractVersionV2),

@@ -4,8 +4,9 @@ import { builderKeySchema, platformIdSchema, timestampSchema } from "./identifie
 export const labelSchema = z.string().trim().min(1).max(60);
 export const shortNameSchema = z.string().trim().min(1).max(80);
 export const descriptionSchema = z.string().trim().min(1).max(1_000);
-export const safeHttpsUrlSchema = z.url().refine((value) => new URL(value).protocol === "https:", {
-  message: "Only HTTPS addresses are accepted",
+export const safeHttpsUrlSchema = z.url({
+  protocol: /^https$/,
+  error: "Only valid HTTPS addresses are accepted",
 });
 export const duplicateProtectionKeySchema = z.string().min(16).max(200);
 export const correlationIdSchema = platformIdSchema.brand<"CorrelationId">();

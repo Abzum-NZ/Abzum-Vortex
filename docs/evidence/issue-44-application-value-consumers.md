@@ -15,7 +15,7 @@ not the correct selector.
 
 ## Scope and delivery status
 
-Implementation and independent review are complete; delivery is pending. The correction reuses existing value helpers and
+Implementation, independent review and Testing delivery are complete. The correction reuses existing value helpers and
 retains ownership through the Application consumer path. It does not add another
 rule engine, invent new legacy input types, change database permissions or deliver
 protected record saving. New exact-value flow inputs and served-interface wire
@@ -66,4 +66,13 @@ Its permanent identifiers and historical fixtures remain unchanged.
   the focused interface version-impact test, Contracts/Definition type checks,
   scoped lint and diff checks. Final reviewed compiler hash:
   `62018826ef99b7eacd2f879699060016b912b6e82e03b7b346e23f6941cea781`.
-- Delivery remains pending. No whole-task acceptance is closed by this document.
+- [PR #366](https://github.com/Abzum-NZ/Abzum-Vortex/pull/366) merged into Testing
+  as `e8b35f3ce2b74af070f0bedfa753d35e50788502` after the actual source preview
+  passed. The unchanged merge-only branch update was not substituted for that
+  source build evidence.
+- [Testing deployment](https://vercel.com/abzumdevteam/abzum-vortex/G6LSGc2kCpb9zUnHmJ6VMrWZqAd7)
+  is Ready, with that exact merge commit and `vortex-testing.abzum.com` assigned.
+  Build duration: 3 minutes 6 seconds. Fresh signed-in navigation still resolves
+  to the organisation page rather than asking for credentials again.
+- No whole-task acceptance is closed by this document. Protected persistence
+  and served operation execution remain in their owning tasks.

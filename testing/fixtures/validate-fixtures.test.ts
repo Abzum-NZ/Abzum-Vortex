@@ -8,6 +8,8 @@ import {
   fieldTypeKeys,
   moduleSourceDocumentV2Schema,
   publishedModuleDefinitionSchema,
+  ruleGraphSchema,
+  sourceRuleGraphSchema,
   workflowNodeTypeKeys,
 } from "@vortex/contracts";
 import { compileDefinitionSet } from "@vortex/definition/compiler";
@@ -20,6 +22,7 @@ const readHistorical = (relative: string): unknown =>
   JSON.parse(fs.readFileSync(path.join(historicalRoot, relative), "utf8"));
 const manifest = read("fixture-set.json") as {
   files: string[];
+  ruleGraphFixtures: Array<{ source: string; canonical: string }>;
   requiredFieldTypes: string[];
   requiredWorkflowNodes: string[];
   requiredCrossApplicationCases: Array<{
@@ -160,6 +163,21 @@ describe("complete fixture set", () => {
       .sort();
     expect([...manifest.files].sort()).toEqual(actual);
     expect(new Set(manifest.files).size).toBe(manifest.files.length);
+  });
+
+  it("classifies and validates every authored/canonical Rule graph fixture pair", () => {
+    const classified = manifest.ruleGraphFixtures.flatMap(({ source, canonical }) => [
+      source,
+      canonical,
+    ]);
+    const graphFiles = manifest.files.filter((file) => file.startsWith("rule-graphs/"));
+
+    expect([...classified].sort()).toEqual([...graphFiles].sort());
+    expect(new Set(classified).size).toBe(classified.length);
+    for (const pair of manifest.ruleGraphFixtures) {
+      expect(sourceRuleGraphSchema.safeParse(read(pair.source)).success).toBe(true);
+      expect(ruleGraphSchema.safeParse(read(pair.canonical)).success).toBe(true);
+    }
   });
 
   it("keeps the current pair-specific snapshots and historical Module V1 baseline explicit", () => {

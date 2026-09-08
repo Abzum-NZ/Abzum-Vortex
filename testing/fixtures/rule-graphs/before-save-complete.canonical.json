@@ -1,0 +1,224 @@
+{
+  "ruleId": "10000000-0000-4000-8000-000000000001",
+  "key": "prepare_candidate",
+  "subjectRecordTypeId": "10000000-0000-4000-8000-000000000002",
+  "profile": "before_save",
+  "graphVersion": "1.0.0",
+  "priority": 100,
+  "inputs": [
+    {
+      "inputId": "10000000-0000-4000-8000-000000000011",
+      "key": "minimum_amount",
+      "type": "decimal_number",
+      "required": false
+    },
+    {
+      "inputId": "10000000-0000-4000-8000-000000000012",
+      "key": "requested_budget",
+      "type": "money",
+      "required": true
+    },
+    {
+      "inputId": "10000000-0000-4000-8000-000000000013",
+      "key": "related_record",
+      "type": "link",
+      "required": true,
+      "recordTypeIds": ["10000000-0000-4000-8000-000000000003"]
+    }
+  ],
+  "variables": [
+    {
+      "variableId": "10000000-0000-4000-8000-000000000021",
+      "key": "effective_budget",
+      "type": "money",
+      "defaultValue": {
+        "type": "money",
+        "value": {
+          "amount": "12.34",
+          "currency": "NZD"
+        }
+      }
+    },
+    {
+      "variableId": "10000000-0000-4000-8000-000000000022",
+      "key": "remembered_record",
+      "type": "link_to_one_of_several",
+      "recordTypeIds": [
+        "10000000-0000-4000-8000-000000000003",
+        "10000000-0000-4000-8000-000000000004"
+      ],
+      "defaultValue": {
+        "type": "link_to_one_of_several",
+        "value": {
+          "recordTypeId": "10000000-0000-4000-8000-000000000003",
+          "recordId": "80000000-0000-4000-8000-000000000001"
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000031",
+      "nodeVersion": "1.0.0",
+      "type": "start",
+      "operations": ["update"]
+    },
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000032",
+      "nodeVersion": "1.0.0",
+      "type": "condition",
+      "condition": {
+        "kind": "all",
+        "conditions": [
+          {
+            "kind": "comparison",
+            "operator": "greater_than",
+            "left": {
+              "source": "current_field",
+              "fieldId": "10000000-0000-4000-8000-000000000041"
+            },
+            "right": {
+              "source": "literal",
+              "value": {
+                "type": "decimal_number",
+                "value": "9007199254740993"
+              }
+            }
+          },
+          {
+            "kind": "comparison",
+            "operator": "not_equals",
+            "left": {
+              "source": "previous_field",
+              "fieldId": "10000000-0000-4000-8000-000000000042"
+            },
+            "right": {
+              "source": "current_field",
+              "fieldId": "10000000-0000-4000-8000-000000000042"
+            }
+          },
+          {
+            "kind": "comparison",
+            "operator": "equals",
+            "left": {
+              "source": "input",
+              "inputId": "10000000-0000-4000-8000-000000000013"
+            },
+            "right": {
+              "source": "literal",
+              "value": {
+                "type": "link",
+                "value": {
+                  "recordTypeId": "10000000-0000-4000-8000-000000000003",
+                  "recordId": "80000000-0000-4000-8000-000000000001"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000033",
+      "nodeVersion": "1.0.0",
+      "type": "set_variable",
+      "variableId": "10000000-0000-4000-8000-000000000021",
+      "value": {
+        "source": "input",
+        "inputId": "10000000-0000-4000-8000-000000000012"
+      }
+    },
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000034",
+      "nodeVersion": "1.0.0",
+      "type": "set_field",
+      "fieldId": "10000000-0000-4000-8000-000000000043",
+      "assignment": {
+        "kind": "set",
+        "value": {
+          "source": "variable",
+          "variableId": "10000000-0000-4000-8000-000000000021"
+        }
+      }
+    },
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000035",
+      "nodeVersion": "1.0.0",
+      "type": "require_field",
+      "fieldId": "10000000-0000-4000-8000-000000000044",
+      "code": "related_required",
+      "message": "Choose a related record."
+    },
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000036",
+      "nodeVersion": "1.0.0",
+      "type": "warn",
+      "code": "budget_adjusted",
+      "message": "The proposed budget was applied."
+    },
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000037",
+      "nodeVersion": "1.0.0",
+      "type": "refuse",
+      "code": "amount_too_low",
+      "message": "The amount is below the allowed threshold.",
+      "fieldId": "10000000-0000-4000-8000-000000000041"
+    },
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000038",
+      "nodeVersion": "1.0.0",
+      "type": "finish"
+    },
+    {
+      "nodeId": "10000000-0000-4000-8000-000000000039",
+      "nodeVersion": "1.0.0",
+      "type": "set_field",
+      "fieldId": "10000000-0000-4000-8000-000000000045",
+      "assignment": {
+        "kind": "clear"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "10000000-0000-4000-8000-000000000031",
+      "port": "next",
+      "toNodeId": "10000000-0000-4000-8000-000000000032"
+    },
+    {
+      "fromNodeId": "10000000-0000-4000-8000-000000000032",
+      "port": "false",
+      "toNodeId": "10000000-0000-4000-8000-000000000037"
+    },
+    {
+      "fromNodeId": "10000000-0000-4000-8000-000000000032",
+      "port": "true",
+      "toNodeId": "10000000-0000-4000-8000-000000000033"
+    },
+    {
+      "fromNodeId": "10000000-0000-4000-8000-000000000033",
+      "port": "next",
+      "toNodeId": "10000000-0000-4000-8000-000000000034"
+    },
+    {
+      "fromNodeId": "10000000-0000-4000-8000-000000000034",
+      "port": "next",
+      "toNodeId": "10000000-0000-4000-8000-000000000039"
+    },
+    {
+      "fromNodeId": "10000000-0000-4000-8000-000000000035",
+      "port": "next",
+      "toNodeId": "10000000-0000-4000-8000-000000000036"
+    },
+    {
+      "fromNodeId": "10000000-0000-4000-8000-000000000036",
+      "port": "next",
+      "toNodeId": "10000000-0000-4000-8000-000000000038"
+    },
+    {
+      "fromNodeId": "10000000-0000-4000-8000-000000000039",
+      "port": "next",
+      "toNodeId": "10000000-0000-4000-8000-000000000035"
+    }
+  ]
+}

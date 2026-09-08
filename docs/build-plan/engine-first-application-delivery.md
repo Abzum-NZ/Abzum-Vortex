@@ -51,12 +51,12 @@ has independent actual-work approval and reached Testing through [PR #363](https
 None of these alone is a working installed application or a completed protected
 save.
 
-| Next work | Functional purpose and dependency |
-| --- | --- |
-| [Exact active installation read #43](issue-43-active-installation-read.md) | Identify the installed Application and every exact Module release, including shared Modules. This reader reached Testing in [PR #364](https://github.com/Abzum-NZ/Abzum-Vortex/pull/364); activation and full installation acceptance remain separate. |
-| [Relationship totals #48](issue-48-calculation-engine.md) | Calculate totals from the declared related records using the same typed values and precision rules. Integrate authoritative source selection and affected-parent updates with the protected save, not a second query/calculation engine. |
-| [Protected storage and save #45/#47](module-record-provisioning.md#save-and-event-integration) | Apply current access, field and revision rules, then commit record changes, Activity and events together. Requires the real installation/access adapters; pure-engine proofs do not substitute for these. |
-| [Definition-first application #327](definition-first-application-proof.md) | Assemble the proven engines into a usable installed application before resuming App Designer work. |
+| Next work                                                                                      | Functional purpose and dependency                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Exact active installation read #43](issue-43-active-installation-read.md)                     | Identify the installed Application and every exact Module release, including shared Modules. This reader reached Testing in [PR #364](https://github.com/Abzum-NZ/Abzum-Vortex/pull/364); activation and full installation acceptance remain separate. |
+| [Relationship totals #48](issue-48-calculation-engine.md)                                      | Calculate totals from the declared related records using the same typed values and precision rules. Integrate authoritative source selection and affected-parent updates with the protected save, not a second query/calculation engine.               |
+| [Protected storage and save #45/#47](module-record-provisioning.md#save-and-event-integration) | Apply current access, field and revision rules, then commit record changes, Activity and events together. Requires the real installation/access adapters; pure-engine proofs do not substitute for these.                                              |
+| [Definition-first application #327](definition-first-application-proof.md)                     | Assemble the proven engines into a usable installed application before resuming App Designer work.                                                                                                                                                     |
 
 [Typed component/flow bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250)
 can start on the delivered native Definition/compiler/publication substrate from
@@ -74,8 +74,9 @@ The kernel neither runs a graph nor grants an invocation permission. Later
 executor/readiness and private form-draft proofs stay with their owning engines.
 This follows the existing [Frontend Flow specification](../specification/appendices/frontend-rule-designer.md#pages-compose-flows-define-actions).
 
-The next Definition correction under [Record field values #44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
-makes Application-owned conditions and value maps use their exact bound Module
+The Definition correction under [Record field values #44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
+reached Testing in [PR #366](https://github.com/Abzum-NZ/Abzum-Vortex/pull/366).
+Application-owned conditions and value maps now use their exact bound Module
 formats. The pure field-value engine already exists; do not build another field
 catalogue. The shared save command reached Testing in
 [PR #365](https://github.com/Abzum-NZ/Abzum-Vortex/pull/365), but a command shape is
@@ -84,6 +85,13 @@ save/readback and permission-gated choice enforcement. The
 [field-value plan](issue-44-record-field-values.md#rule-consumer-handoff) and
 [single flow-engine sequence](frontend-rule-designer.md#save-rule-foundation-and-integration-order)
 separate these milestones and prevent a parallel legacy rule executor.
+
+The active independent engine work is the
+[#58 shared graph foundation](issue-58-shared-rule-graph-foundation.md): complete
+the before-save profile's source/canonical definitions and publication proof,
+then implement its one pure interpreter and integrate with protected saves.
+This progresses while the real storage/access prerequisites below remain with
+their owning tasks; it does not waive those dependencies or deliver the designer.
 
 Next, co-deliver [module provisioning #43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43)
 and [record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45): consume

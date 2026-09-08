@@ -22,8 +22,16 @@
     "modules/service-desk.knowledge.json",
     "applications/crm.json",
     "applications/service-desk.json",
+    "rule-graphs/before-save-complete.source.json",
+    "rule-graphs/before-save-complete.canonical.json",
     "scenarios/cross-application-sharing.json",
     "storage/record-storage-layout.json"
+  ],
+  "ruleGraphFixtures": [
+    {
+      "source": "rule-graphs/before-save-complete.source.json",
+      "canonical": "rule-graphs/before-save-complete.canonical.json"
+    }
   ],
   "applications": ["vortex.app.crm", "vortex.app.service_desk"],
   "shared_modules": ["vortex.crm.organisations", "vortex.crm.people"],

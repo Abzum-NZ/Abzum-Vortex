@@ -1,0 +1,189 @@
+{
+  "id": "prepare_candidate",
+  "key": "prepare_candidate",
+  "record_type": "candidate",
+  "profile": "before_save",
+  "graph_version": "1.0.0",
+  "priority": 100,
+  "inputs": [
+    {
+      "id": "minimum_amount",
+      "key": "minimum_amount",
+      "type": "decimal_number",
+      "required": false
+    },
+    {
+      "id": "requested_budget",
+      "key": "requested_budget",
+      "type": "money",
+      "required": true
+    },
+    {
+      "id": "related_record",
+      "key": "related_record",
+      "type": "link",
+      "required": true,
+      "record_types": ["example.shared:related"]
+    }
+  ],
+  "variables": [
+    {
+      "id": "effective_budget",
+      "key": "effective_budget",
+      "type": "money",
+      "default_value": {
+        "type": "money",
+        "value": {
+          "amount": "12.3400",
+          "currency": "NZD"
+        }
+      }
+    },
+    {
+      "id": "remembered_record",
+      "key": "remembered_record",
+      "type": "link_to_one_of_several",
+      "record_types": ["example.shared:related", "example.shared:alternative"],
+      "default_value": {
+        "type": "link_to_one_of_several",
+        "value": {
+          "record_type": "example.shared:related",
+          "record_id": "80000000-0000-4000-8000-000000000001"
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "node_version": "1.0.0",
+      "type": "start",
+      "operations": ["update"]
+    },
+    {
+      "id": "eligible",
+      "node_version": "1.0.0",
+      "type": "condition",
+      "condition": {
+        "kind": "all",
+        "conditions": [
+          {
+            "kind": "comparison",
+            "operator": "greater_than",
+            "left": {
+              "source": "current_field",
+              "field": "amount"
+            },
+            "right": {
+              "source": "literal",
+              "value": {
+                "type": "decimal_number",
+                "value": "9007199254740993.00"
+              }
+            }
+          },
+          {
+            "kind": "comparison",
+            "operator": "not_equals",
+            "left": {
+              "source": "previous_field",
+              "field": "status"
+            },
+            "right": {
+              "source": "current_field",
+              "field": "status"
+            }
+          },
+          {
+            "kind": "comparison",
+            "operator": "equals",
+            "left": {
+              "source": "input",
+              "input": "related_record"
+            },
+            "right": {
+              "source": "literal",
+              "value": {
+                "type": "link",
+                "value": {
+                  "record_type": "example.shared:related",
+                  "record_id": "80000000-0000-4000-8000-000000000001"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "remember_budget",
+      "node_version": "1.0.0",
+      "type": "set_variable",
+      "variable": "effective_budget",
+      "value": {
+        "source": "input",
+        "input": "requested_budget"
+      }
+    },
+    {
+      "id": "apply_budget",
+      "node_version": "1.0.0",
+      "type": "set_field",
+      "field": "budget",
+      "assignment": {
+        "kind": "set",
+        "value": {
+          "source": "variable",
+          "variable": "effective_budget"
+        }
+      }
+    },
+    {
+      "id": "clear_obsolete_note",
+      "node_version": "1.0.0",
+      "type": "set_field",
+      "field": "obsolete_note",
+      "assignment": {
+        "kind": "clear"
+      }
+    },
+    {
+      "id": "require_relation",
+      "node_version": "1.0.0",
+      "type": "require_field",
+      "field": "related",
+      "code": "related_required",
+      "message": "Choose a related record."
+    },
+    {
+      "id": "warn_adjustment",
+      "node_version": "1.0.0",
+      "type": "warn",
+      "code": "budget_adjusted",
+      "message": "The proposed budget was applied."
+    },
+    {
+      "id": "refuse_amount",
+      "node_version": "1.0.0",
+      "type": "refuse",
+      "code": "amount_too_low",
+      "message": "The amount is below the allowed threshold.",
+      "field": "amount"
+    },
+    {
+      "id": "finish",
+      "node_version": "1.0.0",
+      "type": "finish"
+    }
+  ],
+  "edges": [
+    { "from": "start", "port": "next", "to": "eligible" },
+    { "from": "eligible", "port": "true", "to": "remember_budget" },
+    { "from": "eligible", "port": "false", "to": "refuse_amount" },
+    { "from": "remember_budget", "port": "next", "to": "apply_budget" },
+    { "from": "apply_budget", "port": "next", "to": "clear_obsolete_note" },
+    { "from": "clear_obsolete_note", "port": "next", "to": "require_relation" },
+    { "from": "require_relation", "port": "next", "to": "warn_adjustment" },
+    { "from": "warn_adjustment", "port": "next", "to": "finish" }
+  ]
+}
