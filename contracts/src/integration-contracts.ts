@@ -215,7 +215,7 @@ export const interfaceValueTypeSchema = z.enum([
 ]);
 export const interfaceInputFieldSchema = z
   .object({
-    type: interfaceValueTypeSchema,
+    type: z.union([interfaceValueTypeSchema, z.literal("formatted_text")]),
     required: z.boolean(),
     targetBinding: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("action_subject") }).strict(),

@@ -181,6 +181,7 @@ const workflowTriggerInputSchema = z.discriminatedUnion("source", [
       key: builderKeySchema,
       type: workflowValueTypeSchema,
       fieldId: fieldIdSchema,
+      recordTypeIds: z.array(recordTypeIdSchema).min(1).optional(),
     })
     .strict(),
   z

@@ -78,6 +78,32 @@ Every operation has a permission, including organisation-private and public oper
 
 Interfaces use the same [actions](08-forms-actions-rules-and-events.md), [queries](10-queries-reports-search.md), [access](04-access-and-permissions.md), and [activity history](14-activity-privacy-and-retention.md) as the web application.
 
+### Exact values in interface contracts
+
+An interface must preserve the [owning field's value format](05-modules-fields-and-relationships.md#record-value-formats).
+Exact decimal text is not the legacy `number` wire type, and money needs both
+amount and currency. The operation catalogue in
+[#102](https://github.com/Abzum-NZ/Abzum-Vortex/issues/102) must deliver explicit
+exact-decimal and money input/output types through the versioned source,
+canonical, compiler and served-interface path. Compatibility and served versions
+remain owned by [#103](https://github.com/Abzum-NZ/Abzum-Vortex/issues/103).
+
+Until that contract extension is delivered, publication must not advertise a V2
+decimal or money query field as a legacy `number`. This is a recorded missing
+capability, not a permanent restriction or permission decision. Keep historical
+number contracts unchanged; no conversion through a floating-point number or
+discarding the currency is an acceptable implementation of the new types.
+
+An interface action input can explicitly declare `formatted_text` to carry the
+structured document required by a Module V2 formatted-text input. The target
+action validates the document with the shared field-value contract before
+execution; the interface descriptor is not permission or a validation bypass.
+Historical V1 formatted strings still use `text`. Changing an activated
+interface input from `text` to `formatted_text` changes its wire representation
+and requires a major interface version under [#103](https://github.com/Abzum-NZ/Abzum-Vortex/issues/103).
+This input descriptor does not make arbitrary structured outputs or exact
+decimal/money interface types available.
+
 When an interface operation binds a published Frontend Flow, it invokes that exact versioned flow and its configured node sequence rather than an alternate handler. Each protected node uses its owning service and effective-actor Access transaction. A specified account or system actor requires separate exact execution authority; neither an interface credential nor a service-role credential can choose or impersonate it.
 
 ## Governed MCP access

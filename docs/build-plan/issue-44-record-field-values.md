@@ -261,6 +261,32 @@ fixture-only adapter or a relaxation of release integrity.
 
 ### Rule consumer handoff
 
+Application-owned consumers must select value semantics from the exact bound
+Module that owns each referenced record type. This includes rule conditions and
+assignments, action preconditions and field maps, query filters, pipeline gates,
+and record-bound workflow conditions/mappings where those contracts consume field
+values. An Application format version does not override a Module field format.
+Use the existing typed normalization and validation helpers, preserving ordinary
+text and historical V1 meanings. An assignment between incompatible declared
+formats must fail rather than silently convert or guess a value representation.
+
+The current Application compiler and validator contain V1-only consumer paths.
+Correct them together, using actual bound dependency artifacts, and prove the
+supported mixed-version cases through compilation, validation and publication.
+Cover exact decimal/money literals, target-record references, incompatible maps,
+and existing historical V1 behavior. This is Definition compatibility work under
+[#44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44), not a new rule executor.
+
+Preserve the independent meaning of Application-owned action inputs, workflow
+inputs/forms and connection shapes. Existing `number` descriptors do not become
+exact decimal or money merely because a target field is V2. The versioned node
+input/variable extension in [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58)
+must provide explicit exact-value descriptors through the full Definition path.
+The [interface catalogue #102](https://github.com/Abzum-NZ/Abzum-Vortex/issues/102)
+separately owns exact wire types for public operations. Until these capabilities
+exist, refuse incompatible mappings honestly rather than silently losing value
+or currency. Do not widen legacy schemas by inferring a format from JSON shape.
+
 Select V2 evaluation from the exact Module contract pair, never from a value that
 looks like a decimal or money object. Reuse the current condition traversal and
 error vocabulary, with explicit V2 value semantics. Decimal-looking text remains

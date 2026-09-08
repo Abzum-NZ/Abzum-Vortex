@@ -1813,6 +1813,146 @@ function actionValueCompatible(
   );
 }
 
+type ApplicationFieldValuePair = Readonly<{
+  field: JsonObject;
+  moduleV2: boolean;
+}>;
+
+const applicationFieldType = (pair: ApplicationFieldValuePair | undefined): string | undefined => {
+  if (!pair) return undefined;
+  if (pair.moduleV2 && ["formatted_text", "table", "attachment"].includes(String(pair.field.type)))
+    return String(pair.field.type);
+  return pair.moduleV2 ? fieldValueTypeV2(pair.field) : fieldValueType(pair.field);
+};
+
+const crossFormatFieldTypesCompatible = (
+  source: ApplicationFieldValuePair,
+  target: ApplicationFieldValuePair,
+): boolean => {
+  if (
+    fieldDeclaredResultType(source.field) === "whole_number" &&
+    fieldDeclaredResultType(target.field) === "whole_number"
+  )
+    return true;
+  const sourceType = applicationFieldType(source);
+  const targetType = applicationFieldType(target);
+  return (
+    sourceType !== undefined &&
+    sourceType === targetType &&
+    ["text", "number", "boolean", "date", "date_time"].includes(sourceType)
+  );
+};
+
+const applicationMappingTypesCompatible = (
+  actual: string | undefined,
+  expected: string | undefined,
+): boolean => {
+  if (!actual || !expected) return false;
+  if (
+    ["decimal_number", "money"].includes(actual) ||
+    ["decimal_number", "money"].includes(expected)
+  )
+    return actual === expected;
+  if (["number", "whole_number"].includes(actual) && ["number", "whole_number"].includes(expected))
+    return true;
+  return typesCompatibleV2(actual, expected);
+};
+
+function applicationActionValueCompatible(
+  value: unknown,
+  target: ApplicationFieldValuePair | undefined,
+  subjectFields: ReadonlyMap<string, JsonObject>,
+  subjectModuleV2: boolean,
+  inputs: ReadonlyMap<string, JsonObject>,
+  subjectRecordTypeId: string,
+): boolean {
+  if (!target) return false;
+  const entry = object(value);
+  if (entry.source === "literal")
+    return target.moduleV2
+      ? fieldValueMatchesV2(entry.value, target.field, "canonical")
+      : valueTypeCompatible(literalValueType(entry.value), fieldValueType(target.field));
+  if (entry.source === "subject_field" && subjectModuleV2 !== target.moduleV2) {
+    const sourceField = subjectFields.get(String(entry.fieldId));
+    if (
+      !sourceField ||
+      !crossFormatFieldTypesCompatible({ field: sourceField, moduleV2: subjectModuleV2 }, target)
+    )
+      return false;
+  }
+  if (
+    target.moduleV2 &&
+    entry.source === "input" &&
+    (inputs.get(String(entry.inputKey))?.type === "formatted_text" ||
+      (inputs.get(String(entry.inputKey))?.type === "number" &&
+        ["decimal_number", "money"].includes(applicationFieldType(target) ?? "")))
+  )
+    return false;
+  if (
+    target.moduleV2 &&
+    !applicationMappingTypesCompatible(
+      actionValueTypeV2(value, subjectFields, inputs, "canonical"),
+      applicationFieldType(target),
+    )
+  )
+    return false;
+  return target.moduleV2
+    ? actionValueCompatibleV2(value, target.field, subjectFields, inputs, subjectRecordTypeId)
+    : actionValueCompatible(value, target.field, subjectFields, inputs, subjectRecordTypeId);
+}
+
+function applicationConditionUsesLossyInput(
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  inputTypes: ReadonlyMap<string, string>,
+): boolean {
+  if (value === null || value === undefined) return false;
+  const condition = object(value);
+  if (condition.kind === "all" || condition.kind === "any")
+    return array(condition.conditions).some((entry) =>
+      applicationConditionUsesLossyInput(entry, fields, inputTypes),
+    );
+  if (condition.kind === "not")
+    return applicationConditionUsesLossyInput(condition.condition, fields, inputTypes);
+  if (condition.kind !== "comparison") return false;
+  const exactFieldType = (operandValue: unknown) => {
+    const operand = object(operandValue);
+    if (operand.source !== "field") return undefined;
+    const type = fieldValueTypeV2(fields.get(String(operand.fieldId)));
+    return type === "decimal_number" || type === "money" ? type : undefined;
+  };
+  const isLegacyNumberInput = (operandValue: unknown) => {
+    const operand = object(operandValue);
+    return operand.source === "parameter" && inputTypes.get(String(operand.key)) === "number";
+  };
+  return (
+    (exactFieldType(condition.left) !== undefined && isLegacyNumberInput(condition.right)) ||
+    (exactFieldType(condition.right) !== undefined && isLegacyNumberInput(condition.left))
+  );
+}
+
+const applicationConditionTypesValid = (
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  moduleV2: boolean,
+  inputTypes: ReadonlyMap<string, string> = new Map(),
+): boolean =>
+  moduleV2
+    ? !applicationConditionUsesLossyInput(value, fields, inputTypes) &&
+      conditionTypesValidV2(value, fields, inputTypes)
+    : conditionTypesValid(value, fields, inputTypes);
+
+const applicationInterfaceFieldType = (
+  pair: ApplicationFieldValuePair | undefined,
+): string | undefined => {
+  const type = applicationFieldType(pair);
+  if (!pair?.moduleV2) return type;
+  if (type === "whole_number" || type === "number") return "number";
+  if (type === "boolean") return "boolean";
+  if (["text", "date", "date_time", "record_reference"].includes(String(type))) return type;
+  return undefined;
+};
+
 const valueTypeCompatible = (actual: string | undefined, expected: string | undefined): boolean =>
   actual !== undefined &&
   expected !== undefined &&
@@ -2863,6 +3003,136 @@ export function workflowValueCompatible(
   );
 }
 
+function applicationWorkflowFieldValueCompatible(
+  value: JsonObject,
+  target: ApplicationFieldValuePair,
+  fields: ReadonlyMap<string, JsonObject>,
+  fieldPairs: ReadonlyMap<string, ApplicationFieldValuePair>,
+  nodes: ReadonlyMap<string, JsonObject>,
+  queries: ReadonlyMap<string, JsonObject>,
+  triggerRecordId: string | undefined,
+  expectedRecordTypeIds: readonly string[] | undefined,
+  triggerInputs: ReadonlyMap<string, JsonObject>,
+): boolean {
+  if (value.source === "literal")
+    return target.moduleV2
+      ? fieldValueMatchesV2(value.value, target.field, "canonical")
+      : valueTypeCompatible(literalValueType(value.value), fieldValueType(target.field));
+  if (value.source === "trigger_field") {
+    const source = fieldPairs.get(String(value.fieldId));
+    if (!source) return false;
+    const compatible =
+      source.moduleV2 !== target.moduleV2
+        ? crossFormatFieldTypesCompatible(source, target)
+        : target.moduleV2
+          ? applicationMappingTypesCompatible(
+              applicationFieldType(source),
+              applicationFieldType(target),
+            )
+          : valueTypeCompatible(applicationFieldType(source), applicationFieldType(target));
+    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+    const actualRecordTypeIds = fieldRecordTypeIds(source.field);
+    return (
+      actualRecordTypeIds !== undefined &&
+      actualRecordTypeIds.length > 0 &&
+      actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
+    );
+  }
+  const targetType = applicationFieldType(target);
+  if (
+    target.moduleV2 &&
+    ["decimal_number", "money", "formatted_text", "table", "attachment"].includes(
+      String(targetType),
+    )
+  )
+    return false;
+  return workflowValueCompatible(
+    value,
+    targetType === "whole_number" ? "number" : (targetType ?? ""),
+    fields,
+    nodes,
+    queries,
+    triggerRecordId,
+    expectedRecordTypeIds,
+    triggerInputs,
+  );
+}
+
+function applicationWorkflowInputCompatible(
+  value: JsonObject,
+  input: JsonObject,
+  moduleV2: boolean,
+  fields: ReadonlyMap<string, JsonObject>,
+  fieldPairs: ReadonlyMap<string, ApplicationFieldValuePair>,
+  nodes: ReadonlyMap<string, JsonObject>,
+  queries: ReadonlyMap<string, JsonObject>,
+  triggerRecordId: string | undefined,
+  expectedRecordTypeIds: readonly string[] | undefined,
+  triggerInputs: ReadonlyMap<string, JsonObject>,
+): boolean {
+  if (value.source === "trigger_field") {
+    const source = fieldPairs.get(String(value.fieldId));
+    if (!source) return false;
+    const expectedType = moduleV2
+      ? input.type === "formatted_text"
+        ? "formatted_text"
+        : semanticFieldTypeV2(input.type)
+      : normalizeWorkflowType(String(input.type));
+    if (!expectedType) return false;
+    const actualType = applicationFieldType(source);
+    const compatible = moduleV2
+      ? source.moduleV2
+        ? applicationMappingTypesCompatible(actualType, expectedType)
+        : (expectedType === "whole_number" && actualType === "number") ||
+          (actualType === expectedType &&
+            ["text", "boolean", "date", "date_time", "record_reference"].includes(actualType))
+      : valueTypeCompatible(applicationInterfaceFieldType(source), expectedType);
+    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+    const actualRecordTypeIds = fieldRecordTypeIds(source.field);
+    return (
+      actualRecordTypeIds !== undefined &&
+      actualRecordTypeIds.length > 0 &&
+      actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
+    );
+  }
+  if (!moduleV2)
+    return workflowValueCompatible(
+      value,
+      String(input.type),
+      fields,
+      nodes,
+      queries,
+      triggerRecordId,
+      expectedRecordTypeIds,
+      triggerInputs,
+    );
+  const expectedType =
+    input.type === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(input.type);
+  if (!expectedType) return false;
+  if (value.source === "literal") {
+    const compatible =
+      input.type === "formatted_text"
+        ? moduleFieldValueV2Schemas.formatted_text.safeParse(value.value).success
+        : valueMatchesTypeV2(value.value, expectedType);
+    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+    const actualRecordTypeId = object(value.value).recordTypeId;
+    return (
+      typeof actualRecordTypeId === "string" && expectedRecordTypeIds.includes(actualRecordTypeId)
+    );
+  }
+  if (["decimal_number", "money", "formatted_text"].includes(String(input.type))) return false;
+  return workflowValueCompatible(
+    value,
+    expectedType === "whole_number" ? "number" : expectedType,
+    fields,
+    nodes,
+    queries,
+    triggerRecordId,
+    expectedRecordTypeIds,
+    triggerInputs,
+  );
+}
+
 function workflowValueRecordType(
   value: JsonObject,
   nodes: ReadonlyMap<string, JsonObject>,
@@ -2966,9 +3236,29 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       array(object(object(module.canonical).content).recordTypes),
     );
     const records = new Map(recordTypes.map((record) => [String(record.recordTypeId), record]));
+    const recordValuePairs = new Map<string, ApplicationFieldValuePair["moduleV2"]>(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).recordTypes).map(
+          (record) => [String(record.recordTypeId), "validationContractVersion" in module] as const,
+        ),
+      ),
+    );
     const allFields = new Map(
       recordTypes.flatMap((record) =>
         array(record.fields).map((field) => [String(field.fieldId), field] as const),
+      ),
+    );
+    const fieldValuePairs = new Map<string, ApplicationFieldValuePair>(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).recordTypes).flatMap((record) =>
+          array(record.fields).map(
+            (field) =>
+              [
+                String(field.fieldId),
+                { field, moduleV2: "validationContractVersion" in module },
+              ] as const,
+          ),
+        ),
       ),
     );
     const relationshipMap = new Map(
@@ -3050,6 +3340,17 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           array(object(object(module.canonical).content).actions),
         ),
       ].map((action) => [String(action.key), action]),
+    );
+    const moduleActionValuePairs = new Map(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).actions).map(
+          (action) =>
+            [
+              String(action.key),
+              { action, moduleV2: "validationContractVersion" in module },
+            ] as const,
+        ),
+      ),
     );
     const publicPermissionSafe = (permissionKey: unknown) => {
       const permission = permissionMap.get(String(permissionKey));
@@ -3313,6 +3614,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     };
     for (const action of array(content.actions)) {
       const subject = records.get(String(action.subjectRecordTypeId));
+      const subjectModuleV2 = recordValuePairs.get(String(action.subjectRecordTypeId)) ?? false;
       const fieldMap = new Map(
         subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -3334,15 +3636,21 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         actionPermissionsMatch(action, permissionMap, permissionOwnersByKey) &&
         applicationFieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          conditionTypesValid(action.precondition, fieldMap, inputTypes));
+          applicationConditionTypesValid(
+            action.precondition,
+            fieldMap,
+            subjectModuleV2,
+            inputTypes,
+          ));
       for (const effect of array(action.effects)) {
         if (
           effect.kind === "set_field" &&
           (!fields.has(String(effect.fieldId)) ||
-            !actionValueCompatible(
+            !applicationActionValueCompatible(
               effect.value,
-              fieldMap.get(String(effect.fieldId)),
+              fieldValuePairs.get(String(effect.fieldId)),
               fieldMap,
+              subjectModuleV2,
               inputMap,
               String(action.subjectRecordTypeId),
             ))
@@ -3368,10 +3676,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             Object.entries(object(effect.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
-                !actionValueCompatible(
+                !applicationActionValueCompatible(
                   value,
-                  targetFields.get(id),
+                  fieldValuePairs.get(id),
                   fieldMap,
+                  subjectModuleV2,
                   inputMap,
                   String(action.subjectRecordTypeId),
                 ),
@@ -3422,6 +3731,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     );
     for (const rule of array(content.rules)) {
       const record = records.get(String(rule.subjectRecordTypeId));
+      const moduleV2 = recordValuePairs.get(String(rule.subjectRecordTypeId)) ?? false;
       const fieldMap = new Map(
         record ? array(record.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -3431,15 +3741,17 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         !record ||
         !applicationFieldReferencesValid(rule.condition, fields) ||
         !applicationFieldReferencesValid(effect, fields) ||
-        !conditionTypesValid(rule.condition, fieldMap) ||
+        !applicationConditionTypesValid(rule.condition, fieldMap, moduleV2) ||
         (effect.kind === "start_background_work" && !workflows.has(String(effect.workflowId))) ||
         (effect.kind === "show_or_hide" &&
           !applicationPlacementIds.has(String(effect.componentId))) ||
         (effect.kind === "set_value" &&
-          !valueTypeCompatible(
-            literalValueType(effect.value),
-            fieldValueType(fieldMap.get(String(effect.fieldId))),
-          ))
+          !(moduleV2
+            ? fieldValueMatchesV2(effect.value, fieldMap.get(String(effect.fieldId)), "canonical")
+            : valueTypeCompatible(
+                literalValueType(effect.value),
+                fieldValueType(fieldMap.get(String(effect.fieldId))),
+              )))
       )
         failures.push(
           failure(output, "vortex.definition.application_rule_references", "broken_reference"),
@@ -3541,6 +3853,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     for (const query of queries.values()) {
       const record = object(query.recordType);
       const recordType = records.get(String(record.recordTypeId));
+      const moduleV2 = recordValuePairs.get(String(record.recordTypeId)) ?? false;
       const fieldMap = new Map(
         recordType ? array(recordType.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -3564,8 +3877,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         const field = allFields.get(String(aggregate.fieldId));
         if (!field) return false;
         if (aggregate.operation === "sum" || aggregate.operation === "average")
-          return ["whole_number", "decimal_number", "money", "calculation", "total"].includes(
-            String(field.type),
+          return ["number", "whole_number", "decimal_number", "money"].includes(
+            applicationFieldType(fieldValuePairs.get(String(aggregate.fieldId))) ?? "",
           );
         return !["formatted_text", "table", "attachment", "link_to_one_of_several"].includes(
           String(field.type),
@@ -3575,7 +3888,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         !recordType ||
         used.some((fieldId) => !fields.has(fieldId)) ||
         !filterFieldsValid ||
-        (query.filter !== undefined && !conditionTypesValid(query.filter, fieldMap)) ||
+        (query.filter !== undefined &&
+          !applicationConditionTypesValid(query.filter, fieldMap, moduleV2)) ||
         !aggregatesValid
       )
         failures.push(
@@ -3790,13 +4104,14 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         }
         if (
           placement.visibilityCondition !== undefined &&
-          !conditionTypesValid(
+          !applicationConditionTypesValid(
             placement.visibilityCondition,
             new Map(
               pageRecord
                 ? array(pageRecord.fields).map((field) => [String(field.fieldId), field] as const)
                 : [],
             ),
+            pageRecordId === undefined ? false : (recordValuePairs.get(pageRecordId) ?? false),
           )
         )
           failures.push(
@@ -3890,6 +4205,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         );
     for (const pipeline of array(content.pipelines)) {
       const record = records.get(String(object(pipeline.recordType).recordTypeId));
+      const moduleV2 =
+        recordValuePairs.get(String(object(pipeline.recordType).recordTypeId)) ?? false;
       const stageField =
         record && array(record.fields).find((field) => field.fieldId === pipeline.stageFieldId);
       if (!stageField || stageField.type !== "choice")
@@ -3929,7 +4246,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         if (
           (transition.permissionKey && !permissions.has(String(transition.permissionKey))) ||
           (transition.actionKey && !executableActionKeys.has(String(transition.actionKey))) ||
-          (transition.gate !== undefined && !conditionTypesValid(transition.gate, pipelineFields))
+          (transition.gate !== undefined &&
+            !applicationConditionTypesValid(transition.gate, pipelineFields, moduleV2))
         )
           failures.push(
             failure(
@@ -4007,10 +4325,12 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const workflowsByKey = new Map(
       [...workflows.values()].map((workflow) => [String(workflow.key), workflow]),
     );
-    const interfaceActionInputType = (type: unknown): string | undefined => {
+    const interfaceActionInputType = (type: unknown, moduleV2 = false): string | undefined => {
       const value = String(type);
+      if (moduleV2 && ["decimal_number", "money"].includes(value)) return undefined;
+      if (moduleV2 && value === "formatted_text") return "formatted_text";
       if (["text", "formatted_text", "choice"].includes(value)) return "text";
-      if (["whole_number", "decimal_number", "money"].includes(value)) return "number";
+      if (["number", "whole_number", "decimal_number", "money"].includes(value)) return "number";
       if (value === "yes_no") return "boolean";
       if (value === "date" || value === "date_time") return value;
       if (["record_reference", "organization_account_reference"].includes(value))
@@ -4047,6 +4367,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         const targetWorkflow =
           target.kind === "workflow" ? workflowsByKey.get(String(target.key)) : undefined;
         const targetAction = target.kind === "action" ? actions.get(String(target.key)) : undefined;
+        const targetActionPair =
+          target.kind === "action" ? moduleActionValuePairs.get(String(target.key)) : undefined;
         const targetExists =
           targetQuery !== undefined || targetWorkflow !== undefined || targetAction !== undefined;
         if (
@@ -4114,7 +4436,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
               const descriptor = bindingsForInput[0];
               return (
                 descriptor?.required === input.required &&
-                descriptor?.type === interfaceActionInputType(input.type)
+                descriptor?.type ===
+                  interfaceActionInputType(input.type, targetActionPair?.moduleV2 ?? false)
               );
             });
         }
@@ -4147,7 +4470,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
               return (
                 selectedFields.has(fieldId) &&
                 descriptor !== undefined &&
-                object(descriptor).type === fieldValueType(allFields.get(fieldId))
+                object(descriptor).type ===
+                  applicationInterfaceFieldType(fieldValuePairs.get(fieldId))
               );
             });
         }
@@ -4291,6 +4615,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         triggerEvent ? (triggerEvent.carriedFieldIds as string[]) : [],
       );
       const triggerRecord = triggerRecordId ? records.get(triggerRecordId) : undefined;
+      const triggerModuleV2 =
+        triggerRecordId === undefined ? false : (recordValuePairs.get(triggerRecordId) ?? false);
       const triggerRecordFields = new Map(
         triggerRecord
           ? array(triggerRecord.fields).map((field) => [String(field.fieldId), field])
@@ -4299,7 +4625,15 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       const triggerInputs = array(trigger.inputs);
       const triggerInputKeys = triggerInputs.map((input) => String(input.key));
       const triggerInputsByKey = new Map(
-        triggerInputs.map((input) => [String(input.key), input] as const),
+        triggerInputs.map((input) => {
+          if (input.source !== "record_field" || input.recordTypeIds !== undefined)
+            return [String(input.key), input] as const;
+          const recordTypeIds = fieldRecordTypeIds(triggerRecordFields.get(String(input.fieldId)));
+          return [
+            String(input.key),
+            recordTypeIds === undefined ? input : { ...input, recordTypeIds },
+          ] as const;
+        }),
       );
       const declaredTriggerFieldIds = new Set(
         triggerInputs
@@ -4310,7 +4644,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       if (trigger.kind === "button" && triggerAction)
         for (const input of array(triggerAction.inputs))
           expectedPayloadInputs.set(String(input.key), {
-            type: interfaceActionInputType(input.type) ?? String(input.type),
+            type:
+              interfaceActionInputType(
+                input.type,
+                moduleActionValuePairs.get(String(trigger.actionKey))?.moduleV2 ?? false,
+              ) ?? `unsupported:${String(input.type)}`,
             ...(input.recordTypes
               ? {
                   recordTypeIds: array(input.recordTypes).map((reference) =>
@@ -4353,12 +4691,26 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         (trigger.kind === "event"
           ? triggerInputs.every((input) => {
               const field = triggerRecordFields.get(String(input.fieldId));
+              const pair = fieldValuePairs.get(String(input.fieldId));
+              const fieldInputType = applicationInterfaceFieldType(pair);
+              const advertisedRecordTypeIds = input.recordTypeIds as string[] | undefined;
+              const fieldRecordTypeTargets = fieldRecordTypeIds(field);
+              const referenceTargetsValid =
+                input.type === "record_reference"
+                  ? advertisedRecordTypeIds === undefined ||
+                    (fieldRecordTypeTargets !== undefined &&
+                      fieldRecordTypeTargets.every((recordTypeId) =>
+                        advertisedRecordTypeIds.includes(recordTypeId),
+                      ))
+                  : advertisedRecordTypeIds === undefined;
               return (
                 input.source === "record_field" &&
                 field !== undefined &&
                 triggerFieldIds.has(String(input.fieldId)) &&
+                fieldInputType !== undefined &&
                 normalizeWorkflowType(String(input.type)) ===
-                  normalizeWorkflowType(fieldValueType(field) ?? "")
+                  normalizeWorkflowType(fieldInputType) &&
+                referenceTargetsValid
               );
             })
           : triggerInputs.every((input) => input.source === "payload") &&
@@ -4366,7 +4718,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             trigger.condition === null) &&
         (trigger.condition === null ||
           (triggerRecord !== undefined &&
-            conditionTypesValid(trigger.condition, triggerRecordFields) &&
+            applicationConditionTypesValid(
+              trigger.condition,
+              triggerRecordFields,
+              triggerModuleV2,
+            ) &&
             applicationFieldReferencesValid(
               trigger.condition,
               new Set(triggerRecordFields.keys()),
@@ -4421,7 +4777,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         let nodeValuesValid = true;
         if (
           node.type === "condition" &&
-          (!conditionTypesValid(config.condition, triggerRecordFields) ||
+          (!applicationConditionTypesValid(
+            config.condition,
+            triggerRecordFields,
+            triggerModuleV2,
+          ) ||
             !applicationFieldReferencesValid(config.condition, new Set(triggerRecordFields.keys())))
         )
           nodeValuesValid = false;
@@ -4429,7 +4789,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           node.type === "decision_table" &&
           array(config.decisions).some(
             (decision) =>
-              !conditionTypesValid(decision.when, triggerRecordFields) ||
+              !applicationConditionTypesValid(
+                decision.when,
+                triggerRecordFields,
+                triggerModuleV2,
+              ) ||
               !applicationFieldReferencesValid(decision.when, new Set(triggerRecordFields.keys())),
           )
         )
@@ -4447,12 +4811,20 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
               ])) ||
             Object.entries(object(config.values)).some(([fieldId, value]) => {
               const field = targetFields.get(fieldId);
+              const pair = fieldValuePairs.get(fieldId);
               return (
                 !field ||
-                !compatibleWorkflowValue(
-                  value,
-                  fieldValueType(field) ?? "",
+                !pair ||
+                !applicationWorkflowFieldValueCompatible(
+                  object(value),
+                  pair,
+                  allFields,
+                  fieldValuePairs,
+                  workflowNodes,
+                  queries,
+                  triggerRecordId,
                   fieldRecordTypeIds(field),
+                  triggerInputsByKey,
                 )
               );
             })
@@ -4477,12 +4849,20 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             !compatibleWorkflowValue(config.record, "record_reference", [recordTypeId]) ||
             Object.entries(object(config.values)).some(([fieldId, value]) => {
               const field = targetFields.get(fieldId);
+              const pair = fieldValuePairs.get(fieldId);
               return (
                 !field ||
-                !compatibleWorkflowValue(
-                  value,
-                  fieldValueType(field) ?? "",
+                !pair ||
+                !applicationWorkflowFieldValueCompatible(
+                  object(value),
+                  pair,
+                  allFields,
+                  fieldValuePairs,
+                  workflowNodes,
+                  queries,
+                  triggerRecordId,
                   fieldRecordTypeIds(field),
+                  triggerInputsByKey,
                 )
               );
             })
@@ -4650,6 +5030,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           );
         if (node.type === "run_action") {
           const action = actions.get(String(config.actionKey));
+          const actionPair = moduleActionValuePairs.get(String(config.actionKey));
           const inputs = object(config.inputs);
           const declared = action ? array(action.inputs) : [];
           if (
@@ -4663,10 +5044,12 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
                     String(object(reference).recordTypeId),
                   )
                 : [];
-              return !workflowValueCompatible(
+              return !applicationWorkflowInputCompatible(
                 object(inputs[String(input.key)]),
-                String(input.type),
+                input,
+                actionPair?.moduleV2 ?? false,
                 allFields,
+                fieldValuePairs,
                 workflowNodes,
                 queries,
                 triggerRecordId,
@@ -4703,10 +5086,12 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             fields.some(
               (field) =>
                 String(field.key) in inputs &&
-                !workflowValueCompatible(
+                !applicationWorkflowInputCompatible(
                   object(inputs[String(field.key)]),
-                  String(field.type),
+                  field,
+                  false,
                   allFields,
+                  fieldValuePairs,
                   workflowNodes,
                   queries,
                   triggerRecordId,
