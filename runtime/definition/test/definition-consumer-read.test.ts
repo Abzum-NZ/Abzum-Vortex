@@ -120,6 +120,7 @@ const releaseEvidence = (
   rootId: output.canonical.envelope.rootId,
   releaseRevision: 1,
   releaseVersion: "1.0.0",
+  sourceContractVersion: "1.0.0",
   validationContractVersion: "1.0.0",
   contentFingerprint: fingerprintCanonicalValue(output.canonical.content),
   resolutionFingerprint: resolution.fingerprint,

@@ -207,7 +207,7 @@ export const applicationVersionImpactRequestV2Schema = z
   .object({
     kind: z.literal("application"),
     validationContractVersion: z.literal("2.0.0"),
-    history: z.array(applicationVersionImpactHistoryEntryV2Schema).max(historyLimit),
+    history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
     candidate: applicationDraftV2Schema,
   })
   .strict();

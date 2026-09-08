@@ -109,7 +109,53 @@ const release = {
   resolutionFingerprint: "sha256:" + "c".repeat(64),
   dependencyManifest: [],
   correlationId,
-  content: { pages: [page] },
+  content: {
+    name: "Sample application",
+    description: "A neutral application definition.",
+    icon: "sample",
+    moduleBindings: [
+      {
+        moduleRootId: id(50),
+        version: { selection: "exact" as const, version: "1.0.0" },
+        resolvedVersion: "1.0.0",
+        purpose: "primary" as const,
+      },
+    ],
+    navigation: [],
+    pages: [page],
+    roles: [
+      {
+        roleId: id(51),
+        key: "reader",
+        name: "Reader",
+        homePageId: pageId,
+        permissionKeys: [pagePermission.permission.key],
+        permissionSelection: { kind: "exact" as const },
+      },
+    ],
+    queries: [],
+    blockRegistrations: [],
+    pipelines: [],
+    permissions: [pagePermission.permission, blockPermission.permission],
+    actions: [],
+    rules: [],
+    events: [],
+    workflows: [],
+    connectionBindings: [],
+    interfaces: [],
+    publicAddresses: [],
+    theme: {
+      mode: "application" as const,
+      lightAndDark: true,
+      tokens: {
+        brand: "indigo",
+        density: "comfortable" as const,
+        corners: "medium" as const,
+        focus: "high_contrast" as const,
+      },
+    },
+    homePageId: pageId,
+  },
 };
 
 describe("stored V1 page capability adapter", () => {
@@ -179,6 +225,28 @@ describe("stored V1 page capability adapter", () => {
   it("refuses an absent page selection", async () => {
     await expect(
       service(id(98)).service.project({} as never, { organizationId, applicationRootId }),
+    ).rejects.toThrow("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
+  });
+
+  it("refuses an explicitly V2 application release", async () => {
+    readExact.mockResolvedValueOnce({
+      applicationRelease: { ...release, validationContractVersion: "2.0.0" },
+      permissionRegistration: {
+        organizationId,
+        applicationRootId,
+        applicationRelease: {
+          definitionKey: release.definitionKey,
+          releaseRevision: release.releaseRevision,
+          releaseVersion: release.releaseVersion,
+          validationContractVersion: "2.0.0",
+          contentFingerprint: release.contentFingerprint,
+          resolutionFingerprint: release.resolutionFingerprint,
+        },
+        entries: [pagePermission, blockPermission],
+      },
+    });
+    await expect(
+      service().service.project({} as never, { organizationId, applicationRootId }),
     ).rejects.toThrow("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
   });
 

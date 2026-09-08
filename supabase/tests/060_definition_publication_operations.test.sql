@@ -330,6 +330,13 @@ from vortex_definition.append_release(
         'catalogueFingerprint', 'sha256:' || pg_catalog.repeat('5', 64)
       ),
       pg_catalog.jsonb_build_object(
+        'kind', 'platform_block',
+        'blockId', '60000000-0000-4000-8000-000000000060'::uuid,
+        'releaseVersion', '2.1.0',
+        'contentFingerprint', 'sha256:' || pg_catalog.repeat('8', 64),
+        'catalogueFingerprint', 'sha256:' || pg_catalog.repeat('9', 64)
+      ),
+      pg_catalog.jsonb_build_object(
         'kind', 'platform_theme',
         'catalogueThemeId', '50000000-0000-4000-8000-000000000060'::uuid,
         'releaseVersion', '1.0.0',
@@ -350,7 +357,7 @@ select is(:'publication_result_published_by'::uuid, '90000000-0000-4000-8000-000
   'append derives the actor from validated system context rather than the supplied payload');
 select is(
   pg_catalog.jsonb_array_length(:'publication_result_dependency_manifest'::jsonb),
-  3,
+  4,
   'append returns the exact one-for-one dependency manifest'
 );
 select is(
@@ -362,7 +369,7 @@ select is(
 select is(
   (select count(*)::integer from vortex_definition.release_dependencies
     where root_id = :'publication_application_root_id'::uuid and release_revision = 1),
-  3,
+  4,
   'append records one immutable row for each supplied dependency'
 );
 select is(
@@ -371,6 +378,29 @@ select is(
       and release_revision = 1 and dependency_kind = 'platform_theme'),
   'sha256:' || pg_catalog.repeat('7', 64),
   'platform catalogue evidence is stored without pretending a theme has a namespaced key'
+);
+select is(
+  (
+    select pg_catalog.jsonb_build_array(
+      dependency_reference,
+      dependency_version,
+      dependency_content_fingerprint,
+      evidence_fingerprint,
+      catalogue_item_id
+    )
+    from vortex_definition.release_dependencies
+    where root_id = :'publication_application_root_id'::uuid
+      and release_revision = 1
+      and dependency_kind = 'platform_block'
+  ),
+  pg_catalog.jsonb_build_array(
+    '60000000-0000-4000-8000-000000000060',
+    '2.1.0',
+    'sha256:' || pg_catalog.repeat('8', 64),
+    'sha256:' || pg_catalog.repeat('9', 64),
+    '60000000-0000-4000-8000-000000000060'::uuid
+  ),
+  'append stores one exact platform-block identity, version, content and catalogue evidence tuple'
 );
 select is(
   (select target_root_id from vortex_definition.release_dependencies
@@ -861,6 +891,107 @@ select is(
   'an injected release failure leaves the discovery pointer unchanged'
 );
 drop trigger releases_test_abort on vortex_definition.releases;
+
+select pg_catalog.set_config('vortex.request_context', '', true);
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.publication_operation_context());
+set local role vortex_request;
+select throws_ok(
+  $$
+    select *
+    from vortex_definition.append_release(
+      '30000000-0000-4000-8000-000000000062'::uuid,
+      1,
+      'sha256:9999999999999999999999999999999999999999999999999999999999999999',
+      pg_catalog.jsonb_set(
+        pg_temp.failure_release_payload(),
+        '{dependencies}',
+        pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'kind', 'platform_block',
+            'blockId', '60000000-0000-4000-8000-000000000062'::uuid,
+            'releaseVersion', '1.0.0',
+            'contentFingerprint', 'sha256:' || pg_catalog.repeat('6', 64),
+            'catalogueFingerprint', 'sha256:' || pg_catalog.repeat('7', 64)
+          ),
+          pg_catalog.jsonb_build_object(
+            'kind', 'platform_block',
+            'blockId', '60000000-0000-4000-8000-000000000062'::uuid,
+            'releaseVersion', '1.0.0',
+            'contentFingerprint', 'sha256:' || pg_catalog.repeat('6', 64),
+            'catalogueFingerprint', 'sha256:' || pg_catalog.repeat('7', 64)
+          )
+        )
+      )
+    )
+  $$,
+  '22023'::char(5),
+  'Definition dependency manifest repeats or omits a subject',
+  'duplicate platform-block subjects are refused before publication effects'
+);
+reset role;
+select is(
+  (select pg_catalog.count(*)::integer from vortex_definition.releases
+    where root_id = '30000000-0000-4000-8000-000000000062'::uuid),
+  0,
+  'duplicate platform-block refusal leaves no partial immutable release'
+);
+select is(
+  (select current_release_revision from vortex_definition.roots
+    where root_id = '30000000-0000-4000-8000-000000000062'::uuid),
+  null::bigint,
+  'duplicate platform-block refusal leaves the discovery pointer unchanged'
+);
+
+select pg_catalog.set_config('vortex.request_context', '', true);
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.publication_operation_context());
+set local role vortex_request;
+select throws_ok(
+  $malformed_platform_block$
+    select *
+    from vortex_definition.append_release(
+      '30000000-0000-4000-8000-000000000062'::uuid,
+      1,
+      'sha256:9999999999999999999999999999999999999999999999999999999999999999',
+      pg_catalog.jsonb_set(
+        pg_temp.failure_release_payload(),
+        '{dependencies}',
+        pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'kind', 'platform_block',
+            'blockId', 'not-a-uuid',
+            'releaseVersion', '1.0.0',
+            'contentFingerprint', 'sha256:' || pg_catalog.repeat('6', 64),
+            'catalogueFingerprint', 'sha256:' || pg_catalog.repeat('7', 64)
+          )
+        )
+      )
+    )
+  $malformed_platform_block$,
+  '22023'::char(5),
+  'Platform block dependency has invalid evidence',
+  'a malformed platform-block identity is refused before publication effects'
+);
+reset role;
+select is(
+  (select pg_catalog.count(*)::integer from vortex_definition.releases
+    where root_id = '30000000-0000-4000-8000-000000000062'::uuid),
+  0,
+  'malformed platform-block refusal leaves no immutable release'
+);
+select is(
+  (select pg_catalog.count(*)::integer from vortex_definition.release_dependencies
+    where root_id = '30000000-0000-4000-8000-000000000062'::uuid),
+  0,
+  'malformed platform-block refusal leaves no dependency row'
+);
+select is(
+  (select current_release_revision from vortex_definition.roots
+    where root_id = '30000000-0000-4000-8000-000000000062'::uuid),
+  null::bigint,
+  'malformed platform-block refusal leaves the discovery pointer unchanged'
+);
 
 insert into vortex_definition.roots (
   root_id, organization_id, kind, key, created_at, created_by

@@ -234,7 +234,6 @@ export const applicationCompilationOutputV1Schema = z
   })
   .strict();
 
-/** Explicit V2-only output; generic Definition output decoding remains V1. */
 export const applicationCompilationOutputV2Schema = z
   .object({
     kind: z.literal("application"),
@@ -248,7 +247,7 @@ export const applicationCompilationOutputV2Schema = z
   })
   .strict();
 
-export const definitionCompilationOutputSchema = z.discriminatedUnion("kind", [
+export const definitionCompilationOutputSchema = z.union([
   z
     .object({
       kind: z.literal("module"),
@@ -261,6 +260,7 @@ export const definitionCompilationOutputSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   applicationCompilationOutputV1Schema,
+  applicationCompilationOutputV2Schema,
   z
     .object({
       kind: z.literal("connection_type"),

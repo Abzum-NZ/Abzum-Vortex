@@ -1,5 +1,6 @@
 import {
   applicationDraftSchema,
+  applicationDraftV2Schema,
   applicationSourceDocumentV2Schema,
   moduleDraftSchema,
   savedSharingConditionSchema,
@@ -19,6 +20,7 @@ import {
   workflowNodeOutputsByType,
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
+  type ApplicationCompilationRequestV2,
   type ApplicationSourceDocumentV2,
   type ConditionNode,
   type DefinitionSourceDocument,
@@ -44,6 +46,7 @@ import { createContractValueWalker } from "./contract-value-walker";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
+type PublicationCompilationRequest = DefinitionCompilationRequest | ApplicationCompilationRequestV2;
 type DefinitionPath = readonly (string | number)[];
 type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocumentV2;
 
@@ -86,7 +89,7 @@ export type DefinitionSemanticRule = Readonly<{
 }>;
 
 export type DefinitionSetValidationContext = Readonly<{
-  requests: readonly DefinitionCompilationRequest[];
+  requests: readonly PublicationCompilationRequest[];
   outputs: readonly Output[];
   rawSources?: readonly unknown[];
   dependencyOutputs?: readonly Output[];
@@ -105,7 +108,9 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
         output.kind === "module"
           ? moduleDraftSchema
           : output.kind === "application"
-            ? applicationDraftSchema
+            ? "validationContractVersion" in output
+              ? applicationDraftV2Schema
+              : applicationDraftSchema
             : connectionTypeSchema,
       value: output.canonical,
     })),
@@ -2291,6 +2296,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
   const modules = availableOutputs.filter((output) => output.kind === "module");
   const connections = availableOutputs.filter((output) => output.kind === "connection_type");
   for (const output of context.outputs.filter((entry) => entry.kind === "application")) {
+    const applicationV2 = "validationContractVersion" in output;
     const content = object(object(output.canonical).content);
     const bindings = array(content.moduleBindings);
     const connectionBindingEntries = array(content.connectionBindings);
@@ -2542,6 +2548,44 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       ].map((event) => [String(event.key), event]),
     );
     const pages = new Map(array(content.pages).map((page) => [String(page.pageId), page]));
+    const shells = new Map(
+      (applicationV2 ? array(content.shells) : []).map((shell) => [String(shell.shellId), shell]),
+    );
+    const collectPlacementEntriesV2 = (
+      slotValue: unknown,
+      entries: [string, JsonObject][] = [],
+    ): [string, JsonObject][] => {
+      const slot = object(slotValue);
+      for (const [placementId, placementValue] of Object.entries(object(slot.placements))) {
+        const placement = object(placementValue);
+        entries.push([placementId, placement]);
+        for (const childSlot of Object.values(object(placement.slots)))
+          collectPlacementEntriesV2(childSlot, entries);
+      }
+      return entries;
+    };
+    const pageContentPlacementEntriesV2 = (page: JsonObject): [string, JsonObject][] => {
+      const composition = object(page.composition);
+      if ("main" in composition) return collectPlacementEntriesV2(composition.main);
+      if ("content" in composition)
+        return Object.values(object(composition.content)).flatMap((slotValue) =>
+          collectPlacementEntriesV2(slotValue),
+        );
+      if (composition.shellKind === "default")
+        return Object.values(object(composition.stepContent)).flatMap((slotValue) =>
+          collectPlacementEntriesV2(slotValue),
+        );
+      return Object.values(object(composition.stepContent)).flatMap((stepValue) =>
+        Object.values(object(stepValue)).flatMap((slotValue) =>
+          collectPlacementEntriesV2(slotValue),
+        ),
+      );
+    };
+    const pageShellPlacementEntriesV2 = (page: JsonObject): [string, JsonObject][] => {
+      const composition = object(page.composition);
+      if (composition.shellKind !== "application") return [];
+      return collectPlacementEntriesV2(shells.get(String(composition.shellId))?.layout);
+    };
     const queries = new Map(array(content.queries).map((query) => [String(query.queryId), query]));
     const pipelines = new Map(
       array(content.pipelines).map((pipeline) => [String(pipeline.pipelineId), pipeline]),
@@ -2572,7 +2616,10 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       return undefined;
     };
     const blocks = new Map(
-      array(content.blockRegistrations).map((block) => [String(block.blockId), block]),
+      (applicationV2 ? [] : array(content.blockRegistrations)).map((block) => [
+        String(block.blockId),
+        block,
+      ]),
     );
     const connectionMap = new Map(
       connections
@@ -2736,15 +2783,20 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         );
     }
     const applicationPlacementIds = new Set(
-      [...pages.values()].flatMap((page) =>
-        page.type === "guided_form"
-          ? array(page.steps).flatMap((step) =>
-              array(step.blocks).map((placement) => String(placement.placementId)),
-            )
-          : page.blocks
-            ? array(page.blocks).map((placement) => String(placement.placementId))
-            : [],
-      ),
+      applicationV2
+        ? [
+            ...[...shells.values()].flatMap((shell) => collectPlacementEntriesV2(shell.layout)),
+            ...[...pages.values()].flatMap(pageContentPlacementEntriesV2),
+          ].map(([placementId]) => placementId)
+        : [...pages.values()].flatMap((page) =>
+            page.type === "guided_form"
+              ? array(page.steps).flatMap((step) =>
+                  array(step.blocks).map((placement) => String(placement.placementId)),
+                )
+              : page.blocks
+                ? array(page.blocks).map((placement) => String(placement.placementId))
+                : [],
+          ),
     );
     for (const rule of array(content.rules)) {
       const record = records.get(String(rule.subjectRecordTypeId));
@@ -2771,11 +2823,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           failure(output, "vortex.definition.application_rule_references", "broken_reference"),
         );
     }
-    const identityCollections = [
+    const identityCollections: readonly (readonly [JsonObject[], string, string])[] = [
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
       [array(content.queries), "queryId", "key"],
-      [array(content.blockRegistrations), "blockId", "name"],
+      ...(applicationV2 ? [] : ([[array(content.blockRegistrations), "blockId", "name"]] as const)),
       [array(content.pipelines), "pipelineId", "key"],
       [array(content.permissions), "permissionId", "key"],
       [array(content.actions), "actionId", "key"],
@@ -2802,15 +2854,17 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       }
     };
     collectNavigationIds(array(content.navigation));
-    const placementIds = [...pages.values()].flatMap((page) =>
-      page.type === "guided_form"
-        ? array(page.steps).flatMap((step) =>
-            array(step.blocks).map((placement) => String(placement.placementId)),
-          )
-        : page.blocks
-          ? array(page.blocks).map((placement) => String(placement.placementId))
-          : [],
-    );
+    const placementIds = applicationV2
+      ? [...applicationPlacementIds]
+      : [...pages.values()].flatMap((page) =>
+          page.type === "guided_form"
+            ? array(page.steps).flatMap((step) =>
+                array(step.blocks).map((placement) => String(placement.placementId)),
+              )
+            : page.blocks
+              ? array(page.blocks).map((placement) => String(placement.placementId))
+              : [],
+        );
     const guidedStepIds = [...pages.values()].flatMap((page) =>
       page.type === "guided_form" ? array(page.steps).map((step) => String(step.id)) : [],
     );
@@ -2969,20 +3023,32 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             failure(output, "vortex.definition.application_calendar_mapping", "scope_conflict"),
           );
       }
-      const placements =
-        page.type === "guided_form"
+      const pageContentPlacements = applicationV2
+        ? pageContentPlacementEntriesV2(page).map(([, placement]) => placement)
+        : page.type === "guided_form"
           ? array(page.steps).flatMap((step) => array(step.blocks))
           : page.blocks
             ? array(page.blocks)
             : [];
+      const placements = applicationV2
+        ? [
+            ...pageContentPlacements,
+            ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
+          ]
+        : pageContentPlacements;
       const placementIds = placements.map((placement) => String(placement.placementId));
-      const desktopOrder = object(object(page.layout).desktop).componentOrder as string[];
-      const phoneOrder = object(object(page.layout).phone).componentOrder as string[];
+      const desktopOrder = applicationV2
+        ? []
+        : (object(object(page.layout).desktop).componentOrder as string[]);
+      const phoneOrder = applicationV2
+        ? []
+        : (object(object(page.layout).phone).componentOrder as string[]);
       if (
-        new Set(placementIds).size !== placementIds.length ||
-        desktopOrder.length !== placementIds.length ||
-        phoneOrder.length !== placementIds.length ||
-        placementIds.some((id) => !desktopOrder.includes(id) || !phoneOrder.includes(id))
+        !applicationV2 &&
+        (new Set(placementIds).size !== placementIds.length ||
+          desktopOrder.length !== placementIds.length ||
+          phoneOrder.length !== placementIds.length ||
+          placementIds.some((id) => !desktopOrder.includes(id) || !phoneOrder.includes(id)))
       )
         failures.push(
           failure(output, "vortex.definition.application_layout_complete", "broken_reference"),
@@ -2998,6 +3064,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           : [],
       );
       for (const placement of placements) {
+        if (applicationV2) continue;
         const block = blocks.get(String(placement.blockId));
         const placementQuery = placement.queryId
           ? queries.get(String(placement.queryId))
@@ -3133,7 +3200,10 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         let publicBlockReferencesSafe = true;
         for (const placement of placements) {
           if (
-            !publicPermissionSafe(placement.viewPermissionKey) ||
+            (applicationV2
+              ? placement.viewPermissionKey !== undefined &&
+                !publicPermissionSafe(placement.viewPermissionKey)
+              : !publicPermissionSafe(placement.viewPermissionKey)) ||
             (placement.usePermissionKey && !publicPermissionSafe(placement.usePermissionKey))
           )
             publicBlockReferencesSafe = false;
@@ -3141,8 +3211,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             if (entry.source === "field" && !pagePublicFields.has(String(entry.fieldId)))
               publicBlockReferencesSafe = false;
           });
-          for (const settingValue of Object.values(object(placement.settings))) {
-            const setting = object(settingValue);
+          const inspectPublicSetting = (setting: JsonObject) => {
             if (
               setting.kind === "field_reference" &&
               !pagePublicFields.has(String(setting.fieldId))
@@ -3167,7 +3236,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
               if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
                 publicBlockReferencesSafe = false;
             }
-          }
+          };
+          if (applicationV2) walkValues(placement.settings, inspectPublicSetting);
+          else
+            for (const settingValue of Object.values(object(placement.settings)))
+              inspectPublicSetting(object(settingValue));
           if (placement.queryId) {
             const query = queries.get(String(placement.queryId));
             if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
@@ -4228,6 +4301,9 @@ function publicationCompatibilityRule(
           : output.kind === "application" && history.kind === "application"
             ? compareDefinitionVersionImpact({
                 kind: "application",
+                ...("validationContractVersion" in output
+                  ? { validationContractVersion: "2.0.0" as const }
+                  : {}),
                 history: history.history,
                 candidate: output.canonical,
               })

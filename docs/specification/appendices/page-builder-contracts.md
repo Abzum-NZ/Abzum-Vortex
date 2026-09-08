@@ -158,6 +158,14 @@ Follow the [inspected builder integration map](../../build-plan/fluid-integratio
 
 Version the new representation explicitly. Legacy flat pages migrate into the default main slot in a new draft through a deterministic documented conversion. Previously published releases remain immutable and retain a supported reader; never reinterpret them silently with new defaults.
 
+Conversion preserves existing placement conditional visibility and explicit query
+selection as typed placement properties. It must not silently drop either or move
+them into an arbitrary block setting. Preserve their existing condition/reference
+semantics before conversion; richer form/related-record/flow bindings remain in
+[#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250). The
+[bounded compatibility plan](../../build-plan/issue-249-placement-compatibility.md)
+records this identified gap and its engine ownership.
+
 Both supported draft formats use the same revision-checked Definition save.
 Saving validates the exact authored format and its local identities/references;
 resolving external releases and publication evidence belongs to publication.
@@ -186,6 +194,22 @@ For Application definitions, support only the exact source/validation version pa
 | History and restore             | Expose both stored versions in history metadata. Restore verifies both and restores the original authored content without conversion. A V1-to-V2 conversion creates a separately confirmed new draft revision.                                         |
 
 Existing V1 source, canonical JSON, compilation payloads, release rows and fingerprints remain unchanged: do not add tags or default V2 properties to them. History projections and transport envelopes do not change immutable release content or fingerprint inputs.
+
+Internal release evidence includes the stored source and validation versions so
+the service can verify their supported pair. This is not additional public
+consumer metadata: a consumer receiving only canonical content continues to use
+the existing validation-version envelope. The exact component, theme, module and
+connection releases used by publication are retained in the existing dependency
+manifest and verified again on read and restore; display names never substitute
+for those identities.
+
+A history may contain both supported application representations. Publishing a
+different representation is a major change measured from the latest release,
+in either direction: V1 `1.4.2` to V2 becomes `2.0.0`; restoring and later
+publishing an older V1 source becomes `3.0.0`. Restoring alone updates the editable
+draft, not the published or installed application. Same-representation changes
+continue to use their normal version comparison. See the
+[publication and readback acceptance](../../build-plan/issue-249-native-publication.md).
 
 #249 performs no reset of an existing or shared Local, Testing or Production database. Prove its additive migration incrementally against a separately verified Local baseline. A fresh disposable database may be created or reset only under a separately validated delivery target; no such target grants authority over an existing environment.
 

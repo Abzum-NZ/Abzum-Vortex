@@ -836,7 +836,9 @@ export const applicationDraftSchema = applicationDraftV1Schema;
 
 export const publishedApplicationDefinitionV1Schema = z
   .object({
-    publication: publishedApplicationReferenceSchema,
+    publication: publishedApplicationReferenceSchema.extend({
+      validationContractVersion: z.literal("1.0.0"),
+    }),
     content: applicationContentV1Schema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
     releaseNote: z.string().min(1).max(2_000),
@@ -858,8 +860,66 @@ export const publishedApplicationDefinitionV1Schema = z
       },
   );
 
-/** Backward-compatible name for the currently implemented published Application contract. */
-export const publishedApplicationDefinitionSchema = publishedApplicationDefinitionV1Schema;
+export const publishedApplicationDefinitionV2Schema = z
+  .object({
+    publication: publishedApplicationReferenceSchema.extend({
+      validationContractVersion: z.literal("2.0.0"),
+    }),
+    content: applicationContentV2Schema,
+    dependencyManifest: z.array(publishedDefinitionReferenceSchema),
+    releaseNote: z.string().min(1).max(2_000),
+  })
+  .strict()
+  .superRefine((value, context) =>
+    requireResolvedRecordTypeReferences(applicationContentV2Schema, value.content, context, [
+      "content",
+    ]),
+  )
+  .transform(
+    (
+      value,
+    ): Omit<typeof value, "content"> & {
+      content: ResolveRecordTypeReferences<typeof value.content>;
+    } =>
+      value as unknown as Omit<typeof value, "content"> & {
+        content: ResolveRecordTypeReferences<typeof value.content>;
+      },
+  );
+
+/** Select the exact immutable Application representation from publication metadata. */
+export const publishedApplicationDefinitionSchema = z.unknown().transform((value, context) => {
+  const candidate =
+    value !== null && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  const publication =
+    candidate?.publication !== null &&
+    typeof candidate?.publication === "object" &&
+    !Array.isArray(candidate.publication)
+      ? (candidate.publication as Record<string, unknown>)
+      : undefined;
+  const validationContractVersion = publication?.validationContractVersion;
+  const schema =
+    validationContractVersion === "1.0.0"
+      ? publishedApplicationDefinitionV1Schema
+      : validationContractVersion === "2.0.0"
+        ? publishedApplicationDefinitionV2Schema
+        : undefined;
+  if (schema === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["publication", "validationContractVersion"],
+      message: "Published Application validation contract version is unsupported",
+    });
+    return z.NEVER;
+  }
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) context.addIssue({ ...issue });
+    return z.NEVER;
+  }
+  return parsed.data;
+});
 
 export const sharedRecordProjectionSchema = z
   .object({
@@ -887,6 +947,12 @@ export type ApplicationContentV2 = z.infer<typeof applicationContentV2Schema>;
 export type ApplicationDraftV2 = z.infer<typeof applicationDraftV2Schema>;
 export type ApplicationCanonicalDocumentV2 = z.infer<typeof applicationCanonicalDocumentV2Schema>;
 export type ApplicationDraft = z.infer<typeof applicationDraftSchema>;
+export type PublishedApplicationDefinitionV1 = z.infer<
+  typeof publishedApplicationDefinitionV1Schema
+>;
+export type PublishedApplicationDefinitionV2 = z.infer<
+  typeof publishedApplicationDefinitionV2Schema
+>;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
 export type BlockSettingValue = z.infer<typeof blockSettingValueSchema>;
 export type BlockSettingDeclaration = z.infer<typeof blockSettingDeclarationSchema>;
