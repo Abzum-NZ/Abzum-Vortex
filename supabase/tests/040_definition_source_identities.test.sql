@@ -694,6 +694,279 @@ select is(
   4,
   'removal and reintroduction add no duplicate owner identities'
 );
+
+select pg_catalog.set_config('vortex.request_context', '', true);
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.identity_store_context());
+set local role vortex_request;
+
+select root_id
+from vortex_definition.create_root(
+  'application',
+  'example.native_identity_store',
+  '{
+    "source_contract_version":"2.0.0",
+    "kind":"application",
+    "root_alias":"native_application_root",
+    "key":"example.native_identity_store",
+    "body":{"shells":[{"id":"shell_owner","key":"workspace","content_slots":[{"id":"slot_owner","key":"main_slot"}]}],"pages":[]}
+  }'::jsonb,
+  'sha256:' || pg_catalog.repeat('1', 64),
+  '[
+    {
+      "definitionKey":"example.native_identity_store",
+      "ownerScope":"document",
+      "scope":"document",
+      "kind":"root",
+      "componentOwner":"root",
+      "aliases":["example.native_identity_store","native_application_root"]
+    },
+    {
+      "definitionKey":"example.native_identity_store",
+      "ownerScope":"content",
+      "scope":"content",
+      "kind":"shell",
+      "componentOwner":"shell_owner",
+      "aliases":["shell_owner","workspace"]
+    },
+    {
+      "definitionKey":"example.native_identity_store",
+      "ownerScope":"content",
+      "scope":"content",
+      "kind":"shell_content_slot",
+      "componentOwner":"slot_owner",
+      "aliases":["slot_owner","main_slot"]
+    }
+  ]'::jsonb
+) \gset v2_identity_created_
+
+reset role;
+
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from vortex_definition.source_identities
+    where root_id = :'v2_identity_created_root_id'::uuid
+      and kind in ('shell', 'shell_content_slot')
+  ),
+  2,
+  'V2 creation records shell and named content-slot permanent owners through create_root'
+);
+select pg_catalog.set_config(
+  'vortex.test_v2_shell_identity',
+  (
+    select identity_id::text
+    from vortex_definition.source_identities
+    where root_id = :'v2_identity_created_root_id'::uuid
+      and kind = 'shell'
+      and component_owner = 'shell_owner'
+  ),
+  true
+);
+select pg_catalog.set_config(
+  'vortex.test_v2_slot_identity',
+  (
+    select identity_id::text
+    from vortex_definition.source_identities
+    where root_id = :'v2_identity_created_root_id'::uuid
+      and kind = 'shell_content_slot'
+      and component_owner = 'slot_owner'
+  ),
+  true
+);
+
+select pg_catalog.set_config('vortex.request_context', '', true);
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.identity_store_context());
+set local role vortex_request;
+
+select is(
+  (
+    select draft_revision
+    from vortex_definition.save_draft(
+      :'v2_identity_created_root_id'::uuid,
+      1,
+      '{
+        "source_contract_version":"2.0.0",
+        "kind":"application",
+        "root_alias":"native_application_root",
+        "key":"example.native_identity_store",
+        "body":{"shells":[{"id":"shell_owner","key":"operations_workspace","content_slots":[{"id":"slot_owner","key":"primary_slot"}]}],"pages":[]}
+      }'::jsonb,
+      'sha256:' || pg_catalog.repeat('2', 64),
+      '[
+        {
+          "definitionKey":"example.native_identity_store",
+          "ownerScope":"document",
+          "scope":"document",
+          "kind":"root",
+          "componentOwner":"root",
+          "aliases":["example.native_identity_store","native_application_root"]
+        },
+        {
+          "definitionKey":"example.native_identity_store",
+          "ownerScope":"content",
+          "scope":"content",
+          "kind":"shell",
+          "componentOwner":"shell_owner",
+          "aliases":["shell_owner","operations_workspace"]
+        },
+        {
+          "definitionKey":"example.native_identity_store",
+          "ownerScope":"content",
+          "scope":"content",
+          "kind":"shell_content_slot",
+          "componentOwner":"slot_owner",
+          "aliases":["slot_owner","primary_slot"]
+        }
+      ]'::jsonb
+    )
+  ),
+  2::bigint,
+  'V2 shell and slot alias renames save through the existing revision-checked operation'
+);
+
+reset role;
+
+select is(
+  (
+    select identity_id
+    from vortex_definition.source_identities
+    where root_id = :'v2_identity_created_root_id'::uuid
+      and kind = 'shell'
+      and component_owner = 'shell_owner'
+  ),
+  pg_catalog.current_setting('vortex.test_v2_shell_identity')::uuid,
+  'a V2 shell retains its permanent identity across an alias rename'
+);
+select is(
+  (
+    select identity_id
+    from vortex_definition.source_identities
+    where root_id = :'v2_identity_created_root_id'::uuid
+      and kind = 'shell_content_slot'
+      and component_owner = 'slot_owner'
+  ),
+  pg_catalog.current_setting('vortex.test_v2_slot_identity')::uuid,
+  'a V2 named content slot retains its permanent identity across an alias rename'
+);
+
+select pg_catalog.set_config('vortex.request_context', '', true);
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.identity_store_context());
+set local role vortex_request;
+
+select throws_ok(
+  format(
+    $sql$
+      select *
+      from vortex_definition.save_draft(
+        %L::uuid,
+        2,
+        '{
+          "source_contract_version":"2.0.0",
+          "kind":"application",
+          "root_alias":"native_application_root",
+          "key":"example.native_identity_store",
+          "body":{"shells":[{"id":"uncommitted_shell_owner","key":"new_workspace","content_slots":[{"id":"different_slot_owner","key":"main_slot"}]}],"pages":[]}
+        }'::jsonb,
+        'sha256:%s',
+        '[
+          {
+            "definitionKey":"example.native_identity_store",
+            "ownerScope":"document",
+            "scope":"document",
+            "kind":"root",
+            "componentOwner":"root",
+            "aliases":["example.native_identity_store","native_application_root"]
+          },
+          {
+            "definitionKey":"example.native_identity_store",
+            "ownerScope":"content",
+            "scope":"content",
+            "kind":"shell",
+            "componentOwner":"uncommitted_shell_owner",
+            "aliases":["uncommitted_shell_owner","new_workspace"]
+          },
+          {
+            "definitionKey":"example.native_identity_store",
+            "ownerScope":"content",
+            "scope":"content",
+            "kind":"shell_content_slot",
+            "componentOwner":"different_slot_owner",
+            "aliases":["different_slot_owner","main_slot"]
+          }
+        ]'::jsonb
+      )
+    $sql$,
+    :'v2_identity_created_root_id',
+    pg_catalog.repeat('3', 64)
+  ),
+  '23505'::char(5),
+  'A historical source identity alias cannot be reassigned',
+  'a V2 slot historical alias cannot be reassigned to another permanent owner'
+);
+
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from vortex_definition.save_draft(
+      :'v2_identity_created_root_id'::uuid,
+      1,
+      '{
+        "source_contract_version":"2.0.0",
+        "kind":"application",
+        "root_alias":"native_application_root",
+        "key":"example.native_identity_store",
+        "body":{"shells":[{"id":"stale_v2_owner","key":"stale_workspace","content_slots":[]}],"pages":[]}
+      }'::jsonb,
+      'sha256:' || pg_catalog.repeat('4', 64),
+      '[
+        {
+          "definitionKey":"example.native_identity_store",
+          "ownerScope":"document",
+          "scope":"document",
+          "kind":"root",
+          "componentOwner":"root",
+          "aliases":["example.native_identity_store","native_application_root"]
+        },
+        {
+          "definitionKey":"example.native_identity_store",
+          "ownerScope":"content",
+          "scope":"content",
+          "kind":"shell",
+          "componentOwner":"stale_v2_owner",
+          "aliases":["stale_v2_owner","stale_workspace"]
+        }
+      ]'::jsonb
+    )
+  ),
+  0,
+  'a stale V2 save returns before recording proposed identities'
+);
+
+reset role;
+
+select is(
+  (
+    select draft_revision
+    from vortex_definition.drafts
+    where root_id = :'v2_identity_created_root_id'::uuid
+  ),
+  2::bigint,
+  'V2 alias conflict and stale save leave the current draft revision unchanged'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from vortex_definition.source_identities
+    where root_id = :'v2_identity_created_root_id'::uuid
+      and component_owner in ('uncommitted_shell_owner', 'different_slot_owner', 'stale_v2_owner')
+  ),
+  0,
+  'V2 alias conflict and stale save roll back every proposed permanent owner'
+);
+
 select throws_ok(
   format(
     'update vortex_definition.source_identities set component_owner = %L where root_id = %L::uuid and kind = %L',

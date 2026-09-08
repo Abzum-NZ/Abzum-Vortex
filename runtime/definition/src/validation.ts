@@ -1,5 +1,6 @@
 import {
   applicationDraftSchema,
+  applicationSourceDocumentV2Schema,
   moduleDraftSchema,
   savedSharingConditionSchema,
   connectionTypeSchema,
@@ -18,7 +19,9 @@ import {
   workflowNodeOutputsByType,
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
+  type ApplicationSourceDocumentV2,
   type ConditionNode,
+  type DefinitionSourceDocument,
   type DefinitionPublicationContext,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
@@ -26,6 +29,7 @@ import {
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "@vortex/contracts";
+import type { z } from "zod";
 import {
   evaluateTypedCondition,
   TypedConditionEvaluationError,
@@ -41,6 +45,32 @@ import { createContractValueWalker } from "./contract-value-walker";
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
 type DefinitionPath = readonly (string | number)[];
+type EditSaveSource = DefinitionSourceDocument | ApplicationSourceDocumentV2;
+
+const isV2ApplicationSource = (source: unknown): boolean =>
+  source !== null &&
+  typeof source === "object" &&
+  !Array.isArray(source) &&
+  (source as JsonObject).kind === "application" &&
+  (source as JsonObject).source_contract_version === "2.0.0";
+
+const parseEditSaveSource = (
+  source: unknown,
+):
+  | Readonly<{
+      success: true;
+      data: EditSaveSource;
+      schema: z.core.$ZodType;
+    }>
+  | Readonly<{ success: false; error: z.ZodError }> => {
+  const schema = isV2ApplicationSource(source)
+    ? applicationSourceDocumentV2Schema
+    : definitionSourceDocumentSchema;
+  const parsed = schema.safeParse(source);
+  return parsed.success
+    ? { success: true, data: parsed.data, schema }
+    : { success: false, error: parsed.error };
+};
 
 export type DefinitionValidationStage = "edit_save" | "publish" | "install" | "runtime";
 export type DefinitionSemanticRule = Readonly<{
@@ -301,9 +331,9 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
         return String(object(canonical.envelope ?? canonical).key) === sourceKey;
       }) ?? context.outputs[index];
     let duplicate = false;
-    const parsed = definitionSourceDocumentSchema.safeParse(source);
+    const parsed = parseEditSaveSource(source);
     if (!parsed.success) continue;
-    walkDefinitionContract(definitionSourceDocumentSchema, parsed.data, (schema, value) => {
+    walkDefinitionContract(parsed.schema, parsed.data, (schema, value) => {
       if (schema === jsonValueSchema) return;
       if (Array.isArray(value)) {
         for (const property of ["id", "key"] as const) {
@@ -334,7 +364,7 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
 function sourceShapeRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
   return (context.rawSources ?? context.requests.map((request) => request.source)).flatMap(
     (source): DefinitionRuleFailure[] => {
-      const parsed = definitionSourceDocumentSchema.safeParse(source);
+      const parsed = parseEditSaveSource(source);
       if (parsed.success) return [];
       const translation = sourceTranslationContext(source);
       if (!translation)
@@ -380,12 +410,10 @@ function sourceLocalReferenceRule(
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const raw of context.rawSources ?? context.requests.map((request) => request.source)) {
-    const parsed = definitionSourceDocumentSchema.safeParse(raw);
+    const parsed = parseEditSaveSource(raw);
     if (!parsed.success) continue;
     const source = parsed.data;
-    const walkValues = createContractValueWalker([
-      { schema: definitionSourceDocumentSchema, value: source },
-    ]);
+    const walkValues = createContractValueWalker([{ schema: parsed.schema, value: source }]);
     const body = object(source.body);
     let valid = true;
     if (source.kind === "module") {
@@ -592,6 +620,7 @@ function sourceLocalReferenceRule(
           valid = false;
       }
     } else if (source.kind === "application") {
+      const usesV2Composition = source.source_contract_version === "2.0.0";
       const moduleBindings = new Set(
         array(body.module_bindings).map((binding) => String(binding.module)),
       );
@@ -606,7 +635,9 @@ function sourceLocalReferenceRule(
       }
       const pages = new Set(array(body.pages).map((page) => String(page.key)));
       const queries = new Set(array(body.queries).map((query) => String(query.key)));
-      const blocks = new Set(array(body.block_registrations).map((block) => String(block.id)));
+      const blocks = usesV2Composition
+        ? new Set<string>()
+        : new Set(array(body.block_registrations).map((block) => String(block.id)));
       const workflows = new Set(array(body.workflows).map((workflow) => String(workflow.key)));
       const connections = new Set(
         array(body.connection_bindings).map((binding) => String(binding.id)),
@@ -619,6 +650,7 @@ function sourceLocalReferenceRule(
             : [];
       for (const page of array(body.pages)) {
         if (page.query && !queries.has(String(page.query))) valid = false;
+        if (usesV2Composition) continue;
         const placements = pagePlacements(page);
         if (placements.some((placement) => !blocks.has(String(placement.block)))) valid = false;
         const placementIds = new Set(placements.map((placement) => String(placement.id)));

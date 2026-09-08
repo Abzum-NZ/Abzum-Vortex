@@ -158,6 +158,16 @@ Follow the [inspected builder integration map](../../build-plan/fluid-integratio
 
 Version the new representation explicitly. Legacy flat pages migrate into the default main slot in a new draft through a deterministic documented conversion. Previously published releases remain immutable and retain a supported reader; never reinterpret them silently with new defaults.
 
+Both supported draft formats use the same revision-checked Definition save.
+Saving validates the exact authored format and its local identities/references;
+resolving external releases and publication evidence belongs to publication.
+Shells and their named content slots use the existing permanent source-identity
+allocation. Renaming an alias retains its owner; conflicting aliases or stale
+saves leave the draft and identity changes unapplied together. Saving a new-format
+draft alone does not publish it or change the installed application. See the
+[draft-storage acceptance](../../build-plan/issue-249-native-draft-storage.md) and
+[coordinated publication plan](../../build-plan/issue-249-native-publication.md).
+
 [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) retains the existing application source and canonical representation as V1 and introduces explicitly selected V2 contracts. Restoring a V1 release restores its exact V1 authored content; conversion is a separate revision-checked prepare-and-confirm action with explicit exact platform-block mappings. Missing or ambiguous mappings are refused, never guessed from display names. V2 requires only a bounded additive Definition-store migration: add permanent shell identities and exact platform-block dependency shapes to existing constraints, publication, manifest storage and integrity readback. Keep the existing JSONB draft/release tables and every immutable V1 row unchanged. This contract/persistence work precedes dedicated editor UI; its hosted proof follows [#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266).
 
 Update source schemas, canonical schemas, registry, compiler/reference traversal, provenance, version comparison, catalogue snapshots, Definition-service reads/restores and fixtures together. Presentation-only layout changes are patch impact; access, operation or data-meaning changes follow the existing major/minor rules.

@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { correlationIdSchema } from "./common";
-import { applicationSourceDocumentSchema, moduleSourceDocumentSchema } from "./definition-source";
+import {
+  applicationSourceDocumentV1Schema,
+  applicationSourceDocumentV2Schema,
+  moduleSourceDocumentSchema,
+} from "./definition-source";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -20,9 +24,13 @@ import {
   versionImpactSchema,
 } from "./version-impact";
 
-const storedDefinitionSourceSchema = z.discriminatedUnion("kind", [
+export const storedApplicationSourceDocumentSchema = z.discriminatedUnion(
+  "source_contract_version",
+  [applicationSourceDocumentV1Schema, applicationSourceDocumentV2Schema],
+);
+export const storedDefinitionSourceSchema = z.union([
   moduleSourceDocumentSchema,
-  applicationSourceDocumentSchema,
+  storedApplicationSourceDocumentSchema,
 ]);
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
 
@@ -70,7 +78,7 @@ export const storedDefinitionDraftSchema = z
       .object({
         kind: z.literal("application"),
         rootId: applicationRootIdSchema,
-        source: applicationSourceDocumentSchema,
+        source: storedApplicationSourceDocumentSchema,
         ...storedDraftMetadata,
       })
       .strict(),
@@ -233,6 +241,7 @@ export const publishDefinitionResultSchema = z
 
 export type CreateDefinitionRootCommand = z.infer<typeof createDefinitionRootCommandSchema>;
 export type SaveDefinitionDraftCommand = z.infer<typeof saveDefinitionDraftCommandSchema>;
+export type StoredDefinitionSource = z.infer<typeof storedDefinitionSourceSchema>;
 export type StoredDefinitionDraft = z.infer<typeof storedDefinitionDraftSchema>;
 export type ExactDefinitionDependency = z.infer<typeof exactDefinitionDependencySchema>;
 export type PrepareDefinitionPublicationCommand = z.infer<

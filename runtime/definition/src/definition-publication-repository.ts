@@ -21,12 +21,14 @@ import {
   semanticVersionSchema,
   stableDefinitionReleaseVersionSchema,
   sourceIdentityAssignmentSchema,
+  sourceIdentityAssignmentV2Schema,
   storedDefinitionDraftSchema,
   timestampSchema,
   versionImpactReasonSchema,
   type PublishedDefinitionHistory,
   type PublishDefinitionResult,
   type SessionContext,
+  type StoredDefinitionSource,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
@@ -45,7 +47,7 @@ import {
   type DefinitionReleaseAppend,
   type ResolvableModuleRelease,
 } from "./definition-publication";
-import { extractSourceIdentityRequirements } from "./source-identities";
+import { extractStoredSourceIdentityRequirements } from "./source-identities";
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
@@ -126,7 +128,7 @@ const publicationStateSchema = z
   .object({
     root: publicationRootSchema,
     draft: databaseStoredDraftSchema,
-    identities: z.array(sourceIdentityAssignmentSchema),
+    identities: z.array(sourceIdentityAssignmentV2Schema),
     history: storedPublishedHistorySchema,
   })
   .strict();
@@ -214,10 +216,10 @@ const dependencyReferencesMatch = (
 };
 
 const currentIdentityLookupMatches = (
-  source: z.infer<typeof definitionSourceDocumentSchema>,
-  identities: readonly z.infer<typeof sourceIdentityAssignmentSchema>[],
+  source: StoredDefinitionSource,
+  identities: readonly z.infer<typeof sourceIdentityAssignmentV2Schema>[],
 ): boolean => {
-  const expected = extractSourceIdentityRequirements(source).flatMap((requirement) =>
+  const expected = extractStoredSourceIdentityRequirements(source).flatMap((requirement) =>
     requirement.aliases.map((alias) =>
       canonicalJson([
         requirement.definitionKey,
