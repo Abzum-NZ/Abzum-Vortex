@@ -93,6 +93,21 @@ evidence. Runtime, publication tests and database-backed predicates must agree
 before the new value format is activated for records. This work does not require
 the visual Conditions Designer or a second rule engine.
 
+Application-owned rules, actions, queries, pipeline gates and record-bound
+workflow conditions use the value format of the exact Module owning the fields
+they consume. Literal assignments use the target field's format; field-to-field
+and input mappings must have compatible declared formats. A containing
+Application's format version cannot turn an exact decimal into a floating-point
+number, reinterpret money currency, or turn ordinary text into a number. Compile
+and validate these consumers with the same owning helpers described in the
+[field-value plan](../build-plan/issue-44-record-field-values.md#rule-consumer-handoff).
+
+A workflow input bound to a record field retains its declared allowed record
+types. The field's possible targets must fit within that declaration; downstream
+nodes use the declaration when checking their own accepted targets. Historical
+canonical inputs that omitted this metadata use the owning field's targets.
+These type declarations never grant access to the referenced records.
+
 The [Rule package](../../runtime/rule/package.json) is a shared, contracts-only package below Definition and Access in the enforced dependency graph. Both reuse its pure evaluator; the existing Definition entry delegates to it. This does not introduce another service, expression language, database connection or browser-side authority. Actual database parity remains an explicit acceptance requirement of [record visibility](../build-plan/issue-36-ownership-and-visibility.md), not something established by pure tests alone.
 
 ## Events

@@ -1237,7 +1237,19 @@
               "values": {
                 "vortex.crm.organisations:company.description": {
                   "source": "literal",
-                  "value": "Reviewed for possible duplicates"
+                  "value": {
+                    "blocks": [
+                      {
+                        "kind": "paragraph",
+                        "children": [
+                          {
+                            "kind": "text",
+                            "text": "Reviewed for possible duplicates"
+                          }
+                        ]
+                      }
+                    ]
+                  }
                 }
               }
             }

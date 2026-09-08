@@ -595,7 +595,7 @@ const sourceInterfaceValueTypeSchema = z.enum([
 ]);
 const sourceInterfaceInputFieldSchema = z
   .object({
-    type: sourceInterfaceValueTypeSchema,
+    type: z.union([sourceInterfaceValueTypeSchema, z.literal("formatted_text")]),
     required: z.boolean(),
     target_binding: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("action_subject") }).strict(),

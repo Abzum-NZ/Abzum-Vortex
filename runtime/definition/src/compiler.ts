@@ -1440,7 +1440,7 @@ const moduleSourceTransformPatterns = [
 
 const applicationSourceTransformPatterns = [
   /^root_alias$/,
-  /^body\/(?:permissions|actions|roles|block_registrations|pages|pipelines|workflows|interfaces|public_addresses)\/#\/id$/,
+  /^body\/(?:permissions|actions|rules|events|roles|block_registrations|pages|pipelines|workflows|interfaces|public_addresses)\/#\/id$/,
   /^body\/workflows\/#\/nodes\/#\/id$/,
   /^body\/interfaces\/#\/operations\/#\/id$/,
   /^body\/pages\/#\/steps\/#\/id$/,
@@ -1487,6 +1487,7 @@ const applicationSourceTransformPatterns = [
   /^body\/actions\/#\/effects\/#\/value\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/actions\/#\/effects\/#\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
+  /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/pipelines\/#\/stages\/#\/(?:entry_actions|exit_actions)\/#$/,
 ] as const;
 
@@ -1558,6 +1559,33 @@ function sourceTransformationApproved(source: JsonObject, sourcePath: Path): boo
         ? applicationSourceTransformPatterns
         : connectionSourceTransformPatterns;
   return patterns.some((pattern) => pattern.test(path));
+}
+
+function applicationTypedValueTarget(
+  source: JsonObject,
+  sourcePath: Path,
+  targetPath: Path,
+  canonicalLeafSet: ReadonlySet<string>,
+): Path {
+  // Only normalized typed-value leaves need remapping; preserve resolved targets
+  // and unchanged opaque data, even when their property names look like references.
+  if (
+    source.kind !== "application" ||
+    canonicalLeafSet.has(pathKey(targetPath)) ||
+    targetPath.at(-1) !== sourcePath.at(-1) ||
+    !sourceTransformationApproved(source, sourcePath) ||
+    !["record_type", "record_id", "organization_account_id"].includes(String(sourcePath.at(-1)))
+  )
+    return targetPath;
+  const leaf = String(sourcePath.at(-1));
+  const canonicalLeaf =
+    leaf === "record_type"
+      ? "recordTypeId"
+      : leaf === "record_id"
+        ? "recordId"
+        : "organizationAccountId";
+  const candidate = [...targetPath.slice(0, -1), canonicalLeaf];
+  return canonicalLeafSet.has(pathKey(candidate)) ? candidate : targetPath;
 }
 
 function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPositions): boolean {
@@ -1659,14 +1687,26 @@ function provenanceFor(
       positions,
       resolution,
     );
-    const canonicalPath =
+    const initialCanonicalPath =
       explicitTargets?.[0] ?? sourceToCanonicalPath(sourceObject, canonical, sourcePath, positions);
+    const canonicalPath = applicationTypedValueTarget(
+      sourceObject,
+      sourcePath,
+      initialCanonicalPath,
+      canonicalLeafSet,
+    );
     const mapsToCanonicalLeaf = canonicalLeafSet.has(pathKey(canonicalPath));
     const resolved =
       sourceResolvesIdentity(sourcePath, positions) ||
       recordScopeSourceResolvesIdentity(sourcePath) ||
       fieldPolicySourceResolvesIdentity(sourcePath);
-    const transformTargets = explicitTargets ?? (mapsToCanonicalLeaf ? [canonicalPath] : []);
+    const transformTargets = explicitTargets
+      ? explicitTargets.map((target) =>
+          applicationTypedValueTarget(sourceObject, sourcePath, target, canonicalLeafSet),
+        )
+      : mapsToCanonicalLeaf
+        ? [canonicalPath]
+        : [];
     if (transformTargets.length === 0)
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
     for (const targetPath of transformTargets) {
@@ -2282,6 +2322,123 @@ function actionInput(input: JsonObject, resolution: Resolution, moduleV2 = false
           recordTypes: (input.record_types as string[]).map((key) => resolution.recordType(key)),
         }
       : {}),
+  };
+}
+
+type ApplicationRecordValuePair = Readonly<{
+  record: JsonObject;
+  moduleV2: boolean;
+}>;
+
+type ApplicationActionValuePair = Readonly<{
+  action: JsonObject;
+  moduleV2: boolean;
+}>;
+
+type ApplicationModuleValueIndex = Readonly<{
+  record: (reference: string) => ApplicationRecordValuePair | undefined;
+  recordById: (recordTypeId: string) => ApplicationRecordValuePair | undefined;
+  fieldId: (recordTypeId: string, alias: string) => string | undefined;
+  fieldById: (fieldId: string) => Readonly<{ field: JsonObject; moduleV2: boolean }> | undefined;
+  action: (key: string) => ApplicationActionValuePair | undefined;
+  context: (defaultRecordReference?: string) => ModuleValueContext;
+  contextForRecordId: (recordTypeId: string) => ModuleValueContext;
+}>;
+
+function applicationModuleValueIndex(
+  source: JsonObject,
+  resolution: Resolution,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ApplicationModuleValueIndex {
+  const body = asObject(source.body);
+  const recordsById = new Map<string, ApplicationRecordValuePair>();
+  const fieldsById = new Map<string, { field: JsonObject; moduleV2: boolean }>();
+  const actionsByKey = new Map<string, ApplicationActionValuePair>();
+  for (const binding of body.module_bindings as JsonObject[]) {
+    const moduleKey = String(binding.module);
+    const expected = resolution.definition(moduleKey, "module");
+    const candidates = dependencyOutputs.filter(
+      (candidate) => candidate.kind === "module" && candidate.artifact.definitionKey === moduleKey,
+    );
+    const matches = candidates.filter(
+      (candidate) =>
+        candidate.artifact.rootId === expected.rootId &&
+        candidate.artifact.exactVersion === expected.exactVersion &&
+        candidate.artifact.resolutionFingerprint === candidate.resolutionFingerprint,
+    );
+    if (candidates.length === 0) continue;
+    if (matches.length !== 1)
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    const output = matches[0]!;
+    const canonical = asObject(output.canonical);
+    const envelope = asObject(canonical.envelope);
+    const content = asObject(canonical.content);
+    if (
+      envelope.rootId !== expected.rootId ||
+      envelope.key !== moduleKey ||
+      output.artifact.contentFingerprint !== fingerprintCanonicalValue(content)
+    )
+      fail("vortex.definition.application_dependency_manifest", "broken_reference");
+    const moduleV2 = "validationContractVersion" in output;
+    for (const record of content.recordTypes as JsonObject[]) {
+      const recordTypeId = String(record.recordTypeId);
+      if (recordsById.has(recordTypeId))
+        fail("vortex.definition.application_dependency_manifest", "broken_reference");
+      recordsById.set(recordTypeId, { record, moduleV2 });
+      for (const field of record.fields as JsonObject[]) {
+        const fieldId = String(field.fieldId);
+        if (fieldsById.has(fieldId))
+          fail("vortex.definition.application_dependency_manifest", "broken_reference");
+        fieldsById.set(fieldId, { field, moduleV2 });
+      }
+    }
+    for (const action of content.actions as JsonObject[]) {
+      const key = String(action.key);
+      if (actionsByKey.has(key))
+        fail("vortex.definition.application_dependency_manifest", "broken_reference");
+      actionsByKey.set(key, { action, moduleV2 });
+    }
+  }
+  const record = (reference: string) => {
+    const recordTypeId = String(resolution.recordType(reference).recordTypeId);
+    return recordsById.get(recordTypeId);
+  };
+  const fieldIdForRecord = (recordTypeId: string, alias: string) => {
+    const pair = recordsById.get(recordTypeId);
+    const matches = pair
+      ? (pair.record.fields as JsonObject[]).filter((field) => field.key === alias)
+      : [];
+    return matches.length === 1 ? String(matches[0]!.fieldId) : undefined;
+  };
+  const valueContext = (
+    defaultRecordReference?: string,
+    defaultRecordTypeId?: string,
+  ): ModuleValueContext => ({
+    resolution,
+    field: (reference, alias) => {
+      const fieldId =
+        alias !== undefined
+          ? resolution.field(reference, alias)
+          : reference.includes(".")
+            ? qualifiedField(resolution, reference)
+            : defaultRecordReference !== undefined
+              ? resolution.field(defaultRecordReference, reference)
+              : defaultRecordTypeId !== undefined
+                ? fieldIdForRecord(defaultRecordTypeId, reference)
+                : undefined;
+      if (fieldId === undefined) return undefined;
+      const pair = fieldsById.get(fieldId);
+      return pair?.moduleV2 ? pair.field : undefined;
+    },
+  });
+  return {
+    record,
+    recordById: (recordTypeId) => recordsById.get(recordTypeId),
+    fieldId: fieldIdForRecord,
+    fieldById: (fieldId) => fieldsById.get(fieldId),
+    action: (key) => actionsByKey.get(key),
+    context: (defaultRecordReference) => valueContext(defaultRecordReference),
+    contextForRecordId: (recordTypeId) => valueContext(undefined, recordTypeId),
   };
 }
 
@@ -3172,6 +3329,8 @@ function workflowValue(
   resolution: Resolution,
   applicationKey: string,
   triggerRecord?: string,
+  declaration?: JsonObject | string,
+  valueContext?: ModuleValueContext,
 ): unknown {
   const input = asObject(value);
   if (input.source === "trigger_field") {
@@ -3196,6 +3355,11 @@ function workflowValue(
       nodeId: resolution.id(applicationKey, "workflow_node", String(input.node)),
       outputKey: input.output,
     };
+  if (input.source === "literal" && valueContext)
+    return {
+      ...input,
+      value: normaliseModuleTypedValueV2(declaration, input.value, valueContext),
+    };
   return input;
 }
 
@@ -3203,12 +3367,59 @@ function compileWorkflow(
   workflow: JsonObject,
   applicationKey: string,
   resolution: Resolution,
+  valueIndex: ApplicationModuleValueIndex,
+  applicationActions: ReadonlyMap<string, JsonObject>,
+  applicationWorkflows: ReadonlyMap<string, JsonObject>,
 ): unknown {
   const workflowId = resolution.id(applicationKey, "workflow", String(workflow.id), "content");
   const trigger = asObject(workflow.trigger);
-  const triggerRecord = trigger.kind === "event" ? String(trigger.record_type) : undefined;
+  const triggerRecordOwner = (
+    candidate: JsonObject,
+    visiting: ReadonlySet<string> = new Set(),
+  ): Readonly<{ reference?: string; recordTypeId?: string }> => {
+    const candidateTrigger = asObject(candidate.trigger);
+    if (candidateTrigger.kind === "event") {
+      const reference = String(candidateTrigger.record_type);
+      return { reference, recordTypeId: String(resolution.recordType(reference).recordTypeId) };
+    }
+    if (candidateTrigger.kind === "button") {
+      const actionKey = String(candidateTrigger.action);
+      const applicationAction = applicationActions.get(actionKey);
+      if (applicationAction) {
+        const reference = String(applicationAction.record_type);
+        return { reference, recordTypeId: String(resolution.recordType(reference).recordTypeId) };
+      }
+      const moduleAction = valueIndex.action(actionKey)?.action;
+      return moduleAction ? { recordTypeId: String(moduleAction.subjectRecordTypeId) } : {};
+    }
+    if (candidateTrigger.kind !== "workflow") return {};
+    const parentKey = String(candidateTrigger.workflow);
+    if (visiting.has(parentKey)) return {};
+    const parent = applicationWorkflows.get(parentKey);
+    return parent ? triggerRecordOwner(parent, new Set([...visiting, parentKey])) : {};
+  };
+  const triggerOwner = triggerRecordOwner(workflow);
+  const triggerRecord = triggerOwner.reference;
+  const triggerRecordTypeId = triggerOwner.recordTypeId;
   const workflowField = (reference: string) => qualifiedField(resolution, reference);
-  const value = (input: unknown) => workflowValue(input, resolution, applicationKey, triggerRecord);
+  const triggerValueContext =
+    triggerRecordTypeId !== undefined && valueIndex.recordById(triggerRecordTypeId)?.moduleV2
+      ? triggerRecord !== undefined
+        ? valueIndex.context(triggerRecord)
+        : valueIndex.contextForRecordId(triggerRecordTypeId)
+      : undefined;
+  const triggerField = (alias: string) =>
+    triggerRecord !== undefined
+      ? resolution.field(triggerRecord, alias)
+      : triggerRecordTypeId !== undefined
+        ? (valueIndex.fieldId(triggerRecordTypeId, alias) ??
+          fail("vortex.definition.trigger_record_required", "scope_conflict"))
+        : fail("vortex.definition.trigger_record_required", "scope_conflict");
+  const value = (
+    input: unknown,
+    declaration?: JsonObject | string,
+    valueContext?: ModuleValueContext,
+  ) => workflowValue(input, resolution, applicationKey, triggerRecord, declaration, valueContext);
   const nodes = (workflow.nodes as JsonObject[]).map((node) => {
     const config = asObject(node.config);
     let compiledConfig: unknown;
@@ -3217,12 +3428,12 @@ function compileWorkflow(
         compiledConfig = {};
         break;
       case "condition":
-        compiledConfig = { condition: condition(config, workflowField) };
+        compiledConfig = { condition: condition(config, workflowField, triggerValueContext) };
         break;
       case "decision_table":
         compiledConfig = {
           decisions: (config.decisions as JsonObject[]).map((decision) => ({
-            when: condition(decision.when, workflowField),
+            when: condition(decision.when, workflowField, triggerValueContext),
             output: decision.output,
           })),
         };
@@ -3254,39 +3465,60 @@ function compileWorkflow(
         break;
       case "create_record": {
         const record = String(config.record_type);
+        const recordPair = valueIndex.record(record);
+        const targetContext = recordPair?.moduleV2 ? valueIndex.context(record) : undefined;
         compiledConfig = {
           recordTypeId: resolution.recordType(record).recordTypeId,
           values: objectFromUniqueEntries(
-            Object.entries(asObject(config.values)).map(([key, entry]) => [
-              resolution.field(record, key),
-              value(entry),
-            ]),
+            Object.entries(asObject(config.values)).map(([key, entry]) => {
+              const fieldId = resolution.field(record, key);
+              return [fieldId, value(entry, valueIndex.fieldById(fieldId)?.field, targetContext)];
+            }),
           ),
         };
         break;
       }
       case "change_record": {
         const record = String(config.record_type);
+        const recordPair = valueIndex.record(record);
+        const targetContext = recordPair?.moduleV2 ? valueIndex.context(record) : undefined;
         compiledConfig = {
           recordTypeId: resolution.recordType(record).recordTypeId,
           record: value(config.record),
           values: objectFromUniqueEntries(
-            Object.entries(asObject(config.values)).map(([key, entry]) => [
-              resolution.field(record, key),
-              value(entry),
-            ]),
+            Object.entries(asObject(config.values)).map(([key, entry]) => {
+              const fieldId = resolution.field(record, key);
+              return [fieldId, value(entry, valueIndex.fieldById(fieldId)?.field, targetContext)];
+            }),
           ),
         };
         break;
       }
       case "run_action":
-        compiledConfig = {
-          actionKey: config.action,
-          subject: value(config.subject),
-          inputs: objectFromUniqueEntries(
-            Object.entries(asObject(config.inputs)).map(([key, entry]) => [key, value(entry)]),
-          ),
-        };
+        {
+          const actionKey = String(config.action);
+          const moduleAction = valueIndex.action(actionKey);
+          const declaredAction = moduleAction?.action ?? applicationActions.get(actionKey);
+          const inputs = new Map(
+            declaredAction
+              ? ((declaredAction.inputs as JsonObject[]) ?? []).map((input) => [
+                  String(input.key),
+                  input,
+                ])
+              : [],
+          );
+          const inputContext = moduleAction?.moduleV2 ? valueIndex.context() : undefined;
+          compiledConfig = {
+            actionKey,
+            subject: value(config.subject),
+            inputs: objectFromUniqueEntries(
+              Object.entries(asObject(config.inputs)).map(([key, entry]) => [
+                key,
+                value(entry, String(inputs.get(key)?.type), inputContext),
+              ]),
+            ),
+          };
+        }
         break;
       case "soft_delete_record":
       case "duplicate_record": {
@@ -3350,9 +3582,12 @@ function compileWorkflow(
           values: objectFromUniqueEntries(
             Object.entries(asObject(config.values)).map(([qualified, entry]) => {
               const dot = qualified.lastIndexOf(".");
+              const record = qualified.slice(0, dot);
+              const fieldId = resolution.field(record, qualified.slice(dot + 1));
+              const pair = valueIndex.fieldById(fieldId);
               return [
-                resolution.field(qualified.slice(0, dot), qualified.slice(dot + 1)),
-                value(entry),
+                fieldId,
+                value(entry, pair?.field, pair?.moduleV2 ? valueIndex.context(record) : undefined),
               ];
             }),
           ),
@@ -3442,6 +3677,13 @@ function compileWorkflow(
               triggerRecord ?? fail("vortex.definition.trigger_record_required", "scope_conflict"),
               String(inputSource.field),
             ),
+            ...(input.record_types
+              ? {
+                  recordTypeIds: (input.record_types as string[]).map(
+                    (recordType) => resolution.recordType(recordType).recordTypeId,
+                  ),
+                }
+              : {}),
           }
         : {
             source: "payload" as const,
@@ -3460,12 +3702,7 @@ function compileWorkflow(
   const compiledTriggerCommon = {
     inputs: compileTriggerInputs(),
     condition: trigger.condition
-      ? condition(trigger.condition, (field) =>
-          resolution.field(
-            triggerRecord ?? fail("vortex.definition.trigger_record_required", "scope_conflict"),
-            field,
-          ),
-        )
+      ? condition(trigger.condition, triggerField, triggerValueContext)
       : null,
     duplicateProtection: trigger.duplicate_protection,
   };
@@ -3681,10 +3918,47 @@ function compileApplication(
   metadata: JsonObject,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
   compositionV2?: MaterialisedApplicationCompositionV2,
+  suppliedValueIndex?: ApplicationModuleValueIndex,
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const root = resolution.definition(definitionKey, "application");
+  // Resolve permission-owned evidence before the general value-consumer index so
+  // invalid saved-condition dependencies keep their established diagnostic.
+  const permissions = (body.permissions as JsonObject[]).map((permission) => {
+    const referencedSharing = applicationPermissionSharingConditions(
+      permission,
+      source,
+      resolution,
+      metadata.organizationId,
+      dependencyOutputs,
+    );
+    const recordScope = compilePermissionRecordScope(
+      permission,
+      source,
+      resolution,
+      referencedSharing.conditions,
+      undefined,
+      referencedSharing.moduleV2,
+    );
+    const fieldPolicy = compilePermissionFieldPolicy(permission, source, resolution);
+    return {
+      permissionId: resolution.id(definitionKey, "permission", String(permission.id), "content"),
+      key: permission.key,
+      label: permission.label,
+      description: permission.description,
+      ...(permission.record_type
+        ? { recordTypeId: resolution.recordType(String(permission.record_type)).recordTypeId }
+        : {}),
+      actionKind: permission.action_kind,
+      ...(permission.named_action ? { namedAction: permission.named_action } : {}),
+      administrative: permission.administrative,
+      ...(recordScope === undefined ? {} : { recordScope }),
+      ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
+    };
+  });
+  const valueIndex =
+    suppliedValueIndex ?? applicationModuleValueIndex(source, resolution, dependencyOutputs);
   const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
   const queryId = (alias: string) => resolution.id(definitionKey, "query", alias, "content");
   const blockId = (alias: string) => resolution.id(definitionKey, "block", alias, "content");
@@ -3751,8 +4025,10 @@ function compileApplication(
     phone: input.phone,
     ...(input.visibility_condition
       ? {
-          visibilityCondition: condition(input.visibility_condition, (reference) =>
-            qualifiedField(resolution, reference),
+          visibilityCondition: condition(
+            input.visibility_condition,
+            (reference) => qualifiedField(resolution, reference),
+            valueIndex.context(),
           ),
         }
       : {}),
@@ -3882,13 +4158,16 @@ function compileApplication(
       : compileApplicationPagesV2(source, resolution, compositionV2);
   const queries = (body.queries as JsonObject[]).map((query) => {
     const record = String(query.record_type);
+    const valueContext = valueIndex.record(record)?.moduleV2
+      ? valueIndex.context(record)
+      : undefined;
     return {
       queryId: resolution.id(definitionKey, "query", String(query.id), "content"),
       key: query.key,
       recordType: resolution.recordType(record),
       selectedFieldIds: (query.select as string[]).map((alias) => resolution.field(record, alias)),
       filter: query.filter
-        ? condition(query.filter, (alias) => resolution.field(record, alias))
+        ? condition(query.filter, (alias) => resolution.field(record, alias), valueContext)
         : null,
       groupByFieldIds: (query.group_by as string[]).map((alias) => resolution.field(record, alias)),
       aggregates: (query.aggregates as JsonObject[]).map((aggregate) => ({
@@ -3902,38 +4181,6 @@ function compileApplication(
       })),
       pageSize: query.page_size,
       relationshipHops: query.relationship_hops,
-    };
-  });
-  const permissions = (body.permissions as JsonObject[]).map((permission) => {
-    const referencedSharing = applicationPermissionSharingConditions(
-      permission,
-      source,
-      resolution,
-      metadata.organizationId,
-      dependencyOutputs,
-    );
-    const recordScope = compilePermissionRecordScope(
-      permission,
-      source,
-      resolution,
-      referencedSharing.conditions,
-      undefined,
-      referencedSharing.moduleV2,
-    );
-    const fieldPolicy = compilePermissionFieldPolicy(permission, source, resolution);
-    return {
-      permissionId: resolution.id(definitionKey, "permission", String(permission.id), "content"),
-      key: permission.key,
-      label: permission.label,
-      description: permission.description,
-      ...(permission.record_type
-        ? { recordTypeId: resolution.recordType(String(permission.record_type)).recordTypeId }
-        : {}),
-      actionKind: permission.action_kind,
-      ...(permission.named_action ? { namedAction: permission.named_action } : {}),
-      administrative: permission.administrative,
-      ...(recordScope === undefined ? {} : { recordScope }),
-      ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
     };
   });
   const wildcardPermissions = permissions
@@ -4034,6 +4281,9 @@ function compileApplication(
           }),
       pipelines: (body.pipelines as JsonObject[]).map((pipeline) => {
         const record = String(pipeline.record_type);
+        const valueContext = valueIndex.record(record)?.moduleV2
+          ? valueIndex.context(record)
+          : undefined;
         return {
           pipelineId: resolution.id(definitionKey, "pipeline", String(pipeline.id), "content"),
           key: pipeline.key,
@@ -4058,7 +4308,13 @@ function compileApplication(
             ...(transition.permission ? { permissionKey: transition.permission } : {}),
             ...(transition.action ? { actionKey: transition.action } : {}),
             ...(transition.gate
-              ? { gate: condition(transition.gate, (alias) => resolution.field(record, alias)) }
+              ? {
+                  gate: condition(
+                    transition.gate,
+                    (alias) => resolution.field(record, alias),
+                    valueContext,
+                  ),
+                }
               : {}),
           })),
           timeTargets: (pipeline.time_targets as JsonObject[]).map((target) => ({
@@ -4072,6 +4328,9 @@ function compileApplication(
       actions: (body.actions as JsonObject[]).map((action) => {
         const record = String(action.record_type);
         const localField = (alias: string) => resolution.field(record, alias);
+        const subjectContext = valueIndex.record(record)?.moduleV2
+          ? valueIndex.context(record)
+          : undefined;
         return {
           actionId: resolution.id(definitionKey, "action", String(action.id), "content"),
           key: action.key,
@@ -4083,25 +4342,37 @@ function compileApplication(
           sharing: action.sharing,
           inputs: (action.inputs as JsonObject[]).map((input) => actionInput(input, resolution)),
           ...(action.precondition
-            ? { precondition: condition(action.precondition, localField) }
+            ? { precondition: condition(action.precondition, localField, subjectContext) }
             : {}),
           effects: (action.effects as JsonObject[]).map((effect) => {
-            if (effect.kind === "set_field")
+            if (effect.kind === "set_field") {
+              const fieldId = localField(String(effect.field));
+              const pair = valueIndex.fieldById(fieldId);
               return {
                 kind: "set_field",
-                fieldId: localField(String(effect.field)),
-                value: actionValue(effect.value, localField),
+                fieldId,
+                value: actionValue(
+                  effect.value,
+                  localField,
+                  pair?.field,
+                  pair?.moduleV2 ? subjectContext : undefined,
+                ),
               };
+            }
             if (effect.kind === "create_record") {
               const target = String(effect.record_type);
+              const targetContext = valueIndex.record(target)?.moduleV2
+                ? valueIndex.context(target)
+                : undefined;
               return {
                 kind: "create_record",
                 recordType: resolution.recordType(target),
                 values: objectFromUniqueEntries(
-                  Object.entries(asObject(effect.values)).map(([key, value]) => [
-                    resolution.field(target, key),
-                    actionValue(value, localField),
-                  ]),
+                  Object.entries(asObject(effect.values)).map(([key, value]) => {
+                    const fieldId = resolution.field(target, key);
+                    const pair = valueIndex.fieldById(fieldId);
+                    return [fieldId, actionValue(value, localField, pair?.field, targetContext)];
+                  }),
                 ),
               };
             }
@@ -4122,13 +4393,22 @@ function compileApplication(
       rules: (body.rules as JsonObject[]).map((rule) => {
         const record = String(rule.record_type);
         const localField = (alias: string) => resolution.field(record, alias);
+        const valueContext = valueIndex.record(record)?.moduleV2
+          ? valueIndex.context(record)
+          : undefined;
         const effect = asObject(rule.effect);
+        const effectField =
+          effect.kind === "set_value"
+            ? valueIndex.fieldById(localField(String(effect.field)))?.field
+            : undefined;
         const compiledEffect =
           effect.kind === "set_value"
             ? {
                 kind: "set_value",
                 fieldId: localField(String(effect.field)),
-                value: effect.value,
+                value: valueContext
+                  ? normaliseModuleFieldValueV2(effectField, effect.value, valueContext)
+                  : effect.value,
               }
             : effect.kind === "require"
               ? { kind: "require", fieldId: localField(String(effect.field)) }
@@ -4160,7 +4440,7 @@ function compileApplication(
           key: rule.key,
           subjectRecordTypeId: resolution.recordType(record).recordTypeId,
           trigger: rule.trigger,
-          condition: condition(rule.condition, localField),
+          condition: condition(rule.condition, localField, valueContext),
           priority: rule.priority,
           effect: compiledEffect,
         };
@@ -4178,7 +4458,20 @@ function compileApplication(
         };
       }),
       workflows: (body.workflows as JsonObject[]).map((workflow) =>
-        compileWorkflow(workflow, definitionKey, resolution),
+        compileWorkflow(
+          workflow,
+          definitionKey,
+          resolution,
+          valueIndex,
+          new Map(
+            (body.actions as JsonObject[]).map((action) => [String(action.key), action] as const),
+          ),
+          new Map(
+            (body.workflows as JsonObject[]).map(
+              (candidate) => [String(candidate.key), candidate] as const,
+            ),
+          ),
+        ),
       ),
       connectionBindings: (body.connection_bindings as JsonObject[]).map((binding) => {
         const requirement = binding.version as Parameters<typeof compatibleVersion>[0];
@@ -4482,6 +4775,7 @@ function compileDefinitionInternal(
 const applicationCompositionResolutionV2 = (
   source: ApplicationSourceDocumentV2,
   resolution: Resolution,
+  valueIndex: ApplicationModuleValueIndex,
 ): ApplicationCompositionResolutionV2 => {
   const definitionKey = source.key;
   const allowedOwners = permissionScopeSourceOwners(source as unknown as JsonObject);
@@ -4508,7 +4802,11 @@ const applicationCompositionResolutionV2 = (
       resolution.exactOwnedReference("permission", reference, allowedOwners),
     condition: (authored) =>
       conditionNodeSchema.parse(
-        condition(authored, (reference) => qualifiedField(resolution, reference)),
+        condition(
+          authored,
+          (reference) => qualifiedField(resolution, reference),
+          valueIndex.context(),
+        ),
       ),
     recordType: (reference) => resolution.recordType(reference),
   };
@@ -4831,7 +5129,13 @@ function applicationProvenanceV2(
     if (targets === undefined || targets.length === 0) {
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
     }
-    for (const canonicalPath of targets) {
+    for (const targetPath of targets) {
+      const canonicalPath = applicationTypedValueTarget(
+        sourceObject,
+        sourcePath,
+        targetPath,
+        canonicalLeafSet,
+      );
       if (!canonicalLeafSet.has(pathKey(canonicalPath))) {
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
       }
@@ -4947,10 +5251,11 @@ function compileApplicationV2Internal(
   const dependencyOutputs = parseDefinitionCompilationContext(context);
   try {
     const resolution = new Resolution(request.resolution, sourceObject);
+    const valueIndex = applicationModuleValueIndex(sourceObject, resolution, dependencyOutputs);
     const composition = materialiseApplicationCompositionV2(
       source,
       request.catalogueSnapshot,
-      applicationCompositionResolutionV2(source, resolution),
+      applicationCompositionResolutionV2(source, resolution, valueIndex),
     );
     const canonical = applicationDraftV2Schema.parse(
       compileApplication(
@@ -4959,6 +5264,7 @@ function compileApplicationV2Internal(
         request.draftMetadata as unknown as JsonObject,
         dependencyOutputs,
         composition,
+        valueIndex,
       ),
     );
     const ownDefinition = resolution.definition(source.key, "application");
