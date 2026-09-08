@@ -277,9 +277,21 @@ was not reproduced and is not asserted as the current reviewed count. Root also
 reran both complete-fixture suites successfully (16 tests). The author reported
 affected package typechecks, scoped lint/format and all 23 boundaries passing.
 
-This slice is reviewed locally; its Testing delivery receipt is not established
-by this section. Unfinished storage, Event and unrelated Access/flow-binding
-changes were excluded from this review.
+Unfinished storage, Event and unrelated Access/flow-binding changes were excluded
+from this fixture review. The Event slice received its own different independent
+review before the combined delivery below.
+
+[PR #361](https://github.com/Abzum-NZ/Abzum-Vortex/pull/361) merged normally into
+Testing at `2026-09-08T14:37:12Z`, producing
+`f0594760b2c64c87af3ff471d5b7e0ac635cc4c9`. Source
+`2d627be8221f8d8bf77a757a27648288b8ed4673` had a real successful
+[preview build](https://vercel.com/abzumdevteam/abzum-vortex/G44McRaLQywmAj2dq7rsPZaFUWSM)
+lasting 6 minutes 39 seconds before the protected merge. Both independently
+reviewed slices and their evidence were included; unfinished storage and unrelated
+Access/flow-binding changes were not. The staged historical sources retained
+thirteen known extra-newline warnings without changing their reviewed JSON content.
+This proves source-build and Testing-branch delivery, not hosted database completion
+or Production promotion.
 
 ## Remaining integrated work
 
