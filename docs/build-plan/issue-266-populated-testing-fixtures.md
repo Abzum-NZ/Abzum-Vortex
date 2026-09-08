@@ -53,3 +53,18 @@ full run encountered an unrelated timestamp abort in unchanged suite `040`; its
 49 assertions passed alone and one bounded complete retry passed. Reserved
 organisation/account/role/policy fixture counts were all zero after rollback.
 No schema was changed or reset. Hosted exact-revision evidence remains required.
+
+## Hosted outcome — 8 September 2026
+
+[PR #351](https://github.com/Abzum-NZ/Abzum-Vortex/pull/351) merged normally.
+[Testing execution 6WIfY1e5pRWu8lkswspG6M](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6WIfY1e5pRWu8lkswspG6M/outputs)
+succeeded for `c89ae494a98edb4f2815004329ffc737d824667e` on the exact
+68-migration baseline. All 60 SQL files / 2,670 assertions passed; all 25 selected
+concurrency proofs and all six schema checks completed. Root read the complete
+success receipt and matched its runner/manifest hashes and coverage lists to
+that exact Git commit. [The Page evidence](../evidence/issue-38-native-page-handoff.md#successful-hosted-verification)
+records those hashes and confirms the reviewed Page implementation is unchanged.
+
+This bounded repair is complete and #38 is closed. The broader #266 task remains
+open for its outstanding delivery-evidence reconciliation and normal Production
+outcome. No Production completion, queue cancellation or Kestra upgrade is claimed.

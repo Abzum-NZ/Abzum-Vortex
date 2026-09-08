@@ -418,7 +418,7 @@ const compareOptions = (
     after,
     "value",
     "field",
-    (left, right) =>
+    (left, right) => (
       pushChange(
         reasons,
         left.label,
@@ -429,6 +429,17 @@ const compareOptions = (
         "name",
         candidate.fieldId,
       ),
+      pushChange(
+        reasons,
+        left.requiredPermissionId,
+        right.requiredPermissionId,
+        "major",
+        "permission_changed",
+        "field",
+        "permission",
+        candidate.fieldId,
+      )
+    ),
     () => "minor",
     () => candidate.fieldId,
   );
@@ -470,17 +481,36 @@ const compareTableSettings = (
     after.columns as RecordValue[],
     "key",
     "field",
-    (left, right) =>
-      pushChange(
+    (left, right) => {
+      if (left.settings === undefined || right.settings === undefined) {
+        pushChange(
+          reasons,
+          left,
+          right,
+          "major",
+          "existing_behavior_changed",
+          "field",
+          "constraint",
+          candidate.fieldId,
+        );
+        return;
+      }
+      if (left.required !== right.required)
+        reasons.push(
+          makeReason(
+            right.required === true ? "major" : "minor",
+            right.required === true ? "constraint_narrowed" : "constraint_widened",
+            "field",
+            "required",
+            candidate.fieldId,
+          ),
+        );
+      compareFieldSettings(
         reasons,
-        left,
-        right,
-        "major",
-        "storage_contract_changed",
-        "field",
-        "storage",
-        candidate.fieldId,
-      ),
+        { ...left, fieldId: candidate.fieldId },
+        { ...right, fieldId: candidate.fieldId },
+      );
+    },
     (item) => (item.required === true ? "major" : "minor"),
     () => candidate.fieldId,
   );

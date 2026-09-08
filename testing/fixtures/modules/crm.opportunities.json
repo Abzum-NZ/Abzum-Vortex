@@ -216,7 +216,8 @@
                 },
                 {
                   "value": "won",
-                  "label": "Won"
+                  "label": "Won",
+                  "required_permission": "vortex.crm.opportunities.opportunity.mark_won"
                 },
                 {
                   "value": "lost",
@@ -257,22 +258,29 @@
                 {
                   "key": "milestone",
                   "type": "text",
-                  "required": true
+                  "required": true,
+                  "settings": { "max_length": 120 }
                 },
                 {
                   "key": "amount",
                   "type": "money",
-                  "required": true
+                  "required": true,
+                  "settings": {
+                    "currency_mode": "fixed",
+                    "currency": "NZD"
+                  }
                 },
                 {
                   "key": "due_date",
                   "type": "date",
-                  "required": true
+                  "required": true,
+                  "settings": {}
                 },
                 {
                   "key": "paid",
                   "type": "yes_no",
-                  "required": true
+                  "required": true,
+                  "settings": {}
                 }
               ]
             }

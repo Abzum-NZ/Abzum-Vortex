@@ -199,6 +199,7 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   application_root_required: "applicationRootIdRequired",
   permission: "permissionKey",
   permission_alternatives: "permissionKeys",
+  required_permission: "requiredPermissionId",
   event: "eventKey",
   message: "messageKey",
   component: "componentId",
@@ -1372,6 +1373,8 @@ const moduleSourceTransformPatterns = [
   /^body\/record_types\/#\/(?:storage_contract_id|title_field|ownership_relationship)$/,
   /^body\/record_types\/#\/relationships\/#\/(?:from_field|to_record_type|to_record_types\/#)$/,
   /^body\/record_types\/#\/fields\/#\/settings\/(?:application_root_required|audience|currency_mode|field|relationship|target|targets\/#)$/,
+  /^body\/record_types\/#\/fields\/#\/settings\/(?:options\/#|columns\/#\/settings\/options\/#)\/required_permission$/,
+  /^body\/record_types\/#\/fields\/#\/settings\/columns\/#\/settings\/(?:currency_mode|display_time_zone)$/,
   /^body\/record_types\/#\/fields\/#\/settings\/display_time_zone$/,
   /^body\/record_types\/#\/fields\/#\/settings\/expression\/(?:operation|numeric_operation|amount_field|percentage_field|fields\/#|date_field|due_field|status_field)$/,
   /^body\/record_types\/#\/fields\/#\/settings\/expression\/operands\/#\/(?:field|source|value)(?:\/.*)?$/,
@@ -1527,7 +1530,7 @@ function sourceResolvesIdentity(sourcePath: Path, positions: SourceContractPosit
     /\/(?:custom_actions|carries|declared_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
     ) ||
-    /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field)$/.test(
+    /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|amount_field|percentage_field|date_field|due_field|status_field|required_permission)$/.test(
       path,
     ) ||
     /\/expression\/fields\/#$/.test(path) ||
@@ -2098,6 +2101,14 @@ function permissionScopeSourceOwners(source: JsonObject): string[] {
       ];
 }
 
+function moduleFieldPermissionSourceOwners(source: JsonObject): string[] {
+  const body = asObject(source.body);
+  return [
+    String(source.key),
+    ...(body.dependencies as JsonObject[]).map((dependency) => String(dependency.module)),
+  ];
+}
+
 function compilePermissionRecordScope(
   permission: JsonObject,
   source: JsonObject,
@@ -2239,6 +2250,7 @@ function fieldSettings(
   field: JsonObject,
   qualifiedRecordType: string,
   resolution: Resolution,
+  permissionOwners: readonly string[],
 ): unknown {
   const settings = asObject(field.settings);
   const localField = (alias: string) => resolution.field(qualifiedRecordType, alias);
@@ -2298,10 +2310,34 @@ function fieldSettings(
           : {}),
       };
     case "choice":
-      return { options: settings.options };
+      return {
+        options: (settings.options as JsonObject[]).map((option) => ({
+          value: option.value,
+          label: option.label,
+          ...(option.required_permission
+            ? {
+                requiredPermissionId: resolution.permission(
+                  String(option.required_permission),
+                  permissionOwners,
+                ),
+              }
+            : {}),
+        })),
+      };
     case "several_choices":
       return {
-        options: settings.options,
+        options: (settings.options as JsonObject[]).map((option) => ({
+          value: option.value,
+          label: option.label,
+          ...(option.required_permission
+            ? {
+                requiredPermissionId: resolution.permission(
+                  String(option.required_permission),
+                  permissionOwners,
+                ),
+              }
+            : {}),
+        })),
         ...(settings.maximum_selections ? { maximumSelections: settings.maximum_selections } : {}),
       };
     case "reference_number":
@@ -2321,6 +2357,11 @@ function fieldSettings(
           key: column.key,
           type: column.type,
           required: column.required,
+          ...(column.settings === undefined
+            ? {}
+            : {
+                settings: fieldSettings(column, qualifiedRecordType, resolution, permissionOwners),
+              }),
         })),
         minimumRows: settings.minimum_rows,
         maximumRows: settings.maximum_rows,
@@ -2460,6 +2501,7 @@ function compileModule(
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const root = resolution.definition(definitionKey, "module");
+  const permissionOwners = moduleFieldPermissionSourceOwners(source);
   const recordTypes = (body.record_types as JsonObject[]).map((recordType) => {
     const recordKey = String(recordType.key);
     const qualified = `${definitionKey}:${recordKey}`;
@@ -2478,7 +2520,7 @@ function compileModule(
       personalData: field.personal_data,
       publicDisplay: field.public_display,
       type: field.type,
-      settings: fieldSettings(field, qualified, resolution),
+      settings: fieldSettings(field, qualified, resolution, permissionOwners),
     }));
     const relationships = (recordType.relationships as JsonObject[]).map((relationship) => ({
       relationshipId: resolution.id(

@@ -247,3 +247,23 @@ register. Core [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) work co
 Production delivery and its success receipt remain unverified. After normal release
 handling, reconcile the existing protected main/HEAD tracking without upgrading
 Kestra or expanding the task into backup or infrastructure maintenance.
+
+## Latest complete Testing receipt — 8 September 2026
+
+The bounded [populated-Testing fixture repair](../../build-plan/issue-266-populated-testing-fixtures.md#hosted-outcome--8-september-2026)
+passed normal delivery in
+[execution 6WIfY1e5pRWu8lkswspG6M](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6WIfY1e5pRWu8lkswspG6M/outputs),
+for `c89ae494a98edb4f2815004329ffc737d824667e`. The complete schema-2 receipt
+reports success, 68 tracked migrations, all 25 selected/completed concurrency
+proofs and all six selected/completed schemas. Logs record all 60 SQL files and
+2,670 assertions passing. The [Page evidence](../issue-38-native-page-handoff.md#successful-hosted-verification)
+records the hashes verified against that exact Git commit. Earlier failed runs
+remain failed evidence; no coverage was waived.
+
+The existing [#235 completion evidence](../issue-235/README.md#hosted-completion-evidence--6-september-2026)
+already references this corrected exact-commit gate, with its separate dated
+adviser findings. [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29) still
+requires its own full isolation journeys and technical prerequisites; this receipt
+does not pretend those later journeys exist. Production was read-only checked:
+the recorded release remains queued behind the older paused execution. No queued
+or paused execution was cancelled, unqueued, resumed or otherwise changed.

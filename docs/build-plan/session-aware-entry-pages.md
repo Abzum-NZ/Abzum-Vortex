@@ -55,3 +55,14 @@ All 13 entry-page tests and all 58 web tests across eight files pass. Web typech
 scoped lint, formatting, all 23 package boundaries and diff checks pass. Independent
 actual-patch review and deployed browser evidence are recorded with the task before
 closure; these local checks alone do not establish hosted completion.
+
+## Deployed outcome
+
+[PR #352](https://github.com/Abzum-NZ/Abzum-Vortex/pull/352) merged normally as
+Testing `d2952833da0340db5573925516a33e2cd58989f2` after independent Sol approval.
+[The Testing deployment](https://vercel.com/abzumdevteam/abzum-vortex/GRFY6UtM2dC9H1rh7dAiw1kSCLzM)
+was Ready. In the existing signed-in Edge session, the public homepage offered
+**Continue to Vortex** and opening the sign-in address returned to the signed-in
+organisation. [The task's completion record](https://github.com/Abzum-NZ/Abzum-Vortex/issues/350#issuecomment-5581421989)
+records the browser verification. The task is Done; already-open old pages need
+their next refresh/navigation to show the corrected state.

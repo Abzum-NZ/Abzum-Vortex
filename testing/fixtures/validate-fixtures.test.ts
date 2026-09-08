@@ -101,6 +101,52 @@ describe("complete fixture set", () => {
     expect([...actualWorkflowNodes].sort()).toEqual([...workflowNodeTypeKeys].sort());
   });
 
+  it("defines complete table columns and an explicit permission-gated choice", () => {
+    const moduleSources = sources.filter((source) => source.kind === "module");
+    for (const source of moduleSources)
+      for (const record of source.body.record_types)
+        for (const field of record.fields)
+          if (field.type === "table")
+            for (const column of field.settings.columns)
+              expect(column.settings, `${source.key}:${record.key}.${field.key}.${column.key}`).toBeDefined();
+
+    const sla = moduleSources.find((source) => source.key === "vortex.service_desk.sla");
+    const workingHours = sla?.body.record_types
+      .flatMap((record) => record.fields)
+      .find((field) => field.type === "table" && field.key === "working_hours");
+    if (!workingHours || workingHours.type !== "table") throw new Error("Working hours required");
+    const weekday = workingHours.settings.columns.find((column) => column.key === "day");
+    if (!weekday || weekday.type !== "choice") throw new Error("Weekday choice required");
+    expect(weekday.settings.options.map((option) => option.label)).toEqual([
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
+    ]);
+
+    const opportunities = moduleSources.find(
+      (source) => source.key === "vortex.crm.opportunities",
+    );
+    const opportunityFields = opportunities?.body.record_types.find(
+      (record) => record.key === "opportunity",
+    )?.fields;
+    const schedule = opportunityFields?.find((field) => field.key === "payment_schedule");
+    if (!schedule || schedule.type !== "table") throw new Error("Payment schedule required");
+    expect(schedule.settings.columns.find((column) => column.key === "amount")).toMatchObject({
+      type: "money",
+      settings: { currency_mode: "fixed", currency: "NZD" },
+    });
+    const stage = opportunityFields?.find((field) => field.key === "stage");
+    if (!stage || stage.type !== "choice") throw new Error("Opportunity stage required");
+    expect(stage.settings.options.find((option) => option.value === "won")).toMatchObject({
+      label: "Won",
+      required_permission: "vortex.crm.opportunities.opportunity.mark_won",
+    });
+  });
+
   it("covers the declared page types, list arrangements, and loading states", () => {
     const pages = sources.flatMap((source) =>
       source.kind === "application" ? source.body.pages : [],
