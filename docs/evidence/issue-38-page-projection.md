@@ -30,7 +30,40 @@ publication or rendered-interface proof.
 
 ## Remaining work
 
-The recursive projection and trusted authenticated adapter are still in progress.
+The contract checkpoint merged normally through
+[PR #339](https://github.com/Abzum-NZ/Abzum-Vortex/pull/339) at
+`2026-09-08T00:50:28Z`. Reviewed source:
+`1683b0f8971009f3fc0860b22c41594f705471d5`; Testing merge:
+`a308ed54b236c7ae337a17ad8494976893404d73`.
+An isolated checkout of that exact source passed all 23 package typechecks,
+import boundaries and all 23 builds, including Next.js. Normal preview checks
+passed before merge. Its hosted verification is queued, not claimed complete.
+
+The bounded recursive projector and server-only authenticated callback seam have
+passed independent Sol review. They remove refused page/subtree content and all
+responsive-order references to removed placements. V1 visibility conditions need
+explicit trusted admission; missing or false evidence removes the placement.
+Optional V2 placement gates inherit page/ancestor admission and can only narrow it.
+
+The review also corrected action availability: every use-gated or bound control
+remains `operation_unavailable` until [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250)
+supplies the actual owning-operation integration. Page/view/use permission and
+binding existence cannot substitute for that action's own current permission.
+The focused tests cover the previously unsafe case where all placement gates
+allow but the operation has no authority evidence.
+
+The author reports all 10 focused tests passing. Root matched the reviewed file
+hashes below. The adapter tests mock request/Access orchestration: this remains a
+callback seam, not a registered stored Definition reader, shipped V1/V2 adapter,
+working page route or live UI proof. Exact isolated delivery checks are recorded
+separately when complete.
+
+| Runtime candidate | SHA-256 |
+| --- | --- |
+| Projector | `e3f062ad1ac67f5eef756cc664fbe033b0223e14eb9c485821d0e79b335109a0` |
+| Authenticated callback seam | `cb7e35ab123713d31d44dbf9f8f76812e13645517d7facb13a5b4d7e711ae307` |
+| Projection tests | `4b886da1c9f901b88620bdb8934795f374977db86dc44cc2333f48016eb6b58c` |
+| Callback tests | `80cb687d0f95a15b0527db33add270014cfb1f147de0b6e2d1f8d8d6136dcf4f` |
 The V2 compiler, publication and stored readers remain owned by the open
 [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249). Current executable
 Definition paths select V1; V2 contract parsing alone does not implement that

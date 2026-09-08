@@ -28,6 +28,21 @@ Activity does not store passwords, connection secrets, full sensitive values, pr
 
 Activity is append-only through ordinary product operations. Corrections create a later entry. Privileged retention work may remove protected content while preserving a non-content receipt.
 
+Successful changes and their completed Activity commit together. A known refused
+request records one content-free refusal through its protected owner after the
+unsuccessful change has rolled back, not one entry for each affected row. Only
+verified local scope and fixed operation meaning may be recorded: submitted
+foreign/missing targets, private values and exception text are not safe evidence.
+Failures before a local organisation/account scope is established cannot nominate
+an organisation to log in. Failure to record Activity never makes an operation
+successful or permits a claim that the refusal was recorded.
+
+[Access Activity integration #41](../build-plan/issue-41-access-activity.md) connects
+this behavior to real Phase 3 owners without duplicating existing success entries.
+[Activity views #115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) owns later
+permitted browsing, aggregate read evidence and remaining service integrations.
+Ordinary record reads are not logged individually merely to generate counts.
+
 When a protected flow node runs under a specified account or system actor, the owning operation records its ordinary operation activity for that effective actor. When an initiating organisation account exists, use of the separate execution delegation also records an initiator-account delegation-use entry with the same correlation identifier. A system-started flow has no fabricated human initiator; its existing Activity entries identify the actual verified system actor and triggering cause. These are linked entries in the existing Activity store, not a new flow envelope, history table or substitute for the operation's own evidence.
 
 ## Personal-data classification
