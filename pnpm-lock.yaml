@@ -487,6 +487,9 @@ importers:
       '@vortex/record':
         specifier: workspace:*
         version: link:../runtime/record
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../runtime/rule
     devDependencies:
       vitest:
         specifier: 4.1.11

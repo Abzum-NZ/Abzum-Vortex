@@ -3,5 +3,6 @@ export const RuleService = Object.freeze({
   boundary: "@vortex/rule",
 });
 
+export * from "./before-save-rule-graphs";
 export * from "./typed-condition";
 export * from "./typed-condition-v2";

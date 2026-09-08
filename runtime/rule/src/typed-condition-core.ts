@@ -1,4 +1,4 @@
-import type { ConditionNode, JsonValue } from "@vortex/contracts";
+import type { JsonValue } from "@vortex/contracts";
 
 export type ResolvedTypedConditionOperand<TType extends string> = Readonly<{
   type?: TType;
@@ -6,28 +6,31 @@ export type ResolvedTypedConditionOperand<TType extends string> = Readonly<{
   value: JsonValue;
 }>;
 
-type TypedConditionSemantics<TType extends string> = Readonly<{
-  resolveOperand: (entry: unknown) => ResolvedTypedConditionOperand<TType>;
-  validateComparison: (
-    operator: string,
-    left: ResolvedTypedConditionOperand<TType>,
-    right: ResolvedTypedConditionOperand<TType> | undefined,
-  ) => void;
-  evaluateComparison: (
-    operator: string,
-    left: ResolvedTypedConditionOperand<TType>,
-    right: ResolvedTypedConditionOperand<TType> | undefined,
-  ) => boolean;
+type TypedConditionSemantics<
+  TType extends string,
+  TOperand extends ResolvedTypedConditionOperand<TType>,
+  TSourceOperand,
+> = Readonly<{
+  resolveOperand: (entry: TSourceOperand) => TOperand;
+  validateComparison: (operator: string, left: TOperand, right: TOperand | undefined) => void;
+  evaluateComparison: (operator: string, left: TOperand, right: TOperand | undefined) => boolean;
 }>;
 
-type ConditionObject = {
-  kind: string;
-  conditions?: unknown[];
-  condition?: unknown;
-  operator?: string;
-  left?: unknown;
-  right?: unknown;
-};
+export type ResolvedTypedConditionNode<TOperand = unknown> =
+  | Readonly<{
+      kind: "comparison";
+      operator: string;
+      left: TOperand;
+      right?: TOperand;
+    }>
+  | Readonly<{
+      kind: "all" | "any";
+      conditions: readonly ResolvedTypedConditionNode<TOperand>[];
+    }>
+  | Readonly<{
+      kind: "not";
+      condition: ResolvedTypedConditionNode<TOperand>;
+    }>;
 
 export const validText = (value: unknown): value is string => {
   if (typeof value !== "string" || value.includes("\0")) return false;
@@ -120,34 +123,38 @@ export const codePointCompare = (left: string, right: string): number => {
 };
 
 /** Runs the shared, validate-before-evaluate condition traversal for a semantic adapter. */
-export const evaluateResolvedTypedCondition = <TType extends string>(
-  condition: ConditionNode,
-  semantics: TypedConditionSemantics<TType>,
+export const evaluateResolvedTypedCondition = <
+  TType extends string,
+  TOperand extends ResolvedTypedConditionOperand<TType>,
+  TSourceOperand = unknown,
+>(
+  condition: ResolvedTypedConditionNode<TSourceOperand>,
+  semantics: TypedConditionSemantics<TType, TOperand, TSourceOperand>,
 ): boolean => {
-  const validate = (candidate: unknown): void => {
-    const node = candidate as ConditionObject;
+  const validate = (node: ResolvedTypedConditionNode<TSourceOperand>): void => {
     if (node.kind === "all" || node.kind === "any") {
-      node.conditions!.forEach(validate);
+      node.conditions.forEach(validate);
       return;
     }
     if (node.kind === "not") {
-      validate(node.condition!);
+      validate(node.condition);
       return;
     }
+    if (node.kind !== "comparison") return;
     semantics.validateComparison(
-      node.operator!,
+      node.operator,
       semantics.resolveOperand(node.left),
       node.right === undefined ? undefined : semantics.resolveOperand(node.right),
     );
   };
 
-  const evaluate = (candidate: unknown): boolean => {
-    const node = candidate as ConditionObject;
+  const evaluate = (node: ResolvedTypedConditionNode<TSourceOperand>): boolean => {
     if (node.kind === "all") return node.conditions!.map(evaluate).every(Boolean);
     if (node.kind === "any") return node.conditions!.map(evaluate).some(Boolean);
     if (node.kind === "not") return !evaluate(node.condition!);
+    if (node.kind !== "comparison") return false;
     return semantics.evaluateComparison(
-      node.operator!,
+      node.operator,
       semantics.resolveOperand(node.left),
       node.right === undefined ? undefined : semantics.resolveOperand(node.right),
     );
