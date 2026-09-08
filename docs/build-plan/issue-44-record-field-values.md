@@ -103,6 +103,41 @@ existing published-release meaning explicit; never silently insert settings or
 authority into an already published release. This is a prerequisite correction
 inside #44, not completion of the Record engine or a new approval gate.
 
+## Value-format architecture decision
+
+The next coordinated representation change uses an explicit Module source and
+validation-contract version, following the already implemented Application
+contract-version selection. It must not change the meaning of stored V1 releases.
+This is required by concrete value differences, not a general compatibility
+framework. Complete it through Definition compilation/publication/read/restore
+and the affected Rule/value consumers before claiming the new Record path works.
+
+| Value             | Required representation and behavior                                                                                                                                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decimal           | Exact base-10 text, with matching exact bounds and defaults. Normalize zeroes deliberately at the value boundary; do not convert through a JavaScript number.                                                                                |
+| Money             | Exact amount plus an explicit currency code. Resolve an organisation default during creation and retain the resulting currency with the value, so changing the default never changes old amounts.                                            |
+| Formatted content | Reuse the existing safe rich-text document primitives from Page composition. Add the required Record table/file blocks without widening the existing Page V2 property whitelist.                                                             |
+| Attachment        | An ordered array of file identifiers for both single and multiple fields; the single-file form permits at most one. File ownership, state and detected-content checks remain with File.                                                      |
+| Record link       | Explicit record-type and record identifiers; validate the type against the field's compiled target or target list. Existence and access still require the protected service. Person links keep their distinct organisation-account identity. |
+| Whole-number step | Use the declared minimum as the origin, otherwise zero. A default or currently edited value cannot change which values satisfy the step.                                                                                                     |
+| Text format       | Begin with the existing email-address and HTTPS-address checks plus UUID syntax, under explicit closed format keys. No setting means ordinary text. Do not interpret arbitrary old keys as regular expressions or build a plug-in framework. |
+
+Exact decimal transport is a Vortex design choice addressing the interoperability
+limits described in [JSON's number specification](https://www.rfc-editor.org/rfc/rfc8259#section-6).
+The later storage adapter uses [PostgreSQL exact numeric storage](https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-NUMERIC-DECIMAL),
+not floating-point money. The renderer must align its numeric controls with the
+declared origin rather than accidentally using the HTML value attribute as a
+different [step base](https://html.spec.whatwg.org/multipage/input.html#attr-input-step).
+
+Preserve the existing V1 readers and explicit draft restoration. Conversion is
+deliberate: an old finite number can preserve only the value already represented,
+a formatted string becomes plain paragraph content, and a polymorphic identifier
+needs a supplied target rather than a guessed one. No published bytes or currency
+meanings are rewritten. Update the editable complete fixtures and prove their
+new publication path. Do not build a second obsolete Record execution engine
+solely for historical releases that never had an installed record runtime; define
+the supported installation version explicitly in the coordinated implementation.
+
 ```mermaid
 flowchart LR
     D[Published field definitions] --> V[Prepare submitted values]

@@ -133,6 +133,59 @@ The platform supports these twenty-two types:
 
 There is no separate duration type in this release. Each calendar page explicitly selects either start and end date-time fields, or a start date-time plus a whole-number duration field and unit. Missing or invalid inputs are shown as invalid data; the platform never guesses an end time or unit.
 
+## Record value formats
+
+The Record engine must preserve the meaning of values from form entry through
+save, read, conditions, calculations and queries. A display format is not the
+stored value. The [field-runtime plan](../build-plan/issue-44-record-field-values.md#value-format-architecture-decision)
+records the coordinated contract and consumer changes; these requirements do not
+claim that Record execution is already delivered.
+
+- Decimal values use exact base-10 text at the service boundary, including bounds
+  and defaults; their storage uses an exact numeric type. No conversion through
+  floating-point numbers may discard declared precision.
+- Money carries an exact amount and explicit currency. An organisation-default
+  currency is resolved when creating the value and stored with it. Later default
+  changes do not reinterpret existing money; conversions require an explicit
+  operation, never a display preference.
+- Formatted content uses the same safe structured text primitives as page
+  properties, with Record-specific table and attachment blocks where allowed by
+  the field. It is not executable HTML. Allowed-block and visible-text length
+  checks apply to the document; file references still require File access.
+- Attachment fields use ordered file-identifier arrays, including single-file
+  fields. A single-file field permits at most one entry; clearing remains subject
+  to whether the field is required.
+- A record link carries its target record-type identifier and record identifier.
+  Its target must match the compiled field targets. A person link instead names
+  an organisation account. Correct identifier shapes alone prove neither
+  existence nor access.
+- A whole-number step is measured from the declared minimum, otherwise zero.
+  Neither the field default nor an edited value changes that origin.
+- Text format keys initially are `email_address`, `web_address` and `uuid`. They
+  select the same email-address or HTTPS-address validation used by those field
+  types, or UUID syntax. Omission means ordinary
+  text. Unknown keys are not executable patterns or guessed validation rules.
+
+Every table column has settings for its declared scalar type, using the same
+meaning as an ordinary field. Choice columns therefore declare their options,
+and money columns declare their currency policy. Column keys are unique. Table
+defaults and submitted rows must satisfy the same closed column, required-value,
+cell-value and row-count rules; nested tables, links and attachment columns remain
+outside the allowed table-column types.
+
+A choice option may name a required permission. Authored references resolve to
+exact registered permission identities through the owning module and declared
+dependencies. Options without a gate remain ordinary choices. The current Access
+decision controls both option visibility and direct server saves; a definition
+reference or submitted permission claim does not grant access.
+
+These value-representation changes use an explicit Module source/validation
+contract version. That technical format version is separate from the module's own
+published business version. Historical V1 definitions keep their stored bytes and
+remain readable/restorable. A new-format draft conversion and published upgrade
+must be explicit; they cannot infer a polymorphic target, reinterpret a currency
+or recover precision already lost in a historical number.
+
 ## Calculations and totals
 
 - A calculation is deterministic and cannot perform network calls, change records, or read data the current operation is not allowed to read.
