@@ -30,7 +30,21 @@ publication or rendered-interface proof.
 
 ## Remaining work
 
+The contract checkpoint merged normally through
+[PR #339](https://github.com/Abzum-NZ/Abzum-Vortex/pull/339) at
+`2026-09-08T00:50:28Z`. Reviewed source:
+`1683b0f8971009f3fc0860b22c41594f705471d5`; Testing merge:
+`a308ed54b236c7ae337a17ad8494976893404d73`.
+An isolated checkout of that exact source passed all 23 package typechecks,
+import boundaries and all 23 builds, including Next.js. Normal preview checks
+passed before merge. Its hosted verification is queued, not claimed complete.
+
 The recursive projection and trusted authenticated adapter are still in progress.
+The current adapter is a server-only integration seam, not a registered stored
+Definition reader or a working page route. Independent review found that control
+availability must also require the bound operation's own current authority;
+placement view/use permission and binding existence are insufficient. The author
+is adding that refusal coverage before this runtime candidate is delivered.
 The V2 compiler, publication and stored readers remain owned by the open
 [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249). Current executable
 Definition paths select V1; V2 contract parsing alone does not implement that

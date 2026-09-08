@@ -135,6 +135,21 @@ This closes the hosted-receipt qualification for the definition-to-catalogue
 checkpoint below, not the later PR #337/#338 checkpoints or the unfinished
 database enforcement. No Production promotion occurred. Whole #37 remains open.
 
+### Later source checkpoint hosted verification — PR #337
+
+The exact Testing merge `480ee21f6ba8349919f676a861aa6418168f5c01`
+completed [execution 5kGsBKQGoKwb4f3yDaMrqf](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/5kGsBKQGoKwb4f3yDaMrqf?revision=7)
+successfully. Its stored exact-commit receipt was published at
+`2026-09-08T00:38:17.562Z`, names the correct Testing repository/ref/commit and
+execution, and reports 66 applied migrations, all 25 selected concurrency proofs
+and all six selected lint schemas completed.
+
+All four receipt fingerprints equal the verified #336 values above. Root also
+compared the exact Git revisions across `supabase` and `workflows/kestra` and
+confirmed no database/verification artifact changed. This is the later #337
+hosted receipt, not a claim that the pending row/field SQL is deployed. #338's
+separate hosted execution was still running when this result was recorded.
+
 ### Source verification
 
 [PR #336](https://github.com/Abzum-NZ/Abzum-Vortex/pull/336) merged normally into
