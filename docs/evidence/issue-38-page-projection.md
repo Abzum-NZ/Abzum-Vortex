@@ -79,6 +79,34 @@ using the existing workspace pattern and independently reviewed before this
 successful run. No unreviewed compiler or SQL changes were included.
 Hosted verification of this merge is not yet inspected.
 
+## Stored V1 adapter checkpoint — 8 September 2026
+
+The server-only adapter now selects one exact stored application revision and
+page, reads through the existing Definition consumer, resolves registered
+permission identities, and separately projects the current human's page access.
+An injected trusted system context is required; this is not a context issuer or
+an installed-application selector. An application-scoped context cannot select a
+different application. Both stages use the same server-owned correlation.
+
+Independent review corrected the application-scope and correlation checks. Root
+also identified that the first implementation used the runtime database role,
+which cannot execute the existing consumer read. The final implementation reuses
+the existing resolved request runner, including context initialization followed
+by the request-role transition. No database grants, functions, migration or
+second transaction framework were added.
+
+Root verified 15 page tests and the page package typecheck. The additional proof
+uses the real transaction runner with a test driver to verify role-transition
+ordering; Definition and Access orchestration are mocked. Existing Definition
+integrity tests and SQL consumer-read tests remain separate proofs. This is not
+a new combined live-database test or a deployed page route. Independent Sol
+review approved the bounded adapter; exact-source delivery verification follows.
+
+| Reviewed implementation | SHA-256 |
+| --- | --- |
+| Stored adapter | `447cb5daa9ed302813d1e888c4abcefa36d914a76ac3c00919bbf8f2fb7f5095` |
+| Authenticated handoff | `aef341afed1f5602fa98fbd8d8f8f46def95484b7a677ac586bdab75473dd890` |
+
 ## Remaining work
 
 The V2 compiler, publication and stored readers remain owned by the open

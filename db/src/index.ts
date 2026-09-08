@@ -1,6 +1,7 @@
 import "server-only";
 
 export {
+  createResolvedRequestTransactionRunner,
   withRuntimeTransaction,
   withResolvedRequestTransaction,
   type DatabaseRow,

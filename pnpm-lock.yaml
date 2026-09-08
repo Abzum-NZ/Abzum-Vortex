@@ -350,6 +350,9 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/definition':
+        specifier: workspace:*
+        version: link:../definition
       '@vortex/query':
         specifier: workspace:*
         version: link:../query

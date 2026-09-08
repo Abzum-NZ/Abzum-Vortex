@@ -16,6 +16,7 @@
     "@vortex/app": "workspace:*",
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
+    "@vortex/definition": "workspace:*",
     "@vortex/query": "workspace:*",
     "@vortex/theme": "workspace:*",
     "server-only": "0.0.1"

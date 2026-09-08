@@ -30,6 +30,7 @@ type PermissionBinding = Readonly<{
 
 export type FixedAuthenticatedPageCapability = Readonly<{
   page: PageDefinition | PageDefinitionV2;
+  sourceCorrelationId?: string;
   pagePermission: PermissionBinding;
   placements: Readonly<
     Record<
@@ -149,7 +150,12 @@ export const createAuthenticatedPageCapabilityService = <Command>(
 
         const pageAccess = await evaluate(transaction, scope, loaded.pagePermission);
         if (!pageAccess.allowed) return undefined;
-        const correlations = new Set([pageAccess.correlationId.toLowerCase()]);
+        const correlations = new Set([
+          pageAccess.correlationId.toLowerCase(),
+          ...(loaded.sourceCorrelationId === undefined
+            ? []
+            : [loaded.sourceCorrelationId.toLowerCase()]),
+        ]);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
         for (const required of requiredPlacements(page)) {
           const binding = loaded.placements[required.placementId];
