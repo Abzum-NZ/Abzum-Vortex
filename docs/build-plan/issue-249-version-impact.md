@@ -49,7 +49,11 @@ bounded, database-free engine slice; it does not build the App Designer.
 
 V1-to-V2 publication on a root with existing V1 history needs explicit transition
 comparison preserving release numbering and immutable history. Homogeneous V2
-comparison does not prove that case. Complete it with coordinated publication,
+comparison does not prove that case. The coordinated path must also permit normal
+publication of exact V1 content restored after V2: either supported representation
+transition is major, assigned from the latest release, while each historical
+entry retains its own decoder and bytes. No one-way conversion restriction.
+Complete it with coordinated publication,
 additive storage/readback, then confirmed draft conversion and the headless editor
 adapter. Installed application proof remains
 [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and

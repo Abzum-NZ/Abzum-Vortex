@@ -235,3 +235,12 @@ continuous application release numbering; never reset it to `1.0.0`, relabel old
 content as V2, or accept mixed history through shape inference. That transition
 requires explicit version-selected comparison evidence before V2 publication is
 enabled; the native-V2 comparison checkpoint does not complete it.
+
+At that coordinated boundary, changing between the two supported representations
+is a major release, in either direction. This includes publishing exact V1 content
+restored after a V2 release. Compare representation metadata, not a guessed
+cross-format structural equivalence; assign the next major from the latest
+application release. Validate each historical entry using its own recorded
+version and preserve its bytes and fingerprint. Same-representation changes use
+their normal comparator. Unknown or mismatched version pairs still refuse. This
+keeps the existing restore promise without adding a one-way conversion gate.
