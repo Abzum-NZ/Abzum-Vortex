@@ -82,6 +82,16 @@ Relationship traversal is limited and validated. Conditions cannot execute code 
 
 The early [record-visibility foundation #36](../build-plan/issue-36-ownership-and-visibility.md) supplies the shared typed Boolean evaluator using the existing condition contract. It validates the complete tree and declared inputs before evaluating truth: invalid or missing input cannot become an allowance through negation or a short-circuited branch. Values are compared without implicit type conversion, and pure evaluation and PostgreSQL restrictions use the same tested meaning. The [condition builder #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) later adds authoring and general-rule extensions to that same implementation; the operators listed conceptually above are not a claim that all extensions already ship.
 
+Module V2 adds the [exact-value Rule semantics](../build-plan/issue-44-record-field-values.md#rule-consumer-handoff)
+needed by its field definitions. Select them from the trusted owning Module
+contract, not from how an incoming value looks or the containing Application's
+version. Keep the same condition tree and error meanings; decimal and money
+parameters are explicit types, while historical `number` parameters retain their
+meaning. The existing V1 evaluator remains available for historical Definition
+evidence. Runtime, publication tests and database-backed predicates must agree
+before the new value format is activated for records. This work does not require
+the visual Conditions Designer or a second rule engine.
+
 The [Rule package](../../runtime/rule/package.json) is a shared, contracts-only package below Definition and Access in the enforced dependency graph. Both reuse its pure evaluator; the existing Definition entry delegates to it. This does not introduce another service, expression language, database connection or browser-side authority. Actual database parity remains an explicit acceptance requirement of [record visibility](../build-plan/issue-36-ownership-and-visibility.md), not something established by pure tests alone.
 
 ## Events
