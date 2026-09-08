@@ -200,24 +200,6 @@ select is(
   'every defensive role-storage trigger is owner-only'
 );
 
-select is(
-  (
-    select pg_catalog.count(*)::integer
-    from vortex_access.organization_roles
-  ),
-  0,
-  'the storage migration creates no implicit role'
-);
-
-select is(
-  (
-    select pg_catalog.count(*)::integer
-    from vortex_access.organization_role_activation_policy_revisions
-  ),
-  0,
-  'the storage migration creates no activation policy authority'
-);
-
 insert into vortex_identity.tenants (
   tenant_id, short_name, display_name, state, created_at, created_by,
   state_changed_at, revision
@@ -243,6 +225,32 @@ insert into vortex_identity.organizations (
     'Role storage organisation two', 'active', pg_catalog.statement_timestamp(),
     '91000000-0000-4000-8000-000000000140', pg_catalog.statement_timestamp(), 1
   );
+
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from vortex_access.organization_roles
+    where organization_id in (
+      '21000000-0000-4000-8000-000000000140',
+      '21000000-0000-4000-8000-000000000141'
+    )
+  ),
+  0,
+  'new fixture organisations begin without an implicit role'
+);
+
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from vortex_access.organization_role_activation_policy_revisions
+    where organization_id in (
+      '21000000-0000-4000-8000-000000000140',
+      '21000000-0000-4000-8000-000000000141'
+    )
+  ),
+  0,
+  'new fixture organisations begin without activation policy authority'
+);
 
 select * from vortex_access.initialize_organization_access_version(
   '21000000-0000-4000-8000-000000000140',

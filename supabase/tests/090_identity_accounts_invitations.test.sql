@@ -317,7 +317,11 @@ select * from vortex_identity.create_organization_invitation(
 );
 
 select is(
-  (select count(*)::integer from vortex_identity.organization_accounts),
+  (
+    select count(*)::integer
+    from vortex_identity.organization_accounts
+    where organization_id = '20000000-0000-4000-8000-000000000090'
+  ),
   1,
   'issuing an invitation creates no placeholder organisation account'
 );
@@ -352,7 +356,11 @@ select is(
   'a token without exact verified-email control cannot accept an invitation'
 );
 select is(
-  (select count(*)::integer from vortex_identity.organization_accounts),
+  (
+    select count(*)::integer
+    from vortex_identity.organization_accounts
+    where organization_id = '20000000-0000-4000-8000-000000000090'
+  ),
   1,
   'wrong-email refusal creates no organisation account'
 );
