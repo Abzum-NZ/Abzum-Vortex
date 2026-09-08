@@ -169,11 +169,35 @@ Git tree; its skipped check was not substituted for that successful source build
 The one-line public export received its own independent approval. Unreviewed
 Definition execution and Record preparation were excluded from this delivery.
 
+## Reviewed Record value preparation
+
+The Record service now supplies the pure `prepareRecordFieldValuesV2` operation
+for canonical field-identifier maps. It returns a prepared set/clear patch or safe
+field-located corrections. All nineteen writable field types are covered;
+reference numbers, calculations and totals remain generated values that callers
+cannot supply. Create defaults, update omission, required values, explicit clears,
+exact decimal/money values, typed references and repeating-table cells retain
+their declared meanings. Permission-gated choices and record/person/file
+references produce explicit pending checks for the later protected operation;
+preparation does not claim those checks succeeded.
+
+A different GPT-5.6 Sol reviewer approved the actual five-file patch, including
+the existing-catalogue Vitest development dependency and matching lockfile entry.
+The reviewer caught a real repair defect: validation of an existing value ran
+before its replacement or clear. The corrected merge validates the winning
+submitted value, allowing a valid repair while still checking omitted existing
+values. Independent post-fix verification passed all 34 focused tests. Developer
+Record type checking, scoped lint/format and all package boundaries passed.
+
+This reviewed pure slice is not a claim of integrated fixture publication,
+protected persistence, current Access checks or complete #44 delivery. Those
+remain in the coordinated Definition, storage and save work below.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
-Record preparation and real protected save/readback are not delivered by this
-definition slice. Its new Testing revision's hosted database execution has not
+and real protected save/readback are not delivered by the pure preparation
+slice. Its new Testing revision's hosted database execution has not
 yet been verified here; an older successful receipt is not a new-revision claim.
 The [new Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6asr83WskOIDv67Xx4LCCr)
 is running. Its logs confirm exact revision
