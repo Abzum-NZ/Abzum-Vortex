@@ -129,6 +129,17 @@ This is the pure evaluation prerequisite for
 [#57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57), not delivery of the
 Conditions Designer, database evaluation parity or protected Record persistence.
 
+[PR #356](https://github.com/Abzum-NZ/Abzum-Vortex/pull/356) merged normally into
+Testing at `2026-09-08T11:04:45Z`, producing
+`82fc2902445de45c0af3ecf6d82c13970fe429ff`. Reviewed source
+`51f55c7cad4b5a7bc288123f374f66f81e714674` completed an actual successful
+[preview build](https://vercel.com/abzumdevteam/abzum-vortex/HUnUQLNA9x38AVdW7ki9tUAJjPt6)
+in 4 minutes 39 seconds; root read the successful 23-package build summary.
+The normal Testing-base merge `bd12459dd9c40e7ecef4a8bbec0d7974f0311a65`
+has the identical Git tree. Its skipped-not-affected check did not substitute for
+the original source build. This is Testing merge evidence, not a new hosted
+database completion receipt or Production promotion.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
