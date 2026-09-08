@@ -55,3 +55,17 @@ Supplied total values are inputs to this evaluator, not proof of recomputed tota
 
 No database migration, hosted database verification or Production promotion is
 claimed by this calculation-only evidence. There is no new screen to screenshot.
+
+## Testing source delivery
+
+[PR #363](https://github.com/Abzum-NZ/Abzum-Vortex/pull/363) merged normally into
+Testing on 8 September 2026. The independently approved source
+`d3e7c519cefda332452a914d38cd9ba65f3f5371` passed the exact-head GitHub checks;
+the [Vercel preview](https://vercel.com/abzumdevteam/abzum-vortex/6WAnBYcdDs7o2NqsNgDU94onhkWS)
+was visibly **Ready** after **6m 37s**. Testing merge commit:
+`56b632a2a2e043cae330618d20b796432e954fd7`.
+
+The pull request contained the reviewed calculation implementation and reviewed
+architecture/documentation updates, not the concurrent installation-reader or
+uncommitted access/binding work. A successful web build does not establish the
+remaining database, totals, save or whole-application acceptance.

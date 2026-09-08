@@ -43,6 +43,21 @@ Task ownership must separate runtime rendering, application lifecycle and reusab
 
 ## Next binding-engine prerequisite — 8 September 2026
 
+### Current Phase 4 delivery position
+
+The field-value engine, immutable event projection and storage-provisioning slice
+have delivered their bounded implementations. The [calculation engine](../evidence/issue-48-calculation-engine.md)
+has independent actual-work approval and reached Testing through [PR #363](https://github.com/Abzum-NZ/Abzum-Vortex/pull/363).
+None of these alone is a working installed application or a completed protected
+save.
+
+| Next work | Functional purpose and dependency |
+| --- | --- |
+| [Exact active installation read #43](issue-43-active-installation-read.md) | Identify the installed Application and every exact Module release, including shared Modules, so runtime operations use real installed definitions. Implementation is underway. |
+| [Relationship totals #48](issue-48-calculation-engine.md) | Calculate totals from the declared related records using the same typed values and precision rules. Integrate authoritative source selection and affected-parent updates with the protected save, not a second query/calculation engine. |
+| [Protected storage and save #45/#47](module-record-provisioning.md#save-and-event-integration) | Apply current access, field and revision rules, then commit record changes, Activity and events together. Requires the real installation/access adapters; pure-engine proofs do not substitute for these. |
+| [Definition-first application #327](definition-first-application-proof.md) | Assemble the proven engines into a usable installed application before resuming App Designer work. |
+
 [Typed component/flow bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250)
 can start on the delivered native Definition/compiler/publication substrate from
 [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249). It does not wait for
