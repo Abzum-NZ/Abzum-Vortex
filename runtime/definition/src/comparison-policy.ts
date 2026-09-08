@@ -2,6 +2,8 @@ import type {
   ApplicationContent,
   ApplicationContentV2,
   ModuleContent,
+  ModuleContentV2,
+  ModuleContentV3,
   VersionImpact,
   VersionImpactReason,
 } from "@vortex/contracts";
@@ -922,8 +924,8 @@ const compareSimpleComponent = (
 };
 
 export const compareModuleContents = (
-  previousContent: ModuleContent,
-  candidateContent: ModuleContent,
+  previousContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
+  candidateContent: ModuleContent | ModuleContentV2 | ModuleContentV3,
 ): VersionImpactReason[] => {
   const reasons: VersionImpactReason[] = [];
   const previous = asRecord(previousContent);
@@ -2029,7 +2031,9 @@ const normaliseRecordType = (recordType: RecordValue): RecordValue => ({
   customActionIds: sorted(recordType.customActionIds as unknown[]),
 });
 
-export const normaliseModuleContent = (content: ModuleContent): ModuleContent => {
+export const normaliseModuleContent = <T extends ModuleContent | ModuleContentV2 | ModuleContentV3>(
+  content: T,
+): T => {
   const value = asRecord(content);
   return {
     ...value,
@@ -2067,7 +2071,7 @@ export const normaliseModuleContent = (content: ModuleContent): ModuleContent =>
       })),
       "extensionPointId",
     ),
-  } as ModuleContent;
+  } as T;
 };
 
 const normalisePage = (page: RecordValue): RecordValue => ({

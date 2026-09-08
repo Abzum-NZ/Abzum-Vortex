@@ -7,6 +7,7 @@ import {
   definitionSourceDocumentSchema,
   fieldTypeKeys,
   moduleSourceDocumentV2Schema,
+  moduleSourceDocumentV3Schema,
   publishedModuleDefinitionSchema,
   ruleGraphSchema,
   sourceRuleGraphSchema,
@@ -23,6 +24,7 @@ const readHistorical = (relative: string): unknown =>
 const manifest = read("fixture-set.json") as {
   files: string[];
   ruleGraphFixtures: Array<{ source: string; canonical: string }>;
+  ruleGraphModuleFixtures: string[];
   requiredFieldTypes: string[];
   requiredWorkflowNodes: string[];
   requiredCrossApplicationCases: Array<{
@@ -39,7 +41,9 @@ const definitionFiles = manifest.files.filter((file) =>
 );
 const sources = definitionFiles.map((file) => {
   const candidate = read(file);
-  return typeof candidate === "object" && candidate !== null && "kind" in candidate &&
+  return typeof candidate === "object" &&
+    candidate !== null &&
+    "kind" in candidate &&
     candidate.kind === "module"
     ? moduleSourceDocumentV2Schema.parse(candidate)
     : definitionSourceDocumentSchema.parse(candidate);
@@ -70,7 +74,10 @@ const currentDraftMetadata = {
   publishedRevision: 1,
 } as const;
 const savedConditionRevisions = (
-  source: Extract<(typeof sources)[number] | (typeof historicalSources)[number], { kind: "module" }>,
+  source: Extract<
+    (typeof sources)[number] | (typeof historicalSources)[number],
+    { kind: "module" }
+  >,
   resolution: typeof resolutionV1 | typeof resolutionV2,
 ) =>
   source.body.sharing_conditions.map((condition) => {
@@ -119,26 +126,26 @@ const historicalPublishedHistories = historicalOutputs
   .filter((output) => output.kind === "module")
   .map((output) => {
     const entry = {
-        publication: {
-          kind: output.kind,
-          rootId: output.artifact.rootId,
-          revision: 1,
-          releaseVersion: "1.0.0",
-          contentFingerprint: output.artifact.contentFingerprint,
-          publishedAt: draftMetadata.createdAt,
-          publishedBy: draftMetadata.createdBy,
-          validationContractVersion: "1.0.0",
-        },
-        content: output.canonical.content,
-        dependencyManifest: output.resolvedDependencies.flatMap((dependency) => {
-          if (dependency.kind !== "module") return [];
-          const publication = historicalModulePublications.get(dependency.key);
-          if (!publication)
-            throw new Error(`Historical Module publication required for ${dependency.key}`);
-          return [publication];
-        }),
-        releaseNote: "Historical Module V1 fixture baseline",
-      };
+      publication: {
+        kind: output.kind,
+        rootId: output.artifact.rootId,
+        revision: 1,
+        releaseVersion: "1.0.0",
+        contentFingerprint: output.artifact.contentFingerprint,
+        publishedAt: draftMetadata.createdAt,
+        publishedBy: draftMetadata.createdBy,
+        validationContractVersion: "1.0.0",
+      },
+      content: output.canonical.content,
+      dependencyManifest: output.resolvedDependencies.flatMap((dependency) => {
+        if (dependency.kind !== "module") return [];
+        const publication = historicalModulePublications.get(dependency.key);
+        if (!publication)
+          throw new Error(`Historical Module publication required for ${dependency.key}`);
+        return [publication];
+      }),
+      releaseNote: "Historical Module V1 fixture baseline",
+    };
     const history = publishedModuleDefinitionSchema.parse(entry);
     return {
       kind: output.kind,
@@ -166,14 +173,16 @@ describe("complete fixture set", () => {
   });
 
   it("classifies and validates every authored/canonical Rule graph fixture pair", () => {
-    const classified = manifest.ruleGraphFixtures.flatMap(({ source, canonical }) => [
-      source,
-      canonical,
-    ]);
+    const classified = [
+      ...manifest.ruleGraphModuleFixtures,
+      ...manifest.ruleGraphFixtures.flatMap(({ source, canonical }) => [source, canonical]),
+    ];
     const graphFiles = manifest.files.filter((file) => file.startsWith("rule-graphs/"));
 
     expect([...classified].sort()).toEqual([...graphFiles].sort());
     expect(new Set(classified).size).toBe(classified.length);
+    for (const file of manifest.ruleGraphModuleFixtures)
+      expect(moduleSourceDocumentV3Schema.safeParse(read(file)).success).toBe(true);
     for (const pair of manifest.ruleGraphFixtures) {
       expect(sourceRuleGraphSchema.safeParse(read(pair.source)).success).toBe(true);
       expect(ruleGraphSchema.safeParse(read(pair.canonical)).success).toBe(true);
@@ -217,20 +226,20 @@ describe("complete fixture set", () => {
     try {
       outputs = compileDefinitionSet(
         sources.map((source) => ({
-        source,
-        resolution: source.kind === "module" ? resolutionV2 : resolutionV1,
-        ...(source.kind === "module"
-          ? {
-              sourceContractVersion: "2.0.0" as const,
-              validationContractVersion: "2.0.0" as const,
-            }
-          : {}),
-        ...(source.kind === "connection_type"
-          ? {}
-          : { draftMetadata: source.kind === "module" ? currentDraftMetadata : draftMetadata }),
-        ...(source.kind === "module"
-              ? { savedConditionRevisions: savedConditionRevisions(source, resolutionV2) }
-          : {}),
+          source,
+          resolution: source.kind === "module" ? resolutionV2 : resolutionV1,
+          ...(source.kind === "module"
+            ? {
+                sourceContractVersion: "2.0.0" as const,
+                validationContractVersion: "2.0.0" as const,
+              }
+            : {}),
+          ...(source.kind === "connection_type"
+            ? {}
+            : { draftMetadata: source.kind === "module" ? currentDraftMetadata : draftMetadata }),
+          ...(source.kind === "module"
+            ? { savedConditionRevisions: savedConditionRevisions(source, resolutionV2) }
+            : {}),
         })),
         {
           publishedHistories: [
@@ -281,7 +290,10 @@ describe("complete fixture set", () => {
         for (const field of record.fields)
           if (field.type === "table")
             for (const column of field.settings.columns)
-              expect(column.settings, `${source.key}:${record.key}.${field.key}.${column.key}`).toBeDefined();
+              expect(
+                column.settings,
+                `${source.key}:${record.key}.${field.key}.${column.key}`,
+              ).toBeDefined();
 
     const sla = moduleSources.find((source) => source.key === "vortex.service_desk.sla");
     const workingHours = sla?.body.record_types
@@ -300,9 +312,7 @@ describe("complete fixture set", () => {
       "Sunday",
     ]);
 
-    const opportunities = moduleSources.find(
-      (source) => source.key === "vortex.crm.opportunities",
-    );
+    const opportunities = moduleSources.find((source) => source.key === "vortex.crm.opportunities");
     const opportunityFields = opportunities?.body.record_types.find(
       (record) => record.key === "opportunity",
     )?.fields;
@@ -342,9 +352,7 @@ describe("complete fixture set", () => {
 
   it("makes every manifest cross-application case structurally possible", () => {
     const modules = new Map(
-      sources
-        .filter((source) => source.kind === "module")
-        .map((module) => [module.key, module]),
+      sources.filter((source) => source.kind === "module").map((module) => [module.key, module]),
     );
     const applications = new Map(
       sources
@@ -352,19 +360,33 @@ describe("complete fixture set", () => {
         .map((application) => [application.key, application]),
     );
     const scenario = read("scenarios/cross-application-sharing.json") as {
-      body: { inter_application_grant: { module: string; record_type: string; source_application: string; recipient_application: string } };
+      body: {
+        inter_application_grant: {
+          module: string;
+          record_type: string;
+          source_application: string;
+          recipient_application: string;
+        };
+      };
     };
 
     for (const item of manifest.requiredCrossApplicationCases) {
       const module = modules.get(item.module);
       expect(module, `module ${item.module} exists`).toBeDefined();
-      expect(module!.body.record_types.some((record) => record.key === item.record_type)).toBe(true);
+      expect(module!.body.record_types.some((record) => record.key === item.record_type)).toBe(
+        true,
+      );
 
-      const applicationKeys = item.applications ?? [item.source_application!, item.recipient_application!];
+      const applicationKeys = item.applications ?? [
+        item.source_application!,
+        item.recipient_application!,
+      ];
       for (const applicationKey of applicationKeys) {
         const application = applications.get(applicationKey);
         expect(application, `application ${applicationKey} exists`).toBeDefined();
-        expect(application!.body.module_bindings.some((binding) => binding.module === item.module)).toBe(true);
+        expect(
+          application!.body.module_bindings.some((binding) => binding.module === item.module),
+        ).toBe(true);
       }
 
       if (item.requires_grant) {
@@ -451,7 +473,9 @@ describe("complete fixture set", () => {
         ?.shareable,
     ).toBe(true);
 
-    const assertions = new Map(body.assertions.map((assertion: Record<string, unknown>) => [assertion.id, assertion]));
+    const assertions = new Map(
+      body.assertions.map((assertion: Record<string, unknown>) => [assertion.id, assertion]),
+    );
     expect(assertions.get("assert_same_company")).toMatchObject({
       when: "both applications read company_fixture_1",
       expect: "same_record_id_and_current_values",
@@ -550,10 +574,24 @@ describe("complete fixture set", () => {
       application_contained: ["organisation_id", "application_root_id"],
     });
     expect(body.system_columns).toEqual([
-      "organisation_id", "module_root_id", "record_type_id", "storage_contract_id", "record_id",
-      "application_root_id", "definition_revision", "owner_organisation_account_id", "owner_group_id", "lifecycle_state",
-      "concurrency_number", "created_at", "created_by", "updated_at", "updated_by", "deleted_at",
-      "deleted_by", "removal_due_at",
+      "organisation_id",
+      "module_root_id",
+      "record_type_id",
+      "storage_contract_id",
+      "record_id",
+      "application_root_id",
+      "definition_revision",
+      "owner_organisation_account_id",
+      "owner_group_id",
+      "lifecycle_state",
+      "concurrency_number",
+      "created_at",
+      "created_by",
+      "updated_at",
+      "updated_by",
+      "deleted_at",
+      "deleted_by",
+      "removal_due_at",
     ]);
     const mappings = new Map(body.tables.map((mapping: any) => [mapping.record_type, mapping]));
     const roots = new Map(
@@ -562,19 +600,22 @@ describe("complete fixture set", () => {
     const applications = new Set(
       sources.filter((source) => source.kind === "application").map((source) => source.key),
     );
-    expect(new Set(body.application_roots.map((entry: any) => entry.application_root_id)).size).toBe(
-      body.application_roots.length,
-    );
+    expect(
+      new Set(body.application_roots.map((entry: any) => entry.application_root_id)).size,
+    ).toBe(body.application_roots.length);
     for (const applicationRoot of body.application_roots) {
       expect(applications.has(applicationRoot.application_definition)).toBe(true);
     }
     for (const row of body.row_examples) {
       const record = recordTypes.get(row.record_type)!;
       expect(row.physical_table).toBe(mappings.get(row.record_type)?.table);
-      if (record.storage_scope === "organisation_shared") expect(row.application_root_id).toBeNull();
+      if (record.storage_scope === "organisation_shared")
+        expect(row.application_root_id).toBeNull();
       else {
         expect(roots.has(row.application_root_id)).toBe(true);
-        expect((roots.get(row.application_root_id) as any).organisation_id).toBe(row.organisation_id);
+        expect((roots.get(row.application_root_id) as any).organisation_id).toBe(
+          row.organisation_id,
+        );
       }
     }
     const companies = body.row_examples.filter(
@@ -587,7 +628,8 @@ describe("complete fixture set", () => {
     );
     expect(body.fork_example.source_table).not.toBe(body.fork_example.forked_table);
     const sourceMapping = [...mappings.values()].find(
-      (mapping: any) => mapping.storage_contract_id === body.fork_example.source_storage_contract_id,
+      (mapping: any) =>
+        mapping.storage_contract_id === body.fork_example.source_storage_contract_id,
     );
     expect(sourceMapping?.table).toBe(body.fork_example.source_table);
     expect(body.assertions).toHaveLength(9);
@@ -603,14 +645,17 @@ describe("complete fixture set", () => {
           continue;
         }
         recordPermissions++;
-        const record = source.body.record_types.find((entry) => entry.key === permission.record_type)!;
+        const record = source.body.record_types.find(
+          (entry) => entry.key === permission.record_type,
+        )!;
         const fields = new Set(record.fields.map((field) => field.key));
         const policy = permission.field_policy;
         expect(policy, permission.key).toBeDefined();
         if (!policy) continue;
         expect(new Set(policy.readable_fields).size).toBe(policy.readable_fields.length);
         expect(new Set(policy.changeable_fields).size).toBe(policy.changeable_fields.length);
-        for (const field of policy.readable_fields) expect(fields.has(field), permission.key).toBe(true);
+        for (const field of policy.readable_fields)
+          expect(fields.has(field), permission.key).toBe(true);
         for (const field of policy.changeable_fields) {
           expect(policy.readable_fields, permission.key).toContain(field);
           expect(["reference_number", "calculation", "total"]).not.toContain(
@@ -632,39 +677,61 @@ describe("complete fixture set", () => {
     for (const source of sources) {
       if (source.kind !== "module") continue;
       for (const record of source.body.record_types) {
-        const ordinary = record.fields.filter((field) =>
-          !(source.key === "vortex.crm.people" && record.key === "contact" && field.key === "notes"),
+        const ordinary = record.fields.filter(
+          (field) =>
+            !(
+              source.key === "vortex.crm.people" &&
+              record.key === "contact" &&
+              field.key === "notes"
+            ),
         );
         for (const action of ["read", "export", "create", "update"]) {
-          const permission = source.body.permissions.find((entry) =>
-            entry.key === `${source.key}.${record.key}.${action}`,
+          const permission = source.body.permissions.find(
+            (entry) => entry.key === `${source.key}.${record.key}.${action}`,
           );
           if (!permission) continue;
           expect([...permission.field_policy!.readable_fields].sort()).toEqual(
             ordinary.map((field) => field.key).sort(),
           );
           const expectedChanges = ["create", "update"].includes(action)
-            ? ordinary.filter((field) => !["reference_number", "calculation", "total"].includes(field.type)).map((field) => field.key)
+            ? ordinary
+                .filter(
+                  (field) => !["reference_number", "calculation", "total"].includes(field.type),
+                )
+                .map((field) => field.key)
             : [];
-          expect([...permission.field_policy!.changeable_fields].sort()).toEqual(expectedChanges.sort());
+          expect([...permission.field_policy!.changeable_fields].sort()).toEqual(
+            expectedChanges.sort(),
+          );
         }
       }
     }
-    const people = sources.find((source) => source.kind === "module" && source.key === "vortex.crm.people");
+    const people = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.people",
+    );
     if (!people || people.kind !== "module") throw new Error("People fixture required");
-    const notes = people.body.permissions.find((entry) => entry.key.endsWith(".view_sensitive_notes"))!;
+    const notes = people.body.permissions.find((entry) =>
+      entry.key.endsWith(".view_sensitive_notes"),
+    )!;
     expect(notes.action_kind).toBe("read");
     expect(notes.named_action).toBeUndefined();
     expect(notes.field_policy).toEqual({ readable_fields: ["notes"], changeable_fields: [] });
-    const desk = sources.find((source) => source.kind === "application" && source.key === "vortex.app.service_desk");
+    const desk = sources.find(
+      (source) => source.kind === "application" && source.key === "vortex.app.service_desk",
+    );
     if (!desk || desk.kind !== "application") throw new Error("Service Desk fixture required");
     for (const role of desk.body.roles) expect(role.permissions).not.toContain(notes.key);
   });
 
   it("covers named-action subject effects without granting unrelated subject fields", () => {
-    const opportunities = sources.find((source) => source.kind === "module" && source.key === "vortex.crm.opportunities");
-    if (!opportunities || opportunities.kind !== "module") throw new Error("Opportunities fixture required");
-    const approval = opportunities.body.permissions.find((entry) => entry.key.endsWith(".approve_discount"))!;
+    const opportunities = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.opportunities",
+    );
+    if (!opportunities || opportunities.kind !== "module")
+      throw new Error("Opportunities fixture required");
+    const approval = opportunities.body.permissions.find((entry) =>
+      entry.key.endsWith(".approve_discount"),
+    )!;
     expect(approval.action_kind).toBe("named");
     expect(approval.named_action).toBe("approve_discount");
     expect(approval.field_policy).toEqual({
@@ -676,36 +743,56 @@ describe("complete fixture set", () => {
       if (!value || typeof value !== "object") return [];
       const object = value as Record<string, unknown>;
       return [
-        ...(object.source === "subject_field" && typeof object.field === "string" ? [object.field] : []),
+        ...(object.source === "subject_field" && typeof object.field === "string"
+          ? [object.field]
+          : []),
         ...Object.values(object).flatMap(subjectReads),
       ];
     };
     for (const source of sources) {
       if (source.kind !== "module") continue;
       for (const action of source.body.actions) {
-        const policy = source.body.permissions.find((permission) => permission.key === action.permission)!.field_policy!;
-        const changes = action.effects.flatMap((effect) => effect.kind === "set_field" ? [effect.field] : []);
-        const relationshipReads = action.effects.flatMap((effect) => effect.kind === "copy_relationships" ? effect.relationships : []);
-        const reads = [...new Set([...changes, ...relationshipReads, ...subjectReads(action.effects)])];
+        const policy = source.body.permissions.find(
+          (permission) => permission.key === action.permission,
+        )!.field_policy!;
+        const changes = action.effects.flatMap((effect) =>
+          effect.kind === "set_field" ? [effect.field] : [],
+        );
+        const relationshipReads = action.effects.flatMap((effect) =>
+          effect.kind === "copy_relationships" ? effect.relationships : [],
+        );
+        const reads = [
+          ...new Set([...changes, ...relationshipReads, ...subjectReads(action.effects)]),
+        ];
         expect([...policy.readable_fields].sort(), action.key).toEqual(reads.sort());
-        expect([...policy.changeable_fields].sort(), action.key).toEqual([...new Set(changes)].sort());
+        expect([...policy.changeable_fields].sort(), action.key).toEqual(
+          [...new Set(changes)].sort(),
+        );
       }
     }
   });
 
   it("keeps the approved Case Summary narrower than native Case field access", () => {
-    const cases = sources.find((source) => source.kind === "module" && source.key === "vortex.service_desk.cases");
+    const cases = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
     if (!cases || cases.kind !== "module") throw new Error("Case fixture required");
-    const readPolicy = cases.body.permissions.find((entry) => entry.key.endsWith(".case.read"))!.field_policy!;
-    const updatePolicy = cases.body.permissions.find((entry) => entry.key.endsWith(".case.update"))!.field_policy!;
+    const readPolicy = cases.body.permissions.find((entry) =>
+      entry.key.endsWith(".case.read"),
+    )!.field_policy!;
+    const updatePolicy = cases.body.permissions.find((entry) =>
+      entry.key.endsWith(".case.update"),
+    )!.field_policy!;
     const scenario = read("scenarios/cross-application-sharing.json") as {
       body: { inter_application_grant: { readable_fields: string[]; changeable_fields: string[] } };
     };
     const grant = scenario.body.inter_application_grant;
-    expect(grant.readable_fields.filter((field) => readPolicy.readable_fields.includes(field))).toEqual([
-      "case_number", "subject", "status", "priority", "customer_company", "resolved_at",
-    ]);
-    expect(grant.changeable_fields.filter((field) => updatePolicy.changeable_fields.includes(field))).toEqual(["status", "priority"]);
+    expect(
+      grant.readable_fields.filter((field) => readPolicy.readable_fields.includes(field)),
+    ).toEqual(["case_number", "subject", "status", "priority", "customer_company", "resolved_at"]);
+    expect(
+      grant.changeable_fields.filter((field) => updatePolicy.changeable_fields.includes(field)),
+    ).toEqual(["status", "priority"]);
     expect(grant.readable_fields).not.toContain("description");
     expect(grant.readable_fields).not.toContain("attachments");
   });

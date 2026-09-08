@@ -16,9 +16,17 @@ import {
   definitionSourceDocumentSchema,
   moduleDraftSchema,
   moduleDraftV2Schema,
+  moduleDraftV3Schema,
   moduleCompilationOutputV2Schema,
+  moduleCompilationOutputV3Schema,
   moduleCompilationRequestV2Schema,
+  moduleCompilationRequestV3Schema,
   moduleSourceDocumentV2Schema,
+  moduleSourceDocumentV3Schema,
+  ruleIdSchema,
+  containedComponentIdSchema,
+  recordTypeIdSchema,
+  fieldIdSchema,
   normalizeExactDecimal,
   readModuleSourceRecordOwnershipModeV1,
   writeModuleRecordOwnershipModeV1,
@@ -26,12 +34,17 @@ import {
   type ApplicationCompilationRequestV2,
   type ModuleCompilationOutputV2,
   type ModuleCompilationRequestV2,
+  type ModuleCompilationOutputV3,
+  type ModuleCompilationRequestV3,
+  type ModuleSourceDocumentV3,
+  type RuleGraph,
   type DefinitionCompilationRequest,
   type ApplicationSourceDocumentV2,
   type DefinitionCompilationOutput,
   type DefinitionProvenanceEntry,
   type DefinitionResolutionSnapshot,
   type DefinitionResolutionSnapshotV2,
+  type DefinitionResolutionSnapshotV3,
   type DefinitionSourceDocument,
   type DefinitionValidationLocation,
 } from "@vortex/contracts";
@@ -47,7 +60,9 @@ import {
 import {
   extractApplicationSourceIdentityRequirementsV2,
   extractSourceIdentityRequirements,
+  extractModuleSourceIdentityRequirementsV3,
 } from "./source-identities";
+import { compileRuleGraph } from "./rule-graph-compilation";
 import {
   materialiseApplicationCompositionV2,
   type MaterialisedApplicationCompositionV2,
@@ -273,11 +288,13 @@ function sourceContractPositions(source: JsonObject): SourceContractPositions {
   const opaqueDataRoots: Path[] = [];
   const recordRoots: Path[] = [];
   const contract =
-    source.kind === "module" && source.source_contract_version === "2.0.0"
-      ? moduleSourceDocumentV2Schema
-      : source.kind === "application" && source.source_contract_version === "2.0.0"
-        ? applicationSourceDocumentV2Schema
-        : definitionSourceDocumentSchema;
+    source.kind === "module" && source.source_contract_version === "3.0.0"
+      ? moduleSourceDocumentV3Schema
+      : source.kind === "module" && source.source_contract_version === "2.0.0"
+        ? moduleSourceDocumentV2Schema
+        : source.kind === "application" && source.source_contract_version === "2.0.0"
+          ? applicationSourceDocumentV2Schema
+          : definitionSourceDocumentSchema;
   walkDefinitionContract(contract, source, (schema, _value, path) => {
     if (schema === jsonValueSchema) opaqueDataRoots.push(path as Path);
     if (schema._zod.def.type === "record") recordRoots.push(path as Path);
@@ -366,7 +383,10 @@ function sourceToCanonicalPath(
     mapped.push(mappedKey);
     collection = segment;
   }
-  if (source.kind === "module" && source.source_contract_version === "2.0.0") {
+  if (
+    source.kind === "module" &&
+    (source.source_contract_version === "2.0.0" || source.source_contract_version === "3.0.0")
+  ) {
     const leaf = sourcePath.at(-1);
     if (leaf === "record_type") mapped[mapped.length - 1] = "recordTypeId";
     if (leaf === "record_id") mapped[mapped.length - 1] = "recordId";
@@ -635,7 +655,8 @@ function conditionSourceTargets(
   if (node === null || typeof node !== "object" || Array.isArray(node)) return undefined;
   const comparison = asObject(node);
   const valueSuffix = (suffixPath: Path): Path =>
-    source.source_contract_version === "2.0.0"
+    source.source_contract_version === "2.0.0" ||
+    (source.kind === "module" && source.source_contract_version === "3.0.0")
       ? suffixPath.map((segment) => {
           if (segment === "record_type") return "recordTypeId";
           if (segment === "record_id") return "recordId";
@@ -1778,21 +1799,27 @@ function provenanceFor(
 }
 
 class Resolution {
-  readonly snapshot: DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2;
+  readonly snapshot:
+    DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
   readonly sourceLocation: DefinitionValidationLocation;
 
   constructor(
-    snapshot: DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2,
+    snapshot:
+      | DefinitionResolutionSnapshot
+      | DefinitionResolutionSnapshotV2
+      | DefinitionResolutionSnapshotV3,
     source: JsonObject,
   ) {
     this.snapshot = snapshot;
     this.sourceLocation = compilerRootLocation(source);
     const requirements =
-      source.kind === "application" && source.source_contract_version === "2.0.0"
-        ? extractApplicationSourceIdentityRequirementsV2(
-            source as unknown as ApplicationSourceDocumentV2,
-          )
-        : extractSourceIdentityRequirements(source as unknown as DefinitionSourceDocument);
+      source.kind === "module" && source.source_contract_version === "3.0.0"
+        ? extractModuleSourceIdentityRequirementsV3(source as unknown as ModuleSourceDocumentV3)
+        : source.kind === "application" && source.source_contract_version === "2.0.0"
+          ? extractApplicationSourceIdentityRequirementsV2(
+              source as unknown as ApplicationSourceDocumentV2,
+            )
+          : extractSourceIdentityRequirements(source as unknown as DefinitionSourceDocument);
     const authenticSourceIdentities = new Set(
       requirements.flatMap((requirement) =>
         requirement.aliases.map((alias) =>
@@ -2926,6 +2953,7 @@ function compileModule(
   savedConditionRevisions: readonly JsonObject[],
   moduleV2 = false,
   dependencyOutputs: readonly DefinitionCompilationOutput[] = [],
+  graphRules?: readonly RuleGraph[],
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -3137,49 +3165,52 @@ function compileModule(
       personalOrSensitiveValuesAllowed: false,
     };
   });
-  const rules = (body.rules as JsonObject[]).map((rule) => {
-    const record = qualifiedForRecord(String(rule.record_type));
-    const localField = (alias: string) => resolution.field(record, alias);
-    const valueContext = valueContextFor(record);
-    const effect = asObject(rule.effect);
-    let compiledEffect: unknown;
-    if (effect.kind === "set_value")
-      compiledEffect = {
-        kind: "set_value",
-        fieldId: localField(String(effect.field)),
-        value: moduleV2
-          ? normaliseModuleFieldValueV2(
-              fieldsById.get(localField(String(effect.field))),
-              effect.value,
-              valueContext,
-            )
-          : effect.value,
+  const rules =
+    graphRules ??
+    (body.rules as JsonObject[]).map((rule) => {
+      const record = qualifiedForRecord(String(rule.record_type));
+      const localField = (alias: string) => resolution.field(record, alias);
+      const valueContext = valueContextFor(record);
+      const effect = asObject(rule.effect);
+      let compiledEffect: unknown;
+      if (effect.kind === "set_value")
+        compiledEffect = {
+          kind: "set_value",
+          fieldId: localField(String(effect.field)),
+          value: moduleV2
+            ? normaliseModuleFieldValueV2(
+                fieldsById.get(localField(String(effect.field))),
+                effect.value,
+                valueContext,
+              )
+            : effect.value,
+        };
+      else if (effect.kind === "require")
+        compiledEffect = { kind: "require", fieldId: localField(String(effect.field)) };
+      else if (effect.kind === "show_or_hide")
+        compiledEffect = {
+          kind: "show_or_hide",
+          componentId: resolution.id(definitionKey, "extension_point", String(effect.component)),
+          visibility: effect.visibility,
+        };
+      else if (effect.kind === "warn")
+        compiledEffect = { kind: "warn", messageKey: effect.message };
+      else if (effect.kind === "start_background_work")
+        compiledEffect = {
+          kind: "start_background_work",
+          workflowId: resolution.id(definitionKey, "workflow", String(effect.workflow)),
+        };
+      else compiledEffect = { kind: "refuse", reasonCode: effect.reason_code };
+      return {
+        ruleId: resolution.id(definitionKey, "rule", String(rule.id), "content"),
+        key: rule.key,
+        subjectRecordTypeId: resolution.recordType(record).recordTypeId,
+        trigger: rule.trigger,
+        condition: condition(rule.condition, localField, moduleV2 ? valueContext : undefined),
+        priority: rule.priority,
+        effect: compiledEffect,
       };
-    else if (effect.kind === "require")
-      compiledEffect = { kind: "require", fieldId: localField(String(effect.field)) };
-    else if (effect.kind === "show_or_hide")
-      compiledEffect = {
-        kind: "show_or_hide",
-        componentId: resolution.id(definitionKey, "extension_point", String(effect.component)),
-        visibility: effect.visibility,
-      };
-    else if (effect.kind === "warn") compiledEffect = { kind: "warn", messageKey: effect.message };
-    else if (effect.kind === "start_background_work")
-      compiledEffect = {
-        kind: "start_background_work",
-        workflowId: resolution.id(definitionKey, "workflow", String(effect.workflow)),
-      };
-    else compiledEffect = { kind: "refuse", reasonCode: effect.reason_code };
-    return {
-      ruleId: resolution.id(definitionKey, "rule", String(rule.id), "content"),
-      key: rule.key,
-      subjectRecordTypeId: resolution.recordType(record).recordTypeId,
-      trigger: rule.trigger,
-      condition: condition(rule.condition, localField, moduleV2 ? valueContext : undefined),
-      priority: rule.priority,
-      effect: compiledEffect,
-    };
-  });
+    });
   const sharingConditions = (body.sharing_conditions as JsonObject[]).map((saved) => {
     const record = qualifiedForRecord(String(saved.source_record_type));
     const localField = (alias: string) => resolution.field(record, alias);
@@ -3269,7 +3300,13 @@ function compileModule(
       ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
     };
   });
-  const canonical = (moduleV2 ? moduleDraftV2Schema : moduleDraftSchema).parse({
+  const canonical = (
+    source.source_contract_version === "3.0.0"
+      ? moduleDraftV3Schema
+      : moduleV2
+        ? moduleDraftV2Schema
+        : moduleDraftSchema
+  ).parse({
     envelope: {
       kind: "module",
       rootId: root.rootId,
@@ -5356,6 +5393,121 @@ function compileModuleV2Internal(
   }
 }
 
+function compileModuleV3Internal(
+  input: unknown,
+  context?: DefinitionCompilationContext,
+): ModuleCompilationOutputV3 {
+  const parsed = moduleCompilationRequestV3Schema.safeParse(input);
+  if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
+  const request = parsed.data;
+  const source = request.source as unknown as JsonObject;
+  const dependencyOutputs = parseDefinitionCompilationContext(context);
+  try {
+    const resolution = new Resolution(request.resolution, source);
+    const definitionKey = request.source.key;
+    const ruleKeys = new Map(request.source.body.rules.map((rule) => [rule.id, rule.key]));
+    const localRecordKey = (alias: string): string => {
+      const record = request.source.body.record_types.find(
+        (record) => record.id === alias || record.key === alias,
+      );
+      if (!record) fail("vortex.definition.missing_identity", "unresolved_reference");
+      return record.key;
+    };
+    const nestedId = (kind: string, ruleAlias: string, alias: string): string => {
+      const key = ruleKeys.get(ruleAlias);
+      if (key === undefined) fail("vortex.definition.missing_identity", "unresolved_reference");
+      return resolution.id(definitionKey, kind, alias, `rule:${key}`);
+    };
+    const rules = request.source.body.rules
+      .map((rule, sourceIndex) => ({
+        sourceIndex,
+        ...compileRuleGraph(rule, {
+          ruleId: (alias) =>
+            ruleIdSchema.parse(resolution.id(definitionKey, "rule", alias, "content")),
+          nodeId: (ruleAlias, alias) =>
+            containedComponentIdSchema.parse(nestedId("rule_node", ruleAlias, alias)),
+          inputId: (ruleAlias, alias) =>
+            containedComponentIdSchema.parse(nestedId("rule_input", ruleAlias, alias)),
+          variableId: (ruleAlias, alias) =>
+            containedComponentIdSchema.parse(nestedId("rule_variable", ruleAlias, alias)),
+          localRecordTypeId: (alias) =>
+            recordTypeIdSchema.parse(
+              resolution.recordType(`${definitionKey}:${alias}`).recordTypeId,
+            ),
+          localFieldId: (record, field) =>
+            fieldIdSchema.parse(
+              resolution.field(`${definitionKey}:${localRecordKey(record)}`, field),
+            ),
+          qualifiedRecordTypeId: (reference) =>
+            recordTypeIdSchema.parse(resolution.recordType(reference).recordTypeId),
+        }),
+      }))
+      .sort(
+        (a, b) =>
+          a.graph.priority - b.graph.priority ||
+          compareCanonicalStrings(a.graph.ruleId, b.graph.ruleId),
+      );
+    const canonical = moduleDraftV3Schema.parse(
+      compileModule(
+        source,
+        resolution,
+        request.draftMetadata as unknown as JsonObject,
+        (request.savedConditionRevisions ?? []) as unknown as JsonObject[],
+        true,
+        dependencyOutputs,
+        rules.map(({ graph }) => graph),
+      ),
+    );
+    // Existing provenance owns the unchanged Module field model. Graph translation
+    // supplies its exact paths, including reordered nodes and permanent references.
+    const provenance = provenanceFor(
+      { ...source, body: { ...request.source.body, rules: [] } },
+      { ...canonical, content: { ...canonical.content, rules: [] } },
+      resolution,
+    );
+    rules.forEach((rule, canonicalIndex) => {
+      for (const entry of rule.provenance)
+        provenance.push({
+          ...entry,
+          canonicalPath: ["content", "rules", canonicalIndex, ...entry.canonicalPath],
+          ...(entry.sourcePath
+            ? { sourcePath: ["body", "rules", rule.sourceIndex, ...entry.sourcePath] }
+            : {}),
+        });
+    });
+    const ownDefinition = resolution.definition(definitionKey, "module");
+    const output = moduleCompilationOutputV3Schema.safeParse({
+      kind: "module",
+      validationContractVersion: "3.0.0",
+      canonical,
+      artifact: {
+        kind: "module",
+        definitionKey,
+        rootId: ownDefinition.rootId,
+        exactVersion: ownDefinition.exactVersion,
+        contentFingerprint: fingerprintCanonicalValue(canonical.content),
+        resolutionFingerprint: request.resolution.fingerprint,
+      },
+      provenance,
+      dependencyOrder: dependencyOrder(source),
+      resolvedDependencies: resolvedDependencies(source, resolution),
+      resolutionFingerprint: request.resolution.fingerprint,
+    });
+    if (!output.success) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    return output.data;
+  } catch (error) {
+    if (error instanceof DefinitionCompilationError)
+      throw error.location
+        ? error
+        : new DefinitionCompilationError(
+            error.ruleCode,
+            error.family,
+            compilerRootLocation(source),
+          );
+    return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  }
+}
+
 const explicitCompilationKind = (input: unknown): "module" | "application" | undefined => {
   if (input === null || typeof input !== "object" || Array.isArray(input)) return undefined;
   const request = input as JsonObject;
@@ -5375,12 +5527,16 @@ export function compileDefinition(
   input: ApplicationCompilationRequestV2,
 ): ApplicationCompilationOutputV2;
 export function compileDefinition(input: ModuleCompilationRequestV2): ModuleCompilationOutputV2;
+export function compileDefinition(input: ModuleCompilationRequestV3): ModuleCompilationOutputV3;
 export function compileDefinition(input: DefinitionCompilationRequest): DefinitionCompilationOutput;
 export function compileDefinition(
   input: unknown,
 ): DefinitionCompilationOutput | ApplicationCompilationOutputV2 {
   const explicitKind = explicitCompilationKind(input);
-  if (explicitKind === "module") return compileModuleV2Internal(input);
+  if (explicitKind === "module")
+    return (input as JsonObject).sourceContractVersion === "3.0.0"
+      ? compileModuleV3Internal(input)
+      : compileModuleV2Internal(input);
   if (explicitKind === "application") return compileApplicationV2Internal(input);
   return compileDefinitionInternal(input);
 }
@@ -5394,6 +5550,10 @@ export function compileDefinitionWithContext(
   context: DefinitionCompilationContext,
 ): ModuleCompilationOutputV2;
 export function compileDefinitionWithContext(
+  input: ModuleCompilationRequestV3,
+  context: DefinitionCompilationContext,
+): ModuleCompilationOutputV3;
+export function compileDefinitionWithContext(
   input: DefinitionCompilationRequest,
   context: DefinitionCompilationContext,
 ): DefinitionCompilationOutput;
@@ -5402,7 +5562,10 @@ export function compileDefinitionWithContext(
   context: DefinitionCompilationContext,
 ): DefinitionCompilationOutput | ApplicationCompilationOutputV2 {
   const explicitKind = explicitCompilationKind(input);
-  if (explicitKind === "module") return compileModuleV2Internal(input, context);
+  if (explicitKind === "module")
+    return (input as JsonObject).sourceContractVersion === "3.0.0"
+      ? compileModuleV3Internal(input, context)
+      : compileModuleV2Internal(input, context);
   if (explicitKind === "application") return compileApplicationV2Internal(input, context);
   return compileDefinitionInternal(input, context);
 }

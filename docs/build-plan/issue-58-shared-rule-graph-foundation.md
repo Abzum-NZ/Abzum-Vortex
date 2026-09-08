@@ -24,7 +24,8 @@ and its existing dependencies.
 flowchart LR
   C[Shared graph contracts and complete profile fixtures] --> D[Module 3 compile and validate]
   D --> P[Publish, read and restore exact graphs]
-  P --> R[One pure Rule interpreter]
+  P --> M[Explicit new-draft conversion of older rules]
+  M --> R[One pure Rule interpreter]
   R --> S[47: protected save integration]
   R --> A[Later profiles: App coordinates owning services]
 ```
@@ -39,10 +40,15 @@ flowchart LR
 3. Carry graphs through source identity resolution, compilation, provenance,
    reference validation, version impact, publication, consumer reads and restore.
    Complete authored/canonical fixtures cover every supported node and outcome.
-4. Only after that proof passes, add the pure shared Rule interpreter. It consumes
+4. Convert supported V1/V2 rules into a new Module 3 draft, preserving the original
+   trigger, condition and effect. Report unsupported behavior at its source path;
+   never silently discard a rule or rewrite an immutable release. Reuse the
+   existing V1-to-V2 field conversion and request only genuinely missing value or
+   message information. The author can edit an unsupported draft explicitly.
+5. Only after that proof passes, add the pure shared Rule interpreter. It consumes
    the published canonical graph and trusted record definitions/candidate values.
    It has no database, network, Access, App, Page or generic service callback.
-5. Integrate the same interpreter inside [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)'s
+6. Integrate the same interpreter inside [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)'s
    short owning transaction. Revalidate resulting candidate fields before writing.
    A pure graph result alone is not a successful protected save.
 
@@ -85,6 +91,14 @@ or explicitly available previous field. No arbitrary JSON expression or script.
 Keep a missing optional value distinct from explicit clearing; required reads
 need a default, assignment on every incoming path or an explicit absence branch.
 
+Table inputs, variables and standalone literals declare columns with key, V2
+cell type and required status. This minimal data shape lets compilation normalize
+decimal and money cells without guessing from text or requiring a record field.
+Canonical columns sort by key; row order is preserved. Undeclared columns,
+missing required cells and wrong cell types refuse. It does not copy storage
+settings: owning field validation still enforces row limits, precision, choice
+options and currency policy when a flow proposes a field change.
+
 The new graph condition operands explicitly represent input/variable/previous
 sources and adapt resolved typed values to the existing shared condition
 evaluator. Do not silently expand the meaning of the old condition contract.
@@ -94,6 +108,12 @@ contract. Ordinary writable candidate fields are eligible; platform-generated
 reference numbers, calculations and totals remain owned by their existing
 generators. This profile cannot grant permission to change a field. A clear is
 explicit, not a guessed empty string or null stored as a field value.
+
+Publication checks value shape and declared reference targets, including variable
+defaults. Field-specific choice, currency, precision and row policies apply to
+the final candidate in the owning Record save, not independently after every
+node: a later configured node can correct an intermediate value. Publication
+acceptance alone never proves that a particular run can save its final values.
 
 Publication resolves the complete read/write sets, field targets, variable types,
 node versions and branch initialization. Unknown references, incompatible values

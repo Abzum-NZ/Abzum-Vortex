@@ -3,6 +3,13 @@ import { sourceAliasSchema, sourceQualifiedRecordTypeSchema } from "./definition
 import { builderKeySchema } from "./identifiers";
 import { sourceModuleFieldValueV2Schemas } from "./module-field-values-v2";
 import {
+  maximumRuleTableRows,
+  ruleTableColumnsMatch,
+  sourceRuleTableColumnsSchema,
+  validateRuleTableDeclaration,
+  validateRuleTableRows,
+} from "./rule-table-values";
+import {
   ruleGraphBinaryConditionOperatorSchema,
   boundedRuleGraphConditionInputSchema,
   ruleGraphContractVersion,
@@ -17,9 +24,22 @@ const sourceTypedValueBranches = ruleGraphValueTypeKeys.map((type) =>
   z
     .object({
       type: z.literal(type),
-      value: sourceModuleFieldValueV2Schemas[type],
+      value:
+        type === "table"
+          ? sourceModuleFieldValueV2Schemas.table.max(maximumRuleTableRows)
+          : sourceModuleFieldValueV2Schemas[type],
+      columns: type === "table" ? sourceRuleTableColumnsSchema : z.never().optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((value, context) => {
+      if (value.type === "table" && value.columns !== undefined)
+        validateRuleTableRows(
+          value.columns,
+          value.value as Record<string, unknown>[],
+          context,
+          true,
+        );
+    }),
 );
 
 export const sourceRuleGraphTypedValueSchema = z.discriminatedUnion(
@@ -64,9 +84,11 @@ export const sourceRuleGraphInputDeclarationSchema = z
     type: ruleGraphValueTypeSchema,
     required: z.boolean(),
     record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).max(20).optional(),
+    columns: sourceRuleTableColumnsSchema.optional(),
   })
   .strict()
-  .superRefine(validateReferenceTargets);
+  .superRefine(validateReferenceTargets)
+  .superRefine(validateRuleTableDeclaration);
 export type SourceRuleGraphInputDeclaration = z.infer<typeof sourceRuleGraphInputDeclarationSchema>;
 
 export const sourceRuleGraphVariableDeclarationSchema = z
@@ -76,10 +98,23 @@ export const sourceRuleGraphVariableDeclarationSchema = z
     type: ruleGraphValueTypeSchema,
     record_types: z.array(sourceQualifiedRecordTypeSchema).min(1).max(20).optional(),
     default_value: sourceRuleGraphTypedValueSchema.optional(),
+    columns: sourceRuleTableColumnsSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
     validateReferenceTargets(value, context);
+    validateRuleTableDeclaration(value, context);
+    if (
+      value.type === "table" &&
+      value.columns &&
+      value.default_value?.columns &&
+      !ruleTableColumnsMatch(value.columns, value.default_value.columns)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["default_value", "columns"],
+        message: "Table default columns must match the variable declaration",
+      });
     if (value.default_value !== undefined && value.default_value.type !== value.type)
       context.addIssue({
         code: "custom",

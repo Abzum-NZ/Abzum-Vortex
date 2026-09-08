@@ -6,6 +6,7 @@ import {
   definitionKindSchema,
   definitionResolutionSnapshotSchema,
   definitionResolutionSnapshotV2Schema,
+  definitionResolutionSnapshotV3Schema,
   storedDefinitionSourceSchema,
   exactDefinitionDependencySchema,
   fingerprintSchema,
@@ -18,13 +19,14 @@ import {
   publishedApplicationReferenceSchema,
   publishedModuleDefinitionSchema,
   moduleVersionImpactHistoryEntryV2Schema,
+  moduleVersionImpactHistoryEntryV3Schema,
   publishedModuleReferenceSchema,
   revisionSchema,
   semanticVersionSchema,
   selectApplicationContractPair,
   selectModuleContractPair,
   stableDefinitionReleaseVersionSchema,
-  sourceIdentityAssignmentV2Schema,
+  sourceIdentityAssignmentV3Schema,
   storedDefinitionDraftSchema,
   timestampSchema,
   versionImpactReasonSchema,
@@ -107,6 +109,7 @@ const storedReleaseEvidenceSchema = z
     resolutionSnapshot: z.union([
       definitionResolutionSnapshotSchema,
       definitionResolutionSnapshotV2Schema,
+      definitionResolutionSnapshotV3Schema,
     ]),
     resolutionFingerprint: fingerprintSchema,
     comparisonFingerprint: fingerprintSchema,
@@ -136,7 +139,7 @@ const publicationStateSchema = z
   .object({
     root: publicationRootSchema,
     draft: databaseStoredDraftSchema,
-    identities: z.array(sourceIdentityAssignmentV2Schema),
+    identities: z.array(sourceIdentityAssignmentV3Schema),
     history: storedPublishedHistorySchema,
   })
   .strict();
@@ -163,8 +166,9 @@ const rawModuleReleaseSchema = z
     resolutionSnapshot: z.union([
       definitionResolutionSnapshotSchema,
       definitionResolutionSnapshotV2Schema,
+      definitionResolutionSnapshotV3Schema,
     ]),
-    identities: z.array(sourceIdentityAssignmentV2Schema),
+    identities: z.array(sourceIdentityAssignmentV3Schema),
     published: rawPublishedModuleSchema,
   })
   .strict();
@@ -228,7 +232,7 @@ const dependencyReferencesMatch = (
 
 const currentIdentityLookupMatches = (
   source: StoredDefinitionSource,
-  identities: readonly z.infer<typeof sourceIdentityAssignmentV2Schema>[],
+  identities: readonly z.infer<typeof sourceIdentityAssignmentV3Schema>[],
 ): boolean => {
   const expected = extractStoredSourceIdentityRequirements(source).flatMap((requirement) =>
     requirement.aliases.map((alias) =>
@@ -374,7 +378,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           release.publication.kind !== "module"
         )
           return invalidStorage();
-        let schema: "v1" | "v2";
+        let schema: "v1" | "v2" | "v3";
         try {
           schema = selectModuleContractPair(
             release.evidence.sourceContractVersion,
@@ -383,10 +387,10 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch {
           return invalidStorage();
         }
-        if (
-          (schema === "v2") !== "validationContractVersion" in output ||
-          (schema === "v2") !== (resolution.contractVersion === "2.0.0")
-        )
+        const expectedVersion = schema === "v3" ? "3.0.0" : schema === "v2" ? "2.0.0" : "1.0.0";
+        const outputVersion =
+          "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
+        if (outputVersion !== expectedVersion || resolution.contractVersion !== expectedVersion)
           return invalidStorage();
       }
       const ownResolution = resolution.definitions.filter(
@@ -439,9 +443,12 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       if (!dependencyReferencesMatch(output, release.dependencyManifest)) return invalidStorage();
       const published =
         kind === "module" && output.kind === "module" && release.publication.kind === "module"
-          ? ("validationContractVersion" in output
-              ? moduleVersionImpactHistoryEntryV2Schema
-              : publishedModuleDefinitionSchema
+          ? ("validationContractVersion" in output && output.validationContractVersion === "3.0.0"
+              ? moduleVersionImpactHistoryEntryV3Schema
+              : "validationContractVersion" in output &&
+                  output.validationContractVersion === "2.0.0"
+                ? moduleVersionImpactHistoryEntryV2Schema
+                : publishedModuleDefinitionSchema
             ).safeParse({
               publication: release.publication,
               content: output.canonical.content,
@@ -469,9 +476,18 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
   private materializeModuleRelease(release: RawModuleRelease): ResolvableModuleRelease {
     const output = release.compilationOutput;
     const snapshot = release.resolutionSnapshot;
-    const moduleV2 = "validationContractVersion" in output;
-    const sourceContractVersion = moduleV2 ? "2.0.0" : "1.0.0";
-    const validationContractVersion = moduleV2 ? "2.0.0" : "1.0.0";
+    const validationContractVersion =
+      "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
+    const sourceContractVersion = validationContractVersion;
+    let moduleSchema: "v1" | "v2" | "v3";
+    try {
+      moduleSchema = selectModuleContractPair(
+        sourceContractVersion,
+        validationContractVersion,
+      ).schema;
+    } catch {
+      return invalidStorage();
+    }
     const ownResolution = snapshot.definitions.filter(
       (definition) =>
         definition.kind === "module" &&
@@ -518,7 +534,11 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     )
       return invalidStorage();
     const published = (
-      moduleV2 ? moduleVersionImpactHistoryEntryV2Schema : publishedModuleDefinitionSchema
+      moduleSchema === "v3"
+        ? moduleVersionImpactHistoryEntryV3Schema
+        : moduleSchema === "v2"
+          ? moduleVersionImpactHistoryEntryV2Schema
+          : publishedModuleDefinitionSchema
     ).safeParse({
       publication: release.published.publication,
       content: output.canonical.content,

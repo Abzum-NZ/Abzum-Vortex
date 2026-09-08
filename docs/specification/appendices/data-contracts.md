@@ -688,12 +688,29 @@ field values and defines Start, Condition, Set variable, Set field, Require fiel
 Warn, Refuse and Finish nodes. Typed run-local variables are not infrastructure
 environment variables or secrets. Requirements apply to the final candidate
 after the applicable graphs run in ascending priority and permanent rule-ID
-order. These are candidate contracts until their complete compile, publication,
-consumer-read and restore proof passes; parsing a graph alone does not make it
-executable. The [shared graph delivery plan](../../build-plan/issue-58-shared-rule-graph-foundation.md)
-tracks that proof before interpreter implementation. The other interactive and
+order. Definition carries the exact pair through compilation, semantic validation,
+publication, consumer reads and restore, retaining node/input/variable identities
+inside their permanent rule owner. Complete local lifecycle tests exercise those
+operations; they do not establish hosted delivery or execution. The
+[shared graph delivery plan](../../build-plan/issue-58-shared-rule-graph-foundation.md)
+requires explicit new-draft conversion before interpreter implementation. Parsing
+or publishing a graph alone does not execute it. The other interactive and
 effectful nodes remain required extensions of this same engine, not a second
 designer or interpreter.
+
+Flow table inputs, variables and standalone table literals are self-describing:
+each column declares its key, existing V2 cell type and whether a cell is required.
+Canonical columns use key order while rows retain their meaningful order. Cell
+validation reuses existing value codecs; decimal-looking text is not guessed to
+be a number. Assignment to a record table additionally obeys that field's own
+constraints. Flow data descriptors do not duplicate storage settings or grant
+write authority. See the [typed-value delivery plan](../../build-plan/issue-58-shared-rule-graph-foundation.md#values-and-field-behavior).
+
+Graph publication validates value shapes and declared reference targets, including
+variable defaults. The owning Record save enforces field-specific currency,
+choices, precision and row policies on the final candidate after all applicable
+graphs. Intermediate typed values may be corrected by a later node; neither
+publication nor a completed pure flow bypasses final field validation.
 
 The target extension also declares module-exposed query references, platform-managed flow dependencies, per-flow defaults and per-node execution bindings (`current_actor`, exact specified account or registered system actor), viewer-safe output bindings and the separate execution-authority reference required for specified/system use. Those shapes are future source, canonical compiler, provenance, version-impact, storage, consumer-read and restore work; the current contracts do not yet deliver them. They add no caller-selected actor, service-role bypass, copied role set or second activity envelope.
 

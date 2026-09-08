@@ -20,11 +20,13 @@ import {
 } from "./identifiers";
 import { moduleDraftSchema, publishedModuleDefinitionSchema } from "./module-contracts";
 import { moduleContentV2Schema, moduleDraftV2Schema } from "./module-contracts-v2";
+import { moduleContentV3Schema, moduleDraftV3Schema } from "./module-contracts-v3";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const versionImpactPolicyVersion = "1.0.0" as const;
 export const applicationVersionImpactPolicyVersionV2 = "2.0.0" as const;
 export const moduleVersionImpactPolicyVersionV2 = "2.0.0" as const;
+export const moduleVersionImpactPolicyVersionV3 = "3.0.0" as const;
 export const stableDefinitionReleaseVersionSchema = semanticVersionSchema.refine(
   (value) => !value.includes("-") && !value.includes("+"),
   "Published definition versions must be stable major.minor.patch versions",
@@ -61,6 +63,9 @@ export const versionImpactComponentKinds = [
   "action_input",
   "event",
   "rule",
+  "rule_input",
+  "rule_variable",
+  "rule_node",
   "sharing_condition",
   "extension_point",
   "module_binding",
@@ -231,6 +236,26 @@ export const moduleVersionImpactHistoryEntryV2Schema = z
     requireResolvedRecordTypeReferences(moduleContentV2Schema, value.content, context, ["content"]),
   );
 
+/** Comparator-only Module V3 history evidence; publication dispatch is enabled separately. */
+export const moduleVersionImpactHistoryEntryV3Schema = z
+  .object({
+    publication: publishedModuleReferenceSchema.extend({
+      validationContractVersion: z.literal("3.0.0"),
+    }),
+    content: moduleContentV3Schema,
+    dependencyManifest: z.array(publishedDefinitionReferenceSchema),
+    releaseNote: z.string().min(1).max(2_000),
+  })
+  .strict()
+  .superRefine((value, context) =>
+    requireResolvedRecordTypeReferences(
+      moduleContentV2Schema,
+      { ...value.content, rules: [] },
+      context,
+      ["content"],
+    ),
+  );
+
 const moduleVersionImpactHistoryEntryV1Schema = publishedModuleDefinitionSchema.refine(
   (value) => value.publication.validationContractVersion === "1.0.0",
   "Module V1 history must use validation contract version 1.0.0",
@@ -246,6 +271,23 @@ export const moduleVersionImpactRequestV2Schema = z
       )
       .max(historyLimit),
     candidate: moduleDraftV2Schema,
+  })
+  .strict();
+
+export const moduleVersionImpactRequestV3Schema = z
+  .object({
+    kind: z.literal("module"),
+    validationContractVersion: z.literal(moduleVersionImpactPolicyVersionV3),
+    history: z
+      .array(
+        z.union([
+          moduleVersionImpactHistoryEntryV1Schema,
+          moduleVersionImpactHistoryEntryV2Schema,
+          moduleVersionImpactHistoryEntryV3Schema,
+        ]),
+      )
+      .max(historyLimit),
+    candidate: moduleDraftV3Schema,
   })
   .strict();
 
@@ -348,8 +390,12 @@ export type ApplicationVersionImpactRequestV2 = z.infer<
   typeof applicationVersionImpactRequestV2Schema
 >;
 export type ModuleVersionImpactRequestV2 = z.infer<typeof moduleVersionImpactRequestV2Schema>;
+export type ModuleVersionImpactRequestV3 = z.infer<typeof moduleVersionImpactRequestV3Schema>;
 export type ModuleVersionImpactHistoryEntryV2 = z.infer<
   typeof moduleVersionImpactHistoryEntryV2Schema
+>;
+export type ModuleVersionImpactHistoryEntryV3 = z.infer<
+  typeof moduleVersionImpactHistoryEntryV3Schema
 >;
 export type DefinitionVersionImpactResult = z.infer<typeof definitionVersionImpactResultSchema>;
 export type DefinitionVersionConfirmation = z.infer<typeof definitionVersionConfirmationSchema>;

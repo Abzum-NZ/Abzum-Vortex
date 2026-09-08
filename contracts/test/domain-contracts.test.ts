@@ -2807,6 +2807,7 @@ describe("complete definition-source fixture set", () => {
       "ownership",
       "permission",
       "phone",
+      "priority", // Generic rule execution ordering, not a particular record field.
       "public",
       "query",
       "record",

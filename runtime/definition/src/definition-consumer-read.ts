@@ -7,6 +7,7 @@ import {
   definitionConsumerReadResultSchema,
   definitionResolutionSnapshotSchema,
   definitionResolutionSnapshotV2Schema,
+  definitionResolutionSnapshotV3Schema,
   fingerprintSchema,
   moduleRootIdSchema,
   organizationIdSchema,
@@ -77,6 +78,7 @@ export const storedConsumerReleaseEvidenceSchema = z
     resolutionSnapshot: z.union([
       definitionResolutionSnapshotSchema,
       definitionResolutionSnapshotV2Schema,
+      definitionResolutionSnapshotV3Schema,
     ]),
     dependencyManifest: definitionConsumerReadDependencyManifestSchema,
     moduleDependencyTargets: z.array(moduleDependencyTargetSchema).max(10_000),

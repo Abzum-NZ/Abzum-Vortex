@@ -1,0 +1,79 @@
+{
+  "source_contract_version": "3.0.0",
+  "root_alias": "example_shared",
+  "key": "example.shared",
+  "kind": "module",
+  "body": {
+    "name": "example.shared",
+    "description": "Generic packaged rule lifecycle fixture.",
+    "dependencies": [],
+    "record_types": [
+      {
+        "id": "rt_related",
+        "key": "related",
+        "name": "related",
+        "plural_name": "related records",
+        "title_field": "name",
+        "storage_contract_id": "storage_related",
+        "storage_scope": "application_contained",
+        "ownership_mode": "none",
+        "standard_actions": ["create", "read", "update"],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_name",
+            "key": "name",
+            "label": "name",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          }
+        ],
+        "relationships": []
+      },
+      {
+        "id": "rt_alternative",
+        "key": "alternative",
+        "name": "alternative",
+        "plural_name": "alternative records",
+        "title_field": "label",
+        "storage_contract_id": "storage_alternative",
+        "storage_scope": "application_contained",
+        "ownership_mode": "none",
+        "standard_actions": ["create", "read", "update"],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_label",
+            "key": "label",
+            "label": "label",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 120
+            }
+          }
+        ],
+        "relationships": []
+      }
+    ],
+    "permissions": [],
+    "actions": [],
+    "events": [],
+    "rules": [],
+    "extension_points": [],
+    "sharing_conditions": []
+  }
+}
