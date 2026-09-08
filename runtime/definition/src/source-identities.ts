@@ -1,6 +1,7 @@
 import type {
   ApplicationSourceDocumentV2,
   DefinitionSourceDocument,
+  StoredDefinitionSource,
   SourceIdentityKind,
   SourceIdentityKindV2,
 } from "@vortex/contracts";
@@ -318,3 +319,9 @@ export function extractApplicationSourceIdentityRequirementsV2(
 
   return requirements;
 }
+
+/** Selects the permanent-identity vocabulary from exact stored source metadata. */
+export const extractStoredSourceIdentityRequirements = (source: StoredDefinitionSource) =>
+  source.kind === "application" && source.source_contract_version === "2.0.0"
+    ? extractApplicationSourceIdentityRequirementsV2(source)
+    : extractSourceIdentityRequirements(source);

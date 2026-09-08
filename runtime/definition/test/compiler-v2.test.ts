@@ -4,15 +4,26 @@ import {
   applicationCompositionCatalogueSnapshotV2Schema,
   applicationSourceDocumentV2Schema,
   definitionResolutionSnapshotSchema,
+  sessionContextSchema,
   selectApplicationContractPair,
   selectApplicationValidationContract,
+  storedDefinitionDraftSchema,
   type ApplicationDraftV2,
   type ApplicationSourceDocumentV2,
   type BlockPlacementV2Contract,
   type PageCompositionV2,
 } from "@vortex/contracts";
+import type { DatabaseRow, DatabaseValue, RequestDatabaseTransaction } from "@vortex/db";
 import { describe, expect, it } from "vitest";
 import { compileDefinition } from "../src/compiler";
+import { createDefinitionStore } from "../src/definition-store";
+import {
+  createDefinitionPublicationService,
+  type DefinitionPublicationCandidate,
+  type DefinitionPublicationCatalogue,
+  type DefinitionPublicationReader,
+  type DefinitionPublicationRepository,
+} from "../src/definition-publication";
 import {
   compareDefinitionVersionImpact,
   confirmDefinitionVersionImpact,
@@ -21,6 +32,7 @@ import { fingerprintCanonicalValue } from "../src/canonical-json";
 import { DefinitionVersionImpactError } from "../src/version-impact-error";
 import { extractApplicationSourceIdentityRequirementsV2 } from "../src/source-identities";
 import { createApplicationResolutionSnapshotV2 } from "../src/application-v2-resolution";
+import { validateDefinitionSource } from "../src/validation";
 
 const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
 const baseSource = JSON.parse(
@@ -1264,4 +1276,167 @@ describe("native Application V2 version impact", () => {
 const canonicalEmptySlotV2 = (): PlacementSlotV2 => ({
   placements: {},
   order: { desktop: [], tablet: [], phone: [] },
+});
+
+const storedV2Row = (source: ApplicationSourceDocumentV2, revision: number): DatabaseRow => ({
+  root_id: id(1200),
+  organization_id: metadata.organizationId,
+  kind: "application",
+  definition_key: source.key,
+  draft_revision: String(revision),
+  published_revision: null,
+  authored_source: source,
+  source_contract_version: source.source_contract_version,
+  source_fingerprint: fingerprintCanonicalValue(source),
+  created_at: metadata.createdAt,
+  created_by: metadata.createdBy,
+  updated_at: metadata.updatedAt,
+  updated_by: metadata.updatedBy,
+});
+
+const v2StoreRunner = (rows: readonly DatabaseRow[]) => {
+  const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+  const transaction: RequestDatabaseTransaction = {
+    query: async <ResultRow extends DatabaseRow>(
+      strings: TemplateStringsArray,
+      ...values: readonly DatabaseValue[]
+    ) => {
+      calls.push({ text: strings.join("$value"), values });
+      return rows as readonly ResultRow[];
+    },
+  };
+  return { calls, transaction };
+};
+
+describe("native Application V2 draft storage", () => {
+  it("creates and saves the complete source with exact shell and content-slot identities", async () => {
+    const source = createSource();
+    const requirements = extractApplicationSourceIdentityRequirementsV2(source);
+    expect(requirements.map((requirement) => requirement.kind)).toEqual(
+      expect.arrayContaining(["shell", "shell_content_slot"]),
+    );
+
+    const creation = v2StoreRunner([storedV2Row(source, 1)]);
+    await expect(
+      createDefinitionStore(creation.transaction).createRoot({ source }),
+    ).resolves.toMatchObject({
+      kind: "application",
+      sourceContractVersion: "2.0.0",
+      source,
+    });
+    expect(creation.calls[0]?.values).toEqual([
+      "application",
+      source.key,
+      JSON.stringify(source),
+      fingerprintCanonicalValue(source),
+      JSON.stringify(requirements),
+    ]);
+
+    const savedSource = structuredClone(source);
+    savedSource.body.description = "A saved complete V2 application draft.";
+    const saving = v2StoreRunner([storedV2Row(savedSource, 2)]);
+    await expect(
+      createDefinitionStore(saving.transaction).saveDraft({
+        rootId: id(1200),
+        expectedDraftRevision: 1,
+        source: savedSource,
+      }),
+    ).resolves.toMatchObject({ draftRevision: 2, source: savedSource });
+    expect(saving.calls[0]?.values).toEqual([
+      id(1200),
+      1,
+      JSON.stringify(savedSource),
+      fingerprintCanonicalValue(savedSource),
+      JSON.stringify(extractApplicationSourceIdentityRequirementsV2(savedSource)),
+    ]);
+  });
+
+  it("refuses stored metadata that disagrees with the V2 source", async () => {
+    const source = createSource();
+    const mismatched = { ...storedV2Row(source, 1), source_contract_version: "1.0.0" };
+    await expect(
+      createDefinitionStore(v2StoreRunner([mismatched]).transaction).createRoot({ source }),
+    ).rejects.toMatchObject({ code: "INVALID_DEFINITION_STORAGE_RESULT" });
+  });
+
+  it("retains common edit-save identity and local-reference semantics for V2", () => {
+    const brokenHome = createSource();
+    brokenHome.body.home_page = "missing_page";
+    expect(validateDefinitionSource(brokenHome).failures).toContainEqual(
+      expect.objectContaining({
+        ruleCode: "vortex.definition.local_references",
+        family: "broken_reference",
+      }),
+    );
+
+    const duplicatePage = createSource();
+    duplicatePage.body.pages[1]!.key = duplicatePage.body.pages[0]!.key;
+    expect(validateDefinitionSource(duplicatePage).failures).toContainEqual(
+      expect.objectContaining({
+        ruleCode: "vortex.definition.local_identity_unique",
+        family: "duplicate_key",
+      }),
+    );
+  });
+
+  it("keeps V2 release preparation closed after accepting the stored draft", async () => {
+    const source = createSource();
+    const draft = storedDefinitionDraftSchema.parse({
+      kind: "application",
+      rootId: id(1200),
+      source,
+      organizationId: metadata.organizationId,
+      key: source.key,
+      draftRevision: 1,
+      sourceContractVersion: "2.0.0",
+      sourceFingerprint: fingerprintCanonicalValue(source),
+      createdAt: metadata.createdAt,
+      createdBy: metadata.createdBy,
+      updatedAt: metadata.updatedAt,
+      updatedBy: metadata.updatedBy,
+    });
+    const candidate: DefinitionPublicationCandidate = {
+      draft,
+      identities: createResolution(source).identities,
+      history: { kind: "application", definitionKey: source.key, history: [] },
+    };
+    const reader: DefinitionPublicationReader = {
+      readCandidate: async () => candidate,
+      listModuleReleases: async () => [],
+      readModuleRelease: async () => undefined,
+    };
+    const repository: DefinitionPublicationRepository = {
+      read: async <Result>(
+        _context: Parameters<DefinitionPublicationRepository["read"]>[0],
+        operation: (value: DefinitionPublicationReader) => Promise<Result>,
+      ) => operation(reader),
+      transaction: async <Result>(): Promise<Result> => {
+        throw new Error("V2 publication must not enter a transaction");
+      },
+    };
+    const catalogue: DefinitionPublicationCatalogue = {
+      listConnectionTypeReleases: async () => [],
+      readConnectionTypeRelease: async () => undefined,
+      readPlatformThemeRelease: async () => undefined,
+    };
+    const context = sessionContextSchema.parse({
+      callerKind: "system",
+      tenantId: id(1201),
+      organizationId: metadata.organizationId,
+      systemActorId: metadata.createdBy,
+      sessionId: id(1202),
+      authenticationStrength: "service",
+      issuedAt: "2026-09-01T00:00:00Z",
+      expiresAt: "2026-09-01T01:00:00Z",
+      accessVersion: 1,
+      correlationId: id(1203),
+    });
+
+    await expect(
+      createDefinitionPublicationService(repository, catalogue).prepare(context, {
+        rootId: draft.rootId,
+        expectedDraftRevision: 1,
+      }),
+    ).rejects.toMatchObject({ code: "DEFINITION_COMPILATION_REFUSED" });
+  });
 });

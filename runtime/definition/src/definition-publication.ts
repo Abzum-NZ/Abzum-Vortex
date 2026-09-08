@@ -15,6 +15,7 @@ import {
   type DefinitionCompilationOutput,
   type DefinitionPublicationConfirmation,
   type DefinitionResolutionSnapshot,
+  type DefinitionResolutionSnapshotV2,
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
   type PrepareDefinitionPublicationResult,
@@ -42,9 +43,15 @@ import { compileDefinitionSet } from "./validation";
 import { compareDefinitionVersionImpact } from "./version-impact";
 import { DefinitionVersionImpactError } from "./version-impact-error";
 
-type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
+type SourceIdentityAssignments = DefinitionResolutionSnapshotV2["identities"];
 type ModuleOutput = Extract<DefinitionCompilationOutput, { kind: "module" }>;
 type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection_type" }>;
+type StoredModuleDraft = Extract<StoredDefinitionDraft, { kind: "module" }>;
+type StoredApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
+type StoredV1ApplicationDraft = StoredApplicationDraft & {
+  source: Extract<StoredApplicationDraft["source"], { source_contract_version: "1.0.0" }>;
+};
+type PublishableStoredDefinitionDraft = StoredModuleDraft | StoredV1ApplicationDraft;
 
 export type DefinitionPublicationFailureCode =
   | "INVALID_DEFINITION_PUBLICATION_COMMAND"
@@ -84,6 +91,14 @@ export type DefinitionPublicationCandidate = Readonly<{
   identities: SourceIdentityAssignments;
   history: PublishedDefinitionHistory;
 }>;
+
+type PublishableDefinitionPublicationCandidate = DefinitionPublicationCandidate &
+  Readonly<{ draft: PublishableStoredDefinitionDraft }>;
+
+const isPublishableCandidate = (
+  candidate: DefinitionPublicationCandidate,
+): candidate is PublishableDefinitionPublicationCandidate =>
+  candidate.draft.kind === "module" || candidate.draft.source.source_contract_version === "1.0.0";
 
 /** Immutable organization-owned module release made available to a dependency compilation. */
 export type ResolvableModuleRelease = Readonly<{
@@ -224,7 +239,7 @@ const chooseStableRelease = <Release extends { releaseVersion: string }>(
   return highest[0]!;
 };
 
-const moduleRequirements = (draft: StoredDefinitionDraft): Requirement[] => {
+const moduleRequirements = (draft: PublishableStoredDefinitionDraft): Requirement[] => {
   const dependencies =
     draft.source.kind === "module"
       ? draft.source.body.dependencies
@@ -232,7 +247,7 @@ const moduleRequirements = (draft: StoredDefinitionDraft): Requirement[] => {
   return dependencies.map((entry) => ({ key: entry.module, version: entry.version }));
 };
 
-const connectionRequirements = (draft: StoredDefinitionDraft): Requirement[] =>
+const connectionRequirements = (draft: PublishableStoredDefinitionDraft): Requirement[] =>
   draft.source.kind === "application"
     ? draft.source.body.connection_bindings.map((entry) => ({
         key: entry.connection_type,
@@ -340,7 +355,7 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
 const resolveDependencies = async (
   reader: DefinitionPublicationReader,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionPublicationCandidate,
+  candidate: PublishableDefinitionPublicationCandidate,
   pinned?: readonly ExactDefinitionDependency[],
 ): Promise<ResolvedDependencies> => {
   const modules: ResolvableModuleRelease[] = [];
@@ -514,7 +529,7 @@ const manifestFor = (dependencies: ResolvedDependencies): ExactDefinitionDepende
   ]);
 
 const buildResolution = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: PublishableDefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   ownVersion: string,
 ): DefinitionResolutionSnapshot => {
@@ -597,7 +612,7 @@ const draftMetadata = (draft: StoredDefinitionDraft) => ({
 });
 
 const provisionalSavedConditionRevisions = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: PublishableDefinitionPublicationCandidate,
 ): SavedConditionRevisionAssignment[] => {
   if (candidate.draft.kind !== "module") return [];
   const conditions = candidate.draft.source.body.sharing_conditions;
@@ -618,7 +633,7 @@ const provisionalSavedConditionRevisions = (
 };
 
 const compileCandidate = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: PublishableDefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolutionSnapshot,
   final: boolean,
@@ -676,7 +691,7 @@ const validateCandidate = (
   context: SessionContext,
   candidateInput: DefinitionPublicationCandidate | undefined,
   command: PrepareDefinitionPublicationCommand,
-): DefinitionPublicationCandidate => {
+): PublishableDefinitionPublicationCandidate => {
   if (candidateInput === undefined) refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   const supplied = candidateInput as DefinitionPublicationCandidate;
   const draft = storedDefinitionDraftSchema.safeParse(supplied.draft);
@@ -709,6 +724,7 @@ const validateCandidate = (
         ? "DEFINITION_SOURCE_EVIDENCE_MISMATCH"
         : "DEFINITION_HISTORY_INVALID",
     );
+  if (!isPublishableCandidate(candidate)) return refuse("DEFINITION_COMPILATION_REFUSED");
   return candidate;
 };
 

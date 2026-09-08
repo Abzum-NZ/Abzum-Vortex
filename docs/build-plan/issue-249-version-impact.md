@@ -13,6 +13,12 @@ handoff passed independent review and merged in
 [PR #341](https://github.com/Abzum-NZ/Abzum-Vortex/pull/341). This is the next
 bounded, database-free engine slice; it does not build the App Designer.
 
+The bounded comparator is now independently reviewed and delivered in
+[PR #342](https://github.com/Abzum-NZ/Abzum-Vortex/pull/342), with
+[exact-source evidence](../evidence/issue-249-native-version-impact.md). Continue
+with [native draft/identity storage](issue-249-native-draft-storage.md), then the
+coordinated release path below. Whole #249 remains open.
+
 ## Build
 
 1. Add strict native V2 comparison request/history evidence with exact outer
