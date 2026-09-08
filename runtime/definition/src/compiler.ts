@@ -580,8 +580,12 @@ function conditionRootPaths(
   );
 }
 
-function conditionSourceTargets(source: JsonObject, sourcePath: Path): Path[] | undefined {
-  const roots = conditionRootPaths(source, sourcePath);
+function conditionSourceTargets(
+  source: JsonObject,
+  sourcePath: Path,
+  fixedRoots?: { sourceRoot: Path; canonicalRoot: Path },
+): Path[] | undefined {
+  const roots = fixedRoots ?? conditionRootPaths(source, sourcePath);
   if (!roots) return undefined;
   let node = valueAtPath(source, roots.sourceRoot);
   let suffix = sourcePath.slice(roots.sourceRoot.length);
@@ -4083,6 +4087,10 @@ const applicationCompositionResolutionV2 = (
     action: (reference) => resolution.exactOwnedReference("action", reference, allowedOwners),
     permission: (reference) =>
       resolution.exactOwnedReference("permission", reference, allowedOwners),
+    condition: (authored) =>
+      conditionNodeSchema.parse(
+        condition(authored, (reference) => qualifiedField(resolution, reference)),
+      ),
     recordType: (reference) => resolution.recordType(reference),
   };
 };
@@ -4206,6 +4214,12 @@ function v2SlotSourceTargets(
       ];
     if (property === "view_permission") return [[...canonicalRoot, "viewPermissionKey"]];
     if (property === "use_permission") return [[...canonicalRoot, "usePermissionKey"]];
+    if (property === "query") return [[...canonicalRoot, "queryId"]];
+    if (property === "visibility_condition")
+      return conditionSourceTargets(source as unknown as JsonObject, sourcePath, {
+        sourceRoot: [...sourceRoot, "visibility_condition"],
+        canonicalRoot: [...canonicalRoot, "visibilityCondition"],
+      });
     if (
       property === "responsive" &&
       typeof placementSuffix[1] === "string" &&

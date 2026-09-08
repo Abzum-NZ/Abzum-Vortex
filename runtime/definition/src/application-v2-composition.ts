@@ -29,6 +29,8 @@ type SourcePlacement = {
   block: { block_id: string; release_version: string };
   view_permission?: string;
   use_permission?: string;
+  visibility_condition?: Parameters<ApplicationCompositionResolutionV2["condition"]>[0];
+  query?: string;
   settings: Record<string, SourceBlockPropertyValueV2Contract>;
   theme_overrides: Record<string, unknown>;
   responsive: Record<string, unknown>;
@@ -556,6 +558,12 @@ export const materialiseApplicationCompositionV2 = (
         ...(authoredPlacement.use_permission === undefined
           ? {}
           : { usePermissionKey: resolution.permission(authoredPlacement.use_permission) }),
+        ...(authoredPlacement.visibility_condition === undefined
+          ? {}
+          : { visibilityCondition: resolution.condition(authoredPlacement.visibility_condition) }),
+        ...(authoredPlacement.query === undefined
+          ? {}
+          : { queryId: resolution.identity("query", authoredPlacement.query) }),
         settings,
         themeOverrides,
         responsive,

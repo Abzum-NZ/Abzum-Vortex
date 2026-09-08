@@ -60,6 +60,16 @@ Validation, identity extraction, dependency discovery, fingerprints and the edit
 
 A placement has a permanent identity, registered block and version, schema-validated settings, named child slots, optional binding context, visibility/use constraints and layout overrides. The ordered children of each declared slot are the one source of sibling order. Do not duplicate order in a second page-wide array and a third phone-order field.
 
+Existing placement behaviour remains explicit in V2: optional authored
+`visibility_condition` and `query` compile to `visibilityCondition` and `queryId`.
+They use the existing condition compiler and exact field/query reference checks,
+including nested shell content and every guided step. Their absence stays absent;
+reading or publishing does not inject new defaults into historical definitions.
+Changing conditional visibility or query selection has major access/data meaning,
+not a presentation-only change. These references preserve configuration; they do
+not grant permission to read records or implement the richer runtime bindings in
+[#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250).
+
 Validation rejects duplicate IDs, cycles, unreachable placements, undefined or multiply assigned slots, disallowed children, excessive depth/size and incompatible block versions. Slot declarations define required/optional content and allowed child categories. Unknown or orphan content produces a repairable error; it is never silently appended elsewhere or discarded. Shell locking is enforced on the server against the permitted draft editing scope.
 
 ## Registry and property values
