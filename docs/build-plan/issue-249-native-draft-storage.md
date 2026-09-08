@@ -5,6 +5,12 @@ Contract: [page composition](../specification/appendices/page-builder-contracts.
 Preceding slice: [change assessment](issue-249-version-impact.md).
 Sequence: [engines first](engine-first-application-delivery.md).
 
+Implementation is independently reviewed and normally merged to Testing in
+[PR #343](https://github.com/Abzum-NZ/Abzum-Vortex/pull/343).
+[Evidence](../evidence/issue-249-native-draft-storage.md) records exact-source and
+Local proof; hosted verification remains pending. Continue the
+[coordinated publication/readback slice](issue-249-native-publication.md).
+
 ## What this enables
 
 Save and revise a complete native application definition, including reusable

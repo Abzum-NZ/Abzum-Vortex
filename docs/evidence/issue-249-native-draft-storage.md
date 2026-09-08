@@ -13,7 +13,15 @@ without material findings. Root matched every reviewed code and SQL hash.
 The preceding full regression run passed 1,395 tests across 100 files; the final
 four new draft cases then passed within the 16-test native compiler suite. All 23
 package typechecks/builds, import boundaries and changed-code lint/format checks
-passed. Exact committed-source verification and hosted delivery remain pending.
+passed. Exact committed source `1591ded06ea576c4a4be6fa6b9bd10f9657b37c4`
+then passed 1,399 tests across 100 files, all 23 typechecks/builds and boundaries
+in the clean isolated worktree with frozen offline dependencies. One existing
+compiler test timed out under the initial parallel load; the full rerun with two
+workers passed without changing assertions or its timeout. Normal preview checks
+passed and [PR #343](https://github.com/Abzum-NZ/Abzum-Vortex/pull/343) merged to
+Testing at `2026-09-08T04:07:10Z`, merge
+`d2b101b506d734ff273c24438c6c58162b48fd8a`. Hosted verification remains pending;
+this checkpoint does not claim that result or completion of the whole task.
 
 The complete-source cases exercise create/save with exact bytes/fingerprints,
 shell/slot identity requirements, mismatched stored metadata, broken home-page
