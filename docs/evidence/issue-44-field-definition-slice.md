@@ -159,11 +159,45 @@ does not change published V1 bytes, dependency versions or historical semantics.
 The current complete-fixture bundle still needs its coordinated V2 migration and
 actual Definition execution proof before it is treated as delivered.
 
+[PR #357](https://github.com/Abzum-NZ/Abzum-Vortex/pull/357) merged normally into
+Testing at `2026-09-08T11:27:43Z`, producing
+`990b6c3d1d4a116f9aa79becf0459fc1f848da98`. Root verified an actual completed
+successful [source preview](https://vercel.com/abzumdevteam/abzum-vortex/4uxM9HU4BYwJHCWaqMb2cHej2RrD)
+for `25ef0e655ee955a23638592924cad313d2872689` before merging. The final normal
+Testing-base merge `acb8b00589f730c10393b06cc52d4c372be0fd2e` has the identical
+Git tree; its skipped check was not substituted for that successful source build.
+The one-line public export received its own independent approval. Unreviewed
+Definition execution and Record preparation were excluded from this delivery.
+
+## Reviewed Record value preparation
+
+The Record service now supplies the pure `prepareRecordFieldValuesV2` operation
+for canonical field-identifier maps. It returns a prepared set/clear patch or safe
+field-located corrections. All nineteen writable field types are covered;
+reference numbers, calculations and totals remain generated values that callers
+cannot supply. Create defaults, update omission, required values, explicit clears,
+exact decimal/money values, typed references and repeating-table cells retain
+their declared meanings. Permission-gated choices and record/person/file
+references produce explicit pending checks for the later protected operation;
+preparation does not claim those checks succeeded.
+
+A different GPT-5.6 Sol reviewer approved the actual five-file patch, including
+the existing-catalogue Vitest development dependency and matching lockfile entry.
+The reviewer caught a real repair defect: validation of an existing value ran
+before its replacement or clear. The corrected merge validates the winning
+submitted value, allowing a valid repair while still checking omitted existing
+values. Independent post-fix verification passed all 34 focused tests. Developer
+Record type checking, scoped lint/format and all package boundaries passed.
+
+This reviewed pure slice is not a claim of integrated fixture publication,
+protected persistence, current Access checks or complete #44 delivery. Those
+remain in the coordinated Definition, storage and save work below.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
-Record preparation and real protected save/readback are not delivered by this
-definition slice. Its new Testing revision's hosted database execution has not
+and real protected save/readback are not delivered by the pure preparation
+slice. Its new Testing revision's hosted database execution has not
 yet been verified here; an older successful receipt is not a new-revision claim.
 The [new Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6asr83WskOIDv67Xx4LCCr)
 is running. Its logs confirm exact revision

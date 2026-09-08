@@ -35,8 +35,9 @@ sequenceDiagram
     Access-->>Server: Allowed or refused
     Server->>Record: Validate values and relationships
     Record->>Record: Apply immediate rules and calculations
-    Record->>Record: Save record and activity in one transaction
-    Record->>Event: Add committed event to outbox
+    Record->>Record: Write record and activity
+    Record->>Event: Write event outbox and logged queue message in the same transaction
+    Note over Record,Event: Commit all writes together or roll back all writes
     Record-->>Person: Return saved record and new concurrency number
 ```
 
@@ -50,7 +51,7 @@ The save transaction performs these steps in order:
 6. Run eligible immediate [rules](08-forms-actions-rules-and-events.md).
 7. Revalidate any values changed by rules.
 8. Save the record, relationship changes, reference number, and [activity entry](14-activity-privacy-and-retention.md) in one database transaction.
-9. Add committed [events](08-forms-actions-rules-and-events.md) to an outbox in that same transaction.
+9. Write [events](08-forms-actions-rules-and-events.md#delivery-guarantees) to the outbox and logged queue in that same transaction. Dispatch and external work begin only after commit.
 10. Return the fields the person may read and the new concurrency number.
 
 This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). In the target runtime, a configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. The actual protected Record execution and receipt boundary remains owned by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47); this flow description does not claim it is delivered.

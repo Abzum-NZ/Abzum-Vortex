@@ -10,10 +10,11 @@ The platform separates work that must finish during a [record save](06-records-a
 flowchart LR
     START[Person, MCP client, interface or workflow requests action] --> ACTION[Action prepares record changes]
     ACTION --> RULE[Rules validate and adjust save]
-    RULE --> COMMIT{Save commits?}
-    COMMIT -- No --> STOP[Return refusal; no event]
-    COMMIT -- Yes --> EVENT[Write event to outbox]
-    EVENT --> FLOW[Workflow performs background work]
+    RULE --> WRITE[Write record, activity, outbox and logged queue message in one transaction]
+    WRITE --> COMMIT{Transaction commits?}
+    COMMIT -- No --> STOP[Roll back changes and event; return refusal]
+    COMMIT -- Yes --> DISPATCH[Dispatcher delivers committed event]
+    DISPATCH --> FLOW[Workflow performs background work]
 ```
 
 An **action** is a named operation that participates in a save. A **rule** is a typed flow of immediate logic evaluated in its declared context. An **event** is a committed statement that something happened. A [workflow](09-workflows-and-pipelines.md) performs durable work after the save. The [Frontend Rule Designer](appendices/frontend-rule-designer.md) is the one shared rule/action authoring surface, reusing the Conditions Designer and Page Designer forms.
@@ -129,24 +130,29 @@ A Kestra outage after commit leaves the event or start intent pending for retry.
 
 ## Delivery guarantees
 
-- An event is written in the same database transaction as the record change.
+- The record change, activity, event outbox row and logged queue message are written in the same database transaction. Dispatch starts only after commit; it is not responsible for filling a gap between a committed record and its event.
 - Delivery is at least once; each consumer scopes duplicate protection to its own identity and the event identifier. Workflow acceptance additionally includes the exact installation revision, workflow, and trigger, so one event can start different workflows without suppressing either one.
 - Events for the same record are handed to consumers in sequence order.
 - A later event cannot cause an earlier undelivered event to be discarded. The dispatcher waits, retries, or moves the blocked sequence to an operator-visible failure state.
 - A permanently failed event remains available for authorised retry and investigation.
-- The committed outbox writes to a durable [Supabase Queue](https://supabase.com/docs/guides/queues). A database webhook wakes the platform dispatcher for normal low-latency delivery, and a scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the protected dispatcher endpoint to reclaim missed or stalled work. Kestra never reads the database directly.
+- The transaction uses a durable logged [Supabase Queue](https://supabase.com/docs/guides/queues/quickstart), not an unlogged queue. A database webhook wakes the platform dispatcher for normal low-latency delivery, and a scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the protected dispatcher endpoint to reclaim missed or stalled work. Kestra never reads the database directly.
 
 ```mermaid
 sequenceDiagram
     participant DB as Record transaction
     participant Outbox as Event outbox
+    participant Queue as Logged queue
     participant Dispatch as Dispatcher
     participant Consumer as Workflow trigger
-    DB->>Outbox: Commit event with record sequence
+    DB->>Outbox: Write event with record sequence
+    DB->>Queue: Enqueue event identifier
+    Note over DB,Queue: Record, activity, outbox and queue commit together or all roll back
+    Dispatch->>Queue: Read committed message with retry visibility
     Dispatch->>Outbox: Claim next unblocked sequence
     Dispatch->>Consumer: Deliver event identifier and envelope
     Consumer-->>Dispatch: Accepted or already accepted
     Dispatch->>Outbox: Mark delivered
+    Dispatch->>Queue: Acknowledge completed delivery
     Note over Dispatch,Outbox: On failure, retry without skipping earlier sequence
 ```
 

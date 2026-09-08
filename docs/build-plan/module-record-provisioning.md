@@ -63,6 +63,36 @@ binding state, not a distributed rollback or additional recovery programme.
 
 ## Verification
 
+### Save and event integration
+
+Co-deliver the protected [save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)
+with the transactional enqueue slice of [event delivery #60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60)
+on the real [record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
+Neither task requires the other whole task to be marked Done first. Requiring
+all of Phase 4 before #60 would prevent Phase 4 from proving its own atomic
+record/event acceptance. #60 therefore depends on the concrete storage boundary,
+not the whole phase epic. Its ordered dispatch, duplicate-safe consumers and
+recovery acceptance remain required before closing #60.
+
+The save owns one short transaction: current authority, inputs and revisions are
+checked; record changes, success activity, declared event/start intent and logged
+queue message commit together. A failure leaves none of those committed effects.
+Dispatch happens afterward and cannot turn a committed record into a false save
+failure. Input collection and external workflow execution hold no transaction.
+Use the existing [save sequence](../specification/06-records-and-lifecycle.md#save-sequence),
+[Activity foundation #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252),
+and [field preparation #44](issue-44-record-field-values.md); do not invent a
+second queue platform or validator. Immediate rule/calculation integrations must
+land with their owning engines before the full save acceptance is claimed.
+
+Prove a real rollback leaves no record, success activity, outbox or queue message;
+a commit leaves the intended matching effects; an exact retry does not duplicate
+the record or event. Existing safe request-level refusal evidence is separate
+from rolled-back success activity. Browser field feedback belongs to later
+rendered forms and is not a prerequisite for the headless save engine.
+
+### Storage and access proof
+
 Prove two organisations reuse one compatible table without seeing each other's
 rows; application-contained rows also retain their application boundary. Prove
 the existing two-application fixtures read the same declared shared records,
