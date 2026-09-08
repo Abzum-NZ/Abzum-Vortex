@@ -117,6 +117,14 @@ context. Installed-page selection, actual web rendering, anonymous public
 authority and MCP transport remain the explicit later consumer integrations in
 that plan; no client supplies its own permission map.
 
+The [application runtime](../build-plan/issue-64-application-runtime.md) supplies
+the trusted service identity and exact installed release used to read immutable
+definitions. That service read never grants the person's page or operation access:
+the human request still passes its own current Access checks. The existing
+Definition reader and page engine share exact artifact identity, not an elevated
+human context or a second reader. Structural provisioning authority is not reused
+as application-runtime authority.
+
 ### Configure flows while composing pages
 
 The App Builder lists Pages and Frontend Flows within the same application. Dropping an action component opens an Action inspector to choose a quick one-node flow, select an existing compatible flow, or create/edit a custom flow in the shared Frontend Rule Designer. A Submit button can default to Save form only when its exact form and commit operation are unambiguous. A message button can simply show a popup and finish without saving. The [complete authoring and execution rules](appendices/frontend-rule-designer.md#configure-a-component-without-leaving-the-app-builder) also cover reusable flows, keyboard submission, record gestures, revision checks and MCP authoring.
