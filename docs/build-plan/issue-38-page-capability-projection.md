@@ -6,7 +6,8 @@ and [current Access #34](issue-34-access-decision.md).
 Final V2 authored-to-published integration requires the coordinated publication
 and readback slice of [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249),
 normally merged in [PR #344](https://github.com/Abzum-NZ/Abzum-Vortex/pull/344).
-Its exact hosted Testing verification is running. This handoff does not wait
+Its exact hosted Testing verification succeeded. The whole-task dependency on
+#249 is removed because this required publication slice is delivered. This handoff does not wait
 for the remaining draft conversion, Puck adapter or App Designer.
 
 ## Outcome

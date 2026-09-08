@@ -3,8 +3,8 @@
 Task: [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249).
 Preceding slice: [native draft storage](issue-249-native-draft-storage.md).
 Specification: [page composition](../specification/appendices/page-builder-contracts.md).
-Status: implementation and independent Sol review complete; normal Testing
-delivery and exact hosted verification remain. The coordinated runtime and SQL
+Status: implementation, independent Sol review, normal Testing delivery and
+exact hosted verification are complete. The coordinated runtime and SQL
 acceptance is recorded in the [publication evidence](../evidence/issue-249-native-publication.md).
 This does not complete the remaining conversion and adapter work in #249.
 

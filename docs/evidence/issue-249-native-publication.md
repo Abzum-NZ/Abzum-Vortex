@@ -88,7 +88,7 @@ records this boundary explicitly.
 
 ## Remaining delivery
 
-- Verify the exact hosted receipt for the Testing delivery below.
+- Exact hosted Testing receipt verified successfully for the delivery below.
 - Keep whole #249 open for placement compatibility, explicit draft conversion
   and the headless adapter.
 
@@ -102,12 +102,18 @@ preview checks and merged to Testing at `2026-09-08T05:40:35Z`, merge
 [Hosted execution 7B4lfifIp4AKiMXjf0D5SC](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/7B4lfifIp4AKiMXjf0D5SC)
 started at `05:40:38.412Z` on unchanged flow revision 7. The visible log confirms
 that exact Testing commit and successful application of only the new publication
-migration; verification is still running. This is not yet a successful receipt.
+migration. Execution succeeded at `2026-09-08T06:21:13.918Z`; root read the
+successful receipt for that exact commit and execution. All 68 migrations,
+25 selected/completed concurrency proofs, six lint schemas and the four hashes
+below match the source-derived expectations. Visible database test output reports
+60 files and 2,670 assertions passing. No reset, cancellation or flow change was
+used. This completes the publication prerequisite for Page; remaining conversion
+and editor-adapter work does not block that consumer.
 Root recomputed expected evidence from the exact merged Git revision, excluding
 unrelated uncommitted Local files: 68 migrations, 25 concurrency proofs and six
 lint schemas.
 
-| Expected hosted evidence | SHA-256                                                            |
+| Verified hosted evidence | SHA-256                                                            |
 | ------------------------ | ------------------------------------------------------------------ |
 | Migration set            | `f3e6f03a936fc32f27b37c9858bbcf19e013d9edc3ed5b6d8253a8cd0309130b` |
 | Runner                   | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |

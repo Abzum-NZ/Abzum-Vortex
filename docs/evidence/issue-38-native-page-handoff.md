@@ -50,13 +50,23 @@ construction, preserving its meaning and every runtime file. The independent Sol
 reviewer accepted this one-file delta and directly passed its five tests, lint
 and diff check. Reviewed SHA-256:
 `75A074316BE5B770635D1E9E07BD0BB8139BE1945DBFC7CE8EA3DBD961FEC145`.
-No lint rule or test expectation was weakened. Normal final-source checks and
-hosted verification remain required.
+No lint rule or test expectation was weakened. Final source
+`bb9fa094947018ebe53332dfe2665640c9dde5bc` passed the normal preview checks
+and all 23 package type checks/builds. PR #346 merged to Testing at
+2026-09-08T06:39:04Z as
+`bfc75202ff870c10eff1c6bc424134a7d61a8fa8`. Its
+[hosted execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/2RMK74QpwbkNYtQRHPY4gN)
+failed at 2026-09-08T07:03:43.932Z: invitation tests 47/51 expected one account
+but observed two, and role-storage test 35 also failed. The run executed 60 files
+and 2,670 assertions; it did not issue a success receipt or complete the later
+concurrency gate. Investigation of the existing fixture assumptions is underway.
+This is not a successful hosted verification, and the task remains open.
 
 ## Scope and remaining delivery
 
 This completes the remaining engine implementation, not a live application page.
-Source delivery and exact hosted verification must be recorded before task closure.
+Source delivery is recorded above; exact hosted verification remains required
+before task closure.
 The already reviewed earlier contract/compiler/projector work is not duplicated.
 
 - [#64](../build-plan/issue-64-application-runtime.md) supplies installed release
