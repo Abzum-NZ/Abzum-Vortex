@@ -12,6 +12,16 @@ The platform uses three operated services:
 
 [Doppler](https://docs.doppler.com/docs) distributes environment secrets. It is a secret-management control, not an application data store.
 
+Deploy database-facing web functions beside the environment's Supabase database,
+using the [supported Vercel region configuration](https://vercel.com/docs/functions/configuring-functions/region#project-configuration).
+For the current Sydney-hosted environments, the tracked web configuration selects
+`syd1`. Browser edge reception in Sydney does not prove the server function also
+executes there. Measure sign-in and protected-page request durations after delivery;
+do not remove access checks, add authority caches or change database pooling merely
+to compensate for an avoidable cross-region connection. The measured repair is
+tracked in [#347](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347) and its
+[acceptance plan](../build-plan/testing-sign-in-performance.md).
+
 ```mermaid
 flowchart LR
     PERSON[Browser or approved client] --> IDP[Vortex Identity Authority]
@@ -393,12 +403,12 @@ flowchart TD
 
 The allowed layers are:
 
-| Layer                          | Location and key                                                                                                                                        | Rule                                                                                                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Built application assets       | [Vercel CDN](https://vercel.com/docs/caching/cdn-cache), keyed by content hash                                                                          | May be shared across organisations because the content is identical and contains no organisation data. This is the explicit exception to organisation-keyed caches. |
-| Request-local values           | One server request                                                                                                                                      | Session context, access version, explicitly requested discovery pointers, and repeated calculations may be reused only within that request.                         |
-| Immutable definition revisions | Shared [Vercel cache](https://vercel.com/docs/caching), keyed by organisation, root key, revision and content fingerprint                               | Revisions never change. Cross-organisation keys are structurally impossible.                                                                                        |
-| Resolved application and theme | Shared cache, keyed by organisation, application context, exact pinned releases/fingerprints, organisation account where permission-varying, and current Access version | Existing consumers keep their pinned releases. A current pointer is read only during explicit discovery, installation, or upgrade.                                  |
+| Layer                          | Location and key                                                                                                                                                                                                                       | Rule                                                                                                                                                                |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Built application assets       | [Vercel CDN](https://vercel.com/docs/caching/cdn-cache), keyed by content hash                                                                                                                                                         | May be shared across organisations because the content is identical and contains no organisation data. This is the explicit exception to organisation-keyed caches. |
+| Request-local values           | One server request                                                                                                                                                                                                                     | Session context, access version, explicitly requested discovery pointers, and repeated calculations may be reused only within that request.                         |
+| Immutable definition revisions | Shared [Vercel cache](https://vercel.com/docs/caching), keyed by organisation, root key, revision and content fingerprint                                                                                                              | Revisions never change. Cross-organisation keys are structurally impossible.                                                                                        |
+| Resolved application and theme | Shared cache, keyed by organisation, application context, exact pinned releases/fingerprints, organisation account where permission-varying, and current Access version                                                                | Existing consumers keep their pinned releases. A current pointer is read only during explicit discovery, installation, or upgrade.                                  |
 | Initial data-block result      | Shared cache only when explicitly allowed; keyed by organisation, organisation account, application, current Access version, exact pinned releases/fingerprints, all relevant record-type data versions and complete query fingerprint | Never stores sensitive fields. A record save increments the owning Record service's data version, making old results unreachable.                                   |
 
 Current published pointers, current organisation-account state, current access version, permission decisions, secrets, and responses containing sensitive fields are never served from a cross-request cache.

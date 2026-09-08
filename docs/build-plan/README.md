@@ -72,6 +72,13 @@ Version 2.23 (7 September 2026) makes complete file-defined application executio
 
 ## Planning rules
 
+The user-reported [Testing sign-in performance repair #347](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347)
+is the immediate delivery priority. Its [measured plan](testing-sign-in-performance.md)
+first moves database-facing compute beside the existing Sydney database, then
+compares hosted request durations with unchanged authentication and permissions.
+After this repair, resume the available definition-first engine work; no designer
+or infrastructure expansion is introduced by this task.
+
 The [App Designer HTML prototype](app-designer-html-prototype.md) precedes production App Designer UI implementation, but both follow the [complete file-defined application proof](definition-first-application-proof.md). Preserve the existing prototype without expanding it during engine delivery. [Record visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) and [Access administration #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) are Done with their exact hosted evidence recorded in the [visibility receipt](../evidence/issue-36-record-visibility.md) and [administration receipt](../evidence/issue-40-access-administration.md). Current Phase 3 engine work is [row enforcement #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35): narrow SQL tool-execution authorization awaits the fixed 1,000-permission cutoff/recursion bound, followed by final SQL integration and delivery. The completed [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) evidence supersedes the earlier local-only administration checkpoint. The eventual designer and MCP authoring use the same protected definition operations and proven runtime.
 
 1. A phase starts only when its required earlier outcomes are working, not merely when their issues exist.
