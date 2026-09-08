@@ -20,6 +20,9 @@ Record/Event operations, rather than accepting a caller's installation claims.
    canonically ordered active Module bindings. The required dependency set must
    be complete and consistent. Ignore unrelated retained detached history; refuse
    missing, mixed, partial or mismatching required active bindings.
+   Follow the complete recursively reachable Module dependency set, not only
+   direct Application dependencies. An Application using Module A, which itself
+   uses shared Module B, must work without declaring B again on the Application.
 2. Definition's separate `read_application_bound_release_set(revision)` derives
    the same local Application root and organisation from that context. It reads
    the exact immutable Application release and every Module pinned by its stored
@@ -56,7 +59,9 @@ the earlier read is not a successful-authorisation receipt.
 
 Prove an exact shared external Module works while arbitrary external reads,
 wrong context, dependency substitution and partial/mixed active sets fail. Prove
-unrelated detached history does not break a valid current installation. Exercise
+the Application-to-Module-to-shared-Module case agrees across binding discovery,
+Definition readback and Event projection; extra unrelated active bindings fail.
+Prove unrelated detached history does not break a valid current installation. Exercise
 the real restricted request role and preserve the existing generic reader's
 scope. Test contract parsing, canonical ordering and projector integrity without
 adding another test framework.

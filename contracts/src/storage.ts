@@ -4,6 +4,7 @@ import {
   fieldIdSchema,
   fingerprintSchema,
   moduleRootIdSchema,
+  organizationIdSchema,
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
@@ -140,6 +141,50 @@ export const moduleInstallationStorageResultSchema = z
   })
   .strict();
 
+/** Exact persisted Module binding evidence; never caller-authored readiness. */
+export const moduleInstallationBindingEvidenceSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    moduleRootId: moduleRootIdSchema,
+    bindingRevision: javascriptSafeRevisionSchema,
+    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    moduleReleaseRevision: javascriptSafeRevisionSchema,
+    state: z.enum(["provisioned", "active", "detached"]),
+  })
+  .strict();
+
+/** The complete active binding set selected from trusted human application context. */
+export const activeApplicationInstallationEvidenceSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const moduleRootIds = value.moduleBindings.map((binding) => binding.moduleRootId);
+    if (new Set(moduleRootIds).size !== moduleRootIds.length)
+      context.addIssue({
+        code: "custom",
+        path: ["moduleBindings"],
+        message: "An active installation has one binding per Module root",
+      });
+    for (const [index, binding] of value.moduleBindings.entries())
+      if (
+        binding.state !== "active" ||
+        binding.organizationId !== value.organizationId ||
+        binding.applicationRootId !== value.applicationRootId ||
+        binding.applicationReleaseRevision !== value.applicationReleaseRevision
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["moduleBindings", index],
+          message: "Active Module binding evidence must match its Application installation",
+        });
+  });
+
 export const moduleInstallationStorageErrorCodeSchema = z.enum([
   "INVALID_MODULE_INSTALLATION_STORAGE_COMMAND",
   "MODULE_INSTALLATION_AUTHORITY_REFUSED",
@@ -148,6 +193,13 @@ export const moduleInstallationStorageErrorCodeSchema = z.enum([
   "MODULE_INSTALLATION_BINDING_CONFLICT",
   "RECORD_STORAGE_INCOMPATIBLE",
   "RECORD_STORAGE_PROVISIONING_FAILED",
+]);
+
+export const activeApplicationInstallationErrorCodeSchema = z.enum([
+  "ACTIVE_APPLICATION_CONTEXT_REFUSED",
+  "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE",
+  "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
+  "ACTIVE_APPLICATION_INSTALLATION_READ_FAILED",
 ]);
 
 export const recordStorageReleaseProvisionSchema = z
@@ -168,7 +220,16 @@ export type ModuleInstallationStorageCommand = z.infer<
   typeof moduleInstallationStorageCommandSchema
 >;
 export type ModuleInstallationStorageResult = z.infer<typeof moduleInstallationStorageResultSchema>;
+export type ModuleInstallationBindingEvidence = z.infer<
+  typeof moduleInstallationBindingEvidenceSchema
+>;
+export type ActiveApplicationInstallationEvidence = z.infer<
+  typeof activeApplicationInstallationEvidenceSchema
+>;
 export type ModuleInstallationStorageErrorCode = z.infer<
   typeof moduleInstallationStorageErrorCodeSchema
+>;
+export type ActiveApplicationInstallationErrorCode = z.infer<
+  typeof activeApplicationInstallationErrorCodeSchema
 >;
 export type RecordStorageReleaseProvision = z.infer<typeof recordStorageReleaseProvisionSchema>;

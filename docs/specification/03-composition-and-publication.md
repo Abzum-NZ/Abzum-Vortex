@@ -129,6 +129,33 @@ flowchart LR
 - The Definition service verifies the stored canonical envelope, compiled artifact, release row, content fingerprint, resolution fingerprint, own snapshot entry and exact dependency manifest before returning a result. A dependency remains pinned to its stored exact root, revision, version and fingerprints. Each platform-catalogue evidence fingerprint belongs to that exact connection-type or theme release, so adding an unrelated catalogue release cannot invalidate it; a missing exact release is unavailable rather than substituted.
 - Consumer reads are server-only and use the existing request transaction boundary. They implement no cache, browser or HTTP endpoint, token parsing, session creation, access decision, installation, upgrade, publication or consumer-specific rewriting.
 
+### Reading an installed Application
+
+The separate [installed-Application reader](../build-plan/issue-43-active-installation-read.md)
+starts from the verified request's locally owned Application, not an arbitrary
+foreign definition chosen by a caller. It follows that exact release's Module
+dependencies recursively. If the Application uses Module A and A uses a shared
+Module B, B is included without requiring a duplicate direct Application
+declaration. Each Module remains pinned to its exact published release evidence.
+
+Active binding discovery, Definition readback and Event projection must agree on
+this complete reachable Module set. Missing or substituted required bindings and
+unrelated extra active bindings are refused; unrelated detached history is not
+part of the current installation. This narrow read permits exact shared Modules
+owned by another organisation without broadening the generic same-organisation
+consumer reader. It grants no access to the publisher's records and does not
+activate or upgrade an installation.
+
+```mermaid
+flowchart LR
+    App[Locally owned Application] --> A[Exact Module A release]
+    A --> B[Exact shared Module B release]
+    App --> Set[Complete active binding set]
+    A --> Set
+    B --> Set
+    Set --> Runtime[Definition and Event runtime agree]
+```
+
 ## Validation before publication
 
 Shape and rule failures use one [generic, versioned safe validation-error contract](appendices/data-contracts.md#definition-validation-errors). Installed application, module, record-type, field, workflow, connection, and fixture names never appear in the catalogue or translator. A builder-visible key appears only when the authorised caller explicitly maps an internal path to that safe location; deeper evidence remains protected under the same correlation identifier.
