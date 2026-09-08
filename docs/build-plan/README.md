@@ -314,6 +314,16 @@ Prove allowed and refused cases using actual non-owner database roles and the ow
 
 **Needs:** Phase 3.
 
+This is a phase-exit dependency, not a hold on independent field-definition and
+value-preparation work. Follow the [Record field plan](issue-44-record-field-values.md)
+for [#44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44), then co-deliver the
+real [module lifecycle #43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43) and
+[storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) path. Protected
+save/read integration still requires the actual row/field Access engines.
+Do not close the field task on validation alone or call a module installed before
+its real storage and registrations are ready. [Query #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
+then executes against that installed storage; see [engine-first delivery](engine-first-application-delivery.md).
+
 **Outcome:** Builders can install modules and people can safely create, change, delete and restore records with all field and relationship rules enforced.
 
 Build:
