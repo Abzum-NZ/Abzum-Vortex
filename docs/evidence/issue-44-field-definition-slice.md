@@ -70,4 +70,9 @@ The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
 Record preparation and real protected save/readback are not delivered by this
 definition slice. Its new Testing revision's hosted database execution has not
 yet been verified here; an older successful receipt is not a new-revision claim.
+The [new Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6asr83WskOIDv67Xx4LCCr)
+is running. Its logs confirm exact revision
+`0b9fe19c0e590dce1ac7ec4c5131918726a04563` and migration-set hash
+`f3e6f03a936fc32f27b37c9858bbcf19e013d9edc3ed5b6d8253a8cd0309130b`.
+This is revision-matching progress evidence, not a successful completion receipt.
 Production is unchanged by this record.

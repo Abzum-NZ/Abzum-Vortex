@@ -130,6 +130,12 @@ not floating-point money. The renderer must align its numeric controls with the
 declared origin rather than accidentally using the HTML value attribute as a
 different [step base](https://html.spec.whatwg.org/multipage/input.html#attr-input-step).
 
+Money definition defaults are exact amount strings, including table-default money
+cells. They inherit the field or column's declared currency policy. Fixed-currency
+and organisation-default fields both support defaults; publication never resolves
+an installation-specific currency. Record creation resolves it once and produces
+the explicit amount-and-currency value used by submitted and persisted records.
+
 Preserve the existing V1 readers and explicit draft restoration. Conversion is
 deliberate: an old finite number can preserve only the value already represented,
 a formatted string becomes plain paragraph content, and a polymorphic identifier
