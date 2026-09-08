@@ -81,7 +81,11 @@ permission evaluator, cache, SQL store or visual designer.
    a fixed release and injected validated fixture context can prove the actual
    stored-reader integration, not a deployed context issuer. #64 owns real service
    context provisioning and installed-release selection; #30's structural operator
-   is not a prerequisite or substitute. Reuse the existing transaction runners.
+   is not a prerequisite or substitute. Access owns the fixed system-context
+   application/permission-source read and its existing request runner. Page
+   consumes that verified evidence and owns page selection/projection; it does
+   not initialize database authority or use the Access-only runner directly.
+   Do not widen package boundaries or add a general privileged execution API.
    V2 projection
    fixtures may use contract-parsed canonical trees, but are not publication
    evidence. Enable published V2 selection only when #249's coordinated readers

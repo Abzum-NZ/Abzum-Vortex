@@ -31,7 +31,8 @@ is guessed, and no temporary refusal of all accessible blocks was introduced.
 
 Independent Sol review approved the actual final compiler and contract files.
 Root's focused contract/compiler checks passed 51 tests, Definition typechecking
-and scoped lint. Full exact-source repository and normal delivery checks remain
+and scoped lint. The final full Definition suite passed 307 tests and the full
+contracts suite passed 501 tests. Full exact-source repository and normal delivery checks remain
 to be recorded; these local results are not hosted publication evidence.
 
 | Reviewed file | SHA-256 |

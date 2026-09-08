@@ -1,5 +1,4 @@
 import type { OrganizationAccessDeclaration, SessionContext } from "@vortex/contracts";
-import { createResolvedRequestTransactionRunner, type DatabaseRow } from "@vortex/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createStoredV1PageCapabilityService } from "../src/stored-v1-page-capability";
 
@@ -62,17 +61,12 @@ const page = {
     },
   ],
 };
-const read = vi.fn();
-const prepareApplicationRegistration = vi.fn();
+const readExact = vi.fn();
 const accessDeclarations: OrganizationAccessDeclaration[] = [];
 let accessCorrelationId = correlationId;
 
-vi.mock("@vortex/definition", () => ({
-  createDatabaseDefinitionConsumerReadService: () => ({ read }),
-}));
-
 vi.mock("@vortex/access", () => ({
-  createPermissionRegistryDefinitionAdapter: () => ({ prepareApplicationRegistration }),
+  createStoredApplicationPermissionSource: () => ({ readExact }),
   createHumanOrganizationRequestService: () => ({
     run: async (
       _session: unknown,
@@ -120,46 +114,34 @@ const release = {
 
 describe("stored V1 page capability adapter", () => {
   beforeEach(() => {
-    read.mockReset().mockResolvedValue(release);
-    prepareApplicationRegistration.mockReset().mockResolvedValue({
-      organizationId,
-      applicationRootId,
-      applicationRelease: {
-        definitionKey: release.definitionKey,
-        releaseRevision: release.releaseRevision,
-        releaseVersion: release.releaseVersion,
-        validationContractVersion: release.validationContractVersion,
-        contentFingerprint: release.contentFingerprint,
-        resolutionFingerprint: release.resolutionFingerprint,
+    readExact.mockReset().mockResolvedValue({
+      applicationRelease: release,
+      permissionRegistration: {
+        organizationId,
+        applicationRootId,
+        applicationRelease: {
+          definitionKey: release.definitionKey,
+          releaseRevision: release.releaseRevision,
+          releaseVersion: release.releaseVersion,
+          validationContractVersion: release.validationContractVersion,
+          contentFingerprint: release.contentFingerprint,
+          resolutionFingerprint: release.resolutionFingerprint,
+        },
+        entries: [pagePermission, blockPermission],
       },
-      entries: [pagePermission, blockPermission],
     });
     accessDeclarations.length = 0;
     accessCorrelationId = correlationId;
   });
 
-  const service = (selectedPageId = pageId) => {
-    const queries: string[] = [];
-    const driver: Parameters<typeof createResolvedRequestTransactionRunner>[0] = {
-      transaction: async (operation) =>
-        operation({
-          query: async <Row extends DatabaseRow>(strings: TemplateStringsArray) => {
-            queries.push(strings.join("$value"));
-            return [] as readonly Row[];
-          },
-        }),
-    };
-    return {
-      queries,
-      service: createStoredV1PageCapabilityService({
-        identityAuthorityId: id(40),
-        systemContext,
-        selection: { applicationRootId, releaseRevision: 5, pageId: selectedPageId },
-        definitionCatalogue: { connectionTypeReleases: [], platformThemeReleases: [] },
-        resolvedRequestTransaction: createResolvedRequestTransactionRunner(driver),
-      }),
-    };
-  };
+  const service = (selectedPageId = pageId) => ({
+    service: createStoredV1PageCapabilityService({
+      identityAuthorityId: id(40),
+      systemContext,
+      selection: { applicationRootId, releaseRevision: 5, pageId: selectedPageId },
+      definitionCatalogue: { connectionTypeReleases: [], platformThemeReleases: [] },
+    }),
+  });
 
   it("reads one fixed exact release in system context before projecting the selected page", async () => {
     const candidate = service();
@@ -169,19 +151,7 @@ describe("stored V1 page capability adapter", () => {
       kind: "available",
       value: { pageId, name: "Overview", blocks: [{ settings: page.blocks[0]!.settings }] },
     });
-    expect(candidate.queries).toEqual([
-      "select vortex_context.initialize($value::text::jsonb)",
-      "set local role vortex_request",
-    ]);
-    expect(prepareApplicationRegistration).toHaveBeenCalledWith(systemContext, {
-      applicationRootId,
-      releaseRevision: 5,
-    });
-    expect(read).toHaveBeenCalledWith(systemContext, {
-      kind: "application",
-      rootId: applicationRootId,
-      selector: { selection: "revision", releaseRevision: 5 },
-    });
+    expect(readExact).toHaveBeenCalledOnce();
     expect(accessDeclarations.map((entry) => entry.requiredPermission.permissionId)).toEqual([
       pagePermission.permission.permissionId,
       blockPermission.permission.permissionId,
@@ -196,23 +166,19 @@ describe("stored V1 page capability adapter", () => {
         applicationRootId: id(99),
       }),
     ).resolves.toEqual({ kind: "unavailable" });
-    expect(read).not.toHaveBeenCalled();
+    expect(readExact).not.toHaveBeenCalled();
     await expect(
       candidate.service.project({} as never, {
         organizationId: id(97),
         applicationRootId,
       }),
     ).resolves.toEqual({ kind: "unavailable" });
-    expect(read).not.toHaveBeenCalled();
+    expect(readExact).not.toHaveBeenCalled();
   });
 
-  it("refuses absent page selection and mismatched immutable release evidence", async () => {
+  it("refuses an absent page selection", async () => {
     await expect(
       service(id(98)).service.project({} as never, { organizationId, applicationRootId }),
-    ).rejects.toThrow("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
-    read.mockResolvedValueOnce({ ...release, contentFingerprint: "sha256:" + "d".repeat(64) });
-    await expect(
-      service().service.project({} as never, { organizationId, applicationRootId }),
     ).rejects.toThrow("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
   });
 
@@ -221,17 +187,5 @@ describe("stored V1 page capability adapter", () => {
     await expect(
       service().service.project({} as never, { organizationId, applicationRootId }),
     ).rejects.toThrow("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
-  });
-
-  it("refuses a system context scoped to a different application before reading Definition", () => {
-    expect(() =>
-      createStoredV1PageCapabilityService({
-        identityAuthorityId: id(40),
-        systemContext: { ...systemContext, applicationRootId: id(95) },
-        selection: { applicationRootId, releaseRevision: 5, pageId },
-        definitionCatalogue: { connectionTypeReleases: [], platformThemeReleases: [] },
-      }),
-    ).toThrow("STORED_PAGE_SYSTEM_CONTEXT_UNAVAILABLE");
-    expect(read).not.toHaveBeenCalled();
   });
 });

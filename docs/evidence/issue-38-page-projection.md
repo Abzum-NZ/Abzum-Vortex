@@ -37,8 +37,15 @@ The contract checkpoint merged normally through
 `a308ed54b236c7ae337a17ad8494976893404d73`.
 An isolated checkout of that exact source passed all 23 package typechecks,
 import boundaries and all 23 builds, including Next.js. Normal preview checks
-passed before merge. Its hosted verification was queued at the last check;
-no hosted success is claimed here.
+passed before merge. Root then verified the exact hosted Testing receipt:
+[execution 14aEJXmiZwWKadqFRMsjuM](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/14aEJXmiZwWKadqFRMsjuM)
+succeeded at `2026-09-08T01:58:31.261Z`; the schema-2 receipt was published at
+`2026-09-08T01:58:31.218Z` for the exact Testing merge above. It records 66 applied
+migrations, all 25 selected concurrency proofs completed, and all six selected
+lint schemas completed. Migration-set, runner, manifest and coverage fingerprints
+match the preceding verified delivery. This contract-only merge has no changes
+to `supabase` or `workflows/kestra` compared with the preceding merge. Reading
+the receipt did not change settings, queues or database contents.
 
 ## Recursive projection checkpoint
 
@@ -106,6 +113,30 @@ review approved the bounded adapter; exact-source delivery verification follows.
 | --- | --- |
 | Stored adapter | `447cb5daa9ed302813d1e888c4abcefa36d914a76ac3c00919bbf8f2fb7f5095` |
 | Authenticated handoff | `aef341afed1f5602fa98fbd8d8f8f46def95484b7a677ac586bdab75473dd890` |
+
+### Exact-source check and ownership correction
+
+Source `02364d1` passed an isolated 98 test files / 1,379 tests (two files and
+three tests retain existing skips), all 23 package typechecks and all 23 builds,
+plus scoped lint/formatting. However, the package-boundary check correctly refused
+Page's direct use of the Access-only request runner and its private-schema test
+assertion. This source has not been merged for Testing delivery.
+
+The reviewed correction moves only the fixed stored application/permission-source
+read to Access. Page retains page selection and projection. The temporary public
+database factory export and private-schema assertion are removed; existing
+database runner tests retain role-ordering proof. No boundary exception is added.
+Independent Sol review approved the corrected implementation, including removing
+redundant application/revision dependency fields so the fixed selection is the
+sole selector. Root verified 14 page tests, page typechecking and all 23 package
+boundaries. Author verification also passed 372 Access tests and Access
+typechecking. New tests exercise operation-specific orchestration using injected
+dependencies; they do not replace the existing database runner/consumer proofs
+or claim a new live installed-application integration.
+
+Final reviewed Page adapter:
+`97c01c21d762b021cb6d955983757320fe13fc1904212565ca70676864e37b10`;
+Page test: `80b1a66e042bda9947e74babe2c4949ec656853545763eda61e855331ed20f22`.
 
 ## Remaining work
 

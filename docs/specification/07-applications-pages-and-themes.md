@@ -125,6 +125,11 @@ Definition reader and page engine share exact artifact identity, not an elevated
 human context or a second reader. Structural provisioning authority is not reused
 as application-runtime authority.
 
+Access owns the fixed service-context application/permission-source read. Page
+consumes its verified evidence and selects/projects the page; it cannot initialize
+database authority itself. This follows the existing package boundaries rather
+than introducing a general privileged runner for page code.
+
 ### Configure flows while composing pages
 
 The App Builder lists Pages and Frontend Flows within the same application. Dropping an action component opens an Action inspector to choose a quick one-node flow, select an existing compatible flow, or create/edit a custom flow in the shared Frontend Rule Designer. A Submit button can default to Save form only when its exact form and commit operation are unambiguous. A message button can simply show a popup and finish without saving. The [complete authoring and execution rules](appendices/frontend-rule-designer.md#configure-a-component-without-leaving-the-app-builder) also cover reusable flows, keyboard submission, record gestures, revision checks and MCP authoring.

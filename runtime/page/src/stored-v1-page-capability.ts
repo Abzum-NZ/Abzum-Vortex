@@ -4,23 +4,17 @@ import {
   applicationRootIdSchema,
   pageIdSchema,
   revisionSchema,
-  sessionContextSchema,
   type IdentitySession,
   type ApplicationRootId,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
   type PermissionRegistryEntryCandidate,
-  type SessionContext,
 } from "@vortex/contracts";
 import {
-  createPermissionRegistryDefinitionAdapter,
+  createStoredApplicationPermissionSource,
   type HumanOrganizationRequestDependencies,
+  type StoredApplicationPermissionSourceDependencies,
 } from "@vortex/access";
-import {
-  createDatabaseDefinitionConsumerReadService,
-  type ImmutableDefinitionPublicationCatalogueDefinition,
-} from "@vortex/definition";
-import { withResolvedRequestTransaction } from "@vortex/db";
 import {
   createAuthenticatedPageCapabilityService,
   type FixedAuthenticatedPageCapability,
@@ -33,11 +27,8 @@ export type StoredV1PageCapabilitySelection = Readonly<{
 }>;
 
 export type StoredV1PageCapabilityDependencies = HumanOrganizationRequestDependencies &
-  Readonly<{
-    systemContext: SessionContext;
-    selection: StoredV1PageCapabilitySelection;
-    definitionCatalogue: ImmutableDefinitionPublicationCatalogueDefinition;
-  }>;
+  Omit<StoredApplicationPermissionSourceDependencies, "applicationRootId" | "releaseRevision"> &
+  Readonly<{ selection: StoredV1PageCapabilitySelection }>;
 
 const sameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -68,56 +59,25 @@ const declaration = (
 export const createStoredV1PageCapabilityService = (
   dependencies: StoredV1PageCapabilityDependencies,
 ) => {
-  const systemContext = sessionContextSchema.parse(dependencies.systemContext);
-  if (systemContext.callerKind !== "system")
-    throw new Error("STORED_PAGE_SYSTEM_CONTEXT_UNAVAILABLE");
   const applicationRootId = applicationRootIdSchema.parse(dependencies.selection.applicationRootId);
   const releaseRevision = revisionSchema
     .max(Number.MAX_SAFE_INTEGER)
     .parse(dependencies.selection.releaseRevision);
   const selectedPageId = pageIdSchema.parse(dependencies.selection.pageId);
-  if (
-    systemContext.applicationRootId !== undefined &&
-    !sameUuid(systemContext.applicationRootId, applicationRootId)
-  )
-    throw new Error("STORED_PAGE_SYSTEM_CONTEXT_UNAVAILABLE");
-  const runResolved = dependencies.resolvedRequestTransaction ?? withResolvedRequestTransaction;
+  const source = createStoredApplicationPermissionSource({
+    systemContext: dependencies.systemContext,
+    applicationRootId,
+    releaseRevision,
+    definitionCatalogue: dependencies.definitionCatalogue,
+    ...(dependencies.resolvedRequestTransaction === undefined
+      ? {}
+      : { resolvedRequestTransaction: dependencies.resolvedRequestTransaction }),
+  });
 
   const load = async (): Promise<FixedAuthenticatedPageCapability> =>
-    runResolved(
-      async () => ({ context: systemContext, scope: undefined }),
-      async (transaction) => {
-        const reader = createDatabaseDefinitionConsumerReadService(
-          dependencies.definitionCatalogue,
-          transaction,
-        );
-        const definitionAdapter = createPermissionRegistryDefinitionAdapter(reader);
-        const registration = await definitionAdapter.prepareApplicationRegistration(systemContext, {
-          applicationRootId,
-          releaseRevision,
-        });
-        const release = await reader.read(systemContext, {
-          kind: "application",
-          rootId: applicationRootId,
-          selector: { selection: "revision", releaseRevision },
-        });
-        if (
-          release.kind !== "application" ||
-          !sameUuid(release.organizationId, systemContext.organizationId) ||
-          !sameUuid(release.rootId, applicationRootId) ||
-          release.releaseRevision !== releaseRevision ||
-          release.correlationId.toLowerCase() !== systemContext.correlationId.toLowerCase() ||
-          registration.organizationId !== release.organizationId ||
-          !sameUuid(registration.applicationRootId, release.rootId) ||
-          registration.applicationRelease.definitionKey !== release.definitionKey ||
-          registration.applicationRelease.releaseRevision !== release.releaseRevision ||
-          registration.applicationRelease.releaseVersion !== release.releaseVersion ||
-          registration.applicationRelease.validationContractVersion !==
-            release.validationContractVersion ||
-          registration.applicationRelease.contentFingerprint !== release.contentFingerprint ||
-          registration.applicationRelease.resolutionFingerprint !== release.resolutionFingerprint
-        )
-          throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
+    source
+      .readExact()
+      .then(({ applicationRelease: release, permissionRegistration: registration }) => {
         const pages = release.content.pages.filter((page) => sameUuid(page.pageId, selectedPageId));
         if (pages.length !== 1 || pages[0] === undefined)
           throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
@@ -178,13 +138,12 @@ export const createStoredV1PageCapabilityService = (
             }),
           ),
         };
-      },
-    );
+      });
 
   return Object.freeze({
     async project(session: IdentitySession, candidate: OrganizationSelectionCandidate) {
       if (
-        !sameUuid(candidate.organizationId, systemContext.organizationId) ||
+        !sameUuid(candidate.organizationId, dependencies.systemContext.organizationId) ||
         candidate.applicationRootId === undefined ||
         !sameUuid(candidate.applicationRootId, applicationRootId)
       )
@@ -192,12 +151,12 @@ export const createStoredV1PageCapabilityService = (
       const fixed = await load();
       return createAuthenticatedPageCapabilityService({
         ...dependencies,
-        correlationId: () => systemContext.correlationId,
+        correlationId: () => dependencies.systemContext.correlationId,
         adapter: {
           load: async (_transaction, scope) => {
             if (
               scope.applicationRootId === undefined ||
-              !sameUuid(scope.organizationId, systemContext.organizationId) ||
+              !sameUuid(scope.organizationId, dependencies.systemContext.organizationId) ||
               !sameUuid(scope.applicationRootId, applicationRootId)
             )
               throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
