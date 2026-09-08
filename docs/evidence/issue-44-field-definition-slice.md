@@ -129,6 +129,36 @@ This is the pure evaluation prerequisite for
 [#57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57), not delivery of the
 Conditions Designer, database evaluation parity or protected Record persistence.
 
+[PR #356](https://github.com/Abzum-NZ/Abzum-Vortex/pull/356) merged normally into
+Testing at `2026-09-08T11:04:45Z`, producing
+`82fc2902445de45c0af3ecf6d82c13970fe429ff`. Reviewed source
+`51f55c7cad4b5a7bc288123f374f66f81e714674` completed an actual successful
+[preview build](https://vercel.com/abzumdevteam/abzum-vortex/HUnUQLNA9x38AVdW7ki9tUAJjPt6)
+in 4 minutes 39 seconds; root read the successful 23-package build summary.
+The normal Testing-base merge `bd12459dd9c40e7ecef4a8bbec0d7974f0311a65`
+has the identical Git tree. Its skipped-not-affected check did not substitute for
+the original source build. This is Testing merge evidence, not a new hosted
+database completion receipt or Production promotion.
+
+## Reviewed deliberate Module source conversion
+
+The pure Module V1-to-V2 converter preserves the value already represented by a
+finite old number while producing exact, non-exponent decimal text. Amount-only
+money definition defaults remain portable. Known record-value literal contexts
+retain explicit currency and reference targets; missing target/currency meaning
+returns a source-path diagnostic rather than guessing. Formatted strings become
+plain paragraph content. An external total-filter literal without its field type
+also returns a diagnostic; conversion does not consult a mutable catalogue.
+
+A different GPT-5.6 Sol reviewer approved the frozen implementation and tests,
+with 13/13 focused tests and Definition type checking passing. Those tests include
+conversion of all eight current editable Module fixtures without user choices and
+verify no mutation of the input. This helper does not save or publish a draft;
+the existing revision-checked draft save remains the only save path. Conversion
+does not change published V1 bytes, dependency versions or historical semantics.
+The current complete-fixture bundle still needs its coordinated V2 migration and
+actual Definition execution proof before it is treated as delivered.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
