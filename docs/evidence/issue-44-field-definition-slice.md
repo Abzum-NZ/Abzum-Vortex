@@ -193,6 +193,18 @@ This reviewed pure slice is not a claim of integrated fixture publication,
 protected persistence, current Access checks or complete #44 delivery. Those
 remain in the coordinated Definition, storage and save work below.
 
+[PR #358](https://github.com/Abzum-NZ/Abzum-Vortex/pull/358) merged normally into
+Testing at `2026-09-08T11:57:12Z`, producing
+`bd99cc93daecb09292663f147a09d075b15b792a`. Reviewed source
+`62f4506d762074c0fb849986df0be8a9a65c6108` received an actual completed successful
+[preview deployment](https://vercel.com/abzumdevteam/abzum-vortex/2ZaB8cVCTbnVEumPWtLA9kEDewdw).
+Root reran the final 34 tests and Record type check and matched every reviewed
+file hash before staging. The normal Testing-base merge
+`30de4be65498e6dc2d429cbd8a27346915c70462` has the identical Git tree; its final
+check was not used instead of the actual source preview. Unreviewed Definition
+runtime and SQL changes were excluded. This is a Testing merge receipt, not a
+hosted database completion or Production promotion claim.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
