@@ -68,6 +68,30 @@ The foundation's neutral proof is not actual owning-operation integration.
       acceptance, including the 500-row scenario; no unbuilt query engine, metrics
       collector or Activity screen is claimed complete here.
 
+## First owning operation and tool restriction — 8 September 2026
+
+Architect and independent Sol review selected Group rename as the first bounded
+integration. Its existing completed event remains unchanged. A classified
+permission refusal after a verified local request would append only the fixed
+`revise_group_label` / `web` / `refused` evidence, with empty subject/field lists,
+after rollback and fresh human-context validation. A missing/foreign organisation
+before scope validation cannot create Activity. A submitted foreign Group is
+never recorded; a permission denial before target lookup may still create one
+local, content-free request refusal. Missing-target, stale-revision and unexpected
+database errors are not relabelled as permission refusals.
+
+Reuse the existing runtime transaction runner and private context-building logic;
+do not add a general privileged-runner API. The private append wrapper would be
+callable only by the trusted runtime role, not request/browser roles, and could
+not append successes, arbitrary actions, subjects or values.
+
+The tool security reviewer rejected creation of that persistent privileged
+function and its runtime-only execution grant pending explicit user authorization.
+No function, grant or runtime change was applied. The CLI-created empty migration
+was removed so it cannot enter delivery. This is a tool-permission restriction,
+not a business decision, a new native task dependency or a reason to stop other
+engines. Do not retry the denied capability through another actor or mechanism.
+
 ## Later owners
 
 [Record operations #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47),
