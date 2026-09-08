@@ -32,6 +32,9 @@ request connection database-owner permissions.
    of [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) can be co-delivered here;
    its system-field and protected-action completion still needs real record storage.
    This does not require a new event queue or a successful mock registration.
+   The [event availability plan](issue-50-system-fields-actions-events.md) uses
+   exact immutable definitions and real binding state, not a copied catalogue
+   or a boolean claiming registration succeeded.
 4. Activate the exact organisation/application binding only when its required
    mappings, registrations and protected operations are ready. A retry reuses the
    existing compatible storage and registration identities.
@@ -67,6 +70,13 @@ inputs, not hardcoded business-schema migrations. This decision was independentl
 reviewed before implementation; the actual implementation still requires review.
 
 ### Integration prerequisites
+
+Co-deliver the concrete [Application lifecycle permission/caller slice](issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
+owned by #64 with this first real provisioning path. An absent installation
+permission is not solved by borrowing role-management rights, exposing an owner
+helper or leaving a mock-authorised installation. Its catalogue addition preserves
+existing permission meanings, assignments and the exact permanent-steward minimum.
+The full #64 renderer is not a prerequisite for this lower-level operation.
 
 The whole [Access phase #31](https://github.com/Abzum-NZ/Abzum-Vortex/issues/31)
 is not an entry gate. Activation and data operations require the actual central

@@ -233,14 +233,25 @@ The end-to-end service tests use in-memory publication/history adapters; separat
 repository tests exercise serialization and materialization. These results do
 not prove live database predicate parity, activated record storage, migration of
 the complete editable fixture bundle, or a rendered application. Those remain
-explicit follow-on work. Normal Testing delivery of this reviewed source is
-still pending at this entry.
+explicit follow-on work.
+
+[PR #359](https://github.com/Abzum-NZ/Abzum-Vortex/pull/359) merged normally into
+Testing at `2026-09-08T12:41:03Z`, producing
+`1b4ab301238fdc755f7c1ac070346e5512820408`. Root confirmed the actual completed
+successful [source preview](https://vercel.com/abzumdevteam/abzum-vortex/2z1ywbhojcu5NKTEYE5XEfaPm3Q9)
+for `6b7a973f342fe6bd52b6f99050c757901263d404` before merging. The normal Testing-base
+merge `f7527bc09304b58b671ab7ea196ed441c51ee90f` has the identical Git tree
+`9800d9cff1cbbedb32e239810ced5618d2d7bd58`; its final success did not substitute for
+the original source build. Unreviewed storage, permission-catalogue and #35/#250
+work was not included. This is a Testing merge receipt, not hosted database
+verification or Production promotion.
 
 ## Remaining integrated work
 
-The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,
-and real protected save/readback are not delivered by the pure preparation
-slice. Its new Testing revision's hosted database execution has not
+The whole #44 task stays open. The current complete editable fixture bundle still
+needs its coordinated V2 migration and compiled Record-value proof; database
+predicate parity and real protected save/readback are not delivered by these
+pure/Definition slices. The new Testing revision's hosted database execution has not
 yet been verified here; an older successful receipt is not a new-revision claim.
 The [new Testing execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6asr83WskOIDv67Xx4LCCr)
 is running. Its logs confirm exact revision

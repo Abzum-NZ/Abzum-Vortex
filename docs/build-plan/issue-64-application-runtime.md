@@ -14,7 +14,38 @@ Task: [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64). This is engine 
 6. Provide the installation extension consumed by [workflow registration #76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76). Required workflow registration must be verified before an application is fully ready; failed upgrades preserve the previous active release. The extension does not claim the later executor is already built and creates no reverse dependency on it.
 7. Expose the same protected lifecycle operations to non-editor callers and later designer/MCP adapters. Application Roles & access authoring links to ordinary IAM; assignment mutations never become editable application records.
 
-#64 owns the permanent exact application-lifecycle operation contract, its permission registration and protected caller binding, including withdrawal, targeted to the exact application root. This is not an arbitrary permission selected from the installed application, and registering it grants nobody access; governed assignment remains owned by IAM. It also owns the concrete locked affected-scope and atomic Activity composition around the existing private Access coordinator, using #40's protected transaction pattern. Role-management and assignment-management permissions cannot substitute for installation authority. Follow the [reviewed consumer handoff](access-consumer-handoffs.md#application-runtime-acceptance-additions): #40 must not invent this task's missing permission or accept unverified permission evidence. Withdrawal uses the exact current application-context permission catalogue as the affected before scope and preserves supplier/steward safeguards. This division creates no reverse dependency.
+#64 owns the permanent application-lifecycle operation contract, its platform permission registration and protected caller binding, including withdrawal. The fixed command targets the exact application root; the permission is organisation-scoped so installation does not require an already-active application. It is not an arbitrary permission selected from the installed application, and registering it grants nobody access; governed assignment remains owned by IAM. It also owns the concrete locked affected-scope and atomic Activity composition around the existing private Access coordinator, using #40's protected transaction pattern. Role-management and assignment-management permissions cannot substitute for installation authority. Follow the [reviewed consumer handoff](access-consumer-handoffs.md#application-runtime-acceptance-additions): #40 must not invent this task's missing permission or accept unverified permission evidence. Withdrawal uses the exact current application-context permission catalogue as the affected before scope and preserves supplier/steward safeguards. This division creates no reverse dependency.
+
+### Installation permission delivered with the storage engine
+
+Co-deliver this task's lifecycle permission/caller slice with [Module installation #43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43)
+and [Record provisioning #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
+Do not make initial provisioning wait for this whole renderer task or add a
+reverse dependency on it. The remaining runtime prerequisites above still govern
+complete application rendering and readiness.
+
+The additive platform permission `platform.organization.applications.manage`
+allows invoking application lifecycle operations within the selected organisation.
+It does not grant use of business records, role assignment or unrestricted
+catalogue mutation. Each fixed operation binds the exact application root,
+published release and expected binding/registration revision, and separately
+checks existing delegated-management authority over its locked complete before
+and after application-permission scope. New installation cannot invent continuity
+for not-yet-registered permissions; use existing organisation-catalogue delegation
+where bounded delegation cannot cover that prospective scope. Recheck these
+requirements before provisioning and again before activation.
+
+Ship the new permission in immutable platform catalogue `1.1.0`, retaining the
+historical `1.0.0` and display-only `1.0.1` evidence. Adopt shipped revisions through
+one owner-only, expected-revision operation using trusted version/fingerprint
+evidence, not caller-authored permission entries or a special command per future
+version. Registration adds no role membership, assignment or implicit grant.
+
+The permanent-steward requirement remains the original thirteen exact management
+permission identities and meanings plus the existing management-application
+requirement. Do not equate that minimum with every future catalogue entry or
+invalidate a steward merely because a new permission is published. Existing
+delegation permits governance of the new permission without granting its use.
 
 ## Acceptance criteria
 

@@ -109,6 +109,42 @@ Every record type provides seven standard events:
 
 A module may declare additional business events. An event carries identifiers and the minimum non-personal values required to choose later work. It never carries a complete record or a field classified as personal or sensitive. A workflow re-reads permitted current data when needed.
 
+The same rule applies to standard events: a state-change fact can identify the
+record and changed field, but its previous/new values are omitted when classified
+as personal or sensitive. This does not prevent the record change or suppress
+the safe lifecycle fact. Application-owned custom events use the same declaration
+and carried-value rules as Module-owned events.
+
+### Installed event availability
+
+An event declaration describes what may happen; an event occurrence records that
+it happened. Publication creates only the declaration. Installing and activating
+an exact Application release makes its standard and custom events, and those of
+its exact bound Module releases, available in that installation. Detachment stops
+new use there without deleting definitions needed by other installations or
+historical occurrences.
+
+The immutable published definitions and actual installation bindings are the
+authority for discovery and declaration validation. Registration is not a second
+editable copy of those definitions or an `eventsRegistered` success flag. A retry
+reuses the same scoped declaration identities; an explicit installation upgrade
+changes the exact release it resolves, not the meaning of an older installation's
+events. No event is queued merely by publication, registration or discovery.
+
+```mermaid
+flowchart LR
+    D[Exact published Application and Modules] --> B[Verified installation binding]
+    B --> A{Active installation?}
+    A -- No --> N[No runtime event availability]
+    A -- Yes --> C[Discover standard and custom declarations]
+    C --> O[Protected operation validates actual occurrence]
+    O --> T[Record, activity and event commit together]
+```
+
+The [system-field/action/event plan](../build-plan/issue-50-system-fields-actions-events.md)
+separates this installation handoff from actual occurrence delivery and preserves
+the existing service dependency direction.
+
 ## Event envelope
 
 Every event envelope includes:
@@ -119,6 +155,14 @@ Every event envelope includes:
 - Occurrence time, initiating person or system actor, correlation identifier, and causation identifier.
 - Per-record sequence number.
 - Declared carried values.
+
+The unique occurrence identifier is separate from the reusable custom event
+declaration identifier. Resolve a custom event by its exact owning Application
+or Module release and permanent declaration reference, retaining its published
+namespaced key. Resolve a standard event by its fixed kind and owning record
+type/release. Never infer either identity from a display label. Introduce the
+explicit versioned runtime envelope before delivery; preserve historical envelope
+contracts rather than silently changing their meaning.
 
 ## Starting durable work
 
