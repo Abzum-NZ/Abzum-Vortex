@@ -47,7 +47,16 @@ by the test scripts. Further reset runs were stopped by the architect.
 Testing at `2026-09-08T00:02:44Z` after preview success. Reviewed source:
 `95254d8cbab50784d2b372a60afe5aa365e90c80`; Testing merge:
 `62a19dc4c30b111dcb43475e297115ac390d726c`. All 23 package builds also passed.
-No unfinished SQL was included and no hosted receipt is claimed for this merge.
+No unfinished SQL was included. The subsequent exact hosted receipt is now verified:
+[Testing execution Sw6MM3qeYlSuf3I2tjPSv](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/Sw6MM3qeYlSuf3I2tjPSv)
+succeeded, with receipt `database-testing-62a19dc4c30b111dcb43475e297115ac390d726c`
+published at `2026-09-08T01:18:22.683Z`. Root read the stored schema-2 receipt:
+the repository, Testing ref, exact merge and execution match; all 66 migrations,
+25 selected/completed concurrency proofs and six selected/completed lint schemas
+are recorded. Migration-set, runner, manifest and coverage fingerprints match
+the preceding verified receipts. Root confirmed no Git changes to `supabase` or
+`workflows/kestra` between the PR #337 and PR #338 merges. This proves the selected
+database gate for this revision, not delivery of the separate pending SQL candidate.
 
 The strict grant/revoke commands accept normal record, recipient, field, time and
 revision inputs, never caller-supplied authority or field ceilings. Grant and

@@ -72,7 +72,21 @@ permission evaluator, cache, SQL store or visual designer.
    Access version, correlation and validity evidence consistently. Request input
    cannot select an allow-map, permission key, declaration or helper. Prove this
    using a fixed neutral adapter before the installed application consumer exists.
-   The initial published-page adapter uses delivered V1 readers. V2 projection
+   The initial published-page adapter uses the delivered Definition consumer V1
+   reader, which requires a trusted system context. Read and verify an exact
+   immutable release in that context, then project permissions in the separate
+   human request transaction; bind the same organisation, exact application/page,
+   release fingerprint and server correlation. Do not pass a human context to the
+   system reader or fabricate system authority from request input. Before #64,
+   a fixed release and injected validated fixture context can prove the actual
+   stored-reader integration, not a deployed context issuer. #64 owns real service
+   context provisioning and installed-release selection; #30's structural operator
+   is not a prerequisite or substitute. Access owns the fixed system-context
+   application/permission-source read and its existing request runner. Page
+   consumes that verified evidence and owns page selection/projection; it does
+   not initialize database authority or use the Access-only runner directly.
+   Do not widen package boundaries or add a general privileged execution API.
+   V2 projection
    fixtures may use contract-parsed canonical trees, but are not publication
    evidence. Enable published V2 selection only when #249's coordinated readers
    and persistence are delivered; a caller-provided tree is not a substitute.

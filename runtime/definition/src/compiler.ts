@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { satisfies } from "semver";
 import {
+  applicationSourceDocumentV2Schema,
+  applicationCompilationOutputV2Schema,
+  applicationCompilationRequestV2Schema,
   applicationDraftSchema,
+  applicationDraftV2Schema,
   conditionNodeSchema,
   jsonValueSchema,
   walkDefinitionContract,
@@ -13,9 +17,14 @@ import {
   moduleDraftSchema,
   readModuleSourceRecordOwnershipModeV1,
   writeModuleRecordOwnershipModeV1,
+  type ApplicationCompilationOutputV2,
+  type ApplicationCompilationRequestV2,
+  type DefinitionCompilationRequest,
+  type ApplicationSourceDocumentV2,
   type DefinitionCompilationOutput,
   type DefinitionProvenanceEntry,
   type DefinitionResolutionSnapshot,
+  type DefinitionResolutionSnapshotV2,
   type DefinitionSourceDocument,
   type DefinitionValidationLocation,
 } from "@vortex/contracts";
@@ -28,7 +37,15 @@ import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
-import { extractSourceIdentityRequirements } from "./source-identities";
+import {
+  extractApplicationSourceIdentityRequirementsV2,
+  extractSourceIdentityRequirements,
+} from "./source-identities";
+import {
+  materialiseApplicationCompositionV2,
+  type MaterialisedApplicationCompositionV2,
+} from "./application-v2-composition";
+import type { ApplicationCompositionResolutionV2 } from "./application-v2-resolution";
 
 type Path = (string | number)[];
 type JsonObject = Record<string, unknown>;
@@ -247,7 +264,11 @@ const pathStartsWith = (path: Path, prefix: Path) =>
 function sourceContractPositions(source: JsonObject): SourceContractPositions {
   const opaqueDataRoots: Path[] = [];
   const recordRoots: Path[] = [];
-  walkDefinitionContract(definitionSourceDocumentSchema, source, (schema, _value, path) => {
+  const contract =
+    source.source_contract_version === "2.0.0"
+      ? applicationSourceDocumentV2Schema
+      : definitionSourceDocumentSchema;
+  walkDefinitionContract(contract, source, (schema, _value, path) => {
     if (schema === jsonValueSchema) opaqueDataRoots.push(path as Path);
     if (schema._zod.def.type === "record") recordRoots.push(path as Path);
   });
@@ -1665,23 +1686,26 @@ function provenanceFor(
 }
 
 class Resolution {
-  readonly snapshot: DefinitionResolutionSnapshot;
+  readonly snapshot: DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2;
   readonly sourceLocation: DefinitionValidationLocation;
 
-  constructor(snapshot: DefinitionResolutionSnapshot, source: JsonObject) {
+  constructor(
+    snapshot: DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2,
+    source: JsonObject,
+  ) {
     this.snapshot = snapshot;
     this.sourceLocation = compilerRootLocation(source);
+    const requirements =
+      source.source_contract_version === "2.0.0"
+        ? extractApplicationSourceIdentityRequirementsV2(
+            source as unknown as ApplicationSourceDocumentV2,
+          )
+        : extractSourceIdentityRequirements(source as unknown as DefinitionSourceDocument);
     const authenticSourceIdentities = new Set(
-      extractSourceIdentityRequirements(source as unknown as DefinitionSourceDocument).flatMap(
-        (requirement) =>
-          requirement.aliases.map((alias) =>
-            JSON.stringify([
-              requirement.scope,
-              requirement.kind,
-              requirement.componentOwner,
-              alias,
-            ]),
-          ),
+      requirements.flatMap((requirement) =>
+        requirement.aliases.map((alias) =>
+          JSON.stringify([requirement.scope, requirement.kind, requirement.componentOwner, alias]),
+        ),
       ),
     );
     const actualFingerprint = `sha256:${createHash("sha256")
@@ -1900,6 +1924,31 @@ class Resolution {
         this.location("permission", key),
       );
     return unique[0]!;
+  }
+
+  exactOwnedReference(
+    kind: "action" | "permission",
+    key: string,
+    allowedDefinitionKeys: readonly string[],
+  ): string {
+    const allowed = new Set(allowedDefinitionKeys);
+    const matches = this.snapshot.identities.filter(
+      (entry) =>
+        allowed.has(entry.definitionKey) &&
+        entry.scope === "content" &&
+        entry.kind === kind &&
+        entry.alias === key,
+    );
+    const unique = [...new Set(matches.map((entry) => entry.identifier))];
+    if (unique.length === 0)
+      fail("vortex.definition.missing_identity", "unresolved_reference", this.location(kind, key));
+    if (unique.length > 1)
+      fail(
+        "vortex.definition.ambiguous_identity",
+        "unresolved_reference",
+        this.location(kind, key),
+      );
+    return key;
   }
 }
 
@@ -3080,11 +3129,138 @@ function compileWorkflow(
   };
 }
 
+function compileApplicationPagesV2(
+  source: JsonObject,
+  resolution: Resolution,
+  composition: MaterialisedApplicationCompositionV2,
+) {
+  const body = asObject(source.body);
+  const definitionKey = String(source.key);
+  const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
+  const queryId = (alias: string) => resolution.id(definitionKey, "query", alias, "content");
+  const allowedPermissionOwners = permissionScopeSourceOwners(source);
+  return (body.pages as JsonObject[]).map((page, index) => {
+    const compiledComposition = composition.pages[index];
+    if (compiledComposition === undefined)
+      fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    const base = {
+      pageId: pageId(String(page.id)),
+      key: page.key,
+      name: page.name,
+      accessPermissionKey: resolution.exactOwnedReference(
+        "permission",
+        String(page.permission),
+        allowedPermissionOwners,
+      ),
+      states: page.states,
+      composition: compiledComposition.composition,
+      ...(page.standard_page_replacement
+        ? {
+            standardPageReplacement: {
+              standardPage: asObject(page.standard_page_replacement).standard_page,
+              recordType: resolution.recordType(
+                String(asObject(page.standard_page_replacement).record_type),
+              ),
+            },
+          }
+        : {}),
+    };
+    if (page.type === "list") {
+      const record = String(page.record_type);
+      const mapping = page.calendar_mapping ? asObject(page.calendar_mapping) : undefined;
+      return {
+        ...base,
+        type: "list",
+        recordType: resolution.recordType(record),
+        queryId: queryId(String(page.query)),
+        arrangements: page.arrangements,
+        ...(mapping
+          ? {
+              calendarMapping:
+                "end" in mapping
+                  ? {
+                      kind: "start_end",
+                      startFieldId: resolution.field(record, String(mapping.start)),
+                      endFieldId: resolution.field(record, String(mapping.end)),
+                    }
+                  : {
+                      kind: "start_duration",
+                      startFieldId: resolution.field(record, String(mapping.start)),
+                      durationFieldId: resolution.field(record, String(mapping.duration_field)),
+                      durationUnit: mapping.duration_unit,
+                    },
+            }
+          : {}),
+      };
+    }
+    if (page.type === "dashboard") return { ...base, type: "dashboard" };
+    if (page.type === "detail")
+      return {
+        ...base,
+        type: "detail",
+        recordType: resolution.recordType(String(page.record_type)),
+      };
+    if (page.type === "form")
+      return {
+        ...base,
+        type: "form",
+        recordType: resolution.recordType(String(page.record_type)),
+        commitActionKey: resolution.exactOwnedReference(
+          "action",
+          String(page.commit_action),
+          allowedPermissionOwners,
+        ),
+      };
+    if (page.type === "guided_form")
+      return {
+        ...base,
+        type: "guided_form",
+        recordType: resolution.recordType(String(page.record_type)),
+        commitActionKey: resolution.exactOwnedReference(
+          "action",
+          String(page.commit_action),
+          allowedPermissionOwners,
+        ),
+        steps: (page.steps as JsonObject[]).map((step) => ({
+          id: resolution.id(
+            definitionKey,
+            "guided_step",
+            String(step.id),
+            `page:${String(page.key)}`,
+          ),
+          name: step.name,
+          summary: step.summary,
+        })),
+      };
+    return {
+      ...base,
+      type: "public",
+      ...(page.record_type ? { recordType: resolution.recordType(String(page.record_type)) } : {}),
+      publicFieldIds: page.record_type
+        ? (page.public_fields as string[]).map((alias) =>
+            resolution.field(String(page.record_type), alias),
+          )
+        : [],
+      ...(page.public_action
+        ? {
+            publicActionKey: resolution.exactOwnedReference(
+              "action",
+              String(page.public_action),
+              allowedPermissionOwners,
+            ),
+          }
+        : {}),
+      rateLimitPerMinute: page.rate_limit_per_minute,
+    };
+  });
+}
+
 function compileApplication(
   source: JsonObject,
   resolution: Resolution,
   metadata: JsonObject,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
+  compositionV2?: MaterialisedApplicationCompositionV2,
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -3177,97 +3353,113 @@ function compileApplication(
       ),
     },
   });
-  const pages = (body.pages as JsonObject[]).map((page) => {
-    const base = {
-      pageId: resolution.id(definitionKey, "page", String(page.id), "content"),
-      key: page.key,
-      name: page.name,
-      accessPermissionKey: page.permission,
-      states: page.states,
-      layout: layout(asObject(page.layout)),
-      ...(page.standard_page_replacement
-        ? {
-            standardPageReplacement: {
-              standardPage: asObject(page.standard_page_replacement).standard_page,
-              recordType: resolution.recordType(
-                String(asObject(page.standard_page_replacement).record_type),
-              ),
-            },
+  const pagesV1 =
+    compositionV2 === undefined
+      ? (body.pages as JsonObject[]).map((page) => {
+          const base = {
+            pageId: resolution.id(definitionKey, "page", String(page.id), "content"),
+            key: page.key,
+            name: page.name,
+            accessPermissionKey: page.permission,
+            states: page.states,
+            layout: layout(asObject(page.layout)),
+            ...(page.standard_page_replacement
+              ? {
+                  standardPageReplacement: {
+                    standardPage: asObject(page.standard_page_replacement).standard_page,
+                    recordType: resolution.recordType(
+                      String(asObject(page.standard_page_replacement).record_type),
+                    ),
+                  },
+                }
+              : {}),
+          };
+          if (page.type === "list") {
+            const record = String(page.record_type);
+            const mapping = page.calendar_mapping ? asObject(page.calendar_mapping) : undefined;
+            return {
+              ...base,
+              type: "list",
+              recordType: resolution.recordType(record),
+              queryId: queryId(String(page.query)),
+              arrangements: page.arrangements,
+              ...(mapping
+                ? {
+                    calendarMapping:
+                      "end" in mapping
+                        ? {
+                            kind: "start_end",
+                            startFieldId: resolution.field(record, String(mapping.start)),
+                            endFieldId: resolution.field(record, String(mapping.end)),
+                          }
+                        : {
+                            kind: "start_duration",
+                            startFieldId: resolution.field(record, String(mapping.start)),
+                            durationFieldId: resolution.field(
+                              record,
+                              String(mapping.duration_field),
+                            ),
+                            durationUnit: mapping.duration_unit,
+                          },
+                  }
+                : {}),
+            };
           }
-        : {}),
-    };
-    if (page.type === "list") {
-      const record = String(page.record_type);
-      const mapping = page.calendar_mapping ? asObject(page.calendar_mapping) : undefined;
-      return {
-        ...base,
-        type: "list",
-        recordType: resolution.recordType(record),
-        queryId: queryId(String(page.query)),
-        arrangements: page.arrangements,
-        ...(mapping
-          ? {
-              calendarMapping:
-                "end" in mapping
-                  ? {
-                      kind: "start_end",
-                      startFieldId: resolution.field(record, String(mapping.start)),
-                      endFieldId: resolution.field(record, String(mapping.end)),
-                    }
-                  : {
-                      kind: "start_duration",
-                      startFieldId: resolution.field(record, String(mapping.start)),
-                      durationFieldId: resolution.field(record, String(mapping.duration_field)),
-                      durationUnit: mapping.duration_unit,
-                    },
-            }
-          : {}),
-      };
-    }
-    if (page.type === "dashboard")
-      return { ...base, type: "dashboard", blocks: (page.blocks as JsonObject[]).map(placement) };
-    if (page.type === "detail")
-      return {
-        ...base,
-        type: "detail",
-        recordType: resolution.recordType(String(page.record_type)),
-        blocks: (page.blocks as JsonObject[]).map(placement),
-      };
-    if (page.type === "form")
-      return {
-        ...base,
-        type: "form",
-        recordType: resolution.recordType(String(page.record_type)),
-        commitActionKey: page.commit_action,
-        blocks: (page.blocks as JsonObject[]).map(placement),
-      };
-    if (page.type === "guided_form")
-      return {
-        ...base,
-        type: "guided_form",
-        recordType: resolution.recordType(String(page.record_type)),
-        commitActionKey: page.commit_action,
-        steps: (page.steps as JsonObject[]).map((step) => ({
-          id: resolution.id(definitionKey, "guided_step", String(step.id)),
-          name: step.name,
-          summary: step.summary,
-          blocks: (step.blocks as JsonObject[]).map(placement),
-        })),
-      };
-    return {
-      ...base,
-      type: "public",
-      ...(page.record_type ? { recordType: resolution.recordType(String(page.record_type)) } : {}),
-      publicFieldIds: page.record_type
-        ? (page.public_fields as string[]).map((alias) =>
-            resolution.field(String(page.record_type), alias),
-          )
-        : [],
-      ...(page.public_action ? { publicActionKey: page.public_action } : {}),
-      blocks: (page.blocks as JsonObject[]).map(placement),
-      rateLimitPerMinute: page.rate_limit_per_minute,
-    };
-  });
+          if (page.type === "dashboard")
+            return {
+              ...base,
+              type: "dashboard",
+              blocks: (page.blocks as JsonObject[]).map(placement),
+            };
+          if (page.type === "detail")
+            return {
+              ...base,
+              type: "detail",
+              recordType: resolution.recordType(String(page.record_type)),
+              blocks: (page.blocks as JsonObject[]).map(placement),
+            };
+          if (page.type === "form")
+            return {
+              ...base,
+              type: "form",
+              recordType: resolution.recordType(String(page.record_type)),
+              commitActionKey: page.commit_action,
+              blocks: (page.blocks as JsonObject[]).map(placement),
+            };
+          if (page.type === "guided_form")
+            return {
+              ...base,
+              type: "guided_form",
+              recordType: resolution.recordType(String(page.record_type)),
+              commitActionKey: page.commit_action,
+              steps: (page.steps as JsonObject[]).map((step) => ({
+                id: resolution.id(definitionKey, "guided_step", String(step.id)),
+                name: step.name,
+                summary: step.summary,
+                blocks: (step.blocks as JsonObject[]).map(placement),
+              })),
+            };
+          return {
+            ...base,
+            type: "public",
+            ...(page.record_type
+              ? { recordType: resolution.recordType(String(page.record_type)) }
+              : {}),
+            publicFieldIds: page.record_type
+              ? (page.public_fields as string[]).map((alias) =>
+                  resolution.field(String(page.record_type), alias),
+                )
+              : [],
+            ...(page.public_action ? { publicActionKey: page.public_action } : {}),
+            blocks: (page.blocks as JsonObject[]).map(placement),
+            rateLimitPerMinute: page.rate_limit_per_minute,
+          };
+        })
+      : [];
+  const pages =
+    compositionV2 === undefined
+      ? pagesV1
+      : compileApplicationPagesV2(source, resolution, compositionV2);
   const queries = (body.queries as JsonObject[]).map((query) => {
     const record = String(query.record_type);
     return {
@@ -3326,7 +3518,7 @@ function compileApplication(
     .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
   const wildcardPermissionKeys = wildcardPermissions.map((permission) => permission.key);
   const wildcardCatalogueFingerprint = fingerprintCanonicalValue(wildcardPermissions);
-  const canonical = applicationDraftSchema.parse({
+  const canonical = (compositionV2 ? applicationDraftV2Schema : applicationDraftSchema).parse({
     envelope: {
       kind: "application",
       rootId: root.rootId,
@@ -3397,19 +3589,26 @@ function compileApplication(
         };
       }),
       queries,
-      blockRegistrations: (body.block_registrations as JsonObject[]).map((block) => ({
-        blockId: resolution.id(definitionKey, "block", String(block.id), "content"),
-        releaseVersion: block.release_version,
-        name: block.name,
-        icon: block.icon,
-        paletteGroup: block.palette_group,
-        settings: block.settings,
-        allowedChildBlockIds: (block.allowed_child_blocks as string[]).map(blockId),
-        phoneBehaviour: block.phone_behaviour,
-        resizableHeight: block.resizable_height,
-        liveUpdate: block.live_update,
-        publicPage: block.public_page,
-      })),
+      ...(compositionV2
+        ? {
+            platformBlockDependencies: compositionV2.platformBlockDependencies,
+            shells: compositionV2.shells,
+          }
+        : {
+            blockRegistrations: (body.block_registrations as JsonObject[]).map((block) => ({
+              blockId: resolution.id(definitionKey, "block", String(block.id), "content"),
+              releaseVersion: block.release_version,
+              name: block.name,
+              icon: block.icon,
+              paletteGroup: block.palette_group,
+              settings: block.settings,
+              allowedChildBlockIds: (block.allowed_child_blocks as string[]).map(blockId),
+              phoneBehaviour: block.phone_behaviour,
+              resizableHeight: block.resizable_height,
+              liveUpdate: block.live_update,
+              publicPage: block.public_page,
+            })),
+          }),
       pipelines: (body.pipelines as JsonObject[]).map((pipeline) => {
         const record = String(pipeline.record_type);
         return {
@@ -3661,7 +3860,8 @@ function compileApplication(
         rateLimitPerMinute: address.rate_limit_per_minute,
       })),
       theme:
-        asObject(body.theme).mode === "application"
+        compositionV2?.theme ??
+        (asObject(body.theme).mode === "application"
           ? {
               mode: "application",
               lightAndDark: asObject(body.theme).light_and_dark,
@@ -3671,7 +3871,7 @@ function compileApplication(
               mode: "platform",
               catalogueThemeId: asObject(body.theme).catalogue_theme_id,
               version: asObject(body.theme).version,
-            },
+            }),
       homePageId: pageId(String(body.home_page)),
     },
   });
@@ -3856,13 +4056,541 @@ function compileDefinitionInternal(
   }
 }
 
-export function compileDefinition(input: unknown): DefinitionCompilationOutput {
+const applicationCompositionResolutionV2 = (
+  source: ApplicationSourceDocumentV2,
+  resolution: Resolution,
+): ApplicationCompositionResolutionV2 => {
+  const definitionKey = source.key;
+  const allowedOwners = permissionScopeSourceOwners(source as unknown as JsonObject);
+  const splitMember = (
+    reference: string,
+    code: DefinitionCompilerRefusalCode,
+  ): readonly [string, string] => {
+    const separator = reference.lastIndexOf(".");
+    if (separator < 1) fail(code, "unresolved_reference");
+    return [reference.slice(0, separator), reference.slice(separator + 1)];
+  };
+  return {
+    identity: (kind, alias, scope = "content") => resolution.id(definitionKey, kind, alias, scope),
+    field: (reference) => qualifiedField(resolution, reference),
+    relationship: (reference) => {
+      const [recordType, alias] = splitMember(
+        reference,
+        "vortex.definition.qualified_field_required",
+      );
+      return resolution.relationship(recordType, alias);
+    },
+    action: (reference) => resolution.exactOwnedReference("action", reference, allowedOwners),
+    permission: (reference) =>
+      resolution.exactOwnedReference("permission", reference, allowedOwners),
+    recordType: (reference) => resolution.recordType(reference),
+  };
+};
+
+const v2SpecialRoot = (path: Path): boolean =>
+  path[0] === "body" &&
+  (path[1] === "platform_block_dependencies" ||
+    path[1] === "shells" ||
+    path[1] === "theme" ||
+    (path[1] === "pages" && path.includes("composition")));
+
+const v2ThemeValueTargets = (
+  sourcePath: Path,
+  sourceValueRoot: Path,
+  canonicalRoot: Path,
+): Path[] => {
+  const suffix = sourcePath.slice(sourceValueRoot.length);
+  const mapped = suffix.map((segment) =>
+    typeof segment === "string"
+      ? ((
+          {
+            size_rem: "sizeRem",
+            line_height: "lineHeight",
+            width_rem: "widthRem",
+            color_token: "colorToken",
+            asset_id: "assetId",
+          } as Readonly<Record<string, string>>
+        )[segment] ?? segment)
+      : segment,
+  );
+  return [[...canonicalRoot, ...mapped]];
+};
+
+const v2PropertyValueTargets = (
+  source: ApplicationSourceDocumentV2,
+  sourcePath: Path,
+  sourceValueRoot: Path,
+  canonicalRoot: Path,
+): Path[] => {
+  const suffix = sourcePath.slice(sourceValueRoot.length);
+  if (suffix[0] === "kind") return [[...canonicalRoot, "kind"]];
+  const leaf = String(suffix.at(-1));
+  const valueKind = String(asObject(valueAtPath(source, sourcePath.slice(0, -1))).kind);
+  const valueLeaf: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+    asset_reference: { asset_id: "assetId" },
+    icon: { icon_key: "iconKey" },
+    theme_token: { token: "tokenKey" },
+    field_reference: { field: "fieldId" },
+    relationship_reference: { relationship: "relationshipId" },
+    action_reference: { action: "actionKey" },
+    page_reference: { page: "pageId" },
+    query_reference: { query: "queryId" },
+    pipeline_reference: { pipeline: "pipelineId" },
+    record_reference: { record_id: "recordId" },
+  };
+  if (
+    leaf === "record_type" &&
+    (valueKind === "record_type_reference" || valueKind === "record_reference")
+  ) {
+    const target = [...canonicalRoot, ...suffix.slice(0, -1), "recordType"] as Path;
+    return [
+      [...target, "state"],
+      [...target, "moduleRootId"],
+      [...target, "recordTypeId"],
+    ];
+  }
+  return [
+    [...canonicalRoot, ...suffix.slice(0, -1), valueLeaf[valueKind]?.[leaf] ?? suffix.at(-1)!],
+  ];
+};
+
+function v2SlotSourceTargets(
+  source: ApplicationSourceDocumentV2,
+  sourcePath: Path,
+  sourceSlotRoot: Path,
+  canonicalSlotRoot: Path,
+  resolution: Resolution,
+): Path[] | undefined {
+  let sourceRoot = sourceSlotRoot;
+  let canonicalRoot = canonicalSlotRoot;
+  while (true) {
+    const suffix = sourcePath.slice(sourceRoot.length);
+    if (suffix[0] === "order" && typeof suffix[1] === "string") {
+      const authoredOrder = asObject(valueAtPath(source, sourceRoot)).order as JsonObject;
+      const breakpoint = suffix[1];
+      const inherited = [
+        breakpoint,
+        ...(breakpoint === "desktop" && authoredOrder.tablet === undefined ? ["tablet"] : []),
+        ...((
+          breakpoint === "desktop"
+            ? authoredOrder.tablet === undefined && authoredOrder.phone === undefined
+            : breakpoint === "tablet" && authoredOrder.phone === undefined
+        )
+          ? ["phone"]
+          : []),
+      ];
+      return inherited.map((target) => [...canonicalRoot, "order", target, ...suffix.slice(2)]);
+    }
+    if (suffix[0] !== "placements" || typeof suffix[1] !== "string") return undefined;
+    const alias = suffix[1];
+    sourceRoot = [...sourceRoot, "placements", alias];
+    canonicalRoot = [
+      ...canonicalRoot,
+      "placements",
+      resolution.id(source.key, "block_placement", alias, "content"),
+    ];
+    const placementSuffix = sourcePath.slice(sourceRoot.length);
+    const property = placementSuffix[0];
+    if (property === "slots" && typeof placementSuffix[1] === "string") {
+      sourceRoot = [...sourceRoot, "slots", placementSuffix[1]];
+      canonicalRoot = [...canonicalRoot, "slots", placementSuffix[1]];
+      continue;
+    }
+    if (property === "block")
+      return [
+        [
+          ...canonicalRoot,
+          "block",
+          placementSuffix[1] === "block_id" ? "blockId" : "releaseVersion",
+        ],
+      ];
+    if (property === "view_permission") return [[...canonicalRoot, "viewPermissionKey"]];
+    if (property === "use_permission") return [[...canonicalRoot, "usePermissionKey"]];
+    if (
+      property === "responsive" &&
+      typeof placementSuffix[1] === "string" &&
+      typeof placementSuffix[2] === "string"
+    ) {
+      const responsive = asObject(asObject(valueAtPath(source, sourceRoot)).responsive);
+      const breakpoint = placementSuffix[1];
+      const inherited = [
+        breakpoint,
+        ...(breakpoint === "desktop" && responsive.tablet === undefined ? ["tablet"] : []),
+        ...((
+          breakpoint === "desktop"
+            ? responsive.tablet === undefined && responsive.phone === undefined
+            : breakpoint === "tablet" && responsive.phone === undefined
+        )
+          ? ["phone"]
+          : []),
+      ];
+      return inherited.map((target) => [
+        ...canonicalRoot,
+        "responsive",
+        target,
+        ...placementSuffix
+          .slice(2)
+          .map((segment) => (segment === "start_column" ? "startColumn" : segment)),
+      ]);
+    }
+    if (property === "theme_overrides" && typeof placementSuffix[1] === "string")
+      return v2ThemeValueTargets(
+        sourcePath,
+        [...sourceRoot, "theme_overrides", placementSuffix[1]],
+        [...canonicalRoot, "themeOverrides", placementSuffix[1]],
+      );
+    if (property === "settings" && typeof placementSuffix[1] === "string")
+      return v2PropertyValueTargets(
+        source,
+        sourcePath,
+        [...sourceRoot, "settings", placementSuffix[1]],
+        [...canonicalRoot, "settings", placementSuffix[1]],
+      );
+    return undefined;
+  }
+}
+
+function v2SpecialSourceTargets(
+  source: ApplicationSourceDocumentV2,
+  sourcePath: Path,
+  resolution: Resolution,
+): Path[] | undefined {
+  if (sourcePath[1] === "platform_block_dependencies" && typeof sourcePath[2] === "number")
+    return [
+      [
+        "content",
+        "platformBlockDependencies",
+        sourcePath[2],
+        ...sourcePath.slice(3).map((segment) => camelCase(String(segment))),
+      ],
+    ];
+  if (sourcePath[1] === "theme") {
+    if (sourcePath[2] === "base")
+      return [
+        [
+          "content",
+          "theme",
+          "base",
+          ...sourcePath.slice(3).map((segment) => camelCase(String(segment))),
+        ],
+      ];
+    if (sourcePath[2] === "token_overrides" && typeof sourcePath[3] === "string")
+      return v2ThemeValueTargets(
+        sourcePath,
+        ["body", "theme", "token_overrides", sourcePath[3]],
+        ["content", "theme", "tokens", sourcePath[3]],
+      );
+  }
+  if (sourcePath[1] === "shells" && typeof sourcePath[2] === "number") {
+    const shell = source.body.shells[sourcePath[2]];
+    if (shell === undefined) return undefined;
+    const shellRoot: Path = ["content", "shells", sourcePath[2]];
+    if (sourcePath[3] === "layout")
+      return v2SlotSourceTargets(
+        source,
+        sourcePath,
+        ["body", "shells", sourcePath[2], "layout"],
+        [...shellRoot, "layout"],
+        resolution,
+      );
+    if (
+      sourcePath[3] === "content_slots" &&
+      typeof sourcePath[4] === "number" &&
+      typeof sourcePath[5] === "string"
+    ) {
+      const key: Readonly<Record<string, string>> = {
+        id: "slotId",
+        allowed_child_categories: "allowedChildCategories",
+        parent_placement: "parentPlacementId",
+        parent_slot: "parentSlotKey",
+      };
+      return [
+        [
+          ...shellRoot,
+          "contentSlots",
+          sourcePath[4],
+          key[sourcePath[5]] ?? camelCase(sourcePath[5]),
+          ...sourcePath.slice(6),
+        ],
+      ];
+    }
+    if (sourcePath[3] === "id") return [[...shellRoot, "shellId"]];
+    if (typeof sourcePath[3] === "string") return [[...shellRoot, camelCase(sourcePath[3])]];
+  }
+  if (
+    sourcePath[1] === "pages" &&
+    typeof sourcePath[2] === "number" &&
+    sourcePath[3] === "composition"
+  ) {
+    const page = source.body.pages[sourcePath[2]];
+    if (page === undefined) return undefined;
+    const composition = page.composition;
+    const root: Path = ["content", "pages", sourcePath[2], "composition"];
+    if (sourcePath[4] === "shell_kind") return [[...root, "shellKind"]];
+    if (sourcePath[4] === "shell") return [[...root, "shellId"]];
+    if (sourcePath[4] === "main")
+      return v2SlotSourceTargets(
+        source,
+        sourcePath,
+        ["body", "pages", sourcePath[2], "composition", "main"],
+        [...root, "main"],
+        resolution,
+      );
+    if (sourcePath[4] === "content" && typeof sourcePath[5] === "string") {
+      const slotAlias = sourcePath[5];
+      return v2SlotSourceTargets(
+        source,
+        sourcePath,
+        ["body", "pages", sourcePath[2], "composition", "content", slotAlias],
+        [...root, "content", resolution.id(source.key, "shell_content_slot", slotAlias, "content")],
+        resolution,
+      );
+    }
+    if (sourcePath[4] === "step_content" && typeof sourcePath[5] === "string") {
+      const stepAlias = sourcePath[5];
+      const stepId = resolution.id(source.key, "guided_step", stepAlias, "page:" + page.key);
+      if (composition.shell_kind === "default")
+        return v2SlotSourceTargets(
+          source,
+          sourcePath,
+          ["body", "pages", sourcePath[2], "composition", "step_content", stepAlias],
+          [...root, "stepContent", stepId],
+          resolution,
+        );
+      if (typeof sourcePath[6] !== "string") return undefined;
+      const slotAlias = sourcePath[6];
+      return v2SlotSourceTargets(
+        source,
+        sourcePath,
+        ["body", "pages", sourcePath[2], "composition", "step_content", stepAlias, slotAlias],
+        [
+          ...root,
+          "stepContent",
+          stepId,
+          resolution.id(source.key, "shell_content_slot", slotAlias, "content"),
+        ],
+        resolution,
+      );
+    }
+  }
+  return undefined;
+}
+
+function applicationProvenanceV2(
+  source: ApplicationSourceDocumentV2,
+  canonical: unknown,
+  resolution: Resolution,
+): DefinitionProvenanceEntry[] {
+  const sourceObject = source as unknown as JsonObject;
+  const positions = sourceContractPositions(sourceObject);
+  const sourceLeaves = leafPaths(source).filter(
+    (path) => !(path.length === 1 && (path[0] === "source_contract_version" || path[0] === "kind")),
+  );
+  const canonicalLeaves = leafPaths(canonical);
+  const canonicalLeafSet = new Set(canonicalLeaves.map(pathKey));
+  const entries: DefinitionProvenanceEntry[] = [];
+  for (const sourcePath of sourceLeaves) {
+    const targets = v2SpecialRoot(sourcePath)
+      ? v2SpecialSourceTargets(source, sourcePath, resolution)
+      : (explicitSourceTargets(sourceObject, canonical, sourcePath, positions, resolution) ?? [
+          sourceToCanonicalPath(sourceObject, canonical, sourcePath, positions),
+        ]);
+    if (targets === undefined || targets.length === 0) {
+      fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    }
+    for (const canonicalPath of targets) {
+      if (!canonicalLeafSet.has(pathKey(canonicalPath))) {
+        fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      }
+      const transformed =
+        canonicalJson(valueAtPath(source, sourcePath)) !==
+        canonicalJson(valueAtPath(canonical, canonicalPath));
+      const pageReference =
+        sourcePath[0] === "body" &&
+        sourcePath[1] === "pages" &&
+        typeof sourcePath[2] === "number" &&
+        ["permission", "commit_action", "public_action"].includes(String(sourcePath.at(-1)));
+      const sourceParentValue = valueAtPath(source, sourcePath.slice(0, -1));
+      const sourceParent =
+        sourceParentValue !== null &&
+        typeof sourceParentValue === "object" &&
+        !Array.isArray(sourceParentValue)
+          ? (sourceParentValue as JsonObject)
+          : undefined;
+      const propertyReferenceLeaf: Readonly<Record<string, string>> = {
+        action_reference: "action",
+        field_reference: "field",
+        page_reference: "page",
+        pipeline_reference: "pipeline",
+        query_reference: "query",
+        record_reference: "record_type",
+        record_type_reference: "record_type",
+        relationship_reference: "relationship",
+        theme_token: "token",
+      };
+      const propertyReference =
+        sourceParent !== undefined &&
+        propertyReferenceLeaf[String(sourceParent.kind)] === String(sourcePath.at(-1));
+      const compositionReference =
+        v2SpecialRoot(sourcePath) &&
+        (["shell", "parent_placement", "view_permission", "use_permission"].includes(
+          String(sourcePath.at(-1)),
+        ) ||
+          propertyReference);
+      const resolved =
+        sourceResolvesIdentity(sourcePath, positions) ||
+        recordScopeSourceResolvesIdentity(sourcePath) ||
+        fieldPolicySourceResolvesIdentity(sourcePath) ||
+        pageReference ||
+        compositionReference ||
+        (v2SpecialRoot(sourcePath) &&
+          sourcePath.includes("order") &&
+          typeof sourcePath.at(-1) === "number");
+      entries.push({
+        canonicalPath,
+        origin: resolved ? "resolved" : "source",
+        sourcePath,
+        ...(resolved
+          ? { ruleCode: RESOLUTION_RULE }
+          : transformed
+            ? { ruleCode: TRANSFORM_RULE }
+            : {}),
+      });
+    }
+  }
+  const represented = new Set(entries.map((entry) => pathKey(entry.canonicalPath)));
+  for (const canonicalPath of canonicalLeaves) {
+    if (represented.has(pathKey(canonicalPath))) continue;
+    if (isSystemCanonicalPath(canonicalPath)) {
+      entries.push({ canonicalPath, origin: "system_metadata", ruleCode: SYSTEM_RULE });
+      continue;
+    }
+    if (isFixedWorkflowDefaultPath(canonicalPath)) {
+      entries.push({ canonicalPath, origin: "fixed_default", ruleCode: DEFAULT_RULE });
+      continue;
+    }
+    if (canonicalPath[0] === "content" && canonicalPath[1] === "theme") {
+      entries.push({
+        canonicalPath,
+        origin: "resolved",
+        sourcePath: ["body", "theme", "base", "content_fingerprint"],
+        ruleCode: RESOLUTION_RULE,
+      });
+      continue;
+    }
+    const placementsIndex = canonicalPath.lastIndexOf("placements");
+    if (placementsIndex >= 0 && canonicalPath.includes("settings")) {
+      const placement = asObject(
+        valueAtPath(canonical, canonicalPath.slice(0, placementsIndex + 2)),
+      );
+      const blockId = String(asObject(placement.block).blockId);
+      const dependencyIndex = source.body.platform_block_dependencies.findIndex(
+        (dependency) => String(dependency.block_id) === blockId,
+      );
+      if (dependencyIndex < 0)
+        fail("vortex.definition.application_dependency_manifest", "broken_reference");
+      entries.push({
+        canonicalPath,
+        origin: "resolved",
+        sourcePath: ["body", "platform_block_dependencies", dependencyIndex, "content_fingerprint"],
+        ruleCode: RESOLUTION_RULE,
+      });
+      continue;
+    }
+    fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  }
+  return entries;
+}
+
+function compileApplicationV2Internal(
+  input: unknown,
+  context?: DefinitionCompilationContext,
+): ApplicationCompilationOutputV2 {
+  const parsed = applicationCompilationRequestV2Schema.safeParse(input);
+  if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
+  const request = parsed.data;
+  const source = request.source;
+  const sourceObject = source as unknown as JsonObject;
+  const dependencyOutputs = parseDefinitionCompilationContext(context);
+  try {
+    const resolution = new Resolution(request.resolution, sourceObject);
+    const composition = materialiseApplicationCompositionV2(
+      source,
+      request.catalogueSnapshot,
+      applicationCompositionResolutionV2(source, resolution),
+    );
+    const canonical = applicationDraftV2Schema.parse(
+      compileApplication(
+        sourceObject,
+        resolution,
+        request.draftMetadata as unknown as JsonObject,
+        dependencyOutputs,
+        composition,
+      ),
+    );
+    const ownDefinition = resolution.definition(source.key, "application");
+    const artifact = {
+      kind: "application" as const,
+      definitionKey: source.key,
+      rootId: ownDefinition.rootId,
+      exactVersion: ownDefinition.exactVersion,
+      contentFingerprint: fingerprintCanonicalValue(canonical.content),
+      resolutionFingerprint: request.resolution.fingerprint,
+    };
+    const output = applicationCompilationOutputV2Schema.safeParse({
+      kind: "application",
+      validationContractVersion: "2.0.0",
+      canonical,
+      artifact,
+      provenance: applicationProvenanceV2(source, canonical, resolution),
+      dependencyOrder: dependencyOrder(sourceObject),
+      resolvedDependencies: resolvedDependencies(sourceObject, resolution),
+      resolutionFingerprint: request.resolution.fingerprint,
+    });
+    if (!output.success) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    return output.data;
+  } catch (error) {
+    if (error instanceof DefinitionCompilationError)
+      throw error.location
+        ? error
+        : new DefinitionCompilationError(
+            error.ruleCode,
+            error.family,
+            compilerRootLocation(sourceObject),
+          );
+    return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  }
+}
+
+const requestsV2Compilation = (input: unknown): boolean => {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return false;
+  const value = input as JsonObject;
+  return "sourceContractVersion" in value || "validationContractVersion" in value;
+};
+
+export function compileDefinition(
+  input: ApplicationCompilationRequestV2,
+): ApplicationCompilationOutputV2;
+export function compileDefinition(input: DefinitionCompilationRequest): DefinitionCompilationOutput;
+export function compileDefinition(
+  input: unknown,
+): DefinitionCompilationOutput | ApplicationCompilationOutputV2 {
+  if (requestsV2Compilation(input)) return compileApplicationV2Internal(input);
   return compileDefinitionInternal(input);
 }
 
 export function compileDefinitionWithContext(
+  input: ApplicationCompilationRequestV2,
+  context: DefinitionCompilationContext,
+): ApplicationCompilationOutputV2;
+export function compileDefinitionWithContext(
+  input: DefinitionCompilationRequest,
+  context: DefinitionCompilationContext,
+): DefinitionCompilationOutput;
+export function compileDefinitionWithContext(
   input: unknown,
   context: DefinitionCompilationContext,
-): DefinitionCompilationOutput {
+): DefinitionCompilationOutput | ApplicationCompilationOutputV2 {
+  if (requestsV2Compilation(input)) return compileApplicationV2Internal(input, context);
   return compileDefinitionInternal(input, context);
 }

@@ -436,7 +436,16 @@ const catalogueSnapshotV2 = {
         icon: "panel-top",
         paletteGroup: "content",
         rendererKey: "vortex.renderer.content",
-        properties: [],
+        properties: [
+          {
+            kind: "text",
+            key: "name",
+            label: "Accessible name",
+            required: false,
+            minLength: 1,
+            maxLength: 120,
+          },
+        ],
         slots: [],
         capabilities: {
           responsiveVisibility: true,
@@ -444,6 +453,7 @@ const catalogueSnapshotV2 = {
           gridWidth: true,
           height: "content_or_bounded",
           accessibleName: "optional",
+          accessibleNamePropertyPath: ["name"],
           publicSurface: "allowed",
         },
       },
@@ -1148,6 +1158,7 @@ describe("V2 property and immutable block catalogue contracts", () => {
       gridWidth: true,
       height: "content_or_bounded",
       accessibleName: "optional",
+      accessibleNamePropertyPath: ["title"],
       publicSurface: "allowed",
     },
   } as const;
@@ -1156,6 +1167,66 @@ describe("V2 property and immutable block catalogue contracts", () => {
     for (const property of properties)
       expect(blockPropertySchemaV2Schema.safeParse(property).success, property.kind).toBe(true);
     expect(platformBlockReleaseV2Schema.safeParse(registration).success).toBe(true);
+  });
+
+  it("requires explicit accessible-name paths ending at declared text through groups", () => {
+    const nested = {
+      ...registration,
+      properties: [
+        {
+          kind: "group",
+          key: "details",
+          label: "Details",
+          required: false,
+          properties: [properties[0]],
+        },
+      ],
+      capabilities: {
+        ...registration.capabilities,
+        accessibleName: "required",
+        accessibleNamePropertyPath: ["details", "title"],
+      },
+    };
+    expect(platformBlockReleaseV2Schema.safeParse(nested).success).toBe(true);
+    const { accessibleNamePropertyPath, ...withoutPath } = nested.capabilities;
+    expect(accessibleNamePropertyPath).toEqual(["details", "title"]);
+    expect(
+      platformBlockReleaseV2Schema.safeParse({ ...nested, capabilities: withoutPath }).success,
+    ).toBe(false);
+    for (const path of [
+      [],
+      ["missing"],
+      ["details"],
+      ["details", "missing"],
+      ["details", "title", "value"],
+    ]) {
+      expect(
+        platformBlockReleaseV2Schema.safeParse({
+          ...nested,
+          capabilities: { ...nested.capabilities, accessibleNamePropertyPath: path },
+        }).success,
+      ).toBe(false);
+    }
+    for (const path of [["columns"], ["items", "item"]]) {
+      expect(
+        platformBlockReleaseV2Schema.safeParse({
+          ...registration,
+          capabilities: { ...registration.capabilities, accessibleNamePropertyPath: path },
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      platformBlockReleaseV2Schema.safeParse({
+        ...nested,
+        capabilities: { ...nested.capabilities, accessibleName: "not_applicable" },
+      }).success,
+    ).toBe(false);
+    expect(
+      platformBlockReleaseV2Schema.safeParse({
+        ...nested,
+        capabilities: { ...withoutPath, accessibleName: "not_applicable" },
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects malformed bounds, defaults, duplicate options and unknown declaration keys", () => {

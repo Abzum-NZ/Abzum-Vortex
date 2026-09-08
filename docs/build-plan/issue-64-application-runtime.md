@@ -2,7 +2,7 @@
 
 Task: [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64). This is engine work, not App Designer implementation. Follow [engine-first delivery](engine-first-application-delivery.md).
 
-**Blocked by:** [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58), [#67](https://github.com/Abzum-NZ/Abzum-Vortex/issues/67), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), [#73](https://github.com/Abzum-NZ/Abzum-Vortex/issues/73).
+**Prerequisites:** [#39](https://github.com/Abzum-NZ/Abzum-Vortex/issues/39), completed [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40), [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58), [#67](https://github.com/Abzum-NZ/Abzum-Vortex/issues/67), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), [#73](https://github.com/Abzum-NZ/Abzum-Vortex/issues/73).
 
 ## What will be built
 
@@ -17,6 +17,15 @@ Task: [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64). This is engine 
 #64 owns the permanent exact application-lifecycle operation contract, its permission registration and protected caller binding, including withdrawal, targeted to the exact application root. This is not an arbitrary permission selected from the installed application, and registering it grants nobody access; governed assignment remains owned by IAM. It also owns the concrete locked affected-scope and atomic Activity composition around the existing private Access coordinator, using #40's protected transaction pattern. Role-management and assignment-management permissions cannot substitute for installation authority. Follow the [reviewed consumer handoff](access-consumer-handoffs.md#application-runtime-acceptance-additions): #40 must not invent this task's missing permission or accept unverified permission evidence. Withdrawal uses the exact current application-context permission catalogue as the affected before scope and preserves supplier/steward safeguards. This division creates no reverse dependency.
 
 ## Acceptance criteria
+
+- [ ] Supply the real trusted application-service context and installed exact
+      release selector to the [page adapter #38](issue-38-page-capability-projection.md).
+      Reuse the existing Definition consumer reader; its system-context release
+      read and the human Access projection use distinct short transactions bound
+      to the same exact immutable artifact and server correlation. Never mint
+      system authority from human input or reuse #30's structural operator.
+      Earlier injected fixture contexts prove storage behavior, not this deployed
+      service boundary. Consume V2 only after #249 extends the same stored reader.
 
 - [ ] A checked-in application definition is validated/published through [#73](https://github.com/Abzum-NZ/Abzum-Vortex/issues/73), explicitly installed, launched and rendered without opening the App Designer.
 - [ ] Its navigation, page components, typed query, form/action and frontend flow execute through real owning services. The rendered page and semantic controls identify the same installed artifact.

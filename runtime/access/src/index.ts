@@ -1,6 +1,11 @@
 import "server-only";
 
 export {
+  createStoredApplicationPermissionSource,
+  type StoredApplicationPermissionSourceDependencies,
+  type StoredApplicationPermissionSourceEvidence,
+} from "./stored-application-permission-source";
+export {
   applicationRoleTemplatePreparationErrorCodes,
   ApplicationRoleTemplatePreparationError,
   createApplicationRoleTemplateAdapter,

@@ -11,6 +11,8 @@ export * from "./version-impact";
 export * from "./version-impact-error";
 export * from "./compilation-error";
 export * from "./compiler";
+export * from "./application-v2-composition";
+export * from "./application-v2-resolution";
 export * from "./validation";
 export * from "./definition-store";
 export * from "./source-identities";

@@ -511,16 +511,24 @@ export const blockSlotDeclarationV2Schema = z
   })
   .strict();
 
-const blockCapabilitiesV2Schema = z
-  .object({
-    responsiveVisibility: z.boolean(),
-    responsiveOrder: z.boolean(),
-    gridWidth: z.boolean(),
-    height: z.enum(["content", "content_or_bounded"]),
-    accessibleName: z.enum(["required", "optional", "not_applicable"]),
-    publicSurface: z.enum(["refused", "allowed"]),
-  })
-  .strict();
+const blockCapabilitiesV2Base = {
+  responsiveVisibility: z.boolean(),
+  responsiveOrder: z.boolean(),
+  gridWidth: z.boolean(),
+  height: z.enum(["content", "content_or_bounded"]),
+  publicSurface: z.enum(["refused", "allowed"]),
+};
+
+const blockCapabilitiesV2Schema = z.discriminatedUnion("accessibleName", [
+  z.object({ ...blockCapabilitiesV2Base, accessibleName: z.literal("not_applicable") }).strict(),
+  z
+    .object({
+      ...blockCapabilitiesV2Base,
+      accessibleName: z.enum(["required", "optional"]),
+      accessibleNamePropertyPath: z.array(builderKeySchema).min(1),
+    })
+    .strict(),
+]);
 
 /** One immutable, platform-owned block release used by validation and renderer lookup. */
 export const platformBlockReleaseV2Schema = z
@@ -548,6 +556,26 @@ export const platformBlockReleaseV2Schema = z
       });
     if (new Set(value.slots.map((slot) => slot.key)).size !== value.slots.length)
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });
+    if (value.capabilities.accessibleName !== "not_applicable") {
+      const propertyPath = value.capabilities.accessibleNamePropertyPath;
+      let properties = value.properties;
+      for (const [index, key] of propertyPath.entries()) {
+        const property = properties.find((candidate) => candidate.key === key);
+        const last = index === propertyPath.length - 1;
+        if (
+          property === undefined ||
+          (last ? property.kind !== "text" : property.kind !== "group")
+        ) {
+          context.addIssue({
+            code: "custom",
+            path: ["capabilities", "accessibleNamePropertyPath", index],
+            message: "Accessible name must select a declared text property through groups only",
+          });
+          break;
+        }
+        if (property.kind === "group") properties = property.properties;
+      }
+    }
   });
 
 export const applicationCompositionPolicyV2Schema = z
