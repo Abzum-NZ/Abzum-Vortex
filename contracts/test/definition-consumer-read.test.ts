@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { definitionConsumerReadCommandSchema, definitionConsumerReadResultSchema } from "../src";
+import {
+  applicationBoundReleaseSetCommandSchema,
+  applicationBoundReleaseSetResultSchema,
+  definitionConsumerReadCommandSchema,
+  definitionConsumerReadResultSchema,
+} from "../src";
 
 const ids = {
   root: "10000000-0000-4000-8000-000000000001",
@@ -153,6 +158,24 @@ describe("definition consumer read contracts", () => {
           moduleResult.dependencyManifest[0],
           { ...moduleResult.dependencyManifest[0] },
         ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("selects a bound Application release by revision without accepting caller scope", () => {
+    expect(
+      applicationBoundReleaseSetCommandSchema.safeParse({ applicationReleaseRevision: 3 }).success,
+    ).toBe(true);
+    expect(
+      applicationBoundReleaseSetCommandSchema.safeParse({
+        applicationReleaseRevision: 3,
+        applicationRootId: ids.root,
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationBoundReleaseSetResultSchema.safeParse({
+        application: moduleResult,
+        modules: [moduleResult],
       }).success,
     ).toBe(false);
   });

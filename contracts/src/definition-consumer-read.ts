@@ -133,12 +133,47 @@ export const definitionConsumerReadResultSchema = z.union([
   applicationDefinitionConsumerReadResultV2Schema,
 ]);
 
+export const applicationBoundReleaseSetCommandSchema = z
+  .object({ applicationReleaseRevision: javascriptSafeRevisionSchema })
+  .strict();
+
+const applicationDefinitionConsumerReadResultSchema = z.union([
+  applicationDefinitionConsumerReadResultV1Schema,
+  applicationDefinitionConsumerReadResultV2Schema,
+]);
+const moduleDefinitionConsumerReadResultSchema = z.union([
+  moduleDefinitionConsumerReadResultV1Schema,
+  moduleDefinitionConsumerReadResultV2Schema,
+]);
+
+export const applicationBoundReleaseSetResultSchema = z
+  .object({
+    application: applicationDefinitionConsumerReadResultSchema,
+    modules: z.array(moduleDefinitionConsumerReadResultSchema).min(1).max(10_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const roots = value.modules.map((module) => module.rootId);
+    if (new Set(roots).size !== roots.length)
+      context.addIssue({
+        code: "custom",
+        path: ["modules"],
+        message: "A bound release set has one exact release per Module root",
+      });
+  });
+
 export type DefinitionConsumerReadCommand = z.infer<typeof definitionConsumerReadCommandSchema>;
 export type DefinitionConsumerReadSelector = z.infer<typeof definitionConsumerReadSelectorSchema>;
 export type DefinitionConsumerReadDependencyManifest = z.infer<
   typeof definitionConsumerReadDependencyManifestSchema
 >;
 export type DefinitionConsumerReadResult = z.infer<typeof definitionConsumerReadResultSchema>;
+export type ApplicationBoundReleaseSetCommand = z.infer<
+  typeof applicationBoundReleaseSetCommandSchema
+>;
+export type ApplicationBoundReleaseSetResult = z.infer<
+  typeof applicationBoundReleaseSetResultSchema
+>;
 export type ModuleDefinitionConsumerReadResultV1 = z.infer<
   typeof moduleDefinitionConsumerReadResultV1Schema
 >;

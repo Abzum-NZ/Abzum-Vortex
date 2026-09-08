@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
+  activeApplicationInstallationEvidenceSchema,
   fieldStorageMappingSchema,
   moduleInstallationStorageCommandSchema,
+  moduleInstallationBindingEvidenceSchema,
   moduleInstallationStorageResultSchema,
   recordStorageColumnTokenSchema,
   recordStorageReleaseProvisionSchema,
@@ -130,5 +132,47 @@ describe("record storage provisioning contracts", () => {
         storageContractIds: result.storageContractIds,
       }).success,
     ).toBe(true);
+  });
+
+  test("keeps active binding evidence exact and tied to one Application release", () => {
+    const binding = {
+      organizationId: id("8"),
+      applicationRootId,
+      moduleRootId,
+      bindingRevision: 2,
+      applicationReleaseRevision: 4,
+      moduleReleaseRevision: 3,
+      state: "active",
+    } as const;
+    expect(moduleInstallationBindingEvidenceSchema.safeParse(binding).success).toBe(true);
+    expect(
+      activeApplicationInstallationEvidenceSchema.safeParse({
+        organizationId: binding.organizationId,
+        applicationRootId,
+        applicationReleaseRevision: 4,
+        moduleBindings: [binding],
+      }).success,
+    ).toBe(true);
+    for (const invalid of [
+      { ...binding, state: "provisioned" },
+      { ...binding, applicationReleaseRevision: 5 },
+      { ...binding, organizationId: id("9") },
+    ])
+      expect(
+        activeApplicationInstallationEvidenceSchema.safeParse({
+          organizationId: binding.organizationId,
+          applicationRootId,
+          applicationReleaseRevision: 4,
+          moduleBindings: [invalid],
+        }).success,
+      ).toBe(false);
+    expect(
+      activeApplicationInstallationEvidenceSchema.safeParse({
+        organizationId: binding.organizationId,
+        applicationRootId,
+        applicationReleaseRevision: 4,
+        moduleBindings: [binding, binding],
+      }).success,
+    ).toBe(false);
   });
 });

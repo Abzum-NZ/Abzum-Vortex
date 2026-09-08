@@ -149,12 +149,14 @@ const applicationContent = {
   name: "Synthetic application",
   description: "Synthetic exact Application V1 consumer result.",
   icon: "application",
-  moduleBindings: [moduleOne, moduleTwo].map((module, index) => ({
-    moduleRootId: module.rootId,
-    version: { selection: "exact" as const, version: module.releaseVersion },
-    resolvedVersion: module.releaseVersion,
-    purpose: index === 0 ? "primary" : "dependency",
-  })),
+  moduleBindings: [
+    {
+      moduleRootId: moduleOne.rootId,
+      version: { selection: "exact" as const, version: moduleOne.releaseVersion },
+      resolvedVersion: moduleOne.releaseVersion,
+      purpose: "primary",
+    },
+  ],
   navigation: [],
   pages: [
     {
@@ -248,7 +250,7 @@ const application = applicationDefinitionConsumerReadResultV1Schema.parse({
   contentFingerprint: applicationContentFingerprint,
   resolutionFingerprint: fingerprint("a"),
   content: applicationContent,
-  dependencyManifest: [moduleOne, moduleTwo]
+  dependencyManifest: [moduleOne]
     .map((module) => ({
       kind: "module" as const,
       key: module.definitionKey,
@@ -374,6 +376,25 @@ describe("installed event Definition projector", () => {
                 : dependency,
             ),
           },
+        }),
+      "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
+    );
+  });
+
+  it("accepts an exact foreign-owned Module but still refuses release substitution", () => {
+    const foreignModule = { ...moduleOne, organizationId: id(90) };
+    expect(
+      projectInstalledEventCatalogue({
+        ...input(),
+        modules: [foreignModule, moduleTwo],
+      }).moduleBindings,
+    ).toHaveLength(2);
+
+    expectCode(
+      () =>
+        projectInstalledEventCatalogue({
+          ...input(),
+          modules: [{ ...foreignModule, releaseRevision: 23 }, moduleTwo],
         }),
       "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
     );
