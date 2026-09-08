@@ -44,14 +44,18 @@ content; semantic normalization never rewrites stored bytes or fingerprints.
 | Native compiler/comparison tests | `3de7f38b685b6dde5de90017ea7615435f35f548f1a43fe4970cfef292f491d4` |
 | V1 comparison tests | `9c44cbcc7a4f07bf62614b4be94fe90a90433a4e82a955567217b0f02f660ea1` |
 
-Exact committed-source verification and normal Testing delivery follow; no hosted
-result for this comparator is claimed yet. The prior compiler delivery is
-[separately verified](issue-249-native-application-compiler.md).
+Exact source `113f58cf36cc97e45e566cf1e51507ecad2669f1` passed the same complete
+checks in a clean isolated worktree, including frozen offline dependency install.
+Normal preview checks passed and
+[PR #342](https://github.com/Abzum-NZ/Abzum-Vortex/pull/342) merged to Testing at
+`2026-09-08T03:33:43Z`, merge `426c2739d8bda0eecf65bf77b9e8ea5c98e4fa15`.
+No hosted result for this comparator is claimed yet. The prior compiler delivery
+is [separately verified](issue-249-native-application-compiler.md).
 
 ## Remaining task scope
 
 This homogeneous V2 comparator does not enable V2 stored publication, readers,
-history or restore. Persisted V2 drafts/identities, exact block dependencies,
+history or restore. [Persisted V2 drafts/identities](../build-plan/issue-249-native-draft-storage.md), exact block dependencies,
 coordinated version-selected publication and symmetric V1/V2 transition handling,
 confirmed draft conversion and the headless editor adapter remain. Whole
 [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and
