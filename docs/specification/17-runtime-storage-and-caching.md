@@ -319,6 +319,14 @@ can install a not-yet-active application; an active application context is not a
 circular prerequisite. Caller-selected actors, SQL, physical names, permission
 declarations and record graphs are never inputs.
 
+The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
+is the organisation-scoped platform permission
+`platform.organization.applications.manage`. The operation binds the exact
+application and additionally checks delegated management of its complete affected
+permission scope. Installation rights do not grant record access or assignment
+rights. Registration creates no grants and does not expand the permanent
+steward's required minimum when the platform catalogue grows.
+
 The generator is a private `SECURITY DEFINER` operation because creating arbitrary
 record storage is a platform capability while ordinary requests must have no DDL
 rights. Its non-login owner canonically owns the generated Record objects and has

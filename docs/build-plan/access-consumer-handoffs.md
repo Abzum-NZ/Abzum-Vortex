@@ -23,7 +23,7 @@ This replaces the earlier proposal to finish all three consumer-dependent wrappe
 
 ## Application-runtime acceptance additions
 
-1. Define and register the permanent exact lifecycle operation and permission for the target application; do not accept a caller-selected permission or substitute role/assignment administration rights. Registration grants nobody authority.
+1. Define and register the permanent lifecycle operation and organisation-scoped platform permission. The fixed command binds the exact target application; installation must not require that application to be active already. Do not accept a caller-selected permission or substitute role/assignment administration rights. Registration grants nobody authority. Co-deliver this [permission/caller slice](issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine) with #43/#45, without waiting for the full renderer or reopening #40.
 2. Compose verified caller context, current permission decision, locked complete before/after application scope, the existing `coordinate_application_access_change` writer and Activity in one transaction. Reuse existing prepared template/source evidence and stewardship/supplier protections.
 3. Withdrawal derives the current exact application catalogue as its affected before scope. It is immediate when authorised, not held for grant approval. Register/update/reactivate cannot silently accept or restore account/Group authority; required IAM acceptance remains with #267.
 4. Prove actual restricted-caller success/refusal, isolation, stale revision, no automatic assignments, source retention and atomic failure. Do not hand the application database-owner credentials or expose the raw coordinator.
