@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  adoptShippedPlatformPermissionCatalogueCommandSchema,
+  adoptShippedPlatformPermissionCatalogueResultSchema,
   applicationPermissionCatalogueSnapshotCommandSchema,
   applicationPermissionCatalogueSnapshotSchema,
   initializePlatformPermissionCatalogueCommandSchema,
@@ -9,6 +11,8 @@ import {
   permissionCatalogueLookupCommandSchema,
   revisePlatformPermissionCatalogueMetadataCommandSchema,
   revisePlatformPermissionCatalogueMetadataResultSchema,
+  type AdoptShippedPlatformPermissionCatalogueCommand,
+  type AdoptShippedPlatformPermissionCatalogueResult,
   type ApplicationPermissionCatalogueSnapshot,
   type ApplicationPermissionCatalogueSnapshotCommand,
   type InitializePlatformPermissionCatalogueCommand,
@@ -49,6 +53,9 @@ export interface PermissionRegistryPrivateRepository {
   revisePlatformCatalogueMetadata(
     command: RevisePlatformPermissionCatalogueMetadataCommand,
   ): Promise<RevisePlatformPermissionCatalogueMetadataResult>;
+  adoptShippedPlatformCatalogue(
+    command: AdoptShippedPlatformPermissionCatalogueCommand,
+  ): Promise<AdoptShippedPlatformPermissionCatalogueResult>;
   lookup(command: PermissionCatalogueLookupCommand): Promise<PermissionCatalogueLookupResult>;
   readApplicationSnapshot(
     command: ApplicationPermissionCatalogueSnapshotCommand,
@@ -145,6 +152,19 @@ const parsePlatformMetadataRevision = (
   row: PlatformMetadataRevisionRow,
 ): RevisePlatformPermissionCatalogueMetadataResult => {
   const parsed = revisePlatformPermissionCatalogueMetadataResultSchema.safeParse({
+    organizationId: row.organization_id,
+    sourceCatalogueVersion: row.source_catalogue_version,
+    targetCatalogueVersion: row.target_catalogue_version,
+    registrationRevision: revision(row.registration_revision),
+    accessVersion: revision(row.access_version),
+  });
+  return parsed.success ? parsed.data : invalidStorage();
+};
+
+const parsePlatformCatalogueAdoption = (
+  row: PlatformMetadataRevisionRow,
+): AdoptShippedPlatformPermissionCatalogueResult => {
+  const parsed = adoptShippedPlatformPermissionCatalogueResultSchema.safeParse({
     organizationId: row.organization_id,
     sourceCatalogueVersion: row.source_catalogue_version,
     targetCatalogueVersion: row.target_catalogue_version,
@@ -291,6 +311,27 @@ export const createPermissionRegistryPrivateRepository = (
           )
         `;
         return parsePlatformMetadataRevision(requireOne(rows));
+      });
+    },
+
+    async adoptShippedPlatformCatalogue(commandCandidate) {
+      const command =
+        adoptShippedPlatformPermissionCatalogueCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND");
+      return execute(async () => {
+        const rows = await transaction.query<PlatformMetadataRevisionRow>`
+          select *
+          from vortex_access.adopt_shipped_platform_permission_catalogue(
+            ${command.data.organizationId}::uuid,
+            ${command.data.expectedRegistrationRevision}::bigint,
+            ${command.data.targetCatalogueVersion}::text,
+            ${command.data.targetCatalogueFingerprint}::text,
+            ${command.data.changedBy}::uuid,
+            ${command.data.correlationId}::uuid
+          )
+        `;
+        return parsePlatformCatalogueAdoption(requireOne(rows));
       });
     },
 

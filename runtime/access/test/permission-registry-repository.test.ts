@@ -125,6 +125,42 @@ describe("permission registry private repository", () => {
     expect(calls[0]?.values).toEqual([id(1), 1, "1.0.0", "1.0.1", id(2), id(3)]);
   });
 
+  it("adopts only a selected shipped platform catalogue successor", async () => {
+    const calls: QueryCall[] = [];
+    const targetFingerprint = `sha256:${"a".repeat(64)}`;
+    const repository = createPermissionRegistryPrivateRepository(
+      transactionFor(
+        () => [
+          {
+            organization_id: id(1),
+            source_catalogue_version: "1.0.1",
+            target_catalogue_version: "1.1.0",
+            registration_revision: "3",
+            access_version: 4n,
+          },
+        ],
+        calls,
+      ),
+    );
+
+    await expect(
+      repository.adoptShippedPlatformCatalogue({
+        organizationId: id(1),
+        expectedRegistrationRevision: 2,
+        targetCatalogueVersion: "1.1.0",
+        targetCatalogueFingerprint: targetFingerprint,
+        changedBy: id(2),
+        correlationId: id(3),
+      }),
+    ).resolves.toMatchObject({
+      sourceCatalogueVersion: "1.0.1",
+      targetCatalogueVersion: "1.1.0",
+      registrationRevision: 3,
+    });
+    expect(calls[0]?.text).toContain("vortex_access.adopt_shipped_platform_permission_catalogue");
+    expect(calls[0]?.values).toEqual([id(1), 2, "1.1.0", targetFingerprint, id(2), id(3)]);
+  });
+
   it("maps exact scoped permission rows and preserves application context", async () => {
     const repository = createPermissionRegistryPrivateRepository(
       transactionFor(() => [

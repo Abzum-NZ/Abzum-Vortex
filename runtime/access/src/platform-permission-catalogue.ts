@@ -8,7 +8,8 @@ import { fingerprintCanonicalValue } from "@vortex/definition";
 
 export const platformPermissionCatalogueOwnerId = "cabe121e-0baf-4084-9471-cce915d460a8";
 export const platformPermissionCatalogueVersionV1 = "1.0.0";
-export const platformPermissionCatalogueVersion = "1.0.1";
+export const platformPermissionCatalogueVersionV1_0_1 = "1.0.1";
+export const platformPermissionCatalogueVersion = "1.1.0";
 
 const historicalPermissionsV1 = [
   {
@@ -127,7 +128,7 @@ const historicalPermissionsV1 = [
   },
 ];
 
-const currentPermissions = historicalPermissionsV1.map((permission) => {
+const historicalPermissionsV1_0_1 = historicalPermissionsV1.map((permission) => {
   if (permission.key === "platform.organization.teams.read")
     return {
       ...permission,
@@ -143,6 +144,19 @@ const currentPermissions = historicalPermissionsV1.map((permission) => {
     };
   return permission;
 });
+
+const currentPermissions = [
+  ...historicalPermissionsV1_0_1,
+  {
+    permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
+    key: "platform.organization.applications.manage",
+    label: "Manage applications",
+    description:
+      "Install, upgrade or detach exact application bindings in the selected organisation without receiving business-record use or role-assignment authority.",
+    actionKind: "manage" as const,
+    administrative: true,
+  },
+];
 
 const buildCatalogue = (
   catalogueVersion: string,
@@ -166,7 +180,13 @@ export const platformPermissionCatalogueV1 = buildCatalogue(
   historicalPermissionsV1,
 );
 
-/** Current display metadata. Permanent identities, keys and permission meaning remain unchanged. */
+/** Immutable Group-facing metadata revision. */
+export const platformPermissionCatalogueV1_0_1 = buildCatalogue(
+  platformPermissionCatalogueVersionV1_0_1,
+  historicalPermissionsV1_0_1,
+);
+
+/** Current additive catalogue. Historical permission identities and meanings remain unchanged. */
 export const platformPermissionCatalogue = buildCatalogue(
   platformPermissionCatalogueVersion,
   currentPermissions,
