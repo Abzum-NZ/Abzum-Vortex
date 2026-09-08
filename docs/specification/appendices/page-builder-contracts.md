@@ -73,6 +73,17 @@ The platform registry is the shared source for editor controls, server validatio
 - Responsive capabilities, content sizing and optional safe resizing.
 - Accessibility and permitted public-surface behavior.
 
+The platform catalogue declares whether an accessible name is required, optional
+or not applicable. Required and optional names identify an exact
+`accessibleNamePropertyPath` through declared grouped settings to a text property;
+lists, missing properties and non-text targets are invalid. Not-applicable blocks
+do not declare that path. Compilation checks the materialised setting after
+defaults: a required name must exist and contain non-whitespace text. No engine
+accepts a supplied optional name containing only whitespace; optional absence is
+allowed. No engine
+guesses a setting from words such as “title” or from a block's palette label. This
+capability and its path participate in the existing release/catalogue fingerprints.
+
 Text controls accept text; reference pickers accept only typed references. Literal JSON is validated against the registered property schema, not accepted merely because it is JSON. Bounded lists and grouped properties support columns, links and repeated content without arbitrary executable objects. Rich text is structured and restricted to supported safe elements. URLs, assets and icon choices use approved validated forms.
 
 Builders may use text, numbers, choices, safe rich text, token-based colors/typography/spacing and registered layout controls. They cannot supply scripts, JSX, arbitrary CSS, HTML event handlers, network destinations outside the connection policy or runtime component code. Avoid an artificial global limit of forty settings or a rule that every value must be a dropdown; bound document complexity at the validated schema boundary instead.
