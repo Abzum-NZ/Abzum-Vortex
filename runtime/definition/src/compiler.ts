@@ -15,10 +15,17 @@ import {
   definitionPublicationContextSchema,
   definitionSourceDocumentSchema,
   moduleDraftSchema,
+  moduleDraftV2Schema,
+  moduleCompilationOutputV2Schema,
+  moduleCompilationRequestV2Schema,
+  moduleSourceDocumentV2Schema,
+  normalizeExactDecimal,
   readModuleSourceRecordOwnershipModeV1,
   writeModuleRecordOwnershipModeV1,
   type ApplicationCompilationOutputV2,
   type ApplicationCompilationRequestV2,
+  type ModuleCompilationOutputV2,
+  type ModuleCompilationRequestV2,
   type DefinitionCompilationRequest,
   type ApplicationSourceDocumentV2,
   type DefinitionCompilationOutput,
@@ -266,9 +273,11 @@ function sourceContractPositions(source: JsonObject): SourceContractPositions {
   const opaqueDataRoots: Path[] = [];
   const recordRoots: Path[] = [];
   const contract =
-    source.source_contract_version === "2.0.0"
-      ? applicationSourceDocumentV2Schema
-      : definitionSourceDocumentSchema;
+    source.kind === "module" && source.source_contract_version === "2.0.0"
+      ? moduleSourceDocumentV2Schema
+      : source.kind === "application" && source.source_contract_version === "2.0.0"
+        ? applicationSourceDocumentV2Schema
+        : definitionSourceDocumentSchema;
   walkDefinitionContract(contract, source, (schema, _value, path) => {
     if (schema === jsonValueSchema) opaqueDataRoots.push(path as Path);
     if (schema._zod.def.type === "record") recordRoots.push(path as Path);
@@ -356,6 +365,12 @@ function sourceToCanonicalPath(
         : (directSourceKeyMap[segment] ?? camelCase(segment));
     mapped.push(mappedKey);
     collection = segment;
+  }
+  if (source.kind === "module" && source.source_contract_version === "2.0.0") {
+    const leaf = sourcePath.at(-1);
+    if (leaf === "record_type") mapped[mapped.length - 1] = "recordTypeId";
+    if (leaf === "record_id") mapped[mapped.length - 1] = "recordId";
+    if (leaf === "organization_account_id") mapped[mapped.length - 1] = "organizationAccountId";
   }
   if (isOpaqueDataPath(positions, sourcePath))
     return resolveDynamicMapPath(source, canonical, sourcePath, mapped);
@@ -619,6 +634,15 @@ function conditionSourceTargets(
   }
   if (node === null || typeof node !== "object" || Array.isArray(node)) return undefined;
   const comparison = asObject(node);
+  const valueSuffix = (suffixPath: Path): Path =>
+    source.source_contract_version === "2.0.0"
+      ? suffixPath.map((segment) => {
+          if (segment === "record_type") return "recordTypeId";
+          if (segment === "record_id") return "recordId";
+          if (segment === "organization_account_id") return "organizationAccountId";
+          return segment;
+        })
+      : suffixPath;
   if (suffix[0] === "operator")
     return [...targets, [...canonicalPath, "kind"], [...canonicalPath, "operator"]];
   if (suffix[0] === "field")
@@ -635,13 +659,20 @@ function conditionSourceTargets(
       ...(pathKey(leafPaths(comparison.value, ["value"])[0] ?? []) === pathKey(suffix)
         ? [[...canonicalPath, "right", "source"] as Path]
         : []),
-      [...canonicalPath, "right", "value", ...suffix.slice(1)],
+      [...canonicalPath, "right", "value", ...valueSuffix(suffix.slice(1))],
     ];
   if ((suffix[0] === "left" || suffix[0] === "right") && typeof suffix[1] === "string") {
     const operandPath = [...canonicalPath, suffix[0]];
     const mappedKey =
       suffix[1] === "field" ? "fieldId" : suffix[1] === "parameter" ? "key" : suffix[1];
-    return [...targets, [...operandPath, mappedKey, ...suffix.slice(2)]];
+    return [
+      ...targets,
+      [
+        ...operandPath,
+        mappedKey,
+        ...(mappedKey === "value" ? valueSuffix(suffix.slice(2)) : suffix.slice(2)),
+      ],
+    ];
   }
   return undefined;
 }
@@ -1371,6 +1402,9 @@ const moduleSourceTransformPatterns = [
   /^body\/dependencies\/#\/module$/,
   /^body\/record_types\/#\/(?:name|plural_name|custom_actions\/#|ownership_mode|storage_scope)$/,
   /^body\/record_types\/#\/(?:storage_contract_id|title_field|ownership_relationship)$/,
+  /^body\/record_types\/#\/fields\/#\/default(?:\/.*)?$/,
+  /^body\/record_types\/#\/fields\/#\/settings\/(?:minimum|maximum)$/,
+  /^body\/record_types\/#\/fields\/#\/settings\/columns\/#\/settings\/(?:minimum|maximum)$/,
   /^body\/record_types\/#\/relationships\/#\/(?:from_field|to_record_type|to_record_types\/#)$/,
   /^body\/record_types\/#\/fields\/#\/settings\/(?:application_root_required|audience|currency_mode|field|relationship|target|targets\/#)$/,
   /^body\/record_types\/#\/fields\/#\/settings\/(?:options\/#|columns\/#\/settings\/options\/#)\/required_permission$/,
@@ -1383,10 +1417,12 @@ const moduleSourceTransformPatterns = [
   /^body\/events\/#\/carries\/#$/,
   /^body\/actions\/#\/(?:record_type|permission|shareable)$/,
   /^body\/actions\/#\/inputs\/#\/(?:type|record_types\/#)$/,
+  /^body\/actions\/#\/inputs\/#\/validation\/(?:minimum|maximum)$/,
   /^body\/actions\/#\/effects\/#\/(?:field|record_type|relationships\/#|target_input|event)$/,
   /^body\/actions\/#\/effects\/#\/value\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/actions\/#\/effects\/#\/values\/[^/]+\/(?:source|input|field|value)(?:\/.*)?$/,
   /^body\/rules\/#\/effect\/(?:field|message|component|workflow|reason_code)$/,
+  /^body\/rules\/#\/effect\/value(?:\/.*)?$/,
   /^body\/sharing_conditions\/#\/(?:source_record_type|declared_fields\/#)$/,
   /^body\/sharing_conditions\/#\/publication_tests\/#\/(?:field_values|parameters)\/[^/]+(?:\/.*)?$/,
   /^body\/permissions\/#\/record_scope\/.+$/,
@@ -1703,7 +1739,7 @@ class Resolution {
     this.snapshot = snapshot;
     this.sourceLocation = compilerRootLocation(source);
     const requirements =
-      source.source_contract_version === "2.0.0"
+      source.kind === "application" && source.source_contract_version === "2.0.0"
         ? extractApplicationSourceIdentityRequirementsV2(
             source as unknown as ApplicationSourceDocumentV2,
           )
@@ -1985,42 +2021,184 @@ function exactVersion(
   return definition.exactVersion;
 }
 
-function condition(input: unknown, resolveField: (alias: string) => string): unknown {
+type ModuleValueContext = Readonly<{
+  field: (reference: string, alias?: string) => JsonObject | undefined;
+  parameters?: ReadonlyMap<string, string>;
+  resolution: Resolution;
+}>;
+
+const normaliseExactV2 = (value: unknown): unknown =>
+  typeof value === "string" ? (normalizeExactDecimal(value) ?? value) : value;
+
+function normaliseMoneyV2(value: unknown): unknown {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  const money = value as JsonObject;
+  return { ...money, amount: normaliseExactV2(money.amount) };
+}
+
+function normaliseModuleFieldValueV2(
+  field: JsonObject | undefined,
+  value: unknown,
+  context: ModuleValueContext,
+  fieldDefault = false,
+): unknown {
+  if (!field) return value;
+  switch (field.type) {
+    case "decimal_number":
+      return normaliseExactV2(value);
+    case "money":
+      return fieldDefault ? normaliseExactV2(value) : normaliseMoneyV2(value);
+    case "calculation":
+    case "total": {
+      const settings = asObject(field.settings);
+      return normaliseModuleTypedValueV2(
+        String(settings.result_type ?? settings.resultType),
+        value,
+        context,
+      );
+    }
+    case "link":
+    case "link_to_one_of_several": {
+      if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+      const link = value as JsonObject;
+      if (typeof link.record_type !== "string") return value;
+      return {
+        recordTypeId: context.resolution.recordType(link.record_type).recordTypeId,
+        recordId: link.record_id,
+      };
+    }
+    case "link_to_person": {
+      if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+      const person = value as JsonObject;
+      return "organization_account_id" in person
+        ? { organizationAccountId: person.organization_account_id }
+        : value;
+    }
+    case "table": {
+      if (!Array.isArray(value)) return value;
+      const settings = asObject(field.settings);
+      const columns = (settings.columns as JsonObject[]) ?? [];
+      const byKey = new Map(columns.map((column) => [String(column.key), column]));
+      return value.map((row) =>
+        objectFromUniqueEntries(
+          Object.entries(asObject(row)).map(([key, cell]) => {
+            const column = byKey.get(key);
+            if (column?.type === "decimal_number") return [key, normaliseExactV2(cell)];
+            if (column?.type === "money")
+              return [key, fieldDefault ? normaliseExactV2(cell) : normaliseMoneyV2(cell)];
+            return [key, cell];
+          }),
+        ),
+      );
+    }
+    default:
+      return value;
+  }
+}
+
+function normaliseModuleTypedValueV2(
+  declaration: JsonObject | string | undefined,
+  value: unknown,
+  context: ModuleValueContext,
+): unknown {
+  if (typeof declaration === "object" && declaration !== null)
+    return normaliseModuleFieldValueV2(declaration, value, context);
+  if (declaration === "decimal_number") return normaliseExactV2(value);
+  if (declaration === "money") return normaliseMoneyV2(value);
+  if (declaration === "record_reference") {
+    const link = asObject(value);
+    if (typeof link.record_type === "string")
+      return {
+        recordTypeId: context.resolution.recordType(link.record_type).recordTypeId,
+        recordId: link.record_id,
+      };
+  }
+  return value;
+}
+
+function conditionDeclarationV2(
+  operandValue: unknown,
+  context: ModuleValueContext,
+): JsonObject | string | undefined {
+  const operand = asObject(operandValue);
+  if (operand.source === "field") return context.field(String(operand.field));
+  if (operand.source === "parameter") return context.parameters?.get(String(operand.parameter));
+  return undefined;
+}
+
+function condition(
+  input: unknown,
+  resolveField: (alias: string) => string,
+  valueContext?: ModuleValueContext,
+): unknown {
   const value = asObject(input);
   if ("all" in value)
     return {
       kind: "all",
-      conditions: (value.all as unknown[]).map((entry) => condition(entry, resolveField)),
+      conditions: (value.all as unknown[]).map((entry) =>
+        condition(entry, resolveField, valueContext),
+      ),
     };
   if ("any" in value)
     return {
       kind: "any",
-      conditions: (value.any as unknown[]).map((entry) => condition(entry, resolveField)),
+      conditions: (value.any as unknown[]).map((entry) =>
+        condition(entry, resolveField, valueContext),
+      ),
     };
-  if ("not" in value) return { kind: "not", condition: condition(value.not, resolveField) };
+  if ("not" in value)
+    return { kind: "not", condition: condition(value.not, resolveField, valueContext) };
   const operator = String(value.operator);
-  const operand = (inputOperand: unknown) => {
+  const authoredLeft = "left" in value ? value.left : { source: "field", field: value.field };
+  const authoredRight =
+    "right" in value
+      ? value.right
+      : "parameter" in value
+        ? { source: "parameter", parameter: value.parameter }
+        : { source: "value", value: value.value };
+  const leftDeclaration = valueContext
+    ? conditionDeclarationV2(authoredLeft, valueContext)
+    : undefined;
+  const rightDeclaration = valueContext
+    ? conditionDeclarationV2(authoredRight, valueContext)
+    : undefined;
+  const operand = (
+    inputOperand: unknown,
+    declaration: JsonObject | string | undefined,
+    side: "left" | "right",
+  ) => {
     const source = asObject(inputOperand);
     if (source.source === "field")
       return { source: "field", fieldId: resolveField(String(source.field)) };
     if (source.source === "parameter")
       return { source: "parameter", key: String(source.parameter) };
-    return { source: "value", value: source.value };
+    const authoredValue = source.value;
+    const normalisedValue =
+      valueContext &&
+      Array.isArray(authoredValue) &&
+      ((side === "right" && ["in", "not_in"].includes(operator)) ||
+        (side === "left" && ["contains", "not_contains"].includes(operator)))
+        ? authoredValue.map((entry) =>
+            normaliseModuleTypedValueV2(declaration, entry, valueContext),
+          )
+        : valueContext
+          ? normaliseModuleTypedValueV2(declaration, authoredValue, valueContext)
+          : authoredValue;
+    return {
+      source: "value",
+      value: normalisedValue,
+    };
   };
   const hasExplicitOperands = "left" in value;
   return {
     kind: "comparison",
     operator,
     left: hasExplicitOperands
-      ? operand(value.left)
+      ? operand(authoredLeft, rightDeclaration, "left")
       : { source: "field", fieldId: resolveField(String(value.field)) },
     ...(!["is_empty", "is_not_empty"].includes(operator)
       ? {
-          right: hasExplicitOperands
-            ? operand(value.right)
-            : "parameter" in value
-              ? { source: "parameter", key: String(value.parameter) }
-              : { source: "value", value: value.value },
+          right: operand(authoredRight, leftDeclaration, "right"),
         }
       : {}),
   };
@@ -2032,15 +2210,25 @@ function qualifiedField(resolution: Resolution, reference: string): string {
   return resolution.field(reference.slice(0, separator), reference.slice(separator + 1));
 }
 
-function actionValue(value: unknown, field: (alias: string) => string): unknown {
+function actionValue(
+  value: unknown,
+  field: (alias: string) => string,
+  targetField?: JsonObject,
+  valueContext?: ModuleValueContext,
+): unknown {
   const input = asObject(value);
   if (input.source === "input") return { source: "input", inputKey: input.input };
   if (input.source === "subject_field")
     return { source: "subject_field", fieldId: field(String(input.field)) };
+  if (input.source === "literal" && valueContext)
+    return {
+      ...input,
+      value: normaliseModuleFieldValueV2(targetField, input.value, valueContext),
+    };
   return input;
 }
 
-function actionInput(input: JsonObject, resolution: Resolution): unknown {
+function actionInput(input: JsonObject, resolution: Resolution, moduleV2 = false): unknown {
   const validation = input.validation ? asObject(input.validation) : undefined;
   const compiledValidation = validation
     ? input.type === "text"
@@ -2060,7 +2248,16 @@ function actionInput(input: JsonObject, resolution: Resolution): unknown {
               ? { maximumLength: validation.maximum_length }
               : {}),
           }
-        : validation
+        : moduleV2 && (input.type === "decimal_number" || input.type === "money")
+          ? {
+              ...(validation.minimum !== undefined
+                ? { minimum: normaliseExactV2(validation.minimum) }
+                : {}),
+              ...(validation.maximum !== undefined
+                ? { maximum: normaliseExactV2(validation.maximum) }
+                : {}),
+            }
+          : validation
     : undefined;
   return {
     key: input.key,
@@ -2114,6 +2311,8 @@ function compilePermissionRecordScope(
   source: JsonObject,
   resolution: Resolution,
   sharingConditions: readonly JsonObject[] = [],
+  valueContext?: ModuleValueContext,
+  referencedModuleV2 = false,
 ): unknown | undefined {
   if (permission.record_scope === undefined) return undefined;
   const sourceScope = asObject(permission.record_scope);
@@ -2148,11 +2347,31 @@ function compilePermissionRecordScope(
   if (matches.length !== 1)
     fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
   const saved = matches[0]!;
+  const parameterTypes = new Map(
+    ((saved.parameters as JsonObject[]) ?? []).map((parameter) => [
+      String(parameter.key),
+      String(parameter.type),
+    ]),
+  );
   const parameterBindings = (sourceCondition.parameter_bindings as JsonObject[])
     .map((binding) => ({
       key: binding.key,
       source: binding.source,
-      ...(binding.source === "literal" ? { value: binding.value } : {}),
+      ...(binding.source === "literal"
+        ? {
+            value: valueContext
+              ? normaliseModuleTypedValueV2(
+                  parameterTypes.get(String(binding.key)),
+                  binding.value,
+                  valueContext,
+                )
+              : referencedModuleV2 && parameterTypes.get(String(binding.key)) === "decimal_number"
+                ? normaliseExactV2(binding.value)
+                : referencedModuleV2 && parameterTypes.get(String(binding.key)) === "money"
+                  ? normaliseMoneyV2(binding.value)
+                  : binding.value,
+          }
+        : {}),
     }))
     .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
   return {
@@ -2197,10 +2416,10 @@ function applicationPermissionSharingConditions(
   resolution: Resolution,
   organizationId: unknown,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-): readonly JsonObject[] {
-  if (permission.record_scope === undefined) return [];
+): Readonly<{ conditions: readonly JsonObject[]; moduleV2: boolean }> {
+  if (permission.record_scope === undefined) return { conditions: [], moduleV2: false };
   const sourceScope = asObject(permission.record_scope);
-  if (sourceScope.saved_condition === undefined) return [];
+  if (sourceScope.saved_condition === undefined) return { conditions: [], moduleV2: false };
   if (permission.record_type === undefined)
     fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
   const qualifiedRecordType = String(permission.record_type);
@@ -2243,7 +2462,10 @@ function applicationPermissionSharingConditions(
     records.length !== 1
   )
     fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
-  return content.sharingConditions as JsonObject[];
+  return {
+    conditions: content.sharingConditions as JsonObject[],
+    moduleV2: "validationContractVersion" in output,
+  };
 }
 
 function fieldSettings(
@@ -2251,6 +2473,8 @@ function fieldSettings(
   qualifiedRecordType: string,
   resolution: Resolution,
   permissionOwners: readonly string[],
+  moduleV2 = false,
+  valueContext?: ModuleValueContext,
 ): unknown {
   const settings = asObject(field.settings);
   const localField = (alias: string) => resolution.field(qualifiedRecordType, alias);
@@ -2277,8 +2501,12 @@ function fieldSettings(
       return {
         digitsBeforeDecimal: settings.digits_before_decimal,
         decimalPlaces: settings.decimal_places,
-        ...(settings.minimum !== undefined ? { minimum: settings.minimum } : {}),
-        ...(settings.maximum !== undefined ? { maximum: settings.maximum } : {}),
+        ...(settings.minimum !== undefined
+          ? { minimum: moduleV2 ? normaliseExactV2(settings.minimum) : settings.minimum }
+          : {}),
+        ...(settings.maximum !== undefined
+          ? { maximum: moduleV2 ? normaliseExactV2(settings.maximum) : settings.maximum }
+          : {}),
       };
     case "money":
       return {
@@ -2287,8 +2515,12 @@ function fieldSettings(
             ? "organization_default"
             : settings.currency_mode,
         ...(settings.currency ? { currency: settings.currency } : {}),
-        ...(settings.minimum !== undefined ? { minimum: settings.minimum } : {}),
-        ...(settings.maximum !== undefined ? { maximum: settings.maximum } : {}),
+        ...(settings.minimum !== undefined
+          ? { minimum: moduleV2 ? normaliseExactV2(settings.minimum) : settings.minimum }
+          : {}),
+        ...(settings.maximum !== undefined
+          ? { maximum: moduleV2 ? normaliseExactV2(settings.maximum) : settings.maximum }
+          : {}),
       };
     case "yes_no":
     case "email_address":
@@ -2360,7 +2592,14 @@ function fieldSettings(
           ...(column.settings === undefined
             ? {}
             : {
-                settings: fieldSettings(column, qualifiedRecordType, resolution, permissionOwners),
+                settings: fieldSettings(
+                  column,
+                  qualifiedRecordType,
+                  resolution,
+                  permissionOwners,
+                  moduleV2,
+                  valueContext,
+                ),
               }),
         })),
         minimumRows: settings.minimum_rows,
@@ -2404,7 +2643,10 @@ function fieldSettings(
         const operands = (expression.operands as JsonObject[]).map((operand) =>
           operand.source === "field"
             ? { source: "field", fieldId: localField(String(operand.field)) }
-            : { source: "literal", value: operand.value },
+            : {
+                source: "literal",
+                value: moduleV2 ? normaliseExactV2(operand.value) : operand.value,
+              },
         );
         dependencies = (expression.operands as JsonObject[])
           .filter((operand) => operand.source === "field")
@@ -2415,7 +2657,7 @@ function fieldSettings(
           operands,
         };
       } else if (expression.operation === "condition") {
-        const compiledCondition = condition(expression.condition, localField);
+        const compiledCondition = condition(expression.condition, localField, valueContext);
         const dependencySet = new Set<string>();
         walkDefinitionContract(conditionNodeSchema, compiledCondition, (schema, value) => {
           if (schema === jsonValueSchema) return;
@@ -2432,7 +2674,10 @@ function fieldSettings(
         const compiledAmount =
           amount.source === "field"
             ? { source: "field", fieldId: localField(String(amount.field)) }
-            : { source: "literal", value: amount.value };
+            : {
+                source: "literal",
+                value: moduleV2 ? normaliseExactV2(amount.value) : amount.value,
+              };
         dependencies = [
           dateFieldId,
           ...(amount.source === "field" ? [String(compiledAmount.fieldId)] : []),
@@ -2470,12 +2715,23 @@ function fieldSettings(
       const relationshipRecord = relationshipReference.slice(0, separator);
       const relationshipAlias = relationshipReference.slice(separator + 1);
       const aggregateField = (alias: string) => resolution.field(relationshipRecord, alias);
+      const aggregateValueContext = valueContext
+        ? {
+            ...valueContext,
+            field: (reference: string, alias?: string) =>
+              alias === undefined
+                ? valueContext.field(relationshipRecord, reference)
+                : valueContext.field(reference, alias),
+          }
+        : undefined;
       return {
         relationshipId: resolution.relationship(relationshipRecord, relationshipAlias),
         operation: settings.operation,
         resultType: settings.result_type,
         ...(settings.field ? { fieldId: aggregateField(String(settings.field)) } : {}),
-        ...(settings.filter ? { filter: condition(settings.filter, aggregateField) } : {}),
+        ...(settings.filter
+          ? { filter: condition(settings.filter, aggregateField, aggregateValueContext) }
+          : {}),
         ...(settings.currency ? { currency: settings.currency } : {}),
       };
     }
@@ -2497,14 +2753,45 @@ function compileModule(
   resolution: Resolution,
   metadata: JsonObject,
   savedConditionRevisions: readonly JsonObject[],
+  moduleV2 = false,
+  dependencyOutputs: readonly DefinitionCompilationOutput[] = [],
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const root = resolution.definition(definitionKey, "module");
   const permissionOwners = moduleFieldPermissionSourceOwners(source);
+  const fieldsById = new Map<string, JsonObject>();
+  for (const recordType of body.record_types as JsonObject[]) {
+    const qualified = `${definitionKey}:${String(recordType.key)}`;
+    for (const field of recordType.fields as JsonObject[])
+      fieldsById.set(resolution.field(qualified, String(field.id)), field);
+  }
+  for (const output of dependencyOutputs) {
+    if (output.kind !== "module") continue;
+    for (const recordType of output.canonical.content.recordTypes as unknown as JsonObject[])
+      for (const field of recordType.fields as JsonObject[])
+        fieldsById.set(String(field.fieldId), field);
+  }
+  const fieldFor = (qualifiedRecordType: string, alias: string): JsonObject | undefined =>
+    fieldsById.get(resolution.field(qualifiedRecordType, alias));
+  const valueContextFor = (
+    qualifiedRecordType: string,
+    parameters?: ReadonlyMap<string, string>,
+  ): ModuleValueContext => ({
+    field: (reference, alias) => {
+      if (alias !== undefined) return fieldFor(reference, alias);
+      const separator = reference.lastIndexOf(".");
+      return separator > reference.lastIndexOf(":")
+        ? fieldFor(reference.slice(0, separator), reference.slice(separator + 1))
+        : fieldFor(qualifiedRecordType, reference);
+    },
+    ...(parameters ? { parameters } : {}),
+    resolution,
+  });
   const recordTypes = (body.record_types as JsonObject[]).map((recordType) => {
     const recordKey = String(recordType.key);
     const qualified = `${definitionKey}:${recordKey}`;
+    const valueContext = valueContextFor(qualified);
     const recordTypeId = resolution.id(definitionKey, "record_type", recordKey, "content");
     const fields = (recordType.fields as JsonObject[]).map((field) => ({
       fieldId: resolution.id(definitionKey, "field", String(field.id), `record:${recordKey}`),
@@ -2512,7 +2799,13 @@ function compileModule(
       label: field.label,
       ...(field.help_text ? { helpText: field.help_text } : {}),
       required: field.required,
-      ...(field.default !== undefined ? { default: field.default } : {}),
+      ...(field.default !== undefined
+        ? {
+            default: moduleV2
+              ? normaliseModuleFieldValueV2(field, field.default, valueContext, true)
+              : field.default,
+          }
+        : {}),
       unique: field.unique,
       filterable: field.filterable,
       sortable: field.sortable,
@@ -2520,7 +2813,14 @@ function compileModule(
       personalData: field.personal_data,
       publicDisplay: field.public_display,
       type: field.type,
-      settings: fieldSettings(field, qualified, resolution, permissionOwners),
+      settings: fieldSettings(
+        field,
+        qualified,
+        resolution,
+        permissionOwners,
+        moduleV2,
+        moduleV2 ? valueContext : undefined,
+      ),
     }));
     const relationships = (recordType.relationships as JsonObject[]).map((relationship) => ({
       relationshipId: resolution.id(
@@ -2581,6 +2881,10 @@ function compileModule(
   const actions = (body.actions as JsonObject[]).map((action) => {
     const record = qualifiedForRecord(String(action.record_type));
     const localField = (alias: string) => resolution.field(record, alias);
+    const inputTypes = new Map(
+      (action.inputs as JsonObject[]).map((input) => [String(input.key), String(input.type)]),
+    );
+    const valueContext = valueContextFor(record, inputTypes);
     return {
       actionId: resolution.id(definitionKey, "action", String(action.id), "content"),
       key: action.key,
@@ -2590,25 +2894,51 @@ function compileModule(
         ? { permissionKeys: action.permission_alternatives }
         : { permissionKey: action.permission }),
       sharing: action.shareable ? "allowed" : "refused",
-      inputs: (action.inputs as JsonObject[]).map((input) => actionInput(input, resolution)),
-      ...(action.precondition ? { precondition: condition(action.precondition, localField) } : {}),
+      inputs: (action.inputs as JsonObject[]).map((input) =>
+        actionInput(input, resolution, moduleV2),
+      ),
+      ...(action.precondition
+        ? {
+            precondition: condition(
+              action.precondition,
+              localField,
+              moduleV2 ? valueContext : undefined,
+            ),
+          }
+        : {}),
       effects: (action.effects as JsonObject[]).map((effect) => {
         if (effect.kind === "set_field")
-          return {
-            kind: "set_field",
-            fieldId: localField(String(effect.field)),
-            value: actionValue(effect.value, localField),
-          };
+          return (() => {
+            const fieldId = localField(String(effect.field));
+            return {
+              kind: "set_field",
+              fieldId,
+              value: actionValue(
+                effect.value,
+                localField,
+                fieldsById.get(fieldId),
+                moduleV2 ? valueContext : undefined,
+              ),
+            };
+          })();
         if (effect.kind === "create_record") {
           const target = String(effect.record_type);
           return {
             kind: "create_record",
             recordType: resolution.recordType(target),
             values: objectFromUniqueEntries(
-              Object.entries(asObject(effect.values)).map(([key, value]) => [
-                resolution.field(target, key),
-                actionValue(value, localField),
-              ]),
+              Object.entries(asObject(effect.values)).map(([key, value]) => {
+                const fieldId = resolution.field(target, key);
+                return [
+                  fieldId,
+                  actionValue(
+                    value,
+                    localField,
+                    fieldsById.get(fieldId),
+                    moduleV2 ? valueContext : undefined,
+                  ),
+                ];
+              }),
             ),
           };
         }
@@ -2639,13 +2969,20 @@ function compileModule(
   const rules = (body.rules as JsonObject[]).map((rule) => {
     const record = qualifiedForRecord(String(rule.record_type));
     const localField = (alias: string) => resolution.field(record, alias);
+    const valueContext = valueContextFor(record);
     const effect = asObject(rule.effect);
     let compiledEffect: unknown;
     if (effect.kind === "set_value")
       compiledEffect = {
         kind: "set_value",
         fieldId: localField(String(effect.field)),
-        value: effect.value,
+        value: moduleV2
+          ? normaliseModuleFieldValueV2(
+              fieldsById.get(localField(String(effect.field))),
+              effect.value,
+              valueContext,
+            )
+          : effect.value,
       };
     else if (effect.kind === "require")
       compiledEffect = { kind: "require", fieldId: localField(String(effect.field)) };
@@ -2667,7 +3004,7 @@ function compileModule(
       key: rule.key,
       subjectRecordTypeId: resolution.recordType(record).recordTypeId,
       trigger: rule.trigger,
-      condition: condition(rule.condition, localField),
+      condition: condition(rule.condition, localField, moduleV2 ? valueContext : undefined),
       priority: rule.priority,
       effect: compiledEffect,
     };
@@ -2675,7 +3012,18 @@ function compileModule(
   const sharingConditions = (body.sharing_conditions as JsonObject[]).map((saved) => {
     const record = qualifiedForRecord(String(saved.source_record_type));
     const localField = (alias: string) => resolution.field(record, alias);
-    const compiledCondition = condition(saved.condition, localField);
+    const parameterTypes = new Map(
+      (saved.parameters as JsonObject[]).map((parameter) => [
+        String(parameter.key),
+        String(parameter.type),
+      ]),
+    );
+    const valueContext = valueContextFor(record, parameterTypes);
+    const compiledCondition = condition(
+      saved.condition,
+      localField,
+      moduleV2 ? valueContext : undefined,
+    );
     const conditionId = resolution.id(
       definitionKey,
       "sharing_condition",
@@ -2697,11 +3045,20 @@ function compileModule(
       declaredFieldIds: (saved.declared_fields as string[]).map(localField),
       publicationTests: (saved.publication_tests as JsonObject[]).map((test) => ({
         name: test.name,
-        parameters: test.parameters,
+        parameters: moduleV2
+          ? objectFromUniqueEntries(
+              Object.entries(asObject(test.parameters)).map(([key, value]) => [
+                key,
+                normaliseModuleTypedValueV2(parameterTypes.get(key), value, valueContext),
+              ]),
+            )
+          : test.parameters,
         fieldValues: objectFromUniqueEntries(
           Object.entries(asObject(test.field_values)).map(([key, value]) => [
             localField(key),
-            value,
+            moduleV2
+              ? normaliseModuleFieldValueV2(fieldFor(record, key), value, valueContext)
+              : value,
           ]),
         ),
         expected: test.expected,
@@ -2718,6 +3075,9 @@ function compileModule(
       source,
       resolution,
       sharingConditions,
+      moduleV2
+        ? valueContextFor(`${definitionKey}:${String(permission.record_type ?? "")}`)
+        : undefined,
     );
     const fieldPolicy = compilePermissionFieldPolicy(permission, source, resolution);
     return {
@@ -2738,7 +3098,7 @@ function compileModule(
       ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
     };
   });
-  const canonical = moduleDraftSchema.parse({
+  const canonical = (moduleV2 ? moduleDraftV2Schema : moduleDraftSchema).parse({
     envelope: {
       kind: "module",
       rootId: root.rootId,
@@ -3531,17 +3891,20 @@ function compileApplication(
     };
   });
   const permissions = (body.permissions as JsonObject[]).map((permission) => {
+    const referencedSharing = applicationPermissionSharingConditions(
+      permission,
+      source,
+      resolution,
+      metadata.organizationId,
+      dependencyOutputs,
+    );
     const recordScope = compilePermissionRecordScope(
       permission,
       source,
       resolution,
-      applicationPermissionSharingConditions(
-        permission,
-        source,
-        resolution,
-        metadata.organizationId,
-        dependencyOutputs,
-      ),
+      referencedSharing.conditions,
+      undefined,
+      referencedSharing.moduleV2,
     );
     const fieldPolicy = compilePermissionFieldPolicy(permission, source, resolution);
     return {
@@ -4618,20 +4981,87 @@ function compileApplicationV2Internal(
   }
 }
 
-const requestsV2Compilation = (input: unknown): boolean => {
-  if (input === null || typeof input !== "object" || Array.isArray(input)) return false;
-  const value = input as JsonObject;
-  return "sourceContractVersion" in value || "validationContractVersion" in value;
+function compileModuleV2Internal(
+  input: unknown,
+  context?: DefinitionCompilationContext,
+): ModuleCompilationOutputV2 {
+  const parsed = moduleCompilationRequestV2Schema.safeParse(input);
+  if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
+  const request = parsed.data;
+  const source = request.source as unknown as JsonObject;
+  const dependencyOutputs = parseDefinitionCompilationContext(context);
+  try {
+    const resolution = new Resolution(request.resolution, source);
+    const canonical = moduleDraftV2Schema.parse(
+      compileModule(
+        source,
+        resolution,
+        request.draftMetadata as unknown as JsonObject,
+        (request.savedConditionRevisions ?? []) as unknown as JsonObject[],
+        true,
+        dependencyOutputs,
+      ),
+    );
+    const ownDefinition = resolution.definition(request.source.key, "module");
+    const artifact = {
+      kind: "module" as const,
+      definitionKey: request.source.key,
+      rootId: ownDefinition.rootId,
+      exactVersion: ownDefinition.exactVersion,
+      contentFingerprint: fingerprintCanonicalValue(canonical.content),
+      resolutionFingerprint: request.resolution.fingerprint,
+    };
+    const output = moduleCompilationOutputV2Schema.safeParse({
+      kind: "module",
+      validationContractVersion: "2.0.0",
+      canonical,
+      artifact,
+      provenance: provenanceFor(source, canonical, resolution),
+      dependencyOrder: dependencyOrder(source),
+      resolvedDependencies: resolvedDependencies(source, resolution),
+      resolutionFingerprint: request.resolution.fingerprint,
+    });
+    if (!output.success) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    return output.data;
+  } catch (error) {
+    if (error instanceof DefinitionCompilationError)
+      throw error.location
+        ? error
+        : new DefinitionCompilationError(
+            error.ruleCode,
+            error.family,
+            compilerRootLocation(source),
+          );
+    return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+  }
+}
+
+const explicitCompilationKind = (input: unknown): "module" | "application" | undefined => {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const request = input as JsonObject;
+  if (!("sourceContractVersion" in request) && !("validationContractVersion" in request))
+    return undefined;
+  if (
+    request.source === null ||
+    typeof request.source !== "object" ||
+    Array.isArray(request.source)
+  )
+    return undefined;
+  const kind = (request.source as JsonObject).kind;
+  return kind === "module" || kind === "application" ? kind : undefined;
 };
 
 export function compileDefinition(
   input: ApplicationCompilationRequestV2,
 ): ApplicationCompilationOutputV2;
+export function compileDefinition(input: ModuleCompilationRequestV2): ModuleCompilationOutputV2;
 export function compileDefinition(input: DefinitionCompilationRequest): DefinitionCompilationOutput;
 export function compileDefinition(
   input: unknown,
 ): DefinitionCompilationOutput | ApplicationCompilationOutputV2 {
-  if (requestsV2Compilation(input)) return compileApplicationV2Internal(input);
+  const explicitKind = explicitCompilationKind(input);
+  if (explicitKind === "module") return compileModuleV2Internal(input);
+  if (explicitKind === "application") return compileApplicationV2Internal(input);
   return compileDefinitionInternal(input);
 }
 
@@ -4640,6 +5070,10 @@ export function compileDefinitionWithContext(
   context: DefinitionCompilationContext,
 ): ApplicationCompilationOutputV2;
 export function compileDefinitionWithContext(
+  input: ModuleCompilationRequestV2,
+  context: DefinitionCompilationContext,
+): ModuleCompilationOutputV2;
+export function compileDefinitionWithContext(
   input: DefinitionCompilationRequest,
   context: DefinitionCompilationContext,
 ): DefinitionCompilationOutput;
@@ -4647,6 +5081,8 @@ export function compileDefinitionWithContext(
   input: unknown,
   context: DefinitionCompilationContext,
 ): DefinitionCompilationOutput | ApplicationCompilationOutputV2 {
-  if (requestsV2Compilation(input)) return compileApplicationV2Internal(input, context);
+  const explicitKind = explicitCompilationKind(input);
+  if (explicitKind === "module") return compileModuleV2Internal(input, context);
+  if (explicitKind === "application") return compileApplicationV2Internal(input, context);
   return compileDefinitionInternal(input, context);
 }

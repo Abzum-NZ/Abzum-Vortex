@@ -1,5 +1,6 @@
 import {
   selectApplicationContractPair,
+  selectModuleContractPair,
   type ApplicationCompilationOutputV2,
   type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
@@ -207,12 +208,24 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
         output.validationContractVersion !== release.validationContractVersion)
     )
       return false;
-  } else if (
-    release.sourceContractVersion !== "1.0.0" ||
-    release.validationContractVersion !== "1.0.0" ||
-    snapshot.contractVersion !== "1.0.0"
-  )
-    return false;
+  } else {
+    let pair: "v1" | "v2";
+    try {
+      pair = selectModuleContractPair(
+        release.sourceContractVersion,
+        release.validationContractVersion,
+      ).schema;
+    } catch {
+      return false;
+    }
+    if (
+      (pair === "v2") !== "validationContractVersion" in output ||
+      (pair === "v2") !== (snapshot.contractVersion === "2.0.0") ||
+      ("validationContractVersion" in output &&
+        output.validationContractVersion !== release.validationContractVersion)
+    )
+      return false;
+  }
   const ownResolution = snapshot.definitions.filter(
     (definition) =>
       definition.kind === release.kind &&

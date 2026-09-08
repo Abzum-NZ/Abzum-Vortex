@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   fieldTypeKeys,
+  moduleDraftV2Schema,
   workflowNodeTypeKeys,
   publishedApplicationDefinitionSchema,
 } from "@vortex/contracts";
@@ -24,6 +25,7 @@ import {
 } from "../src/canonical-json";
 import { DefinitionVersionImpactError } from "../src/version-impact-error";
 import { assignNextDefinitionVersion } from "../src/semantic-version";
+import { compareModuleContents } from "../src/comparison-policy";
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
 const timestamp = "2026-09-03T00:00:00+00:00";
@@ -1274,6 +1276,104 @@ const fieldPolicyDirectionCases: readonly FieldPolicyCase[] = [
 ];
 
 describe("definition version impact", () => {
+  test("treats the explicit Module V1 to V2 representation transition as major", () => {
+    const v1 = moduleDraft();
+    const candidate = moduleDraftV2Schema.parse(structuredClone(v1));
+    candidate.envelope.draftRevision = 2;
+    candidate.envelope.publishedRevision = 1;
+    expect(
+      compareDefinitionVersionImpact({
+        kind: "module",
+        validationContractVersion: "2.0.0",
+        history: [publish(v1)],
+        candidate,
+      }),
+    ).toMatchObject({
+      outcome: "release_required",
+      impact: "major",
+      assignedVersion: "2.0.0",
+      reasons: [{ impact: "major", code: "existing_behavior_changed" }],
+    });
+  });
+
+  test.each([
+    ["minimum narrows", "minimum", "10", "20", "major", "constraint_narrowed"],
+    ["minimum widens", "minimum", "20", "10", "minor", "constraint_widened"],
+    ["maximum narrows", "maximum", "20", "10", "major", "constraint_narrowed"],
+    ["maximum widens", "maximum", "10", "20", "minor", "constraint_widened"],
+  ] as const)(
+    "classifies exact decimal field %s without binary-number conversion",
+    (_name, bound, before, after, impact, code) => {
+      const previous = moduleDraft().content;
+      previous.recordTypes[0]!.fields[0] = policyField("decimal_number", {
+        digitsBeforeDecimal: 30,
+        decimalPlaces: 12,
+        [bound]: before,
+      }) as never;
+      const candidate = structuredClone(previous);
+      (candidate.recordTypes[0]!.fields[0]!.settings as Record<string, unknown>)[bound] = after;
+      expect(compareModuleContents(previous, candidate)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ impact, code })]),
+      );
+    },
+  );
+
+  test.each(["table", "action_input"] as const)(
+    "classifies exact %s bound narrowing as major",
+    (kind) => {
+      const previous = moduleDraft().content;
+      if (kind === "table")
+        previous.recordTypes[0]!.fields[0] = policyField("table", {
+          minimumRows: 0,
+          maximumRows: 10,
+          columns: [
+            {
+              key: "amount",
+              type: "money",
+              required: false,
+              settings: {
+                currencyMode: "organization_default",
+                minimum: "10",
+                maximum: "100",
+              },
+            },
+          ],
+        }) as never;
+      else
+        previous.actions.push({
+          actionId: id(80),
+          key: "sample.module.adjust",
+          label: "Adjust",
+          subjectRecordTypeId: id(4),
+          permissionKey: "sample.record.read",
+          sharing: "refused",
+          inputs: [
+            {
+              key: "amount",
+              label: "Amount",
+              required: false,
+              type: "decimal_number",
+              validation: { minimum: "10", maximum: "100" },
+            },
+          ],
+          effects: [{ kind: "soft_delete_subject" }],
+        } as never);
+      const candidate = structuredClone(previous);
+      if (kind === "table")
+        (
+          candidate.recordTypes[0]!.fields[0]!.settings.columns as Array<{
+            settings: Record<string, unknown>;
+          }>
+        )[0]!.settings.minimum = "20";
+      else (candidate.actions[0]!.inputs[0]!.validation as Record<string, unknown>).minimum = "20";
+      expect(compareModuleContents(previous, candidate)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ impact: "major", code: "constraint_narrowed" }),
+        ]),
+      );
+    },
+  );
+
   test("assigns the first version and refuses malformed input", () => {
     const draft = moduleDraft();
     const result = compareDefinitionVersionImpact({

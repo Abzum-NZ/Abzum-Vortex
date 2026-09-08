@@ -13,6 +13,7 @@ import {
   platformIdSchema,
   revisionSchema,
   selectApplicationContractPair,
+  selectModuleContractPair,
   semanticVersionSchema,
   sessionContextSchema,
   stableDefinitionReleaseVersionSchema,
@@ -96,17 +97,19 @@ export interface DefinitionConsumerReadRepository {
   ): Promise<unknown | undefined>;
 }
 
-const selectApplicationReleaseContract = (candidate: unknown): void => {
+const selectReleaseContract = (candidate: unknown): void => {
   if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return;
   const record = candidate as Record<string, unknown>;
-  if (record.kind !== "application") return;
+  if (record.kind !== "application" && record.kind !== "module") return;
   if (
     typeof record.sourceContractVersion !== "string" ||
     typeof record.validationContractVersion !== "string"
   )
     throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   try {
-    selectApplicationContractPair(record.sourceContractVersion, record.validationContractVersion);
+    if (record.kind === "application")
+      selectApplicationContractPair(record.sourceContractVersion, record.validationContractVersion);
+    else selectModuleContractPair(record.sourceContractVersion, record.validationContractVersion);
   } catch {
     throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   }
@@ -261,7 +264,7 @@ export const createDefinitionConsumerReadService = (
       throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
 
     // Dispatch on trusted outer metadata before parsing canonical Application content.
-    selectApplicationReleaseContract(candidate);
+    selectReleaseContract(candidate);
     const parsed = storedConsumerReleaseEvidenceSchema.safeParse(candidate);
     if (!parsed.success)
       throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");

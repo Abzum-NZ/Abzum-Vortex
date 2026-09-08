@@ -23,9 +23,11 @@ request connection database-owner permissions.
    dependencies. The coordinated [Module V2 field work](issue-44-record-field-values.md)
    must support that release before installation advertises it as usable.
 2. Generate the storage mappings, typed columns, constraints and fixed protected
-   record adapters from the published definitions. Apply structure changes through
-   the existing owner/migration path, not browser-selected names or runtime DDL
-   credentials. Follow the [record-table allocation rule](../specification/17-runtime-storage-and-caching.md#record-table-allocation).
+   record adapters from the published definitions. Install the generic generator
+   through reviewed platform migrations, then call its fixed private operation
+   for arbitrary app installation. There is no per-customer migration, caller SQL
+   or runtime DDL credential. Follow the [record-table allocation rule](../specification/17-runtime-storage-and-caching.md#record-table-allocation)
+   and [provisioning boundary](../specification/17-runtime-storage-and-caching.md#record-storage-provisioning).
 3. Prepare actual permission and event registrations. The event-registration slice
    of [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) can be co-delivered here;
    its system-field and protected-action completion still needs real record storage.
@@ -40,6 +42,32 @@ request connection database-owner permissions.
 
 ## Dependencies and failure behavior
 
+### Selected implementation
+
+The database is the sole storage generator; Module/Record TypeScript code only
+calls the fixed operation using exact release IDs and expected binding revisions.
+The private non-login Record owner owns generated objects but is never inherited
+by request/runtime roles. The Module coordinator rechecks Access from the trusted
+organisation context and verifies the exact Application-to-Module dependency;
+it does not require the application to be active before installation.
+
+Use `record_data`, `rt_<full storage-contract UUID hex>` and
+`f_<full field UUID hex>` for new allocations. Reuse verified existing mappings.
+The catalogue's existing fingerprint identifies storage meaning: an equal shape
+can be reused, while a changed shape requires a real compatibility comparison and
+upgrade. Do not introduce additional plan/receipt fingerprints. Ownership uses
+Groups, including `owner_group_id` in the illustrative fixture and its validator.
+
+First create/compatible provisioning locks the binding and storage identities and
+commits objects plus mappings as inactive. Activation is a separate transaction
+after real registrations and protected adapters exist. Later populated changes
+may use Kestra over the same bounded operations; no new worker/queue is needed
+for initial creation. Test the generic operation with fixture definitions as
+inputs, not hardcoded business-schema migrations. This decision was independently
+reviewed before implementation; the actual implementation still requires review.
+
+### Integration prerequisites
+
 The whole [Access phase #31](https://github.com/Abzum-NZ/Abzum-Vortex/issues/31)
 is not an entry gate. Activation and data operations require the actual central
 decision, row and field enforcement from
@@ -47,7 +75,8 @@ decision, row and field enforcement from
 [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) and
 [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37), plus the existing
 [migration foundation #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139).
-Pure planning and generation may proceed before those integrated checks complete.
+Catalogue and generic provisioning development may proceed before those integrated
+checks complete; no active installation or protected data path is claimed early.
 
 Treat #43, #45 and #50's registration slice as coordinated work, not a sequence
 requiring a fake completed install before its storage exists. Likewise, #44's

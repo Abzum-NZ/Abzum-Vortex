@@ -26,6 +26,7 @@ import {
   semanticVersionSchema,
   timestampSchema,
 } from "./identifiers";
+import { moduleVersionImpactHistoryEntryV2Schema } from "./version-impact";
 
 export const sourceIdentityKindSchema = z.enum([
   "root",
@@ -296,6 +297,7 @@ export const moduleCompilationOutputV2Schema = z
 
 export const definitionCompilationOutputSchema = z.union([
   moduleCompilationOutputV1Schema,
+  moduleCompilationOutputV2Schema,
   applicationCompilationOutputV1Schema,
   applicationCompilationOutputV2Schema,
   z
@@ -316,7 +318,9 @@ export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("module"),
       definitionKey: namespacedKeySchema,
-      history: z.array(publishedModuleDefinitionSchema).max(10_000),
+      history: z
+        .array(z.union([publishedModuleDefinitionSchema, moduleVersionImpactHistoryEntryV2Schema]))
+        .max(10_000),
     })
     .strict(),
   z

@@ -17,12 +17,13 @@ import {
   publishedApplicationDefinitionSchema,
   publishedApplicationReferenceSchema,
   publishedModuleDefinitionSchema,
+  moduleVersionImpactHistoryEntryV2Schema,
   publishedModuleReferenceSchema,
   revisionSchema,
   semanticVersionSchema,
   selectApplicationContractPair,
+  selectModuleContractPair,
   stableDefinitionReleaseVersionSchema,
-  sourceIdentityAssignmentSchema,
   sourceIdentityAssignmentV2Schema,
   storedDefinitionDraftSchema,
   timestampSchema,
@@ -159,8 +160,11 @@ const rawModuleReleaseSchema = z
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
     compilationOutput: definitionCompilationOutputSchema,
-    resolutionSnapshot: definitionResolutionSnapshotSchema,
-    identities: z.array(sourceIdentityAssignmentSchema),
+    resolutionSnapshot: z.union([
+      definitionResolutionSnapshotSchema,
+      definitionResolutionSnapshotV2Schema,
+    ]),
+    identities: z.array(sourceIdentityAssignmentV2Schema),
     published: rawPublishedModuleSchema,
   })
   .strict();
@@ -363,6 +367,28 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         )
           return invalidStorage();
       }
+      if (kind === "module") {
+        if (
+          release.evidence.authoredSource.kind !== "module" ||
+          output.kind !== "module" ||
+          release.publication.kind !== "module"
+        )
+          return invalidStorage();
+        let schema: "v1" | "v2";
+        try {
+          schema = selectModuleContractPair(
+            release.evidence.sourceContractVersion,
+            release.publication.validationContractVersion,
+          ).schema;
+        } catch {
+          return invalidStorage();
+        }
+        if (
+          (schema === "v2") !== "validationContractVersion" in output ||
+          (schema === "v2") !== (resolution.contractVersion === "2.0.0")
+        )
+          return invalidStorage();
+      }
       const ownResolution = resolution.definitions.filter(
         (definition) =>
           definition.kind === kind &&
@@ -413,7 +439,10 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       if (!dependencyReferencesMatch(output, release.dependencyManifest)) return invalidStorage();
       const published =
         kind === "module" && output.kind === "module" && release.publication.kind === "module"
-          ? publishedModuleDefinitionSchema.safeParse({
+          ? ("validationContractVersion" in output
+              ? moduleVersionImpactHistoryEntryV2Schema
+              : publishedModuleDefinitionSchema
+            ).safeParse({
               publication: release.publication,
               content: output.canonical.content,
               dependencyManifest: release.dependencyManifest,
@@ -440,6 +469,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
   private materializeModuleRelease(release: RawModuleRelease): ResolvableModuleRelease {
     const output = release.compilationOutput;
     const snapshot = release.resolutionSnapshot;
+    const moduleV2 = "validationContractVersion" in output;
+    const sourceContractVersion = moduleV2 ? "2.0.0" : "1.0.0";
+    const validationContractVersion = moduleV2 ? "2.0.0" : "1.0.0";
     const ownResolution = snapshot.definitions.filter(
       (definition) =>
         definition.kind === "module" &&
@@ -454,6 +486,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       release.published.publication.rootId !== release.rootId ||
       release.published.publication.revision !== release.releaseRevision ||
       release.published.publication.releaseVersion !== release.releaseVersion ||
+      release.published.publication.validationContractVersion !== validationContractVersion ||
       release.published.publication.contentFingerprint !== release.contentFingerprint ||
       output.artifact.rootId !== release.rootId ||
       output.canonical.envelope.key !== release.key ||
@@ -472,8 +505,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         key: release.key,
         rootId: release.rootId,
         releaseVersion: release.releaseVersion,
-        sourceContractVersion: "1.0.0",
-        validationContractVersion: "1.0.0",
+        sourceContractVersion,
+        validationContractVersion,
         contentFingerprint: release.contentFingerprint,
         resolutionFingerprint: release.resolutionFingerprint,
         compilationOutput: output,
@@ -484,7 +517,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       !dependencyReferencesMatch(output, release.published.dependencyManifest)
     )
       return invalidStorage();
-    const published = publishedModuleDefinitionSchema.safeParse({
+    const published = (
+      moduleV2 ? moduleVersionImpactHistoryEntryV2Schema : publishedModuleDefinitionSchema
+    ).safeParse({
       publication: release.published.publication,
       content: output.canonical.content,
       dependencyManifest: release.published.dependencyManifest,

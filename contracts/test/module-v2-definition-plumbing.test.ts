@@ -212,7 +212,7 @@ describe("Module V2 Definition contract plumbing", () => {
       }).success,
     ).toBe(true);
     expect(storedModuleDefinitionDraftV2Schema.safeParse(storedV2).success).toBe(true);
-    expect(storedDefinitionDraftSchema.safeParse(storedV2).success).toBe(false);
+    expect(storedDefinitionDraftSchema.safeParse(storedV2).success).toBe(true);
     expect(
       storedModuleDefinitionDraftV2Schema.safeParse({
         ...storedV2,
@@ -263,7 +263,7 @@ describe("Module V2 Definition contract plumbing", () => {
 
   it("keeps V2 compilation output and consumer content bound to validation version 2.0.0", () => {
     expect(moduleCompilationOutputV2Schema.safeParse(compilationOutputV2).success).toBe(true);
-    expect(definitionCompilationOutputSchema.safeParse(compilationOutputV2).success).toBe(false);
+    expect(definitionCompilationOutputSchema.safeParse(compilationOutputV2).success).toBe(true);
     expect(
       definitionCompilationOutputSchema.safeParse({
         ...compilationOutputV2,
@@ -288,7 +288,7 @@ describe("Module V2 Definition contract plumbing", () => {
     expect(moduleDefinitionConsumerReadResultV2Schema.safeParse(consumerResultV2).success).toBe(
       true,
     );
-    expect(definitionConsumerReadResultSchema.safeParse(consumerResultV2).success).toBe(false);
+    expect(definitionConsumerReadResultSchema.safeParse(consumerResultV2).success).toBe(true);
     expect(
       definitionConsumerReadResultSchema.safeParse({
         ...consumerResultV2,

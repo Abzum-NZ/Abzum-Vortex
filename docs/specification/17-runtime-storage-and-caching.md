@@ -125,7 +125,7 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
 - Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
-- The table-owner role is limited to migration and controlled verification work.
+- The Supabase project-owner credential is limited to migration and controlled verification work. The separate non-login Record object owner is callable only through the protected [storage provisioner](#record-storage-provisioning); request roles cannot inherit it.
 - Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
@@ -274,7 +274,7 @@ storage, durable authority, or persistent relation ownership.
 
 ### Record-table allocation
 
-The Record service maintains a protected storage catalog. One `storage_contract_id` maps to one physical business-record table in a cluster. Application bindings and organisation installations reuse that mapping; they do not create tables.
+The Record service maintains a protected storage catalog. One `storage_contract_id` maps to one physical business-record table in a cluster. An installation provisions a missing mapping through the fixed Record operation; subsequent application bindings and organisation installations reuse it rather than creating table copies.
 
 ```mermaid
 flowchart LR
@@ -287,13 +287,13 @@ flowchart LR
     COLUMN --> TABLE
 ```
 
-- The table is allocated for a record-type storage lineage, not for each organisation or application. A shared definition package therefore requires one table migration per cluster rather than one migration for every installation.
+- The table is allocated for a record-type storage lineage, not for each organisation or application. A shared definition requires one compatible physical structure per cluster, not a repository migration for every installation.
 - A table has fixed system columns from the [record storage contract](appendices/data-contracts.md#record-storage-contract) and one typed business column for each field in the active compatible lineage. Optional fields added by a compatible release are nullable for records still governed by an earlier revision.
-- Physical names use immutable, collision-checked storage tokens recorded in the catalog. Human names and builder keys may appear in database comments and operational tools but never determine table or column identity.
-- An independently created or structurally forked record type receives a new storage-contract identity and table. A package install may preserve a source storage identity only when the signed package lineage and fingerprint validate.
+- New mappings use schema `record_data`, table `rt_` followed by the full lowercase storage-contract UUID without hyphens, and column `f_` followed by the full lowercase field UUID without hyphens. Tokens are collision-checked and recorded in the catalog. Existing verified mappings remain authoritative; installation does not regenerate them. Human names and builder keys may appear in comments and operational tools but never determine physical identity.
+- An independently created or structurally forked record type receives a new storage-contract identity and table. Reusing the same local published root does not require package-copy evidence. Copying a package while preserving its source storage identity requires the signed package lineage and fingerprint validation described in [copying](16-copying-sharing-import-export.md).
 - Organisation-shared rows use `organisation_id` as their data boundary. Application-contained rows additionally require `application_root_id`. Unique constraints and lookup indexes include the complete applicable scope before a business value.
 - A relationship always repeats and enforces `organisation_id`. Two application-contained endpoints must also have the same `application_root_id`. An application-contained record may link to an organisation-shared record in the same organisation. A sharing grant never creates a stored cross-organisation or cross-application relationship.
-- Database migrations resolve tables and fields through the catalog. Runtime requests provide stable definition identifiers and never accept a physical table or column name from a browser, definition author, workflow, interface caller, or federation peer.
+- Platform migrations and the protected provisioner resolve tables and fields through the catalog. Runtime requests provide stable definition identifiers and never accept a physical table or column name from a browser, definition author, workflow, interface caller, or federation peer.
 
 Creating a separate schema or table set for every organisation or application is refused because it would multiply migrations, indexes, row restrictions, backups, and operational checks without improving isolation. Organisation separation is enforced by row restrictions and the complete scope keys, while structurally different definitions remain physically separate through their storage-contract identities.
 
@@ -305,6 +305,68 @@ for retry. Activation is atomic and cannot report a usable binding before its
 required mappings, registrations and protected operations are ready. Detachment
 retains the stored records. The [coordinated implementation plan](../build-plan/module-record-provisioning.md)
 keeps these responsibilities with the existing Module, Record and Application engines.
+
+### Record storage provisioning
+
+Installing an arbitrary application must not require an engineer to create a new
+repository migration. Reviewed [platform migrations](18-delivery-and-testing.md#database-changes)
+install one generic database-owned storage generator. Module coordinates it using
+exact immutable Application/Module release identities and an expected binding
+revision. The operation reads the stored release and dependency evidence itself,
+proves that the requested module belongs to the selected application release,
+and rechecks installation authority through Access. An organisation-scoped request
+can install a not-yet-active application; an active application context is not a
+circular prerequisite. Caller-selected actors, SQL, physical names, permission
+declarations and record graphs are never inputs.
+
+The generator is a private `SECURITY DEFINER` operation because creating arbitrary
+record storage is a platform capability while ordinary requests must have no DDL
+rights. Its non-login owner canonically owns the generated Record objects and has
+only the required schema, catalogue and fixed-helper privileges. No runtime or
+request role inherits that owner. The request role can execute only the fixed
+Module coordinator; its private Record helper has no direct public/request grant.
+Use schema-qualified fixed templates, quoted internally derived identifiers,
+and a safe search path. Revoke `PUBLIC` execution in the creating transaction,
+following [PostgreSQL's function guidance](https://www.postgresql.org/docs/17/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY).
+Recheck the actor and scope from the trusted transaction context, not
+`current_user`, which changes inside an owner-executed function.
+
+The database owns the only DDL generator. TypeScript services call that fixed
+operation and parse its result; they do not maintain a second SQL generator.
+The generated structure includes the declared fields, complete scope keys,
+Group ownership (`owner_group_id`), relationships, four row policies and fixed
+field-aware record adapters. Adapters construct trusted relationship evidence;
+callers cannot supply the access graph. Raw content-table access stays denied.
+An adapter execution role receives only the required DML, does not own those
+tables and remains subject to row security.
+
+```mermaid
+flowchart LR
+    I[Install exact application release] --> M[Module: check authority and binding revision]
+    M --> D[Read exact published modules and dependencies]
+    D --> R[Record: protected generic provisioner]
+    R --> C[Lock catalogue and create or reuse compatible storage]
+    C --> P[Commit provisioned, inactive]
+    P --> A[Check permissions, events and dependencies]
+    A --> B[Activate binding in a new transaction]
+```
+
+Lock the installation and storage identities in a consistent order. First create
+or compatible provisioning commits its generated objects and catalogue mappings
+in one short transaction. An exact retry verifies and reuses that state. The
+existing catalogue `contentFingerprint` records canonical storage meaning, not
+labels or unrelated actions: equality permits no-change reuse; a difference
+requires an explicit compatibility comparison and the appropriate structure
+change, not silent reuse or automatic refusal of every compatible addition.
+Exact release content/resolution evidence records what was provisioned. No extra
+plan fingerprint, receipt counter or second platform migration ledger is needed.
+
+Activation rechecks current authority and binding revision after the required
+registrations exist. Failure cannot expose a partial active installation and
+does not destroy valid inactive/shared structures. Populated changes use the
+same owning primitives in bounded add/migrate/switch/retire steps, orchestrated
+through Kestra when durable data movement is necessary. Initial creation needs
+no new worker, queue or owner credential in Vercel.
 
 ## Vortex federation between clusters
 

@@ -324,4 +324,4 @@ export function extractApplicationSourceIdentityRequirementsV2(
 export const extractStoredSourceIdentityRequirements = (source: StoredDefinitionSource) =>
   source.kind === "application" && source.source_contract_version === "2.0.0"
     ? extractApplicationSourceIdentityRequirementsV2(source)
-    : extractSourceIdentityRequirements(source);
+    : extractSourceIdentityRequirements(source as DefinitionSourceDocument);
