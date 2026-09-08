@@ -181,6 +181,23 @@ new services, registries or release-approval mechanisms. A schema-only slice may
 be tested independently but does not advertise Module V2 as publishable/installable
 until its corresponding full pipeline is operational.
 
+### Rule consumer handoff
+
+Select V2 evaluation from the exact Module contract pair, never from a value that
+looks like a decimal or money object. Reuse the current condition traversal and
+error vocabulary, with explicit V2 value semantics. Decimal-looking text remains
+text. Decimal equality, ordering and membership compare exact amounts; authored
+values normalize before canonical evaluation. Money equality and membership also
+require matching currency; ordering across currencies refuses rather than
+returning false that a negation could turn into true.
+
+V2 saved-condition parameters explicitly add `decimal_number` and `money`; the
+historical `number` alternative keeps its existing meaning. Calculation and total
+fields use their declared result type. Normalize authored calculation literals
+through the shared exact codec. Do not add an arithmetic engine merely to validate
+these definitions. Verify the real V2 compile/publication-test path and retain the
+existing V1 historical evaluator tests unchanged.
+
 ```mermaid
 flowchart LR
     D[Published field definitions] --> V[Prepare submitted values]

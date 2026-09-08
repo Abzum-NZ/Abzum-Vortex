@@ -73,6 +73,10 @@ organisation/application binding only after the required capabilities are ready.
 The user-facing application lifecycle remains with [#64](issue-64-application-runtime.md).
 Publication alone must not create an installed application; detaching a binding
 must not delete its records.
+The [coordinated provisioning plan](module-record-provisioning.md) defines the
+actual access prerequisites, event-registration handoff and failure behavior.
+It does not require the whole Access epic or a mock completed installation before
+real storage can be built.
 
 [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) then
 delivers module-exposed query definitions through publication and actual execution

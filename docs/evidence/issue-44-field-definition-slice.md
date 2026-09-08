@@ -64,6 +64,14 @@ formatting and scoped lint passed. Root verified all five final reviewed file
 hashes before staging. These are reusable prerequisites, not a claim that Module
 V2 definitions can already be published or saved as records.
 
+[PR #354](https://github.com/Abzum-NZ/Abzum-Vortex/pull/354) delivered these
+prerequisites through the normal Testing merge at `2026-09-08T09:38:35Z`, producing
+`0e9ab3a5696358c5ed5350e7b697cc6d10317e63`. The reviewed source
+`534ffd5ece5ce1df25f79f5ce06ca36c80d359fc` received an actual completed successful
+[preview deployment](https://vercel.com/abzumdevteam/abzum-vortex/2seewSygKS3KRCJEoFjduF3L18UY),
+not a skipped-not-affected result. This does not claim that its subsequent hosted
+database verification has completed.
+
 ## Remaining work
 
 The whole #44 task stays open. The coordinated exact-value Module V2 pipeline,

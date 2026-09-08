@@ -297,6 +297,15 @@ flowchart LR
 
 Creating a separate schema or table set for every organisation or application is refused because it would multiply migrations, indexes, row restrictions, backups, and operational checks without improving isolation. Organisation separation is enforced by row restrictions and the complete scope keys, while structurally different definitions remain physically separate through their storage-contract identities.
 
+Provisioning shared storage and activating an installation are distinct steps.
+A failed table-creation transaction rolls back its own new objects and changes,
+never a table or registration already used by another installation. If provisioning
+has succeeded but activation fails, the valid inactive structure remains available
+for retry. Activation is atomic and cannot report a usable binding before its
+required mappings, registrations and protected operations are ready. Detachment
+retains the stored records. The [coordinated implementation plan](../build-plan/module-record-provisioning.md)
+keeps these responsibilities with the existing Module, Record and Application engines.
+
 ## Vortex federation between clusters
 
 All Vortex clusters use the same published data contracts, but clusters may run different compatible releases during deployment and remain separate security, availability, and data-residency boundaries. Cross-cluster sharing therefore uses a versioned Vortex service contract, not a direct database connection.
