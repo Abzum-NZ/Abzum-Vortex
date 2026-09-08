@@ -49,8 +49,23 @@ checks in a clean isolated worktree, including frozen offline dependency install
 Normal preview checks passed and
 [PR #342](https://github.com/Abzum-NZ/Abzum-Vortex/pull/342) merged to Testing at
 `2026-09-08T03:33:43Z`, merge `426c2739d8bda0eecf65bf77b9e8ea5c98e4fa15`.
-No hosted result for this comparator is claimed yet. The prior compiler delivery
-is [separately verified](issue-249-native-application-compiler.md).
+Hosted Testing is verified for that exact merge. Execution
+[`14NmonuXq1v5NDkT2Bdy2P`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/14NmonuXq1v5NDkT2Bdy2P)
+succeeded at `2026-09-08T04:14:07.078Z`; the schema-2 receipt was written at
+`2026-09-08T04:14:07.024Z`. It names the exact repository, Testing ref, merge
+commit and execution, with 66 migrations, all 25 selected concurrency proofs
+completed and all six selected lint schemas completed. Root read the full receipt
+and captured the successful execution screen without changing settings or runs.
+The database/runner source diff from the preceding Testing merge is empty.
+
+| Receipt evidence | SHA-256 |
+| --- | --- |
+| Migration set | `ec6b40803297598bfda603618d5178b7cccc3c6d8d673859d409fd47b72d07c2` |
+| Runner | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Verification manifest | `0cfcb4d9995f0c79b132b479a4ec56448d504fa097520fc6610908d21c99dfc8` |
+| Coverage | `7345fd22aa5f8040ddb4356965377e8863dbb5f6ff51bb666d6bc16c8c605f0e` |
+
+The prior compiler delivery is [separately verified](issue-249-native-application-compiler.md).
 
 ## Remaining task scope
 

@@ -3,7 +3,9 @@
 Task: [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249).
 Preceding slice: [native draft storage](issue-249-native-draft-storage.md).
 Specification: [page composition](../specification/appendices/page-builder-contracts.md).
-Status: planned; not implemented.
+Status: in progress after native draft storage; no complete publication delivery
+is claimed. TypeScript and additive SQL work are delegated separately, with one
+independent Sol review of the completed combined slice before delivery.
 
 ## Outcome
 
@@ -130,6 +132,11 @@ Replace the closed kind, reference-shape and target-shape constraints to admit e
   - serialize the same platform-block dependency evidence for integrity verification.
 
 No new table, column, index, grant, RLS policy or public function is required. Existing private-table privileges and request-role operation grants remain unchanged.
+
+Use same-signature function replacement, preserving each function's existing
+security and configuration properties. PostgreSQL retains ownership and permissions
+for replacement; it does not retain unspecified function properties automatically.
+See [official CREATE FUNCTION guidance](https://www.postgresql.org/docs/current/sql-createfunction.html).
 
 ## Representation-transition rules
 
