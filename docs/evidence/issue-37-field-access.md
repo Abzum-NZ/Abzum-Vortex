@@ -4,6 +4,12 @@ Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and accep
 
 ## Protected-share typed operation — 8 September 2026
 
+[PR #338](https://github.com/Abzum-NZ/Abzum-Vortex/pull/338) merged normally into
+Testing at `2026-09-08T00:02:44Z` after preview success. Reviewed source:
+`95254d8cbab50784d2b372a60afe5aa365e90c80`; Testing merge:
+`62a19dc4c30b111dcb43475e297115ac390d726c`. All 23 package builds also passed.
+No unfinished SQL was included and no hosted receipt is claimed for this merge.
+
 The strict grant/revoke commands accept normal record, recipient, field, time and
 revision inputs, never caller-supplied authority or field ceilings. Grant and
 Activity identifiers are generated server-side. The runtime invokes a fixed
@@ -66,6 +72,32 @@ candidate is not delivered with this checkpoint.
 
 ## Isolated source delivery — 8 September 2026
 
+### Hosted Testing result
+
+The exact PR #336 Testing merge `eaef6ce34e46cdc977705068c77822b96e0d5bd8`
+passed [execution 6DEAIaJH6yyc4Elwd8Ul5G](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6DEAIaJH6yyc4Elwd8Ul5G).
+Its stored `database-testing-eaef6ce34e46cdc977705068c77822b96e0d5bd8`
+receipt reports `succeeded`, 66 applied migrations, all 25 selected concurrency
+proofs completed, and all six selected lint schemas completed. Logs confirm
+60 database test files and 2,649 assertions passed. Receipt publication was
+`2026-09-07T23:58:11.548Z`.
+
+Root independently calculated all four fingerprints from that exact Git revision
+and matched the receipt:
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Migration set | `ec6b40803297598bfda603618d5178b7cccc3c6d8d673859d409fd47b72d07c2` |
+| Committed verification runner | `49ca962194c35b4aaa8dc5af6fbaa392604f81df94b70836977f8b1376e68046` |
+| Verification manifest | `0cfcb4d9995f0c79b132b479a4ec56448d504fa097520fc6610908d21c99dfc8` |
+| Selected verification coverage | `7345fd22aa5f8040ddb4356965377e8863dbb5f6ff51bb666d6bc16c8c605f0e` |
+
+This closes the hosted-receipt qualification for the definition-to-catalogue
+checkpoint below, not the later PR #337/#338 checkpoints or the unfinished
+database enforcement. No Production promotion occurred. Whole #37 remains open.
+
+### Source verification
+
 [PR #336](https://github.com/Abzum-NZ/Abzum-Vortex/pull/336) merged normally into
 Testing at `2026-09-07T23:17:58Z`, after both preview checks passed on reviewed head
 `968c7712ce1ee27f6e34a727191fceab40be45b1`. Testing merge:
@@ -83,7 +115,7 @@ installed the frozen lockfile from the local package cache, and verified:
 The independent reviewer confirmed no committed #37 dependency on the excluded
 #35 changes. This replaces the earlier shared-worktree qualification with exact
 isolated source evidence. It does not claim hosted database verification of the
-new field-catalogue migration; its exact Testing receipt remains to be checked.
+new field-catalogue migration by itself; the later exact receipt is recorded above.
 No Production promotion occurred, and the whole #37 enforcement task stays open.
 
 ## Definition-to-catalogue checkpoint — 8 September 2026
