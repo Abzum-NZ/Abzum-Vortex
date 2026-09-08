@@ -41,6 +41,47 @@ flowchart LR
 
 Task ownership must separate runtime rendering, application lifecycle and reusable block registration from visual-editor integration. No engine task depends on the designer that consumes it. Dependencies are tracked on the existing GitHub board; mixed engine/editor tasks must be clarified rather than marking the entire engine blocked by its own consumer.
 
+## Next binding-engine prerequisite — 8 September 2026
+
+[Typed component/flow bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250)
+can start on the delivered native Definition/compiler/publication substrate from
+[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249). It does not wait for
+that task's Puck adapter, conversion or App Designer acceptance. The over-broad
+whole-task dependency is removed; completed contracts/compiler/Access prerequisites
+remain recorded on the board.
+
+The early kernel describes stable component events, typed context and exact
+flow/input/result bindings. Every configurable action or data-provider event
+enters its configured flow. Query, save, action and platform-service operations
+are flow-node bindings, never hidden page-side runners. Current-user and protected
+specified-user/System references describe configuration, not live authority.
+The kernel neither runs a graph nor grants an invocation permission. Later
+executor/readiness and private form-draft proofs stay with their owning engines.
+This follows the existing [Frontend Flow specification](../specification/appendices/frontend-rule-designer.md#pages-compose-flows-define-actions).
+
+The next data-engine delivery is [Record field values #44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44),
+using the existing canonical field definitions rather than adding another field
+catalogue. It can validate submitted values before the database integration is
+ready; the complete task still requires real save/readback and permission-gated
+choice enforcement. Its [implementation plan](issue-44-record-field-values.md)
+separates those milestones explicitly.
+
+Next, co-deliver [module provisioning #43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43)
+and [record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45): consume
+an exact published release, provision its real protected storage and activate its
+organisation/application binding only after the required capabilities are ready.
+The user-facing application lifecycle remains with [#64](issue-64-application-runtime.md).
+Publication alone must not create an installed application; detaching a binding
+must not delete its records.
+
+[Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) then
+delivers module-exposed query definitions through publication and actual execution
+against that installed protected storage. A standalone query descriptor or
+compiler is not a replacement for this working path. Row and field enforcement
+remain real dependencies of data access, not dependencies of pure field-value
+validation. Complete installed-page assembly requires working owning engines;
+a static sample page is not the application-runtime milestone.
+
 | Owner                                                                                                                              | Responsibility                                                                                          |
 | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [#66](issue-66-registered-block-runtime.md)                                                                                        | Registered block implementations and rendering, independent of the designer                             |
