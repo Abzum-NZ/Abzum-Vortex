@@ -48,9 +48,10 @@ permission evaluator, cache, SQL store or visual designer.
    foreign or ambiguous references. Preserve omission and exact compiler provenance.
    A view/use permission change is an existing permission-semantic major change,
    not presentation-only. No new counter or release/acceptance mechanism.
-   Inspection found that only V2 request/data contracts exist today: the live
-   compiler, publication and comparison paths still consume V1. #249 must carry
-   these fields through its real V2 pipeline. Do not add dead V2 branches to the
+   The native V2 compiler and permission-reference provenance are delivered in
+   [PR #341](https://github.com/Abzum-NZ/Abzum-Vortex/pull/341). V2 comparison,
+   publication/storage and consumer/history/restore integration remain in #249.
+   Do not treat compiler coverage as their completion or add dead V2 branches to the
    V1 compiler, build a parallel compiler here, or close #38 on schema parsing alone.
 2. **One recursive projection engine.** Support the existing V1 page blocks and V2
    placement trees. Page refusal returns no page. Filter refused placements and
@@ -123,7 +124,7 @@ permission evaluator, cache, SQL store or visual designer.
 
 | Owner | Required integration |
 | --- | --- |
-| [#249 page-composition foundation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) | Finish the existing V2 compiler/publication/provenance/version pipeline, including the #38 permission references. This is a real prerequisite for final V2 integration, not designer UI. |
+| [#249 page-composition foundation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) | Finish V2 comparison and publication/persistence/readback after the delivered native compiler/provenance, including #38 permission meaning. This is a real prerequisite for final V2 integration, not designer UI. |
 | [#64 application runtime](issue-64-application-runtime.md) | Bind the installed active application and exact release to the trusted page adapter. |
 | [#69 page permissions](https://github.com/Abzum-NZ/Abzum-Vortex/issues/69) | Real navigation, direct addresses, render responses and live access-ended continuity use the projection. |
 | [#250 semantic bindings](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) | Complete form/query/flow/operation bindings determine actual invocable controls. |
