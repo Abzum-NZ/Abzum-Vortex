@@ -89,6 +89,23 @@ was **63/64**, with a new Definition field-reference failure outside the frozen
 storage files; that calculation integration must be resolved before claiming a
 green combined branch.
 
+## Testing source delivery
+
+[PR #362](https://github.com/Abzum-NZ/Abzum-Vortex/pull/362) merged normally into
+Testing on 8 September 2026 after the exact reviewed source
+`917bb98d67d35d69dd32616a56ac662911b2afdd` passed its preview checks. The
+[Vercel preview](https://vercel.com/abzumdevteam/abzum-vortex/37K7CTfjAaadNEyE2mpfK8apfpTv)
+was visibly **Ready**, with a **6m 50s** build. Testing merge commit:
+`a51f10c0c7dd4fed8e08496936cc1be9429a82b8`.
+
+The independent reviewer also confirmed that the new migration and proofs use
+committed context, identity, Definition and organisation-authority dependencies;
+they do not depend on the unrelated uncommitted record-access migrations or test
+helper. This confirms source self-containment, not full hosted execution.
+
+The web build and branch merge do **not** establish that the hosted database has
+applied and verified this migration. No Production promotion is claimed.
+
 - Independent actual-work approval is complete. Full ordered migration
   verification and revision-matched hosted verification are not supplied by this
   bounded proof.
