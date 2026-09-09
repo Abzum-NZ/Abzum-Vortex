@@ -375,11 +375,17 @@ Lock the installation and storage identities in a consistent order. First create
 or compatible provisioning commits its generated objects and catalogue mappings
 in one short transaction. An exact retry verifies and reuses that state. The
 existing catalogue `contentFingerprint` records canonical storage meaning, not
-labels or unrelated actions: equality permits no-change reuse; a difference
+labels, frontend rule graphs or unrelated actions: equality permits no-change reuse; a difference
 requires an explicit compatibility comparison and the appropriate structure
 change, not silent reuse or automatic refusal of every compatible addition.
 Exact release content/resolution evidence records what was provisioned. No extra
 plan fingerprint, receipt counter or second platform migration ledger is needed.
+
+The provisioner must explicitly support the exact Module source/validation pairs
+2.0.0/2.0.0 and 3.0.0/3.0.0. Module 3 reuses the V2 field storage model; accepting
+it does not relabel a published release or create a separate table for its rules.
+See the [compatibility implementation plan](../build-plan/issue-45-module3-storage-compatibility.md)
+for the bounded delivery and remaining installation dependencies.
 
 An unchanged retry of the original first-provision command may return the same
 inactive provisioned binding after a lost response, even though its expected

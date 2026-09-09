@@ -1,5 +1,11 @@
 # Abzum Vortex revised build plan
 
+**Agent coordination — 9 September 2026:** Codex owns task planning, independent
+review and GitHub coordination; Claude Fable 5.1 owns architecture and Claude
+Opus 5 owns implementation. Follow the [coordination rules](agent-coordination.md)
+and [current engine handoff](claude-engine-handoff.md). This changes engineering
+ownership, not product requirements, dependencies or completed review evidence.
+
 The [Access consumer handoff](access-consumer-handoffs.md) keeps activation/invitation invocation with the real IAM workflow and application lifecycle composition with the Application engine. Earlier Access work must not fabricate their missing evidence or depend back on those consumers. All journeys remain required by the complete engine-first application proof.
 
 The [7 September whole-platform architecture review](architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
