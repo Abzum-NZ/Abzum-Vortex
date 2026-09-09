@@ -1,12 +1,13 @@
 # Abzum Vortex revised build plan
 
-**Agent coordination — 9 September 2026:** Codex owns task planning, independent
-review and GitHub coordination; Claude Fable 5.1 owns architecture and Claude
-Opus 5 owns implementation. Follow the [coordination rules](agent-coordination.md)
+**Agent coordination — 10 September 2026:** GPT-6 Astra owns BA review, correction
+of task/specification/build-plan handoffs and independent testing. The coordinator
+dispatches reviewed work and maintains progress; Claude Fable 5.1 owns complex
+architecture and Claude Opus 5/Sonnet 5 implement assigned work. Follow the [coordination rules](agent-coordination.md)
 and [current engine handoff](claude-engine-handoff.md). This changes engineering
 ownership, not product requirements, dependencies or completed review evidence.
 
-The [Access consumer handoff](access-consumer-handoffs.md) keeps activation/invitation invocation with the real IAM workflow and application lifecycle composition with the Application engine. Earlier Access work must not fabricate their missing evidence or depend back on those consumers. All journeys remain required by the complete engine-first application proof.
+The [Access consumer handoff](access-consumer-handoffs.md) keeps activation/invitation invocation with the real IAM workflow and application lifecycle composition with the Application engine. Earlier Access work must not fabricate their missing evidence or depend back on those consumers. The governed IAM journey remains required by #267/#254; the first Phase 4–6 proof #327 may use delivered protected assignment operations.
 
 The [7 September whole-platform architecture review](architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
 
@@ -138,15 +139,18 @@ Operations, accessibility, security, documentation, and automated checks are con
 ### Current dependency tiers
 
 A concise sequencing reference; issues remain the source of exact scope, and no
-automated check treats this table as a second executable source.
+automated check treats this table as a second executable source. Tiers describe
+integration order, not broad start gates. #249/#250 headless work and the pure
+#58 graph foundation proceed when their own prerequisites are ready. Later
+workflow, file, connection and MCP engines likewise do not wait for #327.
 
 | Tier | Unlocked by | Work |
 | --- | --- | --- |
 | 1 — Access enforcement | Completed #34/#36/#40 | [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35), then [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37); [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and [#41](https://github.com/Abzum-NZ/Abzum-Vortex/issues/41) independently |
 | 2 — Module and record engines | Tier 1 row/field enforcement | [#43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43)/[#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) with the co-delivered [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) installation-permission slice, then [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) |
-| 3 — Application runtime | Tier 2 storage, save and query | [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58), [#66](https://github.com/Abzum-NZ/Abzum-Vortex/issues/66)–[#71](https://github.com/Abzum-NZ/Abzum-Vortex/issues/71), [#73](https://github.com/Abzum-NZ/Abzum-Vortex/issues/73), [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249)/[#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), then full [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) |
-| 4 — First definition-led proof | Tier 3 runtime | [#74](https://github.com/Abzum-NZ/Abzum-Vortex/issues/74), then [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327) |
-| 5 — Later capability proofs | The #327 proof | Designer [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323)/[#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65), MCP [#200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200), workflow/file/connection owners, cross-phase [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) |
+| 3 — Application runtime | Each engine's own dependencies; Tier 2 for protected data integration | Required [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58), [#67](https://github.com/Abzum-NZ/Abzum-Vortex/issues/67), [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), [#73](https://github.com/Abzum-NZ/Abzum-Vortex/issues/73) work and completed Access prerequisites feed full [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64); #66 and headless #249/#250 work proceed on their own dependencies |
+| 4 — Runtime consumers and first definition-led proof | Full #64 and each consumer's other dependencies | [#69](https://github.com/Abzum-NZ/Abzum-Vortex/issues/69) and [#71](https://github.com/Abzum-NZ/Abzum-Vortex/issues/71) follow #64; [#74](https://github.com/Abzum-NZ/Abzum-Vortex/issues/74) feeds [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327), alongside its #43/#45/#47/#54/#64 prerequisites |
+| 5 — Designer and cross-phase acceptance | #327 plus each owning task's actual prerequisites | Designer [#323](https://github.com/Abzum-NZ/Abzum-Vortex/issues/323)/[#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65) follow #327; [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) integrates later owning-engine, IAM, sharing/federation, Designer and [MCP #200](https://github.com/Abzum-NZ/Abzum-Vortex/issues/200) evidence |
 
 ## Gate 0 — Decisions and platform readiness
 
@@ -309,7 +313,7 @@ The native V2 compiler and the stored V1 permission handoff merged into Testing 
 | [Assignment-revocation correction #318](https://github.com/Abzum-NZ/Abzum-Vortex/issues/318) | Done: a valid access removal is not rejected by an earlier audit-time observation                                                       | Completed after #33; final hosted Testing evidence is recorded                                                                                                                                                                                                                                                                                        |
 | [Page and capability projection #38](https://github.com/Abzum-NZ/Abzum-Vortex/issues/38)     | Only permitted pages, shared layouts, nested content and controls appear in the shared interface description                            | Done: exact V1/V2 stored handoff and shared-layout projection passed independent review and [complete hosted Testing verification](../evidence/issue-38-native-page-handoff.md#successful-hosted-verification). [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) owns installed runtime use; conversion/designer work is not a prerequisite. |
 | [Permission-aware caching #39](https://github.com/Abzum-NZ/Abzum-Vortex/issues/39)           | Any cached result preserves exact organisation/account scope, current authority and expiry                                              | Phase 5: after [query #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54), before live refresh [#56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56); no Phase 3 cache framework, counter or fixed 60-second policy                                                                                                                          |
-| [Access activity integration #41](https://github.com/Abzum-NZ/Abzum-Vortex/issues/41)        | Permission changes and refused operations use the shared content-free history                                                           | [Reviewed implementation plan](issue-41-access-activity.md) retains existing completed events; the refusal writer is implemented fresh through the normal migration and review gates — this task is not awaiting any user approval and has no unmet technical dependency                                                                              |
+| [Access activity integration #41](https://github.com/Abzum-NZ/Abzum-Vortex/issues/41) | Permission changes and refused operations use the shared content-free history | [Reviewed implementation plan](issue-41-access-activity.md) retains existing completed events; fresh refusal integration uses current applicable tool authorization and normal migration/review checks. No rejected payload is recovered or replayed; completed native prerequisites do not override a tool restriction. |
 
 The shared condition foundation in #36 precedes [the later condition builder #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57); neither task creates a second condition language. [Headless entitlement policy #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) precedes its first resource-limited consumer, without turning commercial billing into core functionality.
 
@@ -424,7 +428,7 @@ Build:
 
 Exit proof:
 
-- CRM, Service Desk and HR fixture definitions compile/publish with exact module dependencies. File-defined runtime proof must exercise the complete declared capabilities before designer work, including later-numbered workflow and connection engines where used. [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) retains the broader final cross-phase and MCP proof; [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) retains the later editable HR builder proof. Neither a compiled fixture nor a partial Phase 6 screenshot substitutes for the engine-first runtime proof.
+- CRM, Service Desk and HR fixture definitions compile/publish with exact module dependencies. The first usable Phase 4–6 file-defined runtime proof [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327) precedes designer work. [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254) owns later workflow, connection/interface, sharing/federation, IAM-journey, Designer and MCP evidence; those engines progress on their own dependencies. [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) retains the later editable HR builder proof. Neither a compiled fixture nor a partial Phase 6 screenshot substitutes for #327's installed runtime acceptance.
 - Every fixture page passes desktop, phone, keyboard, validation, empty, refused, conflict and failure checks that apply.
 - Internal navigation never performs a routine full document reload; slow routes and blocks show immediate local feedback, and refreshing data updates only affected components and dependent totals without losing unrelated state.
 - A delayed response or unfinished animation for an obsolete record, page, or access state never flashes or replaces the current authorised state; no feature defines its own motion timing or spring.

@@ -99,8 +99,10 @@ decision, row and field enforcement from
 [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) and
 [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37), plus the existing
 [migration foundation #139](https://github.com/Abzum-NZ/Abzum-Vortex/issues/139).
-Catalogue and generic provisioning development may proceed before those integrated
-checks complete; no active installation or protected data path is claimed early.
+Both #43 and #45 retain native #37 blocked-by relationships for their integrated
+acceptance. Inactive structural provisioning and catalogue development may proceed
+independently before those checks complete; no active installation or protected
+data path is claimed early.
 
 The next read-only slice supplies [exact active installation evidence](issue-43-active-installation-read.md),
 including locally owned Applications with exact shared external Modules. It does

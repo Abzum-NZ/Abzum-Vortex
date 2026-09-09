@@ -87,11 +87,12 @@ not append successes, arbitrary actions, subjects or values.
 
 An earlier session's attempt to create that persistent privileged function was
 rejected by a tool security check; nothing was applied and the CLI-created empty
-migration was removed. That denial bound only that session's action. This task
-is not awaiting user approval and has no unmet native dependency: the assigned
-developer implements the reviewed private append wrapper fresh from current
-source through the normal migration and review gates. The exact rejected payload
-is not recovered or retried through another actor or mechanism.
+migration was removed. Fresh implementation starts from current source and uses
+current applicable tool authorization and normal migration and review checks.
+The prior denial is not assumed to expire with its session. No rejected payload
+is recovered or replayed through another actor or mechanism. Any current tool
+restriction is reported as such; it creates no new product dependency and does
+not stop independent engine work.
 
 ## Later owners
 
