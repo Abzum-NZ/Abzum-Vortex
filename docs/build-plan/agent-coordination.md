@@ -13,6 +13,12 @@ review on newly assigned work; historical review receipts remain accurate.
 | Claude Opus 5     | Implement the assigned plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction.                                   |
 | User              | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate.                                                                                                                              |
 
+After the current compatibility task, Fable 5.1 reviews the full codebase,
+specification and GitHub issues. Codex assesses findings; Fable 5 then updates
+agreed specifications/tasks and breaks implementation down for Opus 5 (senior)
+and Sonnet 5 (intermediate). Codex coordinates and independently verifies their
+work. This does not authorize simultaneous conflicting edits or duplicate reviews.
+
 The [GitHub project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) remains
 the task board. Issues hold scope, acceptance, dependencies and status. Existing
 task-plan documents hold material design reasoning. Pull requests hold changes
@@ -32,6 +38,10 @@ separate worktrees. Never run competing dependency installations or edits in one
 working copy. Preserve unrelated user changes. Review the submitted commit; if
 it changes, review the affected differences and rerun relevant checks rather than
 repeating unrelated completed reviews.
+
+Observe live progress. Repeated searches, retries or rewrites without new evidence
+require intervention: clarify the task, resolve a demonstrated blocker or reassign
+it. Do not restart a live session solely because an observation timed out.
 
 ## Scope and communication rules
 
