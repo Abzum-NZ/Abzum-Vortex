@@ -8,17 +8,19 @@ review on newly assigned work; historical review receipts remain accurate.
 
 | Owner             | Work                                                                                                                                                                                                                                    |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Codex coordinator | Select dependency-ready tasks; rewrite clear scope and acceptance; commission architecture; independently review actual implementation; maintain GitHub and verify specification/build-plan synchronization; merge after normal checks. |
+| Codex coordinator | Select dependency-ready tasks, commission reviews, dispatch Astra-corrected handoffs, monitor drift/blockers and usage, maintain progress, and coordinate delivery after normal checks. |
+| GPT-6 Astra | Act as BA and Tester. Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. Independently verify actual implementation and record remaining findings. |
 | Claude Fable 5.1  | Own every full-system review across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Choose the simplest sufficient design. Do not use for routine work or implement unless explicitly reassigned. |
 | Claude Opus 5     | Implement the assigned plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction.                                   |
 | Claude Sonnet 5   | Handle bounded intermediate implementation, focused analysis and well-specified follow-up work. Escalate architectural ambiguity instead of expanding scope.                                                                             |
 | User              | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate.                                                                                                                              |
 
 After the current compatibility task, Fable 5.1 reviews the full codebase,
-specification and GitHub issues. Codex assesses findings; Fable 5 then updates
-agreed specifications/tasks and breaks implementation down for Opus 5 (senior)
-and Sonnet 5 (intermediate). Codex coordinates and independently verifies their
-work. This does not authorize simultaneous conflicting edits or duplicate reviews.
+specification and GitHub issues. Astra assesses findings and directly corrects
+agreed specifications, plans, tasks and dependencies before the coordinator
+dispatches bounded implementation to Opus 5 (senior) and Sonnet 5 (intermediate).
+Astra independently verifies their work. This does not authorize simultaneous
+conflicting edits or duplicate reviews.
 
 The [GitHub project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) remains
 the task board. Issues hold scope, acceptance, dependencies and status. Existing
@@ -32,7 +34,8 @@ not as a substitute for a clear current description.
 
 ## Task handoff
 
-The coordinator supplies the issue, exact base revision, working directory,
+After Astra reviews and corrects the task handoff, the coordinator supplies the
+issue, exact base revision, working directory,
 branch, role, functional outcome, included/excluded work, relevant references,
 required checks and stopping point. Each session verifies these before acting.
 Use separate architecture and development sessions with explicit model selection;
@@ -64,6 +67,13 @@ then resume the already assigned work without creating duplicate sessions.
 - Fix the demonstrated cause using existing services and contracts. Before adding
   a framework, counter, fingerprint, fallback, guard or approval process, identify
   the concrete failure that existing transactions/revisions cannot address.
+- Treat the repository, database schema and supporting configuration as active
+  development work. When the cause is in an engine, contract or schema, correct it
+  there rather than preserving an unsuitable shape with wrappers or compatibility
+  layers. Keep compatibility only where a published product behaviour genuinely
+  relies on it. Astra applies this rule when correcting the handoff before
+  developers receive it; required access and data-integrity rules remain part
+  of the owning engine's contract.
 - No unrelated refactoring, dependency upgrades, infrastructure work, visual
   designer work or extra features. Discuss a necessary scope expansion with the
   coordinator before implementing it. Discovery alone does not authorize it.
@@ -76,7 +86,8 @@ then resume the already assigned work without creating duplicate sessions.
 - Business ambiguity: ask the coordinator, who asks the user only when needed.
   Technical dependency: identify it and continue independent assigned work.
   Low-priority maintenance: recommend backlog. Engineering detail: architect
-  decides, documents material reasoning, developer implements, coordinator reviews.
+  decides, documents material reasoning, Astra corrects the handoff, developer
+  implements and Astra verifies.
 - Prior safety denials remain binding across tools and agents. Do not recover a
   rejected patch from an older worktree or execute it through Claude as a workaround.
   No permission-bypass mode, credential copying, broad reset or silent deployment.
@@ -85,9 +96,10 @@ then resume the already assigned work without creating duplicate sessions.
 
 Return: changed functionality; files/commit; tests actually run and results;
 remaining acceptance gaps; necessary spec/plan/task updates; and any real blocker.
-The coordinator reviews the patch against the issue and approved product model,
-returns specific findings to the developer, and merges only after applicable
-checks pass. Existing independent approval is reused for unchanged work.
+Astra reviews the patch against the issue and approved product model and corrects
+any planning or acceptance errors before the coordinator returns specific
+implementation findings to the developer. The coordinator merges only after
+applicable checks pass. Existing independent approval is reused for unchanged work.
 
 User reports use Completed, Coming up, Pending User Decision and Overall Progress
 rows, with linked tasks and functional descriptions. Overall Progress counts all

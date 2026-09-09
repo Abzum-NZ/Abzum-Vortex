@@ -20,7 +20,7 @@ People and agents build the same applications already proven from files. The App
 
 ## Acceptance criteria
 
-- [ ] The complete file-defined application proof passed before production designer implementation begins; retained prototype completion follows that engine proof.
+- [ ] The first usable Phase 4–6 definition-led application proof #327 passed before production designer implementation begins; retained prototype completion follows that proof. Later workflow, connection/interface, sharing/federation, IAM-journey, MCP and designer evidence belongs to #254 and does not gate #327.
 - [ ] Create, edit, save/reopen, validate, preview, publish, deliberately install/upgrade and restore an application without a separate representation or engine.
 - [ ] Designer-authored definitions pass the same fixture/reference and real application scenarios as file-authored definitions. A change requires no example-specific core code.
 - [ ] Page/flow selection, slot ownership, typed settings and semantic identities round-trip without loss. Illegal composition and stale edits produce useful errors.

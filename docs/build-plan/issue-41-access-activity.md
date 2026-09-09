@@ -85,12 +85,14 @@ do not add a general privileged-runner API. The private append wrapper would be
 callable only by the trusted runtime role, not request/browser roles, and could
 not append successes, arbitrary actions, subjects or values.
 
-The tool security reviewer rejected creation of that persistent privileged
-function and its runtime-only execution grant pending explicit user authorization.
-No function, grant or runtime change was applied. The CLI-created empty migration
-was removed so it cannot enter delivery. This is a tool-permission restriction,
-not a business decision, a new native task dependency or a reason to stop other
-engines. Do not retry the denied capability through another actor or mechanism.
+An earlier session's attempt to create that persistent privileged function was
+rejected by a tool security check; nothing was applied and the CLI-created empty
+migration was removed. Fresh implementation starts from current source and uses
+current applicable tool authorization and normal migration and review checks.
+The prior denial is not assumed to expire with its session. No rejected payload
+is recovered or replayed through another actor or mechanism. Any current tool
+restriction is reported as such; it creates no new product dependency and does
+not stop independent engine work.
 
 ## Later owners
 

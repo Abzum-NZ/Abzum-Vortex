@@ -24,7 +24,7 @@ flowchart TD
 | Access grant | A source organisation's limited, approved, and revocable permission for a named recipient context to use specified records, actions, and fields under [Shared-record access](../04-access-and-permissions.md#shared-record-access). |
 | Action | A named operation that participates in one [record save](../08-forms-actions-rules-and-events.md#actions). |
 | Application | A published user experience composed from modules, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md). |
-| Application binding | Application-specific settings attached to a reusable module field or record type, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#application-level-bindings). |
+| Application binding | Application-specific settings attached to a reusable module field or record type, described in [Modules, fields and relationships](../05-modules-fields-and-relationships.md#extension-points). |
 | Application role | A collection of permissions inside one [application](../04-access-and-permissions.md#application-roles). |
 | Grant consent | Immutable source authorisation and recipient acceptance over one exact cross-organisation grant proposal under the [grant-consent contract](data-contracts.md#grant-consent-contract). It is not a general business approval. |
 | Attachment | A record field linking one or more files under [Files and attachments](../11-files-and-attachments.md). |
@@ -47,7 +47,7 @@ flowchart TD
 | Federation | A signed Vortex-to-Vortex request that lets a recipient use source-owned records across clusters without database credentials or a persistent recipient copy under [Vortex federation](../17-runtime-storage-and-caching.md#vortex-federation-between-clusters). |
 | Gallery | A reviewed catalogue of definition packages under [Copying, sharing, import and export](../16-copying-sharing-import-export.md#gallery). |
 | Global identity | One human sign-in that can be linked to a separate account in several organisations under [People, organisations and sign-in](../02-people-organisations-and-sign-in.md). |
-| Guided form | A form split into two to twenty steps and committed once, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#forms-and-guided-forms). |
+| Guided form | A form split into two to twenty steps that may commit once from a summary or explicitly sequence several individually atomic protected operations, described in [Applications, navigation, pages and themes](../07-applications-pages-and-themes.md#forms-and-guided-forms). |
 | Interface | A versioned catalogue of operations for approved software callers, described in [Connections, programmable interfaces and MCP](../12-connections-and-interfaces.md#programmable-interfaces). |
 | Model Context Protocol (MCP) | The standard protocol used by an authorised external client to discover and invoke the same permission-filtered capabilities a person can use in Vortex, under [Governed MCP access](../12-connections-and-interfaces.md#governed-mcp-access). It does not mean Vortex embeds a model or assistant. |
 | Legal hold | A protected instruction that prevents permanent removal of matching data under [Activity history, privacy and retention](../14-activity-privacy-and-retention.md#legal-holds). |

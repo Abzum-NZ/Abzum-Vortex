@@ -1,14 +1,12 @@
 # Phase 3 — Row-policy composition
 
-Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites: completed [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) and completed [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36). Its [exact hosted receipt](../evidence/issue-36-record-visibility.md#exact-hosted-completion-verified--8-september-2026) is verified against the delivered source and selected coverage. The available [access administration #40](issue-40-protected-access-administration.md) compositions were delivered first through [PR #332](https://github.com/Abzum-NZ/Abzum-Vortex/pull/332). The approved removal-only cleanup was independently reviewed and locally verified through [PR #334](https://github.com/Abzum-NZ/Abzum-Vortex/pull/334); [PR #335](https://github.com/Abzum-NZ/Abzum-Vortex/pull/335) repairs its unapplied migration ordering. Its [exact hosted result](../evidence/issue-40-access-administration.md#exact-hosted-completion-verified--8-september-2026) is now verified and #40 is complete. Continue available engine work rather than creating a new whole-project hold.
+Task: [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35). Prerequisites are complete: [central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), [ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) and [access administration #40](issue-40-protected-access-administration.md), each with verified exact hosted evidence.
 
-Before delivering #35, generate fresh timestamps for its two still-unapplied local migrations so they follow the repaired Testing migration `20260907221412`. Preserve their reviewed SQL and apply the normal migration gate; do not use history repair or an out-of-order bypass.
-
-Recheck the latest delivered migration at that time: the field-catalogue migration
-in [PR #336](https://github.com/Abzum-NZ/Abzum-Vortex/pull/336) may be delivered
-first. Migration ordering follows actual delivery, not an earlier local filename.
-
-The [typed exact-record handoff](../evidence/issue-35-record-access-enforcement.md#typed-exact-record-handoff--8-september-2026) is implemented and independently reviewed. This source checkpoint adds no default database adapter and does not complete the still-unmerged SQL delivery or its narrow fixed-limit authorization.
+The earlier local implementation candidate and its unmerged migrations are set
+aside and are not recovered, copied or reassigned. The assigned developer
+implements this task fresh from current source and the requirements below,
+creating new migrations through the normal migration gate and current ordering.
+The reviewed [typed exact-record handoff](../evidence/issue-35-record-access-enforcement.md#typed-exact-record-handoff--8-september-2026) remains a source checkpoint only; it adds no default database adapter and is not a delivered record policy.
 
 ## Outcome
 
@@ -97,20 +95,14 @@ wait for #45 to prove their engines on controlled neutral tables, and #45 does
 not receive a bypass around those engines. No second driver, authority store,
 caller-selected helper or generic dispatcher is required.
 
-### Narrow implementation authorization — 8 September 2026
+### Implementation restart — 9 September 2026
 
-The unfinished local implementation currently refuses record decisions when the
-application has more than 1,000 record permissions and caps recursive traversal at
-1,000. This is not an approved product-size limit. Review recommends retaining the
-existing published-graph bound and cycle refusal without the unrelated fixed
-application-size cutoff. An automated safety check rejected removing the fixed
-upper bounds because larger traversals can exhaust database resources. The change
-was not applied or retried. A narrow tool-execution authorization has been requested
-for the graph-bound/cycle-preserving replacement; this is not product approval of
-either limit. Without that authorization the cutoff remains in the unfinished
-local candidate pending a separately authorized safe change. Only this edit awaits
-authorization, not the remaining implementation or tests. Do not describe the
-cutoff as a permanent product requirement or claim it was removed.
+The prior local candidate refused record decisions above fixed 1,000-permission
+and recursion cutoffs. Neither cutoff is an approved product behaviour, and the
+candidate is not recovered. The fresh implementation uses the existing
+published-graph bound and cycle refusal as its traversal safeguards; any
+additional resource bound requires current evidence and belongs to
+implementation and testing, not business behaviour.
 
 This task proves the policy shape that [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) will install. #45 owns real storage mappings, Definition-derived physical tables and generated integration. It continues to depend on #35; #35 does not depend on #45 or a new storage subtask. That avoids a cycle through the Phase 3 epic and Phase 4 installation tasks.
 
