@@ -75,6 +75,19 @@ delegation permits governance of the new permission without granting its use.
 
 This establishes the base application runtime; it does not replace the complete multi-application/workflow/connection proof in the [engine-first plan](engine-first-application-delivery.md). All visual navigation editing, palettes, inspectors and canvas authoring move to [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65). Module editing remains [#52](https://github.com/Abzum-NZ/Abzum-Vortex/issues/52). Runtime access/theme extensions remain [#69](https://github.com/Abzum-NZ/Abzum-Vortex/issues/69) and [#71](https://github.com/Abzum-NZ/Abzum-Vortex/issues/71).
 
+## Set-wise page eligibility and launcher data — 9 September 2026
+
+Before the page runtime integrates [#69](https://github.com/Abzum-NZ/Abzum-Vortex/issues/69)
+and this task's rendering path, permission eligibility for a page's placements
+must be resolvable set-wise: one authorised database round trip returns the
+eligibility of every placement-relevant permission for the current context,
+rather than one database eligibility call per placement. Where practical,
+organisation scope resolution also returns the organisation display data the
+launcher needs, so opening an application does not repeat a separate launcher
+lookup. This is a task and specification requirement for the #69/#64
+integration, not an instruction to implement caching or batching now, and it
+changes no authorisation semantics.
+
 ## References
 
 - [Application specification](../specification/07-applications-pages-and-themes.md)

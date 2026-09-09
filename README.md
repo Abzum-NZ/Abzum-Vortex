@@ -12,8 +12,8 @@ apart from every other organisation's.
 
 | Document | Where |
 |---|---|
-| Platform Specification 2.12 | [docs/specification/README.md](docs/specification/README.md) |
-| Build Plan 2.11 | [docs/build-plan/README.md](docs/build-plan/README.md) |
+| Platform Specification 2.21 | [docs/specification/README.md](docs/specification/README.md) |
+| Build Plan 2.23 | [docs/build-plan/README.md](docs/build-plan/README.md) |
 | Open business decisions | [docs/specification/appendices/decisions.md](docs/specification/appendices/decisions.md) |
 | Coverage of the earlier specification and plan | [docs/specification/appendices/traceability.md](docs/specification/appendices/traceability.md) |
 | Specification-to-GitHub task coverage | [docs/specification/appendices/github-delivery-map.md](docs/specification/appendices/github-delivery-map.md) |
@@ -21,7 +21,7 @@ apart from every other organisation's.
 | Earlier Platform Specification (superseded source) | [33 chapters and 5 appendices](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4) |
 | Earlier Build Plan (superseded source) | [Prerequisites, dependency map and ten phases](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef) |
 
-Platform Specification 2.12 and Build Plan 2.11 are authoritative. Change the specification before
+Platform Specification 2.21 and Build Plan 2.23 are authoritative. Change the specification before
 changing behaviour, never after.
 
 ## What runs
@@ -335,12 +335,19 @@ The organisation's short name is the first path segment under the
 https://vortex.abzum.com/{organisation}/{application}/{page}
 ```
 
-People sign in at one address, outside any organisation. The Tenant Portal is an application like any
+People sign in at one address, outside any organisation. Tenant Administration is an application like any
 other, and every organisation has it installed, so it appears under that organisation's own segment
 beside every other application.
 
+Two route families coexist deliberately. Platform account and administration routes keep their own
+first segments — today `auth`, `health`, `organizations` and `signed-in`, with
+`/organizations/{organizationId}` addressing platform-level organisation administration — while
+definition-led runtime application routes use the organisation/application/page form above. Neither
+family silently replaces the other.
+
 The first path segment therefore holds both organisation short names and the platform's own paths. So
-the platform reserves `signin`, `auth`, `health` and `api`, and refuses them as short names. The
+the platform reserves every first segment it actually serves — currently `auth`, `health`,
+`organizations` and `signed-in` — plus `signin` and `api`, and refuses them all as short names. The
 platform reads that reserved list from the same table it reads
 addresses from. Add a path to the platform, and add it to that list in the same change.
 

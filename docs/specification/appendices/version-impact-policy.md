@@ -147,7 +147,7 @@ Changing a placed block's tagged setting value or reference is major unless the 
 
 ## Workflow-node policy
 
-The governed [24-node catalogue](../09-workflows-and-pipelines.md#first-release-node-catalogue) is generic. Adding a workflow or reachable node changes executable behaviour and is major. Removing, retyping, reconnecting, or changing any node is major. Node/edge array reorder alone is no change.
+The governed [24-node catalogue](../09-workflows-and-pipelines.md#safe-workflow-node-catalogue) is generic. Adding a workflow or reachable node changes executable behaviour and is major. Removing, retyping, reconnecting, or changing any node is major. Node/edge array reorder alone is no change.
 
 | Node | Major configuration |
 |---|---|
