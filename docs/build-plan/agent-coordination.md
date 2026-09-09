@@ -64,6 +64,11 @@ then resume the already assigned work without creating duplicate sessions.
 - Fix the demonstrated cause using existing services and contracts. Before adding
   a framework, counter, fingerprint, fallback, guard or approval process, identify
   the concrete failure that existing transactions/revisions cannot address.
+- Treat the repository, database schema and supporting configuration as active
+  development work. When the cause is in an engine, contract or schema, correct it
+  there rather than preserving an unsuitable shape with wrappers or compatibility
+  layers. Keep compatibility only where a published product behaviour genuinely
+  relies on it.
 - No unrelated refactoring, dependency upgrades, infrastructure work, visual
   designer work or extra features. Discuss a necessary scope expansion with the
   coordinator before implementing it. Discovery alone does not authorize it.
