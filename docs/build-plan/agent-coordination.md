@@ -9,8 +9,9 @@ review on newly assigned work; historical review receipts remain accurate.
 | Owner             | Work                                                                                                                                                                                                                                    |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Codex coordinator | Select dependency-ready tasks; rewrite clear scope and acceptance; commission architecture; independently review actual implementation; maintain GitHub and verify specification/build-plan synchronization; merge after normal checks. |
-| Claude Fable 5.1  | Inspect the existing system, choose the simplest sufficient design, identify concrete gaps and provide an implementable plan. Do not implement unless explicitly reassigned.                                                            |
+| Claude Fable 5.1  | Own every full-system review across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Choose the simplest sufficient design. Do not use for routine work or implement unless explicitly reassigned. |
 | Claude Opus 5     | Implement the assigned plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction.                                   |
+| Claude Sonnet 5   | Handle bounded intermediate implementation, focused analysis and well-specified follow-up work. Escalate architectural ambiguity instead of expanding scope.                                                                             |
 | User              | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate.                                                                                                                              |
 
 After the current compatibility task, Fable 5.1 reviews the full codebase,
@@ -23,6 +24,11 @@ The [GitHub project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) remain
 the task board. Issues hold scope, acceptance, dependencies and status. Existing
 task-plan documents hold material design reasoning. Pull requests hold changes
 and review results. Do not build another coordination service or duplicate board.
+
+Keep the issue description current: replace or remove obsolete or irrelevant
+scope instead of preserving it under corrective comments. Retain applicable
+requirements and dependencies. Use comments for review evidence and progress,
+not as a substitute for a clear current description.
 
 ## Task handoff
 
@@ -42,6 +48,10 @@ repeating unrelated completed reviews.
 Observe live progress. Repeated searches, retries or rewrites without new evidence
 require intervention: clarify the task, resolve a demonstrated blocker or reassign
 it. Do not restart a live session solely because an observation timed out.
+Track session and model-specific usage. Fable 5.1 consumes its allowance faster,
+so reserve it for the complex responsibilities above and scope broad reviews into
+coherent passes. If a limit is exhausted, stop retries, wait for the stated reset,
+then resume the already assigned work without creating duplicate sessions.
 
 ## Scope and communication rules
 

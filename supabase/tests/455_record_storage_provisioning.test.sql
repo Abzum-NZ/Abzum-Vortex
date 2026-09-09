@@ -1,5 +1,5 @@
 begin;
-select plan(31);
+select plan(44);
 
 set local search_path = pg_catalog, extensions, public;
 
@@ -148,6 +148,109 @@ as $function$
   )
 $function$;
 
+create function pg_temp.single_record_type(
+  p_record_type_id uuid,
+  p_storage_contract_id uuid,
+  p_field_id uuid
+)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'recordTypeId', p_record_type_id,
+    'storageContractId', p_storage_contract_id,
+    'storageScope', 'organization_shared',
+    'ownershipMode', 'group',
+    'fields', pg_catalog.jsonb_build_array(
+      pg_temp.storage_field(p_field_id, 'text', true)
+    ),
+    'relationships', '[]'::jsonb
+  )
+$function$;
+
+create function pg_temp.storage_rule_graph(p_record_type_id uuid)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'ruleId', 'b4550000-0000-4000-8000-000000000001',
+    'key', 'storage_test_rule',
+    'subjectRecordTypeId', p_record_type_id,
+    'profile', 'before_save',
+    'graphVersion', '1.0.0',
+    'priority', 0,
+    'inputs', '[]'::jsonb,
+    'variables', '[]'::jsonb,
+    'nodes', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'nodeId', 'b4550000-0000-4000-8000-000000000002',
+        'nodeVersion', '1.0.0',
+        'type', 'start',
+        'operations', pg_catalog.jsonb_build_array('create', 'update')
+      ),
+      pg_catalog.jsonb_build_object(
+        'nodeId', 'b4550000-0000-4000-8000-000000000003',
+        'nodeVersion', '1.0.0',
+        'type', 'finish'
+      )
+    ),
+    'edges', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'fromNodeId', 'b4550000-0000-4000-8000-000000000002',
+      'port', 'next',
+      'toNodeId', 'b4550000-0000-4000-8000-000000000003'
+    ))
+  )
+$function$;
+
+create function pg_temp.versioned_module_output(
+  p_root_id uuid,
+  p_validation_contract_version text,
+  p_record_type jsonb,
+  p_rules jsonb default null
+)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'kind', 'module',
+    'validationContractVersion', p_validation_contract_version,
+    'canonical', pg_catalog.jsonb_build_object(
+      'envelope', pg_catalog.jsonb_build_object('rootId', p_root_id),
+      'content', pg_catalog.jsonb_build_object(
+        'recordTypes', pg_catalog.jsonb_build_array(p_record_type)
+      ) || case
+        when p_rules is null then '{}'::jsonb
+        else pg_catalog.jsonb_build_object('rules', p_rules)
+      end
+    )
+  )
+$function$;
+
+create function pg_temp.refused_module_output()
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_temp.versioned_module_output(
+    '44550000-0000-4000-8000-000000000005', '3.0.0',
+    pg_temp.single_record_type(
+      '54550000-0000-4000-8000-000000000006',
+      '64550000-0000-4000-8000-000000000006',
+      '74550000-0000-4000-8000-000000000009'
+    ),
+    pg_catalog.jsonb_build_array(
+      pg_temp.storage_rule_graph('54550000-0000-4000-8000-000000000006')
+    )
+  )
+$function$;
+
 create function pg_temp.initialize_storage_context(
   p_organization_id uuid default '24550000-0000-4000-8000-000000000001',
   p_organization_account_id uuid default '54550000-0000-4000-8000-000000000010',
@@ -216,6 +319,18 @@ select ok(
     'vortex_request', 'vortex_record.provision_exact_module_storage(uuid,bigint)', 'EXECUTE'
   ),
   'only Module owns invocation of the private Record generator'
+);
+select ok(
+  (
+    select pg_catalog.pg_get_userbyid(procedure.proowner) = 'vortex_record_owner'
+      and procedure.prosecdef
+      and procedure.provolatile = 'v'
+      and procedure.proconfig = array['search_path=""']
+    from pg_catalog.pg_proc as procedure
+    where procedure.oid =
+      'vortex_record.provision_exact_module_storage(uuid,bigint)'::regprocedure
+  ),
+  'the Record generator keeps its owner, definer rights and empty search path'
 );
 select ok(
   pg_catalog.has_function_privilege(
@@ -1031,6 +1146,439 @@ select throws_ok(
   '42501'::char(5), null,
   'the request role cannot bypass Record through the generated table'::text);
 reset role;
+
+insert into vortex_definition.roots (
+  root_id, organization_id, kind, key, created_at, created_by
+) values
+  (
+    '44550000-0000-4000-8000-000000000003',
+    '24550000-0000-4000-8000-000000000002', 'module',
+    'vortex.storage_test.native_v3_module', pg_catalog.statement_timestamp(),
+    '94550000-0000-4000-8000-000000000001'
+  ),
+  (
+    '44550000-0000-4000-8000-000000000004',
+    '24550000-0000-4000-8000-000000000002', 'module',
+    'vortex.storage_test.rule_upgrade_module', pg_catalog.statement_timestamp(),
+    '94550000-0000-4000-8000-000000000001'
+  ),
+  (
+    '44550000-0000-4000-8000-000000000005',
+    '24550000-0000-4000-8000-000000000002', 'module',
+    'vortex.storage_test.refused_module', pg_catalog.statement_timestamp(),
+    '94550000-0000-4000-8000-000000000001'
+  );
+
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+) values (
+  '44550000-0000-4000-8000-000000000003', 1, '1.0.0',
+  pg_catalog.jsonb_build_object(
+    'source_contract_version', '3.0.0', 'kind', 'module',
+    'key', 'vortex.storage_test.native_v3_module'
+  ),
+  'sha256:' || pg_catalog.repeat('a', 64), '3.0.0',
+  pg_temp.versioned_module_output(
+    '44550000-0000-4000-8000-000000000003', '3.0.0',
+    pg_temp.single_record_type(
+      '54550000-0000-4000-8000-000000000004',
+      '64550000-0000-4000-8000-000000000004',
+      '74550000-0000-4000-8000-000000000007'
+    ),
+    pg_catalog.jsonb_build_array(
+      pg_temp.storage_rule_graph('54550000-0000-4000-8000-000000000004')
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    'fingerprint', 'sha256:' || pg_catalog.repeat('b', 64)
+  ),
+  'sha256:' || pg_catalog.repeat('c', 64),
+  'sha256:' || pg_catalog.repeat('b', 64), '3.0.0',
+  'sha256:' || pg_catalog.repeat('d', 64), '[]'::jsonb,
+  'Native Module V3 storage release.', pg_catalog.statement_timestamp(),
+  '94550000-0000-4000-8000-000000000001'
+);
+
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+)
+select '44550000-0000-4000-8000-000000000004'::uuid, release.revision,
+  release.release_version,
+  pg_catalog.jsonb_build_object(
+    'source_contract_version', release.contract_version, 'kind', 'module',
+    'key', 'vortex.storage_test.rule_upgrade_module'
+  ),
+  'sha256:' || pg_catalog.repeat('e', 64), release.contract_version,
+  pg_temp.versioned_module_output(
+    '44550000-0000-4000-8000-000000000004', release.contract_version,
+    pg_temp.single_record_type(
+      '54550000-0000-4000-8000-000000000005',
+      '64550000-0000-4000-8000-000000000005',
+      '74550000-0000-4000-8000-000000000008'
+    ),
+    case when release.contract_version = '3.0.0' then pg_catalog.jsonb_build_array(
+      pg_temp.storage_rule_graph('54550000-0000-4000-8000-000000000005')
+    ) end
+  ),
+  pg_catalog.jsonb_build_object(
+    'fingerprint', 'sha256:' || pg_catalog.repeat(release.revision::text, 64)
+  ),
+  'sha256:' || pg_catalog.repeat(release.content_digit, 64),
+  'sha256:' || pg_catalog.repeat(release.revision::text, 64),
+  release.contract_version, 'sha256:' || pg_catalog.repeat('e', 64), '[]'::jsonb,
+  release.release_note, pg_catalog.statement_timestamp(),
+  '94550000-0000-4000-8000-000000000001'::uuid
+from (
+  values
+    (
+      1::bigint, '2.0.0', '1.0.0', '7',
+      'Rule-upgrade Module V2 storage release.'
+    ),
+    (
+      2::bigint, '3.0.0', '1.1.0', '8',
+      'Rule-only Module V3 storage release.'
+    )
+) as release(revision, contract_version, release_version, content_digit, release_note);
+
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+)
+select '44550000-0000-4000-8000-000000000005'::uuid, gate.revision,
+  gate.revision::text || '.0.0',
+  pg_catalog.jsonb_build_object(
+    'source_contract_version', gate.source_contract_version, 'kind', 'module',
+    'key', 'vortex.storage_test.refused_module'
+  ),
+  'sha256:' || pg_catalog.repeat('5', 64), gate.source_contract_version,
+  gate.compilation_output,
+  pg_catalog.jsonb_build_object(
+    'fingerprint', 'sha256:' || pg_catalog.repeat(gate.revision::text, 64)
+  ),
+  'sha256:' || pg_catalog.repeat(gate.revision::text, 64),
+  'sha256:' || pg_catalog.repeat(gate.revision::text, 64),
+  gate.validation_contract_version, 'sha256:' || pg_catalog.repeat('5', 64),
+  '[]'::jsonb, gate.release_note, pg_catalog.statement_timestamp(),
+  '94550000-0000-4000-8000-000000000001'::uuid
+from (
+  values
+    (
+      1::bigint, '2.0.0', '3.0.0', pg_temp.refused_module_output(),
+      'Refused source and validation contract disagreement.'
+    ),
+    (
+      2::bigint, '3.0.0', '3.0.0',
+      pg_catalog.jsonb_set(
+        pg_temp.refused_module_output(), '{validationContractVersion}',
+        '"2.0.0"'::jsonb
+      ),
+      'Refused embedded validation contract disagreement.'
+    ),
+    (
+      3::bigint, '4.0.0', '4.0.0',
+      pg_catalog.jsonb_set(
+        pg_temp.refused_module_output(), '{validationContractVersion}',
+        '"4.0.0"'::jsonb
+      ),
+      'Refused unsupported Module validation contract.'
+    ),
+    (
+      4::bigint, '3.0.0', '3.0.0', pg_temp.refused_module_output() - 'kind',
+      'Refused missing embedded definition kind.'
+    ),
+    (
+      5::bigint, '3.0.0', '3.0.0',
+      pg_catalog.jsonb_set(
+        pg_temp.refused_module_output(), '{canonical,envelope}', '{}'::jsonb
+      ),
+      'Refused missing embedded root identity.'
+    )
+) as gate(revision, source_contract_version, validation_contract_version,
+  compilation_output, release_note);
+
+set local role vortex_module_owner;
+create temporary table native_v3_provision on commit drop as
+select * from vortex_record.provision_exact_module_storage(
+  '44550000-0000-4000-8000-000000000003', 1
+);
+reset role;
+select is(
+  (
+    select pg_catalog.concat_ws(':', changed, generator_contract_version,
+      pg_catalog.array_to_string(storage_contract_ids, ','))
+    from native_v3_provision
+  ),
+  't:1.0.0:64550000-0000-4000-8000-000000000004',
+  'a native Module V3 release provisions its exact storage under generator contract 1.0.0');
+select ok(
+  (
+    select catalogue.physical_table_token = 'rt_64550000000040008000000000000004'
+      and catalogue.first_compatible_release_revision = 1
+      and catalogue.last_compatible_release_revision = 1
+      and catalogue.state = 'active'
+      and catalogue.generator_contract_version = '1.0.0'
+      and pg_catalog.to_regclass(
+        'record_data.rt_64550000000040008000000000000004'
+      ) is not null
+      and exists (
+        select 1 from pg_catalog.pg_attribute as attribute
+        where attribute.attrelid =
+          'record_data.rt_64550000000040008000000000000004'::regclass
+          and attribute.attname = 'f_74550000000040008000000000000007'
+          and attribute.attnum > 0 and not attribute.attisdropped
+      )
+      and exists (
+        select 1
+        from vortex_record.release_provisions as provision
+        join vortex_definition.releases as release
+          on release.root_id = provision.module_root_id
+          and release.release_revision = provision.release_revision
+        where provision.module_root_id = '44550000-0000-4000-8000-000000000003'
+          and provision.release_revision = 1
+          and provision.content_fingerprint = release.content_fingerprint
+          and provision.resolution_fingerprint = release.resolution_fingerprint
+          and provision.generator_contract_version = '1.0.0'
+          and provision.storage_contract_ids =
+            array['64550000-0000-4000-8000-000000000004'::uuid]
+      )
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = '64550000-0000-4000-8000-000000000004'
+  ),
+  'native Module V3 storage records its table, column and exact provision receipt');
+
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+) values (
+  '34550000-0000-4000-8000-000000000002', 1, '1.0.0',
+  pg_catalog.jsonb_build_object(
+    'source_contract_version', '1.0.0', 'kind', 'application',
+    'key', 'vortex.storage_test.other_application'
+  ),
+  'sha256:' || pg_catalog.repeat('3', 64), '1.0.0',
+  pg_temp.application_output('34550000-0000-4000-8000-000000000002'),
+  pg_catalog.jsonb_build_object(
+    'fingerprint', 'sha256:' || pg_catalog.repeat('3', 64)
+  ),
+  'sha256:' || pg_catalog.repeat('3', 64),
+  'sha256:' || pg_catalog.repeat('3', 64), '1.0.0',
+  'sha256:' || pg_catalog.repeat('3', 64), '[]'::jsonb,
+  'Module V3 installing Application V1 release.',
+  pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'
+);
+insert into vortex_definition.release_dependencies (
+  root_id, release_revision, dependency_kind, dependency_reference,
+  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
+  target_root_id, target_release_revision, catalogue_item_id
+) values (
+  '34550000-0000-4000-8000-000000000002', 1, 'module',
+  'vortex.storage_test.native_v3_module', '1.0.0',
+  'sha256:' || pg_catalog.repeat('c', 64),
+  'sha256:' || pg_catalog.repeat('3', 64),
+  '44550000-0000-4000-8000-000000000003', 1, null
+);
+
+select pg_temp.initialize_storage_context();
+set local role vortex_request;
+create temporary table module_v3_installation on commit drop as
+select * from vortex_module.provision_module_installation_storage(
+  '34550000-0000-4000-8000-000000000002', 1,
+  '44550000-0000-4000-8000-000000000003', 1, null
+);
+reset role;
+select is(
+  (
+    select pg_catalog.concat_ws(':', installation.state, installation.changed,
+      installation.binding_revision, installation.module_release_revision,
+      binding.state)
+    from module_v3_installation as installation
+    join vortex_module.installation_bindings as binding
+      on binding.organization_id = '24550000-0000-4000-8000-000000000001'
+      and binding.application_root_id = '34550000-0000-4000-8000-000000000002'
+      and binding.module_root_id = '44550000-0000-4000-8000-000000000003'
+  ),
+  'provisioned:t:1:1:provisioned',
+  'the exact Application V1 to Module V3 dependency binds through the coordinator and stays inactive');
+
+set local role vortex_module_owner;
+create temporary table rule_upgrade_base on commit drop as
+select * from vortex_record.provision_exact_module_storage(
+  '44550000-0000-4000-8000-000000000004', 1
+);
+reset role;
+create temporary table rule_upgrade_before on commit drop as
+select catalogue.content_fingerprint, catalogue.physical_table_token,
+  pg_catalog.to_regclass(
+    'record_data.rt_64550000000040008000000000000005'
+  )::oid as table_oid,
+  (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_attribute as attribute
+    where attribute.attrelid = pg_catalog.to_regclass(
+        'record_data.rt_64550000000040008000000000000005'
+      )
+      and attribute.attnum > 0 and not attribute.attisdropped
+  ) as column_count
+from vortex_record.storage_catalogue as catalogue
+where catalogue.storage_contract_id = '64550000-0000-4000-8000-000000000005';
+
+set local role vortex_module_owner;
+create temporary table rule_upgrade_provision on commit drop as
+select * from vortex_record.provision_exact_module_storage(
+  '44550000-0000-4000-8000-000000000004', 2
+);
+reset role;
+select is(
+  (
+    select pg_catalog.concat_ws(':', base.changed, upgrade.changed,
+      catalogue.first_compatible_release_revision,
+      catalogue.last_compatible_release_revision)
+    from rule_upgrade_base as base
+    cross join rule_upgrade_provision as upgrade
+    cross join vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = '64550000-0000-4000-8000-000000000005'
+  ),
+  't:t:1:2',
+  'a rule-only Module V3 release reuses its V2 storage and advances the compatible bound');
+select ok(
+  (
+    select catalogue.content_fingerprint = before.content_fingerprint
+      and catalogue.physical_table_token = before.physical_table_token
+      and before.table_oid = pg_catalog.to_regclass(
+        'record_data.rt_64550000000040008000000000000005'
+      )::oid
+      and before.column_count = (
+        select pg_catalog.count(*)
+        from pg_catalog.pg_attribute as attribute
+        where attribute.attrelid = pg_catalog.to_regclass(
+            'record_data.rt_64550000000040008000000000000005'
+          )
+          and attribute.attnum > 0 and not attribute.attisdropped
+      )
+      and (
+        select pg_catalog.count(*) = 1
+        from vortex_record.field_storage_mappings as mapping
+        where mapping.storage_contract_id = '64550000-0000-4000-8000-000000000005'
+      )
+      and (
+        select pg_catalog.count(*) = 2
+        from vortex_record.release_provisions as provision
+        where provision.module_root_id = '44550000-0000-4000-8000-000000000004'
+      )
+      and exists (
+        select 1
+        from vortex_record.release_provisions as provision
+        join vortex_definition.releases as release
+          on release.root_id = provision.module_root_id
+          and release.release_revision = provision.release_revision
+        where provision.module_root_id = '44550000-0000-4000-8000-000000000004'
+          and provision.release_revision = 1
+          and provision.content_fingerprint = release.content_fingerprint
+          and provision.resolution_fingerprint = release.resolution_fingerprint
+      )
+      and exists (
+        select 1 from vortex_definition.releases as release
+        where release.root_id = '44550000-0000-4000-8000-000000000004'
+          and release.release_revision = 1
+          and release.source_contract_version = '2.0.0'
+          and release.validation_contract_version = '2.0.0'
+      )
+      and exists (
+        select 1 from vortex_definition.releases as release
+        where release.root_id = '44550000-0000-4000-8000-000000000004'
+          and release.release_revision = 2
+          and release.source_contract_version = '3.0.0'
+          and release.validation_contract_version = '3.0.0'
+      )
+    from vortex_record.storage_catalogue as catalogue
+    cross join rule_upgrade_before as before
+    where catalogue.storage_contract_id = '64550000-0000-4000-8000-000000000005'
+  ),
+  'the rule-only release keeps the same physical table, column and storage meaning and leaves the V2 release contracts and receipt unchanged');
+
+set local role vortex_module_owner;
+create temporary table rule_upgrade_older_retry on commit drop as
+select * from vortex_record.provision_exact_module_storage(
+  '44550000-0000-4000-8000-000000000004', 1
+);
+reset role;
+select is(
+  (
+    select pg_catalog.concat_ws(':', retry.changed,
+      catalogue.first_compatible_release_revision,
+      catalogue.last_compatible_release_revision,
+      catalogue.content_fingerprint = before.content_fingerprint)
+    from rule_upgrade_older_retry as retry
+    cross join rule_upgrade_before as before
+    cross join vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = '64550000-0000-4000-8000-000000000005'
+  ),
+  'f:1:2:t',
+  'the older compatible V2 release retried after the V3 advance changes no storage');
+
+select throws_ok(
+  $$set local role vortex_module_owner;
+  select * from vortex_record.provision_exact_module_storage(
+    '44550000-0000-4000-8000-000000000005', 1
+  ); reset role;$$::text,
+  '23514'::char(5), 'Exact Module release is incompatible'::text,
+  'a source and validation contract disagreement is refused'::text);
+select throws_ok(
+  $$set local role vortex_module_owner;
+  select * from vortex_record.provision_exact_module_storage(
+    '44550000-0000-4000-8000-000000000005', 2
+  ); reset role;$$::text,
+  '23514'::char(5), 'Exact Module release is incompatible'::text,
+  'an embedded validation contract disagreement is refused'::text);
+select throws_ok(
+  $$set local role vortex_module_owner;
+  select * from vortex_record.provision_exact_module_storage(
+    '44550000-0000-4000-8000-000000000005', 3
+  ); reset role;$$::text,
+  '23514'::char(5), 'Exact Module release is incompatible'::text,
+  'an unsupported Module validation contract is refused'::text);
+select throws_ok(
+  $$set local role vortex_module_owner;
+  select * from vortex_record.provision_exact_module_storage(
+    '44550000-0000-4000-8000-000000000005', 4
+  ); reset role;$$::text,
+  '23514'::char(5), 'Exact Module release is incompatible'::text,
+  'a missing embedded definition kind cannot evade the gate'::text);
+select throws_ok(
+  $$set local role vortex_module_owner;
+  select * from vortex_record.provision_exact_module_storage(
+    '44550000-0000-4000-8000-000000000005', 5
+  ); reset role;$$::text,
+  '23514'::char(5), 'Exact Module release is incompatible'::text,
+  'a missing embedded root identity cannot evade the gate'::text);
+reset role;
+select ok(
+  not exists (
+    select 1 from vortex_record.storage_catalogue
+    where storage_contract_id = '64550000-0000-4000-8000-000000000006'
+  )
+  and not exists (
+    select 1 from vortex_record.release_provisions
+    where module_root_id = '44550000-0000-4000-8000-000000000005'
+  )
+  and pg_catalog.to_regclass(
+    'record_data.rt_64550000000040008000000000000006'
+  ) is null,
+  'every refused release gate leaves no storage, column or provision evidence');
 
 select * from finish();
 rollback;

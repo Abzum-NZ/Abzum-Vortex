@@ -49,6 +49,13 @@ request connection database-owner permissions.
 
 The database is the sole storage generator; Module/Record TypeScript code only
 calls the fixed operation using exact release IDs and expected binding revisions.
+
+The [Module 3 compatibility slice](issue-45-module3-storage-compatibility.md) extends
+that existing operation to exact source/validation pairs 2.0.0/2.0.0 and
+3.0.0/3.0.0. Both use the same field storage meaning; rules do not affect the
+physical shape. This is separate from Application version support, transitive
+dependency provisioning, activation and the complete protected save operation.
+
 The private non-login Record owner owns generated objects but is never inherited
 by request/runtime roles. The Module coordinator rechecks Access from the trusted
 organisation context and verifies the exact Application-to-Module dependency;

@@ -51,6 +51,29 @@ Codex independently reviews the patch and runs applicable database/concurrency
 checks. Use the existing local database without resets or hosted changes;
 rollback-scoped verification is preferred. Local proof is not hosted verification.
 
+### Local implementation review — 9 September 2026
+
+Opus 5 authored the implementation and focused review corrections in session
+`546a5f75-f00c-4c73-b873-759cc75fd36a`. Codex reviewed the actual patch, not just
+the summary. Mechanical comparison against the original function found only
+CREATE OR REPLACE, the exact version/identity gate and version-neutral messages;
+the storage, permission and locking body is unchanged.
+
+- The original 31 storage assertions passed before the change.
+- All 44 updated assertions passed with the forward migration inside one local
+  rollback transaction, including the restricted-request Module 3 coordinator
+  path. No installation activation is claimed.
+- The rule-only upgrade retains the physical table OID, columns and storage
+  meaning, and leaves the earlier release's V2 contracts and receipt intact.
+- Codex corrected the test harness so pgTAP runs with its existing permissions
+  while the tested private operation still runs as the Module owner. No role
+  grants were added to make a test pass.
+- The existing two-connection provisioning concurrency proof passed against the
+  local baseline function. Its locking body is identical to the replacement;
+  this is regression evidence, not a hosted/new-version concurrency run.
+- Formatting and patch whitespace checks passed. No hosted database or migration
+  history changed; exact hosted Testing verification remains outstanding.
+
 ## Remaining work and stop boundary
 
 This does not activate installations, fix transitive provisioning, support
