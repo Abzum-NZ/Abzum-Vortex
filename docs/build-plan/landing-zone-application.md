@@ -18,6 +18,20 @@ verified identity that has not yet chosen an organisation, and exposes no applic
 or permissions. The Landing Zone lives after that choice, inside one organisation, and adds
 nothing to the launcher's entry contract.
 
+## Shipped and installed by default — user decision, 10 September 2026
+
+Every organisation gets the Landing Zone. It joins the platform applications that
+[#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) already ships as locked, versioned
+definitions built from ordinary modules, records, pages and permissions. Organisation
+provisioning installs it and marks it the organisation's default application through the
+**same protected installation operation** any application uses; provisioning supplies the
+authority and adds no second installation path or backdoor. This reuses an existing concept
+rather than adding an auto-install mechanism.
+
+It is shipped, not frozen. An organisation may afterwards change the default, add rail
+placements or replace the application entirely, exactly as it may for any installed
+application. Nothing in the platform depends on the Landing Zone being present.
+
 ## Boundary decision
 
 The Landing Zone is an ordinary application. Favourites, recency, bookmarks and the tile
