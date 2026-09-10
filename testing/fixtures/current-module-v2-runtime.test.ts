@@ -661,6 +661,8 @@ describe("current Module V2 fixture runtime", () => {
     );
   }, 15_000);
 
+  // This also publishes the complete bundle; use the first scenario's functional-test
+  // allowance rather than the default five-second timeout on shared CI workers.
   it("keeps dependency-owned resolution evidence while refusing substituted releases", async () => {
     const candidates = [...currentModules, ...currentApplications].map(candidateFor);
     const repository = new FixturePublicationRepository(candidates);
@@ -723,5 +725,5 @@ describe("current Module V2 fixture runtime", () => {
         ),
       });
     }
-  });
+  }, 15_000);
 });

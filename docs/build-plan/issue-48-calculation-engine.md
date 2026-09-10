@@ -188,6 +188,17 @@ the same command transaction. A failure rolls back the source and parents
 together. Concurrent child changes serialize through the common parent, and a
 response-lost retry reuses the existing command receipt.
 
+```mermaid
+flowchart TD
+    C[Proposed record or relationship change] --> D[Find old and new parents and dependent totals]
+    D --> L[Lock affected records and reread current dependencies]
+    L --> V{Dependency set stable and no actual cycle?}
+    V -->|Changed set| R[Retry the whole transaction]
+    V -->|Actual cycle| F[Refuse without partial changes]
+    V -->|Yes| E[Evaluate totals and dependent calculations]
+    E --> S[Commit records, revisions, Activity and events together]
+```
+
 Actual save proofs must cover valid self-type hierarchies, an actual refused
 record-level cycle, a relationship move updating both parents, concurrent child
 changes and rollback without partial totals or events. These are #47 integration

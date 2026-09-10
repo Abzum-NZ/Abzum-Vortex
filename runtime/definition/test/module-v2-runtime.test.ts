@@ -748,6 +748,55 @@ describe("Module V2 Definition runtime", () => {
     expect(compile(average)).toHaveLength(1);
     delete total.settings.decimal_places;
     expect(() => compile(average)).toThrow();
+
+    const derivedMoney = sourceV2(true);
+    const derivedServiceLevel = derivedMoney.body.record_types.find(
+      (record) => record.key === "service_level",
+    )!;
+    derivedServiceLevel.fields.push({
+      id: "fld_sla_discounted_resolution",
+      key: "discounted_resolution",
+      type: "calculation",
+      label: "Discounted resolution",
+      required: false,
+      unique: false,
+      filterable: true,
+      sortable: true,
+      personal_data: "none",
+      public_display: "refused",
+      settings: {
+        result_type: "money",
+        decimal_places: 2,
+        expression: {
+          operation: "subtract_percentage",
+          amount_field: "resolution_minutes",
+          percentage_field: "first_response_minutes",
+        },
+      },
+    });
+    const derivedCalendar = derivedMoney.body.record_types.find(
+      (record) => record.key === "business_calendar",
+    )!;
+    derivedCalendar.fields.push({
+      id: "fld_calendar_total_discounted_resolution",
+      key: "total_discounted_resolution",
+      type: "total",
+      label: "Total discounted resolution",
+      required: false,
+      unique: false,
+      filterable: true,
+      sortable: true,
+      personal_data: "none",
+      public_display: "refused",
+      settings: {
+        relationship: "vortex.service_desk.sla:service_level.calendar",
+        operation: "sum",
+        result_type: "money",
+        field: "discounted_resolution",
+        currency: "NZD",
+      },
+    });
+    expect(compile(derivedMoney)).toHaveLength(1);
   });
 
   it("refuses a compiled V2 calculation whose dependency evidence diverges from its expression", () => {

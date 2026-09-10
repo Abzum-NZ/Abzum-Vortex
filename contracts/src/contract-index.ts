@@ -31,6 +31,12 @@ export const contractIndex = [
     owner: "#12, corrected by #186",
   },
   {
+    group: "component events, frontend-flow references and protected flow-node bindings",
+    layer: "authored_source_and_canonical_runtime",
+    specification: "appendices/frontend-rule-designer.md",
+    owner: "#250",
+  },
+  {
     group: "workflows and protected operations",
     layer: "canonical_runtime",
     specification: "09-workflows-and-pipelines.md",

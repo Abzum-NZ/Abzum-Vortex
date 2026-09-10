@@ -187,6 +187,31 @@ grep --fixed-strings --quiet \
 git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
 export VORTEX_GITHUB_COMMIT="$commit"
 
+missing_record_schema_checkout="$test_root/missing-record-schema-checkout"
+git clone --quiet "$test_root/remote.git" "$missing_record_schema_checkout"
+git -C "$missing_record_schema_checkout" config user.name delivery-test
+git -C "$missing_record_schema_checkout" config user.email delivery-test@example.invalid
+jq '.lintSchemas -= ["record_data"]' \
+  "$missing_record_schema_checkout/workflows/kestra/database-verification.json" \
+  >"$missing_record_schema_checkout/workflows/kestra/database-verification.json.next"
+mv \
+  "$missing_record_schema_checkout/workflows/kestra/database-verification.json.next" \
+  "$missing_record_schema_checkout/workflows/kestra/database-verification.json"
+git -C "$missing_record_schema_checkout" add workflows/kestra/database-verification.json
+git -C "$missing_record_schema_checkout" commit --quiet -m "Omit generated record storage from lint"
+missing_record_schema_commit="$(git -C "$missing_record_schema_checkout" rev-parse HEAD)"
+git -C "$missing_record_schema_checkout" push --quiet origin HEAD:main
+export VORTEX_GITHUB_COMMIT="$missing_record_schema_commit"
+if "$delivery_script" >"$test_root/missing-record-schema.log" 2>&1; then
+  echo "expected omitted record_data lint coverage to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "database verification manifest does not list every operated schema exactly once" \
+  "$test_root/missing-record-schema.log"
+git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
+export VORTEX_GITHUB_COMMIT="$commit"
+
 unexpected_schema_checkout="$test_root/unexpected-schema-checkout"
 git clone --quiet "$test_root/remote.git" "$unexpected_schema_checkout"
 git -C "$unexpected_schema_checkout" config user.name delivery-test
@@ -690,8 +715,10 @@ while read -r proof; do
   grep --fixed-strings --quiet "$proof" "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 done < <(jq --raw-output '.concurrencyProofs[].proof' \
   "$fixture_checkout/workflows/kestra/database-verification.json")
+expected_lint_schemas="$(jq --raw-output '.lintSchemas | join(",")' \
+  "$fixture_checkout/workflows/kestra/database-verification.json")"
 grep --fixed-strings --quiet \
-  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access,vortex_runner_parity --level warning --fail-on error" \
+  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema $expected_lint_schemas --level warning --fail-on error" \
   "$VORTEX_TEST_SUPABASE_CALL_MARKER"
 jq --exit-status \
   --argjson expected_proof_count "$parity_proof_count" \
