@@ -62,6 +62,16 @@ delivery. Applied migration filenames and contents are not renamed or repaired;
 all SQL, concurrency, lint and final-history checks remain required. This is a
 bounded consolidation correction, not general permission to reorder migrations.
 
+After that repair, Testing applied all five pending migrations. Its SQL gate then
+identified obsolete Definition test inventories: the installed storage owners now
+have six private SELECT policies, and the application-bound reader adds a narrow
+request entry point. The test-only follow-up asserts the exact policy names,
+tables, owner roles and operations, updates the entry-point inventories and checks
+every function's empty search path. Existing raw-table access denials, forced row
+security and immutable-write protections remain. No database privilege is changed
+to satisfy the tests. Exact hosted success is still required for promotion; use
+[the promotion PR](https://github.com/Abzum-NZ/Abzum-Vortex/pull/373) for final receipts.
+
 ## Recovery and branch cleanup
 
 A pre-cleanup Git bundle at

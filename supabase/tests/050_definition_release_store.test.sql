@@ -271,15 +271,24 @@ select is(
   true,
   'dependency storage forces row security'
 );
-select is(
-  (
-    select count(*)::integer
+select results_eq(
+  $$select tablename::text collate "C", policyname::text collate "C", roles collate "C",
+      permissive collate "C", cmd collate "C", qual collate "C", with_check collate "C"
     from pg_catalog.pg_policies
     where schemaname = 'vortex_definition'
       and tablename in ('releases', 'release_dependencies')
-  ),
-  0,
-  'private immutable release storage has no direct row policies'
+    order by policyname collate "C"$$,
+  $$values
+    ('release_dependencies' collate "C", 'module_installation_definition_dependencies_read' collate "C",
+      array['vortex_module_owner']::name[] collate "C", 'PERMISSIVE' collate "C",
+      'SELECT' collate "C", 'true' collate "C", null::text collate "C"),
+    ('releases', 'module_installation_definition_releases_read',
+      array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    ('release_dependencies', 'record_storage_definition_dependencies_read',
+      array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    ('releases', 'record_storage_definition_releases_read',
+      array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text)$$,
+  'immutable release row policies permit only the exact private Module and Record owner reads'
 );
 select ok(
   not pg_catalog.has_table_privilege(
