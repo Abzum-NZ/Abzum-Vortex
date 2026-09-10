@@ -715,8 +715,10 @@ while read -r proof; do
   grep --fixed-strings --quiet "$proof" "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 done < <(jq --raw-output '.concurrencyProofs[].proof' \
   "$fixture_checkout/workflows/kestra/database-verification.json")
+expected_lint_schemas="$(jq --raw-output '.lintSchemas | join(",")' \
+  "$fixture_checkout/workflows/kestra/database-verification.json")"
 grep --fixed-strings --quiet \
-  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access,vortex_runner_parity --level warning --fail-on error" \
+  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema $expected_lint_schemas --level warning --fail-on error" \
   "$VORTEX_TEST_SUPABASE_CALL_MARKER"
 jq --exit-status \
   --argjson expected_proof_count "$parity_proof_count" \
