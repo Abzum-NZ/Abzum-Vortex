@@ -8,7 +8,11 @@ select no_plan();
 -- #37 slice 3: the protected same-organisation direct-share grant/revoke
 -- operations, corrected in slice 5 after independent review found the
 -- grantor's and revoker's authority was re-derived against fabricated facts
--- rather than the record's real row -- see
+-- rather than the record's real row, and in slice 6 (N1/N2) after a further
+-- review found revocation wrongly required its target record to be visible,
+-- and found (but deliberately did not "fix") the grant path's declaration
+-- raising when an unrelated held permission's route or condition is outside
+-- the adapter's facts -- see
 -- 20260910114716_coordinate_protected_record_share.sql's own header. Mirrors
 -- 445's fixture style: one organisation, a neutral record type with a real
 -- content table (test_share_rows, added in slice 5 -- there was none before),
@@ -778,17 +782,19 @@ create temporary table share_test_checkpoint (
 ) on commit drop;
 
 -- ============================================================================
--- Two fixed adapters (slice 5). Both security definer, owner postgres, empty
--- search path. Each resolves its own installed binding (hardcoded, exactly
--- as 430/445's own adapters), reads the real row(s) from test_share_rows,
--- loads the real self-relationship edge when one exists, and calls the
--- protected operation below -- never a decision, a permission, a field set
--- or the record's binding from its own caller. The grant adapter's caller
--- supplies only the target record id and the share's own terms (recipient,
--- fields, window, reason, activity); the revoke adapter's caller supplies
--- only the share id, expected revision, reason and activity -- exactly the
--- same public shape the two protected functions had before slice 5, minus
--- the five identifiers slice 5 moved into the trusted facts.
+-- Two fixed adapters (slice 5, revoke's simplified in slice 6). Both
+-- security definer, owner postgres, empty search path, never granted to
+-- vortex_request directly. The grant adapter resolves its own installed
+-- binding (hardcoded, exactly as 430/445's own adapters), reads the real
+-- row(s) from test_share_rows, loads the real self-relationship edge when
+-- one exists, and calls the protected grant operation below -- never a
+-- decision, a permission, a field set or the record's binding from its own
+-- caller; its caller supplies only the target record id and the share's own
+-- terms (recipient, fields, window, reason, activity). The revoke adapter
+-- (N1) resolves and loads nothing at all -- revocation's authority check no
+-- longer needs a row -- and is a pure pass-through; its caller supplies
+-- only the share id, expected revision, reason and activity, exactly the
+-- same public shape the protected revoke function had before slice 5.
 -- ============================================================================
 
 create function vortex_access.test_share_grant(
@@ -942,117 +948,15 @@ volatile
 security definer
 set search_path = ''
 as $function$
-declare
-  module_id constant uuid := '34500000-0000-4000-8000-000000000002';
-  type_id constant uuid := 'd4500000-0000-4000-8000-000000000001';
-  contract_id constant uuid := 'b4500000-0000-4000-8000-000000000001';
-  r1_id constant uuid := 'f4500000-0000-4000-8000-000000000001';
-  condition_id constant uuid := 'b4500000-0000-4000-8000-000000000401';
-  f1_id constant uuid := 'b4500000-0000-4000-8000-000000000101';
-  f2_id constant uuid := 'b4500000-0000-4000-8000-000000000102';
-  f3_id constant uuid := 'b4500000-0000-4000-8000-000000000103';
-  f_flag_id constant uuid := 'b4500000-0000-4000-8000-000000000104';
-  ctx_org uuid := vortex_context.organization_id();
-  share_row vortex_access.organization_direct_record_shares%rowtype;
-  target_row vortex_access.test_share_rows;
-  source_row vortex_access.test_share_rows;
-  target_records jsonb := '[]'::jsonb;
-  source_records jsonb := '[]'::jsonb;
-  edges jsonb := '[]'::jsonb;
-  facts jsonb;
 begin
-  -- The share's own stored record_id says which real row to read; if the
-  -- share itself does not exist, the protected function's own lookup
-  -- refuses before this (necessarily empty) facts payload is ever evaluated.
-  select * into share_row from vortex_access.organization_direct_record_shares
-  where organization_id = ctx_org and direct_share_id = p_direct_share_id;
-
-  if found then
-    select * into target_row from vortex_access.test_share_rows
-    where organization_id = ctx_org and record_id = share_row.record_id;
-    if found then
-      target_records := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'recordScope', pg_catalog.jsonb_build_object(
-          'storageScope', 'application_contained',
-          'organizationId', target_row.organization_id,
-          'moduleRootId', module_id, 'recordTypeId', type_id,
-          'storageContractId', contract_id,
-          'recordId', target_row.record_id,
-          'applicationRootId', target_row.application_root_id
-        ),
-        'ownerOrganizationAccountId', target_row.owner_organization_account_id,
-        'lifecycleState', target_row.lifecycle_state,
-        'fieldValues', pg_catalog.jsonb_build_object(
-          f1_id::text, target_row.f1, f2_id::text, target_row.f2,
-          f3_id::text, target_row.f3, f_flag_id::text, target_row.f_flag
-        )
-      ));
-
-      for source_row in
-        select * from vortex_access.test_share_rows
-        where organization_id = ctx_org and f_source_link = share_row.record_id
-      loop
-        source_records := source_records || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-          'recordScope', pg_catalog.jsonb_build_object(
-            'storageScope', 'application_contained',
-            'organizationId', source_row.organization_id,
-            'moduleRootId', module_id, 'recordTypeId', type_id,
-            'storageContractId', contract_id,
-            'recordId', source_row.record_id,
-            'applicationRootId', source_row.application_root_id
-          ),
-          'ownerOrganizationAccountId', source_row.owner_organization_account_id,
-          'lifecycleState', source_row.lifecycle_state,
-          'fieldValues', pg_catalog.jsonb_build_object(
-            f1_id::text, source_row.f1, f2_id::text, source_row.f2,
-            f3_id::text, source_row.f3, f_flag_id::text, source_row.f_flag
-          )
-        ));
-        edges := edges || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-          'relationshipId', r1_id, 'fromRecordId', source_row.record_id, 'toRecordId', share_row.record_id
-        ));
-      end loop;
-    end if;
-  end if;
-
-  facts := pg_catalog.jsonb_build_object(
-    'binding', pg_catalog.jsonb_build_object(
-      'moduleRootId', module_id, 'recordTypeId', type_id,
-      'storageContractId', contract_id, 'storageScope', 'application_contained'
-    ),
-    'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'moduleRootId', module_id, 'recordTypeId', type_id,
-      'storageContractId', contract_id, 'storageScope', 'application_contained',
-      'ownershipMode', 'organization_account',
-      'fields', pg_catalog.jsonb_build_array(
-        pg_catalog.jsonb_build_object('fieldId', f1_id, 'type', 'text'),
-        pg_catalog.jsonb_build_object('fieldId', f2_id, 'type', 'text'),
-        pg_catalog.jsonb_build_object('fieldId', f3_id, 'type', 'text'),
-        pg_catalog.jsonb_build_object('fieldId', f_flag_id, 'type', 'yes_no')
-      )
-    )),
-    'relationships', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'relationshipId', r1_id, 'fromModuleRootId', module_id, 'fromRecordTypeId', type_id,
-      'toModuleRootId', module_id, 'toRecordTypeId', type_id
-    )),
-    'sharingConditions', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'conditionId', condition_id, 'sourceRecordTypeId', type_id,
-      'publishedRevision', 1,
-      'contractFingerprint', 'sha256:' || pg_catalog.repeat('7', 64),
-      'parameters', '[]'::jsonb,
-      'condition', pg_catalog.jsonb_build_object(
-        'kind', 'comparison', 'operator', 'equals',
-        'left', pg_catalog.jsonb_build_object('source', 'field', 'fieldId', f_flag_id),
-        'right', pg_catalog.jsonb_build_object('source', 'value', 'value', true)
-      ),
-      'declaredFieldIds', pg_catalog.jsonb_build_array(f_flag_id)
-    )),
-    'records', target_records || source_records,
-    'edges', edges
-  );
-
+  -- N1 (slice 6): revocation no longer needs the share's target row at all
+  -- -- its authority check is the pre-row record.share eligibility check,
+  -- not the complete record decision -- so this adapter has nothing left to
+  -- resolve or load. It stays a fixed, owner-held pass-through rather than
+  -- being granted directly to vortex_request, for the same boundary reason
+  -- every other adapter in this fixture does.
   return vortex_access.revoke_record_share_for_administration(
-    p_direct_share_id, p_expected_revision, p_reason, p_activity_source, p_activity_id, facts
+    p_direct_share_id, p_expected_revision, p_reason, p_activity_source, p_activity_id
   );
 end
 $function$;
@@ -1325,8 +1229,8 @@ select throws_ok(
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
     pg_catalog.clock_timestamp(), null, 'Attempted re-share after source access withdrawn',
     'web', 'a4500000-0000-4000-8000-000000000213')$$,
-  '42501', 'Protected record-share grant exceeds current read authority',
-  'once the grantor''s own source access to a record is withdrawn, they can no longer create a new share on it'
+  '42501', 'Protected record-share grant requires a current read permission',
+  'once the grantor''s own source access to a record is withdrawn, they hold no current read authority on it at all, so the refusal names that -- not an exceeded ceiling -- and they can no longer create a new share on it'
 );
 reset role;
 
@@ -1763,8 +1667,8 @@ select throws_ok(
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
     pg_catalog.clock_timestamp(), null, 'Condition-false share',
     'web', 'a4500000-0000-4000-8000-000000000405')$$,
-  '42501', 'Protected record-share grant requires a current share permission',
-  'the same condition-scoped share permission refuses when the saved condition currently evaluates false against a different record -- proving it is evaluated, not excluded or constantly admitted'
+  '42501', 'Protected record-share grant target record is unavailable',
+  'the same condition-scoped share permission refuses when the saved condition currently evaluates false against a different record -- proving it is evaluated, not excluded or constantly admitted -- and the refusal names the target, since CONDITION_GRANTOR does hold an eligible share permission in general'
 );
 reset role;
 select is(
@@ -1793,8 +1697,8 @@ select throws_ok(
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
     pg_catalog.clock_timestamp(), null, 'Nonexistent record',
     'web', 'a4500000-0000-4000-8000-000000000406')$$,
-  '42501', 'Protected record-share grant requires a current share permission',
-  'sharing a record that exists in no content table refuses'
+  '42501', 'Protected record-share grant target record is unavailable',
+  'sharing a record that exists in no content table refuses, naming the target rather than the permission -- OWNER_GRANTOR does hold a current, eligible share permission in general'
 );
 reset role;
 select is(
@@ -1840,8 +1744,8 @@ select throws_ok(
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
     pg_catalog.clock_timestamp(), null, 'Soft-deleted record',
     'web', 'a4500000-0000-4000-8000-000000000407')$$,
-  '42501', 'Protected record-share grant requires a current share permission',
-  'sharing a soft-deleted record -- owned by the very grantor attempting to share it -- refuses'
+  '42501', 'Protected record-share grant target record is unavailable',
+  'sharing a soft-deleted record -- owned by the very grantor attempting to share it -- refuses, naming the target rather than the permission'
 );
 reset role;
 select is(
@@ -1920,8 +1824,8 @@ select throws_ok(
       )),
       'edges', '[]'::jsonb
     ))$$,
-  '42501', 'Protected record-share grant requires a current share permission',
-  'a facts payload whose top-level binding names a different module root and storage contract than the target record''s own real, resolved scope refuses -- the disagreeing values never reach the persisted row'
+  '42501', 'Protected record-share grant target record is unavailable',
+  'a facts payload whose top-level binding names a different module root and storage contract than the target record''s own real, resolved scope refuses -- the disagreeing values never reach the persisted row, and the refusal names the target rather than the permission'
 );
 select is(
   (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares
@@ -1929,6 +1833,220 @@ select is(
      and direct_share_id = '94500000-0000-4000-8000-000000000308'),
   0::bigint,
   'the disagreeing-binding refusal writes nothing'
+);
+
+-- ============================================================================
+-- GRANT (slice 6, N2 -- pinned, not fixed). OWNER_GRANTOR also holds
+-- owned_share_unrouted: a further 'share'-kind permission, routed through a
+-- relationship (f...0099) the fixed adapter's facts never carry, alongside
+-- their existing, otherwise-sufficient owned_share (ownership-routed).
+-- Because F3 removed the route exclusions, the declaration this migration
+-- builds is synthesised from every current 'share'-kind permission on this
+-- record type -- not just the one the grantor means to rely on -- and
+-- OWNER_GRANTOR is eligible for both, via two independent live standing
+-- assignments. Row-scope composition evaluates every eligible alternative's
+-- own routes, so the unrouted alternative's own route is evaluated too, and
+-- raises before the otherwise-successful ownership route changes anything.
+-- Proven against record e...031, which OWNER_GRANTOR already shared
+-- successfully earlier above using exactly that ownership route -- nothing
+-- about this attempt differs except the additional permission now also
+-- held.
+-- ============================================================================
+
+insert into vortex_access.permission_catalogue_entries (
+  organization_id, registration_kind, registration_owner_id,
+  registration_revision, application_root_id, owner_kind, owner_id,
+  permission_id, permission_key, label, description, record_type_id,
+  action_kind, named_action, administrative, source_kind,
+  source_definition_key, source_root_id, source_version, source_revision,
+  source_validation_contract_version, source_content_fingerprint,
+  source_resolution_fingerprint, source_catalogue_fingerprint,
+  meaning_fingerprint, record_scope, field_policy
+) values (
+  '24500000-0000-4000-8000-000000000001', 'application',
+  '34500000-0000-4000-8000-000000000001', 1,
+  '34500000-0000-4000-8000-000000000001', 'application',
+  '34500000-0000-4000-8000-000000000001',
+  'c4500000-0000-4000-8000-000000000010', 'record_share.owned_share_unrouted',
+  'Owned share (unrouted relationship)', 'Record share fixture.',
+  'd4500000-0000-4000-8000-000000000001', 'share', null, false,
+  'application', 'example.record_share',
+  '34500000-0000-4000-8000-000000000001', '1.0.0', 1, '1.0.0',
+  'sha256:' || pg_catalog.repeat('1', 64),
+  'sha256:' || pg_catalog.repeat('2', 64), null,
+  'sha256:' || pg_catalog.repeat('a', 64),
+  pg_catalog.jsonb_build_object(
+    'routes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'kind', 'relationship',
+      'relationshipId', 'f4500000-0000-4000-8000-000000000099',
+      'sourcePermissionId', 'c4500000-0000-4000-8000-000000000005'
+    ))
+  ),
+  null
+);
+
+insert into vortex_access.permission_continuities (
+  organization_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id, state,
+  continuity_revision, meaning_fingerprint,
+  last_processed_registration_revision, changed_at
+)
+select entry.organization_id, entry.application_root_id, entry.owner_kind,
+  entry.owner_id, entry.permission_id, entry.registration_kind,
+  entry.registration_owner_id, 'available', 1, entry.meaning_fingerprint,
+  1, pg_catalog.clock_timestamp()
+from vortex_access.permission_catalogue_entries as entry
+where entry.organization_id = '24500000-0000-4000-8000-000000000001'
+  and entry.permission_id = 'c4500000-0000-4000-8000-000000000010';
+
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000010', 'owned_share_unrouted',
+  'c4500000-0000-4000-8000-000000000010'
+);
+
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, group_id, assignment_kind, revision,
+  starts_at, expires_at, state, granted_by, granted_at,
+  grant_correlation_id, changed_by, changed_at, change_correlation_id
+) values (
+  '24500000-0000-4000-8000-000000000001', '74500000-0000-4000-8000-000000000501',
+  '64500000-0000-4000-8000-000000000010', 'organization_account',
+  '54500000-0000-4000-8000-000000000008', null, 'standing', 1,
+  pg_catalog.clock_timestamp() - interval '1 minute',
+  pg_catalog.transaction_timestamp() + interval '4 hours', 'live',
+  '94500000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a4500000-0000-4000-8000-000000000501', '94500000-0000-4000-8000-000000000001',
+  pg_catalog.clock_timestamp(), 'a4500000-0000-4000-8000-000000000501'
+);
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000008');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000309',
+    'e4500000-0000-4000-8000-000000000031', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null,
+    'Grantor also holds a relationship-routed permission the adapter cannot supply',
+    'web', 'a4500000-0000-4000-8000-000000000502')$$,
+  '22023', 'Record access facts are invalid',
+  'a grantor holding an additional relationship-routed share permission whose relationship the adapter does not supply raises, even though their ownership route alone would otherwise succeed -- the declaration is synthesised from the whole catalogue, not authored, so an adapter for this migration must supply the complete relationship graph (N2)'
+);
+reset role;
+select is(
+  (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000309'),
+  0::bigint,
+  'the pinned facts-insufficiency raise writes nothing'
+);
+
+-- ============================================================================
+-- REVOKE (slice 6, N1): a soft-deleted record's live share can still be
+-- revoked by someone with current record.share authority -- the regression
+-- this slice fixes. Reuses OWNER_GRANTOR's own earlier share on OWNERSHIP_
+-- RECORD (e...030, share ...301): OWNER_GRANTOR still currently holds
+-- owned_share, ownership-routed, whose *eligibility* needs no row at all.
+-- A delegated context and the share's own recipient are each still refused
+-- while the record is soft-deleted -- proving the fix narrows nothing it
+-- should not -- and after the record is restored, the earlier revocation is
+-- genuinely permanent rather than silently re-armed.
+-- ============================================================================
+
+update vortex_access.test_share_rows
+set lifecycle_state = 'soft_deleted'
+where organization_id = '24500000-0000-4000-8000-000000000001'
+  and record_id = 'e4500000-0000-4000-8000-000000000030';
+
+-- A delegated context is refused exactly as it would be for an active
+-- record -- the eligibility core's context check runs before anything else.
+select pg_temp.install_request_context(
+  '54500000-0000-4000-8000-000000000008', false, true
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000301', 1,
+    'Delegated context attempts revocation of a soft-deleted record''s share',
+    'web', 'a4500000-0000-4000-8000-000000000511')$$,
+  '42501', 'Protected record-share revocation is unavailable',
+  'a delegated context still cannot revoke a soft-deleted record''s share'
+);
+reset role;
+
+-- The share's recipient, who holds no record.share authority at all, is
+-- still refused while the record is soft-deleted.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000002');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000301', 1,
+    'Recipient attempts to revoke a soft-deleted record''s share',
+    'web', 'a4500000-0000-4000-8000-000000000512')$$,
+  '42501', 'Protected record-share revocation is unavailable',
+  'the recipient still cannot revoke a soft-deleted record''s share'
+);
+reset role;
+
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000301'),
+  'active',
+  'the share is still active -- neither refused attempt above revoked it'
+);
+
+-- OWNER_GRANTOR, who still currently holds owned_share (ownership-routed,
+-- whose eligibility needs no row), revokes the share while the record
+-- remains soft-deleted. Before this slice, evaluating the complete record
+-- decision refused this exact attempt -- the regression -- because the
+-- record was not active.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000008');
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000301', 1,
+    'Grantor revokes their own share while the record is soft-deleted',
+    'web', 'a4500000-0000-4000-8000-000000000513')$$,
+  'a grantor currently holding record.share eligibility may revoke a soft-deleted record''s share -- revocation never depends on the record''s own visibility'
+);
+reset role;
+
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000301'),
+  'revoked',
+  'the share is now revoked while the record is still soft-deleted'
+);
+
+-- Restoring the record does not silently re-arm the revocation: the share
+-- stays gone, and contributes nothing to the recipient's next projection.
+update vortex_access.test_share_rows
+set lifecycle_state = 'active'
+where organization_id = '24500000-0000-4000-8000-000000000001'
+  and record_id = 'e4500000-0000-4000-8000-000000000030';
+
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000301'),
+  'revoked',
+  'the share remains revoked after the record is restored -- a restore never re-arms a revocation'
+);
+select is(
+  (select pg_catalog.count(*) from vortex_access.read_current_direct_record_share_contributions(
+    '24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000001',
+    '34500000-0000-4000-8000-000000000002', 'd4500000-0000-4000-8000-000000000001',
+    'b4500000-0000-4000-8000-000000000001', 'application_contained',
+    'e4500000-0000-4000-8000-000000000030',
+    '24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000002', pg_catalog.clock_timestamp()
+  )),
+  0::bigint,
+  'the revoked share contributes nothing to the recipient''s projection after the record is restored'
 );
 
 -- ============================================================================
@@ -1953,7 +2071,7 @@ select ok(
 )
 from (values
   ('vortex_access.grant_record_share_for_administration(uuid,uuid,text,uuid,uuid,uuid[],uuid[],timestamptz,timestamptz,text,text,uuid,jsonb)'),
-  ('vortex_access.revoke_record_share_for_administration(uuid,bigint,text,text,uuid,jsonb)'),
+  ('vortex_access.revoke_record_share_for_administration(uuid,bigint,text,text,uuid)'),
   ('vortex_access.grant_organization_direct_record_share(uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,text,uuid,uuid,uuid[],uuid[],timestamptz,timestamptz,text,uuid,uuid,text,uuid)'),
   ('vortex_access.revoke_organization_direct_record_share(uuid,uuid,bigint,text,uuid,uuid,text,uuid)'),
   ('vortex_access.resolve_record_field_bounds_internal(jsonb)'),
