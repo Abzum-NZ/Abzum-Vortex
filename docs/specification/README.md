@@ -2,8 +2,8 @@
 
 The [7 September whole-platform architecture review](../build-plan/architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](../build-plan/frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
 
-**Status:** Approved specification 2.21
-**Date:** 7 September 2026
+**Status:** Approved specification 2.22
+**Date:** 10 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
@@ -110,6 +110,7 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 | Version | Status   | Date             | Summary                                                                                                                                                                                                                    |
 | ------- | -------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.22    | Approved | 10 September 2026 | Defined links to applications, pages, records and external addresses with server-resolved availability and open behaviour; the organisation default application and permitted-applications read; and the Landing Zone as an ordinary application with organisation-account-owned tiles and a shell-slot rail. |
 | 2.21    | Approved | 7 September 2026 | Whole-platform architecture review; configurable read/write component flows, per-node execution identity, managed flows and truthful partial outcomes. Added the scoped Access prerequisite and reconciled task ownership. |
 | 2.20    | Approved | 7 September 2026 | All configurable behaviour represented as typed nodes; pages bind application flows and shared App Builder/MCP authoring.                                                                                                  |
 | 2.19    | Approved | 7 September 2026 | Shared Frontend Rule Designer, conditions, variables, reusable Page Designer forms and durable handoff. Later flow revisions supersede the initial universal collect-first restriction.                                    |
