@@ -6,7 +6,7 @@ Tasks: [#376](https://github.com/Abzum-NZ/Abzum-Vortex/issues/376) blocks,
 [#379](https://github.com/Abzum-NZ/Abzum-Vortex/issues/379) action-items rail.
 
 The user asked for a personal start page: a rail down one side, and a main area with
-search, recently used, favourites accepting drag-and-drop, and a grid of applications.
+search, favourites accepting drag-and-drop, and a grid of applications.
 Each person configures their own. Tiles may point at an application, a page, a record or
 an address the person types in, and each tile opens either in a new page or in place.
 
@@ -34,7 +34,7 @@ application. Nothing in the platform depends on the Landing Zone being present.
 
 ## Boundary decision
 
-The Landing Zone is an ordinary application. Favourites, recency, bookmarks and the tile
+The Landing Zone is an ordinary application. Favourites, bookmarks and the tile
 model are definition semantics owned by that application, not engine behaviour. Four items
 are platform, each because an ordinary definition cannot express it:
 
@@ -105,11 +105,13 @@ which removes server-side request forgery and cross-tenant probing at the cause.
 same-origin address pointing at a protected platform route is treated as any other address:
 the destination route applies its own checks and the tile gains no authority over it.
 
-## Recently used
+## Recently used — removed, 10 September 2026
 
-Recency covers only targets opened through the Landing Zone. The platform does not track page
-visits and Activity records no ordinary reads, so wider tracking has no existing primitive and
-none is proposed.
+The user removed this section from the first release. The platform does not track page
+visits and Activity records no ordinary reads, so recency could only ever have covered
+targets opened through the Landing Zone itself. Rather than ship a partial version of the
+idea, the tile record carries no `last_opened_at` field, there is no recency query, and
+opening a tile performs no write. Opening becomes a pure navigation.
 
 ## Sequencing
 
