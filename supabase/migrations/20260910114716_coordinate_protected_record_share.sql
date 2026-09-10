@@ -710,17 +710,34 @@ begin
   -- directly here for that one reason, not as a second evaluator.
   --
   -- The second, independent condition is holding a *current* record.share
-  -- permission whose own catalogue record scope names an all_records
-  -- route. all_records is the one route decidable without the record row,
-  -- which is exactly why revocation can outlive the record: ownership,
-  -- direct_share, relationship and condition-scoped routes all require the
-  -- row to mean anything, so none of them confers revoke authority here --
-  -- previously (the regression this corrects) every current share
-  -- permission was accepted merely because its record_scope was not null,
-  -- without ever inspecting which routes that scope actually named, so an
-  -- account whose only share permission was direct_share-routed -- which
-  -- can never *create* a share -- could revoke every share of that record
-  -- type regardless of route.
+  -- permission whose own catalogue record scope is decidable without the
+  -- record row, which is exactly why revocation can outlive the record.
+  -- A record scope is `{routes, savedCondition?}`, and both halves must be
+  -- row-independent for the scope to be:
+  --
+  --   * Its routes must name all_records, the one route
+  --     `evaluate_current_record_ownership_visibility` admits unconditionally
+  --     once the binding matches, with no row-specific fact left to check
+  --     (20260906144015_evaluate_current_record_ownership_visibility.sql).
+  --     The contract already forces all_records to be the sole route when
+  --     present, so naming it settles the whole array. Ownership,
+  --     direct_share and relationship each require the row to mean anything.
+  --
+  --   * It must carry no saved condition. A saved condition narrows *every*
+  --     route, all_records included -- `compose_exact_record_access_decision`
+  --     says so in those words and evaluates it from the target row's own
+  --     field values -- so a scope carrying one is row-dependent no matter
+  --     how its routes read. Reasoning about the route in isolation was the
+  --     hole an independent probe used: an account whose only share
+  --     permission was all_records *narrowed by a condition* could not grant
+  --     a share over a record the condition excluded, yet could revoke every
+  --     existing share of that record type, including over records it can
+  --     never reach.
+  --
+  -- Before either correction, every current share permission was accepted
+  -- merely because its record_scope was not null, so an account whose only
+  -- share permission was direct_share-routed -- which can never *create* a
+  -- share -- could revoke every share of that record type.
   is_grantor := current_share.granted_by = context_account_id
     and not (context_value ? 'delegatedContext' or context_value ? 'supportContext');
 
@@ -756,15 +773,19 @@ begin
       and entry.record_type_id = current_share.record_type_id
       and entry.action_kind = 'share'
       and entry.record_scope is not null
-      -- F2: only a route the eligibility core can resolve without the
-      -- record row confers revoke authority -- see above.
+      -- F2: only a record scope the eligibility core can resolve without the
+      -- record row confers revoke authority -- see above. That is a property
+      -- of the whole scope, not of its routes alone: a saved condition
+      -- narrows every route, all_records included, so a scope carrying one
+      -- is row-dependent however its routes read.
       and exists (
         select 1
         from pg_catalog.jsonb_array_elements(entry.record_scope -> 'routes') as route(value)
         where route.value ->> 'kind' = 'all_records'
-      );
+      )
+      and not (entry.record_scope ? 'savedCondition');
 
-    -- No current candidate all_records-routed share permission at all:
+    -- No current candidate row-independent share permission at all:
     -- leave eligibility unset rather than calling the eligibility core with
     -- an empty requiredPermissions array, exactly like the grant path.
     if required_permissions is not null then
@@ -832,4 +853,4 @@ comment on function vortex_access.grant_record_share_for_administration(
 comment on function vortex_access.revoke_record_share_for_administration(
   uuid, bigint, text, text, uuid
 ) is
-  'Protected direct-share revocation: permitted only to an account currently acting in the share''s own application and organisation (organisation_shared shares excepted from the application match) that either is the share''s own non-delegated, non-support granted_by identity, or currently holds a record.share permission whose own catalogue record scope names an all_records route -- the one route decidable without the record row, re-evaluated fresh under the governance lock, never the complete exact-record decision. Narrowing never requires the share''s own target record to be visible: never a re-requirement of the acting account''s present field ceiling, and never the record''s own existence or lifecycle state. Owner-only; reached only through a fixed adapter.';
+  'Protected direct-share revocation: permitted only to an account currently acting in the share''s own application and organisation (organisation_shared shares excepted from the application match) that either is the share''s own non-delegated, non-support granted_by identity, or currently holds a record.share permission whose own catalogue record scope is decidable without the record row -- an all_records route and no saved condition, since a saved condition narrows every route including that one -- re-evaluated fresh under the governance lock, never the complete exact-record decision. Narrowing never requires the share''s own target record to be visible: never a re-requirement of the acting account''s present field ceiling, and never the record''s own existence or lifecycle state. Owner-only; reached only through a fixed adapter.';

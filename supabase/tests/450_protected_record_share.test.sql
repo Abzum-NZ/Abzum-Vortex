@@ -2270,6 +2270,100 @@ insert into vortex_access.organization_role_assignments (
   pg_catalog.clock_timestamp(), 'a4500000-0000-4000-8000-000000000612'
 );
 
+-- CONDITION_NARROWED_GRANTOR: holds an all_records-routed 'share'
+-- permission that is narrowed by a saved condition (F_FLAG = true), and
+-- nothing else. The target record below has f_flag = false, so this
+-- account's share authority genuinely cannot reach it -- the grant path
+-- refuses it. Reading the route in isolation would nonetheless admit this
+-- permission to the pre-row eligibility branch, because its sole route is
+-- all_records; a saved condition narrows every route, including that one,
+-- and is evaluated from the target row's own field values, so this scope
+-- is row-dependent and must not confer revoke authority.
+insert into vortex_identity.identity_projections (
+  identity_id, state, created_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+)
+select '44500000-0000-4000-8000-000000000012', 'active', op.now,
+  op.now, '94500000-0000-4000-8000-000000000001',
+  'a4500000-0000-4000-8000-000000000618', 1
+from (select pg_catalog.clock_timestamp() as now) as op;
+
+insert into vortex_identity.organization_accounts (
+  organization_account_id, organization_id, identity_id, display_name,
+  state, activated_at, closed_at, changed_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+)
+select '54500000-0000-4000-8000-000000000012', '24500000-0000-4000-8000-000000000001',
+  '44500000-0000-4000-8000-000000000012', 'Condition-narrowed all_records grantor account',
+  'active', op.now - interval '1 minute', null, op.now,
+  op.now, '94500000-0000-4000-8000-000000000001',
+  'a4500000-0000-4000-8000-000000000619', 1
+from (select pg_catalog.clock_timestamp() as now) as op;
+
+insert into vortex_access.permission_catalogue_entries (
+  organization_id, registration_kind, registration_owner_id,
+  registration_revision, application_root_id, owner_kind, owner_id,
+  permission_id, permission_key, label, description, record_type_id,
+  action_kind, named_action, administrative, source_kind,
+  source_definition_key, source_root_id, source_version, source_revision,
+  source_validation_contract_version, source_content_fingerprint,
+  source_resolution_fingerprint, source_catalogue_fingerprint,
+  meaning_fingerprint, record_scope, field_policy
+) values (
+  '24500000-0000-4000-8000-000000000001', 'application',
+  '34500000-0000-4000-8000-000000000001', 1,
+  '34500000-0000-4000-8000-000000000001', 'application',
+  '34500000-0000-4000-8000-000000000001',
+  'c4500000-0000-4000-8000-000000000012',
+  'record_share.chain_share_all_records_conditional',
+  'Chain share (all_records, condition-narrowed)', 'Record share fixture.',
+  'd4500000-0000-4000-8000-000000000001', 'share', null, false,
+  'application', 'example.record_share',
+  '34500000-0000-4000-8000-000000000001', '1.0.0', 1, '1.0.0',
+  'sha256:' || pg_catalog.repeat('1', 64),
+  'sha256:' || pg_catalog.repeat('2', 64), null,
+  'sha256:' || pg_catalog.repeat('c', 64),
+  ('{"routes":[{"kind":"all_records"}],"savedCondition":{"conditionId":"b4500000-0000-4000-8000-000000000401","publishedRevision":1,"contractFingerprint":"'
+    || ('sha256:' || pg_catalog.repeat('7', 64))
+    || '","parameterBindings":[]}}')::jsonb,
+  null
+);
+
+insert into vortex_access.permission_continuities (
+  organization_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id, state,
+  continuity_revision, meaning_fingerprint,
+  last_processed_registration_revision, changed_at
+)
+select entry.organization_id, entry.application_root_id, entry.owner_kind,
+  entry.owner_id, entry.permission_id, entry.registration_kind,
+  entry.registration_owner_id, 'available', 1, entry.meaning_fingerprint,
+  1, pg_catalog.clock_timestamp()
+from vortex_access.permission_catalogue_entries as entry
+where entry.organization_id = '24500000-0000-4000-8000-000000000001'
+  and entry.permission_id = 'c4500000-0000-4000-8000-000000000012';
+
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000012', 'chain_share_all_records_conditional',
+  'c4500000-0000-4000-8000-000000000012'
+);
+
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, group_id, assignment_kind, revision,
+  starts_at, expires_at, state, granted_by, granted_at,
+  grant_correlation_id, changed_by, changed_at, change_correlation_id
+) values (
+  '24500000-0000-4000-8000-000000000001', '74500000-0000-4000-8000-000000000602',
+  '64500000-0000-4000-8000-000000000012', 'organization_account',
+  '54500000-0000-4000-8000-000000000012', null, 'standing', 1,
+  pg_catalog.clock_timestamp() - interval '1 minute',
+  pg_catalog.transaction_timestamp() + interval '4 hours', 'live',
+  '94500000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a4500000-0000-4000-8000-000000000620', '94500000-0000-4000-8000-000000000001',
+  pg_catalog.clock_timestamp(), 'a4500000-0000-4000-8000-000000000620'
+);
+
 -- The target record and share: owned and granted by ADMIN, to keep every
 -- attempted revoker below equally a non-grantor.
 insert into vortex_access.test_share_rows (
@@ -2348,12 +2442,41 @@ select throws_ok(
 );
 reset role;
 
+-- Condition-narrowed all_records: the scope's sole route is all_records, but
+-- a saved condition narrows it, and record ...0072 has f_flag = false. The
+-- grant refusal below establishes that this account's share authority really
+-- cannot reach this record; the revoke refusal is the point of the case.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000012');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000604',
+    'e4500000-0000-4000-8000-000000000072', 'organization_account',
+    '54500000-0000-4000-8000-000000000009', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null,
+    'Condition-narrowed account attempts to share a record its condition excludes',
+    'web', 'a4500000-0000-4000-8000-000000000621')$$,
+  '42501',
+  'Protected record-share grant target record is not within your current share authority',
+  'a condition-narrowed all_records account cannot grant a share over a record its saved condition excludes'
+);
+select throws_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000603', 1,
+    'Condition-narrowed account attempts to revoke a share over a record its condition excludes',
+    'web', 'a4500000-0000-4000-8000-000000000622')$$,
+  '42501', 'Protected record-share revocation is unavailable',
+  'a condition-narrowed all_records account cannot revoke a share over a record its saved condition excludes -- a saved condition narrows every route including all_records, so the scope is not decidable without the row'
+);
+reset role;
+
 select is(
   (select state from vortex_access.organization_direct_record_shares
    where organization_id = '24500000-0000-4000-8000-000000000001'
      and direct_share_id = '94500000-0000-4000-8000-000000000603'),
   'active',
-  'the share remains active after all three route-restricted refusals'
+  'the share remains active after all four scope-restricted refusals'
 );
 
 -- The record is soft-deleted before the successful revocation below, to
