@@ -15,6 +15,12 @@ fact-loader work is preserved as [non-executable checkpoint text](../checkpoints
 It is not deployed policy enforcement. This task remains open; the empty second
 migration is not part of the runnable migration set.
 
+Coordination resumed the same day at the user's instruction. Source inspection at
+`dc5c40973ad8cdd36e59e062179c67184d6f4a68` confirms the contract, compiler,
+validation, version-comparison and typed-decision work below is delivered, and
+that no record-access function or proof exists in the database. The remaining
+task is the database decision, the four fixed neutral policies and their proof.
+
 Permission to perform an action and permission to see or change a particular record are both enforced by the database. Neither check can substitute for the other.
 
 ## What will be built
@@ -30,7 +36,7 @@ For a record, the decision is `OR(permission eligibility AND that same permissio
 
 ## Implementation sequence
 
-1. Extend the trusted record-operation contract and publication/compiler mapping with canonical permission alternatives, retaining existing singular bindings and normal meaning/version comparison.
+1. **Delivered.** The trusted record-operation contract and the publication/compiler mapping carry canonical permission alternatives, retaining existing singular bindings and normal meaning/version comparison. See the authored/compiled action contracts, `compiler.ts`, `validation.ts` and `comparison-policy.ts` on `main`; the typed record declaration, eligibility, matched-contribution and decision schemas in `contracts/src/organization-access-decision.ts`; and the `FixedOrganizationRecordAccessAdapter` seam in `runtime/access/src/organization-record-access-operation.ts`. Do not rebuild these.
 2. Extend the existing private central decision compatibly: its current non-record path explicitly excludes record catalogue entries and cannot be reused unchanged for a record. Select the exact current record permission and keep its `record_scope`, identity, context and validity deadline bound to that eligibility result. Preserve the existing non-record operation contract and behavior.
 3. Compose each eligible alternative with its own complete visibility scope through the existing predicates. Keep only complete matches and their conservative validity deadline for the field-access consumer. Reuse the published cycle-free relationship graph for recursion; add no parallel policy registry or authority cache.
 4. Apply and verify the four fixed policy shapes below on neutral business-row tables, followed by whole-scope review and exact hosted evidence. Generated storage and field projection remain downstream consumers.
