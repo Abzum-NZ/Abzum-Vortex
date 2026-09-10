@@ -195,7 +195,10 @@ begin
       '{"readableFieldIds":["b4400000-0000-4000-8000-000000000001","B4400000-0000-4000-8000-000000000003"],"changeableFieldIds":[]}'::jsonb),
     ('c4400000-0000-4000-8000-000000000011'::uuid,
       'record_field_bounds.canon_2', 'Canon 2', 'b',
-      '{"readableFieldIds":["b4400000-0000-4000-8000-000000000001","b4400000-0000-4000-8000-000000000002"],"changeableFieldIds":["b4400000-0000-4000-8000-000000000002"]}'::jsonb)
+      '{"readableFieldIds":["b4400000-0000-4000-8000-000000000001","b4400000-0000-4000-8000-000000000002"],"changeableFieldIds":["b4400000-0000-4000-8000-000000000002"]}'::jsonb),
+    ('c4400000-0000-4000-8000-000000000012'::uuid,
+      'record_field_bounds.empty_policy', 'Empty policy', 'c',
+      '{"readableFieldIds":[],"changeableFieldIds":[]}'::jsonb)
   ) as permission(
     permission_id, permission_key, label, fingerprint_character, field_policy
   );
@@ -409,6 +412,29 @@ select is(
   'the null-policy contribution still does not veto when it is declared first'
 );
 
+-- An explicit-empty field_policy ({"readableFieldIds":[],"changeableFieldIds":[]})
+-- is a different fact from an absent one -- a policy author's explicit "this
+-- permission names no fields" rather than field_policy never having been
+-- set -- but resolves the same way: it contributes no fields of its own and
+-- does not veto a second contribution that has some.
+select is(
+  vortex_access.resolve_record_field_bounds_internal(
+    pg_temp.allowed_decision(pg_catalog.jsonb_build_array(
+      pg_temp.contribution(
+        'c4400000-0000-4000-8000-000000000012'::uuid, pg_temp.route_ownership()
+      ),
+      pg_temp.contribution(
+        'c4400000-0000-4000-8000-000000000005'::uuid, pg_temp.route_ownership()
+      )
+    ))
+  ),
+  pg_catalog.jsonb_build_object(
+    'readableFieldIds', pg_catalog.jsonb_build_array('b4400000-0000-4000-8000-000000000003'),
+    'changeableFieldIds', pg_catalog.jsonb_build_array('b4400000-0000-4000-8000-000000000003')
+  ),
+  'an explicit-empty field policy, distinct from an absent one, also contributes no fields and does not veto a second contribution'
+);
+
 -- A direct_share contribution is intersected with the share's own bounds in
 -- both directions: a field in the policy but not the share is absent (fld
 -- ...0002 and ...0004), and a field in the share but not the policy is absent
@@ -544,6 +570,28 @@ select throws_ok(
   $$,
   '22023'::char(5), 'Record field bounds found a superseded permission source',
   'a contribution whose source does not match the catalogue entry''s release raises 22023'
+);
+
+-- The same superseded-source refusal fires on a mismatch in any of the three
+-- fields brought to parity with contracts/src/record-field-access.ts's own
+-- sourceMatches (F5): validationContractVersion, contentFingerprint and
+-- resolutionFingerprint. A release that changed only its content or
+-- resolution evidence, with revision and version unchanged, must still be
+-- caught -- exercised here via validationContractVersion.
+select throws_ok(
+  $$
+    select vortex_access.resolve_record_field_bounds_internal(
+      pg_temp.allowed_decision(pg_catalog.jsonb_build_array(
+        pg_temp.contribution(
+          'c4400000-0000-4000-8000-000000000001'::uuid,
+          pg_temp.route_ownership(),
+          pg_temp.correct_source() || pg_catalog.jsonb_build_object('validationContractVersion', '9.9.9')
+        )
+      ))
+    )
+  $$,
+  '22023'::char(5), 'Record field bounds found a superseded permission source',
+  'a contribution whose validationContractVersion does not match the catalogue entry''s release raises 22023, even with revision and version unchanged'
 );
 
 set constraints all immediate;

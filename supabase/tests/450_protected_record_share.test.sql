@@ -19,8 +19,12 @@ select no_plan();
 
 -- ============================================================================
 -- Identity/organisation fixture: two tenants (home + foreign), one home
--- organisation with four accounts and one Group, one foreign organisation
--- with one account and one Group.
+-- organisation with six accounts and one Group, one foreign organisation
+-- with one account and one Group. Of the six home accounts: GRANTOR,
+-- RECIPIENT, a spare (retired) account and ADMIN are #37 slice 3's own
+-- fixture; NO_SHARE_GRANTOR and ALL_RECORDS_GRANTOR are slice 4's, added to
+-- prove F1's regression (read/update without share) and the all_records
+-- route respectively -- see their own seeded roles below.
 -- ============================================================================
 
 create function pg_temp.seed_identity()
@@ -67,7 +71,11 @@ begin
     ('44500000-0000-4000-8000-000000000004', 'active', operation_at, operation_at,
       '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000004', 1),
     ('44500000-0000-4000-8000-000000000005', 'active', operation_at, operation_at,
-      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000005', 1);
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000005', 1),
+    ('44500000-0000-4000-8000-000000000006', 'active', operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000006', 1),
+    ('44500000-0000-4000-8000-000000000007', 'active', operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000007', 1);
 
   -- Home organisation: GRANTOR, RECIPIENT, a spare account, ADMIN (the
   -- original grantor of the pre-existing shares below).
@@ -95,7 +103,15 @@ begin
     ('54500000-0000-4000-8000-000000000005', '24500000-0000-4000-8000-000000000002',
       '44500000-0000-4000-8000-000000000005', 'Foreign account', 'active',
       operation_at - interval '1 minute', null, operation_at, operation_at,
-      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000015', 1);
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000015', 1),
+    ('54500000-0000-4000-8000-000000000006', '24500000-0000-4000-8000-000000000001',
+      '44500000-0000-4000-8000-000000000006', 'No-share grantor account', 'active',
+      operation_at - interval '1 minute', null, operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000016', 1),
+    ('54500000-0000-4000-8000-000000000007', '24500000-0000-4000-8000-000000000001',
+      '44500000-0000-4000-8000-000000000007', 'All-records grantor account', 'active',
+      operation_at - interval '1 minute', null, operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000017', 1);
 
   perform 1 from vortex_access.initialize_organization_access_version(
     '24500000-0000-4000-8000-000000000001', '94500000-0000-4000-8000-000000000001',
@@ -150,12 +166,17 @@ select pg_temp.seed_identity();
 
 -- ============================================================================
 -- Permission catalogue: one application registration on the home
--- organisation owning two record-scoped permissions on one neutral record
--- type -- chain_read and chain_update -- each routed on direct_share only,
--- so eligibility (a standing role assignment) is necessary but the actual
--- row reached is always an explicit organization_direct_record_shares row.
--- Three fields: F1/F2 are named by both permissions' field policy; F3 is
--- declared nowhere, so no share can ever carry it.
+-- organisation owning four record-scoped permissions on one neutral record
+-- type. chain_read and chain_update are routed on direct_share only, so
+-- eligibility (a standing role assignment) is necessary but the actual row
+-- reached is always an explicit organization_direct_record_shares row.
+-- chain_share (#37 slice 4, F1) is routed all_records -- the record decision
+-- refuses a direct_share route for any action but read/update, so all_records
+-- is the only route that can carry a share action at all. chain_read_all is
+-- also routed all_records, seeded only to prove that route is admitted for
+-- the read/update ceiling too, alongside chain_read's own direct_share proof.
+-- Three fields: F1/F2 are named by every read/update permission's field
+-- policy; F3 is declared nowhere, so no share can ever carry it.
 -- ============================================================================
 
 create function pg_temp.seed_catalogue()
@@ -236,7 +257,14 @@ begin
     ('c4500000-0000-4000-8000-000000000002'::uuid,
       'record_share.chain_update', 'Chain update', 'update', '2',
       '{"routes":[{"kind":"direct_share"}]}'::jsonb,
-      '{"readableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102","b4500000-0000-4000-8000-000000000103"],"changeableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102","b4500000-0000-4000-8000-000000000103"]}'::jsonb)
+      '{"readableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102","b4500000-0000-4000-8000-000000000103"],"changeableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102","b4500000-0000-4000-8000-000000000103"]}'::jsonb),
+    ('c4500000-0000-4000-8000-000000000003'::uuid,
+      'record_share.chain_share', 'Chain share', 'share', '3',
+      '{"routes":[{"kind":"all_records"}]}'::jsonb, null::jsonb),
+    ('c4500000-0000-4000-8000-000000000004'::uuid,
+      'record_share.chain_read_all', 'Chain read (all records)', 'read', '4',
+      '{"routes":[{"kind":"all_records"}]}'::jsonb,
+      '{"readableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102"],"changeableFieldIds":[]}'::jsonb)
   ) as permission(
     permission_id, permission_key, label, action_kind, fingerprint_character,
     record_scope, field_policy
@@ -337,8 +365,21 @@ select pg_temp.seed_role(
 select pg_temp.seed_role(
   '64500000-0000-4000-8000-000000000002', 'chain_update', 'c4500000-0000-4000-8000-000000000002'
 );
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000003', 'chain_share', 'c4500000-0000-4000-8000-000000000003'
+);
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000004', 'chain_read_all', 'c4500000-0000-4000-8000-000000000004'
+);
 
--- GRANTOR holds chain_read and chain_update by standing assignment.
+-- GRANTOR holds chain_read, chain_update and chain_share by standing
+-- assignment -- chain_share (#37 slice 4) is what makes GRANTOR's own
+-- existing positive-path cases below pass for the right reason. NO_SHARE_
+-- GRANTOR holds chain_read and chain_update only, never chain_share: F1's
+-- regression fixture. ALL_RECORDS_GRANTOR holds chain_share and
+-- chain_read_all only -- both all_records-routed, no direct_share row of its
+-- own anywhere below -- proving the all_records route admits a read ceiling
+-- too, not only chain_read's own direct_share route.
 insert into vortex_access.organization_role_assignments (
   organization_id, role_assignment_id, role_id, assignee_kind,
   organization_account_id, group_id, assignment_kind, revision,
@@ -357,7 +398,17 @@ from (values
   ('74500000-0000-4000-8000-000000000001'::uuid, '64500000-0000-4000-8000-000000000001'::uuid,
     '54500000-0000-4000-8000-000000000001'::uuid, 'a4500000-0000-4000-8000-000000000051'::uuid),
   ('74500000-0000-4000-8000-000000000002'::uuid, '64500000-0000-4000-8000-000000000002'::uuid,
-    '54500000-0000-4000-8000-000000000001'::uuid, 'a4500000-0000-4000-8000-000000000052'::uuid)
+    '54500000-0000-4000-8000-000000000001'::uuid, 'a4500000-0000-4000-8000-000000000052'::uuid),
+  ('74500000-0000-4000-8000-000000000003'::uuid, '64500000-0000-4000-8000-000000000003'::uuid,
+    '54500000-0000-4000-8000-000000000001'::uuid, 'a4500000-0000-4000-8000-000000000053'::uuid),
+  ('74500000-0000-4000-8000-000000000004'::uuid, '64500000-0000-4000-8000-000000000001'::uuid,
+    '54500000-0000-4000-8000-000000000006'::uuid, 'a4500000-0000-4000-8000-000000000054'::uuid),
+  ('74500000-0000-4000-8000-000000000005'::uuid, '64500000-0000-4000-8000-000000000002'::uuid,
+    '54500000-0000-4000-8000-000000000006'::uuid, 'a4500000-0000-4000-8000-000000000055'::uuid),
+  ('74500000-0000-4000-8000-000000000006'::uuid, '64500000-0000-4000-8000-000000000003'::uuid,
+    '54500000-0000-4000-8000-000000000007'::uuid, 'a4500000-0000-4000-8000-000000000056'::uuid),
+  ('74500000-0000-4000-8000-000000000007'::uuid, '64500000-0000-4000-8000-000000000004'::uuid,
+    '54500000-0000-4000-8000-000000000007'::uuid, 'a4500000-0000-4000-8000-000000000057'::uuid)
 ) as assignment(role_assignment_id, role_id, account_id, correlation_id);
 
 -- ============================================================================
@@ -369,6 +420,9 @@ from (values
 --   RECORD_B: readable F1,F2; changeable F1         (partial update authority)
 --   RECORD_E: readable F1;    changeable none       (read-only, for revoke-
 --             after-narrowing)
+-- RECORD_F below is the same shape as RECORD_B, but granted to NO_SHARE_
+-- GRANTOR instead of GRANTOR -- full read/update authority with no chain_
+-- share assignment at all.
 -- ============================================================================
 
 insert into vortex_access.organization_direct_record_shares (
@@ -408,10 +462,48 @@ cross join (values
   correlation_id, reason
 );
 
+-- ADMIN's grant to NO_SHARE_GRANTOR on RECORD_F: the same readable F1,F2 /
+-- changeable F1 shape as RECORD_B, but this recipient never holds chain_share
+-- -- F1's regression fixture (full read/update authority is not, by itself,
+-- share authority).
+insert into vortex_access.organization_direct_record_shares (
+  organization_id, direct_share_id, storage_scope, application_root_id,
+  module_root_id, record_type_id, storage_contract_id, record_id,
+  recipient_kind, organization_account_id, group_id,
+  readable_field_ids, changeable_field_ids, starts_at, expires_at,
+  state, revision, granted_by, granted_at, grant_correlation_id,
+  reason, changed_at
+)
+select
+  '24500000-0000-4000-8000-000000000001', '74500000-0000-4000-8000-000000000016',
+  'application_contained', '34500000-0000-4000-8000-000000000001',
+  '34500000-0000-4000-8000-000000000002', 'd4500000-0000-4000-8000-000000000001',
+  'b4500000-0000-4000-8000-000000000001', 'e4500000-0000-4000-8000-000000000006',
+  'organization_account', '54500000-0000-4000-8000-000000000006', null,
+  array['b4500000-0000-4000-8000-000000000101','b4500000-0000-4000-8000-000000000102']::uuid[],
+  array['b4500000-0000-4000-8000-000000000101']::uuid[],
+  op.now - interval '1 minute', op.now + interval '4 hours',
+  'active', 1, '54500000-0000-4000-8000-000000000004', op.now,
+  'a4500000-0000-4000-8000-000000000066', 'Admin grant to no-share account on record F',
+  op.now
+from (select pg_catalog.clock_timestamp() as now) as op;
+
 -- Establishes the real session request context the protected functions
 -- sample via validated_human_request_context(). Callable repeatedly to
 -- switch the acting account between cases.
-create function pg_temp.install_request_context(p_account_id uuid)
+-- p_stale installs an accessVersion one behind the live value -- always
+-- stale, since validated_human_request_context() requires an exact match --
+-- to prove a stale Access version refuses both the grant and the revocation.
+-- p_delegated adds a structurally valid delegatedContext, which the shared
+-- eligibility core refuses outright for any record-permission declaration
+-- (supportContext is refused by the identical check; only one is exercised
+-- below since both share the one code path) -- to prove a delegated or
+-- support context cannot revoke.
+create function pg_temp.install_request_context(
+  p_account_id uuid,
+  p_stale boolean default false,
+  p_delegated boolean default false
+)
 returns void
 language plpgsql
 volatile
@@ -421,6 +513,7 @@ declare
   operation_at timestamptz := pg_catalog.statement_timestamp();
   current_access_version bigint;
   acting_identity_id uuid;
+  context_value jsonb;
 begin
   perform pg_catalog.set_config('vortex.request_context', '', true);
 
@@ -433,7 +526,7 @@ begin
   where account.organization_id = '24500000-0000-4000-8000-000000000001'
     and account.organization_account_id = p_account_id;
 
-  perform vortex_context.initialize(pg_catalog.jsonb_build_object(
+  context_value := pg_catalog.jsonb_build_object(
     'callerKind', 'human',
     'identityAuthorityId', 'a4500000-0000-4000-8000-000000000091',
     'tenantId', '14500000-0000-4000-8000-000000000001',
@@ -445,11 +538,24 @@ begin
     'authenticationStrength', 'single_factor',
     'issuedAt', operation_at,
     'expiresAt', operation_at + interval '2 hours',
-    'accessVersion', current_access_version,
+    'accessVersion',
+      case when p_stale then current_access_version - 1 else current_access_version end,
     'correlationId', 'a4500000-0000-4000-8000-000000000093',
     'accessTokenIssuedAt', operation_at,
     'primaryAuthenticatedAt', operation_at
-  ));
+  );
+
+  if p_delegated then
+    context_value := context_value || pg_catalog.jsonb_build_object(
+      'delegatedContext', pg_catalog.jsonb_build_object(
+        'delegatedByOrganizationAccountId', '54500000-0000-4000-8000-000000000004',
+        'reason', 'Support-assisted action while the true grantor is unavailable',
+        'expiresAt', operation_at + interval '1 hour'
+      )
+    );
+  end if;
+
+  perform vortex_context.initialize(context_value);
 end
 $function$;
 
@@ -886,6 +992,163 @@ select is(
      and direct_share_id = '94500000-0000-4000-8000-000000000101'),
   'active',
   'the share remains active after the recipient''s refused revocation attempt'
+);
+
+-- ============================================================================
+-- GRANT: F1's regression -- a grantor who currently holds read and update
+-- authority for a record, but no current record.share permission at all, is
+-- refused before any ceiling comparison, and nothing is written. The message
+-- is distinct from every "exceeds current read/update authority" refusal
+-- above: this grantor is never even measured against a ceiling, because they
+-- never clear the share gate in the first place. NO_SHARE_GRANTOR holds
+-- chain_read and chain_update on record F (readable F1,F2; changeable F1 --
+-- full update authority) but was never assigned chain_share.
+-- ============================================================================
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000006');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.grant_record_share_for_administration(
+    '94500000-0000-4000-8000-000000000113', 'application_contained',
+    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000006', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'No-share grantor attempts to re-share record F',
+    'web', 'a4500000-0000-4000-8000-000000000221')$$,
+  '42501', 'Protected record-share grant requires a current share permission',
+  'a grantor holding current read and update authority but no share permission is refused, naming the missing permission rather than an exceeded ceiling'
+);
+reset role;
+select is(
+  (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000113'),
+  0::bigint,
+  'the missing-share-permission refusal writes nothing'
+);
+
+-- ============================================================================
+-- GRANT: an all_records-routed grantor succeeds, proving the second route
+-- the migration admits for the read/update ceiling -- chain_read's own
+-- direct_share route is already proven throughout every case above.
+-- ALL_RECORDS_GRANTOR holds chain_share and chain_read_all, both
+-- all_records-routed, and no direct_share row of its own anywhere in this
+-- fixture: record G is reached purely through the all_records route.
+-- ============================================================================
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000007');
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.grant_record_share_for_administration(
+    '94500000-0000-4000-8000-000000000114', 'application_contained',
+    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000007', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'All-records-routed grantor shares record G',
+    'web', 'a4500000-0000-4000-8000-000000000222')$$,
+  'a grantor whose share and read authority are both all_records-routed, with no direct_share row at all, succeeds'
+);
+reset role;
+select is(
+  (select pg_catalog.jsonb_build_object(
+    'state', state, 'readable', readable_field_ids, 'changeable', changeable_field_ids
+  ) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000114'),
+  pg_catalog.jsonb_build_object(
+    'state', 'active',
+    'readable', array['b4500000-0000-4000-8000-000000000101']::uuid[],
+    'changeable', array[]::uuid[]
+  ),
+  'the all_records-routed grant stores exactly the proposed subset'
+);
+
+-- ============================================================================
+-- REVOKE: F4 -- a delegated (or, identically, support) context cannot
+-- revoke, even for the account that would otherwise currently hold
+-- record.share authority. The shared eligibility core refuses any
+-- record-permission declaration outright once delegatedContext or
+-- supportContext is present; this is that refusal exercised through the
+-- revoke path, not the old (and wrong) identity comparison. Both keys are
+-- refused by the identical check, so only delegatedContext is exercised here.
+-- ============================================================================
+
+select pg_temp.install_request_context(
+  '54500000-0000-4000-8000-000000000001', false, true
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.revoke_record_share_for_administration(
+    '94500000-0000-4000-8000-000000000101', 1,
+    'Delegated context attempts revocation', 'web',
+    'a4500000-0000-4000-8000-000000000223')$$,
+  '42501', 'Protected record-share revocation is unavailable',
+  'a delegated context cannot revoke, even for an account that otherwise currently holds record.share'
+);
+reset role;
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000101'),
+  'active',
+  'the share remains active after the delegated context''s refused revocation attempt'
+);
+
+-- ============================================================================
+-- GRANT and REVOKE: a stale Access version refuses both, before any
+-- authority is even evaluated -- validated_human_request_context() itself
+-- requires an exact match against the live Access version.
+-- ============================================================================
+
+select pg_temp.install_request_context(
+  '54500000-0000-4000-8000-000000000001', true
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.grant_record_share_for_administration(
+    '94500000-0000-4000-8000-000000000115', 'application_contained',
+    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000001', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Stale-context grant attempt',
+    'web', 'a4500000-0000-4000-8000-000000000224')$$,
+  '42501', 'Request access version is stale or unavailable',
+  'a stale Access version refuses the grant before any authority is evaluated'
+);
+reset role;
+select is(
+  (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000115'),
+  0::bigint,
+  'the stale-context grant refusal writes nothing'
+);
+
+select pg_temp.install_request_context(
+  '54500000-0000-4000-8000-000000000001', true
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.revoke_record_share_for_administration(
+    '94500000-0000-4000-8000-000000000101', 1,
+    'Stale-context revocation attempt', 'web',
+    'a4500000-0000-4000-8000-000000000225')$$,
+  '42501', 'Request access version is stale or unavailable',
+  'a stale Access version refuses the revocation the same way'
+);
+reset role;
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000101'),
+  'active',
+  'the share remains active after the stale-context revocation attempt'
 );
 
 -- ============================================================================

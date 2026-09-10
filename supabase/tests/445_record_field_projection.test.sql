@@ -432,7 +432,11 @@ values
   ('24450000-0000-4000-8000-000000000001', '34450000-0000-4000-8000-000000000002',
     'd4450000-0000-4000-8000-000000000001', 'b4450000-0000-4000-8000-000000000001',
     'e4450000-0000-4000-8000-000000000006', '34450000-0000-4000-8000-000000000001',
-    '54450000-0000-4000-8000-000000000001', 'open-6', 'locked-6', 'secret-6');
+    '54450000-0000-4000-8000-000000000001', 'open-6', 'locked-6', 'secret-6'),
+  ('24450000-0000-4000-8000-000000000001', '34450000-0000-4000-8000-000000000002',
+    'd4450000-0000-4000-8000-000000000001', 'b4450000-0000-4000-8000-000000000001',
+    'e4450000-0000-4000-8000-000000000007', '34450000-0000-4000-8000-000000000001',
+    '54450000-0000-4000-8000-000000000001', 'open-7', 'locked-7', 'secret-7');
 
 -- Establishes the real session request context the decision function samples
 -- itself via validated_human_request_context(). Callable repeatedly to switch
@@ -654,6 +658,18 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
 
+  -- Field ids are canonically lowercase -- matching both
+  -- resolve_record_field_bounds_internal's own canonicalisation and a uuid
+  -- value's own ::text form. Normalise the proposed object's keys to that
+  -- same case once, here, so the authorisation check below and the UPDATE's
+  -- own key lookups agree on exactly the same keys: an upper-case field id
+  -- must not be authorised under a case-insensitive comparison and then
+  -- silently fail to apply because the UPDATE looked for a differently-cased
+  -- key that was never there.
+  select coalesce(pg_catalog.jsonb_object_agg(pg_catalog.lower(entry.key), entry.value), '{}'::jsonb)
+  into p_proposed
+  from pg_catalog.jsonb_each(p_proposed) as entry(key, value);
+
   select * into row_val from vortex_access.test_field_rows where record_id = p_record_id;
   if not found then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
@@ -729,12 +745,16 @@ begin
   from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
   changeable := coalesce(changeable, array[]::text[]);
 
-  -- Every proposed key must be inside the changeable set. The first field
-  -- outside it refuses the whole proposal before any UPDATE statement runs,
-  -- so a permitted field named alongside a forbidden one is never applied.
+  -- Every proposed key must be inside the changeable set. p_proposed's keys
+  -- are already lowercased above, matching changeable's own canonical case,
+  -- so this is a plain membership test -- the same keys the UPDATE below
+  -- looks up, not a case-insensitive comparison against differently-cased
+  -- keys it will then fail to find. The first field outside it refuses the
+  -- whole proposal before any UPDATE statement runs, so a permitted field
+  -- named alongside a forbidden one is never applied.
   for proposed_key in select * from pg_catalog.jsonb_object_keys(p_proposed)
   loop
-    if not (pg_catalog.lower(proposed_key) = any (changeable)) then
+    if not (proposed_key = any (changeable)) then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
   end loop;
@@ -871,6 +891,26 @@ select is(
   pg_temp.field_snapshot('e4450000-0000-4000-8000-000000000005'),
   pg_catalog.jsonb_build_object('f_open', 'open-5', 'f_locked', 'locked-5', 'f_secret', 'secret-5'),
   'record_5 is untouched after the unknown-field proposal'
+);
+
+-- Case sensitivity: authorisation and application must agree on the same
+-- key. An upper-cased field id is authorised (the changeable-set membership
+-- check compares on the field ids' own canonical lowercase form) and must
+-- therefore actually be applied under that same case -- not silently dropped
+-- by a case-sensitive key lookup that still goes on to report the row as
+-- changed.
+select is(
+  vortex_access.test_field_change(
+    'e4450000-0000-4000-8000-000000000007',
+    pg_catalog.jsonb_build_object('B4450000-0000-4000-8000-000000000101', 'open-7-changed')
+  ),
+  pg_catalog.jsonb_build_object('outcome', 'allowed', 'rowsChanged', 1),
+  'OWNER changing the open field on record_7 via an upper-cased field id is authorised'
+);
+select is(
+  pg_temp.field_snapshot('e4450000-0000-4000-8000-000000000007'),
+  pg_catalog.jsonb_build_object('f_open', 'open-7-changed', 'f_locked', 'locked-7', 'f_secret', 'secret-7'),
+  'the upper-cased field id is actually applied, not silently dropped while still reporting a changed row'
 );
 
 reset role;

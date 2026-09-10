@@ -65,12 +65,23 @@ begin
         message = 'Record field bounds found no catalogue entry';
     end if;
 
-    -- A superseded release would otherwise silently supply the policy.
+    -- A superseded release would otherwise silently supply the policy. Eight
+    -- fields, at parity with contracts/src/record-field-access.ts's own
+    -- sourceMatches: the five identity/release fields plus the three that
+    -- were missing here -- validationContractVersion, contentFingerprint and
+    -- resolutionFingerprint -- so a release that changed only its content or
+    -- resolution evidence (revision and version unchanged) is caught too.
     if catalogue_entry.source_kind is distinct from (contribution_source ->> 'kind')
       or catalogue_entry.source_definition_key is distinct from (contribution_source ->> 'definitionKey')
       or catalogue_entry.source_root_id is distinct from (contribution_source ->> 'rootId')::uuid
       or catalogue_entry.source_version is distinct from (contribution_source ->> 'releaseVersion')
-      or catalogue_entry.source_revision is distinct from (contribution_source ->> 'releaseRevision')::bigint then
+      or catalogue_entry.source_revision is distinct from (contribution_source ->> 'releaseRevision')::bigint
+      or catalogue_entry.source_validation_contract_version
+        is distinct from (contribution_source ->> 'validationContractVersion')
+      or catalogue_entry.source_content_fingerprint
+        is distinct from (contribution_source ->> 'contentFingerprint')
+      or catalogue_entry.source_resolution_fingerprint
+        is distinct from (contribution_source ->> 'resolutionFingerprint') then
       raise exception using errcode = '22023',
         message = 'Record field bounds found a superseded permission source';
     end if;
