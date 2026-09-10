@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { applicationContentV1Schema } from "./application-contracts";
+import { applicationContentV1Schema, applicationContentV2Schema } from "./application-contracts";
 import { correlationIdSchema } from "./common";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
 import {
@@ -12,6 +12,8 @@ import {
   semanticVersionSchema,
 } from "./identifiers";
 import { moduleContentSchema } from "./module-contracts";
+import { moduleContentV2Schema } from "./module-contracts-v2";
+import { moduleContentV3Schema } from "./module-contracts-v3";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -47,7 +49,9 @@ export const definitionConsumerReadCommandSchema = z.discriminatedUnion("kind", 
 const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema>): string =>
   entry.kind === "platform_theme"
     ? `${entry.kind}:${entry.catalogueThemeId}`
-    : `${entry.kind}:${entry.key}`;
+    : entry.kind === "platform_block"
+      ? `${entry.kind}:${entry.blockId}`
+      : `${entry.kind}:${entry.key}`;
 
 /** A complete manifest in canonical subject order, using the publication contract's exact entries. */
 export const definitionConsumerReadDependencyManifestSchema = z
@@ -89,20 +93,87 @@ export const applicationDefinitionConsumerReadResultV1Schema = z
     rootId: applicationRootIdSchema,
     content: applicationContentV1Schema,
     ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("1.0.0"),
   })
   .strict();
 
-export const definitionConsumerReadResultSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("module"),
-      rootId: moduleRootIdSchema,
-      content: moduleContentSchema,
-      ...definitionConsumerReadResultCommon,
-    })
-    .strict(),
+export const applicationDefinitionConsumerReadResultV2Schema = z
+  .object({
+    kind: z.literal("application"),
+    rootId: applicationRootIdSchema,
+    content: applicationContentV2Schema,
+    ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("2.0.0"),
+  })
+  .strict();
+
+export const moduleDefinitionConsumerReadResultV1Schema = z
+  .object({
+    kind: z.literal("module"),
+    rootId: moduleRootIdSchema,
+    content: moduleContentSchema,
+    ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("1.0.0"),
+  })
+  .strict();
+
+export const moduleDefinitionConsumerReadResultV2Schema = z
+  .object({
+    kind: z.literal("module"),
+    rootId: moduleRootIdSchema,
+    content: moduleContentV2Schema,
+    ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("2.0.0"),
+  })
+  .strict();
+
+export const moduleDefinitionConsumerReadResultV3Schema = z
+  .object({
+    kind: z.literal("module"),
+    rootId: moduleRootIdSchema,
+    content: moduleContentV3Schema,
+    ...definitionConsumerReadResultCommon,
+    validationContractVersion: z.literal("3.0.0"),
+  })
+  .strict();
+
+export const definitionConsumerReadResultSchema = z.union([
+  moduleDefinitionConsumerReadResultV1Schema,
+  moduleDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultV3Schema,
   applicationDefinitionConsumerReadResultV1Schema,
+  applicationDefinitionConsumerReadResultV2Schema,
 ]);
+
+export const applicationBoundReleaseSetCommandSchema = z
+  .object({ applicationReleaseRevision: javascriptSafeRevisionSchema })
+  .strict();
+
+const applicationDefinitionConsumerReadResultSchema = z.union([
+  applicationDefinitionConsumerReadResultV1Schema,
+  applicationDefinitionConsumerReadResultV2Schema,
+]);
+const moduleDefinitionConsumerReadResultSchema = z.union([
+  moduleDefinitionConsumerReadResultV1Schema,
+  moduleDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultV3Schema,
+]);
+
+export const applicationBoundReleaseSetResultSchema = z
+  .object({
+    application: applicationDefinitionConsumerReadResultSchema,
+    modules: z.array(moduleDefinitionConsumerReadResultSchema).min(1).max(10_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const roots = value.modules.map((module) => module.rootId);
+    if (new Set(roots).size !== roots.length)
+      context.addIssue({
+        code: "custom",
+        path: ["modules"],
+        message: "A bound release set has one exact release per Module root",
+      });
+  });
 
 export type DefinitionConsumerReadCommand = z.infer<typeof definitionConsumerReadCommandSchema>;
 export type DefinitionConsumerReadSelector = z.infer<typeof definitionConsumerReadSelectorSchema>;
@@ -110,3 +181,18 @@ export type DefinitionConsumerReadDependencyManifest = z.infer<
   typeof definitionConsumerReadDependencyManifestSchema
 >;
 export type DefinitionConsumerReadResult = z.infer<typeof definitionConsumerReadResultSchema>;
+export type ApplicationBoundReleaseSetCommand = z.infer<
+  typeof applicationBoundReleaseSetCommandSchema
+>;
+export type ApplicationBoundReleaseSetResult = z.infer<
+  typeof applicationBoundReleaseSetResultSchema
+>;
+export type ModuleDefinitionConsumerReadResultV1 = z.infer<
+  typeof moduleDefinitionConsumerReadResultV1Schema
+>;
+export type ModuleDefinitionConsumerReadResultV2 = z.infer<
+  typeof moduleDefinitionConsumerReadResultV2Schema
+>;
+export type ModuleDefinitionConsumerReadResultV3 = z.infer<
+  typeof moduleDefinitionConsumerReadResultV3Schema
+>;

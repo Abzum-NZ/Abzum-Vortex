@@ -6,9 +6,11 @@ import { fingerprintPermissionMeaning } from "../src/permission-fingerprints";
 import {
   platformPermissionCatalogue,
   platformPermissionCatalogueV1,
+  platformPermissionCatalogueV1_0_1,
   platformPermissionCatalogueOwnerId,
   platformPermissionCatalogueVersion,
   platformPermissionCatalogueVersionV1,
+  platformPermissionCatalogueVersionV1_0_1,
 } from "../src/platform-permission-catalogue";
 
 describe("platform permission catalogue", () => {
@@ -18,13 +20,13 @@ describe("platform permission catalogue", () => {
       ownerKind: "platform",
       ownerId: platformPermissionCatalogueOwnerId,
     });
-    expect(platformPermissionCatalogue.permissions).toHaveLength(13);
+    expect(platformPermissionCatalogue.permissions).toHaveLength(14);
     expect(
       new Set(platformPermissionCatalogue.permissions.map((entry) => entry.permissionId)),
-    ).toHaveProperty("size", 13);
+    ).toHaveProperty("size", 14);
     expect(
       new Set(platformPermissionCatalogue.permissions.map((entry) => entry.key)),
-    ).toHaveProperty("size", 13);
+    ).toHaveProperty("size", 14);
     expect(platformPermissionCatalogue.permissions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: "platform.organization.permissions.read" }),
@@ -32,6 +34,11 @@ describe("platform permission catalogue", () => {
         expect.objectContaining({ key: "platform.organization.accounts.manage" }),
         expect.objectContaining({ key: "platform.organization.invitations.manage" }),
         expect.objectContaining({ key: "platform.organization.runtime_settings.manage" }),
+        expect.objectContaining({
+          key: "platform.organization.applications.manage",
+          actionKind: "manage",
+          administrative: true,
+        }),
       ]),
     );
     expect(
@@ -45,12 +52,14 @@ describe("platform permission catalogue", () => {
     ).toBe(true);
   });
 
-  it("changes only Group-facing display metadata across the explicit patch revision", () => {
+  it("preserves both historical revisions before the additive application lifecycle permission", () => {
     expect(platformPermissionCatalogueV1.catalogueVersion).toBe(
       platformPermissionCatalogueVersionV1,
     );
-    expect(platformPermissionCatalogue.catalogueVersion).toBe(platformPermissionCatalogueVersion);
-    expect(platformPermissionCatalogue.catalogueFingerprint).not.toBe(
+    expect(platformPermissionCatalogueV1_0_1.catalogueVersion).toBe(
+      platformPermissionCatalogueVersionV1_0_1,
+    );
+    expect(platformPermissionCatalogueV1_0_1.catalogueFingerprint).not.toBe(
       platformPermissionCatalogueV1.catalogueFingerprint,
     );
 
@@ -63,11 +72,11 @@ describe("platform permission catalogue", () => {
         namedAction: permission.namedAction,
         administrative: permission.administrative,
       }));
-    expect(withoutDisplayMetadata(platformPermissionCatalogue)).toEqual(
+    expect(withoutDisplayMetadata(platformPermissionCatalogueV1_0_1)).toEqual(
       withoutDisplayMetadata(platformPermissionCatalogueV1),
     );
 
-    const changed = platformPermissionCatalogue.permissions.filter((permission, index) => {
+    const changed = platformPermissionCatalogueV1_0_1.permissions.filter((permission, index) => {
       const historical = platformPermissionCatalogueV1.permissions[index];
       return (
         historical?.label !== permission.label || historical.description !== permission.description
@@ -86,7 +95,7 @@ describe("platform permission catalogue", () => {
       }),
     ]);
     expect(
-      platformPermissionCatalogue.permissions.map((permission) =>
+      platformPermissionCatalogueV1_0_1.permissions.map((permission) =>
         fingerprintPermissionMeaning("platform", platformPermissionCatalogueOwnerId, permission),
       ),
     ).toEqual(
@@ -94,6 +103,14 @@ describe("platform permission catalogue", () => {
         fingerprintPermissionMeaning("platform", platformPermissionCatalogueOwnerId, permission),
       ),
     );
+    expect(platformPermissionCatalogue.catalogueVersion).toBe(platformPermissionCatalogueVersion);
+    expect(platformPermissionCatalogue.permissions.slice(0, 13)).toEqual(
+      platformPermissionCatalogueV1_0_1.permissions,
+    );
+    expect(platformPermissionCatalogue.permissions[13]).toMatchObject({
+      permissionId: "7ecd3304-f16c-47d4-94db-0964980091ba",
+      key: "platform.organization.applications.manage",
+    });
   });
 
   it("has deterministic version and content provenance", () => {
@@ -110,6 +127,54 @@ describe("platform permission catalogue", () => {
     ).toBe(
       fingerprintPermissionMeaning("platform", platformPermissionCatalogueOwnerId, permission),
     );
+
+    const recordPermission = {
+      permissionId: "00000000-0000-4000-8000-000000000001",
+      key: "sample.records.read",
+      label: "Read records",
+      description: "Read scoped records.",
+      recordTypeId: "00000000-0000-4000-8000-000000000002",
+      actionKind: "read" as const,
+      administrative: false,
+    };
+    const legacy = fingerprintPermissionMeaning(
+      "module",
+      "00000000-0000-4000-8000-000000000003",
+      recordPermission,
+    );
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        recordScope: { routes: [{ kind: "all_records" }] },
+      }),
+    ).not.toBe(legacy);
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        recordScope: { routes: [{ kind: "direct_share" }] },
+      }),
+    ).not.toBe(legacy);
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        recordScope: undefined,
+      }),
+    ).toBe(legacy);
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        fieldPolicy: {
+          readableFieldIds: ["00000000-0000-4000-8000-000000000004"],
+          changeableFieldIds: [],
+        },
+      }),
+    ).not.toBe(legacy);
+    expect(
+      fingerprintPermissionMeaning("module", "00000000-0000-4000-8000-000000000003", {
+        ...recordPermission,
+        fieldPolicy: undefined,
+      }),
+    ).toBe(legacy);
   });
 
   it("keeps every SQL catalogue identity and metadata byte-for-byte aligned", () => {
@@ -161,10 +226,42 @@ describe("platform permission catalogue", () => {
       /current_catalogue_fingerprint constant text :=\s*'(sha256:[a-f0-9]{64})';/,
     );
     expect(entriesMatch?.[1]).toBeDefined();
-    expect(fingerprintMatch?.[1]).toBe(platformPermissionCatalogue.catalogueFingerprint);
+    expect(fingerprintMatch?.[1]).toBe(platformPermissionCatalogueV1_0_1.catalogueFingerprint);
 
     const sqlEntries = JSON.parse(entriesMatch![1]!) as unknown;
     expect(sqlEntries).toEqual(
+      platformPermissionCatalogueV1_0_1.permissions.map((permission) => ({
+        permissionId: permission.permissionId,
+        key: permission.key,
+        label: permission.label,
+        description: permission.description,
+        actionKind: permission.actionKind,
+        meaningFingerprint: fingerprintPermissionMeaning(
+          "platform",
+          platformPermissionCatalogueOwnerId,
+          permission,
+        ),
+      })),
+    );
+  });
+
+  it("keeps the shipped 1.1.0 adoption byte-for-byte aligned with the current catalogue", () => {
+    const migration = fs.readFileSync(
+      path.resolve(
+        import.meta.dirname,
+        "../../../supabase/migrations/20260908124240_adopt_shipped_platform_permission_catalogue.sql",
+      ),
+      "utf8",
+    );
+    const entriesMatch = migration.match(
+      /catalogue_entries constant jsonb := \$catalogue\$(\[[\s\S]*?\])\$catalogue\$::jsonb;/,
+    );
+    const fingerprintMatch = migration.match(
+      /catalogue_fingerprint constant text :=\s*'(sha256:[a-f0-9]{64})';/,
+    );
+    expect(entriesMatch?.[1]).toBeDefined();
+    expect(fingerprintMatch?.[1]).toBe(platformPermissionCatalogue.catalogueFingerprint);
+    expect(JSON.parse(entriesMatch![1]!) as unknown).toEqual(
       platformPermissionCatalogue.permissions.map((permission) => ({
         permissionId: permission.permissionId,
         key: permission.key,

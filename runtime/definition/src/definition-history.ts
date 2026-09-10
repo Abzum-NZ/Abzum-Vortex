@@ -5,13 +5,14 @@ import {
   definitionReleaseHistoryResultSchema,
   definitionReleaseMetadataCommandSchema,
   definitionReleaseMetadataResultSchema,
-  definitionSourceDocumentSchema,
+  storedDefinitionSourceSchema,
   fingerprintSchema,
   restoreDefinitionDraftCommandSchema,
   selectApplicationContractPair,
+  selectModuleContractPair,
   selectStoredApplicationSourceContract,
   sessionContextSchema,
-  sourceIdentityAssignmentSchema,
+  sourceIdentityAssignmentV3Schema,
   storedDefinitionDraftSchema,
   type DefinitionReleaseHistoryCommand,
   type DefinitionReleaseHistoryResult,
@@ -34,7 +35,7 @@ import {
 } from "./definition-consumer-read";
 import { hasAuthenticStoredCustomerDefinitionRelease } from "./definition-release-integrity";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
-import { extractSourceIdentityRequirements } from "./source-identities";
+import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 
 export const definitionHistoryErrorCodes = [
@@ -62,22 +63,22 @@ export class DefinitionHistoryError extends Error {
   }
 }
 
-const currentIdentityEvidenceSchema = sourceIdentityAssignmentSchema
+const currentIdentityEvidenceSchema = sourceIdentityAssignmentV3Schema
   .extend({ ownerScope: z.string().min(1).max(500) })
   .strict();
 
 type RestoreEvidence = StoredConsumerReleaseEvidence & {
-  authoredSource: z.infer<typeof definitionSourceDocumentSchema>;
+  authoredSource: z.infer<typeof storedDefinitionSourceSchema>;
   sourceFingerprint: z.infer<typeof fingerprintSchema>;
-  sourceContractVersion: "1.0.0";
+  sourceContractVersion: "1.0.0" | "2.0.0" | "3.0.0";
   identityEvidence: readonly z.infer<typeof currentIdentityEvidenceSchema>[];
 };
 
 const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
-    authoredSource: definitionSourceDocumentSchema,
+    authoredSource: storedDefinitionSourceSchema,
     sourceFingerprint: fingerprintSchema,
-    sourceContractVersion: z.literal("1.0.0"),
+    sourceContractVersion: z.enum(["1.0.0", "2.0.0", "3.0.0"]),
     identityEvidence: z.array(currentIdentityEvidenceSchema),
   })
   .strict();
@@ -138,9 +139,9 @@ const withoutOptionalNulls = (candidate: unknown): unknown => {
 const asString = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 
-const selectApplicationRestoreContract = (candidate: unknown): void => {
+const selectRestoreContract = (candidate: unknown): void => {
   const record = asCandidate(candidate);
-  if (record?.kind !== "application") return;
+  if (record?.kind !== "application" && record?.kind !== "module") return;
   const source = asCandidate(record.authoredSource);
   const sourceContractVersion = asString(record.sourceContractVersion);
   const validationContractVersion = asString(record.validationContractVersion);
@@ -152,23 +153,33 @@ const selectApplicationRestoreContract = (candidate: unknown): void => {
   )
     throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   try {
-    selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
-    selectApplicationContractPair(sourceContractVersion, validationContractVersion);
+    if (sourceContractVersion !== intrinsicSourceContractVersion)
+      throw new TypeError("Stored source version mismatch");
+    if (record.kind === "application") {
+      selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
+      selectApplicationContractPair(sourceContractVersion, validationContractVersion);
+    } else selectModuleContractPair(sourceContractVersion, validationContractVersion);
   } catch {
     throw new DefinitionHistoryError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   }
 };
 
-const selectStoredApplicationDraftContract = (candidate: unknown): void => {
+const selectStoredDraftContract = (candidate: unknown): void => {
   const record = asCandidate(candidate);
-  if (record?.kind !== "application") return;
+  if (record?.kind !== "application" && record?.kind !== "module") return;
   const source = asCandidate(record.source);
   const sourceContractVersion = asString(record.sourceContractVersion);
   const intrinsicSourceContractVersion = asString(source?.source_contract_version);
   if (sourceContractVersion === undefined || intrinsicSourceContractVersion === undefined)
     throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   try {
-    selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
+    if (record.kind === "application")
+      selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
+    else {
+      if (sourceContractVersion !== intrinsicSourceContractVersion)
+        throw new TypeError("Stored source version mismatch");
+      selectModuleContractPair(sourceContractVersion, sourceContractVersion);
+    }
   } catch {
     throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   }
@@ -251,7 +262,7 @@ const ownerIdentifierKey = (identity: {
   ]);
 
 const identitiesMatchSource = (release: RestoreEvidence): boolean => {
-  const requirements = extractSourceIdentityRequirements(release.authoredSource);
+  const requirements = extractStoredSourceIdentityRequirements(release.authoredSource);
   const expected = requirements.flatMap((requirement) =>
     requirement.aliases.map((alias) => ({
       plain: identifierKey({
@@ -301,8 +312,8 @@ const identitiesMatchSource = (release: RestoreEvidence): boolean => {
 };
 
 const parseRestoreEvidence = (candidate: unknown): RestoreEvidence => {
-  // Select the Application source/canonical pair before either V1 payload is decoded.
-  selectApplicationRestoreContract(candidate);
+  // Select the exact source/canonical pair before either versioned payload is decoded.
+  selectRestoreContract(candidate);
   const parsed = restoreEvidenceSchema.safeParse(candidate);
   if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   return parsed.data;
@@ -324,7 +335,6 @@ const verifyRestoreEvidence = async (
     source.kind !== release.kind ||
     source.key !== release.key ||
     source.source_contract_version !== release.sourceContractVersion ||
-    release.sourceContractVersion !== "1.0.0" ||
     fingerprintCanonicalValue(source) !== release.sourceFingerprint ||
     !validateDefinitionSource(source).valid ||
     release.compilationOutput.kind === "connection_type" ||
@@ -334,6 +344,8 @@ const verifyRestoreEvidence = async (
       key: release.key,
       rootId: release.rootId,
       releaseVersion: release.releaseVersion,
+      sourceContractVersion: release.sourceContractVersion,
+      validationContractVersion: release.validationContractVersion,
       contentFingerprint: release.contentFingerprint,
       resolutionFingerprint: release.resolutionFingerprint,
       compilationOutput: release.compilationOutput,
@@ -350,6 +362,7 @@ const verifyRestoreEvidence = async (
     catalogueResult = await verifyDefinitionCatalogueDependencies(
       release.dependencyManifest,
       catalogue,
+      release.validationContractVersion,
     );
   } catch {
     throw new DefinitionHistoryError("DEFINITION_RESTORE_FAILED");
@@ -359,7 +372,7 @@ const verifyRestoreEvidence = async (
 
   return {
     sourceFingerprint: release.sourceFingerprint,
-    identityRequirements: extractSourceIdentityRequirements(source),
+    identityRequirements: extractStoredSourceIdentityRequirements(source),
   };
 };
 
@@ -370,7 +383,7 @@ const parseRestoredDraft = (
   verified: VerifiedRestoreInput,
 ): StoredDefinitionDraft => {
   const withoutNulls = withoutOptionalNulls(candidate);
-  selectStoredApplicationDraftContract(withoutNulls);
+  selectStoredDraftContract(withoutNulls);
   const parsed = storedDefinitionDraftSchema.safeParse(withoutNulls);
   if (!parsed.success) throw new DefinitionHistoryError("INVALID_DEFINITION_HISTORY_RESULT");
   const draft = parsed.data;

@@ -42,6 +42,8 @@ The records shown in IAM are connected to people by stable organisation-account 
 
 ## Grant and approval workflow
 
+The [engine/consumer ownership](../../build-plan/access-consumer-handoffs.md) places concrete activation and invitation-intent invocation in [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267), where genuine published-action, authentication and workflow-response evidence exists. Reuse the existing private Access writers; do not add an earlier wrapper accepting an unverifiable approval or impersonated account. The protected invocation includes current authority rechecks and atomic Activity, not merely a form around a raw writer.
+
 Every user-facing role grant goes through an IAM action and its governed workflow. This includes direct or Group assignment, Group membership that adds access, role edits that expand current assignments, application-template acceptance or reactivation, invitations with intended assignments and onward delegation. Tenant-administrator grants use the same IAM experience with separately checked tenant-governance authority; tenant authority never substitutes for an organisation role.
 
 ```mermaid

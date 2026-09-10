@@ -31,7 +31,7 @@ flowchart TD
 - An organisation may have one parent organisation in the same tenant. The database stores only that parent link; it does not duplicate the hierarchy in a path, closure table, depth column, or `ltree`. The hierarchy cannot contain a cycle.
 - Moving an organisation changes its parent link. Its descendants retain their links and therefore move as the same subtree. The move is refused if the destination is another tenant, it would create a cycle, or an active policy prevents it.
 - Archiving or marking a tenant or parent organisation for removal is refused while it retains an active or suspended child. A caller may complete an explicitly ordered subtree transition in one transaction; the database validates the final committed state.
-- Suspension does not rewrite descendant lifecycle states. Request-context establishment checks the selected tenant, organisation, and organisation account independently, so suspending a parent or tenant still prevents new entry where required without hiding descendant state changes.
+- Suspension does not rewrite descendant lifecycle states. Suspending the selected organisation prevents entry to that organisation, but suspending its parent does not prevent entry to an independently active child. Suspending the tenant prevents entry to every organisation in that tenant. Request-context establishment checks the selected tenant, organisation and organisation account; it does not inherit a parent organisation's state. [Protected administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) preserves this distinction.
 - Records, files, connections, roles, groups, applications, search, workflow work, and activity remain owned by an organisation. A parent organisation does not inherit access to a child organisation's data.
 - The tenant owns customer-wide hierarchy, lifecycle and [entitlement](15-entitlements-and-metering.md) scope. Metering is attributed to the organisation that caused it where meaningful and can be rolled up to its tenant.
 
@@ -86,7 +86,7 @@ The identity token proves the person; it does not grant tenant administration, o
 
 The first release supports verified email address and password, email verification, and password recovery. New and replacement passwords require at least 8 characters including a letter and a number. Sign-in still passes a provider-valid existing password to the authority, so a later stronger creation policy does not silently lock out an existing identity. Anonymous, SMS, social-provider, passkey, and Web3 sign-in are disabled in the authority. Supabase's email provider also implements magic-link and email-code endpoints, so Vortex does not claim a provider switch that Supabase does not offer: the platform exposes no passwordless sign-in journey and does not call those endpoints. Adding an exposed sign-in method later requires an explicit identity/security change; an application definition cannot change how the environment-wide Identity Authority proves a person.
 
-Local captures verification and recovery messages in the Supabase CLI's [Mailpit service](https://supabase.com/docs/guides/local-development/cli/testing-and-linting). Testing uses a Mailtrap Email Testing inbox through Supabase [custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp), following Supabase's recommendation to use an email-testing tool for test projects. Confirmation and recovery messages stay in that test inbox rather than being delivered to a person. Its dedicated test-only address and credentials are supplied through [Doppler](19-operations-backup-and-recovery.md#secrets). Production SMTP credentials, verified sender domain, monitoring and delivery proof are provisioned before release under [Phase 13](../build-plan/README.md#phase-13--operational-readiness-and-release) and [issue #171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171); Phase 2 sends no Production email.
+Local captures verification and recovery messages in the Supabase CLI's [Mailpit service](https://supabase.com/docs/guides/local-development/cli/testing-and-linting). Testing uses a Mailtrap Email Testing inbox through Supabase [custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp), following Supabase's recommendation to use an email-testing tool for test projects. Confirmation and recovery messages stay in that test inbox rather than being delivered to a person. Its dedicated test-only address and credentials are supplied through [Doppler](19-operations-backup-and-recovery.md#secret-management). Production SMTP credentials, verified sender domain, monitoring and delivery proof are provisioned before release under [Phase 13](../build-plan/README.md#phase-13--operational-readiness-and-release) and [issue #171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171); Phase 2 sends no Production email.
 
 The environment addresses are explicit. Local uses `http://127.0.0.1:3000`, Testing uses the stable owned address `https://vortex-testing.abzum.com`, and Production uses the stable owned address `https://vortex.abzum.com`. Provider-generated deployment aliases are not identity redirect addresses. Each authority allows only its own site address and the `/auth/confirm` and `/auth/update-password` paths below that address. Wildcards and customer-controlled redirect addresses are not allowed.
 
@@ -141,10 +141,28 @@ The [verified recent-authentication contract](appendices/recent-authentication.m
 - The raw invitation secret is generated from 32 cryptographically secure random bytes and is returned only to the trusted delivery caller. The database stores only its SHA-256 fingerprint and never stores or returns the raw secret.
 - Accepting requires a current verified Identity Authority result with exactly the invited normalised email. It creates the one organisation account for that identity and organisation, or reactivates an inactive account only when the invitation was issued after that account became inactive.
 - A pending invitation creates no placeholder account. First acceptance is single-use, expiry-bound, and concurrency-safe. An exact replay by the identity that already accepted it may return the same still-active account after expiry without another mutation; it is no longer a grant operation. Wrong-address, wrong-identity, revoked, expired-first-use, inactive-account, and inactive-organisation or tenant attempts return the same unavailable result. Only the matching verified identity may receive the separate `identity_inactive` outcome for its own inactive cluster projection.
+- Expiry uses fresh database time after the supported acceptance path has waited for conflicting invitation/account changes. Written audit times may retain the latest locked audit value, but must not determine expiry or replace revision ordering. A later audit timestamp alone must not reject an otherwise valid next revision. [Invitation acceptance correction #315](https://github.com/Abzum-NZ/Abzum-Vortex/issues/315) owns the focused regression proof.
 - One organisation account may belong to several groups. Groups belong to one organisation and may receive roles, application access, and direct record shares.
 - Group membership changes affect the next request and appear in [activity history](14-activity-privacy-and-retention.md).
 
 ## Organisation launcher and sign-in experience
+
+Public entry pages must reflect the current request's session state. A verified
+browser session receives a **Continue to Vortex** link on the public homepage;
+opening the sign-in page proceeds to the organisation launcher instead of asking
+for credentials again. Missing or invalid sessions retain the sign-in journey.
+If verification is temporarily unavailable, the interface offers a neutral retry
+without claiming the person is signed out or removing their session. Previously
+opened tabs reflect the new state on their next navigation or reload.
+
+This navigation uses the existing server-verified session hint, not another
+database lookup or a separate browser session store. It grants no access: the
+launcher and destination still perform their existing live identity and
+organisation checks. Session-dependent navigation is request-specific and is not
+shared between visitors. [Entry-page repair #350](https://github.com/Abzum-NZ/Abzum-Vortex/issues/350)
+implements this behaviour using the standard Next.js
+[request headers](https://nextjs.org/docs/app/api-reference/functions/headers) and
+[redirect](https://nextjs.org/docs/app/api-reference/functions/redirect) APIs.
 
 The neutral launcher is a minimum safe projection of the organisations the current verified identity may enter. Each entry contains only the tenant and organisation display names and permanent organisation identifier, plus the organisation-account display name when one exists. It does not expose tenant or account identifiers, hierarchy, lifecycle state, logos, applications, roles, groups, permissions, commercial details, or another identity's account. Entries use display-name ordering with permanent identifiers as stable tie-breakers.
 
@@ -177,6 +195,10 @@ The organisation manages its complete role and permission catalogue, including a
 ## Administrative portals
 
 Tenant Administration and Organisation Administration are locked, system-installed Vortex applications. They use ordinary modules, records, pages, roles and workflows while calling narrowly protected identity, hierarchy, access, entitlement and data-handling operations. The engine does not contain special portal page logic.
+
+Their responsibilities are distinct: Tenant Administration presents tenant structure and organisation lifecycle; Organisation Administration presents organisation accounts, invitations and runtime settings; [IAM](appendices/iam-application.md) presents requests, approvals and grants for tenant-administrator assignments and organisation access. The administration applications do not add parallel role-grant surfaces. They consume the channel-neutral protected operations from [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40); their rendered journeys remain [#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
+
+Initial tenant and organisation stewardship requires two explicit nominations and separately scoped assignments. The same verified person may be nominated for both; holding either appointment never implicitly supplies the other. Protected service provisioning reuses the existing [organisation stewardship appointment](04-access-and-permissions.md#initial-organisation-stewardship). This service-only setup is not proof that the later IAM application and its required operating role are installed and usable.
 
 Legal details, contacts, branding, business calendars, notices and privacy request cases are ordinary records in administration applications. The identity service retains only the organisation's stable identity, hierarchy, lifecycle, display name and minimum [runtime localisation settings](appendices/data-contracts.md#tenant-identity-and-organisation-account-records) needed before an application loads.
 

@@ -77,7 +77,7 @@ validate_verification_manifest() {
       (map(.migration) | unique | length) == length and
       (map(.proof) | unique | length) == length) and
     (.lintSchemas | type == "array" and length > 0 and
-      all(type == "string" and test("^(public|vortex_[a-z0-9_]+)$")) and
+      all(type == "string" and test("^(public|record_data|vortex_[a-z0-9_]+)$")) and
       (unique | length) == length)
   ' "$manifest_file" >/dev/null || die "database verification manifest is invalid"
 
@@ -117,9 +117,9 @@ validate_verification_manifest() {
           LC_ALL=C sort
       ) |
         grep -o -i -E \
-          '(^|[^[:alnum:]_])create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?vortex_[a-z0-9_]+' || true
+          '(^|[^[:alnum:]_])create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(vortex_[a-z0-9_]+|record_data)\b' || true
     } |
-      sed --regexp-extended 's/.*(vortex_[a-z0-9_]+)$/\1/I' |
+      sed --regexp-extended 's/.*(vortex_[a-z0-9_]+|record_data)$/\1/I' |
       tr '[:upper:]' '[:lower:]' |
       LC_ALL=C sort --unique
   )"
@@ -488,12 +488,44 @@ server_version_num="$(psql "$database_url" --no-psqlrc --tuples-only --no-align 
 [ "$((server_version_num / 10000))" = "$EXPECTED_POSTGRES_MAJOR" ] ||
   die "database PostgreSQL major does not match the reviewed project configuration"
 
+local_history="${workdir}/local-migration-history.txt"
+remote_history="${workdir}/remote-migration-history.txt"
+git -C "$checkout" ls-tree -r --name-only "$commit" -- supabase/migrations |
+  LC_ALL=C sort |
+  sed 's#^supabase/migrations/##' >"$local_history"
+history_exists="$(psql "$database_url" --no-psqlrc --tuples-only --no-align \
+  --command "select to_regclass('supabase_migrations.schema_migrations') is not null")"
+case "$history_exists" in
+  t)
+    psql "$database_url" --no-psqlrc --tuples-only --no-align \
+      --command "select version || case when coalesce(name, '') = '' then '' else '_' || name end || '.sql' from supabase_migrations.schema_migrations order by version, name" \
+      >"$remote_history"
+    ;;
+  f) : >"$remote_history" ;;
+  *) die "database returned an invalid migration-history state" ;;
+esac
+[ -z "$(LC_ALL=C comm -13 "$local_history" "$remote_history")" ] ||
+  die "remote migration history does not exactly match the selected commit"
+last_applied="$(tail -n 1 "$remote_history")"
+older_pending="$(LC_ALL=C comm -23 "$local_history" "$remote_history" |
+  LC_ALL=C awk -v maximum="$last_applied" '$0 < maximum')"
+migration_flags=()
+if [ -n "$older_pending" ]; then
+  # Reviewed consolidation gap: these two migrations have independent ownership
+  # and no migration-time dependency. No other out-of-order history is accepted.
+  [ "$older_pending" = "20260908122641_record_storage_provisioning.sql" ] &&
+    [ "$last_applied" = "20260908124240_adopt_shipped_platform_permission_catalogue.sql" ] ||
+    die "unreviewed out-of-order migration gap"
+  migration_flags+=(--include-all)
+  say "applying the reviewed storage-provisioning gap before the pending tail"
+fi
+
 say "applying pending migrations through Supabase migration history"
 execution_directory="$PWD"
 readonly execution_directory
 cd "$checkout"
 prepare_database_only_checkout
-supabase db push --db-url "$database_url" --skip-vault --yes
+supabase db push --db-url "$database_url" --skip-vault "${migration_flags[@]}" --yes
 pg_prove \
   --dbname "$database_name" \
   --username "$database_user" \
@@ -527,11 +559,6 @@ cd "$execution_directory"
 [ "$completed_lint_schemas_json" = "$selected_lint_schemas_json" ] ||
   die "not every selected schema completed database lint"
 
-local_history="${workdir}/local-migration-history.txt"
-remote_history="${workdir}/remote-migration-history.txt"
-git -C "$checkout" ls-tree -r --name-only "$commit" -- supabase/migrations |
-  LC_ALL=C sort |
-  sed 's#^supabase/migrations/##' >"$local_history"
 psql "$database_url" --no-psqlrc --tuples-only --no-align \
   --command "select version || case when coalesce(name, '') = '' then '' else '_' || name end || '.sql' from supabase_migrations.schema_migrations order by version, name" \
   >"$remote_history"

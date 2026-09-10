@@ -11,7 +11,10 @@ import {
   writeModuleRecordOwnershipModeV1,
 } from "../src";
 
-const fixtureDirectory = path.resolve(import.meta.dirname, "../../testing/fixtures/modules");
+const fixtureDirectory = path.resolve(
+  import.meta.dirname,
+  "../../testing/fixtures/historical/module-v1/modules",
+);
 
 describe("Groups compatibility", () => {
   it("keeps immutable Definition V1 ownership bytes behind an explicit current semantic boundary", () => {

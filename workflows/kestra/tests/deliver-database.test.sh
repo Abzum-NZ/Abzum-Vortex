@@ -187,6 +187,31 @@ grep --fixed-strings --quiet \
 git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
 export VORTEX_GITHUB_COMMIT="$commit"
 
+missing_record_schema_checkout="$test_root/missing-record-schema-checkout"
+git clone --quiet "$test_root/remote.git" "$missing_record_schema_checkout"
+git -C "$missing_record_schema_checkout" config user.name delivery-test
+git -C "$missing_record_schema_checkout" config user.email delivery-test@example.invalid
+jq '.lintSchemas -= ["record_data"]' \
+  "$missing_record_schema_checkout/workflows/kestra/database-verification.json" \
+  >"$missing_record_schema_checkout/workflows/kestra/database-verification.json.next"
+mv \
+  "$missing_record_schema_checkout/workflows/kestra/database-verification.json.next" \
+  "$missing_record_schema_checkout/workflows/kestra/database-verification.json"
+git -C "$missing_record_schema_checkout" add workflows/kestra/database-verification.json
+git -C "$missing_record_schema_checkout" commit --quiet -m "Omit generated record storage from lint"
+missing_record_schema_commit="$(git -C "$missing_record_schema_checkout" rev-parse HEAD)"
+git -C "$missing_record_schema_checkout" push --quiet origin HEAD:main
+export VORTEX_GITHUB_COMMIT="$missing_record_schema_commit"
+if "$delivery_script" >"$test_root/missing-record-schema.log" 2>&1; then
+  echo "expected omitted record_data lint coverage to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "database verification manifest does not list every operated schema exactly once" \
+  "$test_root/missing-record-schema.log"
+git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$commit"
+export VORTEX_GITHUB_COMMIT="$commit"
+
 unexpected_schema_checkout="$test_root/unexpected-schema-checkout"
 git clone --quiet "$test_root/remote.git" "$unexpected_schema_checkout"
 git -C "$unexpected_schema_checkout" config user.name delivery-test
@@ -638,6 +663,54 @@ export VORTEX_DATABASE_URL='postgresql://attacker:password@attacker.invalid:5432
 export VORTEX_TEST_CONCURRENCY_PROOF_MARKER="$test_root/concurrency-proof-called"
 export VORTEX_TEST_SUPABASE_CALL_MARKER="$test_root/supabase-called"
 
+# The known Testing gap is permitted only with the reviewed remote maximum.
+# Fake history changes to the complete set only after the migration command runs.
+export VORTEX_TEST_INITIAL_HISTORY="$test_root/initial-history.txt"
+git -C "$fixture_checkout" ls-tree -r --name-only "$VORTEX_GITHUB_COMMIT" -- supabase/migrations |
+  LC_ALL=C sort | sed 's#^supabase/migrations/##' >"$test_root/complete-history.txt"
+awk '$0 <= "20260908124240_adopt_shipped_platform_permission_catalogue.sql" &&
+     $0 != "20260908122641_record_storage_provisioning.sql"' \
+  "$test_root/complete-history.txt" >"$VORTEX_TEST_INITIAL_HISTORY"
+rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER" "$VORTEX_EVIDENCE_PATH"
+"$older_bootstrap" >"$test_root/reviewed-gap.log" 2>&1
+grep --fixed-strings --quiet -- '--include-all' "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+jq --exit-status '.status == "succeeded"' "$VORTEX_EVIDENCE_PATH" >/dev/null
+
+assert_unreviewed_gap_refused() {
+  rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER" "$VORTEX_EVIDENCE_PATH"
+  if "$older_bootstrap" >"$test_root/unreviewed-gap.log" 2>&1; then
+    echo "expected an unreviewed migration gap to refuse before applying" >&2
+    exit 1
+  fi
+  grep --fixed-strings --quiet 'unreviewed out-of-order migration gap' "$test_root/unreviewed-gap.log"
+  test ! -e "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+  test ! -e "$VORTEX_EVIDENCE_PATH"
+}
+
+# Another missing older migration is not covered by the storage exception.
+sed -i '/20260908041122_support_native_application_release_dependencies.sql/d' "$VORTEX_TEST_INITIAL_HISTORY"
+assert_unreviewed_gap_refused
+# The same storage gap against a newer history is not the reviewed ordering.
+grep --fixed-strings --invert-match '20260908122641_record_storage_provisioning.sql' \
+  "$test_root/complete-history.txt" >"$VORTEX_TEST_INITIAL_HISTORY"
+assert_unreviewed_gap_refused
+
+# An ordinary missing tail and an empty database retain normal CLI behavior.
+sed '$d' "$test_root/complete-history.txt" >"$VORTEX_TEST_INITIAL_HISTORY"
+rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+"$older_bootstrap" >"$test_root/ordinary-tail.log" 2>&1
+if grep --fixed-strings --quiet -- '--include-all' "$VORTEX_TEST_SUPABASE_CALL_MARKER"; then
+  echo "ordinary pending migrations must not use the gap exception" >&2; exit 1
+fi
+unset VORTEX_TEST_INITIAL_HISTORY
+export VORTEX_TEST_EMPTY_HISTORY=true
+rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+"$older_bootstrap" >"$test_root/empty-history.log" 2>&1
+if grep --fixed-strings --quiet -- '--include-all' "$VORTEX_TEST_SUPABASE_CALL_MARKER"; then
+  echo "a new database must not use the gap exception" >&2; exit 1
+fi
+unset VORTEX_TEST_EMPTY_HISTORY
+
 rm -f "$VORTEX_EVIDENCE_PATH"
 export VORTEX_TEST_FAIL_PG_PROVE=true
 if "$older_bootstrap" >"$test_root/pg-prove-failure.log" 2>&1; then
@@ -669,6 +742,18 @@ grep --fixed-strings --quiet \
   "$test_root/history-mismatch.log"
 
 unset VORTEX_TEST_REMOTE_MIGRATION_MISMATCH
+rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER" "$VORTEX_EVIDENCE_PATH"
+export VORTEX_TEST_POST_APPLY_MISMATCH=true
+if "$older_bootstrap" >"$test_root/post-apply-history-mismatch.log" 2>&1; then
+  echo "expected post-apply history mismatch to refuse a success receipt" >&2
+  exit 1
+fi
+grep --quiet '^db push ' "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+grep --fixed-strings --quiet \
+  'remote migration history does not exactly match the selected commit' \
+  "$test_root/post-apply-history-mismatch.log"
+test ! -e "$VORTEX_EVIDENCE_PATH"
+unset VORTEX_TEST_POST_APPLY_MISMATCH
 export VORTEX_TEST_PG_PROVE_MARKER="$test_root/pg-prove-called"
 rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 export VORTEX_TEST_FAIL_CONCURRENCY_PROOF=runner-parity-concurrency.test.sh
@@ -690,8 +775,10 @@ while read -r proof; do
   grep --fixed-strings --quiet "$proof" "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 done < <(jq --raw-output '.concurrencyProofs[].proof' \
   "$fixture_checkout/workflows/kestra/database-verification.json")
+expected_lint_schemas="$(jq --raw-output '.lintSchemas | join(",")' \
+  "$fixture_checkout/workflows/kestra/database-verification.json")"
 grep --fixed-strings --quiet \
-  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema public,vortex_context,vortex_identity,vortex_definition,vortex_access,vortex_runner_parity --level warning --fail-on error" \
+  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema $expected_lint_schemas --level warning --fail-on error" \
   "$VORTEX_TEST_SUPABASE_CALL_MARKER"
 jq --exit-status \
   --argjson expected_proof_count "$parity_proof_count" \

@@ -5,6 +5,14 @@ export const identitySessionProxyHeader = "x-vortex-internal-identity-session";
 export type IdentitySessionProxyState =
   "missing" | "verified" | "invalid" | "temporarily_unavailable";
 
+export const identitySessionNavigationHint = (
+  requestHeaders: Pick<Headers, "get">,
+): IdentitySessionProxyState => {
+  const state = requestHeaders.get(identitySessionProxyHeader);
+  if (state === "missing" || state === "verified" || state === "invalid") return state;
+  return "temporarily_unavailable";
+};
+
 export const forwardedIdentitySessionHeaders = (
   source: Headers,
   state: IdentitySessionProxyState,

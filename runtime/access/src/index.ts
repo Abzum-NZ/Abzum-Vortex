@@ -1,6 +1,11 @@
 import "server-only";
 
 export {
+  createStoredApplicationPermissionSource,
+  type StoredApplicationPermissionSourceDependencies,
+  type StoredApplicationPermissionSourceEvidence,
+} from "./stored-application-permission-source";
+export {
   applicationRoleTemplatePreparationErrorCodes,
   ApplicationRoleTemplatePreparationError,
   createApplicationRoleTemplateAdapter,
@@ -22,6 +27,24 @@ export {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
+export {
+  runOrganizationAccessOperation,
+  type OrganizationAccessOperationResult,
+} from "./organization-access-decision";
+export {
+  runOrganizationRecordAccessOperation,
+  type FixedOrganizationRecordAccessAdapter,
+  type OrganizationRecordAccessOperationResult,
+} from "./organization-record-access-operation";
+export {
+  createOrganizationDirectRecordShareService,
+  type FixedOrganizationDirectRecordShareAdapter,
+  type OrganizationDirectRecordShareDependencies,
+} from "./organization-direct-record-share";
+export {
+  createOrganizationAccessAdministrationService,
+  type OrganizationAccessAdministrationDependencies,
+} from "./organization-access-administration";
 export { fingerprintPermissionMeaning } from "./permission-fingerprints";
 export {
   organizationDelegationScopeEvidenceErrorCodes,
@@ -49,9 +72,11 @@ export {
 export {
   platformPermissionCatalogue,
   platformPermissionCatalogueV1,
+  platformPermissionCatalogueV1_0_1,
   platformPermissionCatalogueOwnerId,
   platformPermissionCatalogueVersion,
   platformPermissionCatalogueVersionV1,
+  platformPermissionCatalogueVersionV1_0_1,
 } from "./platform-permission-catalogue";
 export {
   createPermissionRegistryPrivateRepository,

@@ -1,8 +1,8 @@
 {
-  "source_contract_version": "1.0.0",
-  "kind": "module",
+  "source_contract_version": "2.0.0",
   "root_alias": "mod_crm_organisations",
   "key": "vortex.crm.organisations",
+  "kind": "module",
   "body": {
     "name": "CRM Organisations",
     "description": "Companies and their organisational details, shared by compatible applications in one organisation.",
@@ -10,13 +10,13 @@
     "record_types": [
       {
         "id": "rt_crm_company",
-        "storage_contract_id": "srt_00000001",
         "key": "company",
         "name": "Company",
         "plural_name": "Companies",
+        "title_field": "name",
+        "storage_contract_id": "srt_00000001",
         "storage_scope": "organisation_shared",
         "ownership_mode": "team",
-        "title_field": "name",
         "standard_actions": [
           "create",
           "read",
@@ -25,11 +25,13 @@
           "restore",
           "export"
         ],
+        "custom_actions": [
+          "act_company_merge"
+        ],
         "fields": [
           {
             "id": "fld_company_number",
             "key": "company_number",
-            "type": "reference_number",
             "label": "Company number",
             "required": true,
             "unique": true,
@@ -38,6 +40,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "reference_number",
             "settings": {
               "prefix": "COM-",
               "digits": 7
@@ -46,7 +49,6 @@
           {
             "id": "fld_company_name",
             "key": "name",
-            "type": "text",
             "label": "Company name",
             "required": true,
             "unique": false,
@@ -55,6 +57,7 @@
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "text",
             "settings": {
               "max_length": 255
             }
@@ -62,7 +65,6 @@
           {
             "id": "fld_company_kind",
             "key": "company_kind",
-            "type": "several_choices",
             "label": "Company type",
             "required": true,
             "unique": false,
@@ -70,6 +72,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "several_choices",
             "settings": {
               "options": [
                 {
@@ -94,7 +97,6 @@
           {
             "id": "fld_company_industry",
             "key": "industry",
-            "type": "choice",
             "label": "Industry",
             "required": false,
             "unique": false,
@@ -103,6 +105,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -135,7 +138,6 @@
           {
             "id": "fld_company_revenue",
             "key": "annual_revenue",
-            "type": "money",
             "label": "Annual revenue",
             "required": false,
             "unique": false,
@@ -143,15 +145,15 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "money",
             "settings": {
               "currency_mode": "organisation_default",
-              "minimum": 0
+              "minimum": "0"
             }
           },
           {
             "id": "fld_company_employees",
             "key": "employee_count",
-            "type": "whole_number",
             "label": "Employee count",
             "required": false,
             "unique": false,
@@ -159,6 +161,7 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "whole_number",
             "settings": {
               "minimum": 0
             }
@@ -166,7 +169,6 @@
           {
             "id": "fld_company_website",
             "key": "website",
-            "type": "web_address",
             "label": "Website",
             "required": false,
             "unique": false,
@@ -175,6 +177,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "web_address",
             "settings": {
               "allowed_schemes": [
                 "https"
@@ -184,7 +187,6 @@
           {
             "id": "fld_company_phone",
             "key": "phone",
-            "type": "phone_number",
             "label": "Main phone",
             "required": false,
             "unique": false,
@@ -193,6 +195,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "phone_number",
             "settings": {
               "default_country": "NZ"
             }
@@ -200,7 +203,6 @@
           {
             "id": "fld_company_description",
             "key": "description",
-            "type": "formatted_text",
             "label": "Description",
             "required": false,
             "unique": false,
@@ -209,6 +211,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "formatted_text",
             "settings": {
               "allowed_blocks": [
                 "paragraph",
@@ -221,7 +224,6 @@
           {
             "id": "fld_company_parent",
             "key": "parent_company",
-            "type": "link",
             "label": "Parent company",
             "required": false,
             "unique": false,
@@ -229,6 +231,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.organisations:company",
               "reverse_key": "subsidiaries",
@@ -238,7 +241,6 @@
           {
             "id": "fld_company_logo",
             "key": "logo",
-            "type": "attachment",
             "label": "Logo",
             "required": false,
             "unique": false,
@@ -246,6 +248,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "attachment",
             "settings": {
               "allowed_kinds": [
                 "image"
@@ -257,7 +260,6 @@
           {
             "id": "fld_company_created",
             "key": "customer_since",
-            "type": "date",
             "label": "Customer since",
             "required": false,
             "unique": false,
@@ -265,11 +267,9 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date",
             "settings": {}
           }
-        ],
-        "custom_actions": [
-          "act_company_merge"
         ],
         "relationships": [
           {
@@ -291,7 +291,43 @@
         "description": "Allows the standard create operation for companies.",
         "record_type": "company",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "company_number",
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ],
+          "changeable_fields": [
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ]
+        }
       },
       {
         "id": "perm_company_read",
@@ -300,7 +336,31 @@
         "description": "Allows the standard read operation for companies.",
         "record_type": "company",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "company_number",
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_company_update",
@@ -309,7 +369,43 @@
         "description": "Allows the standard update operation for companies.",
         "record_type": "company",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "company_number",
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ],
+          "changeable_fields": [
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ]
+        }
       },
       {
         "id": "perm_company_soft_delete",
@@ -318,7 +414,18 @@
         "description": "Allows the standard soft_delete operation for companies.",
         "record_type": "company",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_company_restore",
@@ -327,7 +434,18 @@
         "description": "Allows the standard restore operation for companies.",
         "record_type": "company",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_company_export",
@@ -336,7 +454,31 @@
         "description": "Allows the standard export operation for companies.",
         "record_type": "company",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "company_number",
+            "name",
+            "company_kind",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "website",
+            "phone",
+            "description",
+            "parent_company",
+            "logo",
+            "customer_since"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_named_1_merge",
@@ -346,7 +488,20 @@
         "record_type": "company",
         "action_kind": "named",
         "named_action": "merge",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "parent_company"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "actions": [
@@ -356,6 +511,7 @@
         "label": "Merge company",
         "record_type": "company",
         "permission": "vortex.crm.organisations.company.merge",
+        "shareable": false,
         "inputs": [
           {
             "key": "duplicate_company",
@@ -382,8 +538,7 @@
             "kind": "announce_event",
             "event": "vortex.crm.organisations.company.merged"
           }
-        ],
-        "shareable": false
+        ]
       }
     ],
     "events": [

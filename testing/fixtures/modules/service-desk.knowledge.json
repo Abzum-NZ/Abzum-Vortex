@@ -1,8 +1,8 @@
 {
-  "source_contract_version": "1.0.0",
-  "kind": "module",
+  "source_contract_version": "2.0.0",
   "root_alias": "mod_service_desk_knowledge",
   "key": "vortex.service_desk.knowledge",
+  "kind": "module",
   "body": {
     "name": "Service Desk Knowledge",
     "description": "Reviewed knowledge articles linked to cases.",
@@ -12,20 +12,20 @@
         "module": "vortex.service_desk.cases",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       }
     ],
     "record_types": [
       {
         "id": "rt_sd_article",
-        "storage_contract_id": "srt_00000013",
         "key": "article",
         "name": "Article",
         "plural_name": "Articles",
+        "title_field": "title",
+        "storage_contract_id": "srt_00000013",
         "storage_scope": "application_contained",
         "ownership_mode": "team",
-        "title_field": "title",
         "standard_actions": [
           "create",
           "read",
@@ -34,11 +34,13 @@
           "restore",
           "export"
         ],
+        "custom_actions": [
+          "act_article_publish"
+        ],
         "fields": [
           {
             "id": "fld_article_number",
             "key": "article_number",
-            "type": "reference_number",
             "label": "Article number",
             "required": true,
             "unique": true,
@@ -47,6 +49,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "reference_number",
             "settings": {
               "prefix": "KBA-",
               "digits": 7
@@ -55,7 +58,6 @@
           {
             "id": "fld_article_title",
             "key": "title",
-            "type": "text",
             "label": "Title",
             "required": true,
             "unique": false,
@@ -64,6 +66,7 @@
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "text",
             "settings": {
               "max_length": 255
             }
@@ -71,7 +74,6 @@
           {
             "id": "fld_article_body",
             "key": "body",
-            "type": "formatted_text",
             "label": "Article",
             "required": true,
             "unique": false,
@@ -80,6 +82,7 @@
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "formatted_text",
             "settings": {
               "allowed_blocks": [
                 "paragraph",
@@ -94,7 +97,6 @@
           {
             "id": "fld_article_status",
             "key": "status",
-            "type": "choice",
             "label": "Status",
             "required": true,
             "unique": false,
@@ -103,6 +105,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -128,7 +131,6 @@
           {
             "id": "fld_article_public",
             "key": "public",
-            "type": "yes_no",
             "label": "Public",
             "required": true,
             "unique": false,
@@ -136,13 +138,13 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "yes_no",
             "settings": {},
             "default": false
           },
           {
             "id": "fld_article_review",
             "key": "review_date",
-            "type": "date",
             "label": "Review date",
             "required": true,
             "unique": false,
@@ -150,12 +152,12 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "date",
             "settings": {}
           },
           {
             "id": "fld_article_author",
             "key": "author",
-            "type": "link_to_person",
             "label": "Author",
             "required": true,
             "unique": false,
@@ -164,16 +166,16 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "link_to_person",
             "settings": {
               "audience": "application_accounts",
-              "on_person_deactivation": "retain_reference",
-              "application_root_required": true
+              "application_root_required": true,
+              "on_person_deactivation": "retain_reference"
             }
           },
           {
             "id": "fld_article_files",
             "key": "attachments",
-            "type": "attachment",
             "label": "Attachments",
             "required": false,
             "unique": false,
@@ -181,6 +183,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "attachment",
             "settings": {
               "allowed_kinds": [
                 "image",
@@ -199,21 +202,18 @@
             }
           }
         ],
-        "custom_actions": [
-          "act_article_publish"
-        ],
         "relationships": []
       },
       {
         "id": "rt_sd_article_case",
-        "storage_contract_id": "srt_00000014",
         "key": "article_case",
         "name": "Article case link",
         "plural_name": "Article case links",
+        "title_field": "linked_at",
+        "storage_contract_id": "srt_00000014",
         "storage_scope": "application_contained",
         "ownership_mode": "inherited",
         "ownership_relationship": "article",
-        "title_field": "linked_at",
         "standard_actions": [
           "create",
           "read",
@@ -221,11 +221,11 @@
           "restore",
           "export"
         ],
+        "custom_actions": [],
         "fields": [
           {
             "id": "fld_article_case_article",
             "key": "article",
-            "type": "link",
             "label": "Article",
             "required": true,
             "unique": false,
@@ -233,6 +233,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.service_desk.knowledge:article",
               "reverse_key": "case_links",
@@ -242,7 +243,6 @@
           {
             "id": "fld_article_case_case",
             "key": "case",
-            "type": "link",
             "label": "Case",
             "required": true,
             "unique": false,
@@ -250,6 +250,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.service_desk.cases:case",
               "reverse_key": "knowledge_links",
@@ -259,7 +260,6 @@
           {
             "id": "fld_article_case_at",
             "key": "linked_at",
-            "type": "date_time",
             "label": "Linked at",
             "required": true,
             "unique": false,
@@ -267,10 +267,10 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date_time",
             "settings": {}
           }
         ],
-        "custom_actions": [],
         "relationships": [
           {
             "id": "fld_article_case_article_relationship",
@@ -299,7 +299,35 @@
         "description": "Allows the standard create operation for articles.",
         "record_type": "article",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article_number",
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ],
+          "changeable_fields": [
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ]
+        }
       },
       {
         "id": "perm_article_read",
@@ -308,7 +336,27 @@
         "description": "Allows the standard read operation for articles.",
         "record_type": "article",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article_number",
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_article_update",
@@ -317,7 +365,35 @@
         "description": "Allows the standard update operation for articles.",
         "record_type": "article",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article_number",
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ],
+          "changeable_fields": [
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ]
+        }
       },
       {
         "id": "perm_article_soft_delete",
@@ -326,7 +402,18 @@
         "description": "Allows the standard soft_delete operation for articles.",
         "record_type": "article",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_article_restore",
@@ -335,7 +422,18 @@
         "description": "Allows the standard restore operation for articles.",
         "record_type": "article",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_article_export",
@@ -344,7 +442,27 @@
         "description": "Allows the standard export operation for articles.",
         "record_type": "article",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article_number",
+            "title",
+            "body",
+            "status",
+            "public",
+            "review_date",
+            "author",
+            "attachments"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_article_case_create",
@@ -353,7 +471,26 @@
         "description": "Allows the standard create operation for article case links.",
         "record_type": "article_case",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article",
+            "case",
+            "linked_at"
+          ],
+          "changeable_fields": [
+            "article",
+            "case",
+            "linked_at"
+          ]
+        }
       },
       {
         "id": "perm_article_case_read",
@@ -362,7 +499,22 @@
         "description": "Allows the standard read operation for article case links.",
         "record_type": "article_case",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article",
+            "case",
+            "linked_at"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_article_case_soft_delete",
@@ -371,7 +523,18 @@
         "description": "Allows the standard soft_delete operation for article case links.",
         "record_type": "article_case",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_article_case_restore",
@@ -380,7 +543,18 @@
         "description": "Allows the standard restore operation for article case links.",
         "record_type": "article_case",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_article_case_export",
@@ -389,7 +563,22 @@
         "description": "Allows the standard export operation for article case links.",
         "record_type": "article_case",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "article",
+            "case",
+            "linked_at"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_named_1_publish",
@@ -399,7 +588,22 @@
         "record_type": "article",
         "action_kind": "named",
         "named_action": "publish",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "status"
+          ],
+          "changeable_fields": [
+            "status"
+          ]
+        }
       }
     ],
     "actions": [
@@ -409,6 +613,7 @@
         "label": "Publish article",
         "record_type": "article",
         "permission": "vortex.service_desk.knowledge.article.publish",
+        "shareable": false,
         "inputs": [],
         "effects": [
           {
@@ -423,8 +628,7 @@
             "kind": "announce_event",
             "event": "vortex.service_desk.knowledge.article.published"
           }
-        ],
-        "shareable": false
+        ]
       }
     ],
     "events": [

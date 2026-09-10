@@ -254,13 +254,14 @@ describe("record and storage contracts", () => {
     const value = {
       storageContractId: id("4"),
       owningService: "record",
-      physicalSchemaToken: "vtx_record_data",
-      physicalTableToken: "vtx_1234567890abcdefghij",
+      physicalSchemaToken: "record_data",
+      physicalTableToken: `rt_${id("4").replaceAll("-", "")}`,
       moduleRootId: id("2"),
       recordTypeId: id("3"),
+      storageScope: "organization_shared",
       compatibleRevisions: { firstRevision: 1 },
       state: "active",
-      creationMigrationId: id("8"),
+      generatorContractVersion: "1.0.0",
       contentFingerprint: fingerprint(),
     };
     expect(storageCatalogEntrySchema.safeParse(value).success).toBe(true);
@@ -268,7 +269,7 @@ describe("record and storage contracts", () => {
       storageCatalogEntrySchema.safeParse({ ...value, physicalTableToken: "crm_contacts" }).success,
     ).toBe(false);
     expect(
-      storageCatalogEntrySchema.safeParse({ ...value, physicalTableToken: `vtx_${"a".repeat(60)}` })
+      storageCatalogEntrySchema.safeParse({ ...value, physicalTableToken: `rt_${"a".repeat(33)}` })
         .success,
     ).toBe(false);
   });

@@ -13,7 +13,7 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "primary"
       },
@@ -21,7 +21,7 @@
         "module": "vortex.crm.people",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "primary"
       },
@@ -29,7 +29,7 @@
         "module": "vortex.crm.opportunities",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "primary"
       },
@@ -37,7 +37,7 @@
         "module": "vortex.crm.activities",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "primary"
       },
@@ -45,7 +45,7 @@
         "module": "vortex.crm.tags",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "primary"
       },
@@ -53,7 +53,7 @@
         "module": "vortex.service_desk.cases",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "compatible_shared_record_display"
       }
@@ -1237,7 +1237,19 @@
               "values": {
                 "vortex.crm.organisations:company.description": {
                   "source": "literal",
-                  "value": "Reviewed for possible duplicates"
+                  "value": {
+                    "blocks": [
+                      {
+                        "kind": "paragraph",
+                        "children": [
+                          {
+                            "kind": "text",
+                            "text": "Reviewed for possible duplicates"
+                          }
+                        ]
+                      }
+                    ]
+                  }
                 }
               }
             }

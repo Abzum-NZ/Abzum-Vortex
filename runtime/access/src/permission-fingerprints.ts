@@ -18,4 +18,6 @@ export const fingerprintPermissionMeaning = (
     actionKind: permission.actionKind,
     namedAction: permission.namedAction ?? null,
     administrative: permission.administrative,
+    ...(permission.recordScope === undefined ? {} : { recordScope: permission.recordScope }),
+    ...(permission.fieldPolicy === undefined ? {} : { fieldPolicy: permission.fieldPolicy }),
   });

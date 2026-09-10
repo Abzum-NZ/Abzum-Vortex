@@ -10,7 +10,7 @@ import {
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { fingerprintCanonicalValue } from "./canonical-json";
-import { extractSourceIdentityRequirements } from "./source-identities";
+import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 
 export const definitionStoreErrorCodes = [
@@ -169,7 +169,7 @@ export const createDefinitionStore = (transaction: RequestDatabaseTransaction) =
       if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
       const source = validateSource(command.data.source);
       const sourceFingerprint = fingerprintCanonicalValue(source);
-      const identityRequirements = extractSourceIdentityRequirements(source);
+      const identityRequirements = extractStoredSourceIdentityRequirements(source);
       const rows = await transaction.query<StoredDraftRow>`
         select *
         from vortex_definition.create_root(
@@ -191,7 +191,7 @@ export const createDefinitionStore = (transaction: RequestDatabaseTransaction) =
       if (!command.success) throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
       const source = validateSource(command.data.source);
       const sourceFingerprint = fingerprintCanonicalValue(source);
-      const identityRequirements = extractSourceIdentityRequirements(source);
+      const identityRequirements = extractStoredSourceIdentityRequirements(source);
       const rows = await transaction.query<StoredDraftRow>`
         select *
         from vortex_definition.save_draft(

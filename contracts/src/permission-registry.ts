@@ -336,6 +336,27 @@ export const revisePlatformPermissionCatalogueMetadataResultSchema = z
   })
   .strict();
 
+export const adoptShippedPlatformPermissionCatalogueCommandSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    expectedRegistrationRevision: javascriptSafeRevisionSchema,
+    targetCatalogueVersion: semanticVersionSchema,
+    targetCatalogueFingerprint: fingerprintSchema,
+    changedBy: actorIdSchema,
+    correlationId: correlationIdSchema,
+  })
+  .strict();
+
+export const adoptShippedPlatformPermissionCatalogueResultSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    sourceCatalogueVersion: semanticVersionSchema,
+    targetCatalogueVersion: semanticVersionSchema,
+    registrationRevision: javascriptSafeRevisionSchema,
+    accessVersion: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
 export const applicationPermissionCatalogueSnapshotCommandSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -381,6 +402,12 @@ export type RevisePlatformPermissionCatalogueMetadataCommand = z.infer<
 >;
 export type RevisePlatformPermissionCatalogueMetadataResult = z.infer<
   typeof revisePlatformPermissionCatalogueMetadataResultSchema
+>;
+export type AdoptShippedPlatformPermissionCatalogueCommand = z.infer<
+  typeof adoptShippedPlatformPermissionCatalogueCommandSchema
+>;
+export type AdoptShippedPlatformPermissionCatalogueResult = z.infer<
+  typeof adoptShippedPlatformPermissionCatalogueResultSchema
 >;
 export type ApplicationPermissionCatalogueSnapshotCommand = z.infer<
   typeof applicationPermissionCatalogueSnapshotCommandSchema

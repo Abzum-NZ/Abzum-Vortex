@@ -14,12 +14,16 @@ import {
   createDefinitionConsumerReadService,
   type DefinitionConsumerReadRepository,
 } from "../src/definition-consumer-read";
+import { createApplicationBoundReleaseSetService } from "../src/application-bound-release-set";
 import type {
   DefinitionPublicationCatalogue,
   ResolvableConnectionTypeRelease,
 } from "../src/definition-publication";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const readSource = (kind: "modules" | "applications", name: string) =>
   definitionSourceDocumentSchema.parse(
     JSON.parse(fs.readFileSync(path.join(fixtureRoot, kind, name), "utf8")),
@@ -120,6 +124,7 @@ const releaseEvidence = (
   rootId: output.canonical.envelope.rootId,
   releaseRevision: 1,
   releaseVersion: "1.0.0",
+  sourceContractVersion: "1.0.0",
   validationContractVersion: "1.0.0",
   contentFingerprint: fingerprintCanonicalValue(output.canonical.content),
   resolutionFingerprint: resolution.fingerprint,
@@ -443,5 +448,129 @@ describe("Definition consumer reads", () => {
         catalogueFor(),
       ).read(context(), command),
     ).rejects.toMatchObject({ code: "DEFINITION_READ_FAILED", message: "DEFINITION_READ_FAILED" });
+  });
+
+  it("projects a complete bound release closure including an exact foreign-owned Module", async () => {
+    const moduleNames = [
+      "crm.activities.json",
+      "crm.opportunities.json",
+      "crm.organisations.json",
+      "crm.people.json",
+      "crm.tags.json",
+    ] as const;
+    const outputs = moduleNames.map((name) => {
+      const output = compile("modules", name);
+      if (output.kind !== "module") throw new Error("Module output required");
+      return output;
+    });
+    const outputByRoot = new Map(
+      outputs.map((output) => [String(output.canonical.envelope.rootId), output]),
+    );
+    const evidenceByRoot = new Map(
+      outputs.map((output) => {
+        const manifest: ExactDefinitionDependency[] = output.canonical.content.dependencies
+          .map((dependency) => {
+            const target = outputByRoot.get(String(dependency.moduleRootId));
+            if (target === undefined) throw new Error("Fixture dependency output required");
+            return {
+              kind: "module" as const,
+              key: target.canonical.envelope.key,
+              rootId: target.canonical.envelope.rootId,
+              releaseRevision: 1,
+              releaseVersion: dependency.resolvedVersion,
+              contentFingerprint: fingerprintCanonicalValue(target.canonical.content),
+              resolutionFingerprint: resolution.fingerprint,
+            };
+          })
+          .sort((left, right) => left.key.localeCompare(right.key));
+        return [
+          String(output.canonical.envelope.rootId),
+          releaseEvidence(output, manifest),
+        ] as const;
+      }),
+    );
+    const boundedApplicationContent = {
+      ...applicationOutput.canonical.content,
+      moduleBindings: applicationOutput.canonical.content.moduleBindings.filter((binding) =>
+        evidenceByRoot.has(String(binding.moduleRootId)),
+      ),
+    };
+    const boundedApplicationOutput = {
+      ...applicationOutput,
+      canonical: { ...applicationOutput.canonical, content: boundedApplicationContent },
+      artifact: {
+        ...applicationOutput.artifact,
+        contentFingerprint: fingerprintCanonicalValue(boundedApplicationContent),
+      },
+    };
+    const directModules = boundedApplicationContent.moduleBindings.map((binding) => {
+      const target = evidenceByRoot.get(String(binding.moduleRootId));
+      if (target === undefined) throw new Error("Fixture Application dependency required");
+      return {
+        kind: "module" as const,
+        key: target.key,
+        rootId: target.rootId,
+        releaseRevision: target.releaseRevision,
+        releaseVersion: target.releaseVersion,
+        contentFingerprint: target.contentFingerprint,
+        resolutionFingerprint: target.resolutionFingerprint,
+      };
+    });
+    const completeManifest = [
+      ...applicationManifest.filter((entry) => entry.kind !== "module"),
+      ...directModules,
+    ].sort((left, right) => {
+      const subject = (entry: ExactDefinitionDependency) =>
+        `${entry.kind}:${"key" in entry ? entry.key : entry.catalogueThemeId}`;
+      return subject(left).localeCompare(subject(right));
+    });
+    const completeApplication = releaseEvidence(boundedApplicationOutput, completeManifest);
+    const externalOrganizationId = "10000000-0000-4000-a000-000000000099";
+    const rawModules = [...evidenceByRoot.values()];
+    const first = rawModules[0]!;
+    rawModules[0] = {
+      ...first,
+      organizationId: externalOrganizationId,
+      compilationOutput: {
+        ...first.compilationOutput,
+        canonical: {
+          ...first.compilationOutput.canonical,
+          envelope: {
+            ...first.compilationOutput.canonical.envelope,
+            organizationId: externalOrganizationId,
+          },
+        },
+      },
+    };
+    const service = createApplicationBoundReleaseSetService(
+      {
+        read: vi.fn(async () => ({
+          correlationId,
+          application: completeApplication,
+          modules: rawModules,
+        })),
+      },
+      catalogueFor(completeManifest),
+    );
+
+    const result = await service.read({ applicationReleaseRevision: 1 });
+    expect(result.modules).toHaveLength(rawModules.length);
+    expect(result.modules).toContainEqual(
+      expect.objectContaining({ organizationId: externalOrganizationId }),
+    );
+
+    const incomplete = createApplicationBoundReleaseSetService(
+      {
+        read: async () => ({
+          correlationId,
+          application: completeApplication,
+          modules: rawModules.slice(0, -1),
+        }),
+      },
+      catalogueFor(completeManifest),
+    );
+    await expect(incomplete.read({ applicationReleaseRevision: 1 })).rejects.toMatchObject({
+      code: "DEFINITION_RELEASE_INTEGRITY_FAILED",
+    });
   });
 });

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   applicationContractPairV1,
+  applicationContractPairV2,
   applicationSourceDocumentSchema,
   applicationSourceDocumentV1Schema,
   selectApplicationContractPair,
@@ -37,10 +38,55 @@ describe("Application contract version selection", () => {
     expect(JSON.stringify(explicitV1)).toBe(JSON.stringify(legacy));
   });
 
-  it("selects only the exact implemented V1 source, validation and pair", () => {
+  it("accepts the shared saved-condition scope shape and keeps it closed", () => {
+    const scoped = structuredClone(applicationSourceDocumentV1Schema.parse(applicationSource));
+    const permission = scoped.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application permission fixture required");
+    permission.record_type = "vortex.service_desk.cases:case";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+
+    expect(applicationSourceDocumentV1Schema.parse(scoped)).toEqual(scoped);
+    expect(
+      applicationSourceDocumentV1Schema.safeParse({
+        ...scoped,
+        body: {
+          ...scoped.body,
+          permissions: scoped.body.permissions.map((entry) =>
+            entry.key === permission.key
+              ? {
+                  ...entry,
+                  record_scope: {
+                    ...entry.record_scope,
+                    saved_condition: {
+                      ...entry.record_scope?.saved_condition,
+                      untrusted: true,
+                    },
+                  },
+                }
+              : entry,
+          ),
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("selects only the exact implemented V1 and V2 source, validation and pairs", () => {
     expect(selectApplicationSourceContract("1.0.0")).toBe("v1");
     expect(selectApplicationValidationContract("1.0.0")).toBe("v1");
     expect(selectApplicationContractPair("1.0.0", "1.0.0")).toBe(applicationContractPairV1);
+    expect(selectApplicationSourceContract("2.0.0")).toBe("v2");
+    expect(selectApplicationValidationContract("2.0.0")).toBe("v2");
+    expect(selectApplicationContractPair("2.0.0", "2.0.0")).toBe(applicationContractPairV2);
   });
 
   it("rejects unknown versions rather than inferring from shape or semantic-version major", () => {
@@ -54,7 +100,7 @@ describe("Application contract version selection", () => {
     );
   });
 
-  it("distinguishes unsupported pairs from the reserved but unimplemented V2 pair", () => {
+  it("rejects unsupported mixed contract pairs", () => {
     expectVersionError(
       () => selectApplicationContractPair("1.0.0", "2.0.0"),
       "UNSUPPORTED_APPLICATION_CONTRACT_VERSION_PAIR",
@@ -62,10 +108,6 @@ describe("Application contract version selection", () => {
     expectVersionError(
       () => selectApplicationContractPair("2.0.0", "1.0.0"),
       "UNSUPPORTED_APPLICATION_CONTRACT_VERSION_PAIR",
-    );
-    expectVersionError(
-      () => selectApplicationContractPair("2.0.0", "2.0.0"),
-      "APPLICATION_CONTRACT_DECODER_NOT_IMPLEMENTED",
     );
   });
 

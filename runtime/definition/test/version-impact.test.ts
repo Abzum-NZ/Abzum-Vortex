@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   fieldTypeKeys,
+  moduleDraftV2Schema,
   workflowNodeTypeKeys,
   publishedApplicationDefinitionSchema,
 } from "@vortex/contracts";
@@ -24,6 +25,7 @@ import {
 } from "../src/canonical-json";
 import { DefinitionVersionImpactError } from "../src/version-impact-error";
 import { assignNextDefinitionVersion } from "../src/semantic-version";
+import { compareModuleContents } from "../src/comparison-policy";
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
 const timestamp = "2026-09-03T00:00:00+00:00";
@@ -246,6 +248,27 @@ const applicationRequestAfter = (draft: ReturnType<typeof applicationDraft>) => 
 };
 
 describe("literal/reference version regression", () => {
+  test("preserves the representative V1 comparison fingerprint and reason bytes", () => {
+    const request = applicationRequestAfter(applicationDraft());
+    request.candidate.content.description = "A changed neutral application definition.";
+    expect(compareDefinitionVersionImpact(request)).toEqual({
+      outcome: "release_required",
+      subject: { definitionKind: "application", rootId: id(20) },
+      comparisonFingerprint:
+        "sha256:818a1405cf5bd1c43860a5bbb471242210e136e1925c71f1bd48afa2c88728ec",
+      currentVersion: "1.0.0",
+      impact: "patch",
+      assignedVersion: "1.0.1",
+      reasons: [
+        {
+          impact: "patch",
+          code: "definition_text_changed",
+          location: { componentKind: "application", property: "description" },
+        },
+      ],
+    });
+  });
+
   test("round-trips page literal JSON through publication contracts and compares its changes", () => {
     const draft = applicationDraft();
     const page = draft.content.pages[0]!;
@@ -1043,31 +1066,41 @@ const fieldPolicyDirectionCases: readonly FieldPolicyCase[] = [
   [
     "table optional column added",
     policyField("table", {
-      columns: [{ key: "first", type: "text", required: false }],
+      columns: [{ key: "first", type: "text", required: false, settings: { maxLength: 120 } }],
       minimumRows: 0,
       maximumRows: 20,
     }),
     (item) =>
-      (item.settings.columns as unknown[]).push({ key: "second", type: "yes_no", required: false }),
+      (item.settings.columns as unknown[]).push({
+        key: "second",
+        type: "yes_no",
+        required: false,
+        settings: {},
+      }),
     "minor",
   ],
   [
     "table required column added",
     policyField("table", {
-      columns: [{ key: "first", type: "text", required: false }],
+      columns: [{ key: "first", type: "text", required: false, settings: { maxLength: 120 } }],
       minimumRows: 0,
       maximumRows: 20,
     }),
     (item) =>
-      (item.settings.columns as unknown[]).push({ key: "second", type: "yes_no", required: true }),
+      (item.settings.columns as unknown[]).push({
+        key: "second",
+        type: "yes_no",
+        required: true,
+        settings: {},
+      }),
     "major",
   ],
   [
     "table column removed",
     policyField("table", {
       columns: [
-        { key: "first", type: "text", required: false },
-        { key: "second", type: "yes_no", required: false },
+        { key: "first", type: "text", required: false, settings: { maxLength: 120 } },
+        { key: "second", type: "yes_no", required: false, settings: {} },
       ],
       minimumRows: 0,
       maximumRows: 20,
@@ -1243,6 +1276,104 @@ const fieldPolicyDirectionCases: readonly FieldPolicyCase[] = [
 ];
 
 describe("definition version impact", () => {
+  test("treats the explicit Module V1 to V2 representation transition as major", () => {
+    const v1 = moduleDraft();
+    const candidate = moduleDraftV2Schema.parse(structuredClone(v1));
+    candidate.envelope.draftRevision = 2;
+    candidate.envelope.publishedRevision = 1;
+    expect(
+      compareDefinitionVersionImpact({
+        kind: "module",
+        validationContractVersion: "2.0.0",
+        history: [publish(v1)],
+        candidate,
+      }),
+    ).toMatchObject({
+      outcome: "release_required",
+      impact: "major",
+      assignedVersion: "2.0.0",
+      reasons: [{ impact: "major", code: "existing_behavior_changed" }],
+    });
+  });
+
+  test.each([
+    ["minimum narrows", "minimum", "10", "20", "major", "constraint_narrowed"],
+    ["minimum widens", "minimum", "20", "10", "minor", "constraint_widened"],
+    ["maximum narrows", "maximum", "20", "10", "major", "constraint_narrowed"],
+    ["maximum widens", "maximum", "10", "20", "minor", "constraint_widened"],
+  ] as const)(
+    "classifies exact decimal field %s without binary-number conversion",
+    (_name, bound, before, after, impact, code) => {
+      const previous = moduleDraft().content;
+      previous.recordTypes[0]!.fields[0] = policyField("decimal_number", {
+        digitsBeforeDecimal: 30,
+        decimalPlaces: 12,
+        [bound]: before,
+      }) as never;
+      const candidate = structuredClone(previous);
+      (candidate.recordTypes[0]!.fields[0]!.settings as Record<string, unknown>)[bound] = after;
+      expect(compareModuleContents(previous, candidate)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ impact, code })]),
+      );
+    },
+  );
+
+  test.each(["table", "action_input"] as const)(
+    "classifies exact %s bound narrowing as major",
+    (kind) => {
+      const previous = moduleDraft().content;
+      if (kind === "table")
+        previous.recordTypes[0]!.fields[0] = policyField("table", {
+          minimumRows: 0,
+          maximumRows: 10,
+          columns: [
+            {
+              key: "amount",
+              type: "money",
+              required: false,
+              settings: {
+                currencyMode: "organization_default",
+                minimum: "10",
+                maximum: "100",
+              },
+            },
+          ],
+        }) as never;
+      else
+        previous.actions.push({
+          actionId: id(80),
+          key: "sample.module.adjust",
+          label: "Adjust",
+          subjectRecordTypeId: id(4),
+          permissionKey: "sample.record.read",
+          sharing: "refused",
+          inputs: [
+            {
+              key: "amount",
+              label: "Amount",
+              required: false,
+              type: "decimal_number",
+              validation: { minimum: "10", maximum: "100" },
+            },
+          ],
+          effects: [{ kind: "soft_delete_subject" }],
+        } as never);
+      const candidate = structuredClone(previous);
+      if (kind === "table")
+        (
+          candidate.recordTypes[0]!.fields[0]!.settings.columns as Array<{
+            settings: Record<string, unknown>;
+          }>
+        )[0]!.settings.minimum = "20";
+      else (candidate.actions[0]!.inputs[0]!.validation as Record<string, unknown>).minimum = "20";
+      expect(compareModuleContents(previous, candidate)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ impact: "major", code: "constraint_narrowed" }),
+        ]),
+      );
+    },
+  );
+
   test("assigns the first version and refuses malformed input", () => {
     const draft = moduleDraft();
     const result = compareDefinitionVersionImpact({
@@ -1340,6 +1471,113 @@ describe("definition version impact", () => {
     },
   );
 
+  test("classifies choice permission gates as authority changes", () => {
+    const draft = moduleDraft();
+    draft.content.recordTypes[0]!.fields.push({
+      ...field(id(11)),
+      type: "choice",
+      settings: { options: [{ value: "first", label: "First" }] },
+    });
+    const request = requestAfter(draft);
+    const option = (
+      request.candidate.content.recordTypes[0]!.fields[1]!.settings as {
+        options: Array<Record<string, unknown>>;
+      }
+    ).options[0]!;
+    option.requiredPermissionId = id(12);
+    expect(compareDefinitionVersionImpact(request)).toMatchObject({
+      outcome: "release_required",
+      impact: "major",
+      reasons: [
+        expect.objectContaining({
+          impact: "major",
+          code: "permission_changed",
+          location: expect.objectContaining({ property: "permission" }),
+        }),
+      ],
+    });
+  });
+
+  test("compares typed table-column constraints and explicit legacy completion", () => {
+    const typed = moduleDraft();
+    typed.content.recordTypes[0]!.fields.push({
+      ...field(id(11)),
+      type: "table",
+      settings: {
+        columns: [{ key: "first", type: "text", required: false, settings: { maxLength: 120 } }],
+        minimumRows: 0,
+        maximumRows: 20,
+      },
+    });
+    const widened = requestAfter(typed);
+    const typedColumn = (
+      widened.candidate.content.recordTypes[0]!.fields[1]!.settings as {
+        columns: Array<{ settings?: { maxLength?: number } }>;
+      }
+    ).columns[0]!;
+    if (!typedColumn.settings) throw new Error("Typed column settings required");
+    typedColumn.settings.maxLength = 240;
+    expect(compareDefinitionVersionImpact(widened)).toMatchObject({
+      outcome: "release_required",
+      impact: "minor",
+      reasons: [expect.objectContaining({ code: "constraint_widened" })],
+    });
+
+    const legacy = moduleDraft();
+    legacy.content.recordTypes[0]!.fields.push({
+      ...field(id(11)),
+      type: "table",
+      settings: {
+        columns: [{ key: "first", type: "text", required: false }],
+        minimumRows: 0,
+        maximumRows: 20,
+      },
+    });
+    const completed = requestAfter(legacy);
+    const legacyColumn = (
+      completed.candidate.content.recordTypes[0]!.fields[1]!.settings as {
+        columns: Array<Record<string, unknown>>;
+      }
+    ).columns[0]!;
+    legacyColumn.settings = { maxLength: 120 };
+    expect(compareDefinitionVersionImpact(completed)).toMatchObject({
+      outcome: "release_required",
+      impact: "major",
+      reasons: [expect.objectContaining({ code: "existing_behavior_changed" })],
+    });
+
+    const tableChoice = moduleDraft();
+    tableChoice.content.recordTypes[0]!.fields.push({
+      ...field(id(11)),
+      type: "table",
+      settings: {
+        columns: [
+          {
+            key: "state",
+            type: "choice",
+            required: false,
+            settings: { options: [{ value: "first", label: "First" }] },
+          },
+        ],
+        minimumRows: 0,
+        maximumRows: 20,
+      },
+    });
+    const gated = requestAfter(tableChoice);
+    const gatedColumn = (
+      gated.candidate.content.recordTypes[0]!.fields[1]!.settings as {
+        columns: Array<{ settings?: { options?: Array<Record<string, unknown>> } }>;
+      }
+    ).columns[0]!;
+    if (!gatedColumn.settings?.options) throw new Error("Table choice options required");
+    gatedColumn.settings.options[0]!.requiredPermissionId = id(12);
+    expect(compareDefinitionVersionImpact(gated)).toMatchObject({
+      outcome: "release_required",
+      impact: "major",
+      reasons: [expect.objectContaining({ code: "permission_changed" })],
+    });
+  });
+
   test.each(fieldPolicyDirectionCases)(
     "classifies field policy direction: %s",
     (_name, original, mutate, impact) => {
@@ -1399,6 +1637,51 @@ describe("definition version impact", () => {
     const majorRequest = requestAfter(moduleDraft());
     majorRequest.candidate.content.permissions[0]!.administrative = true;
     expect(compareDefinitionVersionImpact(majorRequest)).toMatchObject({ impact: "major" });
+
+    const addedScope = requestAfter(moduleDraft());
+    addedScope.candidate.content.permissions[0]!.recordScope = {
+      routes: [{ kind: "all_records" }],
+    };
+    expect(compareDefinitionVersionImpact(addedScope)).toMatchObject({ impact: "major" });
+
+    const scopedDraft = moduleDraft();
+    scopedDraft.content.permissions[0]!.recordScope = {
+      routes: [{ kind: "all_records" }],
+    };
+    const changedScope = requestAfter(scopedDraft);
+    changedScope.candidate.content.permissions[0]!.recordScope = {
+      routes: [{ kind: "direct_share" }],
+    };
+    expect(compareDefinitionVersionImpact(changedScope)).toMatchObject({ impact: "major" });
+
+    const removedScope = requestAfter(scopedDraft);
+    delete removedScope.candidate.content.permissions[0]!.recordScope;
+    expect(compareDefinitionVersionImpact(removedScope)).toMatchObject({ impact: "major" });
+
+    const addedEmptyFieldPolicy = requestAfter(moduleDraft());
+    addedEmptyFieldPolicy.candidate.content.permissions[0]!.fieldPolicy = {
+      readableFieldIds: [],
+      changeableFieldIds: [],
+    };
+    expect(compareDefinitionVersionImpact(addedEmptyFieldPolicy)).toMatchObject({
+      impact: "major",
+    });
+
+    const policyDraft = moduleDraft();
+    policyDraft.content.permissions[0]!.fieldPolicy = {
+      readableFieldIds: [id(10)],
+      changeableFieldIds: [],
+    };
+    const changedFieldPolicy = requestAfter(policyDraft);
+    changedFieldPolicy.candidate.content.permissions[0]!.fieldPolicy = {
+      readableFieldIds: [id(10)],
+      changeableFieldIds: [id(10)],
+    };
+    expect(compareDefinitionVersionImpact(changedFieldPolicy)).toMatchObject({ impact: "major" });
+
+    const removedFieldPolicy = requestAfter(policyDraft);
+    delete removedFieldPolicy.candidate.content.permissions[0]!.fieldPolicy;
+    expect(compareDefinitionVersionImpact(removedFieldPolicy)).toMatchObject({ impact: "major" });
 
     const duplicateRequest = requestAfter(moduleDraft());
     duplicateRequest.candidate.content.permissions.push({
@@ -1840,6 +2123,51 @@ describe("definition version impact", () => {
       outcome: "release_required",
       impact: "patch",
     });
+  });
+
+  test("treats a canonical action permission set as one semantic permission change", () => {
+    const draft = moduleDraft();
+    draft.content.actions.push(sampleAction());
+    const request = requestAfter(draft);
+    const action = request.candidate.content.actions[0]!;
+    delete action.permissionKey;
+    action.permissionKeys = ["sample.record.read", "sample.record.update"];
+
+    const result = compareDefinitionVersionImpact(request);
+    expect(result).toMatchObject({ outcome: "release_required", impact: "major" });
+    expect(result.reasons).toEqual([
+      expect.objectContaining({
+        code: "permission_changed",
+        location: expect.objectContaining({ componentKind: "action", property: "permission" }),
+      }),
+    ]);
+  });
+
+  test("treats a changed plural action permission set as one major change", () => {
+    const draft = moduleDraft();
+    const action = sampleAction();
+    delete action.permissionKey;
+    action.permissionKeys = ["sample.record.read_all", "sample.record.read_own"];
+    draft.content.actions.push(action);
+    const unchanged = requestAfter(draft);
+    expect(compareDefinitionVersionImpact(unchanged)).toMatchObject({
+      outcome: "no_change",
+      reasons: [],
+    });
+
+    const changed = requestAfter(draft);
+    changed.candidate.content.actions[0]!.permissionKeys = [
+      "sample.record.read_all",
+      "sample.record.read_shared",
+    ];
+    const result = compareDefinitionVersionImpact(changed);
+    expect(result).toMatchObject({ outcome: "release_required", impact: "major" });
+    expect(result.reasons).toEqual([
+      expect.objectContaining({
+        code: "permission_changed",
+        location: expect.objectContaining({ componentKind: "action", property: "permission" }),
+      }),
+    ]);
   });
 
   test.each(["text", "number", "date", "date_time"] as const)(

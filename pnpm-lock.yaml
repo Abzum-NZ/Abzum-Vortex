@@ -246,6 +246,9 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../rule
       semver:
         specifier: 'catalog:'
         version: 7.8.5
@@ -268,12 +271,19 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/definition':
+        specifier: workspace:*
+        version: link:../definition
       '@vortex/record':
         specifier: workspace:*
         version: link:../record
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   runtime/file:
     dependencies:
@@ -332,15 +342,25 @@ importers:
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   runtime/page:
     dependencies:
+      '@vortex/access':
+        specifier: workspace:*
+        version: link:../access
       '@vortex/app':
         specifier: workspace:*
         version: link:../app
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/db':
+        specifier: workspace:*
+        version: link:../../db
       '@vortex/query':
         specifier: workspace:*
         version: link:../query
@@ -350,6 +370,10 @@ importers:
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   runtime/query:
     dependencies:
@@ -377,15 +401,26 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../rule
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   runtime/rule:
     dependencies:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   runtime/search:
     dependencies:
@@ -449,6 +484,12 @@ importers:
       '@vortex/modules':
         specifier: workspace:*
         version: link:../modules
+      '@vortex/record':
+        specifier: workspace:*
+        version: link:../runtime/record
+      '@vortex/rule':
+        specifier: workspace:*
+        version: link:../runtime/rule
     devDependencies:
       vitest:
         specifier: 4.1.11

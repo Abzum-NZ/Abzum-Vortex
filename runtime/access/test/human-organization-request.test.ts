@@ -31,6 +31,47 @@ const session = (overrides: Partial<IdentitySession> = {}): IdentitySession =>
 const authorityId = id(3) as IdentityAuthorityId;
 
 describe("human organisation request", () => {
+  it("uses the governance-first organization and application resolvers for changes", async () => {
+    const calls: string[] = [];
+    const service = createHumanOrganizationRequestService({
+      identityAuthorityId: authorityId,
+      clock: () => new Date("2026-09-05T01:00:00.000Z"),
+      correlationId: () => id(9),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve({
+          query: async <Row extends DatabaseRow>(strings: TemplateStringsArray) => {
+            calls.push(strings.join("$value"));
+            return [
+              {
+                tenant_id: id(4),
+                organization_id: id(5),
+                organization_account_id: id(6),
+                ...(calls.length === 2 ? { application_root_id: id(7) } : {}),
+                access_version: "7",
+              },
+            ] as readonly Row[];
+          },
+        });
+        return operation({ query: async () => [] }, resolved.scope);
+      },
+    });
+
+    await expect(
+      service.runChange(session(), { organizationId: id(5) }, async () => "changed"),
+    ).resolves.toEqual({ kind: "available", value: "changed" });
+    await expect(
+      service.runChange(
+        session(),
+        { organizationId: id(5), applicationRootId: id(7) },
+        async () => "changed",
+      ),
+    ).resolves.toEqual({ kind: "available", value: "changed" });
+
+    expect(calls[0]).toContain("vortex_access.resolve_human_organization_change_scope");
+    expect(calls[1]).toContain("vortex_access.resolve_human_application_change_scope");
+    expect(calls.join("\n")).not.toContain("resolve_human_organization_scope(");
+  });
+
   it("derives the closed context inside the protected transaction", async () => {
     let captured: SessionContext | undefined;
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
@@ -95,6 +136,88 @@ describe("human organisation request", () => {
     expect(captured).not.toHaveProperty("applicationRootId");
     expect(captured).not.toHaveProperty("delegatedContext");
     expect(captured).not.toHaveProperty("supportContext");
+  });
+
+  it("binds an exact active application selection into the protected context", async () => {
+    let captured: SessionContext | undefined;
+    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+    const service = createHumanOrganizationRequestService({
+      identityAuthorityId: authorityId,
+      clock: () => new Date("2026-09-05T01:00:00.000Z"),
+      correlationId: () => id(9),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve({
+          query: async <Row extends DatabaseRow>(
+            strings: TemplateStringsArray,
+            ...values: readonly DatabaseValue[]
+          ) => {
+            calls.push({ text: strings.join("$value"), values });
+            return [
+              {
+                tenant_id: id(4),
+                organization_id: id(5),
+                organization_account_id: id(6),
+                application_root_id: id(7).toUpperCase(),
+                access_version: "7",
+              },
+            ] as readonly Row[];
+          },
+        });
+        captured = sessionContextSchema.parse(resolved.context);
+        return operation({ query: async () => [] }, resolved.scope);
+      },
+    });
+
+    await expect(
+      service.run(
+        session(),
+        { organizationId: id(5), applicationRootId: id(7) },
+        async (_transaction, selected) => selected,
+      ),
+    ).resolves.toEqual({
+      kind: "available",
+      value: {
+        tenantId: id(4),
+        organizationId: id(5),
+        organizationAccountId: id(6),
+        applicationRootId: id(7).toUpperCase(),
+        accessVersion: 7,
+      },
+    });
+    expect(calls[0]?.text).toContain("vortex_access.resolve_human_application_scope");
+    expect(calls[0]?.values).toEqual([id(1), id(5), id(7)]);
+    expect(captured).toMatchObject({ applicationRootId: id(7).toUpperCase() });
+  });
+
+  it("fails closed when the application resolver returns a different application", async () => {
+    const service = createHumanOrganizationRequestService({
+      identityAuthorityId: authorityId,
+      clock: () => new Date("2026-09-05T01:00:00.000Z"),
+      correlationId: () => id(9),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve({
+          query: async () =>
+            [
+              {
+                tenant_id: id(4),
+                organization_id: id(5),
+                organization_account_id: id(6),
+                application_root_id: id(8),
+                access_version: "7",
+              },
+            ] as never,
+        });
+        return operation({ query: async () => [] }, resolved.scope);
+      },
+    });
+
+    await expect(
+      service.run(
+        session(),
+        { organizationId: id(5), applicationRootId: id(7) },
+        async () => "must not run",
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
   });
 
   it("copies exact evidence with its token upper bound and preserves the +60-second token boundary", async () => {
@@ -305,5 +428,56 @@ describe("human organisation request", () => {
       },
     });
     expect(operationSql).toContain("vortex_access.validated_human_request_context");
+  });
+
+  it("rechecks the selected application in the protected live context", async () => {
+    const applicationRootId = id(7);
+    const service = createHumanOrganizationRequestService({
+      identityAuthorityId: authorityId,
+      clock: () => new Date("2026-09-05T01:00:00.000Z"),
+      correlationId: () => id(9),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve({
+          query: async () =>
+            [
+              {
+                tenant_id: id(4),
+                organization_id: id(5),
+                organization_account_id: id(6),
+                application_root_id: applicationRootId,
+                access_version: "7",
+              },
+            ] as never,
+        });
+        return operation(
+          {
+            query: async () =>
+              [
+                {
+                  tenant_id: id(4),
+                  organization_id: id(5),
+                  organization_account_id: id(6),
+                  application_root_id: applicationRootId.toUpperCase(),
+                  access_version: "7",
+                },
+              ] as never,
+          },
+          resolved.scope,
+        );
+      },
+    });
+
+    await expect(
+      service.resolve(session(), { organizationId: id(5), applicationRootId }),
+    ).resolves.toEqual({
+      kind: "available",
+      value: {
+        tenantId: id(4),
+        organizationId: id(5),
+        organizationAccountId: id(6),
+        applicationRootId: applicationRootId.toUpperCase(),
+        accessVersion: 7,
+      },
+    });
   });
 });

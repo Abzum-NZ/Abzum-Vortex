@@ -8,13 +8,16 @@ import {
 import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "./catalogues";
 import {
   actionIdSchema,
+  applicationRootIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
+  eventDeclarationIdSchema,
   eventIdSchema,
   fieldIdSchema,
   fingerprintSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
+  permissionIdSchema,
   platformIdSchema,
   recordTypeIdSchema,
   revisionSchema,
@@ -36,7 +39,13 @@ import type { ResolveRecordTypeReferences } from "./definitions";
 import { permissionDeclarationSchema } from "./permissions";
 
 const finiteNumberSchema = z.number().finite();
-const optionSchema = z.object({ value: z.string().min(1).max(120), label: labelSchema }).strict();
+const optionSchema = z
+  .object({
+    value: z.string().min(1).max(120),
+    label: labelSchema,
+    requiredPermissionId: permissionIdSchema.optional(),
+  })
+  .strict();
 const parentDeleteSchema = z.enum(["refuse", "empty_optional", "soft_delete_dependent"]);
 const emptySettingsSchema = z.object({}).strict();
 
@@ -126,9 +135,42 @@ const phoneSettingsSchema = z.object({ defaultCountry: z.string().length(2).opti
 const webAddressSettingsSchema = z
   .object({ allowedSchemes: z.array(z.literal("https")).min(1).optional() })
   .strict();
-const tableColumnSchema = z
+const tableColumnBase = { key: builderKeySchema, required: z.boolean() };
+const typedTableColumnSchema = z.discriminatedUnion("type", [
+  z.object({ ...tableColumnBase, type: z.literal("text"), settings: textSettingsSchema }).strict(),
+  z
+    .object({
+      ...tableColumnBase,
+      type: z.literal("whole_number"),
+      settings: wholeNumberSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...tableColumnBase,
+      type: z.literal("decimal_number"),
+      settings: decimalSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({ ...tableColumnBase, type: z.literal("money"), settings: moneySettingsSchema })
+    .strict(),
+  z
+    .object({ ...tableColumnBase, type: z.literal("yes_no"), settings: emptySettingsSchema })
+    .strict(),
+  z.object({ ...tableColumnBase, type: z.literal("date"), settings: dateSettingsSchema }).strict(),
+  z
+    .object({ ...tableColumnBase, type: z.literal("date_time"), settings: dateTimeSettingsSchema })
+    .strict(),
+  z
+    .object({ ...tableColumnBase, type: z.literal("choice"), settings: choiceSettingsSchema })
+    .strict(),
+]);
+// Historical canonical releases used this incomplete column shape. Keep it
+// parseable for release comparison; publication validation refuses it below.
+const legacyTableColumnSchema = z
   .object({
-    key: builderKeySchema,
+    ...tableColumnBase,
     type: z.enum([
       "text",
       "whole_number",
@@ -139,9 +181,80 @@ const tableColumnSchema = z
       "date_time",
       "choice",
     ]),
-    required: z.boolean(),
   })
   .strict();
+const tableColumnSchema = z.union([typedTableColumnSchema, legacyTableColumnSchema]);
+const tableCellValid = (column: z.infer<typeof tableColumnSchema>, value: unknown): boolean => {
+  const parsed = typedTableColumnSchema.safeParse(column);
+  if (!parsed.success) return false;
+  const typedColumn = parsed.data;
+  switch (typedColumn.type) {
+    case "text":
+      return typeof value === "string" && value.length <= typedColumn.settings.maxLength;
+    case "whole_number":
+      return (
+        Number.isInteger(value) &&
+        (typedColumn.settings.minimum === undefined ||
+          (value as number) >= typedColumn.settings.minimum) &&
+        (typedColumn.settings.maximum === undefined ||
+          (value as number) <= typedColumn.settings.maximum) &&
+        (typedColumn.settings.step === undefined ||
+          ((value as number) - (typedColumn.settings.minimum ?? 0)) % typedColumn.settings.step ===
+            0)
+      );
+    case "decimal_number": {
+      if (typeof value !== "number" || !Number.isFinite(value)) return false;
+      const [whole, fraction = ""] = String(Math.abs(value)).split(".");
+      return (
+        !String(value).toLowerCase().includes("e") &&
+        whole!.length <= typedColumn.settings.digitsBeforeDecimal &&
+        fraction.length <= typedColumn.settings.decimalPlaces &&
+        (typedColumn.settings.minimum === undefined || value >= typedColumn.settings.minimum) &&
+        (typedColumn.settings.maximum === undefined || value <= typedColumn.settings.maximum)
+      );
+    }
+    case "money":
+      return (
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        (typedColumn.settings.minimum === undefined || value >= typedColumn.settings.minimum) &&
+        (typedColumn.settings.maximum === undefined || value <= typedColumn.settings.maximum)
+      );
+    case "yes_no":
+      return typeof value === "boolean";
+    case "date":
+      return (
+        typeof value === "string" &&
+        z.iso.date().safeParse(value).success &&
+        (typedColumn.settings.earliest === undefined || value >= typedColumn.settings.earliest) &&
+        (typedColumn.settings.latest === undefined || value <= typedColumn.settings.latest)
+      );
+    case "date_time":
+      return typeof value === "string" && z.iso.datetime({ offset: true }).safeParse(value).success;
+    case "choice":
+      return (
+        typeof value === "string" &&
+        typedColumn.settings.options.some((option) => option.value === value)
+      );
+  }
+};
+const tableDefaultValid = (
+  columns: readonly z.infer<typeof tableColumnSchema>[],
+  rows: readonly unknown[],
+): boolean => {
+  const keys = new Set(columns.map((column) => column.key));
+  return rows.every((row) => {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) return false;
+    const cells = row as Record<string, unknown>;
+    if (Object.keys(cells).some((key) => !keys.has(key))) return false;
+    return columns.every(
+      (column) =>
+        (!column.required && !Object.prototype.hasOwnProperty.call(cells, column.key)) ||
+        (Object.prototype.hasOwnProperty.call(cells, column.key) &&
+          tableCellValid(column, cells[column.key])),
+    );
+  });
+};
 const tableSettingsSchema = z
   .object({
     columns: z.array(tableColumnSchema).min(1).max(40),
@@ -149,9 +262,20 @@ const tableSettingsSchema = z
     maximumRows: z.number().int().min(1).max(1_000),
   })
   .strict()
-  .refine((value) => value.maximumRows >= value.minimumRows, {
-    path: ["maximumRows"],
-    message: "Maximum rows cannot be below minimum rows",
+  .superRefine((value, context) => {
+    if (value.maximumRows < value.minimumRows)
+      context.addIssue({
+        code: "custom",
+        path: ["maximumRows"],
+        message: "Maximum rows cannot be below minimum rows",
+      });
+    const keys = value.columns.map((column) => column.key);
+    if (value.columns.every((column) => "settings" in column) && new Set(keys).size !== keys.length)
+      context.addIssue({
+        code: "custom",
+        path: ["columns"],
+        message: "Table column keys must be unique",
+      });
   });
 const linkSettingsSchema = z
   .object({
@@ -408,17 +532,21 @@ export const fieldDefinitionSchema = z
         )
           invalid("Every default must be one published choice");
         break;
-      case "table":
+      case "table": {
+        const completeColumns = value.settings.columns.every((column) => "settings" in column);
         if (
           !Array.isArray(value.default) ||
           value.default.length < value.settings.minimumRows ||
           value.default.length > value.settings.maximumRows ||
-          !value.default.every(
-            (row) => typeof row === "object" && row !== null && !Array.isArray(row),
-          )
+          (completeColumns
+            ? !tableDefaultValid(value.settings.columns, value.default)
+            : !value.default.every(
+                (row) => typeof row === "object" && row !== null && !Array.isArray(row),
+              ))
         )
-          invalid("Default must be a table within the configured row limits");
+          invalid("Default must match the configured table columns and row limits");
         break;
+      }
       case "link":
       case "link_to_one_of_several":
       case "link_to_person":
@@ -710,7 +838,8 @@ export const actionDefinitionSchema = z
     key: namespacedKeySchema,
     label: labelSchema,
     subjectRecordTypeId: recordTypeIdSchema,
-    permissionKey: namespacedKeySchema,
+    permissionKey: namespacedKeySchema.optional(),
+    permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
     sharing: z.enum(["refused", "allowed"]),
     inputs: z.array(actionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
@@ -718,6 +847,30 @@ export const actionDefinitionSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["permissionKeys"],
+        message: "An action requires either one permission or canonical alternatives",
+      });
+    if (value.permissionKeys) {
+      if (new Set(value.permissionKeys).size !== value.permissionKeys.length)
+        context.addIssue({
+          code: "custom",
+          path: ["permissionKeys"],
+          message: "Action permission alternatives must be unique",
+        });
+      if (
+        value.permissionKeys.some(
+          (permission, index) => index > 0 && value.permissionKeys![index - 1]! >= permission,
+        )
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["permissionKeys"],
+          message: "Action permission alternatives must use canonical order",
+        });
+    }
     if (new Set(value.inputs.map((input) => input.key)).size !== value.inputs.length)
       context.addIssue({
         code: "custom",
@@ -763,6 +916,63 @@ export const eventDefinitionSchema = z
     personalOrSensitiveValuesAllowed: z.literal(false),
   })
   .strict();
+
+export const standardInstalledEventKindSchema = z.enum([
+  "created",
+  "changed",
+  "deleted",
+  "linked",
+  "unlinked",
+  "reassigned",
+  "state_changed",
+]);
+
+const canonicalCarriedFieldIdsSchema = z
+  .array(fieldIdSchema)
+  .max(30)
+  .superRefine((fieldIds, context) => {
+    if (new Set(fieldIds).size !== fieldIds.length)
+      context.addIssue({ code: "custom", message: "Carried field identities must be unique" });
+    if (fieldIds.some((fieldId, index) => index > 0 && fieldIds[index - 1]! >= fieldId))
+      context.addIssue({
+        code: "custom",
+        message: "Carried field identities must use canonical order",
+      });
+  });
+
+const installedEventOwnerSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("application"), applicationRootId: applicationRootIdSchema }).strict(),
+  z.object({ kind: z.literal("module"), moduleRootId: moduleRootIdSchema }).strict(),
+]);
+
+export const standardInstalledEventDescriptorSchema = z
+  .object({
+    kind: z.literal("standard"),
+    eventKind: standardInstalledEventKindSchema,
+    recordTypeId: recordTypeIdSchema,
+  })
+  .strict();
+
+export const declaredInstalledEventDescriptorSchema = z
+  .object({
+    kind: z.literal("declared"),
+    owner: installedEventOwnerSchema,
+    declarationId: eventDeclarationIdSchema,
+    key: namespacedKeySchema,
+    recordTypeId: recordTypeIdSchema,
+    carriedFieldIds: canonicalCarriedFieldIdsSchema,
+  })
+  .strict();
+
+/**
+ * Closed declaration identity projected from immutable installed definitions.
+ * Installation binding and exact release evidence are catalogue context, not
+ * synthetic properties of this reusable descriptor.
+ */
+export const installedEventDescriptorSchema = z.discriminatedUnion("kind", [
+  standardInstalledEventDescriptorSchema,
+  declaredInstalledEventDescriptorSchema,
+]);
 
 export const recordTypeDefinitionSchema = z
   .object({
@@ -840,7 +1050,14 @@ export const savedSharingConditionSchema = z
       z
         .object({
           key: builderKeySchema,
-          type: z.enum(["text", "number", "boolean", "date", "date_time"]),
+          type: z.enum([
+            "text",
+            "number",
+            "boolean",
+            "date",
+            "date_time",
+            "organization_account_reference",
+          ]),
         })
         .strict(),
     ),
@@ -921,4 +1138,12 @@ export type PublishedModuleDefinition = z.infer<typeof publishedModuleDefinition
 export type ActionDefinition = z.infer<typeof actionDefinitionSchema>;
 export type RuleDefinition = z.infer<typeof ruleDefinitionSchema>;
 export type EventDefinition = z.infer<typeof eventDefinitionSchema>;
+export type StandardInstalledEventKind = z.infer<typeof standardInstalledEventKindSchema>;
+export type StandardInstalledEventDescriptor = z.infer<
+  typeof standardInstalledEventDescriptorSchema
+>;
+export type DeclaredInstalledEventDescriptor = z.infer<
+  typeof declaredInstalledEventDescriptorSchema
+>;
+export type InstalledEventDescriptor = z.infer<typeof installedEventDescriptorSchema>;
 export type SavedSharingCondition = z.infer<typeof savedSharingConditionSchema>;

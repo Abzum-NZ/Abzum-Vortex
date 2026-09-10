@@ -13,7 +13,7 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "shared_customer_context"
       },
@@ -21,7 +21,7 @@
         "module": "vortex.crm.people",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "shared_requester_context"
       },
@@ -29,7 +29,7 @@
         "module": "vortex.service_desk.sla",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "primary"
       },
@@ -37,7 +37,7 @@
         "module": "vortex.service_desk.cases",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "primary"
       },
@@ -45,7 +45,7 @@
         "module": "vortex.service_desk.knowledge",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         },
         "purpose": "primary"
       }
@@ -952,7 +952,19 @@
                 },
                 "body": {
                   "source": "literal",
-                  "value": "Resolution details require review before publication."
+                  "value": {
+                    "blocks": [
+                      {
+                        "kind": "paragraph",
+                        "children": [
+                          {
+                            "kind": "text",
+                            "text": "Resolution details require review before publication."
+                          }
+                        ]
+                      }
+                    ]
+                  }
                 },
                 "status": {
                   "source": "literal",
@@ -1227,7 +1239,7 @@
       {
         "id": "iface_sd_v1",
         "key": "vortex.interface.service_desk",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "operations": [
           {
             "id": "iface_sd_v1_operation_1",
@@ -1313,7 +1325,7 @@
                 }
               },
               "body": {
-                "type": "text",
+                "type": "formatted_text",
                 "required": true,
                 "target_binding": {
                   "kind": "action_input",

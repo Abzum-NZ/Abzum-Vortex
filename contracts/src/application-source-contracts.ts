@@ -21,7 +21,11 @@ import {
   sourceQualifiedRecordTypeSchema,
   sourceRuleEffectSchema,
 } from "./definition-source-common";
-import { actionInputSchema } from "./module-source-contracts";
+import {
+  actionInputSchema,
+  moduleSourcePermissionRecordScopeSchema,
+  sourcePermissionFieldPolicySchema,
+} from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "./permissions";
 import {
   sourceGuidedFormPageCompositionV2Schema,
@@ -591,7 +595,7 @@ const sourceInterfaceValueTypeSchema = z.enum([
 ]);
 const sourceInterfaceInputFieldSchema = z
   .object({
-    type: sourceInterfaceValueTypeSchema,
+    type: z.union([sourceInterfaceValueTypeSchema, z.literal("formatted_text")]),
     required: z.boolean(),
     target_binding: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("action_subject") }).strict(),
@@ -763,8 +767,18 @@ const sourceApplicationBodySchema = z
           ]),
           named_action: builderKeySchema.optional(),
           administrative: z.boolean(),
+          record_scope: moduleSourcePermissionRecordScopeSchema.optional(),
+          field_policy: sourcePermissionFieldPolicySchema.optional(),
         })
-        .strict(),
+        .strict()
+        .superRefine((value, context) => {
+          if (value.field_policy !== undefined && value.record_type === undefined)
+            context.addIssue({
+              code: "custom",
+              path: ["field_policy"],
+              message: "Only record permissions may declare a field policy",
+            });
+        }),
     ),
     roles: z
       .array(
@@ -976,13 +990,40 @@ const sourceApplicationBodySchema = z
           key: namespacedKeySchema,
           label: z.string().min(1).max(60),
           record_type: sourceQualifiedRecordTypeSchema,
-          permission: namespacedKeySchema,
+          permission: namespacedKeySchema.optional(),
+          permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
           sharing: z.enum(["refused", "allowed"]),
           inputs: z.array(actionInputSchema),
           precondition: sourceConditionSchema.optional(),
           effects: z.array(sourceActionEffectSchema).min(1).max(10),
         })
-        .strict(),
+        .strict()
+        .superRefine((value, context) => {
+          if ((value.permission === undefined) === (value.permission_alternatives === undefined))
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "An action requires either one permission or canonical alternatives",
+            });
+          const alternatives = value.permission_alternatives;
+          if (!alternatives) return;
+          if (new Set(alternatives).size !== alternatives.length)
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "Action permission alternatives must be unique",
+            });
+          if (
+            alternatives.some(
+              (permission, index) => index > 0 && alternatives[index - 1]! >= permission,
+            )
+          )
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "Action permission alternatives must use canonical order",
+            });
+        }),
     ),
     rules: z.array(
       z

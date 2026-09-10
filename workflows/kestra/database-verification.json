@@ -95,6 +95,41 @@
       "migration": "supabase/migrations/20260906040352_coordinate_organization_invitation_access.sql",
       "proof": "supabase/tests/organization-invitation-access-concurrency.test.sh",
       "label": "Organization invitation access"
+    },
+    {
+      "migration": "supabase/migrations/20260906055827_evaluate_organization_permission_eligibility.sql",
+      "proof": "supabase/tests/organization-permission-eligibility-concurrency.test.sh",
+      "label": "Organization permission eligibility"
+    },
+    {
+      "migration": "supabase/migrations/20260906090019_activity_append_foundation.sql",
+      "proof": "supabase/tests/activity-append-concurrency.test.sh",
+      "label": "Activity append"
+    },
+    {
+      "migration": "supabase/migrations/20260906101701_protect_organization_access_administration.sql",
+      "proof": "supabase/tests/organization-access-administration-concurrency.test.sh",
+      "label": "Organization Access administration"
+    },
+    {
+      "migration": "supabase/migrations/20260906115410_protect_organization_group_administration_changes.sql",
+      "proof": "supabase/tests/organization-group-administration-change-concurrency.test.sh",
+      "label": "Organization Group administration changes"
+    },
+    {
+      "migration": "supabase/migrations/20260907042701_protect_organization_structural_access_reductions.sql",
+      "proof": "supabase/tests/organization-structural-access-reduction-concurrency.test.sh",
+      "label": "Organization structural Access reductions"
+    },
+    {
+      "migration": "supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql",
+      "proof": "supabase/tests/private-direct-record-share-change-concurrency.test.sh",
+      "label": "Private direct record-share changes"
+    },
+    {
+      "migration": "supabase/migrations/20260908122641_record_storage_provisioning.sql",
+      "proof": "supabase/tests/module-storage-provisioning-concurrency.test.sh",
+      "label": "Module storage provisioning"
     }
   ],
   "lintSchemas": [
@@ -102,6 +137,10 @@
     "vortex_context",
     "vortex_identity",
     "vortex_definition",
-    "vortex_access"
+    "vortex_access",
+    "vortex_activity",
+    "vortex_module",
+    "vortex_record",
+    "record_data"
   ]
 }

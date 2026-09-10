@@ -9,6 +9,7 @@ import {
   builderKeySchema,
   containedComponentIdSchema,
   eventIdSchema,
+  eventOccurrenceIdSchema,
   fieldIdSchema,
   fileIdSchema,
   fingerprintSchema,
@@ -31,6 +32,8 @@ import {
   workflowNodeIdSchema,
   workflowRunIdSchema,
 } from "./identifiers";
+import { installedEventDescriptorSchema } from "./module-contracts";
+import type { StandardInstalledEventKind } from "./module-contracts";
 
 const businessRecordFields = {
   organizationId: organizationIdSchema,
@@ -109,6 +112,150 @@ export const eventEnvelopeSchema = z
     carriedValues: z.record(fieldIdSchema, jsonValueSchema),
   })
   .strict();
+
+const javascriptSafeEventRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
+
+const eventOccurrenceDefinitionReleaseV2Schema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("application"),
+      rootId: applicationRootIdSchema,
+      releaseRevision: javascriptSafeEventRevisionSchema,
+      releaseVersion: semanticVersionSchema,
+      contentFingerprint: fingerprintSchema,
+      resolutionFingerprint: fingerprintSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("module"),
+      rootId: moduleRootIdSchema,
+      releaseRevision: javascriptSafeEventRevisionSchema,
+      releaseVersion: semanticVersionSchema,
+      contentFingerprint: fingerprintSchema,
+      resolutionFingerprint: fingerprintSchema,
+    })
+    .strict(),
+]);
+
+const canonicalFieldIdsSchema = z
+  .array(fieldIdSchema)
+  .min(1)
+  .max(500)
+  .superRefine((fieldIds, context) => {
+    if (new Set(fieldIds).size !== fieldIds.length)
+      context.addIssue({ code: "custom", message: "Field identities must be unique" });
+    if (fieldIds.some((fieldId, index) => index > 0 && fieldIds[index - 1]! >= fieldId))
+      context.addIssue({ code: "custom", message: "Field identities must use canonical order" });
+  });
+
+const emptyStandardOccurrencePayload = (
+  kind: Exclude<StandardInstalledEventKind, "changed" | "state_changed">,
+) => z.object({ kind: z.literal(kind) }).strict();
+
+const standardEventOccurrencePayloadV2Schema = z.discriminatedUnion("kind", [
+  emptyStandardOccurrencePayload("created"),
+  z.object({ kind: z.literal("changed"), changedFieldIds: canonicalFieldIdsSchema }).strict(),
+  emptyStandardOccurrencePayload("deleted"),
+  emptyStandardOccurrencePayload("linked"),
+  emptyStandardOccurrencePayload("unlinked"),
+  emptyStandardOccurrencePayload("reassigned"),
+  z
+    .object({
+      kind: z.literal("state_changed"),
+      fieldId: fieldIdSchema,
+      previousValue: jsonValueSchema.optional(),
+      newValue: jsonValueSchema.optional(),
+    })
+    .strict(),
+]);
+
+const declaredEventOccurrencePayloadV2Schema = z
+  .object({ kind: z.literal("declared"), carriedValues: z.record(fieldIdSchema, jsonValueSchema) })
+  .strict();
+
+/**
+ * Versioned occurrence data. It preserves the historical V1 envelope and keeps
+ * the occurrence identity distinct from the reusable declaration identity.
+ * Definition-backed payload privacy and field-type checks are intentionally
+ * performed by Event using Record's field semantics, not claimed by this shape alone.
+ */
+export const eventOccurrenceEnvelopeV2Schema = z
+  .object({
+    contractVersion: z.literal("2.0.0"),
+    occurrenceId: eventOccurrenceIdSchema,
+    organizationId: organizationIdSchema,
+    installation: z
+      .object({
+        applicationRootId: applicationRootIdSchema,
+        applicationReleaseRevision: javascriptSafeEventRevisionSchema,
+        moduleBinding: z
+          .object({
+            moduleRootId: moduleRootIdSchema,
+            moduleReleaseRevision: javascriptSafeEventRevisionSchema,
+            bindingRevision: javascriptSafeEventRevisionSchema,
+          })
+          .strict(),
+      })
+      .strict(),
+    descriptor: installedEventDescriptorSchema,
+    definitionRelease: eventOccurrenceDefinitionReleaseV2Schema,
+    recordId: recordIdSchema,
+    occurredAt: timestampSchema,
+    actorId: actorIdSchema,
+    correlationId: correlationIdSchema,
+    causationId: platformIdSchema.optional(),
+    recordSequence: javascriptSafeEventRevisionSchema,
+    payload: z.union([
+      standardEventOccurrencePayloadV2Schema,
+      declaredEventOccurrencePayloadV2Schema,
+    ]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const expectedPayloadKind =
+      value.descriptor.kind === "standard" ? value.descriptor.eventKind : "declared";
+    if (value.payload.kind !== expectedPayloadKind)
+      context.addIssue({
+        code: "custom",
+        path: ["payload", "kind"],
+        message: "Occurrence payload kind must match its installed event descriptor",
+      });
+    if (value.descriptor.kind === "declared") {
+      const ownerRootId =
+        value.descriptor.owner.kind === "application"
+          ? value.descriptor.owner.applicationRootId
+          : value.descriptor.owner.moduleRootId;
+      if (
+        value.definitionRelease.kind !== value.descriptor.owner.kind ||
+        value.definitionRelease.rootId !== ownerRootId
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["definitionRelease"],
+          message: "Declared occurrence release must match its declaration owner",
+        });
+      if (
+        (value.descriptor.owner.kind === "application" &&
+          value.installation.applicationRootId !== value.descriptor.owner.applicationRootId) ||
+        (value.descriptor.owner.kind === "module" &&
+          value.installation.moduleBinding.moduleRootId !== value.descriptor.owner.moduleRootId)
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["installation"],
+          message: "Declared occurrence installation must contain its declaration owner",
+        });
+    } else if (
+      value.definitionRelease.kind !== "module" ||
+      value.definitionRelease.rootId !== value.installation.moduleBinding.moduleRootId
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["definitionRelease"],
+        message: "A standard occurrence belongs to its record type's Module release",
+      });
+  });
 export const eventDispatchSchema = z
   .object({
     eventId: eventIdSchema,
@@ -223,19 +370,57 @@ export const downloadGrantSchema = z
   })
   .strict();
 
+const canonicalActivitySubjectIdsSchema = z
+  .array(platformIdSchema)
+  .min(1)
+  .superRefine((identifiers, context) => {
+    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
+    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
+      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
+        context.addIssue({
+          code: "custom",
+          message: "Activity subject identifiers must be unique and in canonical order",
+        });
+        return;
+      }
+    }
+  });
+
+const canonicalActivityChangedFieldIdsSchema = z
+  .array(fieldIdSchema)
+  .superRefine((identifiers, context) => {
+    const canonicalIdentifiers = identifiers.map((identifier) => identifier.toLowerCase());
+    for (let index = 1; index < canonicalIdentifiers.length; index += 1) {
+      if (canonicalIdentifiers[index - 1]! >= canonicalIdentifiers[index]!) {
+        context.addIssue({
+          code: "custom",
+          message: "Changed field identifiers must be unique and in canonical order",
+        });
+        return;
+      }
+    }
+  });
+
+export const activityActorKindSchema = z.enum([
+  "identity",
+  "organization_account",
+  "system",
+  "public_session",
+]);
+
 export const activityEntrySchema = z
   .object({
     organizationId: organizationIdSchema,
     activityId: activityIdSchema,
     occurredAt: timestampSchema,
+    actorKind: activityActorKindSchema,
     actorId: actorIdSchema,
     action: builderKeySchema,
-    subjectIds: z.array(platformIdSchema).min(1),
-    changedFieldIds: z.array(fieldIdSchema),
+    subjectIds: canonicalActivitySubjectIdsSchema,
+    changedFieldIds: canonicalActivityChangedFieldIdsSchema,
     source: z.enum(["web", "workflow", "interface", "connection", "federation", "system"]),
     correlationId: correlationIdSchema,
     outcome: z.enum(["completed", "refused", "failed"]),
-    retainedDetailReference: secretReferenceSchema.optional(),
   })
   .strict();
 export const retentionPolicySchema = z
@@ -412,6 +597,7 @@ export const performanceMeasurementSchema = z
 
 export type BusinessRecord = z.infer<typeof businessRecordSchema>;
 export type EventEnvelope = z.infer<typeof eventEnvelopeSchema>;
+export type EventOccurrenceEnvelopeV2 = z.infer<typeof eventOccurrenceEnvelopeV2Schema>;
 export type EventDispatch = z.infer<typeof eventDispatchSchema>;
 export type LiveInvalidation = z.infer<typeof liveInvalidationSchema>;
 export type CacheInvalidation = z.infer<typeof cacheInvalidationSchema>;

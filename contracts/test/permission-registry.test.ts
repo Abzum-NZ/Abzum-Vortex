@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  adoptShippedPlatformPermissionCatalogueCommandSchema,
+  adoptShippedPlatformPermissionCatalogueResultSchema,
   applicationPermissionCatalogueSnapshotSchema,
   initializePlatformPermissionCatalogueCommandSchema,
   initializePlatformPermissionCatalogueResultSchema,
@@ -70,6 +72,28 @@ describe("permission registry contracts", () => {
     ).toBeDefined();
   });
 
+  it("selects a shipped catalogue successor without accepting caller-authored entries", () => {
+    expect(
+      adoptShippedPlatformPermissionCatalogueCommandSchema.parse({
+        organizationId: id(1),
+        expectedRegistrationRevision: 2,
+        targetCatalogueVersion: "1.1.0",
+        targetCatalogueFingerprint: fingerprint("a"),
+        changedBy: id(8),
+        correlationId: id(9),
+      }),
+    ).not.toHaveProperty("permissions");
+    expect(
+      adoptShippedPlatformPermissionCatalogueResultSchema.parse({
+        organizationId: id(1),
+        sourceCatalogueVersion: "1.0.1",
+        targetCatalogueVersion: "1.1.0",
+        registrationRevision: 3,
+        accessVersion: 4,
+      }),
+    ).toBeDefined();
+  });
+
   it("retains exact owner, application context and release evidence", () => {
     expect(preparedApplicationPermissionRegistrationSchema.parse(candidate)).toEqual(candidate);
     expect(
@@ -84,6 +108,38 @@ describe("permission registry contracts", () => {
         entries: [{ ...entry, ownerId: id(5) }],
       }).success,
     ).toBe(false);
+  });
+
+  it("preserves an explicit record scope while leaving historical omission absent", () => {
+    const scopedEntry = {
+      ...entry,
+      permission: {
+        ...entry.permission,
+        permissionId: id(30),
+        key: "example.application.records.read",
+        recordTypeId: id(31),
+        actionKind: "read" as const,
+        namedAction: undefined,
+        recordScope: {
+          routes: [{ kind: "ownership" as const }, { kind: "direct_share" as const }],
+        },
+      },
+    };
+    const scopedCandidate = {
+      ...candidate,
+      applicationPermissionIds: [id(30)],
+      entries: [scopedEntry],
+    };
+    expect(preparedApplicationPermissionRegistrationSchema.parse(scopedCandidate)).toEqual(
+      scopedCandidate,
+    );
+
+    const { recordScope, ...legacyPermission } = scopedEntry.permission;
+    expect(recordScope).toBeDefined();
+    const legacyEntry = { ...scopedEntry, permission: legacyPermission };
+    const legacyCandidate = { ...scopedCandidate, entries: [legacyEntry] };
+    const parsedLegacy = preparedApplicationPermissionRegistrationSchema.parse(legacyCandidate);
+    expect(parsedLegacy.entries[0]?.permission).not.toHaveProperty("recordScope");
   });
 
   it("allows the same key under different owners but refuses owner-local ambiguity", () => {

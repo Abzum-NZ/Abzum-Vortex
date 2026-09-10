@@ -1,7 +1,25 @@
 import {
   applicationDraftSchema,
+  applicationDraftV2Schema,
+  applicationSourceDocumentV2Schema,
+  applicationCompilationRequestV2Schema,
   moduleDraftSchema,
+  moduleDraftV2Schema,
+  moduleDraftV3Schema,
+  moduleSourceDocumentV2Schema,
+  moduleSourceDocumentV3Schema,
+  moduleCompilationRequestV2Schema,
+  moduleCompilationRequestV3Schema,
+  savedSharingConditionV2Schema,
+  savedSharingConditionSchema,
   connectionTypeSchema,
+  exactDecimalTextV2Schema,
+  moneyValueV2Schema,
+  sourceExactDecimalTextV2Schema,
+  sourceMoneyValueV2Schema,
+  moduleFieldValueV2Schemas,
+  sourceModuleFieldValueV2Schemas,
+  parseExactDecimal,
   workflowDefinitionSchema,
   jsonValueSchema,
   walkDefinitionContract,
@@ -9,6 +27,7 @@ import {
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
   builderKeySchema,
+  platformIdSchema,
   blockSettingReferenceKindByControl,
   namespacedKeySchema,
   translateDefinitionSchemaError,
@@ -16,22 +35,94 @@ import {
   workflowNodeOutputsByType,
   type DefinitionCompilationOutput,
   type DefinitionCompilationRequest,
+  type ApplicationCompilationRequestV2,
+  type ModuleCompilationRequestV2,
+  type ModuleCompilationRequestV3,
+  type ModuleSourceDocumentV2,
+  type ModuleSourceDocumentV3,
+  type ModuleFieldV2,
+  type ApplicationSourceDocumentV2,
+  type ConditionNode,
+  type DefinitionSourceDocument,
   type DefinitionPublicationContext,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
+  type FieldDefinition,
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "@vortex/contracts";
+import type { z } from "zod";
+import {
+  evaluateTypedCondition,
+  evaluateTypedConditionV2,
+  TypedConditionEvaluationError,
+  type TypedConditionParameterDeclaration,
+  type TypedConditionParameterDeclarationV2,
+} from "@vortex/rule";
 import { satisfies } from "semver";
-import { compileDefinition } from "./compiler";
+import { compileDefinitionWithContext } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compareDefinitionVersionImpact } from "./version-impact";
 import { createContractValueWalker } from "./contract-value-walker";
+import { validateRuleGraph, ruleGraphValidationCodes } from "./rule-graph-validation";
 
 type JsonObject = Record<string, unknown>;
 type Output = DefinitionCompilationOutput;
+type PublicationCompilationRequest =
+  | DefinitionCompilationRequest
+  | ApplicationCompilationRequestV2
+  | ModuleCompilationRequestV2
+  | ModuleCompilationRequestV3;
 type DefinitionPath = readonly (string | number)[];
+type EditSaveSource =
+  | DefinitionSourceDocument
+  | ApplicationSourceDocumentV2
+  | ModuleSourceDocumentV2
+  | ModuleSourceDocumentV3;
+
+const isV2ApplicationSource = (source: unknown): boolean =>
+  source !== null &&
+  typeof source === "object" &&
+  !Array.isArray(source) &&
+  (source as JsonObject).kind === "application" &&
+  (source as JsonObject).source_contract_version === "2.0.0";
+
+const isV2ModuleSource = (source: unknown): boolean =>
+  source !== null &&
+  typeof source === "object" &&
+  !Array.isArray(source) &&
+  (source as JsonObject).kind === "module" &&
+  (source as JsonObject).source_contract_version === "2.0.0";
+
+const isV3ModuleSource = (source: unknown): boolean =>
+  source !== null &&
+  typeof source === "object" &&
+  !Array.isArray(source) &&
+  (source as JsonObject).kind === "module" &&
+  (source as JsonObject).source_contract_version === "3.0.0";
+
+const parseEditSaveSource = (
+  source: unknown,
+):
+  | Readonly<{
+      success: true;
+      data: EditSaveSource;
+      schema: z.core.$ZodType;
+    }>
+  | Readonly<{ success: false; error: z.ZodError }> => {
+  const schema = isV2ApplicationSource(source)
+    ? applicationSourceDocumentV2Schema
+    : isV3ModuleSource(source)
+      ? moduleSourceDocumentV3Schema
+      : isV2ModuleSource(source)
+        ? moduleSourceDocumentV2Schema
+        : definitionSourceDocumentSchema;
+  const parsed = schema.safeParse(source);
+  return parsed.success
+    ? { success: true, data: parsed.data, schema }
+    : { success: false, error: parsed.error };
+};
 
 export type DefinitionValidationStage = "edit_save" | "publish" | "install" | "runtime";
 export type DefinitionSemanticRule = Readonly<{
@@ -47,7 +138,7 @@ export type DefinitionSemanticRule = Readonly<{
 }>;
 
 export type DefinitionSetValidationContext = Readonly<{
-  requests: readonly DefinitionCompilationRequest[];
+  requests: readonly PublicationCompilationRequest[];
   outputs: readonly Output[];
   rawSources?: readonly unknown[];
   dependencyOutputs?: readonly Output[];
@@ -64,9 +155,15 @@ const canonicalValueWalker = (context: DefinitionSetValidationContext) =>
     allValidationOutputs(context).map((output) => ({
       schema:
         output.kind === "module"
-          ? moduleDraftSchema
+          ? "validationContractVersion" in output
+            ? output.validationContractVersion === "3.0.0"
+              ? moduleDraftV3Schema
+              : moduleDraftV2Schema
+            : moduleDraftSchema
           : output.kind === "application"
-            ? applicationDraftSchema
+            ? "validationContractVersion" in output
+              ? applicationDraftV2Schema
+              : applicationDraftSchema
             : connectionTypeSchema,
       value: output.canonical,
     })),
@@ -104,6 +201,34 @@ const failure = (
 
 const object = (value: unknown) => value as JsonObject;
 const array = (value: unknown) => value as JsonObject[];
+const actionPermissionKeys = (action: JsonObject): string[] =>
+  action.permissionKeys === undefined
+    ? action.permissionKey === undefined
+      ? []
+      : [String(action.permissionKey)]
+    : array(action.permissionKeys).map(String);
+const actionPermissionsMatch = (
+  action: JsonObject,
+  permissionsByKey: ReadonlyMap<string, JsonObject>,
+  permissionOwnersByKey?: ReadonlyMap<string, string>,
+): boolean => {
+  if (action.permissionKeys === undefined)
+    return action.permissionKey !== undefined && permissionsByKey.has(String(action.permissionKey));
+  const permissions = actionPermissionKeys(action).map((key) => permissionsByKey.get(key));
+  const first = permissions[0];
+  if (first === undefined || String(first.recordTypeId) !== String(action.subjectRecordTypeId))
+    return false;
+  const firstOwner = permissionOwnersByKey?.get(String(first.key));
+  return permissions.every(
+    (permission) =>
+      permission !== undefined &&
+      String(permission.recordTypeId) === String(action.subjectRecordTypeId) &&
+      permission.actionKind === first.actionKind &&
+      String(permission.namedAction ?? "") === String(first.namedAction ?? "") &&
+      (first.actionKind !== "named" ||
+        permissionOwnersByKey?.get(String(permission.key)) === firstOwner),
+  );
+};
 
 const schemaFailureFamily = {
   definition_required_value: "required_value",
@@ -264,11 +389,17 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
         return String(object(canonical.envelope ?? canonical).key) === sourceKey;
       }) ?? context.outputs[index];
     let duplicate = false;
-    const parsed = definitionSourceDocumentSchema.safeParse(source);
+    const parsed = parseEditSaveSource(source);
     if (!parsed.success) continue;
-    walkDefinitionContract(definitionSourceDocumentSchema, parsed.data, (schema, value) => {
+    walkDefinitionContract(parsed.schema, parsed.data, (schema, value) => {
       if (schema === jsonValueSchema) return;
-      if (Array.isArray(value)) {
+      const definition = (schema as z.core.$ZodTypes)._zod.def;
+      // A table row is user data, not a declaration: columns named id/key may repeat.
+      if (
+        Array.isArray(value) &&
+        definition.type === "array" &&
+        definition.element._zod.def.type !== "record"
+      ) {
         for (const property of ["id", "key"] as const) {
           const values = value
             .filter(
@@ -297,7 +428,7 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
 function sourceShapeRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
   return (context.rawSources ?? context.requests.map((request) => request.source)).flatMap(
     (source): DefinitionRuleFailure[] => {
-      const parsed = definitionSourceDocumentSchema.safeParse(source);
+      const parsed = parseEditSaveSource(source);
       if (parsed.success) return [];
       const translation = sourceTranslationContext(source);
       if (!translation)
@@ -343,12 +474,10 @@ function sourceLocalReferenceRule(
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const raw of context.rawSources ?? context.requests.map((request) => request.source)) {
-    const parsed = definitionSourceDocumentSchema.safeParse(raw);
+    const parsed = parseEditSaveSource(raw);
     if (!parsed.success) continue;
     const source = parsed.data;
-    const walkValues = createContractValueWalker([
-      { schema: definitionSourceDocumentSchema, value: source },
-    ]);
+    const walkValues = createContractValueWalker([{ schema: parsed.schema, value: source }]);
     const body = object(source.body);
     let valid = true;
     if (source.kind === "module") {
@@ -362,6 +491,9 @@ function sourceLocalReferenceRule(
       const actionIds = new Set(actions.map((action) => String(action.id)));
       const permissions = new Set(
         array(body.permissions).map((permission) => String(permission.key)),
+      );
+      const sharingConditions = new Map(
+        array(body.sharing_conditions).map((condition) => [String(condition.key), condition]),
       );
       const events = new Set(array(body.events).map((event) => String(event.key)));
       const qualifiedRecordValid = (qualified: unknown): boolean => {
@@ -447,12 +579,53 @@ function sourceLocalReferenceRule(
           }
           if (field.type === "total" && !qualifiedRelationshipValid(settings.relationship))
             valid = false;
+          if (
+            field.type === "table" &&
+            array(settings.columns).some((column) => column.settings === undefined)
+          )
+            valid = false;
+          const choiceSettings = [
+            ...(["choice", "several_choices"].includes(String(field.type)) ? [settings] : []),
+            ...(field.type === "table"
+              ? array(settings.columns)
+                  .filter((column) => column.type === "choice" && column.settings !== undefined)
+                  .map((column) => object(column.settings))
+              : []),
+          ];
+          for (const choice of choiceSettings)
+            for (const option of array(choice.options)) {
+              if (option.required_permission === undefined) continue;
+              const requiredPermission = String(option.required_permission);
+              if (
+                !permissions.has(requiredPermission) &&
+                ![...dependencies].some((dependency) =>
+                  requiredPermission.startsWith(`${dependency}.`),
+                )
+              )
+                valid = false;
+            }
         }
       }
       for (const permission of array(body.permissions)) {
         if (permission.record_type && !records.has(String(permission.record_type))) valid = false;
         if ((permission.action_kind === "named") !== (permission.named_action !== undefined))
           valid = false;
+        const scope = permission.record_scope ? object(permission.record_scope) : undefined;
+        for (const route of scope ? array(scope.routes) : []) {
+          if (
+            route.kind === "ownership" &&
+            records.get(String(permission.record_type))?.ownership_mode === "none"
+          )
+            valid = false;
+          if (
+            route.kind === "relationship" &&
+            (!qualifiedRelationshipValid(route.relationship) ||
+              !permissions.has(String(route.source_permission)))
+          )
+            valid = false;
+        }
+        const saved = scope?.saved_condition ? object(scope.saved_condition) : undefined;
+        if (saved && !sharingConditions.has(String(saved.condition))) valid = false;
       }
       for (const action of actions) {
         const record = records.get(String(action.record_type));
@@ -465,7 +638,16 @@ function sourceLocalReferenceRule(
         const inputs = new Map(
           array(action.inputs).map((input) => [String(input.key), String(input.type)]),
         );
-        if (!record || !permissions.has(String(action.permission))) valid = false;
+        const actionPermissions =
+          action.permission_alternatives === undefined
+            ? [String(action.permission)]
+            : (action.permission_alternatives as string[]);
+        if (
+          !record ||
+          actionPermissions.length === 0 ||
+          actionPermissions.some((key) => !permissions.has(key))
+        )
+          valid = false;
         if (
           action.precondition &&
           !conditionValid(action.precondition, fields, new Set(inputs.keys()))
@@ -489,6 +671,15 @@ function sourceLocalReferenceRule(
         }
       }
       for (const rule of array(body.rules)) {
+        if (isV3ModuleSource(source)) {
+          if (
+            !array(body.record_types).some(
+              (record) => record.key === rule.record_type || record.id === rule.record_type,
+            )
+          )
+            valid = false;
+          continue; // Graph references are resolved and checked by the graph publication rule.
+        }
         const record = records.get(String(rule.record_type));
         const fields = new Set(
           record ? array(record.fields).map((field) => String(field.key)) : [],
@@ -527,9 +718,24 @@ function sourceLocalReferenceRule(
           valid = false;
       }
     } else if (source.kind === "application") {
+      const usesV2Composition = source.source_contract_version === "2.0.0";
+      const moduleBindings = new Set(
+        array(body.module_bindings).map((binding) => String(binding.module)),
+      );
+      for (const permission of array(body.permissions)) {
+        const scope = permission.record_scope ? object(permission.record_scope) : undefined;
+        for (const route of scope ? array(scope.routes) : []) {
+          if (route.kind !== "relationship") continue;
+          const relationship = String(route.relationship);
+          const separator = relationship.lastIndexOf(":");
+          if (separator < 1 || !moduleBindings.has(relationship.slice(0, separator))) valid = false;
+        }
+      }
       const pages = new Set(array(body.pages).map((page) => String(page.key)));
       const queries = new Set(array(body.queries).map((query) => String(query.key)));
-      const blocks = new Set(array(body.block_registrations).map((block) => String(block.id)));
+      const blocks = usesV2Composition
+        ? new Set<string>()
+        : new Set(array(body.block_registrations).map((block) => String(block.id)));
       const workflows = new Set(array(body.workflows).map((workflow) => String(workflow.key)));
       const connections = new Set(
         array(body.connection_bindings).map((binding) => String(binding.id)),
@@ -542,6 +748,7 @@ function sourceLocalReferenceRule(
             : [];
       for (const page of array(body.pages)) {
         if (page.query && !queries.has(String(page.query))) valid = false;
+        if (usesV2Composition) continue;
         const placements = pagePlacements(page);
         if (placements.some((placement) => !blocks.has(String(placement.block)))) valid = false;
         const placementIds = new Set(placements.map((placement) => String(placement.id)));
@@ -698,9 +905,10 @@ function sourceTypeCompatibilityRule(
 ): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
   for (const raw of context.rawSources ?? context.requests.map((request) => request.source)) {
-    const parsed = definitionSourceDocumentSchema.safeParse(raw);
+    const parsed = parseEditSaveSource(raw);
     if (!parsed.success || parsed.data.kind !== "module") continue;
     const source = parsed.data;
+    const moduleV2 = source.source_contract_version === "2.0.0" || isV3ModuleSource(source);
     const body = object(source.body);
     const records = new Map(
       array(body.record_types).map((record) => [String(record.key), record] as const),
@@ -752,9 +960,15 @@ function sourceTypeCompatibilityRule(
             ? settings.field !== undefined
             : aggregateField === undefined) ||
           (["sum", "average"].includes(String(settings.operation)) &&
-            fieldValueType(aggregateField) !== "number") ||
+            (moduleV2
+              ? !["whole_number", "decimal_number", "money"].includes(
+                  fieldValueTypeV2(aggregateField) ?? "",
+                )
+              : fieldValueType(aggregateField) !== "number")) ||
           (settings.filter !== undefined &&
-            !sourceConditionTypesValid(settings.filter, aggregateFields)) ||
+            !(moduleV2
+              ? conditionTypesValidV2(settings.filter, aggregateFields, new Map(), "source")
+              : sourceConditionTypesValid(settings.filter, aggregateFields))) ||
           !resultTypeValid
         )
           valid = false;
@@ -766,11 +980,19 @@ function sourceTypeCompatibilityRule(
         array(action.inputs).map((input) => [String(input.key), input] as const),
       );
       const inputTypes = new Map(
-        [...inputs].map(([key, input]) => [key, semanticFieldType(input.type) ?? ""] as const),
+        [...inputs].map(
+          ([key, input]) =>
+            [
+              key,
+              (moduleV2 ? semanticFieldTypeV2(input.type) : semanticFieldType(input.type)) ?? "",
+            ] as const,
+        ),
       );
       if (
         action.precondition &&
-        !sourceConditionTypesValid(action.precondition, subjectFields, inputTypes)
+        !(moduleV2
+          ? conditionTypesValidV2(action.precondition, subjectFields, inputTypes, "source")
+          : sourceConditionTypesValid(action.precondition, subjectFields, inputTypes))
       )
         valid = false;
       const valueType = (candidate: unknown): string | undefined => {
@@ -801,6 +1023,15 @@ function sourceTypeCompatibilityRule(
         return undefined;
       };
       const sourceValueCompatible = (candidate: unknown, targetField: JsonObject | undefined) => {
+        if (moduleV2)
+          return actionValueCompatibleV2(
+            candidate,
+            targetField,
+            subjectFields,
+            inputs,
+            subjectRecordType,
+            "source",
+          );
         const compatible = valueTypeCompatible(valueType(candidate), fieldValueType(targetField));
         const expectedRecordTypes = fieldRecordTypeIds(targetField);
         if (!compatible || expectedRecordTypes === undefined) return compatible;
@@ -842,15 +1073,23 @@ function sourceTypeCompatibilityRule(
       }
     }
     for (const rule of array(body.rules)) {
+      if (isV3ModuleSource(source)) continue;
       const fields = fieldsFor(records.get(String(rule.record_type)));
-      if (!sourceConditionTypesValid(rule.condition, fields)) valid = false;
+      if (
+        !(moduleV2
+          ? conditionTypesValidV2(rule.condition, fields, new Map(), "source")
+          : sourceConditionTypesValid(rule.condition, fields))
+      )
+        valid = false;
       const effect = object(rule.effect);
       if (
         effect.kind === "set_value" &&
-        !valueTypeCompatible(
-          literalValueType(effect.value),
-          fieldValueType(fields.get(String(effect.field))),
-        )
+        !(moduleV2
+          ? fieldValueMatchesV2(effect.value, fields.get(String(effect.field)), "source")
+          : valueTypeCompatible(
+              literalValueType(effect.value),
+              fieldValueType(fields.get(String(effect.field))),
+            ))
       )
         valid = false;
     }
@@ -861,7 +1100,47 @@ function sourceTypeCompatibilityRule(
           (parameter) => [String(parameter.key), String(parameter.type)] as const,
         ),
       );
-      if (!sourceConditionTypesValid(sharingCondition.condition, fields, parameters)) valid = false;
+      if (
+        !(moduleV2
+          ? conditionTypesValidV2(sharingCondition.condition, fields, parameters, "source")
+          : sourceConditionTypesValid(sharingCondition.condition, fields, parameters))
+      )
+        valid = false;
+    }
+    const sharingConditions = new Map(
+      array(body.sharing_conditions).map((condition) => [String(condition.key), condition]),
+    );
+    for (const permission of array(body.permissions)) {
+      const scope = permission.record_scope ? object(permission.record_scope) : undefined;
+      const restriction = scope?.saved_condition ? object(scope.saved_condition) : undefined;
+      if (!restriction) continue;
+      const saved = sharingConditions.get(String(restriction.condition));
+      const parameters = new Map(
+        saved
+          ? array(saved.parameters).map(
+              (parameter) => [String(parameter.key), String(parameter.type)] as const,
+            )
+          : [],
+      );
+      const bindings = array(restriction.parameter_bindings);
+      if (
+        !saved ||
+        String(saved.source_record_type) !== String(permission.record_type) ||
+        bindings.length !== parameters.size ||
+        new Set(bindings.map((binding) => String(binding.key))).size !== bindings.length ||
+        bindings.some((binding) => {
+          const expected = parameters.get(String(binding.key));
+          return (
+            expected === undefined ||
+            (binding.source === "current_organization_account_id"
+              ? !["text", "organization_account_reference"].includes(expected)
+              : !(moduleV2
+                  ? valueMatchesTypeV2(binding.value, expected, "source")
+                  : valueMatchesType(binding.value, expected)))
+          );
+        })
+      )
+        valid = false;
     }
     if (!valid)
       failures.push({
@@ -976,9 +1255,10 @@ function dependencyRule(context: DefinitionSetValidationContext): DefinitionRule
         target?.kind === "module" ? object(object(target.canonical).content) : undefined;
       const exactBinding =
         target?.kind === "module" &&
-        snapshotDefinition !== undefined &&
-        snapshotDefinition?.rootId === dependency.moduleRootId &&
-        snapshotDefinition.exactVersion === dependency.resolvedVersion &&
+        (request === undefined ||
+          (snapshotDefinition !== undefined &&
+            snapshotDefinition.rootId === dependency.moduleRootId &&
+            snapshotDefinition.exactVersion === dependency.resolvedVersion)) &&
         versionRequirementAccepts(
           dependency.version as VersionRequirement,
           String(dependency.resolvedVersion),
@@ -988,13 +1268,15 @@ function dependencyRule(context: DefinitionSetValidationContext): DefinitionRule
         target.artifact.rootId === dependency.moduleRootId &&
         target.artifact.exactVersion === dependency.resolvedVersion &&
         target.artifact.contentFingerprint === fingerprintCanonicalValue(targetContent) &&
-        target.artifact.resolutionFingerprint === request?.resolution.fingerprint &&
-        target.resolutionFingerprint === request?.resolution.fingerprint;
+        target.artifact.resolutionFingerprint === target.resolutionFingerprint;
       if (!exactBinding)
         failures.push(
           failure(output, "vortex.definition.module_dependency_resolved", "unresolved_reference"),
         );
-      else visit(String(dependency.moduleRootId), target);
+      else if (
+        context.requests.some((candidate) => candidate.source.key === target.artifact.definitionKey)
+      )
+        visit(String(dependency.moduleRootId), target);
     }
     visiting.delete(rootId);
     visited.add(rootId);
@@ -1058,6 +1340,340 @@ function fieldValueType(field: JsonObject | undefined): string | undefined {
   if (type === "link_to_person") return "organization_account_reference";
   if (type === "table" || type === "attachment" || type === "several_choices") return "json";
   return "text";
+}
+
+type ModuleV2ValueDialect = "source" | "canonical";
+type ModuleV2ValueDeclaration = Readonly<{
+  field?: JsonObject;
+  type?: string;
+}>;
+
+function semanticFieldTypeV2(type: unknown): string | undefined {
+  const value = String(type);
+  if (
+    [
+      "whole_number",
+      "decimal_number",
+      "money",
+      "number",
+      "boolean",
+      "date",
+      "date_time",
+      "record_reference",
+      "organization_account_reference",
+    ].includes(value)
+  )
+    return value;
+  if (value === "yes_no") return "boolean";
+  if (["link", "link_to_one_of_several"].includes(value)) return "record_reference";
+  if (["link_to_person", "organisation_account_reference"].includes(value))
+    return "organization_account_reference";
+  if (value === "several_choices") return "text_collection";
+  if (["table", "attachment", "formatted_text"].includes(value)) return "opaque_json";
+  if (
+    [
+      "text",
+      "long_text",
+      "choice",
+      "reference_number",
+      "email_address",
+      "phone_number",
+      "web_address",
+    ].includes(value)
+  )
+    return "text";
+  return undefined;
+}
+
+function fieldValueTypeV2(field: JsonObject | undefined): string | undefined {
+  return field ? semanticFieldTypeV2(fieldDeclaredResultType(field)) : undefined;
+}
+
+type NumericDimensionV2 = "dimensionless" | "money";
+
+const numericDimensionV2 = (field: JsonObject | undefined): NumericDimensionV2 | undefined => {
+  const type = fieldValueTypeV2(field);
+  if (type === "whole_number" || type === "decimal_number") return "dimensionless";
+  return type === "money" ? "money" : undefined;
+};
+
+const exactIntegerLiteralV2 = (value: unknown): boolean => {
+  const parsed = parseExactDecimal(value);
+  return parsed !== undefined && parsed.scale === 0;
+};
+
+const calculationDependencyFieldIdsV2 = (expression: JsonObject): string[] => {
+  const dependencies: string[] = [];
+  const add = (value: unknown) => {
+    if (typeof value === "string" && !dependencies.includes(value)) dependencies.push(value);
+  };
+  const visitCondition = (value: unknown): void => {
+    if (value === null || typeof value !== "object") return;
+    if (!Array.isArray(value) && object(value).source === "field") add(object(value).fieldId);
+    for (const child of Array.isArray(value) ? value : Object.values(value)) visitCondition(child);
+  };
+  if (expression.kind === "join_text")
+    for (const fieldId of expression.fieldIds as string[]) add(fieldId);
+  if (expression.kind === "numeric")
+    for (const operand of array(expression.operands))
+      if (operand.source === "field") add(operand.fieldId);
+  if (expression.kind === "subtract_percentage") {
+    add(expression.amountFieldId);
+    add(expression.percentageFieldId);
+  }
+  if (expression.kind === "condition") visitCondition(expression.condition);
+  if (expression.kind === "date_offset") {
+    add(expression.dateFieldId);
+    const amount = object(expression.amount);
+    if (amount.source === "field") add(amount.fieldId);
+  }
+  if (expression.kind === "deadline_passed") {
+    add(expression.dueFieldId);
+    add(expression.statusFieldId);
+  }
+  return dependencies;
+};
+
+const numericExpressionValidV2 = (
+  expression: JsonObject,
+  resultType: string,
+  fields: ReadonlyMap<string, JsonObject>,
+): boolean => {
+  const operands = array(expression.operands);
+  const dimensions = operands.map((operand) =>
+    operand.source === "literal"
+      ? exactDecimalTextV2Schema.safeParse(operand.value).success
+        ? ("dimensionless" as const)
+        : undefined
+      : numericDimensionV2(fields.get(String(operand.fieldId))),
+  );
+  if (dimensions.some((dimension) => dimension === undefined)) return false;
+  const moneyPositions = dimensions.flatMap((dimension, index) =>
+    dimension === "money" ? [index] : [],
+  );
+  const operation = String(expression.operation);
+  const dimensionValid =
+    operation === "add" || operation === "subtract"
+      ? moneyPositions.length === 0 || moneyPositions.length === dimensions.length
+      : operation === "multiply"
+        ? moneyPositions.length <= 1
+        : operation === "divide"
+          ? moneyPositions.length === 0 || (moneyPositions.length === 1 && moneyPositions[0] === 0)
+          : false;
+  if (!dimensionValid) return false;
+  const resultIsMoney = moneyPositions.length > 0;
+  return resultIsMoney
+    ? resultType === "money"
+    : resultType === "whole_number" || resultType === "decimal_number";
+};
+
+function valueMatchesTypeV2(
+  value: unknown,
+  type: string,
+  dialect: ModuleV2ValueDialect = "canonical",
+): boolean {
+  if (type === "text") return typeof value === "string";
+  if (type === "number") return typeof value === "number" && Number.isFinite(value);
+  if (type === "whole_number") return typeof value === "number" && Number.isInteger(value);
+  if (type === "decimal_number")
+    return (
+      dialect === "source" ? sourceExactDecimalTextV2Schema : exactDecimalTextV2Schema
+    ).safeParse(value).success;
+  if (type === "money")
+    return (dialect === "source" ? sourceMoneyValueV2Schema : moneyValueV2Schema).safeParse(value)
+      .success;
+  if (type === "boolean") return typeof value === "boolean";
+  if (type === "organization_account_reference") return platformIdSchema.safeParse(value).success;
+  if (type === "date") return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (type === "date_time") return typeof value === "string" && !Number.isNaN(Date.parse(value));
+  if (type === "record_reference")
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      (dialect === "source"
+        ? typeof object(value).record_type === "string" &&
+          platformIdSchema.safeParse(object(value).record_id).success
+        : platformIdSchema.safeParse(object(value).recordTypeId).success &&
+          platformIdSchema.safeParse(object(value).recordId).success)
+    );
+  if (type === "text_collection")
+    return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  return type === "opaque_json" && jsonValueSchema.safeParse(value).success;
+}
+
+function fieldValueMatchesV2(
+  value: unknown,
+  field: JsonObject | undefined,
+  dialect: ModuleV2ValueDialect,
+): boolean {
+  if (!field) return false;
+  if (field.type === "calculation" || field.type === "total") {
+    const resultType = fieldValueTypeV2(field);
+    return resultType !== undefined && valueMatchesTypeV2(value, resultType, dialect);
+  }
+  const schemas =
+    dialect === "source" ? sourceModuleFieldValueV2Schemas : moduleFieldValueV2Schemas;
+  const schema = schemas[String(field.type) as keyof typeof schemas];
+  if (schema === undefined || !schema.safeParse(value).success) return false;
+  const expectedRecordTypeIds = fieldRecordTypeIds(field);
+  if (expectedRecordTypeIds === undefined) return true;
+  const actualRecordTypeId = object(value)[dialect === "source" ? "record_type" : "recordTypeId"];
+  return (
+    typeof actualRecordTypeId === "string" && expectedRecordTypeIds.includes(actualRecordTypeId)
+  );
+}
+
+const typesCompatibleV2 = (actual: string | undefined, expected: string | undefined): boolean =>
+  actual !== undefined &&
+  expected !== undefined &&
+  (actual === expected || (expected === "text" && (actual === "date" || actual === "date_time")));
+
+const conditionTypesCompatibleV2 = (left: string | undefined, right: string | undefined): boolean =>
+  left !== undefined &&
+  right !== undefined &&
+  (left === right ||
+    (["number", "whole_number", "decimal_number"].includes(left) &&
+      ["number", "whole_number", "decimal_number"].includes(right)));
+
+const conditionCollectionElementTypeV2 = (type: string | undefined): type is string =>
+  type !== undefined && type !== "text_collection" && type !== "opaque_json";
+
+function naturalLiteralTypeV2(value: unknown): string | undefined {
+  if (value === null) return undefined;
+  if (typeof value === "number") return "number";
+  if (typeof value === "boolean") return "boolean";
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return "date";
+    if (!Number.isNaN(Date.parse(value))) return "date_time";
+    return "text";
+  }
+  if (Array.isArray(value) && value.every((entry) => typeof entry === "string"))
+    return "text_collection";
+  return "opaque_json";
+}
+
+function conditionTypesValidV2(
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  parameters: ReadonlyMap<string, string> = new Map(),
+  dialect: ModuleV2ValueDialect = "canonical",
+): boolean {
+  if (value === null || value === undefined) return true;
+  const condition = object(value);
+  const all =
+    dialect === "source"
+      ? condition.all
+      : condition.kind === "all"
+        ? condition.conditions
+        : undefined;
+  const any =
+    dialect === "source"
+      ? condition.any
+      : condition.kind === "any"
+        ? condition.conditions
+        : undefined;
+  const not =
+    dialect === "source"
+      ? condition.not
+      : condition.kind === "not"
+        ? condition.condition
+        : undefined;
+  if (all)
+    return array(all).every((entry) => conditionTypesValidV2(entry, fields, parameters, dialect));
+  if (any)
+    return array(any).every((entry) => conditionTypesValidV2(entry, fields, parameters, dialect));
+  if (not) return conditionTypesValidV2(not, fields, parameters, dialect);
+  if (dialect === "canonical" && condition.kind !== "comparison") return false;
+
+  const authoredLeft =
+    dialect === "source" && condition.left === undefined
+      ? { source: "field", field: condition.field }
+      : condition.left;
+  const authoredRight =
+    dialect === "source" && condition.right === undefined
+      ? condition.parameter !== undefined
+        ? { source: "parameter", parameter: condition.parameter }
+        : { source: "value", value: condition.value }
+      : condition.right;
+  const declaration = (operandValue: unknown): ModuleV2ValueDeclaration | undefined => {
+    const operand = object(operandValue);
+    if (operand.source === "field") {
+      const field = fields.get(String(operand[dialect === "source" ? "field" : "fieldId"]));
+      if (!field) return undefined;
+      const type = fieldValueTypeV2(field);
+      return { field, ...(type === undefined ? {} : { type }) };
+    }
+    if (operand.source === "parameter") {
+      const type = parameters.get(String(operand[dialect === "source" ? "parameter" : "key"]));
+      if (!type) return undefined;
+      const semanticType = semanticFieldTypeV2(type);
+      return semanticType === undefined ? undefined : { type: semanticType };
+    }
+    return operand.source === "value" ? {} : undefined;
+  };
+  const literal = (operandValue: unknown): unknown => {
+    const operand = object(operandValue);
+    return operand.source === "value" ? operand.value : undefined;
+  };
+  const matches = (literalValue: unknown, expected: ModuleV2ValueDeclaration | undefined) =>
+    literalValue === null ||
+    (expected?.field
+      ? fieldValueMatchesV2(literalValue, expected.field, dialect)
+      : expected?.type !== undefined && valueMatchesTypeV2(literalValue, expected.type, dialect));
+  const leftDeclaration = declaration(authoredLeft);
+  if (!leftDeclaration) return false;
+  const operator = String(condition.operator);
+  if (operator === "is_empty" || operator === "is_not_empty")
+    return dialect === "source"
+      ? condition.left === undefined &&
+          condition.parameter === undefined &&
+          condition.value === undefined
+      : authoredRight === undefined;
+  const rightDeclaration = declaration(authoredRight);
+  if (!rightDeclaration) return false;
+  const leftLiteral = literal(authoredLeft);
+  const rightLiteral = literal(authoredRight);
+  const leftIsLiteral = object(authoredLeft).source === "value";
+  const rightIsLiteral = object(authoredRight).source === "value";
+
+  if (["in", "not_in"].includes(operator)) {
+    const elementType = leftDeclaration.type ?? naturalLiteralTypeV2(leftLiteral);
+    if (!conditionCollectionElementTypeV2(elementType)) return false;
+    if (!rightIsLiteral)
+      return rightDeclaration.type === "text_collection" && elementType === "text";
+    if (!Array.isArray(rightLiteral)) return false;
+    return rightLiteral.every((entry) =>
+      leftDeclaration.type
+        ? matches(entry, leftDeclaration)
+        : valueMatchesTypeV2(entry, elementType, dialect),
+    );
+  }
+  if (["contains", "not_contains"].includes(operator)) {
+    if (Array.isArray(leftLiteral))
+      return leftLiteral.every((entry) => matches(entry, rightDeclaration));
+    if (rightLiteral !== undefined) {
+      if (leftDeclaration.type === "text_collection") return typeof rightLiteral === "string";
+      if (leftDeclaration.type === "text") return typeof rightLiteral === "string";
+    }
+  }
+  if (leftIsLiteral && !matches(leftLiteral, rightDeclaration)) return false;
+  if (rightIsLiteral && !matches(rightLiteral, leftDeclaration)) return false;
+  const leftType = leftDeclaration.type ?? rightDeclaration.type;
+  const rightType = rightDeclaration.type ?? leftDeclaration.type;
+  if (!leftType || !rightType) return false;
+  if (["contains", "not_contains"].includes(operator))
+    return (leftType === "text" && rightType === "text") || leftType === "text_collection";
+  if (
+    ["greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal"].includes(operator)
+  )
+    return (
+      conditionTypesCompatibleV2(leftType, rightType) &&
+      ["number", "whole_number", "decimal_number", "money", "date", "date_time", "text"].includes(
+        leftType,
+      )
+    );
+  return conditionTypesCompatibleV2(leftType, rightType);
 }
 
 function fieldRecordTypeIds(field: JsonObject | undefined): string[] | undefined {
@@ -1152,7 +1768,7 @@ function actionValueRecordTypeIds(
 ): string[] | undefined {
   const entry = object(value);
   if (entry.source === "input") {
-    const input = inputs.get(String(entry.inputKey));
+    const input = inputs.get(String(entry.inputKey ?? entry.input));
     if (input?.type !== "record_reference") return undefined;
     const references = array(input.recordTypes ?? input.record_types);
     return references.map((reference) =>
@@ -1163,6 +1779,56 @@ function actionValueRecordTypeIds(
     return fieldRecordTypeIds(fields.get(String(entry.fieldId ?? entry.field)));
   if (entry.source === "subject_record") return [subjectRecordTypeId];
   return undefined;
+}
+
+function actionValueTypeV2(
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  inputs: ReadonlyMap<string, JsonObject>,
+  dialect: ModuleV2ValueDialect,
+): string | undefined {
+  const entry = object(value);
+  if (entry.source === "input") {
+    const inputType = inputs.get(String(entry[dialect === "source" ? "input" : "inputKey"]))?.type;
+    return inputType === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(inputType);
+  }
+  if (entry.source === "subject_field") {
+    const field = fields.get(String(entry[dialect === "source" ? "field" : "fieldId"]));
+    return ["formatted_text", "table", "attachment"].includes(String(field?.type))
+      ? String(field!.type)
+      : fieldValueTypeV2(field);
+  }
+  if (entry.source === "subject_record") return "record_reference";
+  if (entry.source === "current_actor") return "organization_account_reference";
+  if (entry.source === "current_time") return "date_time";
+  return undefined;
+}
+
+function actionValueCompatibleV2(
+  value: unknown,
+  targetField: JsonObject | undefined,
+  fields: ReadonlyMap<string, JsonObject>,
+  inputs: ReadonlyMap<string, JsonObject>,
+  subjectRecordTypeId: string,
+  dialect: ModuleV2ValueDialect = "canonical",
+): boolean {
+  const entry = object(value);
+  const expectedType = ["formatted_text", "table", "attachment"].includes(String(targetField?.type))
+    ? String(targetField!.type)
+    : fieldValueTypeV2(targetField);
+  const compatible =
+    entry.source === "literal"
+      ? fieldValueMatchesV2(entry.value, targetField, dialect)
+      : typesCompatibleV2(actionValueTypeV2(value, fields, inputs, dialect), expectedType);
+  const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
+  if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+  if (entry.source === "literal") return compatible;
+  const actualRecordTypeIds = actionValueRecordTypeIds(value, fields, inputs, subjectRecordTypeId);
+  return (
+    actualRecordTypeIds !== undefined &&
+    actualRecordTypeIds.length > 0 &&
+    actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
+  );
 }
 
 function actionValueCompatible(
@@ -1186,6 +1852,146 @@ function actionValueCompatible(
   );
 }
 
+type ApplicationFieldValuePair = Readonly<{
+  field: JsonObject;
+  moduleV2: boolean;
+}>;
+
+const applicationFieldType = (pair: ApplicationFieldValuePair | undefined): string | undefined => {
+  if (!pair) return undefined;
+  if (pair.moduleV2 && ["formatted_text", "table", "attachment"].includes(String(pair.field.type)))
+    return String(pair.field.type);
+  return pair.moduleV2 ? fieldValueTypeV2(pair.field) : fieldValueType(pair.field);
+};
+
+const crossFormatFieldTypesCompatible = (
+  source: ApplicationFieldValuePair,
+  target: ApplicationFieldValuePair,
+): boolean => {
+  if (
+    fieldDeclaredResultType(source.field) === "whole_number" &&
+    fieldDeclaredResultType(target.field) === "whole_number"
+  )
+    return true;
+  const sourceType = applicationFieldType(source);
+  const targetType = applicationFieldType(target);
+  return (
+    sourceType !== undefined &&
+    sourceType === targetType &&
+    ["text", "number", "boolean", "date", "date_time"].includes(sourceType)
+  );
+};
+
+const applicationMappingTypesCompatible = (
+  actual: string | undefined,
+  expected: string | undefined,
+): boolean => {
+  if (!actual || !expected) return false;
+  if (
+    ["decimal_number", "money"].includes(actual) ||
+    ["decimal_number", "money"].includes(expected)
+  )
+    return actual === expected;
+  if (["number", "whole_number"].includes(actual) && ["number", "whole_number"].includes(expected))
+    return true;
+  return typesCompatibleV2(actual, expected);
+};
+
+function applicationActionValueCompatible(
+  value: unknown,
+  target: ApplicationFieldValuePair | undefined,
+  subjectFields: ReadonlyMap<string, JsonObject>,
+  subjectModuleV2: boolean,
+  inputs: ReadonlyMap<string, JsonObject>,
+  subjectRecordTypeId: string,
+): boolean {
+  if (!target) return false;
+  const entry = object(value);
+  if (entry.source === "literal")
+    return target.moduleV2
+      ? fieldValueMatchesV2(entry.value, target.field, "canonical")
+      : valueTypeCompatible(literalValueType(entry.value), fieldValueType(target.field));
+  if (entry.source === "subject_field" && subjectModuleV2 !== target.moduleV2) {
+    const sourceField = subjectFields.get(String(entry.fieldId));
+    if (
+      !sourceField ||
+      !crossFormatFieldTypesCompatible({ field: sourceField, moduleV2: subjectModuleV2 }, target)
+    )
+      return false;
+  }
+  if (
+    target.moduleV2 &&
+    entry.source === "input" &&
+    (inputs.get(String(entry.inputKey))?.type === "formatted_text" ||
+      (inputs.get(String(entry.inputKey))?.type === "number" &&
+        ["decimal_number", "money"].includes(applicationFieldType(target) ?? "")))
+  )
+    return false;
+  if (
+    target.moduleV2 &&
+    !applicationMappingTypesCompatible(
+      actionValueTypeV2(value, subjectFields, inputs, "canonical"),
+      applicationFieldType(target),
+    )
+  )
+    return false;
+  return target.moduleV2
+    ? actionValueCompatibleV2(value, target.field, subjectFields, inputs, subjectRecordTypeId)
+    : actionValueCompatible(value, target.field, subjectFields, inputs, subjectRecordTypeId);
+}
+
+function applicationConditionUsesLossyInput(
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  inputTypes: ReadonlyMap<string, string>,
+): boolean {
+  if (value === null || value === undefined) return false;
+  const condition = object(value);
+  if (condition.kind === "all" || condition.kind === "any")
+    return array(condition.conditions).some((entry) =>
+      applicationConditionUsesLossyInput(entry, fields, inputTypes),
+    );
+  if (condition.kind === "not")
+    return applicationConditionUsesLossyInput(condition.condition, fields, inputTypes);
+  if (condition.kind !== "comparison") return false;
+  const exactFieldType = (operandValue: unknown) => {
+    const operand = object(operandValue);
+    if (operand.source !== "field") return undefined;
+    const type = fieldValueTypeV2(fields.get(String(operand.fieldId)));
+    return type === "decimal_number" || type === "money" ? type : undefined;
+  };
+  const isLegacyNumberInput = (operandValue: unknown) => {
+    const operand = object(operandValue);
+    return operand.source === "parameter" && inputTypes.get(String(operand.key)) === "number";
+  };
+  return (
+    (exactFieldType(condition.left) !== undefined && isLegacyNumberInput(condition.right)) ||
+    (exactFieldType(condition.right) !== undefined && isLegacyNumberInput(condition.left))
+  );
+}
+
+const applicationConditionTypesValid = (
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+  moduleV2: boolean,
+  inputTypes: ReadonlyMap<string, string> = new Map(),
+): boolean =>
+  moduleV2
+    ? !applicationConditionUsesLossyInput(value, fields, inputTypes) &&
+      conditionTypesValidV2(value, fields, inputTypes)
+    : conditionTypesValid(value, fields, inputTypes);
+
+const applicationInterfaceFieldType = (
+  pair: ApplicationFieldValuePair | undefined,
+): string | undefined => {
+  const type = applicationFieldType(pair);
+  if (!pair?.moduleV2) return type;
+  if (type === "whole_number" || type === "number") return "number";
+  if (type === "boolean") return "boolean";
+  if (["text", "date", "date_time", "record_reference"].includes(String(type))) return type;
+  return undefined;
+};
+
 const valueTypeCompatible = (actual: string | undefined, expected: string | undefined): boolean =>
   actual !== undefined &&
   expected !== undefined &&
@@ -1194,6 +2000,122 @@ const valueTypeCompatible = (actual: string | undefined, expected: string | unde
     (expected === "record_reference" && actual === "organization_account_reference") ||
     expected === "json");
 
+function permissionRecordScopesValid(
+  permissions: readonly JsonObject[],
+  records: ReadonlyMap<string, JsonObject>,
+  relationships: ReadonlyMap<string, JsonObject>,
+  sharingConditions: ReadonlyMap<string, JsonObject> = new Map(),
+  savedConditionsAllowed = false,
+  availablePermissions: readonly JsonObject[] = permissions,
+  v2SavedConditionIds: ReadonlySet<string> = new Set(),
+): boolean {
+  const permissionsById = new Map(
+    availablePermissions.map((permission) => [String(permission.permissionId), permission]),
+  );
+  const relationshipSources = new Map<string, string[]>();
+  let valid = true;
+  for (const permission of permissions) {
+    const recordTypeId =
+      permission.recordTypeId === undefined ? undefined : String(permission.recordTypeId);
+    const scope = permission.recordScope ? object(permission.recordScope) : undefined;
+    const fieldPolicy = permission.fieldPolicy ? object(permission.fieldPolicy) : undefined;
+    if (
+      (recordTypeId === undefined) !== (scope === undefined) ||
+      (recordTypeId === undefined) !== (fieldPolicy === undefined)
+    ) {
+      valid = false;
+      continue;
+    }
+    if (!scope || !fieldPolicy || recordTypeId === undefined) continue;
+    const record = records.get(recordTypeId);
+    if (!record) {
+      valid = false;
+      continue;
+    }
+    const fieldIds = new Set(array(record.fields).map((field) => String(field.fieldId)));
+    if (
+      [...array(fieldPolicy.readableFieldIds), ...array(fieldPolicy.changeableFieldIds)].some(
+        (fieldId) => !fieldIds.has(String(fieldId)),
+      )
+    )
+      valid = false;
+    const sources: string[] = [];
+    for (const route of array(scope.routes)) {
+      if (route.kind === "ownership" && record.ownershipMode === "none") valid = false;
+      if (route.kind !== "relationship") continue;
+      const relationship = relationships.get(String(route.relationshipId));
+      const sourcePermission = permissionsById.get(String(route.sourcePermissionId));
+      const targets = relationship?.toRecordType
+        ? [relationship.toRecordType]
+        : array(relationship?.toRecordTypes);
+      if (
+        !relationship ||
+        !sourcePermission ||
+        sourcePermission.actionKind !== "read" ||
+        String(sourcePermission.recordTypeId) !== String(relationship.fromRecordTypeId) ||
+        !targets.some(
+          (target) =>
+            object(target).state === "resolved" &&
+            String(object(target).recordTypeId) === recordTypeId,
+        )
+      )
+        valid = false;
+      else sources.push(String(sourcePermission.permissionId));
+    }
+    relationshipSources.set(String(permission.permissionId), sources);
+    const restriction = scope.savedCondition ? object(scope.savedCondition) : undefined;
+    if (!restriction) continue;
+    const saved = sharingConditions.get(String(restriction.conditionId));
+    const declaredParameters = new Map(
+      saved
+        ? array(saved.parameters).map(
+            (parameter) => [String(parameter.key), String(parameter.type)] as const,
+          )
+        : [],
+    );
+    const bindings = array(restriction.parameterBindings);
+    const savedConditionV2 = v2SavedConditionIds.has(String(restriction.conditionId));
+    if (
+      !savedConditionsAllowed ||
+      !saved ||
+      String(saved.sourceRecordTypeId) !== recordTypeId ||
+      saved.publishedRevision !== restriction.publishedRevision ||
+      saved.contractFingerprint !== restriction.contractFingerprint ||
+      bindings.length !== declaredParameters.size ||
+      new Set(bindings.map((binding) => String(binding.key))).size !== bindings.length ||
+      bindings.some((binding) => {
+        const expected = declaredParameters.get(String(binding.key));
+        return (
+          expected === undefined ||
+          (binding.source === "current_organization_account_id"
+            ? !["text", "organization_account_reference"].includes(expected)
+            : !(savedConditionV2
+                ? expected === "decimal_number"
+                  ? exactDecimalTextV2Schema.safeParse(binding.value).success
+                  : expected === "money"
+                    ? moneyValueV2Schema.safeParse(binding.value).success
+                    : valueMatchesType(binding.value, expected)
+                : valueMatchesType(binding.value, expected)))
+        );
+      })
+    )
+      valid = false;
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (permissionId: string): boolean => {
+    if (visiting.has(permissionId)) return false;
+    if (visited.has(permissionId)) return true;
+    visiting.add(permissionId);
+    const acyclic = (relationshipSources.get(permissionId) ?? []).every(visit);
+    visiting.delete(permissionId);
+    visited.add(permissionId);
+    return acyclic;
+  };
+  if (!permissions.map((permission) => String(permission.permissionId)).every(visit)) valid = false;
+  return valid;
+}
+
 function moduleReferenceRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
   const walkValues = canonicalValueWalker(context);
   const failures: DefinitionRuleFailure[] = [];
@@ -1201,12 +2123,37 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
   const availableModuleOutputs = allValidationOutputs(context).filter(
     (output) => output.kind === "module",
   );
-  const records = new Map<string, { record: JsonObject; moduleRootId: string }>();
+  const permissionOwnersById = new Map<string, Set<string>>();
   for (const output of availableModuleOutputs) {
     const canonical = object(output.canonical);
     const moduleRootId = String(object(canonical.envelope).rootId);
-    for (const record of array(object(canonical.content).recordTypes))
-      records.set(String(record.recordTypeId), { record, moduleRootId });
+    for (const permission of array(object(canonical.content).permissions)) {
+      const permissionId = String(permission.permissionId);
+      const owners = permissionOwnersById.get(permissionId) ?? new Set<string>();
+      owners.add(moduleRootId);
+      permissionOwnersById.set(permissionId, owners);
+    }
+  }
+  const recordIdentity = (moduleRootId: string, recordTypeId: string): string =>
+    `${moduleRootId}:${recordTypeId}`;
+  const records = new Map<
+    string,
+    { record: JsonObject; moduleRootId: string; allowedModuleRoots: ReadonlySet<string> }
+  >();
+  for (const output of availableModuleOutputs) {
+    const canonical = object(output.canonical);
+    const content = object(canonical.content);
+    const moduleRootId = String(object(canonical.envelope).rootId);
+    const allowedModuleRoots = new Set([
+      moduleRootId,
+      ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
+    ]);
+    for (const record of array(content.recordTypes))
+      records.set(recordIdentity(moduleRootId, String(record.recordTypeId)), {
+        record,
+        moduleRootId,
+        allowedModuleRoots,
+      });
   }
   const recordReference = (
     reference: unknown,
@@ -1214,14 +2161,58 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
   ): JsonObject | undefined => {
     const resolved = object(reference);
     if (resolved.state !== "resolved") return undefined;
-    const target = records.get(String(resolved.recordTypeId));
-    if (
-      !target ||
-      target.moduleRootId !== String(resolved.moduleRootId) ||
-      !allowedModuleRoots.has(target.moduleRootId)
-    )
-      return undefined;
+    const target = records.get(
+      recordIdentity(String(resolved.moduleRootId), String(resolved.recordTypeId)),
+    );
+    if (!target || !allowedModuleRoots.has(target.moduleRootId)) return undefined;
     return target.record;
+  };
+  const inheritedOwnershipValid = (moduleRootId: string, record: JsonObject): boolean => {
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const visit = (currentModuleRootId: string, currentRecord: JsonObject): boolean => {
+      const identity = recordIdentity(currentModuleRootId, String(currentRecord.recordTypeId));
+      if (visiting.has(identity)) return false;
+      if (visited.has(identity)) return true;
+      if (["organization_account", "team"].includes(String(currentRecord.ownershipMode))) {
+        visited.add(identity);
+        return true;
+      }
+      if (currentRecord.ownershipMode !== "inherited") return false;
+      const relationship = array(currentRecord.relationships).find(
+        (candidate) =>
+          String(candidate.relationshipId) === String(currentRecord.ownershipRelationshipId),
+      );
+      const current = records.get(identity);
+      const targets = relationship?.toRecordType
+        ? [relationship.toRecordType]
+        : array(relationship?.toRecordTypes);
+      if (
+        !relationship ||
+        !current ||
+        String(relationship.fromRecordTypeId) !== String(currentRecord.recordTypeId) ||
+        targets.length === 0
+      )
+        return false;
+      visiting.add(identity);
+      const valid = targets.every((targetReference) => {
+        const target = object(targetReference);
+        if (target.state !== "resolved") return false;
+        const targetModuleRootId = String(target.moduleRootId);
+        const targetRecord = records.get(
+          recordIdentity(targetModuleRootId, String(target.recordTypeId)),
+        );
+        return (
+          current.allowedModuleRoots.has(targetModuleRootId) &&
+          targetRecord !== undefined &&
+          visit(targetModuleRootId, targetRecord.record)
+        );
+      });
+      visiting.delete(identity);
+      if (valid) visited.add(identity);
+      return valid;
+    };
+    return visit(moduleRootId, record);
   };
   const fieldReferencesValid = (value: unknown, fields: ReadonlySet<string>): boolean => {
     let valid = true;
@@ -1234,6 +2225,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
   };
 
   for (const output of moduleOutputs) {
+    const moduleV2 = "validationContractVersion" in output;
     const canonical = object(output.canonical);
     const envelope = object(canonical.envelope);
     const content = object(canonical.content);
@@ -1242,16 +2234,57 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       moduleRootId,
       ...array(content.dependencies).map((dependency) => String(dependency.moduleRootId)),
     ]);
+    const choicePermissionValid = (permissionId: unknown): boolean => {
+      const owners = permissionOwnersById.get(String(permissionId));
+      return owners !== undefined && owners.size === 1 && allowedModuleRoots.has([...owners][0]!);
+    };
     const moduleRecords = new Map(
       array(content.recordTypes).map((record) => [String(record.recordTypeId), record]),
     );
-    const permissions = new Set(
-      array(content.permissions).map((permission) => String(permission.key)),
+    const modulePermissions = array(content.permissions);
+    const modulePermissionsByKey = new Map(
+      modulePermissions.map((permission) => [String(permission.key), permission]),
     );
     const actionsById = new Map(
       array(content.actions).map((action) => [String(action.actionId), action]),
     );
     const events = new Set(array(content.events).map((event) => String(event.key)));
+    const relationships = new Map(
+      [...moduleRecords.values()].flatMap((record) =>
+        array(record.relationships).map(
+          (relationship) => [String(relationship.relationshipId), relationship] as const,
+        ),
+      ),
+    );
+    const sharingConditions = new Map(
+      array(content.sharingConditions).map(
+        (condition) => [String(condition.conditionId), condition] as const,
+      ),
+    );
+    if (
+      !permissionRecordScopesValid(
+        modulePermissions,
+        moduleRecords,
+        relationships,
+        sharingConditions,
+        true,
+        modulePermissions,
+        moduleV2 ? new Set(sharingConditions.keys()) : new Set(),
+      )
+    )
+      failures.push(
+        failure(output, "vortex.definition.module_record_references", "scope_conflict"),
+      );
+
+    if (
+      [...moduleRecords.values()].some(
+        (record) =>
+          record.ownershipMode === "inherited" && !inheritedOwnershipValid(moduleRootId, record),
+      )
+    )
+      failures.push(
+        failure(output, "vortex.definition.module_record_references", "scope_conflict"),
+      );
 
     for (const record of moduleRecords.values()) {
       const recordId = String(record.recordTypeId);
@@ -1301,7 +2334,35 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       }
       for (const field of array(record.fields)) {
         const settings = object(field.settings);
+        const moduleFieldValueType = (candidate: JsonObject | undefined) =>
+          moduleV2 ? fieldValueTypeV2(candidate) : fieldValueType(candidate);
+        const moduleNumericField = (candidate: JsonObject | undefined) =>
+          moduleV2
+            ? ["whole_number", "decimal_number", "money"].includes(
+                fieldValueTypeV2(candidate) ?? "",
+              )
+            : fieldValueType(candidate) === "number";
         let valid = true;
+        const choiceSettings = [
+          ...(["choice", "several_choices"].includes(String(field.type)) ? [settings] : []),
+          ...(field.type === "table"
+            ? array(settings.columns)
+                .filter((column) => column.type === "choice" && column.settings !== undefined)
+                .map((column) => object(column.settings))
+            : []),
+        ];
+        if (
+          choiceSettings.some((choice) =>
+            array(choice.options).some(
+              (option) =>
+                option.requiredPermissionId !== undefined &&
+                !choicePermissionValid(option.requiredPermissionId),
+            ),
+          ) ||
+          (field.type === "table" &&
+            array(settings.columns).some((column) => column.settings === undefined))
+        )
+          valid = false;
         if (field.type === "link")
           valid = recordReference(settings.target, allowedModuleRoots) !== undefined;
         if (field.type === "link_to_one_of_several")
@@ -1310,50 +2371,99 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
           );
         if (field.type === "calculation") {
           const expression = object(settings.expression);
+          const expectedDependencies = moduleV2
+            ? calculationDependencyFieldIdsV2(expression)
+            : undefined;
           valid =
             (settings.dependencyFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
-            fieldReferencesValid(settings.expression, fields);
+            fieldReferencesValid(settings.expression, fields) &&
+            (!moduleV2 ||
+              JSON.stringify([...new Set(settings.dependencyFieldIds as string[])]) ===
+                JSON.stringify(expectedDependencies)) &&
+            (!moduleV2 ||
+              (["decimal_number", "money"].includes(String(settings.resultType))
+                ? settings.decimalPlaces !== undefined
+                : settings.decimalPlaces === undefined));
           if (expression.kind === "join_text")
             valid =
               valid &&
               (expression.fieldIds as string[]).every((id) =>
-                ["text", "choice"].includes(fieldValueType(fieldMap.get(id)) ?? ""),
+                ["text", "choice"].includes(moduleFieldValueType(fieldMap.get(id)) ?? ""),
               );
           if (expression.kind === "numeric")
             valid =
               valid &&
-              array(expression.operands).every(
-                (operand) =>
-                  operand.source === "literal" ||
-                  fieldValueType(fieldMap.get(String(operand.fieldId))) === "number",
-              );
+              (moduleV2
+                ? numericExpressionValidV2(expression, String(settings.resultType), fieldMap)
+                : array(expression.operands).every(
+                    (operand) =>
+                      operand.source === "literal" ||
+                      (operand.source === "field" &&
+                        moduleNumericField(fieldMap.get(String(operand.fieldId)))),
+                  ));
           if (expression.kind === "subtract_percentage")
+            if (moduleV2) {
+              const amountDimension = numericDimensionV2(
+                fieldMap.get(String(expression.amountFieldId)),
+              );
+              valid =
+                valid &&
+                amountDimension !== undefined &&
+                ["whole_number", "decimal_number"].includes(
+                  fieldValueTypeV2(fieldMap.get(String(expression.percentageFieldId))) ?? "",
+                ) &&
+                (amountDimension === "money"
+                  ? settings.resultType === "money"
+                  : settings.resultType === "decimal_number");
+            } else
+              valid =
+                valid &&
+                moduleNumericField(fieldMap.get(String(expression.amountFieldId))) &&
+                fieldValueType(fieldMap.get(String(expression.percentageFieldId))) === "number";
+          if (expression.kind === "condition")
             valid =
               valid &&
-              fieldValueType(fieldMap.get(String(expression.amountFieldId))) === "number" &&
-              fieldValueType(fieldMap.get(String(expression.percentageFieldId))) === "number";
-          if (expression.kind === "condition")
-            valid = valid && conditionTypesValid(expression.condition, fieldMap);
+              (moduleV2
+                ? conditionTypesValidV2(expression.condition, fieldMap)
+                : conditionTypesValid(expression.condition, fieldMap));
           if (expression.kind === "date_offset") {
             const amount = object(expression.amount);
             valid =
               valid &&
               ["date", "date_time"].includes(
-                fieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
+                moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
               ) &&
-              (amount.source === "literal" ||
-                fieldValueType(fieldMap.get(String(amount.fieldId))) === "number");
+              (!moduleV2 ||
+                moduleFieldValueType(fieldMap.get(String(expression.dateFieldId))) ===
+                  settings.resultType) &&
+              ((amount.source === "literal" &&
+                (!moduleV2 || exactIntegerLiteralV2(amount.value))) ||
+                (amount.source === "field" &&
+                  (moduleV2
+                    ? fieldValueTypeV2(fieldMap.get(String(amount.fieldId))) === "whole_number"
+                    : moduleNumericField(fieldMap.get(String(amount.fieldId))))));
           }
-          if (expression.kind === "deadline_passed")
+          if (expression.kind === "deadline_passed") {
+            const statusField =
+              expression.statusFieldId === undefined
+                ? undefined
+                : fieldMap.get(String(expression.statusFieldId));
             valid =
               valid &&
               ["date", "date_time"].includes(
-                fieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
+                moduleFieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
               ) &&
               (expression.statusFieldId === undefined ||
-                ["text", "choice"].includes(
-                  fieldValueType(fieldMap.get(String(expression.statusFieldId))) ?? "",
+                ["text", "choice"].includes(moduleFieldValueType(statusField) ?? "")) &&
+              (!moduleV2 ||
+                expression.statusFieldId !== undefined ||
+                array(expression.terminalStatusValues).length === 0) &&
+              (!moduleV2 ||
+                statusField === undefined ||
+                array(expression.terminalStatusValues).every((value) =>
+                  fieldValueMatchesV2(value, statusField, "canonical"),
                 ));
+          }
         }
         if (field.type === "total") {
           const aggregateRelationship = [...records.values()]
@@ -1389,13 +2499,16 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
             settings.fieldId === undefined
               ? undefined
               : aggregateFieldMap.get(String(settings.fieldId));
+          const aggregateResultType = fieldDeclaredResultType(aggregateField);
           const filterValid =
             settings.filter === undefined ||
             (fieldReferencesValid(settings.filter, aggregateFields) &&
-              conditionTypesValid(settings.filter, aggregateFieldMap));
+              (moduleV2
+                ? conditionTypesValidV2(settings.filter, aggregateFieldMap)
+                : conditionTypesValid(settings.filter, aggregateFieldMap)));
           const currencyValid =
             settings.currency === undefined ||
-            (settings.operation === "sum" && aggregateField?.type === "money");
+            (settings.operation === "sum" && aggregateResultType === "money");
           valid =
             aggregateRelationship !== undefined &&
             reachesCurrentRecord &&
@@ -1405,9 +2518,12 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
               ? settings.fieldId === undefined
               : aggregateField !== undefined) &&
             (!["sum", "average"].includes(String(settings.operation)) ||
-              fieldValueType(aggregateField) === "number");
+              (moduleV2
+                ? ["whole_number", "decimal_number", "money"].includes(
+                    fieldValueTypeV2(aggregateField) ?? "",
+                  )
+                : fieldValueType(aggregateField) === "number"));
           const declaredResultType = String(settings.resultType);
-          const aggregateResultType = fieldDeclaredResultType(aggregateField);
           const resultTypeValid =
             (settings.operation === "count" && declaredResultType === "whole_number") ||
             (settings.operation === "average" &&
@@ -1415,7 +2531,12 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
                 (aggregateResultType === "money" ? "money" : "decimal_number")) ||
             (["sum", "minimum", "maximum"].includes(String(settings.operation)) &&
               declaredResultType === aggregateResultType);
-          valid = valid && resultTypeValid;
+          const precisionValid = moduleV2
+            ? settings.operation === "average"
+              ? settings.decimalPlaces !== undefined
+              : settings.decimalPlaces === undefined
+            : true;
+          valid = valid && resultTypeValid && precisionValid;
         }
         if (!valid)
           failures.push(
@@ -1473,14 +2594,20 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
       const inputMap = new Map(array(action.inputs).map((input) => [String(input.key), input]));
       const inputKeys = new Set(inputMap.keys());
       const inputTypes = new Map(
-        [...inputMap].map(([key, input]) => [key, semanticFieldType(input.type) ?? ""]),
+        [...inputMap].map(([key, input]) => [
+          key,
+          (moduleV2 ? semanticFieldTypeV2(input.type) : semanticFieldType(input.type)) ?? "",
+        ]),
       );
       let valid =
         subject !== undefined &&
-        permissions.has(String(action.permissionKey)) &&
+        actionPermissionKeys(action).length > 0 &&
+        actionPermissionsMatch(action, modulePermissionsByKey) &&
         fieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          conditionTypesValid(action.precondition, fieldMap, inputTypes));
+          (moduleV2
+            ? conditionTypesValidV2(action.precondition, fieldMap, inputTypes)
+            : conditionTypesValid(action.precondition, fieldMap, inputTypes)));
       for (const input of array(action.inputs))
         if (
           input.type === "record_reference" &&
@@ -1493,7 +2620,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         if (
           effect.kind === "set_field" &&
           (!fields.has(String(effect.fieldId)) ||
-            !actionValueCompatible(
+            !(moduleV2 ? actionValueCompatibleV2 : actionValueCompatible)(
               effect.value,
               fieldMap.get(String(effect.fieldId)),
               fieldMap,
@@ -1523,7 +2650,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
             Object.entries(object(effect.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
-                !actionValueCompatible(
+                !(moduleV2 ? actionValueCompatibleV2 : actionValueCompatible)(
                   value,
                   targetFields.get(id),
                   fieldMap,
@@ -1546,6 +2673,8 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
     }
 
     for (const rule of array(content.rules)) {
+      if ("validationContractVersion" in output && output.validationContractVersion === "3.0.0")
+        continue;
       const subject = moduleRecords.get(String(rule.subjectRecordTypeId));
       const fieldMap = new Map(
         subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
@@ -1556,13 +2685,17 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         !subject ||
         !fieldReferencesValid(rule.condition, fields) ||
         !fieldReferencesValid(rule.effect, fields) ||
-        !conditionTypesValid(rule.condition, fieldMap) ||
+        !(moduleV2
+          ? conditionTypesValidV2(rule.condition, fieldMap)
+          : conditionTypesValid(rule.condition, fieldMap)) ||
         ["show_or_hide", "start_background_work"].includes(String(effect.kind)) ||
         (effect.kind === "set_value" &&
-          !valueTypeCompatible(
-            literalValueType(effect.value),
-            fieldValueType(fieldMap.get(String(effect.fieldId))),
-          ))
+          !(moduleV2
+            ? fieldValueMatchesV2(effect.value, fieldMap.get(String(effect.fieldId)), "canonical")
+            : valueTypeCompatible(
+                literalValueType(effect.value),
+                fieldValueType(fieldMap.get(String(effect.fieldId))),
+              )))
       )
         failures.push(
           failure(output, "vortex.definition.module_rule_references", "broken_reference"),
@@ -1604,15 +2737,25 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
         record !== undefined &&
         (condition.declaredFieldIds as string[]).every((fieldId) => fields.has(fieldId)) &&
         fieldReferencesValid(condition.condition, fields) &&
-        conditionTypesValid(condition.condition, fieldMap, parameterTypes);
+        (moduleV2
+          ? conditionTypesValidV2(condition.condition, fieldMap, parameterTypes)
+          : conditionTypesValid(condition.condition, fieldMap, parameterTypes));
       try {
         for (const publicationTest of array(condition.publicationTests))
           if (
-            evaluateSavedSharingCondition(
-              condition,
-              object(publicationTest.fieldValues),
-              object(publicationTest.parameters),
-            ) !== publicationTest.expected
+            (moduleV2
+              ? evaluateSavedSharingConditionV2(
+                  condition,
+                  object(publicationTest.fieldValues),
+                  object(publicationTest.parameters),
+                  [...fieldMap.values()] as ModuleFieldV2[],
+                )
+              : evaluateSavedSharingCondition(
+                  condition,
+                  object(publicationTest.fieldValues),
+                  object(publicationTest.parameters),
+                  [...fieldMap.values()] as FieldDefinition[],
+                )) !== publicationTest.expected
           )
             valid = false;
       } catch {
@@ -1901,6 +3044,136 @@ export function workflowValueCompatible(
   );
 }
 
+function applicationWorkflowFieldValueCompatible(
+  value: JsonObject,
+  target: ApplicationFieldValuePair,
+  fields: ReadonlyMap<string, JsonObject>,
+  fieldPairs: ReadonlyMap<string, ApplicationFieldValuePair>,
+  nodes: ReadonlyMap<string, JsonObject>,
+  queries: ReadonlyMap<string, JsonObject>,
+  triggerRecordId: string | undefined,
+  expectedRecordTypeIds: readonly string[] | undefined,
+  triggerInputs: ReadonlyMap<string, JsonObject>,
+): boolean {
+  if (value.source === "literal")
+    return target.moduleV2
+      ? fieldValueMatchesV2(value.value, target.field, "canonical")
+      : valueTypeCompatible(literalValueType(value.value), fieldValueType(target.field));
+  if (value.source === "trigger_field") {
+    const source = fieldPairs.get(String(value.fieldId));
+    if (!source) return false;
+    const compatible =
+      source.moduleV2 !== target.moduleV2
+        ? crossFormatFieldTypesCompatible(source, target)
+        : target.moduleV2
+          ? applicationMappingTypesCompatible(
+              applicationFieldType(source),
+              applicationFieldType(target),
+            )
+          : valueTypeCompatible(applicationFieldType(source), applicationFieldType(target));
+    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+    const actualRecordTypeIds = fieldRecordTypeIds(source.field);
+    return (
+      actualRecordTypeIds !== undefined &&
+      actualRecordTypeIds.length > 0 &&
+      actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
+    );
+  }
+  const targetType = applicationFieldType(target);
+  if (
+    target.moduleV2 &&
+    ["decimal_number", "money", "formatted_text", "table", "attachment"].includes(
+      String(targetType),
+    )
+  )
+    return false;
+  return workflowValueCompatible(
+    value,
+    targetType === "whole_number" ? "number" : (targetType ?? ""),
+    fields,
+    nodes,
+    queries,
+    triggerRecordId,
+    expectedRecordTypeIds,
+    triggerInputs,
+  );
+}
+
+function applicationWorkflowInputCompatible(
+  value: JsonObject,
+  input: JsonObject,
+  moduleV2: boolean,
+  fields: ReadonlyMap<string, JsonObject>,
+  fieldPairs: ReadonlyMap<string, ApplicationFieldValuePair>,
+  nodes: ReadonlyMap<string, JsonObject>,
+  queries: ReadonlyMap<string, JsonObject>,
+  triggerRecordId: string | undefined,
+  expectedRecordTypeIds: readonly string[] | undefined,
+  triggerInputs: ReadonlyMap<string, JsonObject>,
+): boolean {
+  if (value.source === "trigger_field") {
+    const source = fieldPairs.get(String(value.fieldId));
+    if (!source) return false;
+    const expectedType = moduleV2
+      ? input.type === "formatted_text"
+        ? "formatted_text"
+        : semanticFieldTypeV2(input.type)
+      : normalizeWorkflowType(String(input.type));
+    if (!expectedType) return false;
+    const actualType = applicationFieldType(source);
+    const compatible = moduleV2
+      ? source.moduleV2
+        ? applicationMappingTypesCompatible(actualType, expectedType)
+        : (expectedType === "whole_number" && actualType === "number") ||
+          (actualType === expectedType &&
+            ["text", "boolean", "date", "date_time", "record_reference"].includes(actualType))
+      : valueTypeCompatible(applicationInterfaceFieldType(source), expectedType);
+    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+    const actualRecordTypeIds = fieldRecordTypeIds(source.field);
+    return (
+      actualRecordTypeIds !== undefined &&
+      actualRecordTypeIds.length > 0 &&
+      actualRecordTypeIds.every((recordTypeId) => expectedRecordTypeIds.includes(recordTypeId))
+    );
+  }
+  if (!moduleV2)
+    return workflowValueCompatible(
+      value,
+      String(input.type),
+      fields,
+      nodes,
+      queries,
+      triggerRecordId,
+      expectedRecordTypeIds,
+      triggerInputs,
+    );
+  const expectedType =
+    input.type === "formatted_text" ? "formatted_text" : semanticFieldTypeV2(input.type);
+  if (!expectedType) return false;
+  if (value.source === "literal") {
+    const compatible =
+      input.type === "formatted_text"
+        ? moduleFieldValueV2Schemas.formatted_text.safeParse(value.value).success
+        : valueMatchesTypeV2(value.value, expectedType);
+    if (!compatible || expectedRecordTypeIds === undefined) return compatible;
+    const actualRecordTypeId = object(value.value).recordTypeId;
+    return (
+      typeof actualRecordTypeId === "string" && expectedRecordTypeIds.includes(actualRecordTypeId)
+    );
+  }
+  if (["decimal_number", "money", "formatted_text"].includes(String(input.type))) return false;
+  return workflowValueCompatible(
+    value,
+    expectedType === "whole_number" ? "number" : expectedType,
+    fields,
+    nodes,
+    queries,
+    triggerRecordId,
+    expectedRecordTypeIds,
+    triggerInputs,
+  );
+}
+
 function workflowValueRecordType(
   value: JsonObject,
   nodes: ReadonlyMap<string, JsonObject>,
@@ -1946,6 +3219,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
   const modules = availableOutputs.filter((output) => output.kind === "module");
   const connections = availableOutputs.filter((output) => output.kind === "connection_type");
   for (const output of context.outputs.filter((entry) => entry.kind === "application")) {
+    const applicationV2 = "validationContractVersion" in output;
     const content = object(object(output.canonical).content);
     const bindings = array(content.moduleBindings);
     const connectionBindingEntries = array(content.connectionBindings);
@@ -1994,7 +3268,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         expected?.key === module.artifact.definitionKey &&
         expected.exactVersion === module.artifact.exactVersion &&
         module.artifact.rootId === rootId &&
-        module.artifact.resolutionFingerprint === request?.resolution.fingerprint &&
+        module.artifact.resolutionFingerprint === module.resolutionFingerprint &&
         module.artifact.contentFingerprint ===
           fingerprintCanonicalValue(object(module.canonical).content)
       );
@@ -2003,9 +3277,29 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       array(object(object(module.canonical).content).recordTypes),
     );
     const records = new Map(recordTypes.map((record) => [String(record.recordTypeId), record]));
+    const recordValuePairs = new Map<string, ApplicationFieldValuePair["moduleV2"]>(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).recordTypes).map(
+          (record) => [String(record.recordTypeId), "validationContractVersion" in module] as const,
+        ),
+      ),
+    );
     const allFields = new Map(
       recordTypes.flatMap((record) =>
         array(record.fields).map((field) => [String(field.fieldId), field] as const),
+      ),
+    );
+    const fieldValuePairs = new Map<string, ApplicationFieldValuePair>(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).recordTypes).flatMap((record) =>
+          array(record.fields).map(
+            (field) =>
+              [
+                String(field.fieldId),
+                { field, moduleV2: "validationContractVersion" in module },
+              ] as const,
+          ),
+        ),
       ),
     );
     const relationshipMap = new Map(
@@ -2032,10 +3326,54 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const permissionMap = new Map(
       permissionEntries.map((permission) => [String(permission.key), permission]),
     );
+    const applicationRootId = String(object(object(output.canonical).envelope).rootId);
+    const permissionOwnersByKey = new Map([
+      ...array(content.permissions).map(
+        (permission) => [String(permission.key), `application:${applicationRootId}`] as const,
+      ),
+      ...boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).permissions).map(
+          (permission) => [String(permission.key), `module:${module.artifact.rootId}`] as const,
+        ),
+      ),
+    ]);
     const permissions = new Set(permissionMap.keys());
     const applicationPermissions = new Map(
       array(content.permissions).map((permission) => [String(permission.key), permission]),
     );
+    const savedConditionEntries = boundModules.flatMap((module) =>
+      array(object(object(module.canonical).content).sharingConditions),
+    );
+    const savedConditions = new Map(
+      savedConditionEntries.map((condition) => [String(condition.conditionId), condition] as const),
+    );
+    const v2SavedConditionIds = new Set(
+      boundModules
+        .filter((module) => "validationContractVersion" in module)
+        .flatMap((module) =>
+          array(object(object(module.canonical).content).sharingConditions).map((condition) =>
+            String(condition.conditionId),
+          ),
+        ),
+    );
+    if (savedConditions.size !== savedConditionEntries.length)
+      failures.push(
+        failure(output, "vortex.definition.application_action_references", "scope_conflict"),
+      );
+    if (
+      !permissionRecordScopesValid(
+        [...applicationPermissions.values()],
+        records,
+        relationshipMap,
+        savedConditions,
+        true,
+        permissionEntries,
+        v2SavedConditionIds,
+      )
+    )
+      failures.push(
+        failure(output, "vortex.definition.application_action_references", "scope_conflict"),
+      );
     const actions = new Map(
       [
         ...array(content.actions),
@@ -2043,6 +3381,17 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           array(object(object(module.canonical).content).actions),
         ),
       ].map((action) => [String(action.key), action]),
+    );
+    const moduleActionValuePairs = new Map(
+      boundModules.flatMap((module) =>
+        array(object(object(module.canonical).content).actions).map(
+          (action) =>
+            [
+              String(action.key),
+              { action, moduleV2: "validationContractVersion" in module },
+            ] as const,
+        ),
+      ),
     );
     const publicPermissionSafe = (permissionKey: unknown) => {
       const permission = permissionMap.get(String(permissionKey));
@@ -2071,7 +3420,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         !subjectRecord ||
         (expectedSubjectRecordId !== undefined &&
           String(action.subjectRecordTypeId) !== expectedSubjectRecordId) ||
-        !publicPermissionSafe(action.permissionKey)
+        actionPermissionKeys(action).length === 0 ||
+        !actionPermissionKeys(action).every(publicPermissionSafe)
       )
         return false;
 
@@ -2162,6 +3512,44 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       ].map((event) => [String(event.key), event]),
     );
     const pages = new Map(array(content.pages).map((page) => [String(page.pageId), page]));
+    const shells = new Map(
+      (applicationV2 ? array(content.shells) : []).map((shell) => [String(shell.shellId), shell]),
+    );
+    const collectPlacementEntriesV2 = (
+      slotValue: unknown,
+      entries: [string, JsonObject][] = [],
+    ): [string, JsonObject][] => {
+      const slot = object(slotValue);
+      for (const [placementId, placementValue] of Object.entries(object(slot.placements))) {
+        const placement = object(placementValue);
+        entries.push([placementId, placement]);
+        for (const childSlot of Object.values(object(placement.slots)))
+          collectPlacementEntriesV2(childSlot, entries);
+      }
+      return entries;
+    };
+    const pageContentPlacementEntriesV2 = (page: JsonObject): [string, JsonObject][] => {
+      const composition = object(page.composition);
+      if ("main" in composition) return collectPlacementEntriesV2(composition.main);
+      if ("content" in composition)
+        return Object.values(object(composition.content)).flatMap((slotValue) =>
+          collectPlacementEntriesV2(slotValue),
+        );
+      if (composition.shellKind === "default")
+        return Object.values(object(composition.stepContent)).flatMap((slotValue) =>
+          collectPlacementEntriesV2(slotValue),
+        );
+      return Object.values(object(composition.stepContent)).flatMap((stepValue) =>
+        Object.values(object(stepValue)).flatMap((slotValue) =>
+          collectPlacementEntriesV2(slotValue),
+        ),
+      );
+    };
+    const pageShellPlacementEntriesV2 = (page: JsonObject): [string, JsonObject][] => {
+      const composition = object(page.composition);
+      if (composition.shellKind !== "application") return [];
+      return collectPlacementEntriesV2(shells.get(String(composition.shellId))?.layout);
+    };
     const queries = new Map(array(content.queries).map((query) => [String(query.queryId), query]));
     const pipelines = new Map(
       array(content.pipelines).map((pipeline) => [String(pipeline.pipelineId), pipeline]),
@@ -2192,7 +3580,10 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       return undefined;
     };
     const blocks = new Map(
-      array(content.blockRegistrations).map((block) => [String(block.blockId), block]),
+      (applicationV2 ? [] : array(content.blockRegistrations)).map((block) => [
+        String(block.blockId),
+        block,
+      ]),
     );
     const connectionMap = new Map(
       connections
@@ -2207,7 +3598,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             expected?.key === connection.artifact.definitionKey &&
             expected.exactVersion === connection.artifact.exactVersion &&
             connection.artifact.rootId === canonical.connectionTypeId &&
-            connection.artifact.resolutionFingerprint === request?.resolution.fingerprint &&
+            connection.artifact.resolutionFingerprint === connection.resolutionFingerprint &&
             connection.artifact.contentFingerprint === fingerprintCanonicalValue(canonical)
           );
         })
@@ -2232,7 +3623,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             module.artifact.rootId === binding.moduleRootId &&
             module.artifact.definitionKey === available?.key &&
             module.artifact.exactVersion === binding.resolvedVersion &&
-            module.artifact.resolutionFingerprint === request?.resolution.fingerprint &&
+            module.artifact.resolutionFingerprint === module.resolutionFingerprint &&
             module.artifact.contentFingerprint ===
               fingerprintCanonicalValue(object(module.canonical).content),
         );
@@ -2264,6 +3655,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     };
     for (const action of array(content.actions)) {
       const subject = records.get(String(action.subjectRecordTypeId));
+      const subjectModuleV2 = recordValuePairs.get(String(action.subjectRecordTypeId)) ?? false;
       const fieldMap = new Map(
         subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -2280,18 +3672,26 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       );
       let valid =
         subject !== undefined &&
-        permissions.has(String(action.permissionKey)) &&
+        actionPermissionKeys(action).length > 0 &&
+        permissionEntries.length === permissionMap.size &&
+        actionPermissionsMatch(action, permissionMap, permissionOwnersByKey) &&
         applicationFieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          conditionTypesValid(action.precondition, fieldMap, inputTypes));
+          applicationConditionTypesValid(
+            action.precondition,
+            fieldMap,
+            subjectModuleV2,
+            inputTypes,
+          ));
       for (const effect of array(action.effects)) {
         if (
           effect.kind === "set_field" &&
           (!fields.has(String(effect.fieldId)) ||
-            !actionValueCompatible(
+            !applicationActionValueCompatible(
               effect.value,
-              fieldMap.get(String(effect.fieldId)),
+              fieldValuePairs.get(String(effect.fieldId)),
               fieldMap,
+              subjectModuleV2,
               inputMap,
               String(action.subjectRecordTypeId),
             ))
@@ -2317,10 +3717,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             Object.entries(object(effect.values)).some(
               ([id, value]) =>
                 !targetFields.has(id) ||
-                !actionValueCompatible(
+                !applicationActionValueCompatible(
                   value,
-                  targetFields.get(id),
+                  fieldValuePairs.get(id),
                   fieldMap,
+                  subjectModuleV2,
                   inputMap,
                   String(action.subjectRecordTypeId),
                 ),
@@ -2354,18 +3755,24 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         );
     }
     const applicationPlacementIds = new Set(
-      [...pages.values()].flatMap((page) =>
-        page.type === "guided_form"
-          ? array(page.steps).flatMap((step) =>
-              array(step.blocks).map((placement) => String(placement.placementId)),
-            )
-          : page.blocks
-            ? array(page.blocks).map((placement) => String(placement.placementId))
-            : [],
-      ),
+      applicationV2
+        ? [
+            ...[...shells.values()].flatMap((shell) => collectPlacementEntriesV2(shell.layout)),
+            ...[...pages.values()].flatMap(pageContentPlacementEntriesV2),
+          ].map(([placementId]) => placementId)
+        : [...pages.values()].flatMap((page) =>
+            page.type === "guided_form"
+              ? array(page.steps).flatMap((step) =>
+                  array(step.blocks).map((placement) => String(placement.placementId)),
+                )
+              : page.blocks
+                ? array(page.blocks).map((placement) => String(placement.placementId))
+                : [],
+          ),
     );
     for (const rule of array(content.rules)) {
       const record = records.get(String(rule.subjectRecordTypeId));
+      const moduleV2 = recordValuePairs.get(String(rule.subjectRecordTypeId)) ?? false;
       const fieldMap = new Map(
         record ? array(record.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -2375,25 +3782,27 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         !record ||
         !applicationFieldReferencesValid(rule.condition, fields) ||
         !applicationFieldReferencesValid(effect, fields) ||
-        !conditionTypesValid(rule.condition, fieldMap) ||
+        !applicationConditionTypesValid(rule.condition, fieldMap, moduleV2) ||
         (effect.kind === "start_background_work" && !workflows.has(String(effect.workflowId))) ||
         (effect.kind === "show_or_hide" &&
           !applicationPlacementIds.has(String(effect.componentId))) ||
         (effect.kind === "set_value" &&
-          !valueTypeCompatible(
-            literalValueType(effect.value),
-            fieldValueType(fieldMap.get(String(effect.fieldId))),
-          ))
+          !(moduleV2
+            ? fieldValueMatchesV2(effect.value, fieldMap.get(String(effect.fieldId)), "canonical")
+            : valueTypeCompatible(
+                literalValueType(effect.value),
+                fieldValueType(fieldMap.get(String(effect.fieldId))),
+              )))
       )
         failures.push(
           failure(output, "vortex.definition.application_rule_references", "broken_reference"),
         );
     }
-    const identityCollections = [
+    const identityCollections: readonly (readonly [JsonObject[], string, string])[] = [
       [array(content.pages), "pageId", "key"],
       [array(content.roles), "roleId", "key"],
       [array(content.queries), "queryId", "key"],
-      [array(content.blockRegistrations), "blockId", "name"],
+      ...(applicationV2 ? [] : ([[array(content.blockRegistrations), "blockId", "name"]] as const)),
       [array(content.pipelines), "pipelineId", "key"],
       [array(content.permissions), "permissionId", "key"],
       [array(content.actions), "actionId", "key"],
@@ -2420,15 +3829,17 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       }
     };
     collectNavigationIds(array(content.navigation));
-    const placementIds = [...pages.values()].flatMap((page) =>
-      page.type === "guided_form"
-        ? array(page.steps).flatMap((step) =>
-            array(step.blocks).map((placement) => String(placement.placementId)),
-          )
-        : page.blocks
-          ? array(page.blocks).map((placement) => String(placement.placementId))
-          : [],
-    );
+    const placementIds = applicationV2
+      ? [...applicationPlacementIds]
+      : [...pages.values()].flatMap((page) =>
+          page.type === "guided_form"
+            ? array(page.steps).flatMap((step) =>
+                array(step.blocks).map((placement) => String(placement.placementId)),
+              )
+            : page.blocks
+              ? array(page.blocks).map((placement) => String(placement.placementId))
+              : [],
+        );
     const guidedStepIds = [...pages.values()].flatMap((page) =>
       page.type === "guided_form" ? array(page.steps).map((step) => String(step.id)) : [],
     );
@@ -2483,6 +3894,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     for (const query of queries.values()) {
       const record = object(query.recordType);
       const recordType = records.get(String(record.recordTypeId));
+      const moduleV2 = recordValuePairs.get(String(record.recordTypeId)) ?? false;
       const fieldMap = new Map(
         recordType ? array(recordType.fields).map((field) => [String(field.fieldId), field]) : [],
       );
@@ -2506,8 +3918,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         const field = allFields.get(String(aggregate.fieldId));
         if (!field) return false;
         if (aggregate.operation === "sum" || aggregate.operation === "average")
-          return ["whole_number", "decimal_number", "money", "calculation", "total"].includes(
-            String(field.type),
+          return ["number", "whole_number", "decimal_number", "money"].includes(
+            applicationFieldType(fieldValuePairs.get(String(aggregate.fieldId))) ?? "",
           );
         return !["formatted_text", "table", "attachment", "link_to_one_of_several"].includes(
           String(field.type),
@@ -2517,7 +3929,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         !recordType ||
         used.some((fieldId) => !fields.has(fieldId)) ||
         !filterFieldsValid ||
-        (query.filter !== undefined && !conditionTypesValid(query.filter, fieldMap)) ||
+        (query.filter !== undefined &&
+          !applicationConditionTypesValid(query.filter, fieldMap, moduleV2)) ||
         !aggregatesValid
       )
         failures.push(
@@ -2587,20 +4000,32 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             failure(output, "vortex.definition.application_calendar_mapping", "scope_conflict"),
           );
       }
-      const placements =
-        page.type === "guided_form"
+      const pageContentPlacements = applicationV2
+        ? pageContentPlacementEntriesV2(page).map(([, placement]) => placement)
+        : page.type === "guided_form"
           ? array(page.steps).flatMap((step) => array(step.blocks))
           : page.blocks
             ? array(page.blocks)
             : [];
+      const placements = applicationV2
+        ? [
+            ...pageContentPlacements,
+            ...pageShellPlacementEntriesV2(page).map(([, placement]) => placement),
+          ]
+        : pageContentPlacements;
       const placementIds = placements.map((placement) => String(placement.placementId));
-      const desktopOrder = object(object(page.layout).desktop).componentOrder as string[];
-      const phoneOrder = object(object(page.layout).phone).componentOrder as string[];
+      const desktopOrder = applicationV2
+        ? []
+        : (object(object(page.layout).desktop).componentOrder as string[]);
+      const phoneOrder = applicationV2
+        ? []
+        : (object(object(page.layout).phone).componentOrder as string[]);
       if (
-        new Set(placementIds).size !== placementIds.length ||
-        desktopOrder.length !== placementIds.length ||
-        phoneOrder.length !== placementIds.length ||
-        placementIds.some((id) => !desktopOrder.includes(id) || !phoneOrder.includes(id))
+        !applicationV2 &&
+        (new Set(placementIds).size !== placementIds.length ||
+          desktopOrder.length !== placementIds.length ||
+          phoneOrder.length !== placementIds.length ||
+          placementIds.some((id) => !desktopOrder.includes(id) || !phoneOrder.includes(id)))
       )
         failures.push(
           failure(output, "vortex.definition.application_layout_complete", "broken_reference"),
@@ -2616,6 +4041,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           : [],
       );
       for (const placement of placements) {
+        if (applicationV2) continue;
         const block = blocks.get(String(placement.blockId));
         const placementQuery = placement.queryId
           ? queries.get(String(placement.queryId))
@@ -2719,13 +4145,14 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         }
         if (
           placement.visibilityCondition !== undefined &&
-          !conditionTypesValid(
+          !applicationConditionTypesValid(
             placement.visibilityCondition,
             new Map(
               pageRecord
                 ? array(pageRecord.fields).map((field) => [String(field.fieldId), field] as const)
                 : [],
             ),
+            pageRecordId === undefined ? false : (recordValuePairs.get(pageRecordId) ?? false),
           )
         )
           failures.push(
@@ -2751,7 +4178,10 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         let publicBlockReferencesSafe = true;
         for (const placement of placements) {
           if (
-            !publicPermissionSafe(placement.viewPermissionKey) ||
+            (applicationV2
+              ? placement.viewPermissionKey !== undefined &&
+                !publicPermissionSafe(placement.viewPermissionKey)
+              : !publicPermissionSafe(placement.viewPermissionKey)) ||
             (placement.usePermissionKey && !publicPermissionSafe(placement.usePermissionKey))
           )
             publicBlockReferencesSafe = false;
@@ -2759,8 +4189,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             if (entry.source === "field" && !pagePublicFields.has(String(entry.fieldId)))
               publicBlockReferencesSafe = false;
           });
-          for (const settingValue of Object.values(object(placement.settings))) {
-            const setting = object(settingValue);
+          const inspectPublicSetting = (setting: JsonObject) => {
             if (
               setting.kind === "field_reference" &&
               !pagePublicFields.has(String(setting.fieldId))
@@ -2785,7 +4214,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
               if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
                 publicBlockReferencesSafe = false;
             }
-          }
+          };
+          if (applicationV2) walkValues(placement.settings, inspectPublicSetting);
+          else
+            for (const settingValue of Object.values(object(placement.settings)))
+              inspectPublicSetting(object(settingValue));
           if (placement.queryId) {
             const query = queries.get(String(placement.queryId));
             if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
@@ -2813,6 +4246,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         );
     for (const pipeline of array(content.pipelines)) {
       const record = records.get(String(object(pipeline.recordType).recordTypeId));
+      const moduleV2 =
+        recordValuePairs.get(String(object(pipeline.recordType).recordTypeId)) ?? false;
       const stageField =
         record && array(record.fields).find((field) => field.fieldId === pipeline.stageFieldId);
       if (!stageField || stageField.type !== "choice")
@@ -2852,7 +4287,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         if (
           (transition.permissionKey && !permissions.has(String(transition.permissionKey))) ||
           (transition.actionKey && !executableActionKeys.has(String(transition.actionKey))) ||
-          (transition.gate !== undefined && !conditionTypesValid(transition.gate, pipelineFields))
+          (transition.gate !== undefined &&
+            !applicationConditionTypesValid(transition.gate, pipelineFields, moduleV2))
         )
           failures.push(
             failure(
@@ -2930,10 +4366,12 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
     const workflowsByKey = new Map(
       [...workflows.values()].map((workflow) => [String(workflow.key), workflow]),
     );
-    const interfaceActionInputType = (type: unknown): string | undefined => {
+    const interfaceActionInputType = (type: unknown, moduleV2 = false): string | undefined => {
       const value = String(type);
+      if (moduleV2 && ["decimal_number", "money"].includes(value)) return undefined;
+      if (moduleV2 && value === "formatted_text") return "formatted_text";
       if (["text", "formatted_text", "choice"].includes(value)) return "text";
-      if (["whole_number", "decimal_number", "money"].includes(value)) return "number";
+      if (["number", "whole_number", "decimal_number", "money"].includes(value)) return "number";
       if (value === "yes_no") return "boolean";
       if (value === "date" || value === "date_time") return value;
       if (["record_reference", "organization_account_reference"].includes(value))
@@ -2970,6 +4408,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         const targetWorkflow =
           target.kind === "workflow" ? workflowsByKey.get(String(target.key)) : undefined;
         const targetAction = target.kind === "action" ? actions.get(String(target.key)) : undefined;
+        const targetActionPair =
+          target.kind === "action" ? moduleActionValuePairs.get(String(target.key)) : undefined;
         const targetExists =
           targetQuery !== undefined || targetWorkflow !== undefined || targetAction !== undefined;
         if (
@@ -3037,7 +4477,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
               const descriptor = bindingsForInput[0];
               return (
                 descriptor?.required === input.required &&
-                descriptor?.type === interfaceActionInputType(input.type)
+                descriptor?.type ===
+                  interfaceActionInputType(input.type, targetActionPair?.moduleV2 ?? false)
               );
             });
         }
@@ -3070,7 +4511,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
               return (
                 selectedFields.has(fieldId) &&
                 descriptor !== undefined &&
-                object(descriptor).type === fieldValueType(allFields.get(fieldId))
+                object(descriptor).type ===
+                  applicationInterfaceFieldType(fieldValuePairs.get(fieldId))
               );
             });
         }
@@ -3214,6 +4656,8 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         triggerEvent ? (triggerEvent.carriedFieldIds as string[]) : [],
       );
       const triggerRecord = triggerRecordId ? records.get(triggerRecordId) : undefined;
+      const triggerModuleV2 =
+        triggerRecordId === undefined ? false : (recordValuePairs.get(triggerRecordId) ?? false);
       const triggerRecordFields = new Map(
         triggerRecord
           ? array(triggerRecord.fields).map((field) => [String(field.fieldId), field])
@@ -3222,7 +4666,15 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       const triggerInputs = array(trigger.inputs);
       const triggerInputKeys = triggerInputs.map((input) => String(input.key));
       const triggerInputsByKey = new Map(
-        triggerInputs.map((input) => [String(input.key), input] as const),
+        triggerInputs.map((input) => {
+          if (input.source !== "record_field" || input.recordTypeIds !== undefined)
+            return [String(input.key), input] as const;
+          const recordTypeIds = fieldRecordTypeIds(triggerRecordFields.get(String(input.fieldId)));
+          return [
+            String(input.key),
+            recordTypeIds === undefined ? input : { ...input, recordTypeIds },
+          ] as const;
+        }),
       );
       const declaredTriggerFieldIds = new Set(
         triggerInputs
@@ -3233,7 +4685,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
       if (trigger.kind === "button" && triggerAction)
         for (const input of array(triggerAction.inputs))
           expectedPayloadInputs.set(String(input.key), {
-            type: interfaceActionInputType(input.type) ?? String(input.type),
+            type:
+              interfaceActionInputType(
+                input.type,
+                moduleActionValuePairs.get(String(trigger.actionKey))?.moduleV2 ?? false,
+              ) ?? `unsupported:${String(input.type)}`,
             ...(input.recordTypes
               ? {
                   recordTypeIds: array(input.recordTypes).map((reference) =>
@@ -3276,12 +4732,26 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         (trigger.kind === "event"
           ? triggerInputs.every((input) => {
               const field = triggerRecordFields.get(String(input.fieldId));
+              const pair = fieldValuePairs.get(String(input.fieldId));
+              const fieldInputType = applicationInterfaceFieldType(pair);
+              const advertisedRecordTypeIds = input.recordTypeIds as string[] | undefined;
+              const fieldRecordTypeTargets = fieldRecordTypeIds(field);
+              const referenceTargetsValid =
+                input.type === "record_reference"
+                  ? advertisedRecordTypeIds === undefined ||
+                    (fieldRecordTypeTargets !== undefined &&
+                      fieldRecordTypeTargets.every((recordTypeId) =>
+                        advertisedRecordTypeIds.includes(recordTypeId),
+                      ))
+                  : advertisedRecordTypeIds === undefined;
               return (
                 input.source === "record_field" &&
                 field !== undefined &&
                 triggerFieldIds.has(String(input.fieldId)) &&
+                fieldInputType !== undefined &&
                 normalizeWorkflowType(String(input.type)) ===
-                  normalizeWorkflowType(fieldValueType(field) ?? "")
+                  normalizeWorkflowType(fieldInputType) &&
+                referenceTargetsValid
               );
             })
           : triggerInputs.every((input) => input.source === "payload") &&
@@ -3289,7 +4759,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             trigger.condition === null) &&
         (trigger.condition === null ||
           (triggerRecord !== undefined &&
-            conditionTypesValid(trigger.condition, triggerRecordFields) &&
+            applicationConditionTypesValid(
+              trigger.condition,
+              triggerRecordFields,
+              triggerModuleV2,
+            ) &&
             applicationFieldReferencesValid(
               trigger.condition,
               new Set(triggerRecordFields.keys()),
@@ -3344,7 +4818,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
         let nodeValuesValid = true;
         if (
           node.type === "condition" &&
-          (!conditionTypesValid(config.condition, triggerRecordFields) ||
+          (!applicationConditionTypesValid(
+            config.condition,
+            triggerRecordFields,
+            triggerModuleV2,
+          ) ||
             !applicationFieldReferencesValid(config.condition, new Set(triggerRecordFields.keys())))
         )
           nodeValuesValid = false;
@@ -3352,7 +4830,11 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           node.type === "decision_table" &&
           array(config.decisions).some(
             (decision) =>
-              !conditionTypesValid(decision.when, triggerRecordFields) ||
+              !applicationConditionTypesValid(
+                decision.when,
+                triggerRecordFields,
+                triggerModuleV2,
+              ) ||
               !applicationFieldReferencesValid(decision.when, new Set(triggerRecordFields.keys())),
           )
         )
@@ -3370,12 +4852,20 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
               ])) ||
             Object.entries(object(config.values)).some(([fieldId, value]) => {
               const field = targetFields.get(fieldId);
+              const pair = fieldValuePairs.get(fieldId);
               return (
                 !field ||
-                !compatibleWorkflowValue(
-                  value,
-                  fieldValueType(field) ?? "",
+                !pair ||
+                !applicationWorkflowFieldValueCompatible(
+                  object(value),
+                  pair,
+                  allFields,
+                  fieldValuePairs,
+                  workflowNodes,
+                  queries,
+                  triggerRecordId,
                   fieldRecordTypeIds(field),
+                  triggerInputsByKey,
                 )
               );
             })
@@ -3400,12 +4890,20 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             !compatibleWorkflowValue(config.record, "record_reference", [recordTypeId]) ||
             Object.entries(object(config.values)).some(([fieldId, value]) => {
               const field = targetFields.get(fieldId);
+              const pair = fieldValuePairs.get(fieldId);
               return (
                 !field ||
-                !compatibleWorkflowValue(
-                  value,
-                  fieldValueType(field) ?? "",
+                !pair ||
+                !applicationWorkflowFieldValueCompatible(
+                  object(value),
+                  pair,
+                  allFields,
+                  fieldValuePairs,
+                  workflowNodes,
+                  queries,
+                  triggerRecordId,
                   fieldRecordTypeIds(field),
+                  triggerInputsByKey,
                 )
               );
             })
@@ -3573,6 +5071,7 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
           );
         if (node.type === "run_action") {
           const action = actions.get(String(config.actionKey));
+          const actionPair = moduleActionValuePairs.get(String(config.actionKey));
           const inputs = object(config.inputs);
           const declared = action ? array(action.inputs) : [];
           if (
@@ -3586,10 +5085,12 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
                     String(object(reference).recordTypeId),
                   )
                 : [];
-              return !workflowValueCompatible(
+              return !applicationWorkflowInputCompatible(
                 object(inputs[String(input.key)]),
-                String(input.type),
+                input,
+                actionPair?.moduleV2 ?? false,
                 allFields,
+                fieldValuePairs,
                 workflowNodes,
                 queries,
                 triggerRecordId,
@@ -3626,10 +5127,12 @@ function applicationRule(context: DefinitionSetValidationContext): DefinitionRul
             fields.some(
               (field) =>
                 String(field.key) in inputs &&
-                !workflowValueCompatible(
+                !applicationWorkflowInputCompatible(
                   object(inputs[String(field.key)]),
-                  String(field.type),
+                  field,
+                  false,
                   allFields,
+                  fieldValuePairs,
                   workflowNodes,
                   queries,
                   triggerRecordId,
@@ -3840,12 +5343,18 @@ function publicationCompatibilityRule(
         output.kind === "module" && history.kind === "module"
           ? compareDefinitionVersionImpact({
               kind: "module",
+              ...("validationContractVersion" in output
+                ? { validationContractVersion: output.validationContractVersion }
+                : {}),
               history: history.history,
               candidate: output.canonical,
             })
           : output.kind === "application" && history.kind === "application"
             ? compareDefinitionVersionImpact({
                 kind: "application",
+                ...("validationContractVersion" in output
+                  ? { validationContractVersion: "2.0.0" as const }
+                  : {}),
                 history: history.history,
                 candidate: output.canonical,
               })
@@ -3919,6 +5428,49 @@ function semanticAggregateRule(
   };
 }
 
+function moduleRuleGraphRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
+  const failures: DefinitionRuleFailure[] = [];
+  for (const output of context.outputs) {
+    if (
+      output.kind !== "module" ||
+      !("validationContractVersion" in output) ||
+      output.validationContractVersion !== "3.0.0"
+    )
+      continue;
+    const content = output.canonical.content;
+    const allowedRoots = new Set([
+      output.canonical.envelope.rootId,
+      ...content.dependencies.map((dependency) => dependency.moduleRootId),
+    ]);
+    const availableRecordTypeIds = new Set(
+      allValidationOutputs(context).flatMap((dependency) =>
+        dependency.kind === "module" && allowedRoots.has(dependency.canonical.envelope.rootId)
+          ? dependency.canonical.content.recordTypes.map((record) => String(record.recordTypeId))
+          : [],
+      ),
+    );
+    for (const graph of content.rules) {
+      const subjectRecordType = content.recordTypes.find(
+        (record) => record.recordTypeId === graph.subjectRecordTypeId,
+      );
+      if (!subjectRecordType) {
+        failures.push(
+          failure(output, ruleGraphValidationCodes.references, "broken_reference", {
+            kind: "rule",
+            key: graph.key,
+          }),
+        );
+        continue;
+      }
+      for (const issue of validateRuleGraph({ graph, subjectRecordType, availableRecordTypeIds }))
+        failures.push(
+          failure(output, issue.ruleCode, issue.family, { kind: "rule", key: graph.key }),
+        );
+    }
+  }
+  return failures;
+}
+
 export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
   {
     ruleId: "vortex.definition.source_shape",
@@ -3982,6 +5534,15 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     ["compiled_set"],
     "module",
     dependencyRule,
+  ),
+  semanticAggregateRule(
+    "vortex.definition.module_rule_graphs",
+    Object.values(ruleGraphValidationCodes),
+    "publish",
+    ["module"],
+    ["compiled_set"],
+    "rule",
+    moduleRuleGraphRule,
   ),
   semanticAggregateRule(
     "vortex.definition.module_references",
@@ -4116,6 +5677,7 @@ function valueMatchesType(value: unknown, type: string): boolean {
   if (type === "text") return typeof value === "string";
   if (type === "number") return typeof value === "number" && Number.isFinite(value);
   if (type === "boolean") return typeof value === "boolean";
+  if (type === "organization_account_reference") return platformIdSchema.safeParse(value).success;
   if (type === "date") return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
@@ -4124,90 +5686,79 @@ export function evaluateSavedSharingCondition(
   input: unknown,
   fieldValues: Readonly<Record<string, unknown>>,
   parameters: Readonly<Record<string, unknown>>,
+  sourceRecordFields: readonly FieldDefinition[],
 ): boolean {
-  const saved = object(input);
-  const parameterDeclarations = new Map(
-    array(saved.parameters).map((parameter) => [String(parameter.key), String(parameter.type)]),
-  );
-  const declaredFields = new Set(saved.declaredFieldIds as string[]);
-  if (
-    Object.keys(parameters).some((key) => !parameterDeclarations.has(key)) ||
-    [...parameterDeclarations].some(
-      ([key, type]) => !(key in parameters) || !valueMatchesType(parameters[key], type),
-    ) ||
-    Object.keys(fieldValues).some((key) => !declaredFields.has(key))
-  )
+  const candidate = object(input);
+  let result: boolean;
+  try {
+    result = evaluateTypedCondition({
+      condition: candidate.condition as ConditionNode,
+      sourceRecordFields,
+      declaredFieldIds: candidate.declaredFieldIds as string[],
+      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclaration[],
+      fieldValues,
+      parameterValues: parameters,
+    });
+  } catch (error) {
+    if (!(error instanceof TypedConditionEvaluationError)) throw error;
+    const mapping = {
+      input_refused: "vortex.definition.sharing_condition_input_refused",
+      field_refused: "vortex.definition.sharing_condition_field_refused",
+      parameter_refused: "vortex.definition.sharing_condition_parameter_refused",
+      operator_refused: "vortex.definition.sharing_condition_operator_refused",
+    } as const;
+    throw new DefinitionCompilationError(
+      mapping[error.reason],
+      error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
+    );
+  }
+  if (!savedSharingConditionSchema.safeParse(input).success)
     throw new DefinitionCompilationError(
       "vortex.definition.sharing_condition_input_refused",
       "scope_conflict",
     );
-
-  const operand = (entry: JsonObject): unknown => {
-    if (entry.source === "field") {
-      const id = String(entry.fieldId);
-      if (!declaredFields.has(id) || !(id in fieldValues))
-        throw new DefinitionCompilationError(
-          "vortex.definition.sharing_condition_field_refused",
-          "scope_conflict",
-        );
-      return fieldValues[id];
-    }
-    if (entry.source === "parameter") {
-      const key = String(entry.key);
-      if (!parameterDeclarations.has(key) || !(key in parameters))
-        throw new DefinitionCompilationError(
-          "vortex.definition.sharing_condition_parameter_refused",
-          "scope_conflict",
-        );
-      return parameters[key];
-    }
-    return entry.value;
-  };
-  const evaluate = (entry: JsonObject): boolean => {
-    if (entry.kind === "all") return array(entry.conditions).every(evaluate);
-    if (entry.kind === "any") return array(entry.conditions).some(evaluate);
-    if (entry.kind === "not") return !evaluate(object(entry.condition));
-    const left = operand(object(entry.left));
-    if (entry.operator === "is_empty") return left === null || left === undefined || left === "";
-    if (entry.operator === "is_not_empty")
-      return left !== null && left !== undefined && left !== "";
-    const right = operand(object(entry.right));
-    switch (entry.operator) {
-      case "equals":
-        return Object.is(left, right);
-      case "not_equals":
-        return !Object.is(left, right);
-      case "contains":
-        return typeof left === "string"
-          ? left.includes(String(right))
-          : Array.isArray(left) && left.includes(right);
-      case "not_contains":
-        return !(typeof left === "string"
-          ? left.includes(String(right))
-          : Array.isArray(left) && left.includes(right));
-      case "in":
-        return Array.isArray(right) && right.includes(left);
-      case "not_in":
-        return Array.isArray(right) && !right.includes(left);
-      case "greater_than":
-        return (left as number | string) > (right as number | string);
-      case "greater_than_or_equal":
-        return (left as number | string) >= (right as number | string);
-      case "less_than":
-        return (left as number | string) < (right as number | string);
-      case "less_than_or_equal":
-        return (left as number | string) <= (right as number | string);
-      default:
-        throw new DefinitionCompilationError(
-          "vortex.definition.sharing_condition_operator_refused",
-          "unsupported_choice",
-        );
-    }
-  };
-  return evaluate(object(saved.condition));
+  return result;
 }
 
-function dependencyKeys(request: DefinitionCompilationRequest): string[] {
+export function evaluateSavedSharingConditionV2(
+  input: unknown,
+  fieldValues: Readonly<Record<string, unknown>>,
+  parameters: Readonly<Record<string, unknown>>,
+  sourceRecordFields: readonly ModuleFieldV2[],
+): boolean {
+  const candidate = object(input);
+  let result: boolean;
+  try {
+    result = evaluateTypedConditionV2({
+      condition: candidate.condition as ConditionNode,
+      sourceRecordFields,
+      declaredFieldIds: candidate.declaredFieldIds as string[],
+      parameterDeclarations: candidate.parameters as TypedConditionParameterDeclarationV2[],
+      fieldValues,
+      parameterValues: parameters,
+    });
+  } catch (error) {
+    if (!(error instanceof TypedConditionEvaluationError)) throw error;
+    const mapping = {
+      input_refused: "vortex.definition.sharing_condition_input_refused",
+      field_refused: "vortex.definition.sharing_condition_field_refused",
+      parameter_refused: "vortex.definition.sharing_condition_parameter_refused",
+      operator_refused: "vortex.definition.sharing_condition_operator_refused",
+    } as const;
+    throw new DefinitionCompilationError(
+      mapping[error.reason],
+      error.reason === "operator_refused" ? "unsupported_choice" : "scope_conflict",
+    );
+  }
+  if (!savedSharingConditionV2Schema.safeParse(input).success)
+    throw new DefinitionCompilationError(
+      "vortex.definition.sharing_condition_input_refused",
+      "scope_conflict",
+    );
+  return result;
+}
+
+function dependencyKeys(request: PublicationCompilationRequest): string[] {
   const source = request.source as unknown as JsonObject;
   const body = object(source.body);
   if (source.kind === "module")
@@ -4221,7 +5772,7 @@ function dependencyKeys(request: DefinitionCompilationRequest): string[] {
 }
 
 export function compileDefinitionSet(
-  inputs: readonly DefinitionCompilationRequest[],
+  inputs: readonly PublicationCompilationRequest[],
   options?: DefinitionPublicationContext,
 ): Output[] {
   if (!Array.isArray(inputs))
@@ -4241,7 +5792,14 @@ export function compileDefinitionSet(
       "invalid_value",
     );
   const publicationContext = parsedContext.data;
-  const parsedInputs = inputs.map((input) => definitionCompilationRequestSchema.safeParse(input));
+  const parsedInputs = inputs.map((input) => {
+    const source = object(input).source;
+    if (isV3ModuleSource(source)) return moduleCompilationRequestV3Schema.safeParse(input);
+    if (isV2ModuleSource(source)) return moduleCompilationRequestV2Schema.safeParse(input);
+    if (isV2ApplicationSource(source))
+      return applicationCompilationRequestV2Schema.safeParse(input);
+    return definitionCompilationRequestSchema.safeParse(input);
+  });
   if (parsedInputs.some((result) => !result.success))
     throw new DefinitionCompilationError(
       "vortex.definition.invalid_compilation_request",
@@ -4251,7 +5809,7 @@ export function compileDefinitionSet(
   const byKey = new Map(requests.map((input) => [input.source.key, input]));
   if (byKey.size !== requests.length)
     throw new DefinitionCompilationError("vortex.definition.duplicate_source_key", "duplicate_key");
-  const ordered: DefinitionCompilationRequest[] = [];
+  const ordered: PublicationCompilationRequest[] = [];
   const visiting = new Set<string>();
   const visited = new Set<string>();
   const visit = (key: string) => {
@@ -4270,13 +5828,25 @@ export function compileDefinitionSet(
     ordered.push(input);
   };
   [...byKey.keys()].sort(compareCanonicalStrings).forEach(visit);
-  const outputs = ordered.map(compileDefinition);
+  const dependencyOutputs = publicationContext.dependencyOutputs ?? [];
+  const inputKeys = new Set(ordered.map((request) => request.source.key));
+  if (dependencyOutputs.some((output) => inputKeys.has(output.artifact.definitionKey)))
+    throw new DefinitionCompilationError("vortex.definition.duplicate_source_key", "duplicate_key");
+  const outputs: Output[] = [];
+  const compilePublicationRequest = compileDefinitionWithContext as (
+    request: PublicationCompilationRequest,
+    context: { dependencyOutputs: readonly Output[] },
+  ) => Output;
+  for (const request of ordered)
+    outputs.push(
+      compilePublicationRequest(request, {
+        dependencyOutputs: [...dependencyOutputs, ...outputs],
+      }),
+    );
   const validation = validateDefinitionSet({
     requests: ordered,
     outputs,
-    ...(publicationContext.dependencyOutputs === undefined
-      ? {}
-      : { dependencyOutputs: publicationContext.dependencyOutputs }),
+    ...(dependencyOutputs.length === 0 ? {} : { dependencyOutputs }),
     publishedHistories: publicationContext.publishedHistories,
   });
   if (!validation.valid) {

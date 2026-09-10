@@ -2,8 +2,9 @@
 
 This directory records credential-free evidence for the exact-commit hosted database
 verification correction in [issue #266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266). It
-contains no database address, password, certificate, service token, customer data or hosted success
-claim. The earlier implementation and author-run verification are recorded at code commit
+contains no database address, password, certificate, service token or customer data.
+Hosted results appear only in the dated, revision-specific follow-ups below.
+The earlier implementation and author-run verification are recorded at code commit
 `e91ad0b8bb564e7ed19e6e02ec6c1e6dfc0143a8`; this evidence update follows it without changing
 runtime behavior. The sealed independent security scan covered the earlier tip
 `a541be354a2a1e508ecbd55cc9ddd18634f3acab` and reported no security finding. That historical
@@ -206,3 +207,63 @@ remain outstanding; a protected merge and Testing receipt are not a Production-s
 The temporary Coolify source pin/manual deployment setting still needs restoration to normal
 protected `main`/`HEAD` tracking without interrupting active deliveries. No upgrade or broader
 recovery work is introduced.
+
+## Current reconciliation — 6 September 2026
+
+The later [#33 invitation delivery evidence](../issue-33-invitation-access/README.md#hosted-testing-follow-up--6-september-2026)
+verifies exact Testing commit `8a1edd258444a904977f263dfe5b863904cbb8e0`: all 38
+migrations, 36 SQL files / 1,813 assertions, all 19 selected concurrency proofs and
+five schemas. This includes the newer activation work mentioned above and confirms
+the unchanged deployed bootstrap continued to load expanded commit-owned coverage.
+
+[PR #306](https://github.com/Abzum-NZ/Abzum-Vortex/pull/306) subsequently merged the
+reviewed request/account correction as Testing `3a66e4891fc44b4f5c50d9b9d2fd6034aca38be5`.
+[Its exact hosted execution](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/3lKAG627yTQ5jsso0yyPFa)
+succeeded at 18:18:46 NZST. The [verified receipt](../issue-305-request-lock-order.md#hosted-testing--6-september-2026)
+matches all 39 migrations, 36 SQL files / 1,815 assertions, all 19 concurrency proofs
+and all five schemas for that exact commit. The existing
+Production execution `31t28N9r4TmPCkDCMbKmH6` was rechecked and remains queued.
+No Production queue or deployment mutation was made during this check. The remaining
+release reconciliation is still distinct from the verified Testing repair.
+
+## Latest reviewed promotion and queue boundary — 6 September 2026
+
+[Release PR #307](https://github.com/Abzum-NZ/Abzum-Vortex/pull/307) merged the verified
+Testing candidate `3a66e4891fc44b4f5c50d9b9d2fd6034aca38be5` through normal checks
+into `main` as `96702fb4dec4e81c2c2908be78648fa62094e6c6`. The new
+[Production execution `2wrHT87OJIgtsKnQ2yQYz2`](https://kestra.abzum.com/ui/main/executions/vortex.operations/production_database_delivery/2wrHT87OJIgtsKnQ2yQYz2)
+was observed queued, with that exact main commit visible in its trigger payload.
+The unfinished #34 permission evaluator is not part of this release.
+
+The flow showed 18 superseded attempts ahead of the new release: 17 queued and one
+paused. The browser safety reviewer rejected selecting those old attempts for bulk
+cleanup. No queue state was changed. Explicit authorization is required to cancel
+only those superseded attempts, preserve their execution history and leave the new
+release untouched. This is a tool-enforced operational authorization, not an added
+product decision or permission gate in Vortex. It is tracked in
+[#266](https://github.com/Abzum-NZ/Abzum-Vortex/issues/266), not the product decision
+register. Core [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) work continues.
+
+Production delivery and its success receipt remain unverified. After normal release
+handling, reconcile the existing protected main/HEAD tracking without upgrading
+Kestra or expanding the task into backup or infrastructure maintenance.
+
+## Latest complete Testing receipt — 8 September 2026
+
+The bounded [populated-Testing fixture repair](../../build-plan/issue-266-populated-testing-fixtures.md#hosted-outcome--8-september-2026)
+passed normal delivery in
+[execution 6WIfY1e5pRWu8lkswspG6M](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6WIfY1e5pRWu8lkswspG6M/outputs),
+for `c89ae494a98edb4f2815004329ffc737d824667e`. The complete schema-2 receipt
+reports success, 68 tracked migrations, all 25 selected/completed concurrency
+proofs and all six selected/completed schemas. Logs record all 60 SQL files and
+2,670 assertions passing. The [Page evidence](../issue-38-native-page-handoff.md#successful-hosted-verification)
+records the hashes verified against that exact Git commit. Earlier failed runs
+remain failed evidence; no coverage was waived.
+
+The existing [#235 completion evidence](../issue-235/README.md#hosted-completion-evidence--6-september-2026)
+already references this corrected exact-commit gate, with its separate dated
+adviser findings. [#29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29) still
+requires its own full isolation journeys and technical prerequisites; this receipt
+does not pretend those later journeys exist. Production was read-only checked:
+the recorded release remains queued behind the older paused execution. No queued
+or paused execution was cancelled, unqueued, resumed or otherwise changed.

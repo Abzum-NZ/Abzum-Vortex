@@ -38,9 +38,21 @@ The same decision is enforced through coordinated database and server boundaries
 
 The database function, permission vocabulary, and shared test cases are canonical. The system does not claim that one TypeScript function runs inside PostgreSQL. Parity is proved by the [access test suite](20-quality-and-acceptance.md#organisation-separation-suite).
 
-The server consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. The operation's trusted declaration binds its action, target and exact required permission. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
+An ordinary protected operation consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. A future published Frontend Flow may bind a node to the current actor, an exact specified organisation account, or a registered system actor only through the [scoped execution-identity authority](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) for that exact flow, node and target. The runtime never mutates the initiating human context: each identity-changing protected node opens a new Access-resolved transaction for its effective actor, and a service-role credential or caller-supplied actor identifier never supplies that authority. The operation's trusted declaration binds its action, target and exact required permission, or its published alternatives for a record operation as described below. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
+
+For an application operation, [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
+also verifies the selected application's exact active registration in that organisation
+before establishing application context. This uses the same transaction and current
+organisation account. Selecting an application does not grant permission to use it.
+The server checks the decision against the resolved organisation, account, application
+and declared operation before running the protected action. The
+[implementation plan](../build-plan/issue-34-access-decision.md#slice-4-implementation-choices)
+defines this small shared handoff; later page bindings consume it without a second
+access decision or an application-specific shortcut.
 
 The database evaluates stored role, assignment and delegation facts once. The server calls that decision and composes the required target restrictions; it does not independently reimplement role evaluation in TypeScript. Browser, server and [MCP](12-connections-and-interfaces.md#governed-mcp-access) operations reach the same boundary. A credential's application or capability restrictions can only narrow current account authority. High-impact operations also require their declared verified authentication strength and recent-authentication evidence.
+
+Execution delegation changes who may run one published node; it neither copies the effective actor's roles nor grants the initiator use of that actor's data. The effective actor must pass the normal permission, tenant, organisation, application, row, field, sharing, file, entitlement and recent-authentication checks for the node. A result returned to a different initiating viewer is projected through that viewer's current read authority, and a later write from a derived value is checked again as its own protected operation.
 
 [Identity evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276) supplies the verified authentication method and time through the existing session/context boundary. Token issue time, token refresh and request-context creation time do not prove recent sign-in or recent MFA. If genuine evidence satisfying the operation's declared strength and maximum age is absent, that protected action is refused; an otherwise valid ordinary session remains usable for operations without that requirement. Access never parses provider claims itself. This does not impose MFA on every operation: recent sign-in and specifically required recent MFA remain distinct requirements.
 
@@ -75,6 +87,14 @@ All user-facing role grants and access-expanding changes use the [IAM Vortex app
 ### One organisation-managed catalogue
 
 All organisation roles, application-role registrations, permission availability, Groups and assignments are managed within one organisation. An application declares its permissions and reusable role templates; it does not operate an independent user or permission administration system. Organisation administrators manage both organisation-wide and application-specific access through the same [administration operations](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
+
+[Protected Access administration](../build-plan/issue-40-protected-access-administration.md) reuses the completed private facts and writers rather than rebuilding them. Available read and non-grant operations remain separate from the later governed IAM granting journey. Self-activation is based on the authenticated account's current eligibility and policy, not a requirement to hold role-administration permission; self-deactivation is immediate. Administratively changing another account's access still requires the exact management permission and applicable delegation.
+
+Permitted administrators can browse current registered permissions and inspect one exact entry through the [protected catalogue reader](../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-registered-permission-catalogue). It shows the permission's reference, name, description and declared action, not internal publication or audit evidence. The same module permission installed in two applications remains two distinct entries. Withdrawn and historical declarations are excluded; a current declaration awaiting role acceptance remains visible. Visibility in this catalogue never establishes permission to use, assign or delegate that entry.
+
+Permitted administrators can also inspect [current local role configuration and separately registered application templates](../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-local-roles-and-application-role-templates). Local role details show the accepted permission configuration and safe assignment-policy settings, including roles awaiting acceptance or no longer available. A template comes from the exact currently registered application release, not the latest draft. Neither view establishes effective access or grants authority, and the same source role in two applications remains two distinct template references.
+
+Permitted administrators can inspect [role assignments and delegation authorities](../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-role-assignments-and-delegation-authorities) as separate bounded ledgers. Each shows its current holder, fixed time window, revision and stored state; delegation details show only the exact permitted scope references, not internal acceptance evidence. Revoked and expired facts remain visible for administration. A displayed active window does not establish effective authority: the current permission decision still applies.
 
 An organisation account, not the global identity, receives a direct assignment. Roles, Groups and assignments from another organisation or a parent organisation are never inherited implicitly. Tenant structure administration remains a separate authority and grants no organisation-management or application-data permission.
 
@@ -163,6 +183,19 @@ When accepting a supplied template as an assignable local role, the administrato
 
 An organisation account may have several organisation roles and several application roles. The effective permission set is the union of active role grants, followed by field restrictions and record-scope restrictions. There is no hidden default administrator permission.
 
+Delegated organisation administrators may remove existing assignments after their
+role or permissions are withdrawn. This is removal only: it cannot reactivate or
+recreate a role or permission, assign or replace access, extend an assignment, or
+activate privileged eligibility. Nonempty current accepted permission references
+retain the normal complete affected-scope check. If the current role is explicitly
+unavailable and has no entries, removal requires both the exact assignment-management
+permission and current organisation-catalogue delegation. A missing role snapshot,
+empty active/retired role or merely bounded delegation cannot use that exception.
+The exact organisation, reviewed assignment revision and final-steward safeguard
+still apply. Removal, one Access-version change and Activity evidence are atomic;
+role, permission and activation history are not restored or rewritten. See the
+[approved cleanup contract](../build-plan/issue-40-protected-access-administration.md#approved-removal-only-cleanup-after-withdrawal--8-september-2026).
+
 ### Managing access is different from using data
 
 An administrator needs the exact role-management permission and an explicit scope of permissions they may assign. That delegation authority does not itself permit opening an application or reading its records. This lets an organisation steward assign the first application role without first receiving the application's business-data access.
@@ -206,6 +239,14 @@ The exact initial organisation-administration identities, keys and meanings are 
 
 Permission to perform an action and visibility of a particular record are separate checks.
 
+One record action can serve people with different permitted scopes. For example, one person may read their own records while another may read all permitted records through the same screen. The published action explicitly lists its alternative permissions, each resolved to the same exact record type and action; named actions also match their owning definition. A record is admitted only when at least one alternative has both current permission authority and its own complete visibility scope. Authority from one alternative cannot combine with visibility from another. Field access combines only independently complete permitted contributions. [Row-policy composition #35](../build-plan/issue-35-row-policy-composition.md) owns this record-operation extension; existing non-record declarations remain unchanged and [field access #37](../build-plan/issue-37-field-access.md) consumes the complete results. There is no separate screen, role-name rule or second permission system.
+
+The [authored module](../../contracts/src/module-source-contracts.ts), [authored application](../../contracts/src/application-source-contracts.ts) and [compiled action contracts](../../contracts/src/module-contracts.ts) retain their existing single-permission representation. The #35 metadata extension adds an explicit, mutually exclusive alternatives list only for multiple permissions; both forms must resolve to the same complete-pair decision when record execution is delivered. Existing published files are not rewritten. An interface's own exposure permission remains an additional boundary, not another record alternative that can supply missing row authority. Flow/action execution remains with its owning engine; this extension defines authorisation metadata only.
+
+A record update must pass the complete access check for both its current and proposed state. If authority expires between those checks, the later check refuses the update; an earlier successful check cannot extend access. The [row-enforcement implementation](../build-plan/issue-35-row-policy-composition.md#implementation-ownership-verified-against-current-source) keeps revisions and held Access facts authoritative without adding a second timing or permission-cache mechanism.
+
+The record-scoped permission explicitly declares its supported visibility routes. Scope is part of that permission's published meaning and current catalogue evidence, not inferred from a role label, a record's ownership mode, or a client-supplied filter. A record can have an owner while an authorised permission allows wider visibility; a record with no owner is not automatically visible. Missing required scope refuses. Historical published definitions remain readable, but a legacy permission without row scope gains no implicit record authority. [The #36 implementation plan](../build-plan/issue-36-ownership-and-visibility.md) owns complete authored-source, compiler, meaning and database mapping without rewriting immutable releases.
+
 A record scope may include:
 
 - All records the role can access.
@@ -217,15 +258,59 @@ A record scope may include:
 
 The scope is translated into database conditions. Records outside it must not be fetched and then hidden afterward.
 
+Inherited ownership follows the child's explicitly declared parent relationship until it reaches an organisation-account or Group owner. It neither copies the owner onto the child nor requires permission to read the parent. A parent's direct share is not ownership of its child. Newly published ownership paths must resolve to an owner and cannot loop or end at a record type with no owner; existing immutable releases remain readable. [Ownership validation and the exact relationship witness](../build-plan/issue-36-ownership-and-visibility.md#c--next-inherited-ownership-and-relationship-witness-checkpoint) preserve each module, record type, organisation and application boundary.
+
+Relationship-based visibility is different: the declared source permission must currently authorize the source record under that same permission's complete visibility scope before the exact declared link can contribute visibility of the target. If the source scope follows another relationship, apply the same check along the publication-validated, cycle-free path. An unrelated readable record or an edge alone grants nothing. [Complete relationship-route composition](../build-plan/issue-35-row-policy-composition.md#relationship-route-composition) belongs to the central row decision, not another permission system.
+
+An application permission can reuse a saved condition from the module that owns its exact record type. The record-type reference identifies the module first, and the condition key is resolved within that module's exact published version. The same condition key in another installed module cannot be selected accidentally. Publication uses the existing verified module definition, not condition details or fingerprints supplied by a form.
+
+Visibility conditions use one [shared typed evaluator](../build-plan/issue-36-ownership-and-visibility.md#scope-and-condition-semantics), reused for publication checks and later rule execution. The complete condition and all declared inputs must be valid before any result is used; a successful branch cannot hide an invalid one. Missing input is an error, not an empty value. Empty means null or empty text. Two null values compare equal; a null and a non-null do not. Valid positive ordering, containment and membership tests involving null return false, and their supported negative forms invert the valid result. There is no automatic number/text or date/date-time conversion. Text and field-identifier matching remain exact and case-sensitive; a UUID-valued record or account reference compares the UUID identity, not differences in its hexadecimal letter casing. Date-times compare the same instant regardless of offset, including membership tests. A date-like string in a text field remains text. Collection equality preserves item order, and opaque JSON supports equality rather than arbitrary containment or membership. The implementation plan records the exact type and numeric-domain rules so browser preview and database enforcement cannot invent different meanings.
+
+[Ownership and visibility #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) supplies the row-narrowing predicates before [row-policy composition #35](../build-plan/issue-35-row-policy-composition.md) proves their combination with the central action-permission decision. Phase 3 uses controlled neutral tables and actual non-owner database roles. [Generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) installs the proven policies on real definition-derived tables later. An operation-permission result alone never grants record access.
+
+Each record operation uses a trusted adapter that fixes its declared action and
+storage binding and loads the actual record and relationship facts. A client
+cannot supply its own permission declaration, owner, allowed result or record
+graph. The runtime keeps its restricted database role; it does not acquire owner
+credentials to call the private evaluator. Phase 3 proves this with fixed neutral
+adapters; generated storage later creates the permanent equivalents. The
+[adapter handoff](../build-plan/issue-35-row-policy-composition.md#trusted-record-adapters--8-september-2026)
+keeps these responsibilities separate without another permission system.
+
+Comparing a person field with the current user requires an explicit organisation-account-reference parameter. Its value comes from the verified current organisation account, never a user-entered identity. An ordinary text parameter does not silently become a person reference. The [typed-parameter implementation checkpoint](../build-plan/issue-36-ownership-and-visibility.md#next-condition-correction-compare-a-person-field-with-the-current-account) adds this missing declaration while preserving historical text semantics and publication evidence.
+
 ### Direct record sharing inside one organisation
 
 An authorised person may share one record directly with one organisation account or one group in the same organisation. The share has explicit readable and changeable field allowlists, optional expiry, grantor, recipient, reason, state, and activity history. A changeable field must also be readable.
 
 The grantor must hold `record.share`, must be able to read every shared field, and must be able to change every changeable field. A direct share cannot grant delete, restore, export, re-share, ownership, role administration, or any permission the grantor does not hold. Group membership is evaluated on every request. Revocation, expiry, suspension, or group removal takes effect on the next request. Directly shared records appear in ordinary lists and search only where the receiving account also has application access and the page supports that record type.
 
+Every local share names the exact organisation/module/storage-contract/record identity and the source application when storage is application-contained. It cannot replace an inter-application grant or a compatible consuming application binding. Independent current account and Group shares may contribute their individually allowed fields; removing one contribution leaves only fields still authorised through another valid route. This is not permission to combine partial cross-organisation grants. [Field enforcement #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) applies the resulting bounds before response or mutation; [#36](../build-plan/issue-36-ownership-and-visibility.md) establishes those bounds and the database row restriction.
+
+The [protected local-share invocation in #37](../build-plan/issue-37-field-access.md) follows #35's exact record decision: the grantor must pass the share permission, target visibility and current field ceiling before #36's private share writer runs in the same transaction. Private share storage and neutral predicate tests do not by themselves deliver that authorised invocation.
+
+A read-only share does not require permission to edit the record. The operation
+requires at least one proposed readable field and checks the grantor's current
+read authority. It checks changeable-field authority only when changeable fields
+are proposed; a read-only share does not add an update requirement. The exact
+share permission and target visibility are still mandatory. Revocation checks its current fixed authority and
+share revision without requiring the historical grantor's old field ceiling.
+
 ## Field access
 
-A role can allow or refuse reading or changing named fields. A response omits unreadable fields; it does not return them with blank or masked values unless a specific masking policy is later added to the [decision register](appendices/decisions.md).
+Row restrictions alone do not hide columns. Protected record projection and change
+operations enforce field bounds before returning data or changing it; the request
+role must not have a raw content-table route that bypasses these operations.
+Fixed neutral adapters prove this in [#37](../build-plan/issue-37-field-access.md),
+and [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45)
+creates the permanent equivalents. The underlying private field helpers are not
+client-selectable endpoints.
+
+A role's exact record permissions declare the fields that permission allows a person to read and change. Each immutable `fieldPolicy` contains explicit `readableFieldIds` and `changeableFieldIds`; changeable fields must also be readable. An omitted field is refused by that permission, not a global veto on other independently complete permissions. This follows the existing permission-union model: first prove each permission's own current eligibility and complete record scope, narrow any direct-share contribution by that share's field lists, then combine the surviving contributions. A permission or share that fails its own checks contributes nothing. Do not combine eligibility from one permission with the field policy or record scope of another.
+
+Newly published record permissions require an explicit policy; empty lists are valid for an operation that needs no business-field access. Historical immutable declarations without a policy remain readable and supply no field authority, but do not veto another complete contribution. There is no wildcard that silently includes future fields. Authored field references resolve against the permission's exact record type. Non-record permissions cannot declare a field policy. Policy changes participate in the existing immutable permission-meaning, release-version and acceptance rules; they do not introduce another authority store or approval mechanism. [Field access delivery #37](../build-plan/issue-37-field-access.md) owns this missing contract and compiler work as well as enforcement.
+
+Field lists only narrow an already authorised operation: a read permission cannot authorise an update merely because its policy names changeable fields. Before projection or mutation, the engine binds the result to the exact organisation, application, module, record type, storage contract, record and operation using the current request's Access evidence. It omits unreadable values and field-derived labels, choices and validation metadata rather than returning blank or CSS-hidden data. An unauthorised changed field refuses the entire attempted mutation; filtering, sorting, grouping, field aggregates, action inputs and error details cannot bypass the same bounds. Later Record, Query, Interface and MCP consumers reuse this boundary rather than calculating a different policy. [The delivery plan](../build-plan/issue-37-field-access.md) distinguishes engine proofs from those later interfaces.
 
 Fields marked `sensitive` in [modules, fields and relationships](05-modules-fields-and-relationships.md) require an explicit read grant and are never copied to general search.
 

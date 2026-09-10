@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  adoptShippedPlatformPermissionCatalogueCommandSchema,
+  adoptShippedPlatformPermissionCatalogueResultSchema,
   applicationPermissionCatalogueSnapshotCommandSchema,
   applicationPermissionCatalogueSnapshotSchema,
   initializePlatformPermissionCatalogueCommandSchema,
@@ -9,6 +11,8 @@ import {
   permissionCatalogueLookupCommandSchema,
   revisePlatformPermissionCatalogueMetadataCommandSchema,
   revisePlatformPermissionCatalogueMetadataResultSchema,
+  type AdoptShippedPlatformPermissionCatalogueCommand,
+  type AdoptShippedPlatformPermissionCatalogueResult,
   type ApplicationPermissionCatalogueSnapshot,
   type ApplicationPermissionCatalogueSnapshotCommand,
   type InitializePlatformPermissionCatalogueCommand,
@@ -49,6 +53,9 @@ export interface PermissionRegistryPrivateRepository {
   revisePlatformCatalogueMetadata(
     command: RevisePlatformPermissionCatalogueMetadataCommand,
   ): Promise<RevisePlatformPermissionCatalogueMetadataResult>;
+  adoptShippedPlatformCatalogue(
+    command: AdoptShippedPlatformPermissionCatalogueCommand,
+  ): Promise<AdoptShippedPlatformPermissionCatalogueResult>;
   lookup(command: PermissionCatalogueLookupCommand): Promise<PermissionCatalogueLookupResult>;
   readApplicationSnapshot(
     command: ApplicationPermissionCatalogueSnapshotCommand,
@@ -80,6 +87,8 @@ type PermissionEntryRow = DatabaseRow & {
   label: unknown;
   description: unknown;
   record_type_id: unknown;
+  record_scope: unknown;
+  field_policy: unknown;
   action_kind: unknown;
   named_action: unknown;
   administrative: unknown;
@@ -152,8 +161,23 @@ const parsePlatformMetadataRevision = (
   return parsed.success ? parsed.data : invalidStorage();
 };
 
+const parsePlatformCatalogueAdoption = (
+  row: PlatformMetadataRevisionRow,
+): AdoptShippedPlatformPermissionCatalogueResult => {
+  const parsed = adoptShippedPlatformPermissionCatalogueResultSchema.safeParse({
+    organizationId: row.organization_id,
+    sourceCatalogueVersion: row.source_catalogue_version,
+    targetCatalogueVersion: row.target_catalogue_version,
+    registrationRevision: revision(row.registration_revision),
+    accessVersion: revision(row.access_version),
+  });
+  return parsed.success ? parsed.data : invalidStorage();
+};
+
 const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult => {
   const platformSource = row.source_kind === "platform_catalogue";
+  const recordScope = optional(row.record_scope);
+  const fieldPolicy = optional(row.field_policy);
   const parsed = permissionCatalogueEntrySchema.safeParse({
     organizationId: row.organization_id,
     applicationRootId: optional(row.application_root_id),
@@ -166,6 +190,8 @@ const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult =>
       label: row.label,
       description: row.description,
       recordTypeId: optional(row.record_type_id),
+      ...(recordScope === undefined ? {} : { recordScope }),
+      ...(fieldPolicy === undefined ? {} : { fieldPolicy }),
       actionKind: row.action_kind,
       namedAction: optional(row.named_action),
       administrative: row.administrative,
@@ -285,6 +311,27 @@ export const createPermissionRegistryPrivateRepository = (
           )
         `;
         return parsePlatformMetadataRevision(requireOne(rows));
+      });
+    },
+
+    async adoptShippedPlatformCatalogue(commandCandidate) {
+      const command =
+        adoptShippedPlatformPermissionCatalogueCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND");
+      return execute(async () => {
+        const rows = await transaction.query<PlatformMetadataRevisionRow>`
+          select *
+          from vortex_access.adopt_shipped_platform_permission_catalogue(
+            ${command.data.organizationId}::uuid,
+            ${command.data.expectedRegistrationRevision}::bigint,
+            ${command.data.targetCatalogueVersion}::text,
+            ${command.data.targetCatalogueFingerprint}::text,
+            ${command.data.changedBy}::uuid,
+            ${command.data.correlationId}::uuid
+          )
+        `;
+        return parsePlatformCatalogueAdoption(requireOne(rows));
       });
     },
 

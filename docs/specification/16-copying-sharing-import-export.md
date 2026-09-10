@@ -22,6 +22,8 @@ flowchart TD
 
 A package contains published [modules or applications](03-composition-and-publication.md#definition-ownership-and-versions), a manifest, dependency ranges, stable identifiers, source version, publisher, content fingerprint, required capabilities, and installation notes.
 
+Application-owned Frontend Flows are copied or installed only as part of their immutable application release. A platform-managed flow remains an exact locked catalogue dependency. Neither operation copies a live specified-user/system execution grant, and a missing or incompatible flow dependency leaves the candidate unready rather than substituting another version.
+
 A package never contains organisation records, organisation accounts, secrets, access tokens, private files, commercial-system identifiers, activity history, or live connection instances.
 
 ## Copying between organisations
@@ -62,13 +64,13 @@ The source cluster remains authoritative in both cases. A cross-cluster response
 
 ### App-definition sharing versus record sharing
 
-| Concern | App-definition sharing | Record sharing |
-|---|---|---|
-| What is shared | Published application package (pages, workflows, schemas, themes) | Live organisation-owned records |
-| Ownership | Target organisation installs and owns their instance of the definition | Source organisation retains ownership of records |
-| Data isolation | Target's records are private; source cannot see them | Target sees source's records through a grant; no data is copied |
-| Mechanism | [Definition packages](#definition-packages) and [gallery](#gallery) | [Access grants](04-access-and-permissions.md#shared-record-access) enforced by the Access and Record services and database row restrictions |
-| Updates | Source publishes new versions; target chooses when to update | Changes to shared records are visible immediately |
+| Concern        | App-definition sharing                                                 | Record sharing                                                                                                                              |
+| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| What is shared | Published application package (pages, workflows, schemas, themes)      | Live organisation-owned records                                                                                                             |
+| Ownership      | Target organisation installs and owns their instance of the definition | Source organisation retains ownership of records                                                                                            |
+| Data isolation | Target's records are private; source cannot see them                   | Target sees source's records through a grant; no data is copied                                                                             |
+| Mechanism      | [Definition packages](#definition-packages) and [gallery](#gallery)    | [Access grants](04-access-and-permissions.md#shared-record-access) enforced by the Access and Record services and database row restrictions |
+| Updates        | Source publishes new versions; target chooses when to update           | Changes to shared records are visible immediately                                                                                           |
 
 The Organisation Administration application presents “Install a definition” and “Share records” as separate actions. Neither action silently offers or enables the other.
 
@@ -157,6 +159,8 @@ For shared records, the complete query runs at the source against one active gra
 A complete organisation archive is not a spreadsheet import. It contains versioned definitions, records, relationships, file manifests and encrypted bytes, roles and assignments, retained workflow state, required activity, retention receipts, and a signed manifest. Secrets are excluded or separately re-authorised.
 
 Restore is an operator-controlled disaster-recovery or migration process with compatibility checks, identifier mapping, integrity verification, privacy-removal replay, and a full [organisation separation test](20-quality-and-acceptance.md#organisation-separation-suite) before opening access.
+
+Once the versioned Frontend Flow contract is delivered, definition copy, publication storage, consumer read and restore preserve its exact canonical graph and dependency evidence. Older immutable releases remain readable through their supported legacy contract and are never rewritten to claim the new execution model.
 
 ## Acceptance examples
 

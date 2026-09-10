@@ -1,8 +1,8 @@
 {
-  "source_contract_version": "1.0.0",
-  "kind": "module",
+  "source_contract_version": "2.0.0",
   "root_alias": "mod_crm_people",
   "key": "vortex.crm.people",
+  "kind": "module",
   "body": {
     "name": "CRM People",
     "description": "Contacts and unqualified leads, shared by compatible applications in one organisation.",
@@ -12,20 +12,20 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       }
     ],
     "record_types": [
       {
         "id": "rt_crm_contact",
-        "storage_contract_id": "srt_00000002",
         "key": "contact",
         "name": "Contact",
         "plural_name": "Contacts",
+        "title_field": "full_name",
+        "storage_contract_id": "srt_00000002",
         "storage_scope": "organisation_shared",
         "ownership_mode": "team",
-        "title_field": "full_name",
         "standard_actions": [
           "create",
           "read",
@@ -34,11 +34,11 @@
           "restore",
           "export"
         ],
+        "custom_actions": [],
         "fields": [
           {
             "id": "fld_contact_number",
             "key": "contact_number",
-            "type": "reference_number",
             "label": "Contact number",
             "required": true,
             "unique": true,
@@ -47,6 +47,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "reference_number",
             "settings": {
               "prefix": "CON-",
               "digits": 7
@@ -55,7 +56,6 @@
           {
             "id": "fld_contact_first",
             "key": "first_name",
-            "type": "text",
             "label": "First name",
             "required": true,
             "unique": false,
@@ -64,6 +64,7 @@
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "allowed",
+            "type": "text",
             "settings": {
               "max_length": 80
             }
@@ -71,7 +72,6 @@
           {
             "id": "fld_contact_last",
             "key": "last_name",
-            "type": "text",
             "label": "Last name",
             "required": true,
             "unique": false,
@@ -80,6 +80,7 @@
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "allowed",
+            "type": "text",
             "settings": {
               "max_length": 80
             }
@@ -87,7 +88,6 @@
           {
             "id": "fld_contact_full",
             "key": "full_name",
-            "type": "calculation",
             "label": "Full name",
             "required": true,
             "unique": false,
@@ -96,6 +96,7 @@
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "allowed",
+            "type": "calculation",
             "settings": {
               "result_type": "text",
               "expression": {
@@ -111,7 +112,6 @@
           {
             "id": "fld_contact_email",
             "key": "email",
-            "type": "email_address",
             "label": "Email",
             "required": true,
             "unique": true,
@@ -120,12 +120,12 @@
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "allowed",
+            "type": "email_address",
             "settings": {}
           },
           {
             "id": "fld_contact_phone",
             "key": "phone",
-            "type": "phone_number",
             "label": "Phone",
             "required": false,
             "unique": false,
@@ -134,6 +134,7 @@
             "search_priority": "normal",
             "personal_data": "personal",
             "public_display": "refused",
+            "type": "phone_number",
             "settings": {
               "default_country": "NZ"
             }
@@ -141,7 +142,6 @@
           {
             "id": "fld_contact_company",
             "key": "company",
-            "type": "link",
             "label": "Company",
             "required": false,
             "unique": false,
@@ -150,6 +150,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.organisations:company",
               "reverse_key": "contacts",
@@ -159,7 +160,6 @@
           {
             "id": "fld_contact_owner",
             "key": "relationship_owner",
-            "type": "link_to_person",
             "label": "Relationship owner",
             "required": false,
             "unique": false,
@@ -167,16 +167,16 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link_to_person",
             "settings": {
               "audience": "organisation_accounts",
-              "on_person_deactivation": "retain_reference",
-              "application_root_required": false
+              "application_root_required": false,
+              "on_person_deactivation": "retain_reference"
             }
           },
           {
             "id": "fld_contact_consent",
             "key": "email_consent",
-            "type": "yes_no",
             "label": "Email consent",
             "required": true,
             "unique": false,
@@ -184,13 +184,13 @@
             "sortable": false,
             "personal_data": "personal",
             "public_display": "refused",
+            "type": "yes_no",
             "settings": {},
             "default": false
           },
           {
             "id": "fld_contact_notes",
             "key": "notes",
-            "type": "long_text",
             "label": "Notes",
             "required": false,
             "unique": false,
@@ -199,12 +199,12 @@
             "search_priority": "normal",
             "personal_data": "sensitive",
             "public_display": "refused",
+            "type": "long_text",
             "settings": {
               "max_length": 5000
             }
           }
         ],
-        "custom_actions": [],
         "relationships": [
           {
             "id": "fld_contact_company_relationship",
@@ -218,13 +218,13 @@
       },
       {
         "id": "rt_crm_lead",
-        "storage_contract_id": "srt_00000003",
         "key": "lead",
         "name": "Lead",
         "plural_name": "Leads",
+        "title_field": "display_name",
+        "storage_contract_id": "srt_00000003",
         "storage_scope": "application_contained",
         "ownership_mode": "organisation_account",
-        "title_field": "display_name",
         "standard_actions": [
           "create",
           "read",
@@ -233,11 +233,13 @@
           "restore",
           "export"
         ],
+        "custom_actions": [
+          "act_lead_convert"
+        ],
         "fields": [
           {
             "id": "fld_lead_number",
             "key": "lead_number",
-            "type": "reference_number",
             "label": "Lead number",
             "required": true,
             "unique": true,
@@ -246,6 +248,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "reference_number",
             "settings": {
               "prefix": "LEA-",
               "digits": 7
@@ -254,7 +257,6 @@
           {
             "id": "fld_lead_name",
             "key": "display_name",
-            "type": "text",
             "label": "Name",
             "required": true,
             "unique": false,
@@ -263,6 +265,7 @@
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "refused",
+            "type": "text",
             "settings": {
               "max_length": 160
             }
@@ -270,7 +273,6 @@
           {
             "id": "fld_lead_company",
             "key": "company_name",
-            "type": "text",
             "label": "Company name",
             "required": false,
             "unique": false,
@@ -279,6 +281,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "text",
             "settings": {
               "max_length": 255
             }
@@ -286,7 +289,6 @@
           {
             "id": "fld_lead_email",
             "key": "email",
-            "type": "email_address",
             "label": "Email",
             "required": true,
             "unique": false,
@@ -295,12 +297,12 @@
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "refused",
+            "type": "email_address",
             "settings": {}
           },
           {
             "id": "fld_lead_source",
             "key": "source",
-            "type": "choice",
             "label": "Source",
             "required": true,
             "unique": false,
@@ -308,6 +310,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -332,7 +335,6 @@
           {
             "id": "fld_lead_interests",
             "key": "interests",
-            "type": "several_choices",
             "label": "Interests",
             "required": false,
             "unique": false,
@@ -340,6 +342,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "several_choices",
             "settings": {
               "options": [
                 {
@@ -360,7 +363,6 @@
           {
             "id": "fld_lead_score",
             "key": "score",
-            "type": "whole_number",
             "label": "Score",
             "required": true,
             "unique": false,
@@ -368,6 +370,7 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "whole_number",
             "settings": {
               "minimum": 0,
               "maximum": 100
@@ -377,7 +380,6 @@
           {
             "id": "fld_lead_status",
             "key": "status",
-            "type": "choice",
             "label": "Status",
             "required": true,
             "unique": false,
@@ -386,6 +388,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "choice",
             "settings": {
               "options": [
                 {
@@ -415,7 +418,6 @@
           {
             "id": "fld_lead_reason",
             "key": "unqualified_reason",
-            "type": "long_text",
             "label": "Unqualified reason",
             "required": false,
             "unique": false,
@@ -424,6 +426,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "long_text",
             "settings": {
               "max_length": 1000
             }
@@ -431,7 +434,6 @@
           {
             "id": "fld_lead_received",
             "key": "received_at",
-            "type": "date_time",
             "label": "Received at",
             "required": true,
             "unique": false,
@@ -439,11 +441,9 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date_time",
             "settings": {}
           }
-        ],
-        "custom_actions": [
-          "act_lead_convert"
         ],
         "relationships": []
       }
@@ -456,7 +456,36 @@
         "description": "Allows the standard create operation for contacts.",
         "record_type": "contact",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "contact_number",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "phone",
+            "company",
+            "relationship_owner",
+            "email_consent"
+          ],
+          "changeable_fields": [
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "company",
+            "relationship_owner",
+            "email_consent"
+          ]
+        }
       },
       {
         "id": "perm_contact_read",
@@ -465,7 +494,28 @@
         "description": "Allows the standard read operation for contacts.",
         "record_type": "contact",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "contact_number",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "phone",
+            "company",
+            "relationship_owner",
+            "email_consent"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_contact_update",
@@ -474,7 +524,36 @@
         "description": "Allows the standard update operation for contacts.",
         "record_type": "contact",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "contact_number",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "phone",
+            "company",
+            "relationship_owner",
+            "email_consent"
+          ],
+          "changeable_fields": [
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "company",
+            "relationship_owner",
+            "email_consent"
+          ]
+        }
       },
       {
         "id": "perm_contact_soft_delete",
@@ -483,7 +562,18 @@
         "description": "Allows the standard soft_delete operation for contacts.",
         "record_type": "contact",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_contact_restore",
@@ -492,7 +582,18 @@
         "description": "Allows the standard restore operation for contacts.",
         "record_type": "contact",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_contact_export",
@@ -501,7 +602,28 @@
         "description": "Allows the standard export operation for contacts.",
         "record_type": "contact",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "contact_number",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "phone",
+            "company",
+            "relationship_owner",
+            "email_consent"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_lead_create",
@@ -510,7 +632,39 @@
         "description": "Allows the standard create operation for leads.",
         "record_type": "lead",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "lead_number",
+            "display_name",
+            "company_name",
+            "email",
+            "source",
+            "interests",
+            "score",
+            "status",
+            "unqualified_reason",
+            "received_at"
+          ],
+          "changeable_fields": [
+            "display_name",
+            "company_name",
+            "email",
+            "source",
+            "interests",
+            "score",
+            "status",
+            "unqualified_reason",
+            "received_at"
+          ]
+        }
       },
       {
         "id": "perm_lead_read",
@@ -519,7 +673,29 @@
         "description": "Allows the standard read operation for leads.",
         "record_type": "lead",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "lead_number",
+            "display_name",
+            "company_name",
+            "email",
+            "source",
+            "interests",
+            "score",
+            "status",
+            "unqualified_reason",
+            "received_at"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_lead_update",
@@ -528,7 +704,39 @@
         "description": "Allows the standard update operation for leads.",
         "record_type": "lead",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "lead_number",
+            "display_name",
+            "company_name",
+            "email",
+            "source",
+            "interests",
+            "score",
+            "status",
+            "unqualified_reason",
+            "received_at"
+          ],
+          "changeable_fields": [
+            "display_name",
+            "company_name",
+            "email",
+            "source",
+            "interests",
+            "score",
+            "status",
+            "unqualified_reason",
+            "received_at"
+          ]
+        }
       },
       {
         "id": "perm_lead_soft_delete",
@@ -537,7 +745,18 @@
         "description": "Allows the standard soft_delete operation for leads.",
         "record_type": "lead",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_lead_restore",
@@ -546,7 +765,18 @@
         "description": "Allows the standard restore operation for leads.",
         "record_type": "lead",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_lead_export",
@@ -555,7 +785,29 @@
         "description": "Allows the standard export operation for leads.",
         "record_type": "lead",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "lead_number",
+            "display_name",
+            "company_name",
+            "email",
+            "source",
+            "interests",
+            "score",
+            "status",
+            "unqualified_reason",
+            "received_at"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_named_1_convert",
@@ -565,17 +817,45 @@
         "record_type": "lead",
         "action_kind": "named",
         "named_action": "convert",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "email",
+            "status"
+          ],
+          "changeable_fields": [
+            "status"
+          ]
+        }
       },
       {
         "id": "perm_named_2_view_sensitive_notes",
         "key": "vortex.crm.people.contact.view_sensitive_notes",
         "label": "View sensitive contact notes",
-        "description": "Allows the named view_sensitive_notes operation.",
+        "description": "Allows explicit read access to sensitive contact notes without granting changes.",
         "record_type": "contact",
-        "action_kind": "named",
-        "named_action": "view_sensitive_notes",
-        "administrative": false
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "notes"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "actions": [
@@ -585,6 +865,7 @@
         "label": "Convert lead",
         "record_type": "lead",
         "permission": "vortex.crm.people.lead.convert",
+        "shareable": false,
         "inputs": [
           {
             "key": "first_name",
@@ -643,8 +924,7 @@
             "kind": "announce_event",
             "event": "vortex.crm.people.lead.converted"
           }
-        ],
-        "shareable": false
+        ]
       }
     ],
     "events": [

@@ -57,6 +57,7 @@ import {
   workflowNodeTypeKeys,
   workflowNodeTypeSchema,
   definitionSourceDocumentSchema,
+  moduleSourceDocumentV2Schema,
   definitionPublicationContextSchema,
   directRecordShareSchema,
   sourceBlockSettingValueSchema,
@@ -66,6 +67,7 @@ import {
   tenantSchema,
   verifiedIdentitySchema,
   readOrganizationAccessVersionCommandSchema,
+  readAccessVersionChangeReasonV1,
   readOrganizationAccessVersionV1,
   writeAccessVersionChangeReasonV1,
 } from "../src";
@@ -192,6 +194,12 @@ describe("identity projection, organisation-account and invitation contracts", (
     expect(writeAccessVersionChangeReasonV1("stewardship_changed")).toBe("stewardship_changed");
     expect(writeAccessVersionChangeReasonV1("invitation_access_accepted")).toBe(
       "invitation_access_accepted",
+    );
+    expect(writeAccessVersionChangeReasonV1("record_ownership_changed")).toBe(
+      "record_ownership_changed",
+    );
+    expect(readAccessVersionChangeReasonV1("record_ownership_changed")).toBe(
+      "record_ownership_changed",
     );
     expect(
       readOrganizationAccessVersionV1({
@@ -436,7 +444,7 @@ const fieldSettings: Record<(typeof fieldTypeKeys)[number], unknown> = {
   phone_number: { defaultCountry: "NZ" },
   web_address: { allowedSchemes: ["https"] },
   table: {
-    columns: [{ key: "quantity", type: "whole_number", required: true }],
+    columns: [{ key: "quantity", type: "whole_number", required: true, settings: { minimum: 1 } }],
     minimumRows: 0,
     maximumRows: 20,
   },
@@ -750,6 +758,87 @@ describe("closed catalogues and discriminated contracts", () => {
     ).toBe(false);
   });
 
+  test("keeps choice gates and table-column settings typed without rewriting legacy history", () => {
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "choice",
+        settings: {
+          options: [
+            {
+              value: "restricted",
+              label: "Restricted",
+              requiredPermissionId: id(70),
+            },
+          ],
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "table",
+        default: [{ amount: "not-money" }],
+        settings: {
+          columns: [
+            {
+              key: "amount",
+              type: "money",
+              required: true,
+              settings: { currencyMode: "fixed", currency: "NZD" },
+            },
+          ],
+          minimumRows: 0,
+          maximumRows: 20,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "table",
+        settings: {
+          columns: [
+            {
+              key: "amount",
+              type: "money",
+              required: true,
+              settings: { currencyMode: "fixed", currency: "NZD" },
+            },
+          ],
+          minimumRows: 0,
+          maximumRows: 20,
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "table",
+        settings: {
+          columns: [
+            { key: "duplicate", type: "text", required: false, settings: { maxLength: 120 } },
+            { key: "duplicate", type: "yes_no", required: false, settings: {} },
+          ],
+          minimumRows: 0,
+          maximumRows: 20,
+        },
+      }).success,
+    ).toBe(false);
+    // The historical shape remains parseable only so immutable releases can be compared.
+    expect(
+      fieldDefinitionSchema.safeParse({
+        ...fieldBase,
+        type: "table",
+        settings: {
+          columns: [{ key: "legacy", type: "text", required: false }],
+          minimumRows: 0,
+          maximumRows: 20,
+        },
+      }).success,
+    ).toBe(true);
+  });
+
   test.each(workflowNodeTypeKeys)("accepts and strictly validates the %s workflow node", (type) => {
     const value = {
       nodeId: id(10),
@@ -861,6 +950,31 @@ describe("closed catalogues and discriminated contracts", () => {
             name: "Approved",
             parameters: { approved: true },
             fieldValues: { [id(83)]: true },
+            expected: true,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      savedSharingConditionSchema.safeParse({
+        conditionId: id(84),
+        sourceRecordTypeId: id(85),
+        key: "records_for_current_account",
+        publishedRevision: 1,
+        contractFingerprint: fingerprint,
+        parameters: [{ key: "account", type: "organization_account_reference" }],
+        condition: {
+          kind: "comparison",
+          operator: "equals",
+          left: { source: "field", fieldId: id(86) },
+          right: { source: "parameter", key: "account" },
+        },
+        declaredFieldIds: [id(86)],
+        publicationTests: [
+          {
+            name: "Current account",
+            parameters: { account: id(87) },
+            fieldValues: { [id(86)]: id(87) },
             expected: true,
           },
         ],
@@ -1223,6 +1337,18 @@ describe("identity, sharing and secret invariants", () => {
     expect(
       organizationSelectionCandidateSchema.safeParse({
         organizationId: id(220),
+        applicationRootId: id(224),
+      }).success,
+    ).toBe(true);
+    expect(
+      organizationSelectionCandidateSchema.safeParse({
+        organizationId: id(220),
+        applicationRootId: "00000000-0000-0000-0000-000000000000",
+      }).success,
+    ).toBe(false);
+    expect(
+      organizationSelectionCandidateSchema.safeParse({
+        organizationId: id(220),
         tenantId: id(222),
       }).success,
     ).toBe(false);
@@ -1231,6 +1357,15 @@ describe("identity, sharing and secret invariants", () => {
         tenantId: id(222),
         organizationId: id(220),
         organizationAccountId: id(223),
+        accessVersion: 1,
+      }).success,
+    ).toBe(true);
+    expect(
+      selectedOrganizationScopeSchema.safeParse({
+        tenantId: id(222),
+        organizationId: id(220),
+        organizationAccountId: id(223),
+        applicationRootId: id(224),
         accessVersion: 1,
       }).success,
     ).toBe(true);
@@ -1507,17 +1642,25 @@ describe("identity, sharing and secret invariants", () => {
   test("uses the current Group principal for direct record sharing", () => {
     const share = {
       directShareId: id(209),
-      organizationId: id(200),
-      recordTypeId: id(202),
-      recordId: id(204),
+      recordScope: {
+        storageScope: "organization_shared" as const,
+        organizationId: id(200),
+        moduleRootId: id(201),
+        recordTypeId: id(202),
+        storageContractId: id(203),
+        recordId: id(204),
+      },
       recipient: { kind: "group" as const, groupId: id(207) },
       readableFieldIds: [id(210)],
       changeableFieldIds: [],
       startsAt: "2026-09-02T01:00:00+00:00",
-      status: "active" as const,
+      state: "active" as const,
+      revision: 1,
       grantedBy: id(206),
       grantedAt: "2026-09-02T01:00:00+00:00",
+      grantCorrelationId: id(211),
       reason: "Coordinate the current case.",
+      changedAt: "2026-09-02T01:00:00+00:00",
     };
     expect(directRecordShareSchema.safeParse(share).success).toBe(true);
     expect(
@@ -1532,6 +1675,49 @@ describe("identity, sharing and secret invariants", () => {
         recipient: { kind: "group", groupId: id(207), teamId: id(207) },
       }).success,
     ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        readableFieldIds: [id(212), id(210)],
+      }).success,
+    ).toBe(false);
+    const alphaFieldId = "aaaaaaaa-0000-4000-8000-000000000001";
+    expect(alphaFieldId.toUpperCase()).not.toBe(alphaFieldId);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        readableFieldIds: [alphaFieldId, alphaFieldId.toUpperCase()],
+      }).success,
+    ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        revokedAt: "2026-09-02T02:00:00+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        state: "revoked",
+        revision: 2,
+        revokedBy: id(206),
+        revokedAt: "2026-09-02T02:00:00+00:00",
+        revocationCorrelationId: id(213),
+        changedAt: "2026-09-02T02:00:00+00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      directRecordShareSchema.safeParse({
+        ...share,
+        state: "revoked",
+        revision: 2,
+        revokedBy: id(206),
+        revokedAt: "2026-09-02T02:00:00+00:00",
+        revocationCorrelationId: id(213),
+        revocationReason: "Access no longer required.",
+        changedAt: "2026-09-02T02:00:00+00:00",
+      }).success,
+    ).toBe(true);
   });
 
   test("accepts a genuinely anonymous public caller without inventing an actor", () => {
@@ -2332,7 +2518,9 @@ describe("complete definition-source fixture set", () => {
     expect(definitionFiles).toHaveLength(13);
     for (const file of definitionFiles) {
       const document = JSON.parse(await readFile(resolve(fixtureRoot, file), "utf8"));
-      const result = definitionSourceDocumentSchema.safeParse(document);
+      const result = file.startsWith("modules/")
+        ? moduleSourceDocumentV2Schema.safeParse(document)
+        : definitionSourceDocumentSchema.safeParse(document);
       expect(
         result.success,
         result.success ? undefined : `${file}: ${JSON.stringify(result.error.issues)}`,
@@ -2343,6 +2531,46 @@ describe("complete definition-source fixture set", () => {
         }
       }
     }
+  });
+
+  test("requires typed settings and unique keys for authored table columns", async () => {
+    const fixtureRoot = resolve(process.cwd(), "testing/fixtures");
+    const parsed = moduleSourceDocumentV2Schema.parse(
+      JSON.parse(await readFile(resolve(fixtureRoot, "modules/service-desk.sla.json"), "utf8")),
+    );
+    if (parsed.kind !== "module") throw new Error("Module fixture required");
+    const module = structuredClone(parsed);
+    const table = module.body.record_types
+      .flatMap((recordType) => recordType.fields)
+      .find((field) => field.type === "table");
+    expect(table).toBeDefined();
+    if (!table || table.type !== "table") throw new Error("Table field required");
+    table.default = [{ day: "monday", starts_at: "09:00", ends_at: "17:00" }];
+    expect(moduleSourceDocumentV2Schema.safeParse(module).success).toBe(true);
+
+    const invalidDefault = structuredClone(module);
+    const invalidDefaultTable = invalidDefault.body.record_types
+      .flatMap((recordType) => recordType.fields)
+      .find((field) => field.type === "table");
+    if (!invalidDefaultTable || invalidDefaultTable.type !== "table")
+      throw new Error("Table field required");
+    invalidDefaultTable.default = [{ day: "not_a_weekday", starts_at: "09:00" }];
+    expect(moduleSourceDocumentV2Schema.safeParse(invalidDefault).success).toBe(false);
+
+    const missingSettings = structuredClone(module);
+    const missingTable = missingSettings.body.record_types
+      .flatMap((recordType) => recordType.fields)
+      .find((field) => field.type === "table");
+    if (!missingTable || missingTable.type !== "table") throw new Error("Table field required");
+    delete (missingTable.settings.columns[0] as { settings?: unknown }).settings;
+    // Stored V1 source remains readable, but semantic publication validation
+    // must refuse this legacy-incomplete column.
+    expect(moduleSourceDocumentV2Schema.safeParse(missingSettings).success).toBe(false);
+    missingTable.settings.columns[1]!.key = missingTable.settings.columns[0]!.key;
+    expect(moduleSourceDocumentV2Schema.safeParse(missingSettings).success).toBe(false);
+
+    table.settings.columns[1]!.key = table.settings.columns[0]!.key;
+    expect(moduleSourceDocumentV2Schema.safeParse(module).success).toBe(false);
   });
 
   test("refuses an unknown workflow condition operator in definition-source JSON", async () => {
@@ -2579,6 +2807,7 @@ describe("complete definition-source fixture set", () => {
       "ownership",
       "permission",
       "phone",
+      "priority", // Generic rule execution ordering, not a particular record field.
       "public",
       "query",
       "record",

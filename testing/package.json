@@ -13,7 +13,9 @@
   "dependencies": {
     "@vortex/contracts": "workspace:*",
     "@vortex/definition": "workspace:*",
-    "@vortex/modules": "workspace:*"
+    "@vortex/modules": "workspace:*",
+    "@vortex/record": "workspace:*",
+    "@vortex/rule": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.11"

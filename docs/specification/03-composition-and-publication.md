@@ -26,6 +26,8 @@ A [module](05-modules-fields-and-relationships.md) owns reusable business meanin
 
 An [application](07-applications-pages-and-themes.md) selects exact compatible module versions and adds the user experience: navigation, pages, forms, application roles, application actions, rules, events, workflows, pipelines, and themes.
 
+In the target [Frontend Flow](appendices/frontend-rule-designer.md) model, application-owned flows compose those published capabilities. A platform-managed flow is instead a locked, exact versioned platform-catalogue dependency with separate use and edit authority; it is not copied into the application or selected by a mutable label. Adding these flow contracts remains future Definition source, canonical compilation, provenance, version-impact, persistence, consumer-read and restore work. This specification does not claim those extensions or a managed-flow catalogue are already delivered.
+
 ### Organisation-data layer
 
 [Records](06-records-and-lifecycle.md), files, organisation accounts, saved views, activity entries, workflow references, and organisation-attributed metering events belong to one organisation. Tenant-level entitlements and metering events belong to the tenant. None is part of a reusable definition.
@@ -34,10 +36,10 @@ An [application](07-applications-pages-and-themes.md) selects exact compatible m
 
 There are exactly two customer-managed publishable definitions. Each has its own independent version:
 
-| Publishable definition | Components contained by it |
-|---|---|
-| Module | Record types, fields, relationships, module actions, business events, and extension points |
-| Application | Module/version bindings, navigation, pages, forms, application roles, rules, events, workflows, pipelines, application actions, theme settings, connection bindings, and interfaces |
+| Publishable definition | Components contained by it                                                                                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Module                 | Record types, fields, relationships, module actions, business events, and extension points                                                                                          |
+| Application            | Module/version bindings, navigation, pages, forms, application roles, rules, events, workflows, pipelines, application actions, theme settings, connection bindings, and interfaces |
 
 A module can be reused by several applications and therefore must evolve independently. An application pins an exact module version or an allowed range written with the standard [npm semantic-version range grammar](https://github.com/npm/node-semver#ranges), and publishing the application records the exact module versions that passed validation.
 
@@ -127,6 +129,33 @@ flowchart LR
 - The Definition service verifies the stored canonical envelope, compiled artifact, release row, content fingerprint, resolution fingerprint, own snapshot entry and exact dependency manifest before returning a result. A dependency remains pinned to its stored exact root, revision, version and fingerprints. Each platform-catalogue evidence fingerprint belongs to that exact connection-type or theme release, so adding an unrelated catalogue release cannot invalidate it; a missing exact release is unavailable rather than substituted.
 - Consumer reads are server-only and use the existing request transaction boundary. They implement no cache, browser or HTTP endpoint, token parsing, session creation, access decision, installation, upgrade, publication or consumer-specific rewriting.
 
+### Reading an installed Application
+
+The separate [installed-Application reader](../build-plan/issue-43-active-installation-read.md)
+starts from the verified request's locally owned Application, not an arbitrary
+foreign definition chosen by a caller. It follows that exact release's Module
+dependencies recursively. If the Application uses Module A and A uses a shared
+Module B, B is included without requiring a duplicate direct Application
+declaration. Each Module remains pinned to its exact published release evidence.
+
+Active binding discovery, Definition readback and Event projection must agree on
+this complete reachable Module set. Missing or substituted required bindings and
+unrelated extra active bindings are refused; unrelated detached history is not
+part of the current installation. This narrow read permits exact shared Modules
+owned by another organisation without broadening the generic same-organisation
+consumer reader. It grants no access to the publisher's records and does not
+activate or upgrade an installation.
+
+```mermaid
+flowchart LR
+    App[Locally owned Application] --> A[Exact Module A release]
+    A --> B[Exact shared Module B release]
+    App --> Set[Complete active binding set]
+    A --> Set
+    B --> Set
+    Set --> Runtime[Definition and Event runtime agree]
+```
+
 ## Validation before publication
 
 Shape and rule failures use one [generic, versioned safe validation-error contract](appendices/data-contracts.md#definition-validation-errors). Installed application, module, record-type, field, workflow, connection, and fixture names never appear in the catalogue or translator. A builder-visible key appears only when the authorised caller explicitly maps an internal path to that safe location; deeper evidence remains protected under the same correlation identifier.
@@ -141,7 +170,18 @@ Saved sharing-condition revisions are derived from that permanent condition iden
 
 Every source leaf receives an exact source path in the returned provenance. Every canonical leaf maps back to an exact source leaf, an approved fixed default, a resolved value, or system metadata. The compiler maps source paths forward into canonical paths; it does not search backwards by value or choose a similarly named sibling. A source value may differ from its canonical leaf or map to a canonical component only when its exact source-path shape is in the compiler's closed transformation catalogue. Any newly accepted but unmapped source property therefore refuses compilation. When several approved source values produce a derived canonical leaf, provenance records every deepest mapped source leaf in that leaf's owning component and marks the mapping with the semantic-transformation or immutable-resolution rule. Publication verifies both sides of this coverage.
 
-The publication caller supplies one strict [publication context contract](../../contracts/src/definition-compilation-contracts.ts): existing immutable compiled dependencies and the full prior published history for each module or application being published. Every compiled artifact binds its kind, definition key, permanent root, exact version, canonical-content fingerprint, and resolution-snapshot fingerprint. The artifact's exact version must equal the version assigned by the governed version-impact comparison; unchanged content and a snapshot prepared for another candidate version are refused. Each module dependency records its exact resolved version. An application or module accepts a dependency only when its kind, key, root, exact version, content fingerprint, resolution fingerprint, declared requirement, and snapshot entry all agree, and both the dependency artifact and dependency output must carry the requesting definition's resolution fingerprint. Matching a key or root, or presenting an internally consistent artifact from another snapshot, is insufficient.
+The same rule applies when the future Frontend Flow extension is delivered: node identities, typed edges, module-exposed query bindings, platform-managed flow references, execution bindings and viewer-safe outputs must pass through the source contract, canonical compiler, provenance, version impact, immutable storage, consumer read and restore together. An isolated runtime parser or partial persistence change cannot introduce them.
+
+The publication caller supplies one strict [publication context contract](../../contracts/src/definition-compilation-contracts.ts): existing immutable compiled dependencies and the full prior published history for each module or application being published. Every compiled artifact binds its kind, definition key, permanent root, exact version, canonical-content fingerprint, and resolution-snapshot fingerprint. The artifact's exact version must equal the version assigned by the governed version-impact comparison; unchanged content and a snapshot prepared for another candidate version are refused. Each module dependency records its exact resolved version. An application or module accepts a dependency only when its kind, key, root, exact version, content fingerprint, declared requirement and requesting snapshot's dependency selection agree. The dependency artifact/output retain their own resolution fingerprint, verified against the dependency's own immutable release evidence; that fingerprint need not equal the requesting definition's fingerprint. Publication and readback pin and verify the selected dependency's exact revision and fingerprints in the existing dependency manifest. Matching only a key/root or supplying an internally consistent but differently selected release is insufficient. Do not rewrite a dependency's fingerprint to make two different snapshots appear identical.
+
+Supported source-contract versions may differ across a dependency boundary. In
+particular, an Application V1 can bind a supported Module V2 release. Their
+resolution envelopes have distinct versioned fingerprints even when they contain
+the same identity and version selections. Validate each owning contract and the
+actual cross-definition references; do not require an unrelated Application
+conversion to accept an otherwise valid module dependency. The
+[complete fixture proof](../build-plan/issue-44-record-field-values.md#draft-conversion-without-another-approval-workflow)
+must exercise this through compilation, publication and consumer reads.
 
 Each immutable release stores its complete canonical compilation output and the exact resolution snapshot that produced it. This is required evidence, not a cache: a later component alias, dependency release, or catalogue update must not change how an older release is read or validated. The stored snapshot fingerprint, compilation-output fingerprints, release row and exact dependency manifest must agree before the release can be returned or used as a dependency.
 

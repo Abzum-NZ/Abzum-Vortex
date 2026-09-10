@@ -2,7 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   definitionResolutionSnapshotSchema,
+  definitionResolutionSnapshotV2Schema,
   definitionSourceDocumentSchema,
+  moduleSourceDocumentV2Schema,
   sessionContextSchema,
   storedDefinitionDraftSchema,
   type SessionContext,
@@ -19,10 +21,14 @@ import { createDatabaseDefinitionPublicationRepository } from "../src/definition
 import { createDefinitionStore } from "../src/definition-store";
 import {
   extractSourceIdentityRequirements,
+  extractStoredSourceIdentityRequirements,
   type SourceIdentityRequirement,
 } from "../src/source-identities";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const source = definitionSourceDocumentSchema.parse(
   JSON.parse(fs.readFileSync(path.join(fixtureRoot, "modules", "crm.organisations.json"), "utf8")),
 );
@@ -444,6 +450,114 @@ describe("database Definition publication repository", () => {
       expect.stringContaining("vortex_definition.list_module_releases"),
       expect.stringContaining("vortex_definition.read_module_release"),
     ]);
+  });
+
+  it("materializes an exact Module V2 release and refuses a tampered stored validation pair", async () => {
+    const v2Source = moduleSourceDocumentV2Schema.parse({
+      ...JSON.parse(
+        fs.readFileSync(path.join(fixtureRoot, "modules", "service-desk.sla.json"), "utf8"),
+      ),
+      source_contract_version: "2.0.0",
+    });
+    const v2OwnResolution = resolution.definitions.find(
+      (definition) => definition.kind === "module" && definition.key === v2Source.key,
+    );
+    if (v2OwnResolution?.kind !== "module") throw new Error("Module V2 fixture root missing");
+    const identities = [...resolution.identities];
+    for (const requirement of extractStoredSourceIdentityRequirements(v2Source)) {
+      const owner = identities.find(
+        (identity) =>
+          identity.definitionKey === requirement.definitionKey &&
+          identity.scope === requirement.scope &&
+          identity.kind === requirement.kind &&
+          identity.componentOwner === requirement.componentOwner,
+      );
+      if (!owner) throw new Error("Fixture identity owner missing");
+      for (const alias of requirement.aliases)
+        if (
+          !identities.some(
+            (identity) =>
+              identity.definitionKey === requirement.definitionKey &&
+              identity.scope === requirement.scope &&
+              identity.kind === requirement.kind &&
+              identity.componentOwner === requirement.componentOwner &&
+              identity.alias === alias,
+          )
+        )
+          identities.push({ ...owner, alias });
+    }
+    const snapshotEvidence = {
+      contractVersion: "2.0.0" as const,
+      definitions: resolution.definitions,
+      identities,
+    };
+    const v2Resolution = definitionResolutionSnapshotV2Schema.parse({
+      ...snapshotEvidence,
+      fingerprint: fingerprintCanonicalValue(snapshotEvidence),
+    });
+    const v2Output = compileDefinition({
+      sourceContractVersion: "2.0.0",
+      validationContractVersion: "2.0.0",
+      source: v2Source,
+      resolution: v2Resolution,
+      draftMetadata: {
+        organizationId,
+        draftRevision: 1,
+        createdAt: publishedAt,
+        createdBy: actorId,
+        updatedAt: publishedAt,
+        updatedBy: actorId,
+      },
+      savedConditionRevisions: [],
+    });
+    const v2Publication = {
+      ...publication,
+      rootId: v2OwnResolution.rootId,
+      validationContractVersion: "2.0.0",
+      contentFingerprint: v2Output.artifact.contentFingerprint,
+    };
+    const v2RawRelease = {
+      ...rawModuleRelease,
+      key: v2Source.key,
+      rootId: v2OwnResolution.rootId,
+      contentFingerprint: v2Output.artifact.contentFingerprint,
+      resolutionFingerprint: v2Resolution.fingerprint,
+      compilationOutput: v2Output,
+      resolutionSnapshot: v2Resolution,
+      identities: v2Resolution.identities,
+      published: {
+        ...rawModuleRelease.published,
+        publication: v2Publication,
+        content: v2Output.canonical.content,
+      },
+    };
+    const repository = createDatabaseDefinitionPublicationRepository(
+      runnerWith(() => [{ module_release: v2RawRelease }]).transaction,
+    );
+    await expect(
+      repository.read(context(), (reader) =>
+        reader.readModuleRelease(organizationId, v2OwnResolution.rootId, 1),
+      ),
+    ).resolves.toMatchObject({
+      resolutionSnapshot: { contractVersion: "2.0.0" },
+      published: { publication: { validationContractVersion: "2.0.0" } },
+    });
+
+    const tampered = {
+      ...v2RawRelease,
+      published: {
+        ...v2RawRelease.published,
+        publication: { ...v2Publication, validationContractVersion: "1.0.0" },
+      },
+    };
+    const tamperedRepository = createDatabaseDefinitionPublicationRepository(
+      runnerWith(() => [{ module_release: tampered }]).transaction,
+    );
+    await expect(
+      tamperedRepository.read(context(), (reader) =>
+        reader.readModuleRelease(organizationId, v2OwnResolution.rootId, 1),
+      ),
+    ).rejects.toMatchObject({ code: "DEFINITION_PUBLICATION_FAILED" });
   });
 
   it("passes exact compiled output and resolution evidence to the atomic append operation", async () => {

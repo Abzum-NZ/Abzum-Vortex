@@ -34,6 +34,8 @@ A module definition records:
 - Whether its records are shared across applications in an organisation or kept within one application.
 - Import, export, search, retention, and activity defaults that applications may narrow but not silently weaken.
 
+A module may expose a versioned, named query for application flows. That contract fixes its record source, typed inputs, projection, filters, ordering, grouping and bounded result shape through the ordinary [Query service](10-queries-reports-search.md); it is not raw SQL or a label-selected handler. An application flow binds the exact installed module release and query identity, and every execution still applies current tenant, application, record, field and sharing access.
+
 ## Record types
 
 Each record type has:
@@ -82,21 +84,21 @@ This keeps the number of tables proportional to genuinely different record-type 
 
 Every field carries the following properties. Properties marked “optional” have the listed default.
 
-| Property | Requirement |
-|---|---|
-| `key` | Required permanent name, 1–40 characters, unique in the record type. |
-| `type` | Required field type from the list below. |
-| `label` | Required user-facing text, 1–60 characters. |
-| `help_text` | Optional explanation, at most 200 characters. |
-| `required` | Optional; defaults to false. |
-| `default` | Optional valid starting value or approved calculation. |
-| `unique` | Optional; defaults to false and applies within the record type's storage scope. |
-| `filterable` | Optional; defaults to false. |
-| `sortable` | Optional; defaults to false. |
-| `search` | Optional search priority: `first`, `normal`, or `last`. |
-| `personal_data` | Required: `none`, `personal`, or `sensitive`. |
+| Property         | Requirement                                                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `key`            | Required permanent name, 1–40 characters, unique in the record type.                                                 |
+| `type`           | Required field type from the list below.                                                                             |
+| `label`          | Required user-facing text, 1–60 characters.                                                                          |
+| `help_text`      | Optional explanation, at most 200 characters.                                                                        |
+| `required`       | Optional; defaults to false.                                                                                         |
+| `default`        | Optional valid starting value or approved calculation.                                                               |
+| `unique`         | Optional; defaults to false and applies within the record type's storage scope.                                      |
+| `filterable`     | Optional; defaults to false.                                                                                         |
+| `sortable`       | Optional; defaults to false.                                                                                         |
+| `search`         | Optional search priority: `first`, `normal`, or `last`.                                                              |
+| `personal_data`  | Required: `none`, `personal`, or `sensitive`.                                                                        |
 | `public_display` | Required: `refused` or `allowed`; defaults to `refused`, and a public operation must separately allowlist the field. |
-| `settings` | The settings allowed for the selected field type. |
+| `settings`       | The settings allowed for the selected field type.                                                                    |
 
 Unknown properties are refused. Type-specific properties belong inside `settings`.
 
@@ -104,41 +106,150 @@ Unknown properties are refused. Type-specific properties belong inside `settings
 
 The platform supports these twenty-two types:
 
-| Type key | Meaning | Main settings |
-|---|---|---|
-| `text` | One line of text | Maximum length and optional format |
-| `long_text` | Several lines of plain text | Maximum length |
-| `formatted_text` | Restricted formatted content | Allowed paragraph, heading, list, table, link and attachment blocks, plus maximum length |
-| `whole_number` | Integer | Minimum, maximum, and step |
-| `decimal_number` | Decimal value | Digits before and after the decimal point, minimum, maximum |
-| `money` | Monetary value | Currency, minimum, maximum |
-| `yes_no` | Boolean value | None |
-| `date` | Calendar date | Earliest and latest date |
-| `date_time` | Time-zone-aware instant | Display time zone policy |
-| `choice` | One defined option | Options |
-| `several_choices` | Several defined options | Options and maximum selections |
-| `reference_number` | Platform-issued sequence | Digits, prefix, suffix, starting number |
-| `email_address` | Email address | None |
-| `phone_number` | Telephone number | Default country |
-| `web_address` | Web address | None |
-| `table` | Repeating structured rows | Columns and minimum/maximum rows |
-| `link` | Link to one record type | Target, delete behaviour, reverse name |
-| `link_to_one_of_several` | Link to one of several record types | Allowed targets |
-| `link_to_person` | Link to an organisation account | Optional application-access requirement through an application binding |
-| `calculation` | Value calculated from the record | Expression and result type |
-| `total` | Aggregate across a relationship | Relationship, operation, field, filter |
-| `attachment` | One or more files | The canonical settings in [files and attachments](11-files-and-attachments.md) |
+| Type key                 | Meaning                             | Main settings                                                                            |
+| ------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| `text`                   | One line of text                    | Maximum length and optional format                                                       |
+| `long_text`              | Several lines of plain text         | Maximum length                                                                           |
+| `formatted_text`         | Restricted formatted content        | Allowed paragraph, heading, list, table, link and attachment blocks, plus maximum length |
+| `whole_number`           | Integer                             | Minimum, maximum, and step                                                               |
+| `decimal_number`         | Decimal value                       | Digits before and after the decimal point, minimum, maximum                              |
+| `money`                  | Monetary value                      | Currency, minimum, maximum                                                               |
+| `yes_no`                 | Boolean value                       | None                                                                                     |
+| `date`                   | Calendar date                       | Earliest and latest date                                                                 |
+| `date_time`              | Time-zone-aware instant             | Display time zone policy                                                                 |
+| `choice`                 | One defined option                  | Options                                                                                  |
+| `several_choices`        | Several defined options             | Options and maximum selections                                                           |
+| `reference_number`       | Platform-issued sequence            | Digits, prefix, suffix, starting number                                                  |
+| `email_address`          | Email address                       | None                                                                                     |
+| `phone_number`           | Telephone number                    | Default country                                                                          |
+| `web_address`            | Web address                         | None                                                                                     |
+| `table`                  | Repeating structured rows           | Columns and minimum/maximum rows                                                         |
+| `link`                   | Link to one record type             | Target, delete behaviour, reverse name                                                   |
+| `link_to_one_of_several` | Link to one of several record types | Allowed targets                                                                          |
+| `link_to_person`         | Link to an organisation account     | Optional application-access requirement through an application binding                   |
+| `calculation`            | Value calculated from the record    | Expression and result type                                                               |
+| `total`                  | Aggregate across a relationship     | Relationship, operation, field, filter                                                   |
+| `attachment`             | One or more files                   | The canonical settings in [files and attachments](11-files-and-attachments.md)           |
 
 There is no separate duration type in this release. Each calendar page explicitly selects either start and end date-time fields, or a start date-time plus a whole-number duration field and unit. Missing or invalid inputs are shown as invalid data; the platform never guesses an end time or unit.
 
+## Record value formats
+
+The Record engine must preserve the meaning of values from form entry through
+save, read, conditions, calculations and queries. A display format is not the
+stored value. The [field-runtime plan](../build-plan/issue-44-record-field-values.md#value-format-architecture-decision)
+records the coordinated contract and consumer changes; these requirements do not
+claim that Record execution is already delivered.
+
+- Decimal values use exact base-10 text at the service boundary, including bounds
+  and defaults; their storage uses an exact numeric type. No conversion through
+  floating-point numbers may discard declared precision.
+- Money carries an exact amount and explicit currency. An organisation-default
+  currency is resolved when creating the value and stored with it. Later default
+  changes do not reinterpret existing money; conversions require an explicit
+  operation, never a display preference.
+  A money field's definition default is an exact amount string, using the currency
+  policy already declared in its settings. Both fixed-currency and organisation-
+  default fields may declare an amount default. Publication does not bind that
+  default to an installation's currency; record creation resolves and stores the
+  currency once. The same rule applies to money cells in table defaults. Submitted
+  and persisted money values carry both amount and currency.
+  `organisation_default` supplies the currency for an omitted amount-only default;
+  it is not a permanent restriction to today's organisation currency. Explicitly
+  submitted amount-and-currency pairs retain their stated currency on create and
+  update. Fixed-currency fields require their declared currency. Editing an old
+  amount therefore does not force a currency change after the organisation default
+  changes. A submitted replacement pair does not cause an automatic exchange-rate
+  calculation or relabel any other stored value. Table money cells follow the same
+  rule; replacing a table supplies explicit pairs, while an omitted update leaves
+  the stored table unchanged.
+- Formatted content uses the same safe structured text primitives as page
+  properties, with Record-specific table and attachment blocks where allowed by
+  the field. It is not executable HTML. Allowed-block and visible-text length
+  checks apply to the document; file references still require File access.
+- Attachment fields use ordered file-identifier arrays, including single-file
+  fields. A single-file field permits at most one entry; clearing remains subject
+  to whether the field is required.
+- A record link carries its target record-type identifier and record identifier.
+  Its target must match the compiled field targets. A person link instead names
+  an organisation account. Correct identifier shapes alone prove neither
+  existence nor access.
+- A whole-number step is measured from the declared minimum, otherwise zero.
+  Neither the field default nor an edited value changes that origin.
+- Text format keys initially are `email_address`, `web_address` and `uuid`. They
+  select the same email-address or HTTPS-address validation used by those field
+  types, or UUID syntax. Omission means ordinary
+  text. Unknown keys are not executable patterns or guessed validation rules.
+
+Every table column has settings for its declared scalar type, using the same
+meaning as an ordinary field. Choice columns therefore declare their options,
+and money columns declare their currency policy. Column keys are unique. Table
+defaults and submitted rows must satisfy the same closed column, required-value,
+cell-value and row-count rules; nested tables, links and attachment columns remain
+outside the allowed table-column types.
+
+A choice option may name a required permission. Authored references resolve to
+exact registered permission identities through the owning module and declared
+dependencies. Options without a gate remain ordinary choices. The current Access
+decision controls both option visibility and direct server saves; a definition
+reference or submitted permission claim does not grant access.
+
+These value-representation changes use an explicit Module source/validation
+contract version. That technical format version is separate from the module's own
+published business version. Historical V1 definitions keep their stored bytes and
+remain readable/restorable. A new-format draft conversion and published upgrade
+must be explicit; they cannot infer a polymorphic target, reinterpret a currency
+or recover precision already lost in a historical number.
+
 ## Calculations and totals
+
+The [calculation-engine plan](../build-plan/issue-48-calculation-engine.md) defines
+the first executable arithmetic and missing-value meanings. Decimal/money
+calculations and average totals declare result precision from zero to twelve
+decimal places and use half-even rounding once at the final result. Ordinary
+non-terminating division is supported at that precision; division by zero is not.
+This is calculation precision, separate from display formatting. Preserve money
+currency and reject mixed currencies or undefined money dimensions.
+
+For universal stored values, the protected Record operation uses the complete
+declared authoritative dependency set, not a caller-filtered subset. A hidden
+dependency does not by itself invalidate an otherwise permitted edit. The caller
+still cannot submit derived values or change unwritable inputs, and readable
+projection must not disclose hidden dependencies through calculated results,
+errors, events or activity. Internal dependency reads are confined to the owning
+operation's declared scope, not a general permission bypass.
+
+A calculated field is disclosed only when that field and its recursive input
+dependencies are readable to the viewer. Apply the same restriction to query
+filters, sorting, grouping/aggregation, search, event/activity output, interfaces
+and MCP. Computing from authoritative inputs and omitting disallowed output is
+different from computing from a redacted subset or refusing a permitted save.
 
 - A calculation is deterministic and cannot perform network calls, change records, or read data the current operation is not allowed to read.
 - The first release uses only six closed calculation forms: join named text fields, apply one of four numeric operations to named field/literal operands, subtract a named percentage field from a named amount field, evaluate a typed condition, offset a named date/date-time field by a named/literal amount, or determine whether a named deadline has passed while excluding explicitly listed terminal status values. The declared result type must match that form. Arbitrary objects, scripts, and user-defined expressions are refused.
 - Calculation dependencies are known at publication and cycles are refused.
 - A total names the relationship with its exact `module:record_type.relationship` owner, plus an operation, explicit result type, optional aggregate-source field, and optional aggregate-source filter expressed through the same closed typed condition tree used by rules. The relationship must point from its source records to the record that owns the total. This makes reverse totals unambiguous, resolves fields and filters in the related source record rather than the total-owning record, and refuses unrelated outgoing relationships and arbitrary filter objects.
 - Supported operations are count, sum, minimum, maximum, and average where the source type permits them. Count produces a whole number; sum, minimum, and maximum preserve the compatible source-field type; average produces a decimal number, or money when averaging money. Publication checks the declared result against the referenced field instead of treating every calculated or total value as a number.
-- A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable error that identifies the currency codes present. Vortex never silently converts or splits the total.
+- A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable internal diagnostic identifying the currency codes present; caller-visible errors must not reveal hidden inputs. Vortex never silently converts or splits the total.
+
+The [relationship-total delivery plan](../build-plan/issue-48-calculation-engine.md#next-delivery-relationship-totals)
+defines the executable meanings. Count counts filtered related records; field
+operations ignore absent/null inputs but do not silently ignore invalid values.
+Empty count and dimensionless sum are zero; empty minimum, maximum and average
+are absent. An empty money sum needs an explicit currency to produce zero.
+Minimum/maximum use exact numeric/instant comparison, Unicode code-point text
+ordering, and `false` before `true` for yes/no values. Money's declared currency
+rules apply equally to derived money fields. Internal currency diagnostics must
+not expose hidden related inputs through caller-visible errors. Persisted totals
+use the complete authoritative related set; readable output is separately limited
+by both input-field and related-record visibility.
+
+Related totals may form valid finite hierarchies even when their record types
+refer back to themselves. A type-level cycle is not automatically a forbidden
+record-level cycle. The protected save checks the actual record/field dependency
+graph, updates affected old/new parents and dependent totals atomically, and
+refuses a real cycle without partial changes. Follow the reviewed
+[integrated totals rules](../build-plan/issue-48-calculation-engine.md#integrated-totals-dependency-and-transaction-rules).
 
 ## Relationships
 

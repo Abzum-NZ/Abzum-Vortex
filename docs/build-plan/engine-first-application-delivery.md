@@ -1,0 +1,136 @@
+# Engine-first application delivery
+
+[Build plan](README.md) · [Application specification](../specification/07-applications-pages-and-themes.md) · [Designer prototype](app-designer-html-prototype.md)
+
+## Required delivery order
+
+Build the Phase 4–6 engines and prove the first usable definition-led application in #327 before the App Designer. Applications must be definable in versioned files, validated, published, installed and used in the normal browser runtime without opening a visual editor. The App Designer later creates and changes those same definitions through the same protected operations. A prototype or a static rendering of sample rows does not prove the runtime works. Later capability engines proceed as their own dependencies become ready; #254 owns their cross-phase application evidence.
+
+The existing HTML prototype is retained as design evidence. Further prototype expansion and production designer work are deferred until the definition-first application proof is complete. This is implementation sequencing, not a request for another business approval. Continue Phase 3 access work and the genuine engine dependencies in the meantime.
+
+## First usable proof without a designer — #327
+
+1. **Complete definitions.** The existing complete application fixture sets include independent module/application versions, record types, fields, relationships, exposed queries, pages, navigation, themes, roles, permissions, frontend flows, background workflows and connection/interface declarations. Validate every reference and dependency. Example-specific names and policies stay in these files, never in the engines.
+2. **Publication and installation.** Import or create a draft through the supported definition operations, validate it, publish an immutable release and explicitly install it in the selected organisation. Installation binds the exact definitions and enables only capabilities whose owning engines are ready. Publishing alone changes no live application. Background workflow registration/dispatch and connection execution are later owning-engine and #254 evidence, not prerequisites for this first proof. Missing capabilities remain visibly unavailable rather than replaced with successful mocks.
+3. **A usable application runtime.** Open the installed application through its real launcher and routes. Render navigation, pages and registered components from the installed definition. Show permitted records, related data, forms and actions through the owning query/record/access services. This browser runtime is required now; the drag-and-drop editor is not.
+4. **Configured behaviour.** Exercise the Phase 4–6 query, form, record-save and before-save-rule path through existing owning services and semantic controls. Keep preview effect-free. Broader frontend-flow, background dispatch and connection scenarios remain required under their owning tasks and #254; they do not gate #327.
+5. **Real separation and lifecycle.** Prove two applications, both organisation isolation directions, the same organisation-shared Company/Contact records and allowed field/edit limits using the existing fixtures. Grant-limited sharing and federation belong to #153/#156 and #254. Prove a definition-only change can be validated and deliberately activated without changing core code or unintentionally retargeting an installed release. Include invalid references, refused access and stale edits without inventing a new test framework.
+6. **Designer and agent reuse.** Protected, revision-aware definition operations and runtime semantic controls must be usable without private editor state. Later App Designer controls and authenticated MCP tools consume those same operations and artifacts. #254 owns the full MCP and designer journeys; local prototype tools do not satisfy them.
+
+## Completion evidence
+
+The owner of the first usable pre-designer proof is [#327](https://github.com/Abzum-NZ/Abzum-Vortex/issues/327), with its [acceptance plan](definition-first-application-proof.md); it covers the Phase 4–6 core path only. [#64](issue-64-application-runtime.md) supplies the base runtime, not a substitute for that proof. Background workflows, pipelines, files/search, connections/interfaces, record sharing/federation, the governed IAM human journey, MCP parity and designer evidence belong to their owning issues and [#254](https://github.com/Abzum-NZ/Abzum-Vortex/issues/254), which retains later designer/MCP/federation acceptance and therefore cannot block the designer that its own tests require.
+
+- Record exact fixture/definition releases, installation and code revision.
+- Demonstrate the installed application in the browser with screenshots and a short user walkthrough, not merely JSON validation or unit-test output.
+- Exercise the same protected operations through a non-editor adapter; demonstrate that editing definitions changes the rendered application without engine changes.
+- Match successful Testing results to the delivered revision and obtain independent review against #327's Phase 4–6 acceptance; retain the remaining complete-application requirements in #254.
+- Only after this proof, resume the remaining prototype/design work and wire the App Designer to the proven operations. Re-run the same application scenarios using designer-authored definitions; do not substitute a second application representation.
+
+```mermaid
+flowchart LR
+    D[Complete application definitions] --> V[Validate and publish]
+    V --> I[Install exact release]
+    I --> R[Open and use real application]
+    R --> P[Verify pages, data, access and flows]
+    P --> B[Build App Designer on the same operations]
+    B --> C[Repeat proof with designer-authored definitions]
+    M[Agent through MCP] --> V
+    M --> B
+```
+
+Task ownership must separate runtime rendering, application lifecycle and reusable block registration from visual-editor integration. No engine task depends on the designer that consumes it. Dependencies are tracked on the existing GitHub board; mixed engine/editor tasks must be clarified rather than marking the entire engine blocked by its own consumer.
+
+## Next binding-engine prerequisite — 8 September 2026
+
+### Current Phase 4 delivery position
+
+The field-value engine, immutable event projection and storage-provisioning slice
+have delivered their bounded implementations. The [calculation engine](../evidence/issue-48-calculation-engine.md)
+has independent actual-work approval and reached Testing through [PR #363](https://github.com/Abzum-NZ/Abzum-Vortex/pull/363).
+None of these alone is a working installed application or a completed protected
+save.
+
+| Next work                                                                                      | Functional purpose and dependency                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Exact active installation read #43](issue-43-active-installation-read.md)                     | Identify the installed Application and every exact Module release, including shared Modules. This reader reached Testing in [PR #364](https://github.com/Abzum-NZ/Abzum-Vortex/pull/364); activation and full installation acceptance remain separate. |
+| [Relationship totals #48](issue-48-calculation-engine.md)                                      | Calculate totals from the declared related records using the same typed values and precision rules. Integrate authoritative source selection and affected-parent updates with the protected save, not a second query/calculation engine.               |
+| [Protected storage and save #45/#47](module-record-provisioning.md#save-and-event-integration) | Apply current access, field and revision rules, then commit record changes, Activity and events together. Requires the real installation/access adapters; pure-engine proofs do not substitute for these.                                              |
+| [Definition-first application #327](definition-first-application-proof.md)                     | Assemble the proven engines into a usable installed application before resuming App Designer work.                                                                                                                                                     |
+
+[Typed component/flow bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250)
+can start on the delivered native Definition/compiler/publication substrate from
+[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249). It does not wait for
+that task's Puck adapter, conversion or App Designer acceptance. The over-broad
+whole-task dependency is removed; completed contracts/compiler/Access prerequisites
+remain recorded on the board.
+
+The early kernel describes stable component events, typed context and exact
+flow/input/result bindings. Every configurable action or data-provider event
+enters its configured flow. Query, save, action and platform-service operations
+are flow-node bindings, never hidden page-side runners. Current-user and protected
+specified-user/System references describe configuration, not live authority.
+The kernel neither runs a graph nor grants an invocation permission. Later
+executor/readiness and private form-draft proofs stay with their owning engines.
+This follows the existing [Frontend Flow specification](../specification/appendices/frontend-rule-designer.md#pages-compose-flows-define-actions).
+
+The Definition correction under [Record field values #44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
+reached Testing in [PR #366](https://github.com/Abzum-NZ/Abzum-Vortex/pull/366).
+Application-owned conditions and value maps now use their exact bound Module
+formats. The pure field-value engine already exists; do not build another field
+catalogue. The shared save command reached Testing in
+[PR #365](https://github.com/Abzum-NZ/Abzum-Vortex/pull/365), but a command shape is
+not successful persistence. Full #44/#47 completion still requires real protected
+save/readback and permission-gated choice enforcement. The
+[field-value plan](issue-44-record-field-values.md#rule-consumer-handoff) and
+[single flow-engine sequence](frontend-rule-designer.md#save-rule-foundation-and-integration-order)
+separate these milestones and prevent a parallel legacy rule executor.
+
+The active independent engine work is the
+[#58 shared graph foundation](issue-58-shared-rule-graph-foundation.md): complete
+the before-save profile's source/canonical definitions and publication proof,
+then implement its one pure interpreter and integrate with protected saves.
+This progresses while the real storage/access prerequisites below remain with
+their owning tasks; it does not waive those dependencies or deliver the designer.
+
+Next, co-deliver [module provisioning #43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43)
+and [record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45): consume
+an exact published release, provision its real protected storage and activate its
+organisation/application binding only after the required capabilities are ready.
+The user-facing application lifecycle remains with [#64](issue-64-application-runtime.md).
+Publication alone must not create an installed application; detaching a binding
+must not delete its records.
+
+[Reading records #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) then
+depends on actual [protected storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45)
+and [headless bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250),
+not the whole Phase 4 epic. Storage retains the Module, field-value and Access
+prerequisites above. Coordinate related-record reads with
+[#49](https://github.com/Abzum-NZ/Abzum-Vortex/issues/49) when required by a query;
+unrelated deletion or extension-point work must not delay a base-list query.
+Derived stored values remain owned by
+[#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48), not a second calculator
+inside Query. These delivery slices do not waive whole-task acceptance or make
+an unimplemented capability available.
+The [coordinated provisioning plan](module-record-provisioning.md) defines the
+actual access prerequisites, event-registration handoff and failure behavior.
+It does not require the whole Access epic or a mock completed installation before
+real storage can be built.
+
+[Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) then
+delivers module-exposed query definitions through publication and actual execution
+against that installed protected storage. A standalone query descriptor or
+compiler is not a replacement for this working path. Row and field enforcement
+remain real dependencies of data access, not dependencies of pure field-value
+validation. Complete installed-page assembly requires working owning engines;
+a static sample page is not the application-runtime milestone.
+
+| Owner                                                                                                                              | Responsibility                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [#66](issue-66-registered-block-runtime.md)                                                                                        | Registered block implementations and rendering, independent of the designer                             |
+| [#73](issue-73-definition-publication.md)                                                                                          | File-authored drafts, validation, publication, preview and restore services                             |
+| [#64](issue-64-application-runtime.md)                                                                                             | Explicit installation, runtime navigation and application assembly                                      |
+| [#327](definition-first-application-proof.md)                                                                                      | First usable two-application proof: install/activate, launcher and routes, rendered pages, protected query/save, before-save rules, permissions, organisation-shared records and isolation |
+| [#323](app-designer-html-prototype.md), [#65](issue-65-app-designer.md), [#52](https://github.com/Abzum-NZ/Abzum-Vortex/issues/52) | Prototype completion and visual application/module authoring after the runtime proof                    |
+
+Workflow registration [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), connection administration [#99](https://github.com/Abzum-NZ/Abzum-Vortex/issues/99), operation catalogue [#102](https://github.com/Abzum-NZ/Abzum-Vortex/issues/102) and sharing [#153](https://github.com/Abzum-NZ/Abzum-Vortex/issues/153) use exact engine dependencies instead of whole phase epics containing later designer work. Existing security and lifecycle requirements are preserved; this changes delivery order, not authorization.

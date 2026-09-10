@@ -51,6 +51,26 @@ their diagnostics are owned by the installed platform image, not this repository
 
 ## Roles and request context
 
+### Platform migrations and generated business storage
+
+Reviewed timestamped migrations install or change platform schemas, including the
+generic [Record provisioner](../docs/specification/17-runtime-storage-and-caching.md#record-storage-provisioning).
+That closed operation creates/evolves business storage from exact immutable
+published definitions during application installation. It does not require a
+per-customer repository migration or write a second platform migration history.
+`supabase_migrations.schema_migrations` remains the platform delivery ledger;
+the private Record catalogue records domain storage mappings and provision state.
+
+The generated Record objects have a narrowly privileged non-login owner. Only
+the fixed Module coordinator is callable by the request role; the internal DDL
+helper is private. No runtime/login role inherits the object owner or receives
+DDL rights. New owner roles require their own default-privilege revocations in
+addition to explicit grants/revokes on each generated object; the `postgres`
+default-privilege baseline below does not automatically apply to another owner.
+Generated record adapters remain subject to row policies and field bounds.
+
+### Request connection
+
 The Supabase project owner is an operational credential used by Kestra for
 migrations and controlled database verification. Vercel never receives it.
 The server runtime instead connects as the restricted `vortex_runtime` login.

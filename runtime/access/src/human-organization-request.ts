@@ -39,10 +39,13 @@ export type HumanOrganizationRequestDependencies = Readonly<{
   correlationId?: () => string;
 }>;
 
+type HumanOrganizationRequestMode = "read" | "change";
+
 type ScopeRow = DatabaseRow & {
   tenant_id: unknown;
   organization_id: unknown;
   organization_account_id: unknown;
+  application_root_id?: unknown;
   access_version: unknown;
 };
 
@@ -59,9 +62,15 @@ const parseScope = (rows: readonly ScopeRow[]): SelectedOrganizationScope => {
     tenantId: row.tenant_id,
     organizationId: row.organization_id,
     organizationAccountId: row.organization_account_id,
+    ...(row.application_root_id === undefined || row.application_root_id === null
+      ? {}
+      : { applicationRootId: row.application_root_id }),
     accessVersion: revision(row.access_version),
   });
 };
+
+const representsSameUuid = (left: string, right: string): boolean =>
+  left.toLowerCase() === right.toLowerCase();
 
 const databaseCode = (error: unknown): string | undefined =>
   typeof error === "object" && error !== null && "code" in error
@@ -76,7 +85,8 @@ export const createHumanOrganizationRequestService = (
   const clock = dependencies.clock ?? (() => new Date());
   const newCorrelationId = dependencies.correlationId ?? randomUUID;
 
-  const run = async <Result>(
+  const runWithMode = async <Result>(
+    mode: HumanOrganizationRequestMode,
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
     operation: (
@@ -113,20 +123,58 @@ export const createHumanOrganizationRequestService = (
 
     try {
       const value = await runTransaction(async (transaction) => {
-        const rows = await transaction.query<ScopeRow>`
-              select *
-              from vortex_access.resolve_human_organization_scope(
-                ${verifiedSession.data.identityId}::uuid,
-                ${verifiedCandidate.data.organizationId}::uuid
-              )
-            `;
+        const rows =
+          verifiedCandidate.data.applicationRootId === undefined
+            ? mode === "change"
+              ? await transaction.query<ScopeRow>`
+                  select *
+                  from vortex_access.resolve_human_organization_change_scope(
+                    ${verifiedSession.data.identityId}::uuid,
+                    ${verifiedCandidate.data.organizationId}::uuid
+                  )
+                `
+              : await transaction.query<ScopeRow>`
+                  select *
+                  from vortex_access.resolve_human_organization_scope(
+                    ${verifiedSession.data.identityId}::uuid,
+                    ${verifiedCandidate.data.organizationId}::uuid
+                  )
+                `
+            : mode === "change"
+              ? await transaction.query<ScopeRow>`
+                  select *
+                  from vortex_access.resolve_human_application_change_scope(
+                    ${verifiedSession.data.identityId}::uuid,
+                    ${verifiedCandidate.data.organizationId}::uuid,
+                    ${verifiedCandidate.data.applicationRootId}::uuid
+                  )
+                `
+              : await transaction.query<ScopeRow>`
+                  select *
+                  from vortex_access.resolve_human_application_scope(
+                    ${verifiedSession.data.identityId}::uuid,
+                    ${verifiedCandidate.data.organizationId}::uuid,
+                    ${verifiedCandidate.data.applicationRootId}::uuid
+                  )
+                `;
         const scope = parseScope(rows);
+        if (
+          (verifiedCandidate.data.applicationRootId === undefined) !==
+            (scope.applicationRootId === undefined) ||
+          (verifiedCandidate.data.applicationRootId !== undefined &&
+            scope.applicationRootId !== undefined &&
+            !representsSameUuid(verifiedCandidate.data.applicationRootId, scope.applicationRootId))
+        )
+          throw new Error("INVALID_SCOPE_RESULT");
         const context: SessionContext = sessionContextSchema.parse({
           callerKind: "human",
           identityAuthorityId: configuredAuthority,
           tenantId: scope.tenantId,
           organizationId: scope.organizationId,
           organizationAccountId: scope.organizationAccountId,
+          ...(scope.applicationRootId === undefined
+            ? {}
+            : { applicationRootId: scope.applicationRootId }),
           identityId: verifiedSession.data.identityId,
           sessionId: verifiedSession.data.sessionId,
           authenticationStrength: verifiedSession.data.authenticationStrength,
@@ -159,17 +207,35 @@ export const createHumanOrganizationRequestService = (
   };
 
   return Object.freeze({
-    run,
+    run: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+      ) => Promise<Result>,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode("read", session, candidate, operation),
+    runChange: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+      ) => Promise<Result>,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode("change", session, candidate, operation),
     resolve: (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
     ): Promise<HumanOrganizationRequestResult<SelectedOrganizationScope>> =>
-      run(session, candidate, async (transaction, scope) => {
+      runWithMode("read", session, candidate, async (transaction, scope) => {
         const rows = await transaction.query<ScopeRow>`
           select
             checked ->> 'tenantId' as tenant_id,
             checked ->> 'organizationId' as organization_id,
             checked ->> 'organizationAccountId' as organization_account_id,
+            checked ->> 'applicationRootId' as application_root_id,
             checked ->> 'accessVersion' as access_version
           from vortex_access.validated_human_request_context() as checked
         `;
@@ -178,6 +244,10 @@ export const createHumanOrganizationRequestService = (
           checked.tenantId !== scope.tenantId ||
           checked.organizationId !== scope.organizationId ||
           checked.organizationAccountId !== scope.organizationAccountId ||
+          (checked.applicationRootId === undefined) !== (scope.applicationRootId === undefined) ||
+          (checked.applicationRootId !== undefined &&
+            scope.applicationRootId !== undefined &&
+            !representsSameUuid(checked.applicationRootId, scope.applicationRootId)) ||
           checked.accessVersion !== scope.accessVersion
         )
           throw new Error("INVALID_PROTECTED_CONTEXT_RESULT");

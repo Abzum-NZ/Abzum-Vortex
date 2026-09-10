@@ -3,11 +3,13 @@ import { blockPaletteGroupSchema } from "./catalogues";
 import { labelSchema, safeHttpsUrlSchema } from "./common";
 import {
   sourceAliasSchema,
+  sourceQualifiedConditionSchema,
   sourceQualifiedFieldSchema,
   sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
 } from "./definition-source-common";
 import { recordTypeReferenceSchema } from "./definitions";
+import { conditionNodeSchema } from "./module-contracts";
 import {
   blockIdSchema,
   builderKeySchema,
@@ -23,6 +25,17 @@ import {
   semanticVersionSchema,
   shellIdSchema,
 } from "./identifiers";
+import {
+  richTextDocumentV2Schema,
+  richTextElementKindV2Schema,
+  type RichTextInlineV2,
+} from "./rich-text";
+
+export {
+  richTextBlockV2Schema,
+  richTextDocumentV2Schema,
+  richTextElementKindV2Schema,
+} from "./rich-text";
 
 const iconKeySchema = z
   .string()
@@ -32,63 +45,6 @@ const iconKeySchema = z
 
 const nonNegativeFiniteSchema = z.number().finite().nonnegative();
 const positiveFiniteSchema = z.number().finite().positive();
-
-export const richTextElementKindV2Schema = z.enum([
-  "paragraph",
-  "heading",
-  "bulleted_list",
-  "numbered_list",
-  "emphasis",
-  "link",
-]);
-
-type RichTextInlineV2 =
-  | { kind: "text"; text: string }
-  | { kind: "emphasis"; style: "strong" | "emphasis" | "code"; children: RichTextInlineV2[] }
-  | { kind: "link"; address: string; children: RichTextInlineV2[] };
-
-const richTextInlineV2Schema: z.ZodType<RichTextInlineV2> = z.lazy(() =>
-  z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("text"), text: z.string() }).strict(),
-    z
-      .object({
-        kind: z.literal("emphasis"),
-        style: z.enum(["strong", "emphasis", "code"]),
-        children: z.array(richTextInlineV2Schema).min(1),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("link"),
-        address: safeHttpsUrlSchema,
-        children: z.array(richTextInlineV2Schema).min(1),
-      })
-      .strict(),
-  ]),
-);
-
-export const richTextBlockV2Schema = z.discriminatedUnion("kind", [
-  z
-    .object({ kind: z.literal("paragraph"), children: z.array(richTextInlineV2Schema).min(1) })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("heading"),
-      level: z.enum(["2", "3", "4"]),
-      children: z.array(richTextInlineV2Schema).min(1),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.enum(["bulleted_list", "numbered_list"]),
-      items: z.array(z.array(richTextInlineV2Schema).min(1)).min(1),
-    })
-    .strict(),
-]);
-
-export const richTextDocumentV2Schema = z
-  .object({ blocks: z.array(richTextBlockV2Schema) })
-  .strict();
 
 export type BlockPropertyValueV2Contract =
   | { kind: "text"; value: string }
@@ -511,16 +467,24 @@ export const blockSlotDeclarationV2Schema = z
   })
   .strict();
 
-const blockCapabilitiesV2Schema = z
-  .object({
-    responsiveVisibility: z.boolean(),
-    responsiveOrder: z.boolean(),
-    gridWidth: z.boolean(),
-    height: z.enum(["content", "content_or_bounded"]),
-    accessibleName: z.enum(["required", "optional", "not_applicable"]),
-    publicSurface: z.enum(["refused", "allowed"]),
-  })
-  .strict();
+const blockCapabilitiesV2Base = {
+  responsiveVisibility: z.boolean(),
+  responsiveOrder: z.boolean(),
+  gridWidth: z.boolean(),
+  height: z.enum(["content", "content_or_bounded"]),
+  publicSurface: z.enum(["refused", "allowed"]),
+};
+
+const blockCapabilitiesV2Schema = z.discriminatedUnion("accessibleName", [
+  z.object({ ...blockCapabilitiesV2Base, accessibleName: z.literal("not_applicable") }).strict(),
+  z
+    .object({
+      ...blockCapabilitiesV2Base,
+      accessibleName: z.enum(["required", "optional"]),
+      accessibleNamePropertyPath: z.array(builderKeySchema).min(1),
+    })
+    .strict(),
+]);
 
 /** One immutable, platform-owned block release used by validation and renderer lookup. */
 export const platformBlockReleaseV2Schema = z
@@ -548,6 +512,26 @@ export const platformBlockReleaseV2Schema = z
       });
     if (new Set(value.slots.map((slot) => slot.key)).size !== value.slots.length)
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });
+    if (value.capabilities.accessibleName !== "not_applicable") {
+      const propertyPath = value.capabilities.accessibleNamePropertyPath;
+      let properties = value.properties;
+      for (const [index, key] of propertyPath.entries()) {
+        const property = properties.find((candidate) => candidate.key === key);
+        const last = index === propertyPath.length - 1;
+        if (
+          property === undefined ||
+          (last ? property.kind !== "text" : property.kind !== "group")
+        ) {
+          context.addIssue({
+            code: "custom",
+            path: ["capabilities", "accessibleNamePropertyPath", index],
+            message: "Accessible name must select a declared text property through groups only",
+          });
+          break;
+        }
+        if (property.kind === "group") properties = property.properties;
+      }
+    }
   });
 
 export const applicationCompositionPolicyV2Schema = z
@@ -898,6 +882,10 @@ export const applicationCompositionCatalogueSnapshotV2Schema = z
 
 type BlockPlacementV2 = {
   block: z.infer<typeof platformBlockReferenceV2Schema>;
+  viewPermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
+  usePermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
+  visibilityCondition?: z.infer<typeof conditionNodeSchema> | undefined;
+  queryId?: z.infer<typeof queryIdSchema> | undefined;
   settings: Record<string, BlockPropertyValueV2Contract>;
   themeOverrides: Record<string, z.infer<typeof themeTokenValueV2Schema>>;
   responsive: z.infer<typeof responsivePlacementV2Schema>;
@@ -910,6 +898,10 @@ type PlacementSlotV2 = {
 
 type SourceBlockPlacementV2 = {
   block: z.infer<typeof sourcePlatformBlockReferenceV2Schema>;
+  view_permission?: z.infer<typeof namespacedKeySchema> | undefined;
+  use_permission?: z.infer<typeof namespacedKeySchema> | undefined;
+  visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
+  query?: z.infer<typeof builderKeySchema> | undefined;
   settings: Record<string, SourceBlockPropertyValueV2Contract>;
   theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueV2Schema>>;
   responsive: z.infer<typeof sourceResponsivePlacementV2Schema>;
@@ -929,6 +921,10 @@ export const blockPlacementV2Schema: z.ZodType<BlockPlacementV2> = z.lazy(() =>
   z
     .object({
       block: platformBlockReferenceV2Schema,
+      viewPermissionKey: namespacedKeySchema.optional(),
+      usePermissionKey: namespacedKeySchema.optional(),
+      visibilityCondition: conditionNodeSchema.optional(),
+      queryId: queryIdSchema.optional(),
       settings: z.record(builderKeySchema, blockPropertyValueV2Schema),
       themeOverrides: z.record(builderKeySchema, themeTokenValueV2Schema),
       responsive: responsivePlacementV2Schema,
@@ -966,6 +962,10 @@ export const sourceBlockPlacementV2Schema: z.ZodType<SourceBlockPlacementV2> = z
   z
     .object({
       block: sourcePlatformBlockReferenceV2Schema,
+      view_permission: namespacedKeySchema.optional(),
+      use_permission: namespacedKeySchema.optional(),
+      visibility_condition: sourceQualifiedConditionSchema.optional(),
+      query: builderKeySchema.optional(),
       settings: z.record(builderKeySchema, sourceBlockPropertyValueV2Schema),
       theme_overrides: z.record(builderKeySchema, sourceThemeTokenValueV2Schema),
       responsive: sourceResponsivePlacementV2Schema,

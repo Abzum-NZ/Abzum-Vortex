@@ -11,10 +11,16 @@ export * from "./version-impact";
 export * from "./version-impact-error";
 export * from "./compilation-error";
 export * from "./compiler";
+export * from "./application-v2-composition";
+export * from "./application-v2-resolution";
+export * from "./application-draft-conversion";
+export * from "./module-draft-conversion";
+export * from "./module-v3-draft-conversion";
 export * from "./validation";
 export * from "./definition-store";
 export * from "./source-identities";
 export * from "./saved-condition-revisions";
+export * from "./installed-event-catalogue";
 export * from "./definition-publication";
 export * from "./definition-publication-repository";
 export * from "./definition-publication-catalogue";
@@ -26,6 +32,7 @@ export {
   type DefinitionConsumerReadErrorCode,
 } from "./definition-consumer-read";
 export { createDatabaseDefinitionConsumerReadService } from "./definition-consumer-read-composition";
+export * from "./application-bound-release-set";
 export {
   createDefinitionHistoryService,
   DefinitionHistoryError,

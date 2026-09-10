@@ -5,7 +5,9 @@ import {
   definitionCompilationOutputSchema,
   definitionKindSchema,
   definitionResolutionSnapshotSchema,
-  definitionSourceDocumentSchema,
+  definitionResolutionSnapshotV2Schema,
+  definitionResolutionSnapshotV3Schema,
+  storedDefinitionSourceSchema,
   exactDefinitionDependencySchema,
   fingerprintSchema,
   moduleRootIdSchema,
@@ -16,17 +18,22 @@ import {
   publishedApplicationDefinitionSchema,
   publishedApplicationReferenceSchema,
   publishedModuleDefinitionSchema,
+  moduleVersionImpactHistoryEntryV2Schema,
+  moduleVersionImpactHistoryEntryV3Schema,
   publishedModuleReferenceSchema,
   revisionSchema,
   semanticVersionSchema,
+  selectApplicationContractPair,
+  selectModuleContractPair,
   stableDefinitionReleaseVersionSchema,
-  sourceIdentityAssignmentSchema,
+  sourceIdentityAssignmentV3Schema,
   storedDefinitionDraftSchema,
   timestampSchema,
   versionImpactReasonSchema,
   type PublishedDefinitionHistory,
   type PublishDefinitionResult,
   type SessionContext,
+  type StoredDefinitionSource,
 } from "@vortex/contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import { z } from "zod";
@@ -45,7 +52,7 @@ import {
   type DefinitionReleaseAppend,
   type ResolvableModuleRelease,
 } from "./definition-publication";
-import { extractSourceIdentityRequirements } from "./source-identities";
+import { extractStoredSourceIdentityRequirements } from "./source-identities";
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
@@ -65,7 +72,9 @@ const exactManifestSchema = z
     const subjects = entries.map((entry) =>
       entry.kind === "platform_theme"
         ? `${entry.kind}:${entry.catalogueThemeId}`
-        : `${entry.kind}:${entry.key}`,
+        : entry.kind === "platform_block"
+          ? `${entry.kind}:${entry.blockId}`
+          : `${entry.kind}:${entry.key}`,
     );
     if (new Set(subjects).size !== subjects.length)
       context.addIssue({ code: "custom", message: "Dependency subjects must be unique" });
@@ -93,11 +102,15 @@ const publicationRootSchema = z
 
 const storedReleaseEvidenceSchema = z
   .object({
-    authoredSource: definitionSourceDocumentSchema,
+    authoredSource: storedDefinitionSourceSchema,
     authoredSourceFingerprint: fingerprintSchema,
     sourceContractVersion: semanticVersionSchema,
     compilationOutput: definitionCompilationOutputSchema,
-    resolutionSnapshot: definitionResolutionSnapshotSchema,
+    resolutionSnapshot: z.union([
+      definitionResolutionSnapshotSchema,
+      definitionResolutionSnapshotV2Schema,
+      definitionResolutionSnapshotV3Schema,
+    ]),
     resolutionFingerprint: fingerprintSchema,
     comparisonFingerprint: fingerprintSchema,
     impactReasons: z.array(versionImpactReasonSchema),
@@ -126,7 +139,7 @@ const publicationStateSchema = z
   .object({
     root: publicationRootSchema,
     draft: databaseStoredDraftSchema,
-    identities: z.array(sourceIdentityAssignmentSchema),
+    identities: z.array(sourceIdentityAssignmentV3Schema),
     history: storedPublishedHistorySchema,
   })
   .strict();
@@ -150,8 +163,12 @@ const rawModuleReleaseSchema = z
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
     compilationOutput: definitionCompilationOutputSchema,
-    resolutionSnapshot: definitionResolutionSnapshotSchema,
-    identities: z.array(sourceIdentityAssignmentSchema),
+    resolutionSnapshot: z.union([
+      definitionResolutionSnapshotSchema,
+      definitionResolutionSnapshotV2Schema,
+      definitionResolutionSnapshotV3Schema,
+    ]),
+    identities: z.array(sourceIdentityAssignmentV3Schema),
     published: rawPublishedModuleSchema,
   })
   .strict();
@@ -214,10 +231,10 @@ const dependencyReferencesMatch = (
 };
 
 const currentIdentityLookupMatches = (
-  source: z.infer<typeof definitionSourceDocumentSchema>,
-  identities: readonly z.infer<typeof sourceIdentityAssignmentSchema>[],
+  source: StoredDefinitionSource,
+  identities: readonly z.infer<typeof sourceIdentityAssignmentV3Schema>[],
 ): boolean => {
-  const expected = extractSourceIdentityRequirements(source).flatMap((requirement) =>
+  const expected = extractStoredSourceIdentityRequirements(source).flatMap((requirement) =>
     requirement.aliases.map((alias) =>
       canonicalJson([
         requirement.definitionKey,
@@ -332,6 +349,50 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     for (const release of releases) {
       const output = release.evidence.compilationOutput;
       const resolution = release.evidence.resolutionSnapshot;
+      if (kind === "application") {
+        if (
+          release.evidence.authoredSource.kind !== "application" ||
+          output.kind !== "application" ||
+          release.publication.kind !== "application"
+        )
+          return invalidStorage();
+        let schema: "v1" | "v2";
+        try {
+          schema = selectApplicationContractPair(
+            release.evidence.sourceContractVersion,
+            release.publication.validationContractVersion,
+          ).schema;
+        } catch {
+          return invalidStorage();
+        }
+        if (
+          (schema === "v2") !== "validationContractVersion" in output ||
+          (schema === "v2") !== (resolution.contractVersion === "2.0.0")
+        )
+          return invalidStorage();
+      }
+      if (kind === "module") {
+        if (
+          release.evidence.authoredSource.kind !== "module" ||
+          output.kind !== "module" ||
+          release.publication.kind !== "module"
+        )
+          return invalidStorage();
+        let schema: "v1" | "v2" | "v3";
+        try {
+          schema = selectModuleContractPair(
+            release.evidence.sourceContractVersion,
+            release.publication.validationContractVersion,
+          ).schema;
+        } catch {
+          return invalidStorage();
+        }
+        const expectedVersion = schema === "v3" ? "3.0.0" : schema === "v2" ? "2.0.0" : "1.0.0";
+        const outputVersion =
+          "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
+        if (outputVersion !== expectedVersion || resolution.contractVersion !== expectedVersion)
+          return invalidStorage();
+      }
       const ownResolution = resolution.definitions.filter(
         (definition) =>
           definition.kind === kind &&
@@ -363,13 +424,32 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           release.evidence.sourceContractVersion ||
         release.evidence.authoredSource.kind !== kind ||
         release.evidence.authoredSource.key !== key ||
+        !hasAuthenticStoredCustomerDefinitionRelease({
+          organizationId: this.context.organizationId,
+          kind,
+          key,
+          rootId,
+          releaseVersion: release.publication.releaseVersion,
+          sourceContractVersion: release.evidence.sourceContractVersion,
+          validationContractVersion: release.publication.validationContractVersion,
+          contentFingerprint: release.publication.contentFingerprint,
+          resolutionFingerprint: release.evidence.resolutionFingerprint,
+          compilationOutput: output,
+          resolutionSnapshot: resolution,
+        }) ||
         !sameCanonicalJson(output.canonical.content, release.content)
       )
         return invalidStorage();
       if (!dependencyReferencesMatch(output, release.dependencyManifest)) return invalidStorage();
       const published =
         kind === "module" && output.kind === "module" && release.publication.kind === "module"
-          ? publishedModuleDefinitionSchema.safeParse({
+          ? ("validationContractVersion" in output && output.validationContractVersion === "3.0.0"
+              ? moduleVersionImpactHistoryEntryV3Schema
+              : "validationContractVersion" in output &&
+                  output.validationContractVersion === "2.0.0"
+                ? moduleVersionImpactHistoryEntryV2Schema
+                : publishedModuleDefinitionSchema
+            ).safeParse({
               publication: release.publication,
               content: output.canonical.content,
               dependencyManifest: release.dependencyManifest,
@@ -396,6 +476,18 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
   private materializeModuleRelease(release: RawModuleRelease): ResolvableModuleRelease {
     const output = release.compilationOutput;
     const snapshot = release.resolutionSnapshot;
+    const validationContractVersion =
+      "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
+    const sourceContractVersion = validationContractVersion;
+    let moduleSchema: "v1" | "v2" | "v3";
+    try {
+      moduleSchema = selectModuleContractPair(
+        sourceContractVersion,
+        validationContractVersion,
+      ).schema;
+    } catch {
+      return invalidStorage();
+    }
     const ownResolution = snapshot.definitions.filter(
       (definition) =>
         definition.kind === "module" &&
@@ -410,6 +502,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       release.published.publication.rootId !== release.rootId ||
       release.published.publication.revision !== release.releaseRevision ||
       release.published.publication.releaseVersion !== release.releaseVersion ||
+      release.published.publication.validationContractVersion !== validationContractVersion ||
       release.published.publication.contentFingerprint !== release.contentFingerprint ||
       output.artifact.rootId !== release.rootId ||
       output.canonical.envelope.key !== release.key ||
@@ -428,6 +521,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         key: release.key,
         rootId: release.rootId,
         releaseVersion: release.releaseVersion,
+        sourceContractVersion,
+        validationContractVersion,
         contentFingerprint: release.contentFingerprint,
         resolutionFingerprint: release.resolutionFingerprint,
         compilationOutput: output,
@@ -438,7 +533,13 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       !dependencyReferencesMatch(output, release.published.dependencyManifest)
     )
       return invalidStorage();
-    const published = publishedModuleDefinitionSchema.safeParse({
+    const published = (
+      moduleSchema === "v3"
+        ? moduleVersionImpactHistoryEntryV3Schema
+        : moduleSchema === "v2"
+          ? moduleVersionImpactHistoryEntryV2Schema
+          : publishedModuleDefinitionSchema
+    ).safeParse({
       publication: release.published.publication,
       content: output.canonical.content,
       dependencyManifest: release.published.dependencyManifest,

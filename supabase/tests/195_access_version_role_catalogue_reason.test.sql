@@ -12,7 +12,7 @@ select is(
       'vortex_access.organization_access_versions'::regclass
       and constraint_row.conname = 'organization_access_versions_reason_valid'
   ),
-  'CHECK ((change_reason = ANY (ARRAY[''organization_initialized''::text, ''organization_account_activated''::text, ''organization_account_reactivated''::text, ''organization_account_suspended''::text, ''organization_account_closed''::text, ''role_assignment_changed''::text, ''role_activation_changed''::text, ''delegation_changed''::text, ''stewardship_changed''::text, ''invitation_access_accepted''::text, ''role_catalogue_changed''::text, ''team_membership_changed''::text, ''application_access_changed''::text, ''direct_share_changed''::text, ''access_grant_changed''::text, ''public_policy_changed''::text, ''federation_mirror_changed''::text, ''mcp_authorization_changed''::text])))',
+  'CHECK ((change_reason = ANY (ARRAY[''organization_initialized''::text, ''organization_account_activated''::text, ''organization_account_reactivated''::text, ''organization_account_suspended''::text, ''organization_account_closed''::text, ''role_assignment_changed''::text, ''role_activation_changed''::text, ''delegation_changed''::text, ''stewardship_changed''::text, ''invitation_access_accepted''::text, ''role_catalogue_changed''::text, ''team_membership_changed''::text, ''application_access_changed''::text, ''direct_share_changed''::text, ''record_ownership_changed''::text, ''access_grant_changed''::text, ''public_policy_changed''::text, ''federation_mirror_changed''::text, ''mcp_authorization_changed''::text])))',
   'the exact stored V1 reason allowlist includes role, delegation, stewardship and invitation changes'
 );
 

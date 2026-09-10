@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   applicationCanonicalDocumentV2Schema,
+  applicationCompilationOutputV1Schema,
   applicationCompilationOutputV2Schema,
   applicationCompilationRequestV2Schema,
   applicationContentV2Schema,
@@ -436,7 +437,16 @@ const catalogueSnapshotV2 = {
         icon: "panel-top",
         paletteGroup: "content",
         rendererKey: "vortex.renderer.content",
-        properties: [],
+        properties: [
+          {
+            kind: "text",
+            key: "name",
+            label: "Accessible name",
+            required: false,
+            minLength: 1,
+            maxLength: 120,
+          },
+        ],
         slots: [],
         capabilities: {
           responsiveVisibility: true,
@@ -444,6 +454,7 @@ const catalogueSnapshotV2 = {
           gridWidth: true,
           height: "content_or_bounded",
           accessibleName: "optional",
+          accessibleNamePropertyPath: ["name"],
           publicSurface: "allowed",
         },
       },
@@ -569,6 +580,55 @@ describe("Application V2 composition contracts", () => {
     expect(applicationContentV2Schema.safeParse(canonicalApplication).success).toBe(true);
   });
 
+  it("preserves optional permission gates on shell, page and nested placements", () => {
+    const authored = structuredClone(sourceApplication);
+    const authoredShell = Object.values(authored.body.shells[0]!.layout.placements)[0]!;
+    Object.assign(authoredShell, { view_permission: "example.pages.shell.view" });
+    const authoredPage = authored.body.pages[0]!;
+    if (!("content" in authoredPage.composition)) throw new Error("Shell page fixture required");
+    const authoredPagePlacement = Object.values(
+      Object.values(authoredPage.composition.content)[0]!.placements,
+    )[0]!;
+    Object.assign(authoredPagePlacement, {
+      view_permission: "example.pages.section.view",
+      use_permission: "example.pages.section.use",
+      visibility_condition: {
+        field: "example.people:person.status",
+        operator: "equals",
+        value: "active",
+      },
+      query: "people",
+    });
+    expect(applicationSourceDocumentV2Schema.safeParse(authored).success).toBe(true);
+
+    const canonical = structuredClone(canonicalApplication);
+    const canonicalShellPlacement = Object.values(canonical.shells[0]!.layout.placements)[0]!;
+    Object.assign(canonicalShellPlacement, { viewPermissionKey: "example.pages.shell.view" });
+    const canonicalPage = canonical.pages[0]!;
+    if (!("content" in canonicalPage.composition)) throw new Error("Shell page fixture required");
+    const canonicalPagePlacement = Object.values(
+      Object.values(canonicalPage.composition.content)[0]!.placements,
+    )[0]!;
+    Object.assign(canonicalPagePlacement, {
+      viewPermissionKey: "example.pages.section.view",
+      usePermissionKey: "example.pages.section.use",
+      visibilityCondition: {
+        kind: "comparison",
+        operator: "equals",
+        left: { source: "field", fieldId: id(700) },
+        right: { source: "value", value: "active" },
+      },
+      queryId: id(701),
+    });
+    expect(applicationContentV2Schema.safeParse(canonical).success).toBe(true);
+
+    const historical = applicationSourceDocumentV2Schema.parse(sourceApplication);
+    expect(Object.values(historical.body.shells[0]!.layout.placements)[0]).not.toHaveProperty(
+      "view_permission",
+    );
+    expect(applicationContentV2Schema.parse(canonicalApplication)).toEqual(canonicalApplication);
+  });
+
   it("exposes V2-only canonical, resolution, compilation request and output envelopes", () => {
     const request = {
       sourceContractVersion: "2.0.0",
@@ -615,7 +675,7 @@ describe("Application V2 composition contracts", () => {
     expect(applicationCompilationOutputV2Schema.safeParse(output).success).toBe(true);
   });
 
-  it("keeps every generic V1 decoder closed to V2-only envelopes and identity kinds", () => {
+  it("keeps explicit V1 decoders closed while the generic output dispatches exact V2", () => {
     expect(sourceIdentityKindV2Schema.safeParse("shell").success).toBe(true);
     expect(sourceIdentityKindSchema.safeParse("shell").success).toBe(false);
     expect(sourceIdentityKindSchema.safeParse("shell_content_slot").success).toBe(false);
@@ -641,25 +701,25 @@ describe("Application V2 composition contracts", () => {
         },
       }).success,
     ).toBe(false);
-    expect(
-      definitionCompilationOutputSchema.safeParse({
+    const v2Output = {
+      kind: "application",
+      validationContractVersion: "2.0.0",
+      canonical: canonicalDraftV2,
+      artifact: {
         kind: "application",
-        validationContractVersion: "2.0.0",
-        canonical: canonicalDraftV2,
-        artifact: {
-          kind: "application",
-          definitionKey: "example.application",
-          rootId: id(650),
-          exactVersion: "1.0.0",
-          contentFingerprint: fingerprint("7"),
-          resolutionFingerprint: resolutionV2.fingerprint,
-        },
-        provenance: [],
-        dependencyOrder: ["example.application"],
-        resolvedDependencies: [],
+        definitionKey: "example.application",
+        rootId: id(650),
+        exactVersion: "1.0.0",
+        contentFingerprint: fingerprint("7"),
         resolutionFingerprint: resolutionV2.fingerprint,
-      }).success,
-    ).toBe(false);
+      },
+      provenance: [],
+      dependencyOrder: ["example.application"],
+      resolvedDependencies: [],
+      resolutionFingerprint: resolutionV2.fingerprint,
+    };
+    expect(applicationCompilationOutputV1Schema.safeParse(v2Output).success).toBe(false);
+    expect(definitionCompilationOutputSchema.safeParse(v2Output).success).toBe(true);
   });
 
   it("requires exact trusted V2 request metadata without inferring from source shape", () => {
@@ -901,10 +961,8 @@ describe("Application V2 composition contracts", () => {
     );
   });
 
-  it("does not enable the V2 selector before compiler and runtime support exist", () => {
-    expect(() => selectApplicationContractPair("2.0.0", "2.0.0")).toThrowError(
-      expect.objectContaining({ code: "APPLICATION_CONTRACT_DECODER_NOT_IMPLEMENTED" }),
-    );
+  it("selects the exact coordinated V2 contract pair", () => {
+    expect(selectApplicationContractPair("2.0.0", "2.0.0")).toMatchObject({ schema: "v2" });
   });
 
   it("requires a complete unique order at each declared breakpoint", () => {
@@ -1112,6 +1170,7 @@ describe("V2 property and immutable block catalogue contracts", () => {
       gridWidth: true,
       height: "content_or_bounded",
       accessibleName: "optional",
+      accessibleNamePropertyPath: ["title"],
       publicSurface: "allowed",
     },
   } as const;
@@ -1120,6 +1179,66 @@ describe("V2 property and immutable block catalogue contracts", () => {
     for (const property of properties)
       expect(blockPropertySchemaV2Schema.safeParse(property).success, property.kind).toBe(true);
     expect(platformBlockReleaseV2Schema.safeParse(registration).success).toBe(true);
+  });
+
+  it("requires explicit accessible-name paths ending at declared text through groups", () => {
+    const nested = {
+      ...registration,
+      properties: [
+        {
+          kind: "group",
+          key: "details",
+          label: "Details",
+          required: false,
+          properties: [properties[0]],
+        },
+      ],
+      capabilities: {
+        ...registration.capabilities,
+        accessibleName: "required",
+        accessibleNamePropertyPath: ["details", "title"],
+      },
+    };
+    expect(platformBlockReleaseV2Schema.safeParse(nested).success).toBe(true);
+    const { accessibleNamePropertyPath, ...withoutPath } = nested.capabilities;
+    expect(accessibleNamePropertyPath).toEqual(["details", "title"]);
+    expect(
+      platformBlockReleaseV2Schema.safeParse({ ...nested, capabilities: withoutPath }).success,
+    ).toBe(false);
+    for (const path of [
+      [],
+      ["missing"],
+      ["details"],
+      ["details", "missing"],
+      ["details", "title", "value"],
+    ]) {
+      expect(
+        platformBlockReleaseV2Schema.safeParse({
+          ...nested,
+          capabilities: { ...nested.capabilities, accessibleNamePropertyPath: path },
+        }).success,
+      ).toBe(false);
+    }
+    for (const path of [["columns"], ["items", "item"]]) {
+      expect(
+        platformBlockReleaseV2Schema.safeParse({
+          ...registration,
+          capabilities: { ...registration.capabilities, accessibleNamePropertyPath: path },
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      platformBlockReleaseV2Schema.safeParse({
+        ...nested,
+        capabilities: { ...nested.capabilities, accessibleName: "not_applicable" },
+      }).success,
+    ).toBe(false);
+    expect(
+      platformBlockReleaseV2Schema.safeParse({
+        ...nested,
+        capabilities: { ...withoutPath, accessibleName: "not_applicable" },
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects malformed bounds, defaults, duplicate options and unknown declaration keys", () => {

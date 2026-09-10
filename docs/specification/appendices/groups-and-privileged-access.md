@@ -149,6 +149,8 @@ flowchart TD
 
 Users can end their own activation; authorised administrators can revoke it immediately. These reductions do not wait for approval. Requests and review history remain visible as ordinary IAM records under their normal permissions, separately from whether access is effective now.
 
+Permitted administrators can inspect the retained [activation ledger](../../build-plan/issue-40-protected-access-administration.md#next-safe-read-checkpoint-temporary-privileged-activations). It distinguishes the beneficiary, current role label, historical role revision, exact eligibility-source references, fixed activation window and safe policy settings used at activation. Revoked or expired facts remain inspectable when their underlying authority changes. Its active-window label is descriptive, not a claim that access remains effective; only the current Access decision establishes that.
+
 ## Creating, renaming and retiring Groups
 
 An organisation creates a Group with a permanent identity and key plus an editable display label. Renaming does not change its memberships or assigned roles. Retirement is permanent: the Group stops supplying access, but its related membership, assignment, activation and delegation records remain available as evidence under their normal read permissions. It cannot be restored by reusing its key or changing its label. Removing retained grants remains possible after retirement.

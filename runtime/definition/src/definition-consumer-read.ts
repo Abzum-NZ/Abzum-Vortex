@@ -6,11 +6,15 @@ import {
   definitionConsumerReadDependencyManifestSchema,
   definitionConsumerReadResultSchema,
   definitionResolutionSnapshotSchema,
+  definitionResolutionSnapshotV2Schema,
+  definitionResolutionSnapshotV3Schema,
   fingerprintSchema,
   moduleRootIdSchema,
   organizationIdSchema,
+  platformIdSchema,
   revisionSchema,
-  selectApplicationValidationContract,
+  selectApplicationContractPair,
+  selectModuleContractPair,
   semanticVersionSchema,
   sessionContextSchema,
   stableDefinitionReleaseVersionSchema,
@@ -21,7 +25,10 @@ import {
 } from "@vortex/contracts";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
-import { hasAuthenticStoredCustomerDefinitionRelease } from "./definition-release-integrity";
+import {
+  hasAuthenticStoredCustomerDefinitionRelease,
+  releaseManifestMatchesCanonicalContent,
+} from "./definition-release-integrity";
 
 export const definitionConsumerReadErrorCodes = [
   "INVALID_DEFINITION_READ_COMMAND",
@@ -63,11 +70,16 @@ export const storedConsumerReleaseEvidenceSchema = z
     rootId: z.uuid(),
     releaseRevision: javascriptSafeRevisionSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
+    sourceContractVersion: semanticVersionSchema,
     validationContractVersion: semanticVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
     compilationOutput: definitionCompilationOutputSchema,
-    resolutionSnapshot: definitionResolutionSnapshotSchema,
+    resolutionSnapshot: z.union([
+      definitionResolutionSnapshotSchema,
+      definitionResolutionSnapshotV2Schema,
+      definitionResolutionSnapshotV3Schema,
+    ]),
     dependencyManifest: definitionConsumerReadDependencyManifestSchema,
     moduleDependencyTargets: z.array(moduleDependencyTargetSchema).max(10_000),
   })
@@ -87,111 +99,36 @@ export interface DefinitionConsumerReadRepository {
   ): Promise<unknown | undefined>;
 }
 
-const manifestSubject = (dependency: ExactDefinitionDependency): string =>
-  dependency.kind === "platform_theme"
-    ? `${dependency.kind}:${dependency.catalogueThemeId}`
-    : `${dependency.kind}:${dependency.key}`;
-
-const sameStringSet = (left: readonly string[], right: readonly string[]): boolean =>
-  (() => {
-    const leftSet = new Set(left);
-    const rightSet = new Set(right);
-    return (
-      left.length === right.length &&
-      leftSet.size === left.length &&
-      rightSet.size === right.length &&
-      left.every((subject) => rightSet.has(subject))
-    );
-  })();
-
-const selectApplicationReleaseContract = (candidate: unknown): void => {
+const selectReleaseContract = (candidate: unknown): void => {
   if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return;
   const record = candidate as Record<string, unknown>;
-  if (record.kind !== "application") return;
-  if (typeof record.validationContractVersion !== "string")
+  if (record.kind !== "application" && record.kind !== "module") return;
+  if (
+    typeof record.sourceContractVersion !== "string" ||
+    typeof record.validationContractVersion !== "string"
+  )
     throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   try {
-    selectApplicationValidationContract(record.validationContractVersion);
+    if (record.kind === "application")
+      selectApplicationContractPair(record.sourceContractVersion, record.validationContractVersion);
+    else selectModuleContractPair(record.sourceContractVersion, record.validationContractVersion);
   } catch {
     throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   }
 };
 
+type StoredConsumerReleaseExpectation = Readonly<{
+  kind: "module" | "application";
+  rootId: string;
+  releaseRevision?: number;
+  organizationId?: string;
+}>;
+
 export const definitionReleaseManifestMatchesCanonicalContent = (
   release: StoredConsumerReleaseEvidence,
-): boolean => {
-  const output = release.compilationOutput;
-  if (output.kind === "connection_type") return false;
-  const actual = release.dependencyManifest.map(manifestSubject);
-  const moduleEntries = release.dependencyManifest.filter(
-    (entry): entry is Extract<ExactDefinitionDependency, { kind: "module" }> =>
-      entry.kind === "module",
-  );
-  const connectionEntries = release.dependencyManifest.filter(
-    (entry): entry is Extract<ExactDefinitionDependency, { kind: "connection_type" }> =>
-      entry.kind === "connection_type",
-  );
-  const themeEntries = release.dependencyManifest.filter(
-    (entry): entry is Extract<ExactDefinitionDependency, { kind: "platform_theme" }> =>
-      entry.kind === "platform_theme",
-  );
-  let expected: string[];
-
-  if (output.kind === "module") {
-    expected = output.canonical.content.dependencies.map(
-      (dependency) => `module:${dependency.moduleKey}`,
-    );
-    if (
-      !moduleEntries.every((entry) =>
-        output.canonical.content.dependencies.some(
-          (dependency) =>
-            dependency.moduleKey === entry.key &&
-            dependency.moduleRootId === entry.rootId &&
-            dependency.resolvedVersion === entry.releaseVersion,
-        ),
-      )
-    )
-      return false;
-  } else {
-    const canonicalTheme = output.canonical.content.theme;
-    if (
-      canonicalTheme.mode === "platform" &&
-      !themeEntries.some(
-        (entry) =>
-          entry.catalogueThemeId === canonicalTheme.catalogueThemeId &&
-          entry.releaseVersion === canonicalTheme.version,
-      )
-    )
-      return false;
-    expected = [
-      ...output.canonical.content.moduleBindings.map(
-        (binding) =>
-          `module:${
-            moduleEntries.find(
-              (entry) =>
-                entry.rootId === binding.moduleRootId &&
-                entry.releaseVersion === binding.resolvedVersion,
-            )?.key ?? ""
-          }`,
-      ),
-      ...output.canonical.content.connectionBindings.map(
-        (binding) =>
-          `connection_type:${
-            connectionEntries.find(
-              (entry) =>
-                entry.rootId === binding.connectionTypeId &&
-                entry.releaseVersion === binding.resolvedVersion,
-            )?.key ?? ""
-          }`,
-      ),
-      ...(canonicalTheme.mode === "platform"
-        ? [`platform_theme:${canonicalTheme.catalogueThemeId}`]
-        : []),
-    ];
-  }
-
-  return sameStringSet(expected, actual);
-};
+): boolean =>
+  release.compilationOutput.kind !== "connection_type" &&
+  releaseManifestMatchesCanonicalContent(release.compilationOutput, release.dependencyManifest);
 
 export const definitionReleaseModuleTargetsMatch = (
   release: StoredConsumerReleaseEvidence,
@@ -220,6 +157,7 @@ export type DefinitionCatalogueVerification = "valid" | "unavailable" | "invalid
 export const verifyDefinitionCatalogueDependencies = async (
   manifest: readonly ExactDefinitionDependency[],
   catalogue: DefinitionPublicationCatalogue,
+  validationContractVersion: string = "1.0.0",
 ): Promise<DefinitionCatalogueVerification> => {
   for (const dependency of manifest) {
     if (dependency.kind === "module") continue;
@@ -239,10 +177,34 @@ export const verifyDefinitionCatalogueDependencies = async (
         return "invalid";
       continue;
     }
-    const release = await catalogue.readPlatformThemeRelease(
-      dependency.catalogueThemeId,
-      dependency.releaseVersion,
-    );
+    if (dependency.kind === "platform_block") {
+      if (validationContractVersion !== "2.0.0") return "invalid";
+      const release = await catalogue.readPlatformBlockReleaseV2(
+        dependency.blockId,
+        dependency.releaseVersion,
+      );
+      if (release === undefined) return "unavailable";
+      if (
+        release.blockId !== dependency.blockId ||
+        release.releaseVersion !== dependency.releaseVersion ||
+        release.contentFingerprint !== dependency.contentFingerprint ||
+        release.catalogueFingerprint !== dependency.catalogueFingerprint
+      )
+        return "invalid";
+      continue;
+    }
+    const catalogueThemeId = platformIdSchema.safeParse(dependency.catalogueThemeId);
+    if (!catalogueThemeId.success) return "invalid";
+    const release =
+      validationContractVersion === "2.0.0"
+        ? await catalogue.readPlatformThemeReleaseV2(
+            catalogueThemeId.data,
+            dependency.releaseVersion,
+          )
+        : await catalogue.readPlatformThemeRelease(
+            dependency.catalogueThemeId,
+            dependency.releaseVersion,
+          );
     if (release === undefined) return "unavailable";
     if (
       release.catalogueThemeId !== dependency.catalogueThemeId ||
@@ -285,6 +247,81 @@ export const isDefinitionContextFailure = (error: unknown): boolean => {
   );
 };
 
+/**
+ * Applies the existing immutable-release integrity boundary to evidence selected
+ * by either protected Definition reader. This helper does not authorize or
+ * select a release; its caller supplies evidence from one fixed database read.
+ */
+export const projectStoredConsumerRelease = async (
+  candidate: unknown,
+  expectation: StoredConsumerReleaseExpectation,
+  correlationId: string,
+  catalogue: DefinitionPublicationCatalogue,
+): Promise<DefinitionConsumerReadResult> => {
+  selectReleaseContract(candidate);
+  const parsed = storedConsumerReleaseEvidenceSchema.safeParse(candidate);
+  if (!parsed.success) throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  const release = parsed.data;
+  const output = release.compilationOutput;
+  if (
+    output.kind === "connection_type" ||
+    release.kind !== expectation.kind ||
+    release.rootId !== expectation.rootId ||
+    (expectation.organizationId !== undefined &&
+      release.organizationId !== expectation.organizationId) ||
+    (expectation.releaseRevision !== undefined &&
+      release.releaseRevision !== expectation.releaseRevision) ||
+    !hasAuthenticStoredCustomerDefinitionRelease({
+      organizationId: release.organizationId,
+      kind: release.kind,
+      key: release.key,
+      rootId: release.rootId,
+      releaseVersion: release.releaseVersion,
+      sourceContractVersion: release.sourceContractVersion,
+      validationContractVersion: release.validationContractVersion,
+      contentFingerprint: release.contentFingerprint,
+      resolutionFingerprint: release.resolutionFingerprint,
+      compilationOutput: output,
+      resolutionSnapshot: release.resolutionSnapshot,
+    }) ||
+    !definitionReleaseManifestMatchesCanonicalContent(release) ||
+    !definitionReleaseModuleTargetsMatch(release)
+  )
+    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+
+  let catalogueVerification: DefinitionCatalogueVerification;
+  try {
+    catalogueVerification = await verifyDefinitionCatalogueDependencies(
+      release.dependencyManifest,
+      catalogue,
+      release.validationContractVersion,
+    );
+  } catch {
+    throw new DefinitionConsumerReadError("DEFINITION_READ_FAILED");
+  }
+  if (catalogueVerification === "unavailable")
+    throw new DefinitionConsumerReadError("DEFINITION_DEPENDENCY_UNAVAILABLE");
+  if (catalogueVerification === "invalid")
+    throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+
+  const result = definitionConsumerReadResultSchema.safeParse({
+    kind: release.kind,
+    organizationId: release.organizationId,
+    definitionKey: release.key,
+    rootId: release.rootId,
+    releaseRevision: release.releaseRevision,
+    releaseVersion: release.releaseVersion,
+    validationContractVersion: release.validationContractVersion,
+    contentFingerprint: release.contentFingerprint,
+    resolutionFingerprint: release.resolutionFingerprint,
+    content: output.canonical.content,
+    dependencyManifest: release.dependencyManifest,
+    correlationId,
+  });
+  if (!result.success) throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  return result.data;
+};
+
 export const createDefinitionConsumerReadService = (
   repository: DefinitionConsumerReadRepository,
   catalogue: DefinitionPublicationCatalogue,
@@ -310,66 +347,18 @@ export const createDefinitionConsumerReadService = (
     if (candidate === undefined)
       throw new DefinitionConsumerReadError("DEFINITION_RELEASE_NOT_FOUND");
 
-    // Dispatch on trusted outer metadata before parsing canonical Application content.
-    selectApplicationReleaseContract(candidate);
-    const parsed = storedConsumerReleaseEvidenceSchema.safeParse(candidate);
-    if (!parsed.success)
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-    const release = parsed.data;
-    const output = release.compilationOutput;
-    if (
-      output.kind === "connection_type" ||
-      release.kind !== command.data.kind ||
-      release.rootId !== command.data.rootId ||
-      release.organizationId !== context.data.organizationId ||
-      (command.data.selector.selection === "revision" &&
-        release.releaseRevision !== command.data.selector.releaseRevision) ||
-      !hasAuthenticStoredCustomerDefinitionRelease({
-        organizationId: release.organizationId,
-        kind: release.kind,
-        key: release.key,
-        rootId: release.rootId,
-        releaseVersion: release.releaseVersion,
-        contentFingerprint: release.contentFingerprint,
-        resolutionFingerprint: release.resolutionFingerprint,
-        compilationOutput: output,
-        resolutionSnapshot: release.resolutionSnapshot,
-      }) ||
-      !definitionReleaseManifestMatchesCanonicalContent(release) ||
-      !definitionReleaseModuleTargetsMatch(release)
-    )
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-
-    let catalogueVerification: DefinitionCatalogueVerification;
-    try {
-      catalogueVerification = await verifyDefinitionCatalogueDependencies(
-        release.dependencyManifest,
-        catalogue,
-      );
-    } catch {
-      throw new DefinitionConsumerReadError("DEFINITION_READ_FAILED");
-    }
-    if (catalogueVerification === "unavailable")
-      throw new DefinitionConsumerReadError("DEFINITION_DEPENDENCY_UNAVAILABLE");
-    if (catalogueVerification === "invalid")
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-
-    const result = definitionConsumerReadResultSchema.safeParse({
-      kind: release.kind,
-      organizationId: release.organizationId,
-      definitionKey: release.key,
-      rootId: release.rootId,
-      releaseRevision: release.releaseRevision,
-      releaseVersion: release.releaseVersion,
-      validationContractVersion: release.validationContractVersion,
-      contentFingerprint: release.contentFingerprint,
-      resolutionFingerprint: release.resolutionFingerprint,
-      content: output.canonical.content,
-      dependencyManifest: release.dependencyManifest,
-      correlationId: context.data.correlationId,
-    });
-    if (!result.success)
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-    return result.data;
+    return projectStoredConsumerRelease(
+      candidate,
+      {
+        kind: command.data.kind,
+        rootId: command.data.rootId,
+        organizationId: context.data.organizationId,
+        ...(command.data.selector.selection === "revision"
+          ? { releaseRevision: command.data.selector.releaseRevision }
+          : {}),
+      },
+      context.data.correlationId,
+      catalogue,
+    );
   },
 });

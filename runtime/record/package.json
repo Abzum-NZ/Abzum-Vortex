@@ -14,6 +14,7 @@
     "@vortex/access": "workspace:*",
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
+    "@vortex/rule": "workspace:*",
     "server-only": "0.0.1"
   },
   "vortex": {
@@ -22,5 +23,8 @@
     "ships": true,
     "engine": true,
     "service": "record"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   }
 }

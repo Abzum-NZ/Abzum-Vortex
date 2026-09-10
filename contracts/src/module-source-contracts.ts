@@ -13,8 +13,102 @@ import {
 } from "./definition-source-common";
 import { moduleSourceRecordOwnershipModeV1Schema } from "./record-ownership-compatibility";
 
+export const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("all_records") }).strict(),
+  z.object({ kind: z.literal("ownership") }).strict(),
+  z.object({ kind: z.literal("direct_share") }).strict(),
+  z
+    .object({
+      kind: z.literal("relationship"),
+      relationship: sourceQualifiedRelationshipSchema,
+      source_permission: namespacedKeySchema,
+    })
+    .strict(),
+]);
+
+const sourceRecordScopeRouteIdentity = (
+  route: z.infer<typeof sourcePermissionRecordScopeRouteSchema>,
+) =>
+  route.kind === "relationship"
+    ? `${route.kind}:${route.relationship}:${route.source_permission}`
+    : route.kind;
+
+export const sourcePermissionRecordScopeBaseSchema = z
+  .object({ routes: z.array(sourcePermissionRecordScopeRouteSchema).min(1) })
+  .strict()
+  .superRefine((value, context) => {
+    const identities = value.routes.map(sourceRecordScopeRouteIdentity);
+    if (new Set(identities).size !== identities.length)
+      context.addIssue({
+        code: "custom",
+        path: ["routes"],
+        message: "Permission record-scope routes must be unique",
+      });
+    if (value.routes.some((route) => route.kind === "all_records") && value.routes.length !== 1)
+      context.addIssue({
+        code: "custom",
+        path: ["routes"],
+        message: "The all-record route must be the sole base route",
+      });
+  });
+
+const sourceSavedConditionParameterBindingSchema = z.discriminatedUnion("source", [
+  z
+    .object({
+      key: builderKeySchema,
+      source: z.literal("current_organization_account_id"),
+    })
+    .strict(),
+  z
+    .object({ key: builderKeySchema, source: z.literal("literal"), value: jsonValueSchema })
+    .strict(),
+]);
+
+export const moduleSourcePermissionRecordScopeSchema =
+  sourcePermissionRecordScopeBaseSchema.safeExtend({
+    saved_condition: z
+      .object({
+        condition: builderKeySchema,
+        parameter_bindings: z.array(sourceSavedConditionParameterBindingSchema),
+      })
+      .strict()
+      .optional(),
+  });
+
+export const sourcePermissionFieldPolicySchema = z
+  .object({
+    readable_fields: z.array(builderKeySchema),
+    changeable_fields: z.array(builderKeySchema),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.readable_fields).size !== value.readable_fields.length)
+      context.addIssue({
+        code: "custom",
+        path: ["readable_fields"],
+        message: "Readable field aliases must be unique",
+      });
+    if (new Set(value.changeable_fields).size !== value.changeable_fields.length)
+      context.addIssue({
+        code: "custom",
+        path: ["changeable_fields"],
+        message: "Changeable field aliases must be unique",
+      });
+    const readable = new Set(value.readable_fields);
+    if (value.changeable_fields.some((field) => !readable.has(field)))
+      context.addIssue({
+        code: "custom",
+        path: ["changeable_fields"],
+        message: "Changeable fields must be a readable subset",
+      });
+  });
+
 const sourceOptionSchema = z
-  .object({ value: z.string().min(1).max(120), label: z.string().min(1).max(60) })
+  .object({
+    value: z.string().min(1).max(120),
+    label: z.string().min(1).max(60),
+    required_permission: namespacedKeySchema.optional(),
+  })
   .strict();
 const sourceFieldBase = {
   id: sourceAliasSchema,
@@ -37,6 +131,215 @@ const numberRange = {
   maximum: z.number().finite().optional(),
 };
 const empty = z.object({}).strict();
+const sourceTextSettingsSchema = z
+  .object({
+    max_length: z.number().int().min(1).max(100_000),
+    format: builderKeySchema.optional(),
+  })
+  .strict();
+const sourceWholeNumberSettingsSchema = z
+  .object({
+    minimum: z.number().int().optional(),
+    maximum: z.number().int().optional(),
+    step: z.number().int().positive().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.minimum === undefined || value.maximum === undefined || value.maximum >= value.minimum,
+    { path: ["maximum"], message: "Maximum cannot be below minimum" },
+  );
+const sourceDecimalSettingsSchema = z
+  .object({
+    ...numberRange,
+    digits_before_decimal: z.number().int().min(1).max(30),
+    decimal_places: z.number().int().min(0).max(12),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.minimum === undefined || value.maximum === undefined || value.maximum >= value.minimum,
+    { path: ["maximum"], message: "Maximum cannot be below minimum" },
+  );
+const sourceMoneySettingsSchema = z
+  .object({
+    currency_mode: z.enum(["fixed", "organisation_default"]),
+    currency: z.string().length(3).optional(),
+    minimum: z.number().finite().optional(),
+    maximum: z.number().finite().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.currency_mode === "fixed") !== (value.currency !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["currency"],
+        message: "Fixed money requires exactly one currency",
+      });
+    if (value.minimum !== undefined && value.maximum !== undefined && value.maximum < value.minimum)
+      context.addIssue({
+        code: "custom",
+        path: ["maximum"],
+        message: "Maximum cannot be below minimum",
+      });
+  });
+const sourceDateSettingsSchema = z
+  .object({ earliest: z.iso.date().optional(), latest: z.iso.date().optional() })
+  .strict();
+const sourceDateTimeSettingsSchema = z
+  .object({ display_time_zone: z.enum(["person", "organisation", "utc"]).optional() })
+  .strict();
+const sourceChoiceSettingsSchema = z
+  .object({ options: z.array(sourceOptionSchema).min(1).max(200) })
+  .strict();
+const sourceTableColumnBase = { key: builderKeySchema, required: z.boolean() };
+const typedSourceTableColumnSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      ...sourceTableColumnBase,
+      type: z.literal("text"),
+      settings: sourceTextSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...sourceTableColumnBase,
+      type: z.literal("whole_number"),
+      settings: sourceWholeNumberSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...sourceTableColumnBase,
+      type: z.literal("decimal_number"),
+      settings: sourceDecimalSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...sourceTableColumnBase,
+      type: z.literal("money"),
+      settings: sourceMoneySettingsSchema,
+    })
+    .strict(),
+  z.object({ ...sourceTableColumnBase, type: z.literal("yes_no"), settings: empty }).strict(),
+  z
+    .object({
+      ...sourceTableColumnBase,
+      type: z.literal("date"),
+      settings: sourceDateSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...sourceTableColumnBase,
+      type: z.literal("date_time"),
+      settings: sourceDateTimeSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...sourceTableColumnBase,
+      type: z.literal("choice"),
+      settings: sourceChoiceSettingsSchema,
+    })
+    .strict(),
+]);
+// Stored V1 source documents may contain this incomplete historical shape.
+// Semantic validation prevents it being newly published until settings exist.
+const legacySourceTableColumnSchema = z
+  .object({
+    ...sourceTableColumnBase,
+    type: z.enum([
+      "text",
+      "whole_number",
+      "decimal_number",
+      "money",
+      "yes_no",
+      "date",
+      "date_time",
+      "choice",
+    ]),
+  })
+  .strict();
+const sourceTableColumnSchema = z.union([
+  typedSourceTableColumnSchema,
+  legacySourceTableColumnSchema,
+]);
+const sourceTableCellValid = (
+  column: z.infer<typeof sourceTableColumnSchema>,
+  value: unknown,
+): boolean => {
+  const parsed = typedSourceTableColumnSchema.safeParse(column);
+  if (!parsed.success) return false;
+  const typedColumn = parsed.data;
+  switch (typedColumn.type) {
+    case "text":
+      return typeof value === "string" && value.length <= typedColumn.settings.max_length;
+    case "whole_number":
+      return (
+        Number.isInteger(value) &&
+        (typedColumn.settings.minimum === undefined ||
+          (value as number) >= typedColumn.settings.minimum) &&
+        (typedColumn.settings.maximum === undefined ||
+          (value as number) <= typedColumn.settings.maximum) &&
+        (typedColumn.settings.step === undefined ||
+          ((value as number) - (typedColumn.settings.minimum ?? 0)) % typedColumn.settings.step ===
+            0)
+      );
+    case "decimal_number": {
+      if (typeof value !== "number" || !Number.isFinite(value)) return false;
+      const [whole, fraction = ""] = String(Math.abs(value)).split(".");
+      return (
+        !String(value).toLowerCase().includes("e") &&
+        whole!.length <= typedColumn.settings.digits_before_decimal &&
+        fraction.length <= typedColumn.settings.decimal_places &&
+        (typedColumn.settings.minimum === undefined || value >= typedColumn.settings.minimum) &&
+        (typedColumn.settings.maximum === undefined || value <= typedColumn.settings.maximum)
+      );
+    }
+    case "money":
+      return (
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        (typedColumn.settings.minimum === undefined || value >= typedColumn.settings.minimum) &&
+        (typedColumn.settings.maximum === undefined || value <= typedColumn.settings.maximum)
+      );
+    case "yes_no":
+      return typeof value === "boolean";
+    case "date":
+      return (
+        typeof value === "string" &&
+        z.iso.date().safeParse(value).success &&
+        (typedColumn.settings.earliest === undefined || value >= typedColumn.settings.earliest) &&
+        (typedColumn.settings.latest === undefined || value <= typedColumn.settings.latest)
+      );
+    case "date_time":
+      return typeof value === "string" && z.iso.datetime({ offset: true }).safeParse(value).success;
+    case "choice":
+      return (
+        typeof value === "string" &&
+        typedColumn.settings.options.some((option) => option.value === value)
+      );
+  }
+};
+const sourceTableDefaultValid = (
+  columns: readonly z.infer<typeof sourceTableColumnSchema>[],
+  rows: readonly unknown[],
+): boolean => {
+  const keys = new Set(columns.map((column) => column.key));
+  return rows.every((row) => {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) return false;
+    const cells = row as Record<string, unknown>;
+    if (Object.keys(cells).some((key) => !keys.has(key))) return false;
+    return columns.every(
+      (column) =>
+        (!column.required && !Object.prototype.hasOwnProperty.call(cells, column.key)) ||
+        (Object.prototype.hasOwnProperty.call(cells, column.key) &&
+          sourceTableCellValid(column, cells[column.key])),
+    );
+  });
+};
 const sourceAttachmentSettingsSchema = z
   .object({
     allowed_kinds: z
@@ -121,15 +424,7 @@ const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
     .strict(),
 ]);
 const sourceFieldMembers = [
-  sourceField(
-    "text",
-    z
-      .object({
-        max_length: z.number().int().min(1).max(100_000),
-        format: builderKeySchema.optional(),
-      })
-      .strict(),
-  ),
+  sourceField("text", sourceTextSettingsSchema),
   sourceField(
     "long_text",
     z.object({ max_length: z.number().int().min(1).max(1_000_000) }).strict(),
@@ -145,86 +440,13 @@ const sourceFieldMembers = [
       })
       .strict(),
   ),
-  sourceField(
-    "whole_number",
-    z
-      .object({
-        minimum: z.number().int().optional(),
-        maximum: z.number().int().optional(),
-        step: z.number().int().positive().optional(),
-      })
-      .strict()
-      .refine(
-        (value) =>
-          value.minimum === undefined ||
-          value.maximum === undefined ||
-          value.maximum >= value.minimum,
-        { path: ["maximum"], message: "Maximum cannot be below minimum" },
-      ),
-  ),
-  sourceField(
-    "decimal_number",
-    z
-      .object({
-        ...numberRange,
-        digits_before_decimal: z.number().int().min(1).max(30),
-        decimal_places: z.number().int().min(0).max(12),
-      })
-      .strict()
-      .refine(
-        (value) =>
-          value.minimum === undefined ||
-          value.maximum === undefined ||
-          value.maximum >= value.minimum,
-        { path: ["maximum"], message: "Maximum cannot be below minimum" },
-      ),
-  ),
-  sourceField(
-    "money",
-    z
-      .object({
-        currency_mode: z.enum(["fixed", "organisation_default"]),
-        currency: z.string().length(3).optional(),
-        minimum: z.number().finite().optional(),
-        maximum: z.number().finite().optional(),
-      })
-      .strict()
-      .superRefine((value, context) => {
-        if ((value.currency_mode === "fixed") !== (value.currency !== undefined))
-          context.addIssue({
-            code: "custom",
-            path: ["currency"],
-            message: "Fixed money requires exactly one currency",
-          });
-        if (
-          value.minimum !== undefined &&
-          value.maximum !== undefined &&
-          value.maximum < value.minimum
-        )
-          context.addIssue({
-            code: "custom",
-            path: ["maximum"],
-            message: "Maximum cannot be below minimum",
-          });
-      }),
-  ),
+  sourceField("whole_number", sourceWholeNumberSettingsSchema),
+  sourceField("decimal_number", sourceDecimalSettingsSchema),
+  sourceField("money", sourceMoneySettingsSchema),
   sourceField("yes_no", empty),
-  sourceField(
-    "date",
-    z.object({ earliest: z.iso.date().optional(), latest: z.iso.date().optional() }).strict(),
-  ),
-  sourceField(
-    "date_time",
-    z
-      .object({
-        display_time_zone: z.enum(["person", "organisation", "utc"]).optional(),
-      })
-      .strict(),
-  ),
-  sourceField(
-    "choice",
-    z.object({ options: z.array(sourceOptionSchema).min(1).max(200) }).strict(),
-  ),
+  sourceField("date", sourceDateSettingsSchema),
+  sourceField("date_time", sourceDateTimeSettingsSchema),
+  sourceField("choice", sourceChoiceSettingsSchema),
   sourceField(
     "several_choices",
     z
@@ -260,32 +482,26 @@ const sourceFieldMembers = [
       .object({
         minimum_rows: z.number().int().min(0),
         maximum_rows: z.number().int().min(1).max(1_000),
-        columns: z
-          .array(
-            z
-              .object({
-                key: builderKeySchema,
-                type: z.enum([
-                  "text",
-                  "whole_number",
-                  "decimal_number",
-                  "money",
-                  "yes_no",
-                  "date",
-                  "date_time",
-                  "choice",
-                ]),
-                required: z.boolean(),
-              })
-              .strict(),
-          )
-          .min(1)
-          .max(40),
+        columns: z.array(sourceTableColumnSchema).min(1).max(40),
       })
       .strict()
-      .refine((value) => value.maximum_rows >= value.minimum_rows, {
-        path: ["maximum_rows"],
-        message: "Maximum rows cannot be below minimum rows",
+      .superRefine((value, context) => {
+        if (value.maximum_rows < value.minimum_rows)
+          context.addIssue({
+            code: "custom",
+            path: ["maximum_rows"],
+            message: "Maximum rows cannot be below minimum rows",
+          });
+        const keys = value.columns.map((column) => column.key);
+        if (
+          value.columns.every((column) => "settings" in column) &&
+          new Set(keys).size !== keys.length
+        )
+          context.addIssue({
+            code: "custom",
+            path: ["columns"],
+            message: "Table column keys must be unique",
+          });
       }),
   ),
   sourceField(
@@ -422,17 +638,23 @@ export const moduleSourceFieldSchema = z
           )
             invalid("Every default must be a declared choice within the selection limit");
           break;
-        case "table":
+        case "table": {
+          const completeSourceColumns = value.settings.columns.every(
+            (column) => "settings" in column,
+          );
           if (
             !Array.isArray(value.default) ||
             value.default.length < value.settings.minimum_rows ||
             value.default.length > value.settings.maximum_rows ||
-            !value.default.every(
-              (row) => typeof row === "object" && row !== null && !Array.isArray(row),
-            )
+            (completeSourceColumns
+              ? !sourceTableDefaultValid(value.settings.columns, value.default)
+              : !value.default.every(
+                  (row) => typeof row === "object" && row !== null && !Array.isArray(row),
+                ))
           )
-            invalid("Default must be a table within the configured row limits");
+            invalid("Default must match the configured table columns and row limits");
           break;
+        }
         case "link":
         case "link_to_one_of_several":
         case "link_to_person":
@@ -722,8 +944,18 @@ const moduleSourceBodySchema = z
           ]),
           named_action: builderKeySchema.optional(),
           administrative: z.boolean(),
+          record_scope: moduleSourcePermissionRecordScopeSchema.optional(),
+          field_policy: sourcePermissionFieldPolicySchema.optional(),
         })
-        .strict(),
+        .strict()
+        .superRefine((value, context) => {
+          if (value.field_policy !== undefined && value.record_type === undefined)
+            context.addIssue({
+              code: "custom",
+              path: ["field_policy"],
+              message: "Only record permissions may declare a field policy",
+            });
+        }),
     ),
     actions: z.array(
       z
@@ -732,13 +964,40 @@ const moduleSourceBodySchema = z
           key: namespacedKeySchema,
           label: z.string().min(1).max(120),
           record_type: builderKeySchema,
-          permission: namespacedKeySchema,
+          permission: namespacedKeySchema.optional(),
+          permission_alternatives: z.array(namespacedKeySchema).min(2).optional(),
           shareable: z.boolean(),
           inputs: z.array(actionInputSchema),
           precondition: sourceConditionSchema.optional(),
           effects: z.array(sourceActionEffectSchema).min(1).max(10),
         })
-        .strict(),
+        .strict()
+        .superRefine((value, context) => {
+          if ((value.permission === undefined) === (value.permission_alternatives === undefined))
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "An action requires either one permission or canonical alternatives",
+            });
+          const alternatives = value.permission_alternatives;
+          if (!alternatives) return;
+          if (new Set(alternatives).size !== alternatives.length)
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "Action permission alternatives must be unique",
+            });
+          if (
+            alternatives.some(
+              (permission, index) => index > 0 && alternatives[index - 1]! >= permission,
+            )
+          )
+            context.addIssue({
+              code: "custom",
+              path: ["permission_alternatives"],
+              message: "Action permission alternatives must use canonical order",
+            });
+        }),
     ),
     events: z.array(
       z
@@ -784,7 +1043,14 @@ const moduleSourceBodySchema = z
             z
               .object({
                 key: builderKeySchema,
-                type: z.enum(["text", "number", "boolean", "date", "date_time"]),
+                type: z.enum([
+                  "text",
+                  "number",
+                  "boolean",
+                  "date",
+                  "date_time",
+                  "organization_account_reference",
+                ]),
               })
               .strict(),
           ),

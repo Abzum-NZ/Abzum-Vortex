@@ -1,0 +1,1459 @@
+begin;
+
+set local search_path = pg_catalog, extensions, public;
+
+select no_plan();
+
+-- #35 Slice 2.1 proves exact record fact loading only. Four fixed
+-- operation-specific loaders resolve their own declaration, current release
+-- and installed storage binding, then load the exact target row, proposed
+-- row, current share contributions and related edges. Each loader reports the
+-- #36 predicates as separate independent facts; nothing here composes an
+-- eligibility, permission alternative, allow result or row authorization, and
+-- no policy is attached to any table. Those remain later #35 slices.
+
+insert into vortex_identity.tenants (
+  tenant_id, short_name, display_name, state, created_at, created_by,
+  state_changed_at, revision
+) values (
+  '14300000-0000-4000-8000-000000000001', 'exact_record',
+  'Exact record', 'active', pg_catalog.clock_timestamp(),
+  '94300000-0000-4000-8000-000000000001',
+  pg_catalog.clock_timestamp(), 1
+);
+
+insert into vortex_identity.organizations (
+  organization_id, tenant_id, short_name, display_name, state,
+  created_at, created_by, state_changed_at, revision
+) values
+  (
+    '24300000-0000-4000-8000-000000000001',
+    '14300000-0000-4000-8000-000000000001', 'exact_record',
+    'Exact record', 'active', pg_catalog.clock_timestamp(),
+    '94300000-0000-4000-8000-000000000001',
+    pg_catalog.clock_timestamp(), 1
+  ),
+  (
+    '24300000-0000-4000-8000-000000000002',
+    '14300000-0000-4000-8000-000000000001', 'foreign_records',
+    'Foreign records', 'active', pg_catalog.clock_timestamp(),
+    '94300000-0000-4000-8000-000000000001',
+    pg_catalog.clock_timestamp(), 1
+  );
+
+insert into vortex_identity.identity_projections (
+  identity_id, state, created_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+) values
+  (
+    '44300000-0000-4000-8000-000000000101', 'active',
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '94300000-0000-4000-8000-000000000001',
+    'a4300000-0000-4000-8000-000000000001', 1
+  ),
+  (
+    '44300000-0000-4000-8000-000000000102', 'active',
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '94300000-0000-4000-8000-000000000001',
+    'a4300000-0000-4000-8000-000000000002', 1
+  );
+
+insert into vortex_identity.organization_accounts (
+  organization_account_id, organization_id, identity_id, display_name,
+  state, activated_at, changed_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+) values
+  (
+    '74300000-0000-4000-8000-000000000001',
+    '24300000-0000-4000-8000-000000000001',
+    '44300000-0000-4000-8000-000000000101', 'Record author', 'active',
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    pg_catalog.clock_timestamp(), '94300000-0000-4000-8000-000000000001',
+    'a4300000-0000-4000-8000-000000000003', 1
+  ),
+  (
+    '74300000-0000-4000-8000-000000000002',
+    '24300000-0000-4000-8000-000000000001',
+    '44300000-0000-4000-8000-000000000102', 'Other author', 'active',
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    pg_catalog.clock_timestamp(), '94300000-0000-4000-8000-000000000001',
+    'a4300000-0000-4000-8000-000000000004', 1
+  );
+
+select * from vortex_access.initialize_organization_access_version(
+  '24300000-0000-4000-8000-000000000001',
+  '94300000-0000-4000-8000-000000000001',
+  'a4300000-0000-4000-8000-000000000005'
+);
+
+-- Fixture-side RecordScope construction only. The loaders never build an
+-- identity; they read the stored identity and check it against their own
+-- resolved binding.
+create function pg_temp.record_identity(
+  p_record_id uuid,
+  p_module_root_id uuid default '44300000-0000-4000-8000-000000000001',
+  p_record_type_id uuid default '54300000-0000-4000-8000-000000000001',
+  p_storage_contract_id uuid default '64300000-0000-4000-8000-000000000001',
+  p_storage_scope text default 'application_contained',
+  p_organization_id uuid default '24300000-0000-4000-8000-000000000001',
+  p_application_root_id uuid default '34300000-0000-4000-8000-000000000001'
+)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+    'storageScope', p_storage_scope,
+    'organizationId', p_organization_id,
+    'moduleRootId', p_module_root_id,
+    'recordTypeId', p_record_type_id,
+    'storageContractId', p_storage_contract_id,
+    'recordId', p_record_id,
+    'applicationRootId', case
+      when p_storage_scope = 'application_contained' then p_application_root_id
+      else null
+    end
+  ))
+$function$;
+
+-- Immutable release evidence. Only the current release supplies an installed
+-- storage binding; the superseded release remains readable and must never be
+-- selected for a live operation.
+create table vortex_access.test_exact_record_release_bindings (
+  organization_id uuid not null,
+  application_root_id uuid not null,
+  module_root_id uuid not null,
+  record_type_id uuid not null,
+  storage_contract_id uuid not null,
+  storage_scope text not null,
+  release_id uuid not null,
+  release_revision bigint not null,
+  release_state text not null,
+  saved_condition_release jsonb,
+  record_type_shape jsonb,
+  primary key (organization_id, application_root_id, record_type_id, release_id)
+);
+revoke all on table vortex_access.test_exact_record_release_bindings
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+insert into vortex_access.test_exact_record_release_bindings values
+  (
+    '24300000-0000-4000-8000-000000000001',
+    '34300000-0000-4000-8000-000000000001',
+    '44300000-0000-4000-8000-000000000001',
+    '54300000-0000-4000-8000-000000000001',
+    '64300000-0000-4000-8000-000000000001',
+    'application_contained',
+    'c4300000-0000-4000-8000-000000000001', 2, 'current',
+    '{"conditionId":"c4300000-0000-4000-8000-000000000201","sourceRecordTypeId":"54300000-0000-4000-8000-000000000001","publishedRevision":1,"contractFingerprint":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","parameters":[{"key":"actor","type":"text"}],"condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f4300000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"actor"}},"declaredFieldIds":["f4300000-0000-4000-8000-000000000001"]}'::jsonb,
+    '{"recordTypeId":"54300000-0000-4000-8000-000000000001","fields":[{"fieldId":"f4300000-0000-4000-8000-000000000001","type":"text"}]}'::jsonb
+  ),
+  (
+    '24300000-0000-4000-8000-000000000001',
+    '34300000-0000-4000-8000-000000000001',
+    '44300000-0000-4000-8000-000000000001',
+    '54300000-0000-4000-8000-000000000001',
+    '64300000-0000-4000-8000-000000000009',
+    'application_contained',
+    'c4300000-0000-4000-8000-000000000009', 1, 'superseded',
+    '{"conditionId":"c4300000-0000-4000-8000-000000000201","sourceRecordTypeId":"54300000-0000-4000-8000-000000000001","publishedRevision":1,"contractFingerprint":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","parameters":[{"key":"actor","type":"text"}],"condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f4300000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"actor"}},"declaredFieldIds":["f4300000-0000-4000-8000-000000000001"]}'::jsonb,
+    '{"recordTypeId":"54300000-0000-4000-8000-000000000001","fields":[{"fieldId":"f4300000-0000-4000-8000-000000000001","type":"text"}]}'::jsonb
+  ),
+  (
+    '24300000-0000-4000-8000-000000000001',
+    '34300000-0000-4000-8000-000000000001',
+    '44300000-0000-4000-8000-000000000002',
+    '54300000-0000-4000-8000-000000000002',
+    '64300000-0000-4000-8000-000000000002',
+    'organization_shared',
+    'c4300000-0000-4000-8000-000000000002', 1, 'current', null, null
+  );
+
+-- The trusted record-operation declarations. A request caller supplies no
+-- operation key, permission, record type or release; each loader below fixes
+-- its own row. The substituted entry exists and is reachable by no loader.
+create table vortex_access.test_exact_record_operation_declarations (
+  operation_key text primary key,
+  action_kind text not null,
+  permission_id uuid not null,
+  record_type_id uuid not null,
+  release_id uuid not null,
+  permission_record_scope jsonb not null
+);
+revoke all on table vortex_access.test_exact_record_operation_declarations
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+insert into vortex_access.test_exact_record_operation_declarations
+select candidate.operation_key, candidate.action_kind, candidate.permission_id,
+  '54300000-0000-4000-8000-000000000001', candidate.release_id,
+  '{"routes":[{"kind":"ownership"}],"savedCondition":{"conditionId":"c4300000-0000-4000-8000-000000000201","publishedRevision":1,"contractFingerprint":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","parameterBindings":[{"key":"actor","source":"current_organization_account_id"}]}}'::jsonb
+from (values
+  ('record.read', 'read', '64300000-0000-4000-8000-000000000101'::uuid,
+    'c4300000-0000-4000-8000-000000000001'::uuid),
+  ('record.create', 'create', '64300000-0000-4000-8000-000000000102'::uuid,
+    'c4300000-0000-4000-8000-000000000001'::uuid),
+  ('record.update', 'update', '64300000-0000-4000-8000-000000000103'::uuid,
+    'c4300000-0000-4000-8000-000000000001'::uuid),
+  ('record.delete', 'delete', '64300000-0000-4000-8000-000000000104'::uuid,
+    'c4300000-0000-4000-8000-000000000001'::uuid),
+  ('record.read.substituted', 'read', '64300000-0000-4000-8000-000000000101'::uuid,
+    'c4300000-0000-4000-8000-000000000009'::uuid)
+) as candidate(operation_key, action_kind, permission_id, release_id);
+
+create table vortex_access.test_exact_record_rows (
+  record_id uuid primary key,
+  record_scope jsonb not null,
+  ownership_mode text not null,
+  owner_organization_account_id uuid,
+  owner_group_id uuid,
+  lifecycle_state text not null,
+  field_values jsonb not null
+);
+revoke all on table vortex_access.test_exact_record_rows
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+insert into vortex_access.test_exact_record_rows values
+  (
+    'd4300000-0000-4000-8000-000000000101',
+    pg_temp.record_identity('d4300000-0000-4000-8000-000000000101'),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    'active',
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000102',
+    pg_temp.record_identity('d4300000-0000-4000-8000-000000000102'),
+    'organization_account', '74300000-0000-4000-8000-000000000002', null,
+    'active',
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000002"}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000103',
+    pg_temp.record_identity(
+      'd4300000-0000-4000-8000-000000000103',
+      p_organization_id => '24300000-0000-4000-8000-000000000002'
+    ),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    'active',
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000104',
+    pg_temp.record_identity(
+      'd4300000-0000-4000-8000-000000000104',
+      p_application_root_id => '34300000-0000-4000-8000-000000000002'
+    ),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    'active',
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000105',
+    pg_temp.record_identity(
+      'd4300000-0000-4000-8000-000000000105',
+      p_storage_contract_id => '64300000-0000-4000-8000-000000000009'
+    ),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    'active',
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000106',
+    pg_temp.record_identity('d4300000-0000-4000-8000-000000000106'),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    'soft_deleted',
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000107',
+    pg_temp.record_identity('d4300000-0000-4000-8000-000000000107'),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    'active',
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000201',
+    pg_temp.record_identity(
+      'd4300000-0000-4000-8000-000000000201',
+      '44300000-0000-4000-8000-000000000002',
+      '54300000-0000-4000-8000-000000000002',
+      '64300000-0000-4000-8000-000000000002', 'organization_shared'
+    ),
+    'none', null, null, 'active', '{}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000202',
+    pg_temp.record_identity(
+      'd4300000-0000-4000-8000-000000000202',
+      '44300000-0000-4000-8000-000000000002',
+      '54300000-0000-4000-8000-000000000002',
+      '64300000-0000-4000-8000-000000000002', 'organization_shared'
+    ) || '{"unexpected":true}'::jsonb,
+    'none', null, null, 'active', '{}'
+  ),
+  (
+    'd4300000-0000-4000-8000-000000000204',
+    pg_temp.record_identity(
+      'd4300000-0000-4000-8000-000000000204',
+      '44300000-0000-4000-8000-000000000002',
+      '54300000-0000-4000-8000-000000000002',
+      '64300000-0000-4000-8000-000000000002', 'organization_shared',
+      '24300000-0000-4000-8000-000000000002'
+    ),
+    'none', null, null, 'active', '{}'
+  );
+
+create table vortex_access.test_exact_record_proposals (
+  proposal_id uuid primary key,
+  operation_key text not null,
+  target_record_id uuid,
+  record_scope jsonb not null,
+  ownership_mode text not null,
+  owner_organization_account_id uuid,
+  owner_group_id uuid,
+  field_values jsonb not null
+);
+revoke all on table vortex_access.test_exact_record_proposals
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+insert into vortex_access.test_exact_record_proposals values
+  (
+    'e4300000-0000-4000-8000-000000000101', 'record.create', null,
+    pg_temp.record_identity('d4300000-0000-4000-8000-000000000301'),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'e4300000-0000-4000-8000-000000000102', 'record.update',
+    'd4300000-0000-4000-8000-000000000101',
+    pg_temp.record_identity('d4300000-0000-4000-8000-000000000101'),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000002"}'
+  ),
+  (
+    'e4300000-0000-4000-8000-000000000103', 'record.update',
+    'd4300000-0000-4000-8000-000000000101',
+    pg_temp.record_identity(
+      'd4300000-0000-4000-8000-000000000101',
+      '44300000-0000-4000-8000-000000000002',
+      '54300000-0000-4000-8000-000000000002',
+      '64300000-0000-4000-8000-000000000002', 'organization_shared'
+    ),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'e4300000-0000-4000-8000-000000000104', 'record.create', null,
+    pg_temp.record_identity(
+      'd4300000-0000-4000-8000-000000000302',
+      p_organization_id => '24300000-0000-4000-8000-000000000002'
+    ),
+    'organization_account', '74300000-0000-4000-8000-000000000001', null,
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000001"}'
+  ),
+  (
+    'e4300000-0000-4000-8000-000000000105', 'record.update',
+    'd4300000-0000-4000-8000-000000000102',
+    pg_temp.record_identity('d4300000-0000-4000-8000-000000000102'),
+    'organization_account', '74300000-0000-4000-8000-000000000002', null,
+    '{"f4300000-0000-4000-8000-000000000001":"74300000-0000-4000-8000-000000000002"}'
+  );
+
+create table vortex_access.test_exact_record_relationship_declarations (
+  relationship_id uuid not null,
+  from_module_root_id uuid not null,
+  from_record_type_id uuid not null,
+  to_module_root_id uuid not null,
+  to_record_type_id uuid not null,
+  release_id uuid not null,
+  primary key (relationship_id, to_module_root_id, to_record_type_id)
+);
+revoke all on table vortex_access.test_exact_record_relationship_declarations
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+insert into vortex_access.test_exact_record_relationship_declarations values (
+  'c4300000-0000-4000-8000-000000000101',
+  '44300000-0000-4000-8000-000000000001',
+  '54300000-0000-4000-8000-000000000001',
+  '44300000-0000-4000-8000-000000000002',
+  '54300000-0000-4000-8000-000000000002',
+  'c4300000-0000-4000-8000-000000000001'
+);
+
+create table vortex_access.test_exact_record_relationship_edges (
+  edge_id uuid primary key,
+  relationship_id uuid not null,
+  from_record_id uuid not null,
+  to_record_id uuid not null
+);
+revoke all on table vortex_access.test_exact_record_relationship_edges
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+insert into vortex_access.test_exact_record_relationship_edges values
+  ('e4300000-0000-4000-8000-000000000001',
+   'c4300000-0000-4000-8000-000000000101',
+   'd4300000-0000-4000-8000-000000000101',
+   'd4300000-0000-4000-8000-000000000201'),
+  -- A foreign-organisation endpoint stays a valid #36 nonmatch, not a refusal.
+  ('e4300000-0000-4000-8000-000000000002',
+   'c4300000-0000-4000-8000-000000000101',
+   'd4300000-0000-4000-8000-000000000101',
+   'd4300000-0000-4000-8000-000000000204'),
+  -- A malformed endpoint identity must refuse rather than be dropped.
+  ('e4300000-0000-4000-8000-000000000003',
+   'c4300000-0000-4000-8000-000000000101',
+   'd4300000-0000-4000-8000-000000000107',
+   'd4300000-0000-4000-8000-000000000202');
+
+insert into vortex_access.organization_direct_record_shares (
+  organization_id, direct_share_id, storage_scope, application_root_id,
+  module_root_id, record_type_id, storage_contract_id, record_id,
+  recipient_kind, organization_account_id, group_id, readable_field_ids,
+  changeable_field_ids, starts_at, expires_at, state, revision, granted_by,
+  granted_at, grant_correlation_id, reason, changed_at
+)
+select '24300000-0000-4000-8000-000000000001', candidate.direct_share_id,
+  'application_contained', '34300000-0000-4000-8000-000000000001',
+  '44300000-0000-4000-8000-000000000001',
+  '54300000-0000-4000-8000-000000000001',
+  '64300000-0000-4000-8000-000000000001', candidate.record_id,
+  'organization_account', '74300000-0000-4000-8000-000000000001', null,
+  array['f4300000-0000-4000-8000-000000000001'::uuid], array[]::uuid[],
+  pg_catalog.clock_timestamp() - interval '1 minute', null, 'active', 1,
+  '74300000-0000-4000-8000-000000000002', pg_catalog.clock_timestamp(),
+  candidate.correlation_id, candidate.reason, pg_catalog.clock_timestamp()
+from (values
+  ('b4300000-0000-4000-8000-000000000001'::uuid,
+    'd4300000-0000-4000-8000-000000000101'::uuid, 'Target record share',
+    'a4300000-0000-4000-8000-000000000011'::uuid),
+  ('b4300000-0000-4000-8000-000000000002'::uuid,
+    'd4300000-0000-4000-8000-000000000102'::uuid, 'Sibling record share',
+    'a4300000-0000-4000-8000-000000000012'::uuid)
+) as candidate(direct_share_id, record_id, reason, correlation_id);
+
+-- Fixed read fact loader. It accepts one record identity and nothing else.
+create function vortex_access.test_load_exact_record_read_facts(
+  p_record_id uuid
+)
+returns table (
+  fact_role text,
+  operation_key text,
+  action_kind text,
+  permission_id uuid,
+  release_id uuid,
+  storage_scope text,
+  module_root_id uuid,
+  record_type_id uuid,
+  storage_contract_id uuid,
+  record_id uuid,
+  ownership_mode text,
+  owner_organization_account_id uuid,
+  owner_group_id uuid,
+  ownership_witness boolean,
+  condition_witness boolean,
+  share_contribution_count bigint,
+  related_record_ids uuid[]
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  declaration_row record;
+  binding_row record;
+  target_row record;
+  checked_at timestamptz;
+begin
+  context_value := vortex_access.validated_human_request_context();
+  checked_at := pg_catalog.clock_timestamp();
+
+  select * into strict declaration_row
+  from vortex_access.test_exact_record_operation_declarations as fixed
+  where fixed.operation_key = 'record.read';
+
+  select * into binding_row
+  from vortex_access.test_exact_record_release_bindings as installed
+  where installed.organization_id = (context_value ->> 'organizationId')::uuid
+    and installed.application_root_id =
+      (context_value ->> 'applicationRootId')::uuid
+    and installed.record_type_id = declaration_row.record_type_id
+    and installed.release_state = 'current';
+  if not found or binding_row.release_id <> declaration_row.release_id then
+    raise exception using errcode = '22023',
+      message = 'Exact record release binding is unavailable';
+  end if;
+
+  select * into target_row
+  from vortex_access.test_exact_record_rows as stored
+  where stored.record_id = p_record_id
+    and stored.lifecycle_state = 'active';
+  if not found then
+    raise exception using errcode = '22023',
+      message = 'Exact record target facts are unavailable';
+  end if;
+  if target_row.record_scope ->> 'storageScope'
+      is distinct from binding_row.storage_scope
+    or (target_row.record_scope ->> 'organizationId')::uuid
+      is distinct from binding_row.organization_id
+    or (target_row.record_scope ->> 'applicationRootId')::uuid
+      is distinct from case
+        when binding_row.storage_scope = 'application_contained'
+        then binding_row.application_root_id else null end
+    or (target_row.record_scope ->> 'moduleRootId')::uuid
+      is distinct from binding_row.module_root_id
+    or (target_row.record_scope ->> 'recordTypeId')::uuid
+      is distinct from binding_row.record_type_id
+    or (target_row.record_scope ->> 'storageContractId')::uuid
+      is distinct from binding_row.storage_contract_id
+    or (target_row.record_scope ->> 'recordId')::uuid is distinct from p_record_id
+  then
+    raise exception using errcode = '22023',
+      message = 'Exact record facts do not match the installed storage binding';
+  end if;
+
+  return query
+  select
+    'target'::text, declaration_row.operation_key, declaration_row.action_kind,
+    declaration_row.permission_id, binding_row.release_id,
+    binding_row.storage_scope, binding_row.module_root_id,
+    binding_row.record_type_id, binding_row.storage_contract_id, p_record_id,
+    target_row.ownership_mode, target_row.owner_organization_account_id,
+    target_row.owner_group_id, visibility.admitted,
+    vortex_access.evaluate_permission_saved_condition(
+      declaration_row.permission_record_scope,
+      binding_row.saved_condition_release, binding_row.record_type_shape,
+      target_row.field_values,
+      (context_value ->> 'organizationAccountId')::uuid
+    ),
+    (
+      select pg_catalog.count(*)
+      from vortex_access.read_current_direct_record_share_contributions(
+        binding_row.organization_id, binding_row.application_root_id,
+        binding_row.module_root_id, binding_row.record_type_id,
+        binding_row.storage_contract_id, binding_row.storage_scope,
+        p_record_id, (context_value ->> 'organizationId')::uuid,
+        (context_value ->> 'applicationRootId')::uuid,
+        (context_value ->> 'organizationAccountId')::uuid, checked_at
+      ) as contribution
+    ),
+    (
+      select pg_catalog.array_agg(related.record_id order by related.record_id)
+      from vortex_access.test_exact_record_relationship_edges as edge
+      join vortex_access.test_exact_record_rows as related
+        on related.record_id = edge.to_record_id
+        and related.lifecycle_state = 'active'
+      join vortex_access.test_exact_record_relationship_declarations as route
+        on route.relationship_id = edge.relationship_id
+        and route.release_id = binding_row.release_id
+        and route.from_module_root_id = binding_row.module_root_id
+        and route.from_record_type_id = binding_row.record_type_id
+        and route.to_module_root_id =
+          (related.record_scope ->> 'moduleRootId')::uuid
+        and route.to_record_type_id =
+          (related.record_scope ->> 'recordTypeId')::uuid
+      join vortex_access.test_exact_record_release_bindings as related_binding
+        on related_binding.organization_id = binding_row.organization_id
+        and related_binding.application_root_id =
+          binding_row.application_root_id
+        and related_binding.record_type_id = route.to_record_type_id
+        and related_binding.release_state = 'current'
+        and related_binding.module_root_id =
+          (related.record_scope ->> 'moduleRootId')::uuid
+        and related_binding.storage_contract_id =
+          (related.record_scope ->> 'storageContractId')::uuid
+        and related_binding.storage_scope =
+          (related.record_scope ->> 'storageScope')
+      where edge.from_record_id = p_record_id
+        and vortex_access.record_relationship_witness_matches(
+          route.relationship_id, route.from_module_root_id,
+          route.from_record_type_id, route.to_module_root_id,
+          route.to_record_type_id, edge.relationship_id,
+          edge.from_record_id, edge.to_record_id, target_row.record_scope,
+          related.record_scope, (context_value ->> 'organizationId')::uuid,
+          (context_value ->> 'applicationRootId')::uuid
+        )
+    )
+  from vortex_access.evaluate_current_record_ownership_visibility(
+    declaration_row.permission_record_scope, target_row.ownership_mode,
+    binding_row.organization_id, binding_row.application_root_id,
+    binding_row.module_root_id, binding_row.record_type_id,
+    binding_row.storage_contract_id, binding_row.storage_scope,
+    target_row.record_scope, target_row.owner_organization_account_id,
+    target_row.owner_group_id, (context_value ->> 'organizationId')::uuid,
+    (context_value ->> 'applicationRootId')::uuid,
+    (context_value ->> 'organizationAccountId')::uuid, checked_at
+  ) as visibility;
+end
+$function$;
+
+-- Fixed create fact loader. It accepts one proposed-row identity; a proposal
+-- published for another operation or naming an existing target is refused.
+create function vortex_access.test_load_exact_record_create_facts(
+  p_proposal_id uuid
+)
+returns table (
+  fact_role text,
+  operation_key text,
+  action_kind text,
+  permission_id uuid,
+  release_id uuid,
+  storage_scope text,
+  module_root_id uuid,
+  record_type_id uuid,
+  storage_contract_id uuid,
+  record_id uuid,
+  ownership_mode text,
+  owner_organization_account_id uuid,
+  owner_group_id uuid,
+  ownership_witness boolean,
+  condition_witness boolean,
+  share_contribution_count bigint,
+  related_record_ids uuid[]
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  declaration_row record;
+  binding_row record;
+  proposed_row record;
+  proposed_record_id uuid;
+  checked_at timestamptz;
+begin
+  context_value := vortex_access.validated_human_request_context();
+  checked_at := pg_catalog.clock_timestamp();
+
+  select * into strict declaration_row
+  from vortex_access.test_exact_record_operation_declarations as fixed
+  where fixed.operation_key = 'record.create';
+
+  select * into binding_row
+  from vortex_access.test_exact_record_release_bindings as installed
+  where installed.organization_id = (context_value ->> 'organizationId')::uuid
+    and installed.application_root_id =
+      (context_value ->> 'applicationRootId')::uuid
+    and installed.record_type_id = declaration_row.record_type_id
+    and installed.release_state = 'current';
+  if not found or binding_row.release_id <> declaration_row.release_id then
+    raise exception using errcode = '22023',
+      message = 'Exact record release binding is unavailable';
+  end if;
+
+  select * into proposed_row
+  from vortex_access.test_exact_record_proposals as stored
+  where stored.proposal_id = p_proposal_id
+    and stored.operation_key = 'record.create';
+  if not found or proposed_row.target_record_id is not null then
+    raise exception using errcode = '22023',
+      message = 'Exact proposed record facts are unavailable';
+  end if;
+
+  proposed_record_id := (proposed_row.record_scope ->> 'recordId')::uuid;
+  if proposed_record_id is null then
+    raise exception using errcode = '22023',
+      message = 'Proposed record facts do not identify the exact target record';
+  end if;
+  if proposed_row.record_scope ->> 'storageScope'
+      is distinct from binding_row.storage_scope
+    or (proposed_row.record_scope ->> 'organizationId')::uuid
+      is distinct from binding_row.organization_id
+    or (proposed_row.record_scope ->> 'applicationRootId')::uuid
+      is distinct from case
+        when binding_row.storage_scope = 'application_contained'
+        then binding_row.application_root_id else null end
+    or (proposed_row.record_scope ->> 'moduleRootId')::uuid
+      is distinct from binding_row.module_root_id
+    or (proposed_row.record_scope ->> 'recordTypeId')::uuid
+      is distinct from binding_row.record_type_id
+    or (proposed_row.record_scope ->> 'storageContractId')::uuid
+      is distinct from binding_row.storage_contract_id
+  then
+    raise exception using errcode = '22023',
+      message = 'Exact record facts do not match the installed storage binding';
+  end if;
+
+  -- A proposed row carries no stored share contribution or factual edge yet.
+  return query
+  select
+    'proposed'::text, declaration_row.operation_key,
+    declaration_row.action_kind, declaration_row.permission_id,
+    binding_row.release_id, binding_row.storage_scope,
+    binding_row.module_root_id, binding_row.record_type_id,
+    binding_row.storage_contract_id, proposed_record_id,
+    proposed_row.ownership_mode, proposed_row.owner_organization_account_id,
+    proposed_row.owner_group_id, visibility.admitted,
+    vortex_access.evaluate_permission_saved_condition(
+      declaration_row.permission_record_scope,
+      binding_row.saved_condition_release, binding_row.record_type_shape,
+      proposed_row.field_values,
+      (context_value ->> 'organizationAccountId')::uuid
+    ),
+    null::bigint, null::uuid[]
+  from vortex_access.evaluate_current_record_ownership_visibility(
+    declaration_row.permission_record_scope, proposed_row.ownership_mode,
+    binding_row.organization_id, binding_row.application_root_id,
+    binding_row.module_root_id, binding_row.record_type_id,
+    binding_row.storage_contract_id, binding_row.storage_scope,
+    proposed_row.record_scope, proposed_row.owner_organization_account_id,
+    proposed_row.owner_group_id, (context_value ->> 'organizationId')::uuid,
+    (context_value ->> 'applicationRootId')::uuid,
+    (context_value ->> 'organizationAccountId')::uuid, checked_at
+  ) as visibility;
+end
+$function$;
+
+-- Fixed update fact loader. It loads the existing target row and the proposed
+-- row for that same exact record as two separate fact rows.
+create function vortex_access.test_load_exact_record_update_facts(
+  p_record_id uuid,
+  p_proposal_id uuid
+)
+returns table (
+  fact_role text,
+  operation_key text,
+  action_kind text,
+  permission_id uuid,
+  release_id uuid,
+  storage_scope text,
+  module_root_id uuid,
+  record_type_id uuid,
+  storage_contract_id uuid,
+  record_id uuid,
+  ownership_mode text,
+  owner_organization_account_id uuid,
+  owner_group_id uuid,
+  ownership_witness boolean,
+  condition_witness boolean,
+  share_contribution_count bigint,
+  related_record_ids uuid[]
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  declaration_row record;
+  binding_row record;
+  target_row record;
+  proposed_row record;
+  checked_at timestamptz;
+begin
+  context_value := vortex_access.validated_human_request_context();
+  checked_at := pg_catalog.clock_timestamp();
+
+  select * into strict declaration_row
+  from vortex_access.test_exact_record_operation_declarations as fixed
+  where fixed.operation_key = 'record.update';
+
+  select * into binding_row
+  from vortex_access.test_exact_record_release_bindings as installed
+  where installed.organization_id = (context_value ->> 'organizationId')::uuid
+    and installed.application_root_id =
+      (context_value ->> 'applicationRootId')::uuid
+    and installed.record_type_id = declaration_row.record_type_id
+    and installed.release_state = 'current';
+  if not found or binding_row.release_id <> declaration_row.release_id then
+    raise exception using errcode = '22023',
+      message = 'Exact record release binding is unavailable';
+  end if;
+
+  select * into target_row
+  from vortex_access.test_exact_record_rows as stored
+  where stored.record_id = p_record_id
+    and stored.lifecycle_state = 'active';
+  if not found then
+    raise exception using errcode = '22023',
+      message = 'Exact record target facts are unavailable';
+  end if;
+  if target_row.record_scope ->> 'storageScope'
+      is distinct from binding_row.storage_scope
+    or (target_row.record_scope ->> 'organizationId')::uuid
+      is distinct from binding_row.organization_id
+    or (target_row.record_scope ->> 'applicationRootId')::uuid
+      is distinct from case
+        when binding_row.storage_scope = 'application_contained'
+        then binding_row.application_root_id else null end
+    or (target_row.record_scope ->> 'moduleRootId')::uuid
+      is distinct from binding_row.module_root_id
+    or (target_row.record_scope ->> 'recordTypeId')::uuid
+      is distinct from binding_row.record_type_id
+    or (target_row.record_scope ->> 'storageContractId')::uuid
+      is distinct from binding_row.storage_contract_id
+    or (target_row.record_scope ->> 'recordId')::uuid is distinct from p_record_id
+  then
+    raise exception using errcode = '22023',
+      message = 'Exact record facts do not match the installed storage binding';
+  end if;
+
+  select * into proposed_row
+  from vortex_access.test_exact_record_proposals as stored
+  where stored.proposal_id = p_proposal_id
+    and stored.operation_key = 'record.update';
+  if not found then
+    raise exception using errcode = '22023',
+      message = 'Exact proposed record facts are unavailable';
+  end if;
+  if proposed_row.target_record_id is distinct from p_record_id
+    or (proposed_row.record_scope ->> 'recordId')::uuid
+      is distinct from p_record_id
+  then
+    raise exception using errcode = '22023',
+      message = 'Proposed record facts do not identify the exact target record';
+  end if;
+  if proposed_row.record_scope ->> 'storageScope'
+      is distinct from binding_row.storage_scope
+    or (proposed_row.record_scope ->> 'organizationId')::uuid
+      is distinct from binding_row.organization_id
+    or (proposed_row.record_scope ->> 'applicationRootId')::uuid
+      is distinct from case
+        when binding_row.storage_scope = 'application_contained'
+        then binding_row.application_root_id else null end
+    or (proposed_row.record_scope ->> 'moduleRootId')::uuid
+      is distinct from binding_row.module_root_id
+    or (proposed_row.record_scope ->> 'recordTypeId')::uuid
+      is distinct from binding_row.record_type_id
+    or (proposed_row.record_scope ->> 'storageContractId')::uuid
+      is distinct from binding_row.storage_contract_id
+  then
+    raise exception using errcode = '22023',
+      message = 'Exact record facts do not match the installed storage binding';
+  end if;
+
+  return query
+  select
+    'target'::text, declaration_row.operation_key, declaration_row.action_kind,
+    declaration_row.permission_id, binding_row.release_id,
+    binding_row.storage_scope, binding_row.module_root_id,
+    binding_row.record_type_id, binding_row.storage_contract_id, p_record_id,
+    target_row.ownership_mode, target_row.owner_organization_account_id,
+    target_row.owner_group_id, visibility.admitted,
+    vortex_access.evaluate_permission_saved_condition(
+      declaration_row.permission_record_scope,
+      binding_row.saved_condition_release, binding_row.record_type_shape,
+      target_row.field_values,
+      (context_value ->> 'organizationAccountId')::uuid
+    ),
+    (
+      select pg_catalog.count(*)
+      from vortex_access.read_current_direct_record_share_contributions(
+        binding_row.organization_id, binding_row.application_root_id,
+        binding_row.module_root_id, binding_row.record_type_id,
+        binding_row.storage_contract_id, binding_row.storage_scope,
+        p_record_id, (context_value ->> 'organizationId')::uuid,
+        (context_value ->> 'applicationRootId')::uuid,
+        (context_value ->> 'organizationAccountId')::uuid, checked_at
+      ) as contribution
+    ),
+    (
+      select pg_catalog.array_agg(related.record_id order by related.record_id)
+      from vortex_access.test_exact_record_relationship_edges as edge
+      join vortex_access.test_exact_record_rows as related
+        on related.record_id = edge.to_record_id
+        and related.lifecycle_state = 'active'
+      join vortex_access.test_exact_record_relationship_declarations as route
+        on route.relationship_id = edge.relationship_id
+        and route.release_id = binding_row.release_id
+        and route.from_module_root_id = binding_row.module_root_id
+        and route.from_record_type_id = binding_row.record_type_id
+        and route.to_module_root_id =
+          (related.record_scope ->> 'moduleRootId')::uuid
+        and route.to_record_type_id =
+          (related.record_scope ->> 'recordTypeId')::uuid
+      join vortex_access.test_exact_record_release_bindings as related_binding
+        on related_binding.organization_id = binding_row.organization_id
+        and related_binding.application_root_id =
+          binding_row.application_root_id
+        and related_binding.record_type_id = route.to_record_type_id
+        and related_binding.release_state = 'current'
+        and related_binding.module_root_id =
+          (related.record_scope ->> 'moduleRootId')::uuid
+        and related_binding.storage_contract_id =
+          (related.record_scope ->> 'storageContractId')::uuid
+        and related_binding.storage_scope =
+          (related.record_scope ->> 'storageScope')
+      where edge.from_record_id = p_record_id
+        and vortex_access.record_relationship_witness_matches(
+          route.relationship_id, route.from_module_root_id,
+          route.from_record_type_id, route.to_module_root_id,
+          route.to_record_type_id, edge.relationship_id,
+          edge.from_record_id, edge.to_record_id, target_row.record_scope,
+          related.record_scope, (context_value ->> 'organizationId')::uuid,
+          (context_value ->> 'applicationRootId')::uuid
+        )
+    )
+  from vortex_access.evaluate_current_record_ownership_visibility(
+    declaration_row.permission_record_scope, target_row.ownership_mode,
+    binding_row.organization_id, binding_row.application_root_id,
+    binding_row.module_root_id, binding_row.record_type_id,
+    binding_row.storage_contract_id, binding_row.storage_scope,
+    target_row.record_scope, target_row.owner_organization_account_id,
+    target_row.owner_group_id, (context_value ->> 'organizationId')::uuid,
+    (context_value ->> 'applicationRootId')::uuid,
+    (context_value ->> 'organizationAccountId')::uuid, checked_at
+  ) as visibility;
+
+  return query
+  select
+    'proposed'::text, declaration_row.operation_key,
+    declaration_row.action_kind, declaration_row.permission_id,
+    binding_row.release_id, binding_row.storage_scope,
+    binding_row.module_root_id, binding_row.record_type_id,
+    binding_row.storage_contract_id, p_record_id,
+    proposed_row.ownership_mode, proposed_row.owner_organization_account_id,
+    proposed_row.owner_group_id, visibility.admitted,
+    vortex_access.evaluate_permission_saved_condition(
+      declaration_row.permission_record_scope,
+      binding_row.saved_condition_release, binding_row.record_type_shape,
+      proposed_row.field_values,
+      (context_value ->> 'organizationAccountId')::uuid
+    ),
+    null::bigint, null::uuid[]
+  from vortex_access.evaluate_current_record_ownership_visibility(
+    declaration_row.permission_record_scope, proposed_row.ownership_mode,
+    binding_row.organization_id, binding_row.application_root_id,
+    binding_row.module_root_id, binding_row.record_type_id,
+    binding_row.storage_contract_id, binding_row.storage_scope,
+    proposed_row.record_scope, proposed_row.owner_organization_account_id,
+    proposed_row.owner_group_id, (context_value ->> 'organizationId')::uuid,
+    (context_value ->> 'applicationRootId')::uuid,
+    (context_value ->> 'organizationAccountId')::uuid, checked_at
+  ) as visibility;
+end
+$function$;
+
+-- Fixed delete fact loader. It accepts one record identity and nothing else.
+create function vortex_access.test_load_exact_record_delete_facts(
+  p_record_id uuid
+)
+returns table (
+  fact_role text,
+  operation_key text,
+  action_kind text,
+  permission_id uuid,
+  release_id uuid,
+  storage_scope text,
+  module_root_id uuid,
+  record_type_id uuid,
+  storage_contract_id uuid,
+  record_id uuid,
+  ownership_mode text,
+  owner_organization_account_id uuid,
+  owner_group_id uuid,
+  ownership_witness boolean,
+  condition_witness boolean,
+  share_contribution_count bigint,
+  related_record_ids uuid[]
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  declaration_row record;
+  binding_row record;
+  target_row record;
+  checked_at timestamptz;
+begin
+  context_value := vortex_access.validated_human_request_context();
+  checked_at := pg_catalog.clock_timestamp();
+
+  select * into strict declaration_row
+  from vortex_access.test_exact_record_operation_declarations as fixed
+  where fixed.operation_key = 'record.delete';
+
+  select * into binding_row
+  from vortex_access.test_exact_record_release_bindings as installed
+  where installed.organization_id = (context_value ->> 'organizationId')::uuid
+    and installed.application_root_id =
+      (context_value ->> 'applicationRootId')::uuid
+    and installed.record_type_id = declaration_row.record_type_id
+    and installed.release_state = 'current';
+  if not found or binding_row.release_id <> declaration_row.release_id then
+    raise exception using errcode = '22023',
+      message = 'Exact record release binding is unavailable';
+  end if;
+
+  select * into target_row
+  from vortex_access.test_exact_record_rows as stored
+  where stored.record_id = p_record_id
+    and stored.lifecycle_state = 'active';
+  if not found then
+    raise exception using errcode = '22023',
+      message = 'Exact record target facts are unavailable';
+  end if;
+  if target_row.record_scope ->> 'storageScope'
+      is distinct from binding_row.storage_scope
+    or (target_row.record_scope ->> 'organizationId')::uuid
+      is distinct from binding_row.organization_id
+    or (target_row.record_scope ->> 'applicationRootId')::uuid
+      is distinct from case
+        when binding_row.storage_scope = 'application_contained'
+        then binding_row.application_root_id else null end
+    or (target_row.record_scope ->> 'moduleRootId')::uuid
+      is distinct from binding_row.module_root_id
+    or (target_row.record_scope ->> 'recordTypeId')::uuid
+      is distinct from binding_row.record_type_id
+    or (target_row.record_scope ->> 'storageContractId')::uuid
+      is distinct from binding_row.storage_contract_id
+    or (target_row.record_scope ->> 'recordId')::uuid is distinct from p_record_id
+  then
+    raise exception using errcode = '22023',
+      message = 'Exact record facts do not match the installed storage binding';
+  end if;
+
+  return query
+  select
+    'target'::text, declaration_row.operation_key, declaration_row.action_kind,
+    declaration_row.permission_id, binding_row.release_id,
+    binding_row.storage_scope, binding_row.module_root_id,
+    binding_row.record_type_id, binding_row.storage_contract_id, p_record_id,
+    target_row.ownership_mode, target_row.owner_organization_account_id,
+    target_row.owner_group_id, visibility.admitted,
+    vortex_access.evaluate_permission_saved_condition(
+      declaration_row.permission_record_scope,
+      binding_row.saved_condition_release, binding_row.record_type_shape,
+      target_row.field_values,
+      (context_value ->> 'organizationAccountId')::uuid
+    ),
+    (
+      select pg_catalog.count(*)
+      from vortex_access.read_current_direct_record_share_contributions(
+        binding_row.organization_id, binding_row.application_root_id,
+        binding_row.module_root_id, binding_row.record_type_id,
+        binding_row.storage_contract_id, binding_row.storage_scope,
+        p_record_id, (context_value ->> 'organizationId')::uuid,
+        (context_value ->> 'applicationRootId')::uuid,
+        (context_value ->> 'organizationAccountId')::uuid, checked_at
+      ) as contribution
+    ),
+    (
+      select pg_catalog.array_agg(related.record_id order by related.record_id)
+      from vortex_access.test_exact_record_relationship_edges as edge
+      join vortex_access.test_exact_record_rows as related
+        on related.record_id = edge.to_record_id
+        and related.lifecycle_state = 'active'
+      join vortex_access.test_exact_record_relationship_declarations as route
+        on route.relationship_id = edge.relationship_id
+        and route.release_id = binding_row.release_id
+        and route.from_module_root_id = binding_row.module_root_id
+        and route.from_record_type_id = binding_row.record_type_id
+        and route.to_module_root_id =
+          (related.record_scope ->> 'moduleRootId')::uuid
+        and route.to_record_type_id =
+          (related.record_scope ->> 'recordTypeId')::uuid
+      join vortex_access.test_exact_record_release_bindings as related_binding
+        on related_binding.organization_id = binding_row.organization_id
+        and related_binding.application_root_id =
+          binding_row.application_root_id
+        and related_binding.record_type_id = route.to_record_type_id
+        and related_binding.release_state = 'current'
+        and related_binding.module_root_id =
+          (related.record_scope ->> 'moduleRootId')::uuid
+        and related_binding.storage_contract_id =
+          (related.record_scope ->> 'storageContractId')::uuid
+        and related_binding.storage_scope =
+          (related.record_scope ->> 'storageScope')
+      where edge.from_record_id = p_record_id
+        and vortex_access.record_relationship_witness_matches(
+          route.relationship_id, route.from_module_root_id,
+          route.from_record_type_id, route.to_module_root_id,
+          route.to_record_type_id, edge.relationship_id,
+          edge.from_record_id, edge.to_record_id, target_row.record_scope,
+          related.record_scope, (context_value ->> 'organizationId')::uuid,
+          (context_value ->> 'applicationRootId')::uuid
+        )
+    )
+  from vortex_access.evaluate_current_record_ownership_visibility(
+    declaration_row.permission_record_scope, target_row.ownership_mode,
+    binding_row.organization_id, binding_row.application_root_id,
+    binding_row.module_root_id, binding_row.record_type_id,
+    binding_row.storage_contract_id, binding_row.storage_scope,
+    target_row.record_scope, target_row.owner_organization_account_id,
+    target_row.owner_group_id, (context_value ->> 'organizationId')::uuid,
+    (context_value ->> 'applicationRootId')::uuid,
+    (context_value ->> 'organizationAccountId')::uuid, checked_at
+  ) as visibility;
+end
+$function$;
+
+revoke execute on function
+  vortex_access.test_load_exact_record_read_facts(uuid),
+  vortex_access.test_load_exact_record_create_facts(uuid),
+  vortex_access.test_load_exact_record_update_facts(uuid, uuid),
+  vortex_access.test_load_exact_record_delete_facts(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function
+  vortex_access.test_load_exact_record_read_facts(uuid),
+  vortex_access.test_load_exact_record_create_facts(uuid),
+  vortex_access.test_load_exact_record_update_facts(uuid, uuid),
+  vortex_access.test_load_exact_record_delete_facts(uuid)
+  to vortex_request;
+grant usage on schema extensions to vortex_request;
+
+select is(
+  (
+    select pg_catalog.jsonb_agg(
+      pg_catalog.format(
+        '%s(%s)', routine.proname,
+        pg_catalog.pg_get_function_arguments(routine.oid)
+      )
+      order by routine.proname collate "C"
+    )
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_namespace as namespace
+      on namespace.oid = routine.pronamespace
+    where namespace.nspname = 'vortex_access'
+      and routine.proname like 'test_load_exact_record_%_facts'
+  ),
+  pg_catalog.jsonb_build_array(
+    'test_load_exact_record_create_facts(p_proposal_id uuid)',
+    'test_load_exact_record_delete_facts(p_record_id uuid)',
+    'test_load_exact_record_read_facts(p_record_id uuid)',
+    'test_load_exact_record_update_facts(p_record_id uuid, p_proposal_id uuid)'
+  ),
+  'one fixed loader per operation accepts only exact record and proposal identities'
+);
+
+select is(
+  (
+    select pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'name', routine.proname,
+        'owner', owner_role.rolname,
+        'securityDefiner', routine.prosecdef,
+        'configuration', routine.proconfig
+      )
+      order by routine.proname collate "C"
+    )
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_namespace as namespace
+      on namespace.oid = routine.pronamespace
+    join pg_catalog.pg_roles as owner_role
+      on owner_role.oid = routine.proowner
+    where namespace.nspname = 'vortex_access'
+      and routine.proname like 'test_load_exact_record_%_facts'
+  ),
+  (
+    select pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'name', expected.name, 'owner', 'postgres',
+        'securityDefiner', true, 'configuration', array['search_path=""']
+      )
+      order by expected.name collate "C"
+    )
+    from (values
+      ('test_load_exact_record_create_facts'),
+      ('test_load_exact_record_delete_facts'),
+      ('test_load_exact_record_read_facts'),
+      ('test_load_exact_record_update_facts')
+    ) as expected(name)
+  ),
+  'each loader is owner-held, definer-rights and empty-search-path'
+);
+
+select ok(
+  not exists (
+    select 1
+    from (values
+      ('public'), ('anon'), ('authenticated'), ('service_role'),
+      ('vortex_runtime')
+    ) as caller(role_name)
+    cross join (values
+      ('vortex_access.test_load_exact_record_read_facts(uuid)'),
+      ('vortex_access.test_load_exact_record_create_facts(uuid)'),
+      ('vortex_access.test_load_exact_record_update_facts(uuid,uuid)'),
+      ('vortex_access.test_load_exact_record_delete_facts(uuid)')
+    ) as loader(signature)
+    where pg_catalog.has_function_privilege(
+      caller.role_name, loader.signature, 'EXECUTE'
+    )
+  ),
+  'only the verified request role reaches the fixed operation loaders'
+);
+
+select ok(
+  not exists (
+    select 1
+    from (values
+      ('public'), ('anon'), ('authenticated'), ('service_role'),
+      ('vortex_runtime'), ('vortex_request')
+    ) as caller(role_name)
+    cross join (values
+      ('test_exact_record_release_bindings'),
+      ('test_exact_record_operation_declarations'),
+      ('test_exact_record_rows'),
+      ('test_exact_record_proposals'),
+      ('test_exact_record_relationship_declarations'),
+      ('test_exact_record_relationship_edges')
+    ) as fixture(table_name)
+    where pg_catalog.has_table_privilege(
+      caller.role_name, 'vortex_access.' || fixture.table_name, 'SELECT'
+    )
+  ),
+  'no request or public role can choose a neutral fact table directly'
+);
+
+select ok(
+  not exists (
+    select 1
+    from (values
+      ('public'), ('anon'), ('authenticated'), ('service_role'),
+      ('vortex_runtime'), ('vortex_request')
+    ) as caller(role_name)
+    cross join (values
+      ('vortex_access.evaluate_current_record_ownership_visibility(jsonb,text,uuid,uuid,uuid,uuid,uuid,text,jsonb,uuid,uuid,uuid,uuid,uuid,timestamptz)'),
+      ('vortex_access.record_relationship_witness_matches(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,jsonb,jsonb,uuid,uuid)'),
+      ('vortex_access.read_current_direct_record_share_contributions(uuid,uuid,uuid,uuid,uuid,text,uuid,uuid,uuid,uuid,timestamptz)'),
+      ('vortex_access.evaluate_permission_saved_condition(jsonb,jsonb,jsonb,jsonb,uuid)')
+    ) as predicate(signature)
+    where pg_catalog.has_function_privilege(
+      caller.role_name, predicate.signature, 'EXECUTE'
+    )
+  ),
+  'no request or public role can supply its own ownership, share, condition or graph witness'
+);
+
+select is(
+  (
+    select pg_catalog.count(*)
+    from vortex_access.test_exact_record_operation_declarations as stored
+    where stored.operation_key = 'record.read.substituted'
+  ),
+  1::bigint,
+  'a substituted record declaration exists and no fixed loader resolves it'
+);
+
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'callerKind', 'human',
+  'identityAuthorityId', '84300000-0000-4000-8000-000000000101',
+  'tenantId', '14300000-0000-4000-8000-000000000001',
+  'organizationId', '24300000-0000-4000-8000-000000000001',
+  'organizationAccountId', '74300000-0000-4000-8000-000000000001',
+  'identityId', '44300000-0000-4000-8000-000000000101',
+  'applicationRootId', '34300000-0000-4000-8000-000000000001',
+  'sessionId', '64300000-0000-4000-8000-000000000199',
+  'authenticationStrength', 'multi_factor',
+  'issuedAt', pg_catalog.clock_timestamp(),
+  'expiresAt', pg_catalog.clock_timestamp() + interval '1 hour',
+  'accessVersion', (
+    select current_version
+    from vortex_access.organization_access_versions
+    where organization_id = '24300000-0000-4000-8000-000000000001'
+  ),
+  'correlationId', 'a4300000-0000-4000-8000-000000000099'
+));
+
+set local role vortex_request;
+set local search_path = pg_catalog, extensions, public;
+
+select is(
+  (
+    select pg_catalog.to_jsonb(facts)
+    from vortex_access.test_load_exact_record_read_facts(
+      'd4300000-0000-4000-8000-000000000101'
+    ) as facts
+  ),
+  '{"fact_role":"target","operation_key":"record.read","action_kind":"read",
+    "permission_id":"64300000-0000-4000-8000-000000000101",
+    "release_id":"c4300000-0000-4000-8000-000000000001",
+    "storage_scope":"application_contained",
+    "module_root_id":"44300000-0000-4000-8000-000000000001",
+    "record_type_id":"54300000-0000-4000-8000-000000000001",
+    "storage_contract_id":"64300000-0000-4000-8000-000000000001",
+    "record_id":"d4300000-0000-4000-8000-000000000101",
+    "ownership_mode":"organization_account",
+    "owner_organization_account_id":"74300000-0000-4000-8000-000000000001",
+    "owner_group_id":null,"ownership_witness":true,"condition_witness":true,
+    "share_contribution_count":1,
+    "related_record_ids":["d4300000-0000-4000-8000-000000000201"]}'::jsonb,
+  'the read loader selects the exact target row, current release and its own facts'
+);
+
+select is(
+  (
+    select pg_catalog.count(*)
+    from vortex_access.test_load_exact_record_read_facts(
+      'd4300000-0000-4000-8000-000000000101'
+    )
+  ),
+  1::bigint,
+  'exactly one exact target fact row is loaded'
+);
+
+select is(
+  (
+    select pg_catalog.to_jsonb(facts)
+    from vortex_access.test_load_exact_record_read_facts(
+      'd4300000-0000-4000-8000-000000000102'
+    ) as facts
+  ),
+  '{"fact_role":"target","operation_key":"record.read","action_kind":"read",
+    "permission_id":"64300000-0000-4000-8000-000000000101",
+    "release_id":"c4300000-0000-4000-8000-000000000001",
+    "storage_scope":"application_contained",
+    "module_root_id":"44300000-0000-4000-8000-000000000001",
+    "record_type_id":"54300000-0000-4000-8000-000000000001",
+    "storage_contract_id":"64300000-0000-4000-8000-000000000001",
+    "record_id":"d4300000-0000-4000-8000-000000000102",
+    "ownership_mode":"organization_account",
+    "owner_organization_account_id":"74300000-0000-4000-8000-000000000002",
+    "owner_group_id":null,"ownership_witness":false,"condition_witness":false,
+    "share_contribution_count":1,"related_record_ids":null}'::jsonb,
+  'a second record reports its own ownership, condition and share facts'
+);
+
+select is(
+  (
+    select pg_catalog.to_jsonb(facts)
+    from vortex_access.test_load_exact_record_create_facts(
+      'e4300000-0000-4000-8000-000000000101'
+    ) as facts
+  ),
+  '{"fact_role":"proposed","operation_key":"record.create",
+    "action_kind":"create",
+    "permission_id":"64300000-0000-4000-8000-000000000102",
+    "release_id":"c4300000-0000-4000-8000-000000000001",
+    "storage_scope":"application_contained",
+    "module_root_id":"44300000-0000-4000-8000-000000000001",
+    "record_type_id":"54300000-0000-4000-8000-000000000001",
+    "storage_contract_id":"64300000-0000-4000-8000-000000000001",
+    "record_id":"d4300000-0000-4000-8000-000000000301",
+    "ownership_mode":"organization_account",
+    "owner_organization_account_id":"74300000-0000-4000-8000-000000000001",
+    "owner_group_id":null,"ownership_witness":true,"condition_witness":true,
+    "share_contribution_count":null,"related_record_ids":null}'::jsonb,
+  'the create loader selects only the exact proposed row for its own declaration'
+);
+
+select results_eq(
+  $$select fact_role, operation_key, record_id, owner_organization_account_id,
+      ownership_witness, condition_witness, share_contribution_count
+    from vortex_access.test_load_exact_record_update_facts(
+      'd4300000-0000-4000-8000-000000000101',
+      'e4300000-0000-4000-8000-000000000102'
+    )$$,
+  $$values
+    ('target'::text, 'record.update'::text,
+      'd4300000-0000-4000-8000-000000000101'::uuid,
+      '74300000-0000-4000-8000-000000000001'::uuid, true, true, 1::bigint),
+    ('proposed'::text, 'record.update'::text,
+      'd4300000-0000-4000-8000-000000000101'::uuid,
+      '74300000-0000-4000-8000-000000000001'::uuid, true, false, null::bigint)$$,
+  'the update loader reports the existing target row and the proposed row separately'
+);
+
+select is(
+  (
+    select pg_catalog.to_jsonb(facts)
+    from vortex_access.test_load_exact_record_delete_facts(
+      'd4300000-0000-4000-8000-000000000101'
+    ) as facts
+  ),
+  '{"fact_role":"target","operation_key":"record.delete",
+    "action_kind":"delete",
+    "permission_id":"64300000-0000-4000-8000-000000000104",
+    "release_id":"c4300000-0000-4000-8000-000000000001",
+    "storage_scope":"application_contained",
+    "module_root_id":"44300000-0000-4000-8000-000000000001",
+    "record_type_id":"54300000-0000-4000-8000-000000000001",
+    "storage_contract_id":"64300000-0000-4000-8000-000000000001",
+    "record_id":"d4300000-0000-4000-8000-000000000101",
+    "ownership_mode":"organization_account",
+    "owner_organization_account_id":"74300000-0000-4000-8000-000000000001",
+    "owner_group_id":null,"ownership_witness":true,"condition_witness":true,
+    "share_contribution_count":1,
+    "related_record_ids":["d4300000-0000-4000-8000-000000000201"]}'::jsonb,
+  'the delete loader binds the same exact target facts to its own declaration'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_read_facts(
+    'd4300000-0000-4000-8000-000000000103'
+  )$$,
+  '22023', 'Exact record facts do not match the installed storage binding',
+  'a foreign organisation record identity is refused'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_read_facts(
+    'd4300000-0000-4000-8000-000000000104'
+  )$$,
+  '22023', 'Exact record facts do not match the installed storage binding',
+  'another application is refused for application-contained storage'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_delete_facts(
+    'd4300000-0000-4000-8000-000000000105'
+  )$$,
+  '22023', 'Exact record facts do not match the installed storage binding',
+  'a row bound to the superseded release storage contract is refused'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_read_facts(
+    'd4300000-0000-4000-8000-000000000106'
+  )$$,
+  '22023', 'Exact record target facts are unavailable',
+  'a nonexistent or removed target row is refused'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_read_facts(
+    'd4300000-0000-4000-8000-000000000107'
+  )$$,
+  '22023', 'Relationship target record identity is invalid',
+  'a malformed related-edge identity refuses instead of being dropped'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_update_facts(
+    'd4300000-0000-4000-8000-000000000101',
+    'e4300000-0000-4000-8000-000000000105'
+  )$$,
+  '22023', 'Proposed record facts do not identify the exact target record',
+  'a proposed row for another record cannot stand in for the exact target'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_update_facts(
+    'd4300000-0000-4000-8000-000000000101',
+    'e4300000-0000-4000-8000-000000000103'
+  )$$,
+  '22023', 'Exact record facts do not match the installed storage binding',
+  'a proposed row moved to another record type and storage scope is refused'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_create_facts(
+    'e4300000-0000-4000-8000-000000000104'
+  )$$,
+  '22023', 'Exact record facts do not match the installed storage binding',
+  'a proposed create row in a foreign organisation is refused'
+);
+
+select throws_ok(
+  $$select * from vortex_access.test_load_exact_record_create_facts(
+    'e4300000-0000-4000-8000-000000000102'
+  )$$,
+  '22023', 'Exact proposed record facts are unavailable',
+  'a proposal published for another operation is refused'
+);
+
+reset role;
+
+set constraints all immediate;
+
+select * from finish();
+
+rollback;

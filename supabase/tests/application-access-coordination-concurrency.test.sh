@@ -30,6 +30,7 @@ readonly permission_id="94${run_uuid:2}"
 readonly role_id="95${run_uuid:2}"
 readonly source_role_id="96${run_uuid:2}"
 readonly replacement_source_role_id="97${run_uuid:2}"
+readonly organization_account_id="98${run_uuid:2}"
 readonly actor_id="99${run_uuid:2}"
 readonly correlation_initialize="9a${run_uuid:2}"
 readonly correlation_register="9b${run_uuid:2}"
@@ -38,6 +39,9 @@ readonly correlation_update="9d${run_uuid:2}"
 readonly correlation_withdraw="9e${run_uuid:2}"
 readonly correlation_update_three="a1${run_uuid:2}"
 readonly correlation_update_four="a2${run_uuid:2}"
+readonly correlation_scope_withdraw_one="a3${run_uuid:2}"
+readonly correlation_scope_reactivate="a4${run_uuid:2}"
+readonly correlation_scope_withdraw_two="a5${run_uuid:2}"
 
 fixture_claimed=0
 declare -a worker_pids=()
@@ -190,6 +194,10 @@ cleanup_fixture() {
     delete from vortex_definition.roots where root_id = '$application_root_id';
     delete from vortex_access.organization_access_versions
       where organization_id = '$organization_id';
+    delete from vortex_identity.organization_accounts
+      where organization_account_id = '$organization_account_id';
+    delete from vortex_identity.identity_projections
+      where identity_id = '$actor_id';
     delete from vortex_identity.organizations where organization_id = '$organization_id';
     delete from vortex_identity.tenants where tenant_id = '$tenant_id';
     commit;
@@ -202,7 +210,8 @@ finalize() {
   local operation_status
   trap - EXIT INT TERM
   set +e
-  touch "$proof_root/update-release" "$proof_root/update-a-release"
+  touch "$proof_root/update-release" "$proof_root/update-a-release" \
+    "$proof_root/scope-reader-release" "$proof_root/scope-holder-release"
   stop_owned_workers
   if [ "$original_status" -ne 0 ]; then emit_owned_failure_diagnostics; fi
   cleanup_fixture
@@ -443,6 +452,23 @@ run_sql "
     '$organization_id', '$tenant_id', null, '$fixture_short_name',
     'Coordination $fixture_name_token', 'active', pg_catalog.clock_timestamp(), '$actor_id',
     pg_catalog.clock_timestamp(), 1
+  );
+  insert into vortex_identity.identity_projections (
+    identity_id, state, created_at, state_changed_at, state_changed_by,
+    state_change_correlation_id, revision
+  ) values (
+    '$actor_id', 'active', pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '$actor_id', '$correlation_initialize', 1
+  );
+  insert into vortex_identity.organization_accounts (
+    organization_account_id, organization_id, identity_id, display_name, state,
+    activated_at, changed_at, state_changed_at, state_changed_by,
+    state_change_correlation_id, revision
+  ) values (
+    '$organization_account_id', '$organization_id', '$actor_id',
+    'Application scope proof', 'active', pg_catalog.clock_timestamp(),
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(), '$actor_id',
+    '$correlation_initialize', 1
   );
   select * from vortex_access.initialize_organization_access_version(
     '$organization_id', '$actor_id', '$correlation_initialize'
@@ -819,6 +845,177 @@ state="$(run_sql "
 ")"
 [ "$state" = '4|active|3|3|available|1|3|unavailable|2|3|available|1|3|2|unavailable|1|3|3|1|2|1|2|1|t|t|t|f' ] || {
   printf 'coordinated update race left duplicate or partial derived state: %q\n' "$state" >&2
+  exit 1
+}
+
+# Resolver-first: an application-bound request keeps the organization Access
+# row shared-locked for its transaction. The real B2 withdrawal must wait, and
+# the already-resolved request retains the exact pre-change application scope.
+PGAPPNAME="vortex-application-scope-reader-$fixture_name_token" \
+  "${psql_command[@]}" >"$proof_root/scope-reader.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout = '30s';
+set local statement_timeout = '45s';
+set local role vortex_runtime;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/scope-reader.pid'
+select application_root_id::text || '|' || access_version::text
+from vortex_access.resolve_human_application_scope(
+  '$actor_id', '$organization_id', '$application_root_id'
+)
+\g '$proof_root/scope-reader.result'
+\! deadline=600; while [ ! -f '$proof_root/scope-reader-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline - 1)); done; [ -f '$proof_root/scope-reader-release' ]
+commit;
+SQL
+scope_reader_pid=$!
+worker_pids+=("$scope_reader_pid")
+scope_reader_db="$(read_backend_pid "$proof_root/scope-reader.pid")"
+wait_for_file "$proof_root/scope-reader.result"
+
+PGAPPNAME="vortex-application-scope-withdraw-one-$fixture_name_token" \
+  "${psql_command[@]}" >"$proof_root/scope-withdraw-one.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout = '30s';
+set local statement_timeout = '45s';
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/scope-withdraw-one.pid'
+select outcome || '|' || registration_state || '|' ||
+  registration_revision::text || '|' || access_version::text
+from vortex_access.coordinate_application_access_change(
+  'withdraw', 3, null, '$organization_id', '$application_root_id',
+  '$actor_id', '$correlation_scope_withdraw_one'
+)
+\g '$proof_root/scope-withdraw-one.result'
+commit;
+SQL
+scope_withdraw_one_pid=$!
+worker_pids+=("$scope_withdraw_one_pid")
+scope_withdraw_one_db="$(read_backend_pid "$proof_root/scope-withdraw-one.pid")"
+wait_for_database_blocker "$scope_withdraw_one_db" "$scope_reader_db"
+touch "$proof_root/scope-reader-release"
+wait_owned_worker "$scope_reader_pid"
+wait_owned_worker "$scope_withdraw_one_pid"
+
+[ "$(tr -d '[:space:]' <"$proof_root/scope-reader.result")" = "$application_root_id|4" ] || {
+  echo 'resolver-first application scope did not retain its exact pre-change result' >&2
+  exit 1
+}
+[ "$(tr -d '[:space:]' <"$proof_root/scope-withdraw-one.result")" = 'changed|withdrawn|4|5' ] || {
+  echo 'resolver-first B2 withdrawal did not complete exactly once after the request' >&2
+  exit 1
+}
+
+# Restore through the same B2 coordinator so the opposite ordering starts from
+# a complete supported active state rather than rewriting protected facts.
+reactivated="$(run_sql "
+  select outcome || '|' || registration_state || '|' ||
+    registration_revision::text || '|' || access_version::text
+  from vortex_access.coordinate_application_access_change(
+    'reactivate', 4, $prepared_three, '$organization_id', '$application_root_id',
+    '$actor_id', '$correlation_scope_reactivate'
+  );
+")"
+[ "$reactivated" = 'changed|active|5|6' ] || {
+  printf 'application scope proof could not restore its coherent B2 state: %q\n' "$reactivated" >&2
+  exit 1
+}
+
+# Writer-first: a downstream registration holder lets the real B2 withdrawal
+# acquire the Access UPDATE lock first. The resolver waits on that exact writer,
+# then rechecks the registration and refuses the committed withdrawal.
+PGAPPNAME="vortex-application-scope-holder-$fixture_name_token" \
+  "${psql_command[@]}" >"$proof_root/scope-holder.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout = '30s';
+set local statement_timeout = '45s';
+select registration_owner_id
+from vortex_access.permission_registrations
+where organization_id = '$organization_id'
+  and registration_kind = 'application'
+  and registration_owner_id = '$application_root_id'
+for update;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/scope-holder.pid'
+\! deadline=600; while [ ! -f '$proof_root/scope-holder-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline - 1)); done; [ -f '$proof_root/scope-holder-release' ]
+commit;
+SQL
+scope_holder_pid=$!
+worker_pids+=("$scope_holder_pid")
+scope_holder_db="$(read_backend_pid "$proof_root/scope-holder.pid")"
+
+PGAPPNAME="vortex-application-scope-withdraw-two-$fixture_name_token" \
+  "${psql_command[@]}" >"$proof_root/scope-withdraw-two.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout = '30s';
+set local statement_timeout = '45s';
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/scope-withdraw-two.pid'
+select outcome || '|' || registration_state || '|' ||
+  registration_revision::text || '|' || access_version::text
+from vortex_access.coordinate_application_access_change(
+  'withdraw', 5, null, '$organization_id', '$application_root_id',
+  '$actor_id', '$correlation_scope_withdraw_two'
+)
+\g '$proof_root/scope-withdraw-two.result'
+commit;
+SQL
+scope_withdraw_two_pid=$!
+worker_pids+=("$scope_withdraw_two_pid")
+scope_withdraw_two_db="$(read_backend_pid "$proof_root/scope-withdraw-two.pid")"
+wait_for_database_blocker "$scope_withdraw_two_db" "$scope_holder_db"
+
+PGAPPNAME="vortex-application-scope-refusal-$fixture_name_token" \
+  "${psql_command[@]}" >"$proof_root/scope-refusal.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout = '30s';
+set local statement_timeout = '45s';
+set local role vortex_runtime;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/scope-refusal.pid'
+do \$proof\$
+begin
+  perform 1 from vortex_access.resolve_human_application_scope(
+    '$actor_id', '$organization_id', '$application_root_id'
+  );
+  raise exception 'writer-first application resolver unexpectedly returned a stale scope';
+exception when sqlstate '42501' then
+  null;
+end
+\$proof\$;
+select '42501'
+\g '$proof_root/scope-refusal.result'
+commit;
+SQL
+scope_refusal_pid=$!
+worker_pids+=("$scope_refusal_pid")
+scope_refusal_db="$(read_backend_pid "$proof_root/scope-refusal.pid")"
+wait_for_database_blocker "$scope_refusal_db" "$scope_withdraw_two_db"
+touch "$proof_root/scope-holder-release"
+wait_owned_worker "$scope_holder_pid"
+wait_owned_worker "$scope_withdraw_two_pid"
+wait_owned_worker "$scope_refusal_pid"
+
+[ "$(tr -d '[:space:]' <"$proof_root/scope-withdraw-two.result")" = 'changed|withdrawn|6|7' ] || {
+  echo 'writer-first B2 withdrawal did not complete exactly once' >&2
+  exit 1
+}
+[ "$(tr -d '[:space:]' <"$proof_root/scope-refusal.result")" = '42501' ] || {
+  echo 'writer-first application resolver did not refuse the withdrawn application' >&2
+  exit 1
+}
+
+scope_state="$(run_sql "
+  select registration.state || '|' || registration.revision::text || '|' ||
+    version.current_version::text
+  from vortex_access.permission_registrations as registration
+  join vortex_access.organization_access_versions as version
+    on version.organization_id = registration.organization_id
+  where registration.organization_id = '$organization_id'
+    and registration.registration_kind = 'application'
+    and registration.registration_owner_id = '$application_root_id';
+")"
+[ "$scope_state" = 'withdrawn|6|7' ] || {
+  printf 'application-scope ordering proof left unexpected final state: %q\n' "$scope_state" >&2
   exit 1
 }
 

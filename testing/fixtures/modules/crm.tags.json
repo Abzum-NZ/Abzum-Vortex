@@ -1,8 +1,8 @@
 {
-  "source_contract_version": "1.0.0",
-  "kind": "module",
+  "source_contract_version": "2.0.0",
   "root_alias": "mod_crm_tags",
   "key": "vortex.crm.tags",
+  "kind": "module",
   "body": {
     "name": "CRM Tags",
     "description": "Controlled labels that can be attached to CRM and Service Desk records.",
@@ -12,7 +12,7 @@
         "module": "vortex.crm.organisations",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       },
       {
@@ -20,7 +20,7 @@
         "module": "vortex.crm.people",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       },
       {
@@ -28,20 +28,20 @@
         "module": "vortex.crm.opportunities",
         "version": {
           "selection": "exact",
-          "version": "1.0.0"
+          "version": "2.0.0"
         }
       }
     ],
     "record_types": [
       {
         "id": "rt_crm_tag",
-        "storage_contract_id": "srt_00000007",
         "key": "tag",
         "name": "Tag",
         "plural_name": "Tags",
+        "title_field": "name",
+        "storage_contract_id": "srt_00000007",
         "storage_scope": "organisation_shared",
         "ownership_mode": "team",
-        "title_field": "name",
         "standard_actions": [
           "create",
           "read",
@@ -50,11 +50,11 @@
           "restore",
           "export"
         ],
+        "custom_actions": [],
         "fields": [
           {
             "id": "fld_tag_name",
             "key": "name",
-            "type": "text",
             "label": "Name",
             "required": true,
             "unique": true,
@@ -63,6 +63,7 @@
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "text",
             "settings": {
               "max_length": 80
             }
@@ -70,7 +71,6 @@
           {
             "id": "fld_tag_description",
             "key": "description",
-            "type": "long_text",
             "label": "Description",
             "required": false,
             "unique": false,
@@ -79,6 +79,7 @@
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
+            "type": "long_text",
             "settings": {
               "max_length": 500
             }
@@ -86,7 +87,6 @@
           {
             "id": "fld_tag_active",
             "key": "active",
-            "type": "yes_no",
             "label": "Active",
             "required": true,
             "unique": false,
@@ -94,13 +94,13 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "yes_no",
             "settings": {},
             "default": true
           },
           {
             "id": "fld_tag_assignments",
             "key": "assignment_count",
-            "type": "total",
             "label": "Assignment count",
             "required": true,
             "unique": false,
@@ -108,6 +108,7 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "total",
             "settings": {
               "relationship": "vortex.crm.tags:record_tag.tag",
               "operation": "count",
@@ -115,19 +116,18 @@
             }
           }
         ],
-        "custom_actions": [],
         "relationships": []
       },
       {
         "id": "rt_crm_record_tag",
-        "storage_contract_id": "srt_00000008",
         "key": "record_tag",
         "name": "Record tag",
         "plural_name": "Record tags",
+        "title_field": "assigned_at",
+        "storage_contract_id": "srt_00000008",
         "storage_scope": "organisation_shared",
         "ownership_mode": "inherited",
         "ownership_relationship": "record",
-        "title_field": "assigned_at",
         "standard_actions": [
           "create",
           "read",
@@ -135,11 +135,13 @@
           "restore",
           "export"
         ],
+        "custom_actions": [
+          "act_tag_assign"
+        ],
         "fields": [
           {
             "id": "fld_record_tag_tag",
             "key": "tag",
-            "type": "link",
             "label": "Tag",
             "required": true,
             "unique": false,
@@ -147,6 +149,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link",
             "settings": {
               "target": "vortex.crm.tags:tag",
               "reverse_key": "assignments",
@@ -156,7 +159,6 @@
           {
             "id": "fld_record_tag_target",
             "key": "record",
-            "type": "link_to_one_of_several",
             "label": "Record",
             "required": true,
             "unique": false,
@@ -164,6 +166,7 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link_to_one_of_several",
             "settings": {
               "targets": [
                 "vortex.crm.organisations:company",
@@ -177,7 +180,6 @@
           {
             "id": "fld_record_tag_at",
             "key": "assigned_at",
-            "type": "date_time",
             "label": "Assigned at",
             "required": true,
             "unique": false,
@@ -185,12 +187,12 @@
             "sortable": true,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "date_time",
             "settings": {}
           },
           {
             "id": "fld_record_tag_by",
             "key": "assigned_by",
-            "type": "link_to_person",
             "label": "Assigned by",
             "required": true,
             "unique": false,
@@ -198,15 +200,13 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
+            "type": "link_to_person",
             "settings": {
               "audience": "organisation_accounts",
-              "on_person_deactivation": "retain_reference",
-              "application_root_required": false
+              "application_root_required": false,
+              "on_person_deactivation": "retain_reference"
             }
           }
-        ],
-        "custom_actions": [
-          "act_tag_assign"
         ],
         "relationships": [
           {
@@ -241,7 +241,27 @@
         "description": "Allows the standard create operation for tags.",
         "record_type": "tag",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "description",
+            "active",
+            "assignment_count"
+          ],
+          "changeable_fields": [
+            "name",
+            "description",
+            "active"
+          ]
+        }
       },
       {
         "id": "perm_tag_read",
@@ -250,7 +270,23 @@
         "description": "Allows the standard read operation for tags.",
         "record_type": "tag",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "description",
+            "active",
+            "assignment_count"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_tag_update",
@@ -259,7 +295,27 @@
         "description": "Allows the standard update operation for tags.",
         "record_type": "tag",
         "action_kind": "update",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "description",
+            "active",
+            "assignment_count"
+          ],
+          "changeable_fields": [
+            "name",
+            "description",
+            "active"
+          ]
+        }
       },
       {
         "id": "perm_tag_soft_delete",
@@ -268,7 +324,18 @@
         "description": "Allows the standard soft_delete operation for tags.",
         "record_type": "tag",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_tag_restore",
@@ -277,7 +344,18 @@
         "description": "Allows the standard restore operation for tags.",
         "record_type": "tag",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_tag_export",
@@ -286,7 +364,23 @@
         "description": "Allows the standard export operation for tags.",
         "record_type": "tag",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "name",
+            "description",
+            "active",
+            "assignment_count"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_record_tag_create",
@@ -295,7 +389,28 @@
         "description": "Allows the standard create operation for record tags.",
         "record_type": "record_tag",
         "action_kind": "create",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "tag",
+            "record",
+            "assigned_at",
+            "assigned_by"
+          ],
+          "changeable_fields": [
+            "tag",
+            "record",
+            "assigned_at",
+            "assigned_by"
+          ]
+        }
       },
       {
         "id": "perm_record_tag_read",
@@ -304,7 +419,23 @@
         "description": "Allows the standard read operation for record tags.",
         "record_type": "record_tag",
         "action_kind": "read",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "tag",
+            "record",
+            "assigned_at",
+            "assigned_by"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_record_tag_soft_delete",
@@ -313,7 +444,18 @@
         "description": "Allows the standard soft_delete operation for record tags.",
         "record_type": "record_tag",
         "action_kind": "delete",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_record_tag_restore",
@@ -322,7 +464,18 @@
         "description": "Allows the standard restore operation for record tags.",
         "record_type": "record_tag",
         "action_kind": "restore",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_record_tag_export",
@@ -331,7 +484,23 @@
         "description": "Allows the standard export operation for record tags.",
         "record_type": "record_tag",
         "action_kind": "export",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "tag",
+            "record",
+            "assigned_at",
+            "assigned_by"
+          ],
+          "changeable_fields": []
+        }
       },
       {
         "id": "perm_named_1_manage",
@@ -341,7 +510,18 @@
         "record_type": "record_tag",
         "action_kind": "named",
         "named_action": "manage",
-        "administrative": false
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [],
+          "changeable_fields": []
+        }
       }
     ],
     "actions": [
@@ -351,6 +531,7 @@
         "label": "Assign tag",
         "record_type": "record_tag",
         "permission": "vortex.crm.tags.record_tag.manage",
+        "shareable": false,
         "inputs": [
           {
             "key": "tag",
@@ -399,8 +580,7 @@
             "kind": "announce_event",
             "event": "vortex.crm.tags.record_tag.assigned"
           }
-        ],
-        "shareable": false
+        ]
       }
     ],
     "events": [

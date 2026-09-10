@@ -10,7 +10,7 @@ import {
   definitionCompilerRefusalCodes,
   DefinitionCompilationError,
 } from "../src/compilation-error";
-import { compileDefinition } from "../src/compiler";
+import { compileDefinition, compileDefinitionWithContext } from "../src/compiler";
 import { fingerprintCanonicalValue } from "../src/canonical-json";
 import {
   compileDefinitionSet,
@@ -21,7 +21,10 @@ import {
   workflowValueCompatible,
 } from "../src/validation";
 
-const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+const fixtureRoot = path.resolve(
+  import.meta.dirname,
+  "../../../testing/fixtures/historical/module-v1",
+);
 const fixturePaths = ["modules", "applications", "connection-types"].flatMap((directory) =>
   fs
     .readdirSync(path.join(fixtureRoot, directory))
@@ -91,6 +94,418 @@ const leafPathKeys = (value: unknown, path: readonly (string | number)[] = []): 
       : [JSON.stringify(path)];
 
 describe("authored definition compiler", () => {
+  it("compiles typed table settings and resolves choice gates from exact dependency ownership", () => {
+    const source = structuredClone(
+      sources.find(
+        (candidate) => candidate.kind === "module" && candidate.key === "vortex.crm.opportunities",
+      ),
+    );
+    const dependency = sources.find(
+      (candidate) => candidate.kind === "module" && candidate.key === "vortex.crm.organisations",
+    );
+    if (!source || source.kind !== "module" || !dependency || dependency.kind !== "module")
+      throw new Error("Opportunity and organisation modules required");
+    const dependencyPermission = dependency.body.permissions[0]!;
+    const opportunity = source.body.record_types.find((record) => record.key === "opportunity")!;
+    const recordIndex = source.body.record_types.indexOf(opportunity);
+    const stage = opportunity.fields.find((field) => field.type === "choice");
+    if (!stage || stage.type !== "choice") throw new Error("Stage choice required");
+    const stageIndex = opportunity.fields.indexOf(stage);
+    stage.settings.options[0]!.required_permission = dependencyPermission.key;
+    const paymentSchedule = opportunity.fields.find((field) => field.key === "payment_schedule");
+    if (!paymentSchedule || paymentSchedule.type !== "table")
+      throw new Error("Payment schedule required");
+    const paymentScheduleIndex = opportunity.fields.indexOf(paymentSchedule);
+    const amountIndex = paymentSchedule.settings.columns.findIndex(
+      (column) => column.key === "amount",
+    );
+
+    const request = requestFor(source);
+    const output = compileDefinition(request);
+    if (output.kind !== "module") throw new Error("Compiled module required");
+    const compiledOpportunity = output.canonical.content.recordTypes.find(
+      (record) => record.key === "opportunity",
+    )!;
+    const compiledStage = compiledOpportunity.fields.find((field) => field.key === stage.key);
+    const table = compiledOpportunity.fields.find((field) => field.type === "table");
+    if (!compiledStage || compiledStage.type !== "choice" || !table || table.type !== "table")
+      throw new Error("Compiled choice and table required");
+    const expectedPermissionId = resolution.identities.find(
+      (identity) =>
+        identity.definitionKey === dependency.key &&
+        identity.kind === "permission" &&
+        identity.alias === dependencyPermission.key,
+    )?.identifier;
+    expect(expectedPermissionId).toBeDefined();
+    expect(compiledStage.settings.options[0]).toMatchObject({
+      value: stage.settings.options[0]!.value,
+      label: stage.settings.options[0]!.label,
+      requiredPermissionId: expectedPermissionId,
+    });
+    expect(compiledStage.settings.options[1]).not.toHaveProperty("requiredPermissionId");
+    expect(table.settings.columns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "amount",
+          type: "money",
+          settings: { currencyMode: "fixed", currency: "NZD" },
+        }),
+      ]),
+    );
+    expect(output.provenance).toContainEqual(
+      expect.objectContaining({
+        sourcePath: [
+          "body",
+          "record_types",
+          recordIndex,
+          "fields",
+          stageIndex,
+          "settings",
+          "options",
+          0,
+          "required_permission",
+        ],
+        canonicalPath: [
+          "content",
+          "recordTypes",
+          recordIndex,
+          "fields",
+          stageIndex,
+          "settings",
+          "options",
+          0,
+          "requiredPermissionId",
+        ],
+        origin: "resolved",
+      }),
+    );
+    expect(output.provenance).toContainEqual(
+      expect.objectContaining({
+        sourcePath: [
+          "body",
+          "record_types",
+          recordIndex,
+          "fields",
+          paymentScheduleIndex,
+          "settings",
+          "columns",
+          amountIndex,
+          "settings",
+          "currency_mode",
+        ],
+        canonicalPath: [
+          "content",
+          "recordTypes",
+          recordIndex,
+          "fields",
+          paymentScheduleIndex,
+          "settings",
+          "columns",
+          amountIndex,
+          "settings",
+          "currencyMode",
+        ],
+        origin: "source",
+      }),
+    );
+
+    const amendedRequests = sources.map((candidate) =>
+      requestFor(candidate.kind === "module" && candidate.key === source.key ? source : candidate),
+    );
+    const amendedOutputs = amendedRequests.map(compileDefinition);
+    expect(
+      validateDefinitionSet(publicationContext(amendedRequests, amendedOutputs)).failures,
+    ).toEqual([]);
+  });
+
+  it("loads and deterministically compiles legacy V1 table source but refuses republication", () => {
+    const source = structuredClone(
+      sources.find(
+        (candidate) => candidate.kind === "module" && candidate.key === "vortex.service_desk.sla",
+      ),
+    );
+    if (!source || source.kind !== "module") throw new Error("SLA module required");
+    const table = source.body.record_types
+      .flatMap((record) => record.fields)
+      .find((field) => field.type === "table");
+    if (!table || table.type !== "table") throw new Error("Table field required");
+    table.default = [{ day: "monday", starts_at: "09:00", ends_at: "17:00" }];
+    delete (table.settings.columns[0] as { settings?: unknown }).settings;
+    table.settings.columns[1]!.key = table.settings.columns[0]!.key;
+    const legacy = definitionSourceDocumentSchema.parse(source);
+    const request = requestFor(legacy);
+    const first = compileDefinition(request);
+    const second = compileDefinition(requestFor(structuredClone(legacy)));
+    expect(first.canonical).toEqual(second.canonical);
+    expect(first.provenance).toEqual(second.provenance);
+    if (first.kind !== "module") throw new Error("Compiled module required");
+    const compiledTable = first.canonical.content.recordTypes
+      .flatMap((record) => record.fields)
+      .find((field) => field.type === "table");
+    if (!compiledTable || compiledTable.type !== "table")
+      throw new Error("Compiled table required");
+    expect(compiledTable.default).toEqual(table.default);
+    expect(compiledTable.settings.columns[0]).not.toHaveProperty("settings");
+    expect(validateDefinitionSource(legacy).failures.map((failure) => failure.ruleCode)).toContain(
+      "vortex.definition.local_references",
+    );
+    expect(
+      validateDefinitionSet(publicationContext([request], [first])).failures.map(
+        (failure) => failure.ruleCode,
+      ),
+    ).toContain("vortex.definition.module_field_references");
+  });
+
+  it("preserves singular action bindings and compiles plural alternatives without rewriting", () => {
+    const source = structuredClone(
+      sources.find(
+        (candidate) => candidate.kind === "module" && candidate.key === "vortex.service_desk.cases",
+      ),
+    );
+    if (!source || source.kind !== "module") throw new Error("Case module required");
+    const [first] = source.body.actions;
+    if (!first?.permission) throw new Error("Named action required");
+    const permission = source.body.permissions.find(
+      (candidate) => candidate.key === first.permission,
+    );
+    if (!permission) throw new Error("Action permission required");
+    const primaryPermissionKey = permission.key;
+    const alternative = {
+      ...structuredClone(permission),
+      id: "perm_named_9_assign_alternative",
+      key: `${permission.key}_alternative`,
+    };
+    source.body.permissions.push(alternative);
+    const alternatives = [primaryPermissionKey, alternative.key].sort();
+    delete first.permission;
+    first.permission_alternatives = alternatives;
+    const alternativeId = "9c4b5aef-297a-4ae0-a4d2-b4664e73c4ad";
+    const amendedResolution = withResolutionFingerprint({
+      ...resolution,
+      identities: [
+        ...resolution.identities,
+        ...[alternative.id, alternative.key].map((alias) => ({
+          definitionKey: source.key,
+          scope: "content" as const,
+          kind: "permission" as const,
+          alias,
+          identifier: alternativeId,
+          componentOwner: alternative.id,
+        })),
+      ],
+    });
+
+    const output = compileDefinition({ ...requestFor(source), resolution: amendedResolution });
+    if (output.kind !== "module") throw new Error("Compiled module required");
+    const compiled = output.canonical.content.actions.find((action) => action.key === first.key);
+    expect(compiled).toMatchObject({ permissionKeys: alternatives });
+    expect(compiled).not.toHaveProperty("permissionKey");
+    for (const index of alternatives.keys())
+      expect(output.provenance).toContainEqual(
+        expect.objectContaining({
+          canonicalPath: ["content", "actions", 0, "permissionKeys", index],
+          sourcePath: ["body", "actions", 0, "permission_alternatives", index],
+          origin: "source",
+        }),
+      );
+
+    const applicationSource = structuredClone(
+      sources.find(
+        (candidate) =>
+          candidate.kind === "application" && candidate.key === "vortex.app.service_desk",
+      ),
+    );
+    if (!applicationSource || applicationSource.kind !== "application")
+      throw new Error("Service desk application required");
+    const applicationAction = {
+      id: "act_case_assign_alternative",
+      key: "vortex.app.service_desk.case.assign_alternative",
+      label: "Assign case",
+      record_type: "vortex.service_desk.cases:case",
+      permission_alternatives: alternatives,
+      sharing: "refused" as const,
+      inputs: [],
+      effects: [
+        {
+          kind: "set_field" as const,
+          field: "status",
+          value: { source: "literal" as const, value: "resolved" },
+        },
+      ],
+    };
+    applicationSource.body.actions.push(applicationAction);
+    const parsedApplicationSource = definitionSourceDocumentSchema.safeParse(applicationSource);
+    if (!parsedApplicationSource.success)
+      throw new Error(JSON.stringify(parsedApplicationSource.error.issues));
+    const applicationActionId = "29a7d1af-21e5-442b-b7ad-9504ec11c2ce";
+    const applicationResolution = withResolutionFingerprint({
+      ...amendedResolution,
+      identities: [
+        ...amendedResolution.identities,
+        ...[applicationAction.id, applicationAction.key].map((alias) => ({
+          definitionKey: applicationSource.key,
+          scope: "content" as const,
+          kind: "action" as const,
+          alias,
+          identifier: applicationActionId,
+          componentOwner: applicationAction.id,
+        })),
+      ],
+    });
+    const applicationOutput = compileDefinition({
+      ...requestFor(applicationSource),
+      resolution: applicationResolution,
+    });
+    if (applicationOutput.kind !== "application") throw new Error("Compiled application required");
+    expect(applicationOutput.canonical.content.actions.at(-1)).toMatchObject({
+      permissionKeys: alternatives,
+    });
+    expect(
+      applicationOutput.canonical.content.interfaces.flatMap((entry) => entry.operations),
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ permissionKey: expect.any(String) })]),
+    );
+    expect(
+      applicationOutput.canonical.content.interfaces
+        .flatMap((entry) => entry.operations)
+        .some((operation) => "permissionKeys" in operation),
+    ).toBe(false);
+    for (const index of alternatives.keys())
+      expect(applicationOutput.provenance).toContainEqual(
+        expect.objectContaining({
+          canonicalPath: ["content", "actions", 0, "permissionKeys", index],
+          sourcePath: ["body", "actions", 0, "permission_alternatives", index],
+          origin: "source",
+        }),
+      );
+
+    const amendedRequests = sources.map((candidate) => ({
+      ...requestFor(
+        candidate.kind === "module" && candidate.key === source.key
+          ? source
+          : candidate.kind === "application" && candidate.key === applicationSource.key
+            ? applicationSource
+            : candidate,
+      ),
+      resolution: applicationResolution,
+    }));
+    const amendedOutputs = amendedRequests.map(compileDefinition);
+    expect(
+      validateDefinitionSet(publicationContext(amendedRequests, amendedOutputs)).failures,
+    ).toEqual([]);
+
+    for (const mismatch of ["action", "owner"] as const) {
+      const mismatchedOutputs = structuredClone(amendedOutputs);
+      const mismatched = mismatchedOutputs.find(
+        (candidate) =>
+          candidate.kind === "module" && candidate.artifact.definitionKey === source.key,
+      );
+      if (!mismatched || mismatched.kind !== "module") throw new Error("Case module required");
+      const alternativePermission = mismatched.canonical.content.permissions.find(
+        (candidate) => candidate.key === alternative.key,
+      );
+      if (!alternativePermission) throw new Error("Alternative permission required");
+      if (mismatch === "action") alternativePermission.namedAction = "resolve";
+      else {
+        const foreignRecord = mismatched.canonical.content.recordTypes.find(
+          (record) => record.recordTypeId !== alternativePermission.recordTypeId,
+        );
+        if (!foreignRecord) throw new Error("Foreign record type required");
+        alternativePermission.recordTypeId = foreignRecord.recordTypeId;
+      }
+      mismatched.artifact.contentFingerprint = fingerprintCanonicalValue(
+        mismatched.canonical.content,
+      );
+      expect(
+        validateDefinitionSet(publicationContext(amendedRequests, mismatchedOutputs)).failures,
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ruleCode: "vortex.definition.module_action_references" }),
+        ]),
+      );
+    }
+
+    const crossOwnerOutputs = structuredClone(amendedOutputs);
+    const crossOwnerApplication = crossOwnerOutputs.find(
+      (candidate) =>
+        candidate.kind === "application" &&
+        candidate.artifact.definitionKey === applicationSource.key,
+    );
+    if (!crossOwnerApplication || crossOwnerApplication.kind !== "application")
+      throw new Error("Service desk application required");
+    const moduleAlternative = output.canonical.content.permissions.find(
+      (candidate) => candidate.key === alternative.key,
+    );
+    const crossOwnerKey = "vortex.app.service_desk.case.assign_alternative";
+    if (!moduleAlternative) throw new Error("Alternative permission required");
+    crossOwnerApplication.canonical.content.permissions.push({
+      ...structuredClone(moduleAlternative),
+      permissionId: "a261cc36-78c4-41a6-a10a-39e0ef6f210a",
+      key: crossOwnerKey,
+    });
+    crossOwnerApplication.canonical.content.actions.at(-1)!.permissionKeys = [
+      primaryPermissionKey,
+      crossOwnerKey,
+    ].sort();
+    crossOwnerApplication.artifact.contentFingerprint = fingerprintCanonicalValue(
+      crossOwnerApplication.canonical.content,
+    );
+    expect(
+      validateDefinitionSet(publicationContext(amendedRequests, crossOwnerOutputs)).failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleCode: "vortex.definition.application_action_references",
+        }),
+      ]),
+    );
+
+    const collisionOutputs = structuredClone(amendedOutputs);
+    const collisionApplication = collisionOutputs.find(
+      (candidate) =>
+        candidate.kind === "application" &&
+        candidate.artifact.definitionKey === applicationSource.key,
+    );
+    if (!collisionApplication || collisionApplication.kind !== "application")
+      throw new Error("Service desk application required");
+    const collisionPermission = output.canonical.content.permissions.find(
+      (candidate) => candidate.actionKind === "read" && !alternatives.includes(candidate.key),
+    );
+    if (!collisionPermission) throw new Error("Unreferenced read permission required");
+    collisionApplication.canonical.content.permissions.push({
+      ...structuredClone(collisionPermission),
+      permissionId: "44abdf25-ac8e-45dc-8367-7bb54c4f0a11",
+    });
+    // Keep the action's valid module-owned alternatives unchanged: only the
+    // extra ambiguous application/module permission key makes this case fail.
+    expect(collisionApplication.canonical.content.actions.at(-1)!.permissionKeys).toEqual(
+      alternatives,
+    );
+    expect(alternatives).not.toContain(collisionPermission.key);
+    collisionApplication.artifact.contentFingerprint = fingerprintCanonicalValue(
+      collisionApplication.canonical.content,
+    );
+    expect(
+      validateDefinitionSet(publicationContext(amendedRequests, collisionOutputs)).failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleCode: "vortex.definition.application_action_references",
+        }),
+      ]),
+    );
+
+    const unchangedSource = sources.find(
+      (candidate) => candidate.kind === "module" && candidate.key === source.key,
+    );
+    if (!unchangedSource || unchangedSource.kind !== "module")
+      throw new Error("Original module required");
+    const unchanged = compileDefinition(requestFor(unchangedSource));
+    if (unchanged.kind !== "module") throw new Error("Compiled module required");
+    expect(unchanged.canonical.content.actions[0]).toHaveProperty("permissionKey");
+    expect(unchanged.canonical.content.actions[0]).not.toHaveProperty("permissionKeys");
+  });
+
   it("preserves reference-shaped workflow literals through compilation and publish validation", () => {
     const amended = structuredClone(sources);
     const source = amended.find(
@@ -189,6 +604,606 @@ describe("authored definition compiler", () => {
       "module",
       "module",
     ]);
+  });
+
+  it("resolves explicit record scope, condition evidence and provenance", () => {
+    const amended = structuredClone(sources);
+    const module = amended.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!module || module.kind !== "module") throw new Error("Case module fixture required");
+    const permission = module.body.permissions.find(
+      (entry) => entry.key === "vortex.service_desk.cases.case.read",
+    );
+    if (!permission) throw new Error("Case read permission required");
+    permission.record_scope = {
+      routes: [
+        {
+          kind: "relationship",
+          relationship: "vortex.service_desk.cases:case_comment.case",
+          source_permission: "vortex.service_desk.cases.case_comment.read",
+        },
+        { kind: "direct_share" },
+        { kind: "ownership" },
+      ],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+
+    const outputs = compileDefinitionSet(amended.map(requestFor), publicationOptions);
+    const output = outputs.find(
+      (entry) =>
+        entry.kind === "module" && entry.canonical.envelope.key === "vortex.service_desk.cases",
+    );
+    if (!output || output.kind !== "module") throw new Error("Compiled case module required");
+    const compiled = output.canonical.content.permissions.find(
+      (entry) => entry.key === permission.key,
+    );
+    expect(compiled?.recordScope).toEqual({
+      routes: [
+        { kind: "ownership" },
+        { kind: "direct_share" },
+        {
+          kind: "relationship",
+          relationshipId: expect.any(String),
+          sourcePermissionId: expect.any(String),
+        },
+      ],
+      savedCondition: {
+        conditionId: savedConditionRevisions[0]!.conditionId,
+        publishedRevision: 1,
+        contractFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        parameterBindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    });
+    const recordScopeProvenance = output.provenance.filter((entry) =>
+      entry.sourcePath?.includes("record_scope"),
+    );
+    expect(recordScopeProvenance.length).toBeGreaterThan(0);
+    expect(
+      recordScopeProvenance.some(
+        (entry) => entry.origin === "resolved" && entry.ruleCode !== undefined,
+      ),
+    ).toBe(true);
+    expect(
+      recordScopeProvenance.every((entry) => entry.canonicalPath.includes("recordScope")),
+    ).toBe(true);
+  });
+
+  it("resolves exact permission field policies with canonical per-field provenance", () => {
+    const amended = structuredClone(sources);
+    const module = amended.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!module || module.kind !== "module") throw new Error("Case module fixture required");
+    const permission = module.body.permissions.find(
+      (entry) => entry.key === "vortex.service_desk.cases.case.read",
+    );
+    if (!permission) throw new Error("Case read permission required");
+    const permissionIndex = module.body.permissions.indexOf(permission);
+    permission.field_policy = {
+      readable_fields: ["subject", "case_number"],
+      changeable_fields: ["subject"],
+    };
+
+    const output = compileDefinitionSet(amended.map(requestFor), publicationOptions).find(
+      (entry) =>
+        entry.kind === "module" && entry.canonical.envelope.key === "vortex.service_desk.cases",
+    );
+    if (!output || output.kind !== "module") throw new Error("Compiled case module required");
+    const record = output.canonical.content.recordTypes.find((entry) => entry.key === "case");
+    const fieldId = (key: string) => record?.fields.find((field) => field.key === key)?.fieldId;
+    const expectedReadable = [fieldId("subject"), fieldId("case_number")].sort();
+    const compiled = output.canonical.content.permissions.find(
+      (entry) => entry.key === permission.key,
+    );
+    expect(compiled?.fieldPolicy).toEqual({
+      readableFieldIds: expectedReadable,
+      changeableFieldIds: [fieldId("subject")],
+    });
+    const policyProvenance = output.provenance.filter(
+      (entry) =>
+        entry.sourcePath?.includes("field_policy") && entry.sourcePath[2] === permissionIndex,
+    );
+    expect(policyProvenance).toHaveLength(3);
+    expect(policyProvenance.every((entry) => entry.origin === "resolved")).toBe(true);
+    expect(policyProvenance.every((entry) => entry.canonicalPath.includes("fieldPolicy"))).toBe(
+      true,
+    );
+  });
+
+  it("preserves historical field-policy omission but refuses it for new publication", () => {
+    const amended = structuredClone(sources);
+    const module = amended.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.activities",
+    );
+    if (!module || module.kind !== "module") throw new Error("Activities fixture required");
+    delete module.body.permissions[0]!.field_policy;
+
+    const compiled = compileDefinition(requestFor(module));
+    expect(compiled.canonical.content.permissions[0]).not.toHaveProperty("fieldPolicy");
+    expect(() => compileDefinitionSet(amended.map(requestFor), publicationOptions)).toThrowError(
+      "vortex.definition.module_record_references",
+    );
+  });
+
+  it("requires scope for new record-permission publication and refuses route cycles", () => {
+    const missingScope = structuredClone(sources);
+    const missingModule = missingScope.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.activities",
+    );
+    if (!missingModule || missingModule.kind !== "module")
+      throw new Error("Activities fixture required");
+    delete missingModule.body.permissions[0]!.record_scope;
+    expect(() =>
+      compileDefinitionSet(missingScope.map(requestFor), publicationOptions),
+    ).toThrowError("vortex.definition.module_record_references");
+
+    const cyclic = structuredClone(sources);
+    const companyModule = cyclic.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.organisations",
+    );
+    if (!companyModule || companyModule.kind !== "module")
+      throw new Error("Organisations fixture required");
+    const companyRead = companyModule.body.permissions.find(
+      (entry) => entry.key === "vortex.crm.organisations.company.read",
+    );
+    if (!companyRead) throw new Error("Company read permission required");
+    companyRead.record_scope = {
+      routes: [
+        {
+          kind: "relationship",
+          relationship: "vortex.crm.organisations:company.parent_company",
+          source_permission: companyRead.key,
+        },
+      ],
+    };
+    expect(() => compileDefinitionSet(cyclic.map(requestFor), publicationOptions)).toThrowError(
+      "vortex.definition.module_record_references",
+    );
+
+    const invalidCondition = structuredClone(sources);
+    const caseModule = invalidCondition.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!caseModule || caseModule.kind !== "module") throw new Error("Case fixture required");
+    const caseRead = caseModule.body.permissions.find(
+      (entry) => entry.key === "vortex.service_desk.cases.case.read",
+    );
+    if (!caseRead) throw new Error("Case read permission required");
+    caseRead.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: 42 }],
+      },
+    };
+    expect(() =>
+      compileDefinitionSet(invalidCondition.map(requestFor), publicationOptions),
+    ).toThrowError("vortex.definition.source_type_compatibility");
+  });
+
+  it("requires inherited ownership to terminate through exact cycle-free record identities", () => {
+    const sourceRecord = (candidates: typeof sources, moduleKey: string, recordKey: string) => {
+      const module = candidates.find(
+        (source) => source.kind === "module" && source.key === moduleKey,
+      );
+      if (!module || module.kind !== "module") throw new Error(`Expected ${moduleKey}`);
+      const record = module.body.record_types.find((entry) => entry.key === recordKey);
+      if (!record) throw new Error(`Expected ${moduleKey}:${recordKey}`);
+      return record;
+    };
+
+    const twoHopSources = structuredClone(sources);
+    const opportunitySource = sourceRecord(
+      twoHopSources,
+      "vortex.crm.opportunities",
+      "opportunity",
+    );
+    opportunitySource.ownership_mode = "inherited";
+    opportunitySource.ownership_relationship = "company";
+    expect(() =>
+      compileDefinitionSet(twoHopSources.map(requestFor), publicationOptions),
+    ).not.toThrow();
+
+    const terminalNoneSources = structuredClone(sources);
+    sourceRecord(terminalNoneSources, "vortex.crm.organisations", "company").ownership_mode =
+      "none";
+    expect(() =>
+      compileDefinitionSet(terminalNoneSources.map(requestFor), publicationOptions),
+    ).toThrowError("vortex.definition.module_record_references");
+
+    const cyclicSources = structuredClone(sources);
+    const companySource = sourceRecord(cyclicSources, "vortex.crm.organisations", "company");
+    companySource.ownership_mode = "inherited";
+    companySource.ownership_relationship = "parent_company";
+    expect(() =>
+      compileDefinitionSet(cyclicSources.map(requestFor), publicationOptions),
+    ).toThrowError("vortex.definition.module_record_references");
+
+    const tagSource = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.tags",
+    );
+    if (!tagSource || tagSource.kind !== "module") throw new Error("Expected tag module");
+    const dependencyOutputs = sources
+      .filter((source) => source.kind === "module" && source.key !== tagSource.key)
+      .map((source) => compileDefinition(requestFor(source)));
+    const tagRequest = requestFor(tagSource);
+    const tagOutput = compileDefinition(tagRequest);
+    expect(
+      validateDefinitionSet({
+        requests: [tagRequest],
+        outputs: [tagOutput],
+        dependencyOutputs,
+        publishedHistories: [{ kind: "module", definitionKey: tagSource.key, history: [] }],
+      }).failures.map((entry) => entry.ruleCode),
+    ).not.toContain("vortex.definition.module_record_references");
+    const invalidDependencies = structuredClone(dependencyOutputs);
+    const organizationDependency = invalidDependencies.find(
+      (output) =>
+        output.kind === "module" && output.canonical.envelope.key === "vortex.crm.organisations",
+    );
+    if (!organizationDependency || organizationDependency.kind !== "module")
+      throw new Error("Expected organization dependency");
+    const dependencyCompany = organizationDependency.canonical.content.recordTypes.find(
+      (record) => record.key === "company",
+    );
+    if (!dependencyCompany) throw new Error("Expected dependency company record");
+    dependencyCompany.ownershipMode = "none";
+    expect(
+      validateDefinitionSet({
+        requests: [tagRequest],
+        outputs: [tagOutput],
+        dependencyOutputs: invalidDependencies,
+        publishedHistories: [{ kind: "module", definitionKey: tagSource.key, history: [] }],
+      }).failures.map((entry) => entry.ruleCode),
+    ).toContain("vortex.definition.module_record_references");
+
+    const requests = sources.map(requestFor);
+    const outputs = requests.map(compileDefinition);
+    const moduleRecord = (candidates: typeof outputs, moduleKey: string, recordKey: string) => {
+      const module = candidates.find(
+        (output) => output.kind === "module" && output.canonical.envelope.key === moduleKey,
+      );
+      if (!module || module.kind !== "module") throw new Error(`Expected ${moduleKey}`);
+      const record = module.canonical.content.recordTypes.find((entry) => entry.key === recordKey);
+      if (!record) throw new Error(`Expected ${moduleKey}:${recordKey}`);
+      return record;
+    };
+
+    const wrongModule = structuredClone(outputs);
+    const inherited = moduleRecord(wrongModule, "vortex.crm.opportunities", "opportunity_contact");
+    const ownershipRelationship = inherited.relationships.find(
+      (relationship) => relationship.relationshipId === inherited.ownershipRelationshipId,
+    );
+    if (!ownershipRelationship?.toRecordType)
+      throw new Error("Expected inherited ownership target");
+    const peopleModule = wrongModule.find(
+      (output) => output.kind === "module" && output.canonical.envelope.key === "vortex.crm.people",
+    );
+    if (!peopleModule || peopleModule.kind !== "module") throw new Error("Expected people module");
+    ownershipRelationship.toRecordType.moduleRootId = peopleModule.canonical.envelope.rootId;
+    expect(
+      validateDefinitionSet(publicationContext(requests, wrongModule)).failures.map(
+        (entry) => entry.ruleCode,
+      ),
+    ).toContain("vortex.definition.module_record_references");
+  });
+
+  it("maps application-owned record permissions through a bound-module read permission", () => {
+    const amended = structuredClone(sources);
+    const source = amended.find(
+      (candidate) => candidate.kind === "application" && candidate.key === "vortex.app.crm",
+    );
+    if (!source || source.kind !== "application") throw new Error("CRM application required");
+    const permission = source.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application case permission required");
+    const permissionIndex = source.body.permissions.indexOf(permission);
+    permission.record_type = "vortex.crm.organisations:company";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [
+        {
+          kind: "relationship",
+          relationship: "vortex.service_desk.cases:case.customer_company",
+          source_permission: "vortex.service_desk.cases.case.read",
+        },
+      ],
+    };
+    permission.field_policy = {
+      readable_fields: ["name"],
+      changeable_fields: [],
+    };
+    const outputs = compileDefinitionSet(amended.map(requestFor), publicationOptions);
+    const output = outputs.find(
+      (entry) => entry.kind === "application" && entry.canonical.envelope.key === source.key,
+    );
+    if (!output) throw new Error("Compiled application output required");
+    if (output.kind !== "application") throw new Error("Application output required");
+    const compiledPermission = output.canonical.content.permissions.find(
+      (entry) => entry.key === permission.key,
+    );
+    expect(compiledPermission?.recordScope).toEqual({
+      routes: [
+        {
+          kind: "relationship",
+          relationshipId: expect.any(String),
+          sourcePermissionId: expect.any(String),
+        },
+      ],
+    });
+    const companyModule = outputs.find(
+      (entry) =>
+        entry.kind === "module" && entry.canonical.envelope.key === "vortex.crm.organisations",
+    );
+    const company =
+      companyModule?.kind === "module"
+        ? companyModule.canonical.content.recordTypes.find((record) => record.key === "company")
+        : undefined;
+    const nameFieldId = company?.fields.find((field) => field.key === "name")?.fieldId;
+    expect(compiledPermission?.fieldPolicy).toEqual({
+      readableFieldIds: [nameFieldId],
+      changeableFieldIds: [],
+    });
+    expect(
+      output.provenance.some(
+        (entry) =>
+          entry.sourcePath?.includes("field_policy") &&
+          entry.sourcePath[2] === permissionIndex &&
+          entry.canonicalPath.includes("fieldPolicy") &&
+          entry.origin === "resolved",
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses unresolved and foreign-record field-policy aliases", () => {
+    const compileApplicationField = (field: string) => {
+      const amended = structuredClone(sources);
+      const application = amended.find(
+        (source) => source.kind === "application" && source.key === "vortex.app.crm",
+      );
+      if (!application || application.kind !== "application")
+        throw new Error("CRM application required");
+      const permission = application.body.permissions.find(
+        (entry) => entry.key === "application.crm.shared_cases.read",
+      );
+      if (!permission) throw new Error("Application case permission required");
+      permission.record_type = "vortex.crm.organisations:company";
+      permission.action_kind = "read";
+      delete permission.named_action;
+      permission.record_scope = { routes: [{ kind: "ownership" }] };
+      permission.field_policy = { readable_fields: [field], changeable_fields: [] };
+      return () => compileDefinitionSet(amended.map(requestFor), publicationOptions);
+    };
+
+    expect(compileApplicationField("missing_field")).toThrow();
+    expect(compileApplicationField("subject")).toThrow();
+  });
+
+  it("binds an application-owned saved condition to the module owning its record type", () => {
+    const amended = structuredClone(sources);
+    const application = amended.find(
+      (source) => source.kind === "application" && source.key === "vortex.app.crm",
+    );
+    const module = amended.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!application || application.kind !== "application" || !module || module.kind !== "module")
+      throw new Error("Application and module fixtures required");
+    const permission = application.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application permission fixture required");
+    permission.record_type = "vortex.service_desk.cases:case";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+    permission.field_policy = {
+      readable_fields: ["subject"],
+      changeable_fields: [],
+    };
+
+    const requests = amended.map(requestFor);
+    const forward = compileDefinitionSet(requests, publicationOptions);
+    const reverse = compileDefinitionSet([...requests].reverse(), publicationOptions);
+    const output = forward.find(
+      (entry) => entry.kind === "application" && entry.canonical.envelope.key === application.key,
+    );
+    const moduleOutput = forward.find(
+      (entry) => entry.kind === "module" && entry.canonical.envelope.key === module.key,
+    );
+    if (!output || output.kind !== "application" || !moduleOutput || moduleOutput.kind !== "module")
+      throw new Error("Compiled application and module outputs required");
+    const condition = moduleOutput.canonical.content.sharingConditions.find(
+      (entry) => entry.key === "matching_priority",
+    );
+    expect(
+      output.canonical.content.permissions.find((entry) => entry.key === permission.key)
+        ?.recordScope,
+    ).toEqual({
+      routes: [{ kind: "all_records" }],
+      savedCondition: {
+        conditionId: condition?.conditionId,
+        publishedRevision: condition?.publishedRevision,
+        contractFingerprint: condition?.contractFingerprint,
+        parameterBindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    });
+    expect(reverse).toEqual(forward);
+
+    const wrongConditionOutputs = structuredClone(forward);
+    const wrongModule = wrongConditionOutputs.find(
+      (entry) => entry.kind === "module" && entry.canonical.envelope.key === module.key,
+    );
+    if (!wrongModule || wrongModule.kind !== "module") throw new Error("Module output required");
+    const wrongCondition = wrongModule.canonical.content.sharingConditions[0];
+    const otherRecord = wrongModule.canonical.content.recordTypes.find(
+      (record) => record.recordTypeId !== condition?.sourceRecordTypeId,
+    );
+    if (!wrongCondition || !otherRecord) throw new Error("Condition and record fixtures required");
+    wrongCondition.sourceRecordTypeId = otherRecord.recordTypeId;
+    wrongModule.artifact.contentFingerprint = fingerprintCanonicalValue(
+      wrongModule.canonical.content,
+    );
+    expect(
+      validateDefinitionSet({
+        requests,
+        outputs: wrongConditionOutputs,
+        ...publicationOptions,
+      }).failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleCode: "vortex.definition.application_action_references" }),
+      ]),
+    );
+
+    const duplicateConditionOutputs = structuredClone(forward);
+    const duplicateOwner = duplicateConditionOutputs.find(
+      (entry) =>
+        entry.kind === "module" && entry.canonical.envelope.key === "vortex.crm.organisations",
+    );
+    if (!duplicateOwner || duplicateOwner.kind !== "module" || !condition)
+      throw new Error("Duplicate condition fixtures required");
+    duplicateOwner.canonical.content.sharingConditions = [condition];
+    duplicateOwner.artifact.contentFingerprint = fingerprintCanonicalValue(
+      duplicateOwner.canonical.content,
+    );
+    expect(
+      validateDefinitionSet({
+        requests,
+        outputs: duplicateConditionOutputs,
+        ...publicationOptions,
+      }).failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleCode: "vortex.definition.application_action_references" }),
+      ]),
+    );
+  });
+
+  it("requires exact trusted dependency evidence for standalone application saved conditions", () => {
+    const application = structuredClone(
+      sources.find((source) => source.kind === "application" && source.key === "vortex.app.crm"),
+    );
+    const module = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.service_desk.cases",
+    );
+    if (!application || application.kind !== "application" || !module || module.kind !== "module")
+      throw new Error("Application and module fixtures required");
+    const applicationWithoutSavedCondition = structuredClone(application);
+    const permission = application.body.permissions.find(
+      (entry) => entry.key === "application.crm.shared_cases.read",
+    );
+    if (!permission) throw new Error("Application permission fixture required");
+    permission.record_type = "vortex.service_desk.cases:case";
+    permission.action_kind = "read";
+    delete permission.named_action;
+    permission.record_scope = {
+      routes: [{ kind: "all_records" }],
+      saved_condition: {
+        condition: "matching_priority",
+        parameter_bindings: [{ key: "allowed_priority", source: "literal", value: "high" }],
+      },
+    };
+    permission.field_policy = {
+      readable_fields: ["subject"],
+      changeable_fields: [],
+    };
+    const moduleOutput = compileDefinition(requestFor(module));
+    const unrelatedModule = sources.find(
+      (source) => source.kind === "module" && source.key === "vortex.crm.organisations",
+    );
+    if (!unrelatedModule || unrelatedModule.kind !== "module")
+      throw new Error("Unrelated module fixture required");
+    const unrelatedOutput = compileDefinition(requestFor(unrelatedModule));
+    if (moduleOutput.kind !== "module" || unrelatedOutput.kind !== "module")
+      throw new Error("Module outputs required");
+    const targetCondition = moduleOutput.canonical.content.sharingConditions.find(
+      (entry) => entry.key === "matching_priority",
+    );
+    if (!targetCondition) throw new Error("Saved condition fixture required");
+    const sameKeyElsewhere = structuredClone(unrelatedOutput);
+    sameKeyElsewhere.canonical.content.sharingConditions = [
+      {
+        ...targetCondition,
+        conditionId: "10000000-0000-4000-a000-000000000099",
+      },
+    ];
+    sameKeyElsewhere.artifact.contentFingerprint = fingerprintCanonicalValue(
+      sameKeyElsewhere.canonical.content,
+    );
+    const request = requestFor(application);
+
+    expect(
+      compileDefinitionWithContext(requestFor(applicationWithoutSavedCondition), {
+        dependencyOutputs: [sameKeyElsewhere, moduleOutput],
+      }),
+    ).toEqual(compileDefinition(requestFor(applicationWithoutSavedCondition)));
+
+    const output = compileDefinitionWithContext(request, {
+      dependencyOutputs: [sameKeyElsewhere, moduleOutput],
+    });
+    expect(output.kind).toBe("application");
+    if (output.kind !== "application") throw new Error("Application output required");
+    expect(
+      output.canonical.content.permissions.find((entry) => entry.key === permission.key)
+        ?.recordScope?.savedCondition?.conditionId,
+    ).toBe(targetCondition.conditionId);
+    expect(() => compileDefinition(request)).toThrowError(
+      "vortex.definition.saved_condition_revision_required",
+    );
+    for (const altered of [
+      {
+        ...moduleOutput,
+        artifact: { ...moduleOutput.artifact, exactVersion: "1.0.1" },
+      },
+      {
+        ...moduleOutput,
+        artifact: { ...moduleOutput.artifact, contentFingerprint: `sha256:${"0".repeat(64)}` },
+      },
+      {
+        ...moduleOutput,
+        artifact: { ...moduleOutput.artifact, resolutionFingerprint: `sha256:${"1".repeat(64)}` },
+      },
+    ])
+      expect(() =>
+        compileDefinitionWithContext(request, { dependencyOutputs: [altered] }),
+      ).toThrowError("vortex.definition.saved_condition_revision_required");
+    expect(() =>
+      compileDefinitionWithContext(request, {
+        dependencyOutputs: [moduleOutput],
+        publishedHistories: [],
+      } as never),
+    ).toThrowError("vortex.definition.invalid_compilation_request");
+    expect(() =>
+      compileDefinitionSet([requestFor(module), request], {
+        ...publicationOptions,
+        dependencyOutputs: [moduleOutput],
+      }),
+    ).toThrowError("vortex.definition.duplicate_source_key");
+
+    const missingRecord = structuredClone(moduleOutput);
+    missingRecord.canonical.content.recordTypes =
+      missingRecord.canonical.content.recordTypes.filter(
+        (record) => record.recordTypeId !== targetCondition.sourceRecordTypeId,
+      );
+    missingRecord.artifact.contentFingerprint = fingerprintCanonicalValue(
+      missingRecord.canonical.content,
+    );
+    expect(() =>
+      compileDefinitionWithContext(request, { dependencyOutputs: [missingRecord] }),
+    ).toThrowError("vortex.definition.saved_condition_revision_required");
   });
 
   it("expands the sole application wildcard into exact non-admin permissions", () => {
@@ -1536,17 +2551,147 @@ describe("authored definition compiler", () => {
     const output = compileDefinition(requestFor(module));
     if (output.kind !== "module") throw new Error("Expected module output");
     const saved = output.canonical.content.sharingConditions[0]!;
+    const sourceRecord = output.canonical.content.recordTypes.find(
+      (record) => record.recordTypeId === saved.sourceRecordTypeId,
+    );
+    if (!sourceRecord) throw new Error("Expected sharing-condition source record");
     for (const test of saved.publicationTests)
-      expect(evaluateSavedSharingCondition(saved, test.fieldValues, test.parameters)).toBe(
-        test.expected,
-      );
+      expect(
+        evaluateSavedSharingCondition(
+          saved,
+          test.fieldValues,
+          test.parameters,
+          sourceRecord.fields,
+        ),
+      ).toBe(test.expected);
     expect(() =>
       evaluateSavedSharingCondition(
         saved,
         { ...saved.publicationTests[0]!.fieldValues, unknown: "private" },
         saved.publicationTests[0]!.parameters,
+        sourceRecord.fields,
       ),
     ).toThrowError("vortex.definition.sharing_condition_input_refused");
+  });
+
+  it("publishes and evaluates an explicit current-account reference condition", () => {
+    const source = structuredClone(
+      sources.find((candidate) => candidate.key === "vortex.service_desk.cases")!,
+    );
+    if (source.kind !== "module") throw new Error("Expected module source");
+    const sharingCondition = source.body.sharing_conditions[0]!;
+    sharingCondition.parameters = [
+      { key: "current_account", type: "organization_account_reference" },
+    ];
+    sharingCondition.condition = {
+      field: "owner",
+      operator: "equals",
+      parameter: "current_account",
+    };
+    sharingCondition.declared_fields = ["owner"];
+    sharingCondition.publication_tests = [
+      {
+        name: "Current account owns the case",
+        parameters: { current_account: "53650000-0000-4000-8000-000000000001" },
+        field_values: { owner: "53650000-0000-4000-8000-000000000001" },
+        expected: true,
+      },
+    ];
+
+    const parsed = definitionSourceDocumentSchema.parse(source);
+    expect(validateDefinitionSource(parsed).valid).toBe(true);
+    const amendedSources = sources.map((candidate) =>
+      candidate.key === parsed.key ? parsed : structuredClone(candidate),
+    );
+    for (const candidate of amendedSources) {
+      if (candidate.kind !== "application") continue;
+      for (const permission of candidate.body.permissions) {
+        if (permission.record_scope?.saved_condition?.condition !== sharingCondition.key) continue;
+        permission.record_scope.saved_condition.parameter_bindings = [
+          { key: "current_account", source: "current_organization_account_id" },
+        ];
+      }
+    }
+    const output = compileDefinitionSet(amendedSources.map(requestFor), publicationOptions).find(
+      (candidate) => candidate.kind === "module" && candidate.artifact.definitionKey === parsed.key,
+    );
+    if (!output || output.kind !== "module") throw new Error("Expected module output");
+    const saved = output.canonical.content.sharingConditions[0]!;
+    const sourceRecord = output.canonical.content.recordTypes.find(
+      (record) => record.recordTypeId === saved.sourceRecordTypeId,
+    );
+    if (!sourceRecord) throw new Error("Expected sharing-condition source record");
+    expect(saved.parameters).toEqual([
+      { key: "current_account", type: "organization_account_reference" },
+    ]);
+    expect(
+      evaluateSavedSharingCondition(
+        saved,
+        saved.publicationTests[0]!.fieldValues,
+        saved.publicationTests[0]!.parameters,
+        sourceRecord.fields,
+      ),
+    ).toBe(true);
+    expect(() =>
+      evaluateSavedSharingCondition(
+        saved,
+        saved.publicationTests[0]!.fieldValues,
+        { current_account: "not-an-account-id" },
+        sourceRecord.fields,
+      ),
+    ).toThrowError("vortex.definition.sharing_condition_input_refused");
+  });
+
+  it("maps typed sharing-condition refusals through the Definition boundary", () => {
+    const module = sources.find((source) => source.key === "vortex.service_desk.cases")!;
+    const output = compileDefinition(requestFor(module));
+    if (output.kind !== "module") throw new Error("Expected module output");
+    const saved = output.canonical.content.sharingConditions[0]!;
+    const sourceRecord = output.canonical.content.recordTypes.find(
+      (record) => record.recordTypeId === saved.sourceRecordTypeId,
+    );
+    if (!sourceRecord) throw new Error("Expected sharing-condition source record");
+    const sourceField = sourceRecord.fields[0]!;
+    const equality = (left: unknown) => ({
+      kind: "comparison",
+      operator: "equals",
+      left,
+      right: { source: "value", value: "value" },
+    });
+    expect(() =>
+      evaluateSavedSharingCondition(
+        {
+          ...saved,
+          declaredFieldIds: [],
+          parameters: [],
+          condition: equality({ source: "field", fieldId: sourceField.fieldId }),
+        },
+        {},
+        {},
+        sourceRecord.fields,
+      ),
+    ).toThrowError("vortex.definition.sharing_condition_field_refused");
+    expect(() =>
+      evaluateSavedSharingCondition(
+        {
+          ...saved,
+          declaredFieldIds: [],
+          parameters: [],
+          condition: equality({ source: "parameter", key: "missing" }),
+        },
+        {},
+        {},
+        sourceRecord.fields,
+      ),
+    ).toThrowError("vortex.definition.sharing_condition_parameter_refused");
+    expect(() =>
+      evaluateSavedSharingCondition(
+        { ...saved, condition: { ...equality({ source: "value", value: true }), operator: "run" } },
+        {},
+        {},
+        sourceRecord.fields,
+      ),
+    ).toThrowError("vortex.definition.sharing_condition_operator_refused");
   });
 
   it("refuses missing identities, incompatible versions and dependency cycles", () => {
@@ -2422,7 +3567,7 @@ describe("authored definition compiler", () => {
       );
     });
 
-    it("requires each connection binding to use the exact complete caller-snapshot artifact", () => {
+    it("requires each connection binding to use an exact internally consistent artifact", () => {
       const requests = sources.map(requestFor);
       const baseline = requests.map(compileDefinition);
       const application = baseline.find(
@@ -2452,7 +3597,7 @@ describe("authored definition compiler", () => {
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
       foreignConnection.resolutionFingerprint = foreignConnection.artifact.resolutionFingerprint;
       expect(failureCodes(requests, foreignSnapshot)).toContain(
-        "vortex.definition.application_connection_operations",
+        "vortex.definition.artifact_binding",
       );
 
       const incompleteOperations = structuredClone(baseline);
@@ -2493,7 +3638,7 @@ describe("authored definition compiler", () => {
       );
     });
 
-    it("refuses a dependency artifact that is self-consistent but bound to a different caller snapshot", () => {
+    it("accepts dependency-owned evidence from a different caller resolution envelope", () => {
       const application = sources.find((source) => source.key === "vortex.app.crm");
       if (!application || application.kind !== "application")
         throw new Error("Expected application fixture");
@@ -2518,9 +3663,7 @@ describe("authored definition compiler", () => {
         dependencyOutputs: dependencies,
         publishedHistories: [{ kind: "application", definitionKey: application.key, history: [] }],
       }).failures;
-      expect(callerSnapshotFailures).toContainEqual(
-        expect.objectContaining({ ruleCode: "vortex.definition.application_module_bindings" }),
-      );
+      expect(callerSnapshotFailures).toEqual([]);
     });
 
     it("binds a connection canonical version to its exact artifact version", () => {

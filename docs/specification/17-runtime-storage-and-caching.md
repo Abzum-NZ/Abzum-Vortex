@@ -12,6 +12,16 @@ The platform uses three operated services:
 
 [Doppler](https://docs.doppler.com/docs) distributes environment secrets. It is a secret-management control, not an application data store.
 
+Deploy database-facing web functions beside the environment's Supabase database,
+using the [supported Vercel region configuration](https://vercel.com/docs/functions/configuring-functions/region#project-configuration).
+For the current Sydney-hosted environments, the tracked web configuration selects
+`syd1`. Browser edge reception in Sydney does not prove the server function also
+executes there. Measure sign-in and protected-page request durations after delivery;
+do not remove access checks, add authority caches or change database pooling merely
+to compensate for an avoidable cross-region connection. The measured repair is
+tracked in [#347](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347) and its
+[acceptance plan](../build-plan/testing-sign-in-performance.md).
+
 ```mermaid
 flowchart LR
     PERSON[Browser or approved client] --> IDP[Vortex Identity Authority]
@@ -28,16 +38,16 @@ flowchart LR
 
 Vortex uses Supabase as an integrated platform, but each capability has one narrow job. This avoids building replacements for managed database features while keeping deployments, secrets, and business scheduling under their already approved owners.
 
-| Supabase capability | Vortex use | Boundary |
-|---|---|---|
-| [Auth](https://supabase.com/docs/guides/auth), [OAuth 2.1 server](https://supabase.com/docs/guides/auth/oauth-server) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority, locally verifiable short-lived identity tokens, and authorization-code-with-PKCE tokens for governed MCP clients | Organisation roles, groups, application access and MCP capability grants remain live Vortex data, not OAuth scope or token claims. Supabase authorizes identity/client; the Vercel MCP route enforces Vortex access. |
-| PostgreSQL, [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) and [Supavisor](https://supabase.com/docs/guides/database/connecting-to-postgres) | Authoritative data, transactions, constraints, organisation separation and pooled server connections | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. Vercel uses transaction mode; migrations and database verification use a separate owner credential over session mode. |
-| [Queues](https://supabase.com/docs/guides/queues) | Logged, durable event delivery after a committed save | Queue client functions are server-only and the `pgmq_public` interface is not exposed to browsers. |
-| [Database Webhooks](https://supabase.com/docs/guides/database/webhooks) | Asynchronous low-latency wake-up after durable work exists | A webhook is a hint, not delivery proof; the queue and scheduled Kestra recovery remain authoritative. |
-| [Realtime Broadcast](https://supabase.com/docs/guides/realtime/authorization) | Private, content-free invalidation for open components | Clients reload through the authorised query path; business values are never broadcast. |
-| [Storage](https://supabase.com/docs/guides/storage) | Private objects, resumable uploads and authenticated private download streams | Business files are never public; Storage row policies and File-service checks both apply. |
-| [CLI, database tests and linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) | Reproducible local database, migration checks, pgTAP tests and database lint | The shared Testing project remains the authoritative platform and separation test. Kestra alone migrates Testing and Production. |
-| [Managed backups](https://supabase.com/docs/guides/platform/backups) and database advisers | Provider recovery layer and reviewed security/performance findings | Independent encrypted backups, restore drills and reviewed migrations remain required. Adviser suggestions never change production automatically. |
+| Supabase capability                                                                                                                                                                                     | Vortex use                                                                                                                                            | Boundary                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Auth](https://supabase.com/docs/guides/auth), [OAuth 2.1 server](https://supabase.com/docs/guides/auth/oauth-server) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority, locally verifiable short-lived identity tokens, and authorization-code-with-PKCE tokens for governed MCP clients | Organisation roles, groups, application access and MCP capability grants remain live Vortex data, not OAuth scope or token claims. Supabase authorizes identity/client; the Vercel MCP route enforces Vortex access.                      |
+| PostgreSQL, [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) and [Supavisor](https://supabase.com/docs/guides/database/connecting-to-postgres)               | Authoritative data, transactions, constraints, organisation separation and pooled server connections                                                  | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. Vercel uses transaction mode; migrations and database verification use a separate owner credential over session mode. |
+| [Queues](https://supabase.com/docs/guides/queues)                                                                                                                                                       | Logged, durable event delivery after a committed save                                                                                                 | Queue client functions are server-only and the `pgmq_public` interface is not exposed to browsers.                                                                                                                                        |
+| [Database Webhooks](https://supabase.com/docs/guides/database/webhooks)                                                                                                                                 | Asynchronous low-latency wake-up after durable work exists                                                                                            | A webhook is a hint, not delivery proof; the queue and scheduled Kestra recovery remain authoritative.                                                                                                                                    |
+| [Realtime Broadcast](https://supabase.com/docs/guides/realtime/authorization)                                                                                                                           | Private, content-free invalidation for open components                                                                                                | Clients reload through the authorised query path; business values are never broadcast.                                                                                                                                                    |
+| [Storage](https://supabase.com/docs/guides/storage)                                                                                                                                                     | Private objects, resumable uploads and authenticated private download streams                                                                         | Business files are never public; Storage row policies and File-service checks both apply.                                                                                                                                                 |
+| [CLI, database tests and linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting)                                                                                           | Reproducible local database, migration checks, pgTAP tests and database lint                                                                          | The shared Testing project remains the authoritative platform and separation test. Kestra alone migrates Testing and Production.                                                                                                          |
+| [Managed backups](https://supabase.com/docs/guides/platform/backups) and database advisers                                                                                                              | Provider recovery layer and reviewed security/performance findings                                                                                    | Independent encrypted backups, restore drills and reviewed migrations remain required. Adviser suggestions never change production automatically.                                                                                         |
 
 Supabase Cron is not a second workflow system: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
 
@@ -64,26 +74,28 @@ flowchart LR
 
 The codebase is divided into sixteen named services. These are package and ownership boundaries, not sixteen separately deployed servers.
 
-| Service | Owns |
-|---|---|
-| Definition | Module and application drafts, validation, immutable published revisions, dependency graph, restore |
-| Identity | Identity Authority integration, cluster-local identity projections, tenants, tenant-administrator assignments, organisation hierarchy, organisation accounts, invitations, sessions, sign-in |
-| Access | Permissions, roles, assignments, sharing grants, access versions, allow/refuse decision, protected grant activation |
-| Module | Module installation, dependencies, generated storage changes |
-| Record | Record validation, storage, calculations, totals, concurrency, data versions |
-| Query | Tables, boards, calendars, summaries and saved views |
-| Rule | Typed conditions and immediate rule effects |
-| Event | Transactional event outbox, queue dispatch, retries and failed sequences |
-| Workflow | Execution references, schedules, generic human-input waits and the [Kestra](https://kestra.io/docs) boundary; Kestra owns execution status |
-| App | Application assembly, module bindings, navigation, options and application roles |
-| Page | Block registration, page resolution, form drafts, page states and rendering contract |
-| Theme | Application-contained and platform-catalogue theme values, inheritance and legibility validation |
-| Search | Search-document maintenance, ranking and access recheck |
-| File | Upload admission, metadata, lifecycle, storage allowance and download grants |
-| Connection | Connection types, secret grants, outgoing calls, incoming messages and health |
-| Interface | Versioned operation catalogue, public interface boundary, governed MCP adapter and semantic projection, cluster directory and federation transport |
+| Service    | Owns                                                                                                                                                                                         |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Definition | Module and application drafts, validation, immutable published revisions, dependency graph, restore                                                                                          |
+| Identity   | Identity Authority integration, cluster-local identity projections, tenants, tenant-administrator assignments, organisation hierarchy, organisation accounts, invitations, sessions, sign-in |
+| Access     | Permissions, roles, assignments, sharing grants, access versions, allow/refuse decision, protected grant activation                                                                          |
+| Module     | Module installation, dependencies, generated storage changes                                                                                                                                 |
+| Record     | Record validation, storage, calculations, totals, concurrency, data versions                                                                                                                 |
+| Query      | Tables, boards, calendars, summaries and saved views                                                                                                                                         |
+| Rule       | Typed conditions and immediate rule effects                                                                                                                                                  |
+| Event      | Transactional event outbox, queue dispatch, retries and failed sequences                                                                                                                     |
+| Workflow   | Execution references, schedules, generic human-input waits and the [Kestra](https://kestra.io/docs) boundary; Kestra owns execution status                                                   |
+| App        | Application assembly, module bindings, navigation, options and application roles                                                                                                             |
+| Page       | Block registration, page resolution, form drafts, page states and rendering contract                                                                                                         |
+| Theme      | Application-contained and platform-catalogue theme values, inheritance and legibility validation                                                                                             |
+| Search     | Search-document maintenance, ranking and access recheck                                                                                                                                      |
+| File       | Upload admission, metadata, lifecycle, storage allowance and download grants                                                                                                                 |
+| Connection | Connection types, secret grants, outgoing calls, incoming messages and health                                                                                                                |
+| Interface  | Versioned operation catalogue, public interface boundary, governed MCP adapter and semantic projection, cluster directory and federation transport                                           |
 
 Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
+
+The shared [Activity foundation](../build-plan/issue-252-activity-foundation.md) is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_activity` history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
 
 The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives Identity schema usage and execution only for exact pre-request operations: ensure a verified identity projection during bootstrap, read that projection without mutation during normal session resolution, return the minimum safe organisation launcher, and resolve one exact active organisation-account scope for Access. Runtime invitation acceptance is available only through the private `vortex_access` schema. Access calls owner-only Identity operations and owns the atomic account-scope plus current-version composition; it never reads Identity relations. Invitation activation/reactivation and the required organisation Access-version change commit or roll back together. The former standalone runtime version read and rich organisation-account list are revoked. `vortex_runtime` receives no Access table, generic increment, initialisation or administrative lifecycle authority. Invitation administration and account lifecycle remain owner-only until protected administration composes their authorisation. `vortex_request` receives no Identity access; it receives Access schema usage and execution only for the exact live human-context validator. Trigger functions remain non-executable by runtime roles.
 
@@ -113,7 +125,8 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
 - Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
 - Request database roles do not own tables and cannot bypass the row restrictions.
-- The table-owner role is limited to migration and controlled verification work.
+- The trusted backend owns the runtime database connection; browser, import, flow and MCP callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#final-values-and-the-trusted-server-boundary) separates untrusted submitted values from server-computed final changes without duplicating the business-rule engine in SQL. Tests must distinguish a genuinely restricted session from a runtime session temporarily using the request role.
+- The Supabase project-owner credential is limited to migration and controlled verification work. The separate non-login Record object owner is callable only through the protected [storage provisioner](#record-storage-provisioning); request roles cannot inherit it.
 - Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
@@ -122,14 +135,14 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 
 The private `vortex_definition` schema uses six relations with one responsibility each. It stores no starter application, business record, consumer installation, grant, workflow run, or duplicate history document.
 
-| Relation | Stored responsibility |
-|---|---|
-| `roots` | Permanent organisation, kind and definition key, creation evidence, and a nullable current-release discovery pointer. |
-| `drafts` | Exactly one current parsed authored-source draft, its source-contract version, canonical source fingerprint, expected-save revision and optional all-or-none restore provenance bound to an exact immutable source snapshot. |
-| `source_identities` | One append-only UUID for each permanent root or contained-component owner. |
-| `source_identity_aliases` | Append-only historical and current compiler lookup aliases; an old alias cannot be reassigned. |
-| `releases` | Complete immutable authored source, canonical compilation output, the exact resolution snapshot used by that output, stable release version, published draft revision, source/content/resolution/comparison fingerprints, validation-contract version, deterministic impact reasons, release note, actor and database time. |
-| `release_dependencies` | One exact Module, connection-type or platform-theme dependency per release subject, with its exact version, content fingerprint and separate resolution/catalogue evidence fingerprint. |
+| Relation                  | Stored responsibility                                                                                                                                                                                                                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `roots`                   | Permanent organisation, kind and definition key, creation evidence, and a nullable current-release discovery pointer.                                                                                                                                                                                                       |
+| `drafts`                  | Exactly one current parsed authored-source draft, its source-contract version, canonical source fingerprint, expected-save revision and optional all-or-none restore provenance bound to an exact immutable source snapshot.                                                                                                |
+| `source_identities`       | One append-only UUID for each permanent root or contained-component owner.                                                                                                                                                                                                                                                  |
+| `source_identity_aliases` | Append-only historical and current compiler lookup aliases; an old alias cannot be reassigned.                                                                                                                                                                                                                              |
+| `releases`                | Complete immutable authored source, canonical compilation output, the exact resolution snapshot used by that output, stable release version, published draft revision, source/content/resolution/comparison fingerprints, validation-contract version, deterministic impact reasons, release note, actor and database time. |
+| `release_dependencies`    | One exact Module, connection-type or platform-theme dependency per release subject, with its exact version, content fingerprint and separate resolution/catalogue evidence fingerprint.                                                                                                                                     |
 
 ```mermaid
 flowchart LR
@@ -183,20 +196,25 @@ application request.
   Vortex context or service schemas. Direct browser access to those schemas therefore has no database
   route even if an exposed-schema setting changes.
 
-For a human organisation request, the browser supplies only the selected permanent organisation
-identifier. The server verifies the closed Identity session and adds the configured Identity
+For a human organisation request, the browser supplies the selected permanent organisation
+identifier and, when applicable, an application-root candidate. Neither is authority.
+The server verifies the closed Identity session and adds the configured Identity
 Authority identifier; callers cannot choose it. Inside one database transaction as `vortex_runtime`,
 Access resolves the exact active tenant, organisation account, organisation and current positive
 Access version from live private state. The same transaction retains shared locks on the identity,
 account, organisation, tenant and Access-version rows until protected work ends, so a concurrent
-suspension or version change cannot commit between resolution and use.
+suspension or version change cannot commit between resolution and use. When an application
+is selected, [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) additionally
+verifies its exact active registration in that organisation under the same Access lock,
+before initializing the application-bound context. The organisation-only route remains valid.
 
 The runtime then validates and initializes the complete closed [session-context
 contract](appendices/data-contracts.md#session-context), enters `vortex_request` with `SET LOCAL ROLE`,
 and runs protected service SQL without leaving that transaction. `vortex_runtime` may call only the
 safe launcher, Access scope composer and initializer; the exact Identity scope resolver remains an
 owner-only helper callable through that Access composer. The request role
-has no Identity schema access and may execute only Access's exact live human-context validator. It
+has no Identity schema access and may execute only explicitly granted request functions, including
+Access's exact live human-context validator and central permission/delegation evaluator. It
 cannot call the legacy rich account list or standalone Access-version read, both of which are revoked
 from runtime use. Only `vortex_request` may execute the read-only context accessors used by row
 policies and service SQL. The database stores the whole context as one transaction-local value, not
@@ -208,9 +226,13 @@ Setting a structurally valid context is not itself an access grant. Access owns 
 organisation composition; other services consume its resolved transaction rather than assembling
 human authority from browser or application values. Every human or federated context contains the
 trusted Identity Authority identifier; system and public contexts must not contain one. An
-application-contained policy also refuses a Phase 2 context because it has no application identifier.
+application-contained policy refuses the organisation-only launcher context because it has no
+application identifier. Only the verified application handoff supplies that scope; the declared
+operation still requires the central permission decision.
 A tenant-administration operation may use tenant scope only where its owning service explicitly
 permits it; it never satisfies an organisation-record policy.
+
+The initiating human request context remains immutable for the request. A future Frontend Flow node bound to a different specified account or registered system actor does not rewrite or reuse that context: after validating separate exact execution authority, the runtime opens a new Access-resolved transaction for that protected node and establishes only the effective actor's closed context. A later node repeats that resolution. Transactions remain short, never cross a form wait, and sequential commits are not rolled back by a later node failure. Current service access, tenant and application scope, record sharing, file and entitlement checks remain unchanged; a service-role credential is never an execution-identity shortcut.
 
 The database package exposes no production operation that accepts a caller-assembled request context.
 Only Access may use the resolved-request transaction capability. Protected service adapters receive
@@ -253,7 +275,7 @@ storage, durable authority, or persistent relation ownership.
 
 ### Record-table allocation
 
-The Record service maintains a protected storage catalog. One `storage_contract_id` maps to one physical business-record table in a cluster. Application bindings and organisation installations reuse that mapping; they do not create tables.
+The Record service maintains a protected storage catalog. One `storage_contract_id` maps to one physical business-record table in a cluster. An installation provisions a missing mapping through the fixed Record operation; subsequent application bindings and organisation installations reuse it rather than creating table copies.
 
 ```mermaid
 flowchart LR
@@ -266,15 +288,120 @@ flowchart LR
     COLUMN --> TABLE
 ```
 
-- The table is allocated for a record-type storage lineage, not for each organisation or application. A shared definition package therefore requires one table migration per cluster rather than one migration for every installation.
+- The table is allocated for a record-type storage lineage, not for each organisation or application. A shared definition requires one compatible physical structure per cluster, not a repository migration for every installation.
 - A table has fixed system columns from the [record storage contract](appendices/data-contracts.md#record-storage-contract) and one typed business column for each field in the active compatible lineage. Optional fields added by a compatible release are nullable for records still governed by an earlier revision.
-- Physical names use immutable, collision-checked storage tokens recorded in the catalog. Human names and builder keys may appear in database comments and operational tools but never determine table or column identity.
-- An independently created or structurally forked record type receives a new storage-contract identity and table. A package install may preserve a source storage identity only when the signed package lineage and fingerprint validate.
+- New mappings use schema `record_data`, table `rt_` followed by the full lowercase storage-contract UUID without hyphens, and column `f_` followed by the full lowercase field UUID without hyphens. Tokens are collision-checked and recorded in the catalog. Existing verified mappings remain authoritative; installation does not regenerate them. Human names and builder keys may appear in comments and operational tools but never determine physical identity.
+- An independently created or structurally forked record type receives a new storage-contract identity and table. Reusing the same local published root does not require package-copy evidence. Copying a package while preserving its source storage identity requires the signed package lineage and fingerprint validation described in [copying](16-copying-sharing-import-export.md).
 - Organisation-shared rows use `organisation_id` as their data boundary. Application-contained rows additionally require `application_root_id`. Unique constraints and lookup indexes include the complete applicable scope before a business value.
 - A relationship always repeats and enforces `organisation_id`. Two application-contained endpoints must also have the same `application_root_id`. An application-contained record may link to an organisation-shared record in the same organisation. A sharing grant never creates a stored cross-organisation or cross-application relationship.
-- Database migrations resolve tables and fields through the catalog. Runtime requests provide stable definition identifiers and never accept a physical table or column name from a browser, definition author, workflow, interface caller, or federation peer.
+- Platform migrations and the protected provisioner resolve tables and fields through the catalog. Runtime requests provide stable definition identifiers and never accept a physical table or column name from a browser, definition author, workflow, interface caller, or federation peer.
 
 Creating a separate schema or table set for every organisation or application is refused because it would multiply migrations, indexes, row restrictions, backups, and operational checks without improving isolation. Organisation separation is enforced by row restrictions and the complete scope keys, while structurally different definitions remain physically separate through their storage-contract identities.
+
+Provisioning shared storage and activating an installation are distinct steps.
+A failed table-creation transaction rolls back its own new objects and changes,
+never a table or registration already used by another installation. If provisioning
+has succeeded but activation fails, the valid inactive structure remains available
+for retry. Activation is atomic and cannot report a usable binding before its
+required mappings, registrations and protected operations are ready. Detachment
+retains the stored records. The [coordinated implementation plan](../build-plan/module-record-provisioning.md)
+keeps these responsibilities with the existing Module, Record and Application engines.
+
+### Record storage provisioning
+
+Installing an arbitrary application must not require an engineer to create a new
+repository migration. Reviewed [platform migrations](18-delivery-and-testing.md#database-changes)
+install one generic database-owned storage generator. Module coordinates it using
+exact immutable Application/Module release identities and an expected binding
+revision. The operation reads the stored release and dependency evidence itself,
+proves that the requested module belongs to the selected application release,
+and rechecks installation authority through Access. An organisation-scoped request
+can install a not-yet-active application; an active application context is not a
+circular prerequisite. Caller-selected actors, SQL, physical names, permission
+declarations and record graphs are never inputs.
+
+The Application root must belong to the intended organisation. A globally
+readable published release does not make another organisation's Application
+installable under that root. An exact shared Module dependency may belong to a
+different organisation; this does not transfer ownership of either Application.
+
+Runtime installation reads follow the same distinction. A context-bound read
+returns the complete exact active Application dependency set, including its
+explicitly pinned shared Modules, without a general cross-organisation definition
+lookup. Ordinary discovery does not require installation-management permission
+and grants no record access. Unrelated detached history does not invalidate a
+complete current installation. See the [active installation read plan](../build-plan/issue-43-active-installation-read.md).
+
+The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
+is the organisation-scoped platform permission
+`platform.organization.applications.manage`. The operation binds the exact
+application and additionally checks delegated management of its complete affected
+permission scope. Installation rights do not grant record access or assignment
+rights. Registration creates no grants and does not expand the permanent
+steward's required minimum when the platform catalogue grows.
+
+The generator is a private `SECURITY DEFINER` operation because creating arbitrary
+record storage is a platform capability while ordinary requests must have no DDL
+rights. Its non-login owner canonically owns the generated Record objects and has
+only the required schema, catalogue and fixed-helper privileges. No runtime or
+request role inherits that owner. The request role can execute only the fixed
+Module coordinator; its private Record helper has no direct public/request grant.
+Use schema-qualified fixed templates, quoted internally derived identifiers,
+and a safe search path. Revoke `PUBLIC` execution in the creating transaction,
+following [PostgreSQL's function guidance](https://www.postgresql.org/docs/17/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY).
+Recheck the actor and scope from the trusted transaction context, not
+`current_user`, which changes inside an owner-executed function.
+
+The database owns the only DDL generator. TypeScript services call that fixed
+operation and parse its result; they do not maintain a second SQL generator.
+The generated structure includes the declared fields, complete scope keys,
+Group ownership (`owner_group_id`), relationships, four row policies and fixed
+field-aware record adapters. Adapters construct trusted relationship evidence;
+callers cannot supply the access graph. Raw content-table access stays denied.
+An adapter execution role receives only the required DML, does not own those
+tables and remains subject to row security.
+
+```mermaid
+flowchart LR
+    I[Install exact application release] --> M[Module: check authority and binding revision]
+    M --> D[Read exact published modules and dependencies]
+    D --> R[Record: protected generic provisioner]
+    R --> C[Lock catalogue and create or reuse compatible storage]
+    C --> P[Commit provisioned, inactive]
+    P --> A[Check permissions, events and dependencies]
+    A --> B[Activate binding in a new transaction]
+```
+
+Lock the installation and storage identities in a consistent order. First create
+or compatible provisioning commits its generated objects and catalogue mappings
+in one short transaction. An exact retry verifies and reuses that state. The
+existing catalogue `contentFingerprint` records canonical storage meaning, not
+labels, frontend rule graphs or unrelated actions: equality permits no-change reuse; a difference
+requires an explicit compatibility comparison and the appropriate structure
+change, not silent reuse or automatic refusal of every compatible addition.
+Exact release content/resolution evidence records what was provisioned. No extra
+plan fingerprint, receipt counter or second platform migration ledger is needed.
+
+The provisioner must explicitly support the exact Module source/validation pairs
+2.0.0/2.0.0 and 3.0.0/3.0.0. Module 3 reuses the V2 field storage model; accepting
+it does not relabel a published release or create a separate table for its rules.
+See the [compatibility implementation plan](../build-plan/issue-45-module3-storage-compatibility.md)
+for the bounded delivery and remaining installation dependencies.
+
+An unchanged retry of the original first-provision command may return the same
+inactive provisioned binding after a lost response, even though its expected
+revision was initially absent. It must recheck current authority and match the
+same exact releases and state; it cannot retarget or reactivate a binding.
+Concurrent first requests serialize on these same identities. An older pinned
+release may reuse a newer compatible storage shape containing additional nullable
+fields, without removing those mappings or downgrading the shared catalogue.
+
+Activation rechecks current authority and binding revision after the required
+registrations exist. Failure cannot expose a partial active installation and
+does not destroy valid inactive/shared structures. Populated changes use the
+same owning primitives in bounded add/migrate/switch/retire steps, orchestrated
+through Kestra when durable data movement is necessary. Initial creation needs
+no new worker, queue or owner credential in Vercel.
 
 ## Vortex federation between clusters
 
@@ -372,21 +499,23 @@ flowchart TD
     DEF -- No --> DBDEF[Load revision from database and cache by organisation and revision]
     DBDEF --> RESOLVE
     RESOLVE --> DATA{Safe data-result cache allowed?}
-    DATA -- Yes --> CHECK[Use organisation, person, access version and data version key]
+    DATA -- Yes --> CHECK{Current account, application, authority, data and query key match?}
     DATA -- No --> QUERY[Run authorised query]
-    CHECK --> QUERY
+    CHECK -- No --> QUERY
+    CHECK -- Yes --> HIT[Recheck current permission and field scope before reuse]
+    HIT --> PAGE
     QUERY --> PAGE[Return private non-shared response]
 ```
 
 The allowed layers are:
 
-| Layer | Location and key | Rule |
-|---|---|---|
-| Built application assets | [Vercel CDN](https://vercel.com/docs/caching/cdn-cache), keyed by content hash | May be shared across organisations because the content is identical and contains no organisation data. This is the explicit exception to organisation-keyed caches. |
-| Request-local values | One server request | Session context, access version, explicitly requested discovery pointers, and repeated calculations may be reused only within that request. |
-| Immutable definition revisions | Shared [Vercel cache](https://vercel.com/docs/caching), keyed by organisation, root key, revision and content fingerprint | Revisions never change. Cross-organisation keys are structurally impossible. |
-| Resolved application and theme | Shared cache, keyed by organisation, the exact releases pinned by the owning installation or operation, person where needed, and current access version | Existing consumers keep their pinned releases. A current pointer is read only during explicit discovery, installation, or upgrade. |
-| Initial data-block result | Shared cache only when explicitly allowed; keyed by organisation, person, access version, record-type data versions and query fingerprint | Never stores sensitive fields. A record save increments the owning Record service's data version, making old results unreachable. |
+| Layer                          | Location and key                                                                                                                                                                                                                       | Rule                                                                                                                                                                |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Built application assets       | [Vercel CDN](https://vercel.com/docs/caching/cdn-cache), keyed by content hash                                                                                                                                                         | May be shared across organisations because the content is identical and contains no organisation data. This is the explicit exception to organisation-keyed caches. |
+| Request-local values           | One server request                                                                                                                                                                                                                     | Session context, access version, explicitly requested discovery pointers, and repeated calculations may be reused only within that request.                         |
+| Immutable definition revisions | Shared [Vercel cache](https://vercel.com/docs/caching), keyed by organisation, root key, revision and content fingerprint                                                                                                              | Revisions never change. Cross-organisation keys are structurally impossible.                                                                                        |
+| Resolved application and theme | Shared cache, keyed by organisation, application context, exact pinned releases/fingerprints, organisation account where permission-varying, and current Access version                                                                | Existing consumers keep their pinned releases. A current pointer is read only during explicit discovery, installation, or upgrade.                                  |
+| Initial data-block result      | Shared cache only when explicitly allowed; keyed by organisation, organisation account, application, current Access version, exact pinned releases/fingerprints, all relevant record-type data versions and complete query fingerprint | Never stores sensitive fields. A record save increments the owning Record service's data version, making old results unreachable.                                   |
 
 Current published pointers, current organisation-account state, current access version, permission decisions, secrets, and responses containing sensitive fields are never served from a cross-request cache.
 
@@ -395,11 +524,20 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 ## Cache correctness
 
 - A cache-writing function requires an organisation identifier except for content-hashed application assets.
-- Cached values that differ by person require the person identifier and access version.
+- Permission-varying values require the organisation-account identifier, application context and current Access version, not a global identity alone. Query-result keys also include exact pinned releases/fingerprints and the complete query parameters.
 - Data cache keys name every record-type data version used by the query.
+- Read current account, session, Access and relevant data versions before lookup. A hit never bypasses current permission or field checks. Reuse ends at the earliest cache-policy lifetime, authority validity or session/context expiry; there is no fixed 60-second security policy.
+- Permission-administration and Activity responses are not cross-request cached. Provider failure falls back to the ordinary authorised query, never unverifiable stale content.
 - Publication does not retarget an existing consumer. It invalidates discovery and Studio views of the root's current release; installed applications, grants, workflows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them.
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
+
+Implement [permission-safe query caching #39](../build-plan/issue-39-permission-safe-query-caching.md)
+with the actual [query engine #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
+in Phase 5, before [live refresh #56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56).
+No dormant Phase 3 cache framework or duplicate version counter is required.
+The [application runtime #64](../build-plan/issue-64-application-runtime.md) owns
+its later immutable-definition and resolved-application cache integration.
 
 ### Grant cache invalidation
 
