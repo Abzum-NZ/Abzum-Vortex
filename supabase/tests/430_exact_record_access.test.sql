@@ -804,15 +804,9 @@ $function$;
 -- alternatives (already in canonical id order), the record type key the
 -- target belongs to, the target record id, and the action kind.
 --
--- Every assertion below still checks the exact value the contract requires --
--- none is weakened to fit observed behaviour. The `others` handler exists
--- solely so that ONE unexpected server exception (see the defect noted
--- further down: every row-scope composition currently raises
--- `42883 function pg_catalog.coalesce(...) does not exist`) turns into a
--- normal failed `is()` comparison instead of aborting this file's single
--- transaction and cascading into every later, otherwise-independent case.
--- Without this, the whole file would stop at the first such call and report
--- nothing beyond it.
+-- Every assertion below checks the exact value the contract requires. A server
+-- exception is a failure here, not a result to be absorbed: it propagates and
+-- fails the run.
 create function pg_temp.decide(
   p_permission_ids uuid[],
   p_type_key text,
@@ -830,13 +824,6 @@ begin
     p_target_record_id,
     pg_temp.facts_for(p_type_key)
   );
-exception
-  when others then
-    return pg_catalog.jsonb_build_object(
-      'outcome', '__unexpected_server_exception__',
-      'sqlstate', sqlstate,
-      'message', sqlerrm
-    );
 end
 $function$;
 
@@ -884,28 +871,9 @@ $function$;
 select pg_temp.install_request_context();
 
 -- ============================================================================
--- DEFECT, confirmed independently of this fixture:
--- `pg_catalog.coalesce(...)` is used at lines 437, 479, 834 and 845 of
--- 20260910040755_compose_exact_record_access_decision.sql. COALESCE is a
--- SQL special form (like CASE), never a catalogued, schema-qualifiable
--- function, so every one of those calls raises `42883 function
--- pg_catalog.coalesce(...) does not exist` -- confirmed directly with
--- `select pg_catalog.coalesce(1,2)` against this same database, independent
--- of any fixture here. Line 437 sits in evaluate_record_permission_row_
--- scope_internal's saved-condition gate and is reached unconditionally on
--- every call for any active, correctly-typed record (every case below hits
--- it save the malformed-facts and pre-row-scope-refusal cases), so no
--- 'allowed' outcome, and no row-scope-derived 'refused', can currently be
--- produced by either function. Every assertion below still checks the exact
--- value the contract requires; pg_temp.decide() only prevents this one
--- server exception from aborting the rest of the file (see its comment).
--- ============================================================================
-
--- ============================================================================
 -- Cases. Every assertion checks the exact value the brief and
--- organizationRecordAccessDecisionSchema require; pg_temp.decide()'s
--- exception catch (see its own comment) only keeps the one server exception
--- documented above from aborting every later, otherwise-independent case.
+-- organizationRecordAccessDecisionSchema require. A server exception is a
+-- failure, not a result: it propagates and fails the run.
 -- ============================================================================
 
 -- ---- Account ownership (coverage allows) -----------------------------------
@@ -1413,14 +1381,6 @@ create table vortex_access.test_neutral_gamma (
 alter table vortex_access.test_neutral_gamma enable row level security;
 alter table vortex_access.test_neutral_gamma force row level security;
 
--- Owner-only fixture: one row holding the release-level definition (record
--- types, relationships, the one saved condition), shared unchanged by every
--- adapter and every organisation.
-create table vortex_access.test_neutral_release (
-  release_key text primary key,
-  definition jsonb not null
-);
-
 -- Owner-only fixture: the installed binding per record type per organisation
 -- and application, plus a superseded decoy no adapter should ever resolve.
 create table vortex_access.test_neutral_bindings (
@@ -1454,24 +1414,6 @@ create table vortex_access.test_neutral_decisions (
 -- shape a release publishes does not. This row exists as the authoritative,
 -- auditable record of that same shape (see the R2/R3 direction note by the
 -- gamma adapter for why R3 exists alongside R2).
-insert into vortex_access.test_neutral_release (release_key, definition) values (
-  'exact_record_access_row_policy',
-  '{
-    "recordTypes": [
-      {"typeKey":"alpha","recordTypeId":"d4300500-0000-4000-8000-000000000001","storageContractId":"b4300500-0000-4000-8000-000000000001","ownershipMode":"organization_account"},
-      {"typeKey":"beta","recordTypeId":"d4300500-0000-4000-8000-000000000002","storageContractId":"b4300500-0000-4000-8000-000000000002","ownershipMode":"team"},
-      {"typeKey":"gamma","recordTypeId":"d4300500-0000-4000-8000-000000000003","storageContractId":"b4300500-0000-4000-8000-000000000003","ownershipMode":"inherited","ownershipRelationshipId":"f4300500-0000-4000-8000-000000000002"}
-    ],
-    "relationships": [
-      {"relationshipId":"f4300500-0000-4000-8000-000000000001","fromTypeKey":"alpha","toTypeKey":"beta","purpose":"beta.read.related source edge"},
-      {"relationshipId":"f4300500-0000-4000-8000-000000000002","fromTypeKey":"gamma","toTypeKey":"beta","purpose":"gamma inherited-ownership chase (ownershipRelationshipId)"},
-      {"relationshipId":"f4300500-0000-4000-8000-000000000003","fromTypeKey":"beta","toTypeKey":"gamma","purpose":"gamma.read.related source edge (opposite direction from the chase, required by evaluate_record_permission_row_scope_internal)"}
-    ],
-    "sharingConditions": [
-      {"conditionId":"b4300500-0000-4000-8000-000000000101","sourceTypeKey":"beta","fieldId":"b4300500-0000-4000-8000-000000000201","expression":"f_beta_actor = @actor(current_organization_account_id)"}
-    ]
-  }'::jsonb
-);
 
 -- ============================================================================
 -- Five fixed adapters. Each is security definer, owner postgres, empty
@@ -3365,12 +3307,9 @@ select pg_catalog.set_config('vortex.request_context', '', true);
 -- That real statement is caught by throws_ok, and PostgreSQL's ordinary
 -- per-statement atomicity rolls back everything the failing statement did --
 -- including both of the adapter's own test_neutral_decisions inserts made
--- while evaluating USING and WITH CHECK for this row. This was verified
--- directly against this database (see rollback_experiment.sql in the
--- scratchpad): a minimal RLS probe with its own log table showed the
--- using-phase and check-phase inserts both present immediately after the
--- policy ran, then gone once throws_ok recovered from the expected error --
--- 0 of 2 rows survived. There is no ordinary-means way to keep one failing
+-- while evaluating USING and WITH CHECK for this row: a failing statement is
+-- rolled back to its implicit statement-level savepoint, which discards the
+-- policy function's own inserts along with the update. There is no ordinary-means way to keep one failing
 -- statement's own nested writes durable inside the same transaction (no
 -- autonomous transactions without dblink, and dblink cannot see this
 -- transaction's own uncommitted objects regardless).
@@ -3407,7 +3346,7 @@ select * from vortex_access.coordinate_organization_role_assignment_change(
   '64300500-0000-4000-8000-000000000004', 1,
   'organization_account', '54300500-0000-4000-8000-000000000001', null, 'standing',
   pg_catalog.clock_timestamp() - interval '1 second',
-  pg_catalog.clock_timestamp() + interval '1.5 seconds',
+  pg_catalog.clock_timestamp() + interval '5 seconds',
   '94300500-0000-4000-8000-000000000001', 'a4300500-0000-4000-8000-000000000922'
 );
 
@@ -3428,7 +3367,7 @@ select ok(
 
 select throws_ok(
   $$update vortex_access.test_neutral_beta
-    set f_beta_note = pg_temp.slow_value(3, 'later')
+    set f_beta_note = pg_temp.slow_value(8, 'later')
     where record_id = 'e4300500-0000-4000-8000-000000000016'$$,
   '42501'::char(5), null::text,
   'the real UPDATE refuses once the assignment expires between the scan qualification and the new-row check'
@@ -3610,7 +3549,7 @@ select ok(
   'vortex_request has no privilege on ' || target.relation
 )
 from (values
-  ('vortex_access.test_neutral_alpha'), ('vortex_access.test_neutral_release'),
+  ('vortex_access.test_neutral_alpha'),
   ('vortex_access.test_neutral_bindings'), ('vortex_access.test_neutral_decisions')
 ) as target(relation)
 order by target.relation collate "C";

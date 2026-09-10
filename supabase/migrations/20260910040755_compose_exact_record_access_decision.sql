@@ -86,7 +86,6 @@ declare
   reduced_type jsonb;
   condition_ok boolean;
   result jsonb;
-  route_index integer;
 begin
   select value into target_record
   from pg_catalog.jsonb_array_elements(p_facts -> 'records') as item(value)
