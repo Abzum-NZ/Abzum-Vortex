@@ -1,8 +1,10 @@
 -- Protected same-organisation direct record sharing (#37 slice 3, corrected
 -- in slice 4 to require record.share before any share, in slice 5 to
--- replace fabricated facts with the target record's real ones, and in slice
+-- replace fabricated facts with the target record's real ones, in slice
 -- 6 to stop requiring revocation's target record to be visible -- see N1
--- below). Reuses #36's
+-- below -- and in slice 7 to restore the application boundary and the
+-- route restriction that slice 6 dropped from revocation along with the
+-- lifecycle check -- see F1 (slice 7) and F2 (slice 7) below). Reuses #36's
 -- private structural writers unchanged: they already do the revision check,
 -- Activity append and Access invalidation. These two functions own what the
 -- writers deliberately do not: confirming the acting context currently holds
@@ -67,6 +69,20 @@
 -- permissions are all passed to the decision and evaluated on their own
 -- merits against the adapter's real facts.
 --
+-- N3 (F5, slice 7 doc fix; the behaviour is original to slice 4). Inside the
+-- grant path's share/read/update loop, finding no current candidate
+-- permission at all for the 'share' action kind raises immediately, inline,
+-- naming the missing permission as the cause -- rather than deferring to
+-- after the loop, where a later iteration's own query would already have
+-- overwritten `required_permissions`, leaving nothing to say why.
+--
+-- N4 (F5, slice 7 doc fix; the behaviour is original to slice 4). The
+-- readable-field ceiling check the grant path applies after the loop is
+-- split in two for the same reason a diagnosis needs its real cause named:
+-- holding no current read authority that reaches this exact record at all
+-- (`requires a current read permission`) is a different cause from holding
+-- some but proposing beyond it (`exceeds current read authority`).
+--
 -- N2 (slice 6, pinned, not fixed). Because F3 removed the route exclusions,
 -- every declaration this migration builds is synthesised from the whole
 -- current catalogue of that action kind on the record type, not authored by
@@ -93,21 +109,62 @@
 -- verified -- the complete exact-record decision below, which requires an
 -- existing, active row matched against the adapter's facts, is the right
 -- authority for it. Revocation only ever narrows access, so it must not
--- depend on the record's visibility at all: the grantor's current
--- record.share *eligibility* for the share's exact record type and
--- organisation -- the pre-row permission/role-path evidence the complete
--- decision itself calls first, before it ever asks for a row
--- (20260910031411_extract_shared_permission_eligibility_core.sql) -- is
--- authority enough to remove a share, whether or not the record it
--- concerns currently exists, is active, or has ever been restored. Before
--- this correction, `revoke_record_share_for_administration` evaluated the
--- same complete decision the grant path does, which made a soft-deleted
--- record's live shares un-revokable until the record was restored --
--- contradicting this migration's own header below, which has always
--- claimed revocation is permitted to anyone with current authority, and
--- [specification 04](../../docs/specification/04-access-and-permissions.md).
--- A restore no longer matters to a share revoked while its record was
--- soft-deleted: revocation is permanent the moment it is admitted.
+-- depend on the record's visibility at all: the *pre-row* permission/
+-- role-path evidence the complete decision itself calls first, before it
+-- ever asks for a row
+-- (20260910031411_extract_shared_permission_eligibility_core.sql), needs no
+-- row and so can remove a share whether or not the record it concerns
+-- currently exists, is active, or has ever been restored -- exactly which
+-- pre-row evidence suffices is F1 (slice 7) and F2 (slice 7) below, not
+-- reargued here. Before this correction, `revoke_record_share_for_
+-- administration` evaluated the same complete decision the grant path does,
+-- which made a soft-deleted record's live shares un-revokable until the
+-- record was restored -- contradicting this migration's own header below,
+-- which has always claimed revocation is permitted to anyone with current
+-- authority, and [specification
+-- 04](../../docs/specification/04-access-and-permissions.md). A restore no
+-- longer matters to a share revoked while its record was soft-deleted:
+-- revocation is permanent the moment it is admitted.
+--
+-- F1 (slice 7). N1 removed the target-row check from revocation but left
+-- nothing in its place to compare the share's own application to the
+-- caller's: the declaration revocation builds, and the catalogue filter
+-- that supplies it, were both keyed on the caller's own
+-- `context_application_root_id` for every field that should have named the
+-- share's, so the eligibility core's target-context check compared context
+-- against itself and always passed. An account acting in one application
+-- could revoke a share belonging to another merely by holding record.share
+-- somewhere in its own -- exactly the cross-application authority
+-- [specification 04](../../docs/specification/04-access-and-permissions.md)
+-- line 205 forbids. Fixed by comparing the share's own stored
+-- `application_root_id` and `storage_scope` against the caller's current
+-- application before either authority branch below is evaluated, mirroring
+-- the complete decision's own target-row check
+-- (20260910040755_compose_exact_record_access_decision.sql:816-819).
+--
+-- F2 (slice 7). N1's eligibility check accepted *any* current 'share'
+-- permission whose `record_scope` was merely non-null, without asking which
+-- routes that scope actually named. `evaluate_record_permission_row_scope_
+-- internal` -- the function that walks ownership, direct_share,
+-- relationship, saved-condition and all_records -- was never called on the
+-- revoke path (N1's whole point is that revocation must not need the row
+-- that function requires), so every one of those route kinds was accepted
+-- as if it were all_records. An account whose only share permission was
+-- direct_share-routed -- which the grant path already refuses for share
+-- actions, so such an account can never *create* a share -- could revoke
+-- every share of that record type. Fixed by restricting the pre-row
+-- eligibility branch to permissions whose record scope names an all_records
+-- route: the one route `evaluate_current_record_ownership_visibility`
+-- admits unconditionally once the binding matches, with no row-specific
+-- fact left to check
+-- (20260906144015_evaluate_current_record_ownership_visibility.sql) -- which
+-- is exactly why it is the one route decidable without the record row. A
+-- second, independent branch restores what F2's fix would otherwise cost a
+-- legitimate grantor: being the account that granted this share is
+-- authority enough on its own, regardless of which permission (if any) that
+-- account currently holds, because narrowing one's own prior grant needs no
+-- catalogue evidence beyond identity -- gated the same way every other
+-- branch here is, against a delegated or support context.
 
 -- Takes the exact target record, the recipient, the proposed readable and
 -- changeable fields, the share's validity window, and the trusted facts a
@@ -376,11 +433,18 @@ begin
       -- an effective share permission at all (stale eligibility, an
       -- unsupported delegated/support context, or recent-authentication
       -- unsatisfied -- none reachable from this migration's own fixed
-      -- declaration today, but named correctly regardless).
+      -- declaration today, but named correctly regardless). F3 (slice 7):
+      -- the message previously said the target record was "unavailable",
+      -- which a caller who does hold a real share permission could read as
+      -- "no such record" specifically -- an existence oracle for exactly the
+      -- callers this refusal exists to stop. `record_scope_refused` covers
+      -- both a record that does not currently exist and one that does but
+      -- matched no held route, and the wording below no longer distinguishes
+      -- them, on purpose.
       if decision ->> 'outcome' <> 'allowed' then
         if decision ->> 'reasonCode' = 'record_scope_refused' then
           raise exception using errcode = '42501',
-            message = 'Protected record-share grant target record is unavailable';
+            message = 'Protected record-share grant target record is not within your current share authority';
         else
           raise exception using errcode = '42501',
             message = 'Protected record-share grant requires a current share permission';
@@ -412,10 +476,21 @@ begin
   -- matching the existing writer's own requirement. Split in two (N3/N4) so
   -- the message names its real cause: holding no current read authority
   -- that reaches this exact record at all, versus holding some but
-  -- proposing beyond it.
+  -- proposing beyond it. F4 (slice 7) adds a third: the read decision can be
+  -- 'allowed' while every admitted contribution's own field policy is
+  -- non-null but names no readable field at all (resolve_record_field_
+  -- bounds_internal's own "a missing policy contributes no fields" rule
+  -- means an *explicitly empty* one contributes none either) -- an empty
+  -- ceiling is not exceeded by any non-empty proposal, so it is not the same
+  -- cause as holding a non-empty ceiling too narrow for the proposal, and is
+  -- named separately rather than folded into "exceeds".
   if not read_admitted then
     raise exception using errcode = '42501',
       message = 'Protected record-share grant requires a current read permission';
+  end if;
+  if pg_catalog.cardinality(readable_ceiling) = 0 then
+    raise exception using errcode = '42501',
+      message = 'Protected record-share grant currently holds no readable fields for this record';
   end if;
   if pg_catalog.cardinality(p_readable_field_ids) = 0
     or not (p_readable_field_ids <@ readable_ceiling) then
@@ -525,6 +600,7 @@ declare
   locked_access_version bigint;
   current_share vortex_access.organization_direct_record_shares%rowtype;
   checked_at timestamptz;
+  is_grantor boolean;
   declaration_binding jsonb;
   required_permissions jsonb;
   declaration jsonb;
@@ -589,76 +665,129 @@ begin
       message = 'Protected record-share revocation is unavailable';
   end if;
 
-  -- Current authority over the share (F4, corrected by N1): the acting
-  -- context must currently hold record.share *eligibility* for this exact
-  -- record type, in this organisation -- re-derived fresh under the lock
-  -- just acquired, via the same shared eligibility core the complete
-  -- record decision itself calls first -- never the share's own granted_by
-  -- identity, never the grantor's present read/update field ceiling
+  -- F1 correction (slice 7). The share's own application must match the
+  -- caller's current one -- unless the share is organisation_shared, which
+  -- by definition crosses applications -- exactly as the complete record
+  -- decision already requires the target row's own real recordScope.
+  -- applicationRootId to match before it admits anything
+  -- (20260910040755_compose_exact_record_access_decision.sql:816-819).
+  -- Before this correction, nothing on this path ever compared the share's
+  -- own stored application to the caller's: the declaration's target below
+  -- and the catalogue filter it feeds are both built from
+  -- context_application_root_id, so the eligibility core's own
+  -- target-context check compared context against itself and always
+  -- passed. An account acting in one application could therefore revoke a
+  -- share belonging to another merely by holding record.share somewhere in
+  -- its own.
+  if current_share.storage_scope <> 'organization_shared'
+    and current_share.application_root_id <> context_application_root_id then
+    raise exception using errcode = '42501',
+      message = 'Protected record-share revocation is unavailable';
+  end if;
+
+  checked_at := pg_catalog.clock_timestamp();
+
+  -- Current authority over the share (F2 correction, slice 7): exactly two
+  -- independent sufficient conditions, both re-derived fresh under the lock
+  -- just acquired -- never the grantor's present read/update field ceiling
   -- (revocation is a narrowing act, unlike granting, so it needs neither),
   -- and -- unlike granting -- never the share's own target row: narrowing
   -- access never requires that the record being narrowed is currently
-  -- visible, only that the acting account currently holds authority to
-  -- narrow it. checked_at is this function's own one time sample, taken
-  -- once under the lock, exactly as the complete decision takes its own one
+  -- visible. checked_at is this function's own one time sample, taken once
+  -- under the lock, exactly as the complete decision takes its own one
   -- sample when the grant path calls it; context_value, sampled once above
   -- and already proven current against the freshly locked Access version,
   -- is reused rather than sampled a second time.
-  checked_at := pg_catalog.clock_timestamp();
-  declaration_binding := pg_catalog.jsonb_build_object(
-    'moduleRootId', current_share.module_root_id, 'recordTypeId', current_share.record_type_id,
-    'storageContractId', current_share.storage_contract_id, 'storageScope', current_share.storage_scope
-  );
+  --
+  -- The first condition is being the account that granted this share.
+  -- Identity is authority enough on its own -- a grantor can always
+  -- withdraw what they gave, regardless of the record's lifecycle and
+  -- regardless of whether they still hold any current permission at all --
+  -- but a delegated or support context still cannot exercise it: "granted
+  -- this share" names no permission the shared eligibility core can
+  -- evaluate for context legitimacy, so the same unsupported-context test
+  -- the core itself runs first for every other declaration is applied
+  -- directly here for that one reason, not as a second evaluator.
+  --
+  -- The second, independent condition is holding a *current* record.share
+  -- permission whose own catalogue record scope names an all_records
+  -- route. all_records is the one route decidable without the record row,
+  -- which is exactly why revocation can outlive the record: ownership,
+  -- direct_share, relationship and condition-scoped routes all require the
+  -- row to mean anything, so none of them confers revoke authority here --
+  -- previously (the regression this corrects) every current share
+  -- permission was accepted merely because its record_scope was not null,
+  -- without ever inspecting which routes that scope actually named, so an
+  -- account whose only share permission was direct_share-routed -- which
+  -- can never *create* a share -- could revoke every share of that record
+  -- type regardless of route.
+  is_grantor := current_share.granted_by = context_account_id
+    and not (context_value ? 'delegatedContext' or context_value ? 'supportContext');
 
-  select pg_catalog.jsonb_agg(
-      pg_catalog.jsonb_build_object(
-        'applicationRootId', entry.application_root_id,
-        'ownerKind', entry.owner_kind, 'ownerId', entry.owner_id,
-        'permissionId', entry.permission_id
+  if not is_grantor then
+    declaration_binding := pg_catalog.jsonb_build_object(
+      'moduleRootId', current_share.module_root_id, 'recordTypeId', current_share.record_type_id,
+      'storageContractId', current_share.storage_contract_id, 'storageScope', current_share.storage_scope
+    );
+
+    select pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'applicationRootId', entry.application_root_id,
+          'ownerKind', entry.owner_kind, 'ownerId', entry.owner_id,
+          'permissionId', entry.permission_id
+        )
+        order by entry.owner_kind, entry.owner_id, entry.permission_id
       )
-      order by entry.owner_kind, entry.owner_id, entry.permission_id
-    )
-  into required_permissions
-  from vortex_access.permission_catalogue_entries as entry
-  join vortex_access.permission_registrations as registration
-    on registration.organization_id = entry.organization_id
-    and registration.registration_kind = entry.registration_kind
-    and registration.registration_owner_id = entry.registration_owner_id
-    and registration.revision = entry.registration_revision
-    and registration.state = 'active'
-  where entry.organization_id = context_organization_id
-    and entry.application_root_id = context_application_root_id
-    and entry.owner_kind in ('application', 'module')
-    and (
-      (entry.owner_kind = 'application' and entry.owner_id = context_application_root_id)
-      or (entry.owner_kind = 'module' and entry.owner_id = current_share.module_root_id)
-    )
-    and entry.record_type_id = current_share.record_type_id
-    and entry.action_kind = 'share'
-    and entry.record_scope is not null;
+    into required_permissions
+    from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and registration.revision = entry.registration_revision
+      and registration.state = 'active'
+    where entry.organization_id = context_organization_id
+      and entry.application_root_id = context_application_root_id
+      and entry.owner_kind in ('application', 'module')
+      and (
+        (entry.owner_kind = 'application' and entry.owner_id = context_application_root_id)
+        or (entry.owner_kind = 'module' and entry.owner_id = current_share.module_root_id)
+      )
+      and entry.record_type_id = current_share.record_type_id
+      and entry.action_kind = 'share'
+      and entry.record_scope is not null
+      -- F2: only a route the eligibility core can resolve without the
+      -- record row confers revoke authority -- see above.
+      and exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(entry.record_scope -> 'routes') as route(value)
+        where route.value ->> 'kind' = 'all_records'
+      );
 
-  -- No current candidate share permission at all: leave eligibility unset
-  -- rather than calling the eligibility core with an empty
-  -- requiredPermissions array, exactly like the grant path.
-  if required_permissions is not null then
-    declaration := pg_catalog.jsonb_build_object(
-      'operationKey', 'record.share',
-      'action', pg_catalog.jsonb_build_object('actionKind', 'share'),
-      'target', pg_catalog.jsonb_build_object(
-        'kind', 'application', 'applicationRootId', context_application_root_id
-      ),
-      'requiredPermissions', required_permissions,
-      'recordBinding', declaration_binding,
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
-      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
-    );
+    -- No current candidate all_records-routed share permission at all:
+    -- leave eligibility unset rather than calling the eligibility core with
+    -- an empty requiredPermissions array, exactly like the grant path.
+    if required_permissions is not null then
+      declaration := pg_catalog.jsonb_build_object(
+        'operationKey', 'record.share',
+        'action', pg_catalog.jsonb_build_object('actionKind', 'share'),
+        'target', pg_catalog.jsonb_build_object(
+          'kind', 'application', 'applicationRootId', context_application_root_id
+        ),
+        'requiredPermissions', required_permissions,
+        'recordBinding', declaration_binding,
+        'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+        'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+      );
 
-    eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
-      declaration, context_value, checked_at
-    );
+      eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
+        declaration, context_value, checked_at
+      );
+    end if;
   end if;
 
-  if eligibility is null or eligibility ->> 'outcome' <> 'eligible' then
+  if not is_grantor
+    and (eligibility is null or eligibility ->> 'outcome' <> 'eligible') then
     raise exception using errcode = '42501',
       message = 'Protected record-share revocation is unavailable';
   end if;
@@ -703,4 +832,4 @@ comment on function vortex_access.grant_record_share_for_administration(
 comment on function vortex_access.revoke_record_share_for_administration(
   uuid, bigint, text, text, uuid
 ) is
-  'Protected direct-share revocation: only an account currently holding current record.share eligibility for the share''s exact record type and organisation -- the pre-row permission/role-path evidence, re-evaluated under the governance lock, never the complete exact-record decision -- may invoke the existing private writer. Narrowing never requires the share''s own target record to be visible: never the share''s granted_by identity, never a re-requirement of the acting account''s present field ceiling, and never the record''s own existence or lifecycle state. Owner-only; reached only through a fixed adapter.';
+  'Protected direct-share revocation: permitted only to an account currently acting in the share''s own application and organisation (organisation_shared shares excepted from the application match) that either is the share''s own non-delegated, non-support granted_by identity, or currently holds a record.share permission whose own catalogue record scope names an all_records route -- the one route decidable without the record row, re-evaluated fresh under the governance lock, never the complete exact-record decision. Narrowing never requires the share''s own target record to be visible: never a re-requirement of the acting account''s present field ceiling, and never the record''s own existence or lifecycle state. Owner-only; reached only through a fixed adapter.';

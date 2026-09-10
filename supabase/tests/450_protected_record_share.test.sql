@@ -708,10 +708,15 @@ values
 -- (supportContext is refused by the identical check; only one is exercised
 -- below since both share the one code path) -- to prove a delegated or
 -- support context cannot revoke.
+-- p_application_root_id defaults to this fixture's one home application;
+-- the F1 (slice 7) boundary cases below pass the foreign application root
+-- instead, to prove an organisation_shared share revokes from any
+-- application while an application_contained one does not.
 create function pg_temp.install_request_context(
   p_account_id uuid,
   p_stale boolean default false,
-  p_delegated boolean default false
+  p_delegated boolean default false,
+  p_application_root_id uuid default '34500000-0000-4000-8000-000000000001'
 )
 returns void
 language plpgsql
@@ -742,7 +747,7 @@ begin
     'organizationId', '24500000-0000-4000-8000-000000000001',
     'organizationAccountId', p_account_id,
     'identityId', acting_identity_id,
-    'applicationRootId', '34500000-0000-4000-8000-000000000001',
+    'applicationRootId', p_application_root_id,
     'sessionId', 'a4500000-0000-4000-8000-000000000092',
     'authenticationStrength', 'single_factor',
     'issuedAt', operation_at,
@@ -1667,7 +1672,7 @@ select throws_ok(
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
     pg_catalog.clock_timestamp(), null, 'Condition-false share',
     'web', 'a4500000-0000-4000-8000-000000000405')$$,
-  '42501', 'Protected record-share grant target record is unavailable',
+  '42501', 'Protected record-share grant target record is not within your current share authority',
   'the same condition-scoped share permission refuses when the saved condition currently evaluates false against a different record -- proving it is evaluated, not excluded or constantly admitted -- and the refusal names the target, since CONDITION_GRANTOR does hold an eligible share permission in general'
 );
 reset role;
@@ -1697,7 +1702,7 @@ select throws_ok(
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
     pg_catalog.clock_timestamp(), null, 'Nonexistent record',
     'web', 'a4500000-0000-4000-8000-000000000406')$$,
-  '42501', 'Protected record-share grant target record is unavailable',
+  '42501', 'Protected record-share grant target record is not within your current share authority',
   'sharing a record that exists in no content table refuses, naming the target rather than the permission -- OWNER_GRANTOR does hold a current, eligible share permission in general'
 );
 reset role;
@@ -1744,7 +1749,7 @@ select throws_ok(
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
     pg_catalog.clock_timestamp(), null, 'Soft-deleted record',
     'web', 'a4500000-0000-4000-8000-000000000407')$$,
-  '42501', 'Protected record-share grant target record is unavailable',
+  '42501', 'Protected record-share grant target record is not within your current share authority',
   'sharing a soft-deleted record -- owned by the very grantor attempting to share it -- refuses, naming the target rather than the permission'
 );
 reset role;
@@ -1824,7 +1829,7 @@ select throws_ok(
       )),
       'edges', '[]'::jsonb
     ))$$,
-  '42501', 'Protected record-share grant target record is unavailable',
+  '42501', 'Protected record-share grant target record is not within your current share authority',
   'a facts payload whose top-level binding names a different module root and storage contract than the target record''s own real, resolved scope refuses -- the disagreeing values never reach the persisted row, and the refusal names the target rather than the permission'
 );
 select is(
@@ -2047,6 +2052,338 @@ select is(
   )),
   0::bigint,
   'the revoked share contributes nothing to the recipient''s projection after the record is restored'
+);
+
+-- ============================================================================
+-- REVOKE (slice 7, F1): the application boundary. Both shares below are
+-- seeded directly, exactly as this fixture already seeds ADMIN's own
+-- pre-existing shares, because the protected grant path always stamps a new
+-- share with the *caller's* current application -- it cannot itself produce
+-- a share whose application differs from its own grantor's, which is
+-- exactly the shape this boundary case needs to construct. A second
+-- application root, home to the same organisation, stands in for #45's real
+-- foreign application.
+-- ============================================================================
+
+-- Share A: application_contained, stamped with the foreign application, but
+-- granted_by GRANTOR -- so identity alone would otherwise admit revocation.
+-- granted_at and changed_at must be the identical instant (the insert
+-- trigger requires it), so both are the one sampled op.now, exactly as this
+-- fixture's own pre-existing-share seed above does.
+insert into vortex_access.organization_direct_record_shares (
+  organization_id, direct_share_id, storage_scope, application_root_id,
+  module_root_id, record_type_id, storage_contract_id, record_id,
+  recipient_kind, organization_account_id, group_id,
+  readable_field_ids, changeable_field_ids, starts_at, expires_at,
+  state, revision, granted_by, granted_at, grant_correlation_id,
+  reason, changed_at
+)
+select
+  '24500000-0000-4000-8000-000000000001', '94500000-0000-4000-8000-000000000601',
+  'application_contained', '34500000-0000-4000-8000-000000000006',
+  '34500000-0000-4000-8000-000000000002', 'd4500000-0000-4000-8000-000000000001',
+  'b4500000-0000-4000-8000-000000000001', 'e4500000-0000-4000-8000-000000000001',
+  'organization_account', '54500000-0000-4000-8000-000000000002', null,
+  array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+  op.now - interval '1 minute', op.now + interval '4 hours',
+  'active', 1, '54500000-0000-4000-8000-000000000001', op.now,
+  'a4500000-0000-4000-8000-000000000601', 'Share stamped with a foreign application',
+  op.now
+from (select pg_catalog.clock_timestamp() as now) as op;
+
+-- Share B: organisation_shared, also granted_by GRANTOR, application_root_id
+-- null by the table's own shape constraint.
+insert into vortex_access.organization_direct_record_shares (
+  organization_id, direct_share_id, storage_scope, application_root_id,
+  module_root_id, record_type_id, storage_contract_id, record_id,
+  recipient_kind, organization_account_id, group_id,
+  readable_field_ids, changeable_field_ids, starts_at, expires_at,
+  state, revision, granted_by, granted_at, grant_correlation_id,
+  reason, changed_at
+)
+select
+  '24500000-0000-4000-8000-000000000001', '94500000-0000-4000-8000-000000000602',
+  'organization_shared', null,
+  '34500000-0000-4000-8000-000000000002', 'd4500000-0000-4000-8000-000000000001',
+  'b4500000-0000-4000-8000-000000000001', 'e4500000-0000-4000-8000-000000000001',
+  'organization_account', '54500000-0000-4000-8000-000000000002', null,
+  array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+  op.now - interval '1 minute', op.now + interval '4 hours',
+  'active', 1, '54500000-0000-4000-8000-000000000001', op.now,
+  'a4500000-0000-4000-8000-000000000602', 'Organisation-shared share',
+  op.now
+from (select pg_catalog.clock_timestamp() as now) as op;
+
+-- GRANTOR, acting in the *home* application (the default), attempts to
+-- revoke Share A -- stamped with the foreign application. Identity matches
+-- (GRANTOR is the real granted_by), so without the boundary this would
+-- admit through the grantor branch; the application mismatch refuses it
+-- first.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000601', 1,
+    'Home-application grantor attempts to revoke a foreign-application share',
+    'web', 'a4500000-0000-4000-8000-000000000603')$$,
+  '42501', 'Protected record-share revocation is unavailable',
+  'a share stamped with a foreign application cannot be revoked from this application''s context, even by its own real grantor'
+);
+reset role;
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000601'),
+  'active',
+  'the foreign-application share remains active after the refused revocation attempt'
+);
+
+-- GRANTOR, now acting in the *foreign* application, revokes Share B --
+-- organisation_shared, so the application boundary does not apply, and
+-- identity still matches. This is the same account as the case just above;
+-- only the acting application and the target share differ.
+select pg_temp.install_request_context(
+  '54500000-0000-4000-8000-000000000001', false, false,
+  '34500000-0000-4000-8000-000000000006'
+);
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000602', 1,
+    'Foreign-application grantor revokes an organisation-shared share',
+    'web', 'a4500000-0000-4000-8000-000000000604')$$,
+  'an organisation_shared share can be revoked from a different application context than the one it was granted from'
+);
+reset role;
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000602'),
+  'revoked',
+  'the organisation-shared share is now revoked'
+);
+
+-- ============================================================================
+-- REVOKE (slice 7, F2): current authority is restricted to a route the
+-- eligibility core can resolve without the record row. A fresh grantor,
+-- DIRECT_SHARE_GRANTOR, holds a 'share' permission routed direct_share --
+-- the one route the grant path already refuses for share actions, so this
+-- account could never itself create a share. OWNER_GRANTOR (ownership-routed
+-- share authority elsewhere in this fixture) and RELATIONSHIP_GRANTOR
+-- (relationship-routed) hold real share authority over *other* records, but
+-- not over this one and not through a route revocation admits. All three
+-- attempt to revoke a share none of them granted, over a record none of
+-- them owns or has any edge to; all three are refused. ALL_RECORDS_GRANTOR,
+-- holding chain_share (all_records-routed), then revokes the same share --
+-- neither its grantor nor its recipient, and after the record has been
+-- soft-deleted -- proving all_records is current authority enough on its
+-- own, regardless of the record's lifecycle.
+-- ============================================================================
+
+-- DIRECT_SHARE_GRANTOR: a fresh identity and account, holding one
+-- direct_share-routed 'share' permission and nothing else. Kept separate
+-- from every existing account so its one permission cannot be mistaken for
+-- broader authority any of them already holds.
+insert into vortex_identity.identity_projections (
+  identity_id, state, created_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+)
+select '44500000-0000-4000-8000-000000000011', 'active', op.now,
+  op.now, '94500000-0000-4000-8000-000000000001',
+  'a4500000-0000-4000-8000-000000000610', 1
+from (select pg_catalog.clock_timestamp() as now) as op;
+
+insert into vortex_identity.organization_accounts (
+  organization_account_id, organization_id, identity_id, display_name,
+  state, activated_at, closed_at, changed_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+)
+select '54500000-0000-4000-8000-000000000011', '24500000-0000-4000-8000-000000000001',
+  '44500000-0000-4000-8000-000000000011', 'Direct-share-only grantor account', 'active',
+  op.now - interval '1 minute', null, op.now,
+  op.now, '94500000-0000-4000-8000-000000000001',
+  'a4500000-0000-4000-8000-000000000611', 1
+from (select pg_catalog.clock_timestamp() as now) as op;
+
+insert into vortex_access.permission_catalogue_entries (
+  organization_id, registration_kind, registration_owner_id,
+  registration_revision, application_root_id, owner_kind, owner_id,
+  permission_id, permission_key, label, description, record_type_id,
+  action_kind, named_action, administrative, source_kind,
+  source_definition_key, source_root_id, source_version, source_revision,
+  source_validation_contract_version, source_content_fingerprint,
+  source_resolution_fingerprint, source_catalogue_fingerprint,
+  meaning_fingerprint, record_scope, field_policy
+) values (
+  '24500000-0000-4000-8000-000000000001', 'application',
+  '34500000-0000-4000-8000-000000000001', 1,
+  '34500000-0000-4000-8000-000000000001', 'application',
+  '34500000-0000-4000-8000-000000000001',
+  'c4500000-0000-4000-8000-000000000011', 'record_share.chain_share_direct',
+  'Chain share (direct_share-routed)', 'Record share fixture.',
+  'd4500000-0000-4000-8000-000000000001', 'share', null, false,
+  'application', 'example.record_share',
+  '34500000-0000-4000-8000-000000000001', '1.0.0', 1, '1.0.0',
+  'sha256:' || pg_catalog.repeat('1', 64),
+  'sha256:' || pg_catalog.repeat('2', 64), null,
+  'sha256:' || pg_catalog.repeat('b', 64),
+  pg_catalog.jsonb_build_object(
+    'routes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'kind', 'direct_share'
+    ))
+  ),
+  null
+);
+
+insert into vortex_access.permission_continuities (
+  organization_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id, state,
+  continuity_revision, meaning_fingerprint,
+  last_processed_registration_revision, changed_at
+)
+select entry.organization_id, entry.application_root_id, entry.owner_kind,
+  entry.owner_id, entry.permission_id, entry.registration_kind,
+  entry.registration_owner_id, 'available', 1, entry.meaning_fingerprint,
+  1, pg_catalog.clock_timestamp()
+from vortex_access.permission_catalogue_entries as entry
+where entry.organization_id = '24500000-0000-4000-8000-000000000001'
+  and entry.permission_id = 'c4500000-0000-4000-8000-000000000011';
+
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000011', 'chain_share_direct',
+  'c4500000-0000-4000-8000-000000000011'
+);
+
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, group_id, assignment_kind, revision,
+  starts_at, expires_at, state, granted_by, granted_at,
+  grant_correlation_id, changed_by, changed_at, change_correlation_id
+) values (
+  '24500000-0000-4000-8000-000000000001', '74500000-0000-4000-8000-000000000601',
+  '64500000-0000-4000-8000-000000000011', 'organization_account',
+  '54500000-0000-4000-8000-000000000011', null, 'standing', 1,
+  pg_catalog.clock_timestamp() - interval '1 minute',
+  pg_catalog.transaction_timestamp() + interval '4 hours', 'live',
+  '94500000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a4500000-0000-4000-8000-000000000612', '94500000-0000-4000-8000-000000000001',
+  pg_catalog.clock_timestamp(), 'a4500000-0000-4000-8000-000000000612'
+);
+
+-- The target record and share: owned and granted by ADMIN, to keep every
+-- attempted revoker below equally a non-grantor.
+insert into vortex_access.test_share_rows (
+  organization_id, module_root_id, record_type_id, storage_contract_id,
+  record_id, application_root_id, owner_organization_account_id,
+  lifecycle_state, f1, f2, f3, f_flag, f_source_link
+) values (
+  '24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+  'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  'e4500000-0000-4000-8000-000000000072', '34500000-0000-4000-8000-000000000001',
+  '54500000-0000-4000-8000-000000000004', 'active', 'open-72', 'open-72', 'open-72', false, null
+);
+
+insert into vortex_access.organization_direct_record_shares (
+  organization_id, direct_share_id, storage_scope, application_root_id,
+  module_root_id, record_type_id, storage_contract_id, record_id,
+  recipient_kind, organization_account_id, group_id,
+  readable_field_ids, changeable_field_ids, starts_at, expires_at,
+  state, revision, granted_by, granted_at, grant_correlation_id,
+  reason, changed_at
+)
+select
+  '24500000-0000-4000-8000-000000000001', '94500000-0000-4000-8000-000000000603',
+  'application_contained', '34500000-0000-4000-8000-000000000001',
+  '34500000-0000-4000-8000-000000000002', 'd4500000-0000-4000-8000-000000000001',
+  'b4500000-0000-4000-8000-000000000001', 'e4500000-0000-4000-8000-000000000072',
+  'organization_account', '54500000-0000-4000-8000-000000000002', null,
+  array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+  op.now - interval '1 minute', op.now + interval '4 hours',
+  'active', 1, '54500000-0000-4000-8000-000000000004', op.now,
+  'a4500000-0000-4000-8000-000000000613', 'Admin grant, target for the route-restriction cases',
+  op.now
+from (select pg_catalog.clock_timestamp() as now) as op;
+
+-- Ownership-routed: OWNER_GRANTOR holds real share authority (owned_share)
+-- but not over this record, which it does not own.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000008');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000603', 1,
+    'Ownership-routed account attempts to revoke a share over a record it does not own',
+    'web', 'a4500000-0000-4000-8000-000000000614')$$,
+  '42501', 'Protected record-share revocation is unavailable',
+  'an ownership-routed account cannot revoke a share over a record it does not own -- ownership is not a route the eligibility core can resolve without the row'
+);
+reset role;
+
+-- Relationship-routed: RELATIONSHIP_GRANTOR holds real share authority
+-- (owned_share_relationship) but has no edge reaching this record.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000009');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000603', 1,
+    'Relationship-routed account attempts to revoke a share over a record with no edge to it',
+    'web', 'a4500000-0000-4000-8000-000000000615')$$,
+  '42501', 'Protected record-share revocation is unavailable',
+  'a relationship-routed account cannot revoke a share over a record with no edge to it -- relationship is not a route the eligibility core can resolve without the row'
+);
+reset role;
+
+-- Direct_share-routed: DIRECT_SHARE_GRANTOR holds a 'share' permission, but
+-- it could never have created a share in the first place (the grant path
+-- already refuses direct_share for share actions), so it cannot revoke one
+-- either.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000011');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000603', 1,
+    'Direct_share-routed account attempts to revoke a share it could never have granted',
+    'web', 'a4500000-0000-4000-8000-000000000616')$$,
+  '42501', 'Protected record-share revocation is unavailable',
+  'a direct_share-routed account cannot revoke -- it could never grant one, and direct_share is excluded from the pre-row eligibility branch the same way ownership and relationship are'
+);
+reset role;
+
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000603'),
+  'active',
+  'the share remains active after all three route-restricted refusals'
+);
+
+-- The record is soft-deleted before the successful revocation below, to
+-- prove the all_records branch -- like the grantor branch proven earlier in
+-- the N1 section -- does not depend on the record's visibility either.
+update vortex_access.test_share_rows
+set lifecycle_state = 'soft_deleted'
+where organization_id = '24500000-0000-4000-8000-000000000001'
+  and record_id = 'e4500000-0000-4000-8000-000000000072';
+
+-- ALL_RECORDS_GRANTOR: neither this share's grantor (ADMIN) nor its
+-- recipient, and holding no ownership, relationship or direct_share
+-- authority over this record at all -- only chain_share, all_records-routed
+-- -- revokes it successfully, soft-deleted record included.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000007');
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.test_share_revoke(
+    '94500000-0000-4000-8000-000000000603', 1,
+    'All-records-routed administrator revokes a share it did not grant, over a soft-deleted record',
+    'web', 'a4500000-0000-4000-8000-000000000617')$$,
+  'an all_records-routed current share permission is authority enough to revoke a share the account neither granted nor received, and the record''s soft-deleted lifecycle does not block it'
+);
+reset role;
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000603'),
+  'revoked',
+  'the share is now revoked'
 );
 
 -- ============================================================================
