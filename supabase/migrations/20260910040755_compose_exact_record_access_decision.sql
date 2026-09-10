@@ -434,7 +434,7 @@ begin
   end loop;
 
   -- Step 5: a saved condition narrows every route, including all_records.
-  if pg_catalog.coalesce(pg_catalog.array_length(route_list, 1), 0) > 0
+  if coalesce(pg_catalog.array_length(route_list, 1), 0) > 0
     and candidate_record_scope ? 'savedCondition' then
     condition_id := (candidate_record_scope -> 'savedCondition' ->> 'conditionId')::uuid;
 
@@ -476,7 +476,7 @@ begin
 
   -- Step 6: map to full matched contributions for this candidate.
   result := '[]'::jsonb;
-  for route_index in 1 .. pg_catalog.coalesce(pg_catalog.array_length(route_list, 1), 0) loop
+  for route_index in 1 .. coalesce(pg_catalog.array_length(route_list, 1), 0) loop
     result := result || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
       'permission', candidate_permission,
       'recordScope', candidate_record_scope,
@@ -831,7 +831,7 @@ begin
     ctx, checked_at, p_declaration -> 'recentAuthentication'
   );
 
-  select pg_catalog.coalesce(
+  select coalesce(
     pg_catalog.jsonb_agg(
       contribution.value
       order by
@@ -842,7 +842,7 @@ begin
           when 'direct_share' then 2
           when 'relationship' then 3
         end,
-        pg_catalog.coalesce(
+        coalesce(
           contribution.value -> 'route' ->> 'directShareId',
           contribution.value -> 'route' ->> 'sourceRecordId',
           ''
