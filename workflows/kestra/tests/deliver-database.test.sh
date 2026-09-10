@@ -663,6 +663,54 @@ export VORTEX_DATABASE_URL='postgresql://attacker:password@attacker.invalid:5432
 export VORTEX_TEST_CONCURRENCY_PROOF_MARKER="$test_root/concurrency-proof-called"
 export VORTEX_TEST_SUPABASE_CALL_MARKER="$test_root/supabase-called"
 
+# The known Testing gap is permitted only with the reviewed remote maximum.
+# Fake history changes to the complete set only after the migration command runs.
+export VORTEX_TEST_INITIAL_HISTORY="$test_root/initial-history.txt"
+git -C "$fixture_checkout" ls-tree -r --name-only "$VORTEX_GITHUB_COMMIT" -- supabase/migrations |
+  LC_ALL=C sort | sed 's#^supabase/migrations/##' >"$test_root/complete-history.txt"
+awk '$0 <= "20260908124240_adopt_shipped_platform_permission_catalogue.sql" &&
+     $0 != "20260908122641_record_storage_provisioning.sql"' \
+  "$test_root/complete-history.txt" >"$VORTEX_TEST_INITIAL_HISTORY"
+rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER" "$VORTEX_EVIDENCE_PATH"
+"$older_bootstrap" >"$test_root/reviewed-gap.log" 2>&1
+grep --fixed-strings --quiet -- '--include-all' "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+jq --exit-status '.status == "succeeded"' "$VORTEX_EVIDENCE_PATH" >/dev/null
+
+assert_unreviewed_gap_refused() {
+  rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER" "$VORTEX_EVIDENCE_PATH"
+  if "$older_bootstrap" >"$test_root/unreviewed-gap.log" 2>&1; then
+    echo "expected an unreviewed migration gap to refuse before applying" >&2
+    exit 1
+  fi
+  grep --fixed-strings --quiet 'unreviewed out-of-order migration gap' "$test_root/unreviewed-gap.log"
+  test ! -e "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+  test ! -e "$VORTEX_EVIDENCE_PATH"
+}
+
+# Another missing older migration is not covered by the storage exception.
+sed -i '/20260908041122_support_native_application_release_dependencies.sql/d' "$VORTEX_TEST_INITIAL_HISTORY"
+assert_unreviewed_gap_refused
+# The same storage gap against a newer history is not the reviewed ordering.
+grep --fixed-strings --invert-match '20260908122641_record_storage_provisioning.sql' \
+  "$test_root/complete-history.txt" >"$VORTEX_TEST_INITIAL_HISTORY"
+assert_unreviewed_gap_refused
+
+# An ordinary missing tail and an empty database retain normal CLI behavior.
+sed '$d' "$test_root/complete-history.txt" >"$VORTEX_TEST_INITIAL_HISTORY"
+rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+"$older_bootstrap" >"$test_root/ordinary-tail.log" 2>&1
+if grep --fixed-strings --quiet -- '--include-all' "$VORTEX_TEST_SUPABASE_CALL_MARKER"; then
+  echo "ordinary pending migrations must not use the gap exception" >&2; exit 1
+fi
+unset VORTEX_TEST_INITIAL_HISTORY
+export VORTEX_TEST_EMPTY_HISTORY=true
+rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+"$older_bootstrap" >"$test_root/empty-history.log" 2>&1
+if grep --fixed-strings --quiet -- '--include-all' "$VORTEX_TEST_SUPABASE_CALL_MARKER"; then
+  echo "a new database must not use the gap exception" >&2; exit 1
+fi
+unset VORTEX_TEST_EMPTY_HISTORY
+
 rm -f "$VORTEX_EVIDENCE_PATH"
 export VORTEX_TEST_FAIL_PG_PROVE=true
 if "$older_bootstrap" >"$test_root/pg-prove-failure.log" 2>&1; then

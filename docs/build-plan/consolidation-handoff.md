@@ -39,6 +39,29 @@ type checks and boundaries, formatting and lint passed; the fixture command
 passed **17 tests**. Final build, runner and deployment receipts belong in the
 linked consolidation PR, not inferred from these partial results.
 
+The later preview passed all 1,796 tests but the separate complete-bundle fixture
+hit its implicit five-second timeout. Its equivalent first scenario already used
+15 seconds. The second now uses the same scoped allowance; all assertions remain
+unchanged, 17 fixture checks passed, and the full preview succeeded before
+[PR #372](https://github.com/Abzum-NZ/Abzum-Vortex/pull/372) entered Testing.
+
+### Existing Testing migration gap
+
+Testing `09afc4b` passed repaired manifest validation but refused an unapplied
+`20260908122641_record_storage_provisioning.sql` before its latest applied
+`20260908124240_adopt_shipped_platform_permission_catalogue.sql`. Read-only history
+inspection confirmed this was the only older gap, with four ordinary later
+migrations pending. Independent Astra review confirmed the storage migration
+creates Record/Module objects and does not replace catalogue/stewardship functions;
+the catalogue migration has no migration-time storage dependency or provisioning.
+
+The runner permits Supabase's documented `--include-all` only for that exact older
+gap and exact remote maximum. Unknown remote history and every other older gap
+refuse before applying. Ordinary pending tails and empty databases retain normal
+delivery. Applied migration filenames and contents are not renamed or repaired;
+all SQL, concurrency, lint and final-history checks remain required. This is a
+bounded consolidation correction, not general permission to reorder migrations.
+
 ## Recovery and branch cleanup
 
 A pre-cleanup Git bundle at
