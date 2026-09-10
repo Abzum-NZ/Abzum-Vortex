@@ -742,6 +742,18 @@ grep --fixed-strings --quiet \
   "$test_root/history-mismatch.log"
 
 unset VORTEX_TEST_REMOTE_MIGRATION_MISMATCH
+rm -f "$VORTEX_TEST_SUPABASE_CALL_MARKER" "$VORTEX_EVIDENCE_PATH"
+export VORTEX_TEST_POST_APPLY_MISMATCH=true
+if "$older_bootstrap" >"$test_root/post-apply-history-mismatch.log" 2>&1; then
+  echo "expected post-apply history mismatch to refuse a success receipt" >&2
+  exit 1
+fi
+grep --quiet '^db push ' "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+grep --fixed-strings --quiet \
+  'remote migration history does not exactly match the selected commit' \
+  "$test_root/post-apply-history-mismatch.log"
+test ! -e "$VORTEX_EVIDENCE_PATH"
+unset VORTEX_TEST_POST_APPLY_MISMATCH
 export VORTEX_TEST_PG_PROVE_MARKER="$test_root/pg-prove-called"
 rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 export VORTEX_TEST_FAIL_CONCURRENCY_PROOF=runner-parity-concurrency.test.sh

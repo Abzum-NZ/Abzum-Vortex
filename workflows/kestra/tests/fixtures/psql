@@ -14,7 +14,9 @@ case "$*" in
     if [ -n "${VORTEX_TEST_INITIAL_HISTORY:-}" ] &&
       ! grep --quiet '^db push ' "${VORTEX_TEST_SUPABASE_CALL_MARKER:-/dev/null}" 2>/dev/null; then
       cat "$VORTEX_TEST_INITIAL_HISTORY"
-    elif [ "${VORTEX_TEST_REMOTE_MIGRATION_MISMATCH:-false}" = "true" ]; then
+    elif [ "${VORTEX_TEST_REMOTE_MIGRATION_MISMATCH:-false}" = "true" ] ||
+      { [ "${VORTEX_TEST_POST_APPLY_MISMATCH:-false}" = "true" ] &&
+        grep --quiet '^db push ' "${VORTEX_TEST_SUPABASE_CALL_MARKER:-/dev/null}" 2>/dev/null; }; then
       printf '20000101000000_unreviewed.sql\n'
     else
       git -C "${VORTEX_TEST_SOURCE_REPOSITORY:-/source}" \
