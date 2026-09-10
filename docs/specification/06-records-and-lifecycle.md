@@ -58,7 +58,7 @@ The save transaction performs these steps in order:
 5. Compare the submitted concurrency number with the current number.
 6. Run eligible immediate [rules](08-forms-actions-rules-and-events.md).
 7. Run the owning reference-number, calculation and total generators in their declared dependency order. Validate the complete final candidate, including required fields and accumulated rule requirements, choices, currency/precision/row settings, live reference and file eligibility, uniqueness and application bindings. Refuse all writes if final validation fails.
-8. Save the record, relationship changes, reference number, and [activity entry](14-activity-privacy-and-retention.md) in one database transaction.
+8. Save the record, affected parent totals and revisions, relationship changes, reference number, and matching [activity entries](14-activity-privacy-and-retention.md) in one database transaction. Include both old and new parents when a relationship moves, following the [concrete dependency and locking rules](../build-plan/issue-48-calculation-engine.md#integrated-totals-dependency-and-transaction-rules). A failed calculation or total refuses the operation without partial changes.
 9. Write [events](08-forms-actions-rules-and-events.md#delivery-guarantees) to the outbox and logged queue in that same transaction. Dispatch and external work begin only after commit.
 10. Return the fields the person may read and the new concurrency number.
 
@@ -74,7 +74,7 @@ This sequence defines one protected Record operation, not a transaction around a
 
 ## Concurrent changes
 
-Every change request includes the last concurrency number the person received. If the stored number differs, the save is refused as a conflict and returns the current readable values. The platform never silently overwrites a later change.
+Every update request includes the last concurrency number the person received; a create request has no existing concurrency number. If the stored number differs, the save is refused as a conflict. Current values may be returned only when current access permits disclosure. The platform never silently overwrites a later change. The exact request and response boundary is the [record save contract](appendices/data-contracts.md#record-save-command-and-result).
 
 Clients may present a comparison and allow the person to reapply their changes. That creates a new request against the current concurrency number.
 

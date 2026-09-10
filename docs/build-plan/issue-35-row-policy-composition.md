@@ -10,6 +10,11 @@ The reviewed [typed exact-record handoff](../evidence/issue-35-record-access-enf
 
 ## Outcome
 
+Consolidation status, 10 September 2026: the unfinished fresh eligibility and
+fact-loader work is preserved as [non-executable checkpoint text](../checkpoints/issue-35/README.md).
+It is not deployed policy enforcement. This task remains open; the empty second
+migration is not part of the runnable migration set.
+
 Permission to perform an action and permission to see or change a particular record are both enforced by the database. Neither check can substitute for the other.
 
 ## What will be built

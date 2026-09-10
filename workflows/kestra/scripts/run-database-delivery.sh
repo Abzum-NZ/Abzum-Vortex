@@ -77,7 +77,7 @@ validate_verification_manifest() {
       (map(.migration) | unique | length) == length and
       (map(.proof) | unique | length) == length) and
     (.lintSchemas | type == "array" and length > 0 and
-      all(type == "string" and test("^(public|vortex_[a-z0-9_]+)$")) and
+      all(type == "string" and test("^(public|record_data|vortex_[a-z0-9_]+)$")) and
       (unique | length) == length)
   ' "$manifest_file" >/dev/null || die "database verification manifest is invalid"
 
@@ -117,9 +117,9 @@ validate_verification_manifest() {
           LC_ALL=C sort
       ) |
         grep -o -i -E \
-          '(^|[^[:alnum:]_])create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?vortex_[a-z0-9_]+' || true
+          '(^|[^[:alnum:]_])create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(vortex_[a-z0-9_]+|record_data)' || true
     } |
-      sed --regexp-extended 's/.*(vortex_[a-z0-9_]+)$/\1/I' |
+      sed --regexp-extended 's/.*(vortex_[a-z0-9_]+|record_data)$/\1/I' |
       tr '[:upper:]' '[:lower:]' |
       LC_ALL=C sort --unique
   )"

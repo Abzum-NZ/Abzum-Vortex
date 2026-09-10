@@ -2499,6 +2499,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
             settings.fieldId === undefined
               ? undefined
               : aggregateFieldMap.get(String(settings.fieldId));
+          const aggregateResultType = fieldDeclaredResultType(aggregateField);
           const filterValid =
             settings.filter === undefined ||
             (fieldReferencesValid(settings.filter, aggregateFields) &&
@@ -2507,7 +2508,7 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
                 : conditionTypesValid(settings.filter, aggregateFieldMap)));
           const currencyValid =
             settings.currency === undefined ||
-            (settings.operation === "sum" && aggregateField?.type === "money");
+            (settings.operation === "sum" && aggregateResultType === "money");
           valid =
             aggregateRelationship !== undefined &&
             reachesCurrentRecord &&
@@ -2523,7 +2524,6 @@ function moduleReferenceRule(context: DefinitionSetValidationContext): Definitio
                   )
                 : fieldValueType(aggregateField) === "number"));
           const declaredResultType = String(settings.resultType);
-          const aggregateResultType = fieldDeclaredResultType(aggregateField);
           const resultTypeValid =
             (settings.operation === "count" && declaredResultType === "whole_number") ||
             (settings.operation === "average" &&

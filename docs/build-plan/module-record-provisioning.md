@@ -109,6 +109,15 @@ including locally owned Applications with exact shared external Modules. It does
 not activate bindings or require installation-management permission for ordinary
 runtime discovery. Protected operations still check their own current authority.
 
+The delivered first provisioner currently accepts only direct Application-to-Module
+dependencies. Before claiming complete installation, extend its fixed Module
+coordinator to accept an exact Module reachable through the Application's pinned
+Module dependency graph, preserving the same Access and release checks. Use a
+forward migration, not an edit to the delivered migration or a requirement that
+administrators duplicate indirect dependencies on the Application. Prove actual
+provisioning of Application-to-A-to-shared-B and refusal of an unrelated B. The
+reader's manually activated fixtures do not satisfy this installation acceptance.
+
 Treat #43, #45 and #50's registration slice as coordinated work, not a sequence
 requiring a fake completed install before its storage exists. Likewise, #44's
 value preparation precedes storage, while its full save/readback acceptance is
@@ -199,8 +208,60 @@ The existing TypeScript Rule/Record engines still evaluate business rules and
 calculations. This design does not duplicate them in PostgreSQL. The fixed writer
 enforces database-authoritative context, access, binding, revision, field/reference
 constraints and receipt handling, then persists Record, Activity and Event effects
-atomically. Resolving the final-value handoff remains part of the real protected
-writer in #45/#47, not a successful validation flag supplied by a caller.
+atomically. The following final-value handoff is the selected implementation for
+#45/#47; it is not delivered by the pure value/calculation engines.
+
+#### Final values and the trusted server boundary
+
+Independent Sol architecture review approved this handoff after inspecting the
+actual transaction runner and owning package boundaries.
+
+The browser, import, flow and MCP adapters submit the same closed save command:
+operation, target, expected record revision, command identifier and proposed
+writable values/relationships. They cannot submit generated values or a claim
+that validation succeeded. The server constructs a fresh final mutation from
+authoritative locked state and its owning field, rule, calculation and totals
+engines; it does not forward or spread caller JSON into the final write plan.
+Keep submitted and generated changes structurally separate. Apply the existing
+changeable-field bounds to submitted values; generated changes must match the
+exact installed rule write sets or derived-field declarations and pass final
+validation. Do not reject a legitimate declared rule output simply because the
+initiator could not edit that field directly.
+
+Use the existing request transaction for preparation, current Access checks,
+dependency locking and calculation. The terminal Record repository call restores
+the existing `vortex_runtime` session role and invokes one fixed private save
+operation. Only that runtime role can invoke this terminal writer; the request
+and Data API roles cannot. Runtime receives no raw content-table or private
+Event-helper grants and never inherits the non-login Record owner. No new
+credential, second transaction or general privileged-callback API is needed.
+
+The fixed writer independently enforces current context, Access, exact installed
+definition, revisions, storage mappings, field/reference constraints and the
+existing retry receipt. It accepts only final fields supported by that definition
+and the permitted owning operation, including legitimate immediate-rule and
+derived changes, then writes matching Record, Activity and Event effects together.
+It does not repeat the TypeScript business-rule/calculation engine in SQL or
+accept a caller's validation booleans. The final dependency set must still match
+the locked/re-read set used to calculate; a changed set requires whole-transaction
+retry, not saving stale computed values.
+
+This is a trusted-backend boundary, not a sandbox for hostile backend code.
+The [existing transaction runner](../../db/src/request-transaction.ts) connects as
+`vortex_runtime` and temporarily selects `vortex_request`.
+[PostgreSQL permits resetting that role](https://www.postgresql.org/docs/current/sql-set-role.html),
+so arbitrary SQL executing with the runtime connection could regain its runtime
+capabilities. No user-facing adapter may accept SQL, caller-selected helper names
+or a final mutation plan. Parameterized fixed operations, server-only connection
+ownership and closed commands are part of the boundary; role switching alone is
+not evidence of protection from a compromised backend or stolen credential.
+
+Verify both cases honestly: a genuinely restricted database session cannot call
+the terminal writer/private helpers/raw tables; the real runtime connection can
+complete the fixed save and its atomic effects but has no raw table or direct
+Event-helper access. Also prove an untrusted save command cannot inject generated
+values or bypass validation. A restricted `current_user` test must not be described
+as proof that the underlying runtime `session_user` cannot reset its role.
 
 Concrete missing integrations are the Module active-binding reader/activation,
 protected Record writer and 30-day command receipt, the private Event queue/outbox

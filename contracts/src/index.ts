@@ -2,6 +2,7 @@ export * from "./application-contracts";
 export * from "./application-contract-versions";
 export * from "./application-composition-v2";
 export * from "./application-draft-conversion";
+export * from "./application-flow-bindings";
 export * from "./application-access-coordination";
 export * from "./automation-contracts";
 export * from "./catalogues";

@@ -59,6 +59,11 @@ export const divideRationals = (
     ? undefined
     : rational(left.numerator * right.denominator, left.denominator * right.numerator);
 
+export const compareRationals = (left: ExactRational, right: ExactRational): number => {
+  const difference = left.numerator * right.denominator - right.numerator * left.denominator;
+  return difference < 0n ? -1 : difference > 0n ? 1 : 0;
+};
+
 const normalizedText = (coefficient: bigint, scale: number): string => {
   const negative = coefficient < 0n;
   const digits = magnitude(coefficient)
@@ -69,6 +74,24 @@ const normalizedText = (coefficient: bigint, scale: number): string => {
       ? digits
       : `${digits.slice(0, digits.length - scale)}.${digits.slice(digits.length - scale)}`;
   return normalizeExactDecimal(`${negative ? "-" : ""}${text}`)!;
+};
+
+export const rationalToExactText = (value: ExactRational): string | undefined => {
+  let denominator = value.denominator;
+  let twos = 0;
+  let fives = 0;
+  while (denominator % 2n === 0n) {
+    denominator /= 2n;
+    twos += 1;
+  }
+  while (denominator % 5n === 0n) {
+    denominator /= 5n;
+    fives += 1;
+  }
+  if (denominator !== 1n) return undefined;
+  const scale = Math.max(twos, fives);
+  const coefficient = value.numerator * 2n ** BigInt(scale - twos) * 5n ** BigInt(scale - fives);
+  return normalizedText(coefficient, scale);
 };
 
 export const roundRationalHalfEven = (
