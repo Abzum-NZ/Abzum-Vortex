@@ -129,8 +129,10 @@ Docker socket. Only a completely successful run writes credential-free evidence 
 
 `production_database_delivery` performs the same immutable-commit checks for `refs/heads/main` and
 prepares a credential-free migration fingerprint before pausing. The operator approves and identifies
-the Testing commit. Kestra records the authenticated account that resumes the hold; the operator does
-not type their own identity, an execution identifier, or a migration fingerprint. Production then
+the Testing commit; they do not type their own identity, an execution identifier, or a migration
+fingerprint. The receipt records the approving Kestra execution, and that execution's audit log holds
+the authenticated account that resumed the hold. The Pause task does not expose that account to the
+flow, so the receipt references it rather than restating it. Production then
 loads the successful Testing evidence itself. The delivery script independently proves that the
 tested commit is an ancestor of the Production commit and that both revisions contain the same
 migration set, commit-owned runner and verification manifest before opening the Production database
