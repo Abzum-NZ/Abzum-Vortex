@@ -149,10 +149,27 @@ select is(
   true,
   'draft storage forces row security'
 );
-select is(
-  (select count(*)::integer from pg_catalog.pg_policies where schemaname = 'vortex_definition'),
-  0,
-  'private Definition tables expose no direct row-security policy'
+select results_eq(
+  $$select tablename::text collate "C", policyname::text collate "C", roles collate "C",
+      permissive collate "C", cmd collate "C", qual collate "C", with_check collate "C"
+    from pg_catalog.pg_policies
+    where schemaname = 'vortex_definition'
+    order by policyname collate "C"$$,
+  $$values
+    ('release_dependencies' collate "C", 'module_installation_definition_dependencies_read' collate "C",
+      array['vortex_module_owner']::name[] collate "C", 'PERMISSIVE' collate "C",
+      'SELECT' collate "C", 'true' collate "C", null::text collate "C"),
+    ('releases', 'module_installation_definition_releases_read',
+      array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    ('roots', 'module_installation_definition_roots_read',
+      array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    ('release_dependencies', 'record_storage_definition_dependencies_read',
+      array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    ('releases', 'record_storage_definition_releases_read',
+      array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    ('roots', 'record_storage_definition_roots_read',
+      array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text)$$,
+  'Definition row policies permit only the exact private Module and Record owner reads'
 );
 select is(
   (
@@ -201,6 +218,7 @@ select is(
     'create_root',
     'list_module_releases',
     'list_release_history',
+    'read_application_bound_release_set',
     'read_consumer_release',
     'read_module_release',
     'read_publication_state',
@@ -275,6 +293,7 @@ select is(
     'create_root',
     'list_module_releases',
     'list_release_history',
+    'read_application_bound_release_set',
     'read_consumer_release',
     'read_module_release',
     'read_publication_state',
@@ -290,9 +309,9 @@ select is(
     select count(*)::integer
     from pg_catalog.pg_proc as function
     where function.pronamespace = 'vortex_definition'::regnamespace
-      and function.proconfig @> array['search_path=""']
+      and (function.proconfig @> array['search_path=""']) is not true
   ),
-  18,
+  0,
   'every Definition function fixes an empty search path'
 );
 select has_function(
