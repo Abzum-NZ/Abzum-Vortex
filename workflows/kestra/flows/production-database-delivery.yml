@@ -60,7 +60,7 @@ tasks:
       VORTEX_EXECUTION_ID: "{{ execution.id }}"
       VORTEX_EVIDENCE_PATH: delivery-evidence.json
       VORTEX_APPROVED: "{{ outputs.await_approval.onResume.approved }}"
-      VORTEX_APPROVING_ACTOR: "{{ outputs.await_approval.resumed.by }}"
+      VORTEX_APPROVING_ACTOR: "kestra-execution:{{ execution.id }}"
       VORTEX_TESTING_COMMIT: "{{ outputs.await_approval.onResume.testing_commit }}"
       VORTEX_TESTING_EXECUTION_ID: "{{ outputs.load_testing_evidence.value.execution_id }}"
       VORTEX_TESTING_MIGRATION_SET_SHA256: "{{ outputs.load_testing_evidence.value.migration_set_sha256 }}"
