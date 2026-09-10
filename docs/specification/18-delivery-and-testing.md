@@ -57,6 +57,14 @@ The Vercel project uses `apps/web` as its Root Directory and includes files outs
 
 Platform database changes are immutable, ordered files. Once applied to a shared environment, a file is not edited. A correction is a later change.
 
+A missing migration older than the target's applied maximum requires an actual
+ordering review before application. The delivery runner normally refuses such
+gaps. The [reviewed consolidation exception](../build-plan/consolidation-handoff.md#existing-testing-migration-gap)
+admits only the exact storage-provisioning gap against the exact reviewed catalogue
+maximum using [Supabase's missing-migration option](https://supabase.com/docs/reference/cli/supabase-db-push).
+It does not rewrite applied history, admit arbitrary future gaps, skip verification
+or authorise a reset.
+
 Every change follows an expand-and-contract sequence:
 
 1. Add compatible storage or functions.
