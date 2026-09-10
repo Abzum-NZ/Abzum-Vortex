@@ -6,25 +6,33 @@ select no_plan();
 
 -- ============================================================================
 -- #37 slice 3: the protected same-organisation direct-share grant/revoke
--- operations. Mirrors 445's fixture style: one organisation, a neutral
--- record type with no real content table (the share's own writer never
--- reads business rows -- see 20260907023622's own header comment), a
--- catalogue with two direct_share-routed record permissions (chain_read,
--- chain_update), one grantor holding both by standing role assignment, and
--- pre-existing shares (seeded directly, as 445 seeds its own) that give the
--- grantor their own current read/update ceiling on each target record. Every
--- assertion below runs the protected functions under `set local role
--- vortex_request`, exactly as 430/445 do.
+-- operations, corrected in slice 5 after independent review found the
+-- grantor's and revoker's authority was re-derived against fabricated facts
+-- rather than the record's real row -- see
+-- 20260910114716_coordinate_protected_record_share.sql's own header. Mirrors
+-- 445's fixture style: one organisation, a neutral record type with a real
+-- content table (test_share_rows, added in slice 5 -- there was none before),
+-- a catalogue with direct_share-, all_records-, ownership-, relationship- and
+-- condition-scoped record permissions, several grantors each holding a
+-- different route to the same authority, and pre-existing shares (seeded
+-- directly, as 445 seeds its own) that give some of them their own current
+-- read/update ceiling on specific target records. `grant_record_share_for_
+-- administration` and `revoke_record_share_for_administration` are owner-only
+-- as of slice 5: every assertion below reaches them only through the two
+-- fixed adapters at the bottom of the fixture section, exactly as 430/445
+-- reach the record decision only through their own fixed adapters.
 -- ============================================================================
 
 -- ============================================================================
 -- Identity/organisation fixture: two tenants (home + foreign), one home
--- organisation with six accounts and one Group, one foreign organisation
--- with one account and one Group. Of the six home accounts: GRANTOR,
+-- organisation with nine accounts and one Group, one foreign organisation
+-- with one account and one Group. Of the nine home accounts: GRANTOR,
 -- RECIPIENT, a spare (retired) account and ADMIN are #37 slice 3's own
--- fixture; NO_SHARE_GRANTOR and ALL_RECORDS_GRANTOR are slice 4's, added to
--- prove F1's regression (read/update without share) and the all_records
--- route respectively -- see their own seeded roles below.
+-- fixture; NO_SHARE_GRANTOR and ALL_RECORDS_GRANTOR are slice 4's, proving
+-- F1's regression (read/update without share) and the all_records route
+-- respectively; OWNER_GRANTOR, RELATIONSHIP_GRANTOR and CONDITION_GRANTOR are
+-- slice 5's, proving the three route kinds slice 4's fabricated facts always
+-- excluded -- see their own seeded roles and real rows below.
 -- ============================================================================
 
 create function pg_temp.seed_identity()
@@ -75,10 +83,17 @@ begin
     ('44500000-0000-4000-8000-000000000006', 'active', operation_at, operation_at,
       '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000006', 1),
     ('44500000-0000-4000-8000-000000000007', 'active', operation_at, operation_at,
-      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000007', 1);
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000007', 1),
+    ('44500000-0000-4000-8000-000000000008', 'active', operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000008', 1),
+    ('44500000-0000-4000-8000-000000000009', 'active', operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000009', 1),
+    ('44500000-0000-4000-8000-000000000010', 'active', operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-00000000000a', 1);
 
-  -- Home organisation: GRANTOR, RECIPIENT, a spare account, ADMIN (the
-  -- original grantor of the pre-existing shares below).
+  -- Home organisation: GRANTOR, RECIPIENT, a spare account, ADMIN, then
+  -- NO_SHARE_GRANTOR/ALL_RECORDS_GRANTOR (slice 4), then OWNER_GRANTOR/
+  -- RELATIONSHIP_GRANTOR/CONDITION_GRANTOR (slice 5).
   insert into vortex_identity.organization_accounts (
     organization_account_id, organization_id, identity_id, display_name,
     state, activated_at, closed_at, changed_at, state_changed_at, state_changed_by,
@@ -111,7 +126,19 @@ begin
     ('54500000-0000-4000-8000-000000000007', '24500000-0000-4000-8000-000000000001',
       '44500000-0000-4000-8000-000000000007', 'All-records grantor account', 'active',
       operation_at - interval '1 minute', null, operation_at, operation_at,
-      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000017', 1);
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000017', 1),
+    ('54500000-0000-4000-8000-000000000008', '24500000-0000-4000-8000-000000000001',
+      '44500000-0000-4000-8000-000000000008', 'Owner grantor account', 'active',
+      operation_at - interval '1 minute', null, operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000018', 1),
+    ('54500000-0000-4000-8000-000000000009', '24500000-0000-4000-8000-000000000001',
+      '44500000-0000-4000-8000-000000000009', 'Relationship grantor account', 'active',
+      operation_at - interval '1 minute', null, operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-000000000019', 1),
+    ('54500000-0000-4000-8000-000000000010', '24500000-0000-4000-8000-000000000001',
+      '44500000-0000-4000-8000-000000000010', 'Condition grantor account', 'active',
+      operation_at - interval '1 minute', null, operation_at, operation_at,
+      '94500000-0000-4000-8000-000000000001', 'a4500000-0000-4000-8000-00000000001a', 1);
 
   perform 1 from vortex_access.initialize_organization_access_version(
     '24500000-0000-4000-8000-000000000001', '94500000-0000-4000-8000-000000000001',
@@ -165,18 +192,62 @@ $function$;
 select pg_temp.seed_identity();
 
 -- ============================================================================
+-- Content table (added in slice 5 -- there was none before, and the shared
+-- record identifiers existed in no table at all). One neutral record type,
+-- following 445's own shape: module/record-type/storage-contract pinned by
+-- CHECK, an owner, a lifecycle state, three business fields (F1/F2/F3,
+-- exactly the ids every direct_share/all_records/ownership permission below
+-- already names) and one boolean flag field (F_FLAG) used only by the
+-- condition-scoped permission. f_source_link is a plain, hand-written
+-- self-link: a row that names another row as its f_source_link is that
+-- row's relationship *source* under the one self-relationship R1 declared
+-- by the two adapters below, exactly as 430's own alpha.f_alpha_link links
+-- alpha rows to the beta row they relate to.
+-- ============================================================================
+
+create table vortex_access.test_share_rows (
+  organization_id uuid not null
+    references vortex_identity.organizations (organization_id),
+  module_root_id uuid not null
+    check (module_root_id = '34500000-0000-4000-8000-000000000002'::uuid),
+  record_type_id uuid not null
+    check (record_type_id = 'd4500000-0000-4000-8000-000000000001'::uuid),
+  storage_contract_id uuid not null
+    check (storage_contract_id = 'b4500000-0000-4000-8000-000000000001'::uuid),
+  record_id uuid primary key,
+  application_root_id uuid not null,
+  owner_organization_account_id uuid not null,
+  lifecycle_state text not null default 'active'
+    check (lifecycle_state in ('active', 'soft_deleted', 'removal_pending')),
+  f1 text,
+  f2 text,
+  f3 text,
+  f_flag boolean not null default false,
+  f_source_link uuid references vortex_access.test_share_rows (record_id),
+  foreign key (organization_id, owner_organization_account_id)
+    references vortex_identity.organization_accounts (organization_id, organization_account_id)
+);
+alter table vortex_access.test_share_rows enable row level security;
+alter table vortex_access.test_share_rows force row level security;
+
+-- No grant of any kind to vortex_request on this table. That absence -- not a
+-- row policy -- is what stops vortex_request from ever seeing a raw row,
+-- exactly as 445's own content table.
+
+-- ============================================================================
 -- Permission catalogue: one application registration on the home
--- organisation owning four record-scoped permissions on one neutral record
--- type. chain_read and chain_update are routed on direct_share only, so
--- eligibility (a standing role assignment) is necessary but the actual row
+-- organisation. chain_read and chain_update are routed on direct_share only,
+-- so eligibility (a standing role assignment) is necessary but the actual row
 -- reached is always an explicit organization_direct_record_shares row.
--- chain_share (#37 slice 4, F1) is routed all_records -- the record decision
--- refuses a direct_share route for any action but read/update, so all_records
--- is the only route that can carry a share action at all. chain_read_all is
--- also routed all_records, seeded only to prove that route is admitted for
--- the read/update ceiling too, alongside chain_read's own direct_share proof.
--- Three fields: F1/F2 are named by every read/update permission's field
--- policy; F3 is declared nowhere, so no share can ever carry it.
+-- chain_share (#37 slice 4, F1) and chain_read_all are routed all_records.
+-- owned_read/owned_share/owned_update (slice 5) are routed ownership.
+-- owned_share_relationship (slice 5) is routed relationship, over the one
+-- self-relationship R1, sourced from owned_read. owned_share_conditional
+-- (slice 5) is routed ownership narrowed by one saved condition comparing
+-- F_FLAG to true. Fields: F1/F2/F3 are named by every read/update
+-- permission's field policy; F_FLAG is named only by the saved condition
+-- (never a readable/changeable field of any permission); no permission ever
+-- names any other field id, so a share can never carry one.
 -- ============================================================================
 
 create function pg_temp.seed_catalogue()
@@ -264,7 +335,28 @@ begin
     ('c4500000-0000-4000-8000-000000000004'::uuid,
       'record_share.chain_read_all', 'Chain read (all records)', 'read', '4',
       '{"routes":[{"kind":"all_records"}]}'::jsonb,
-      '{"readableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102"],"changeableFieldIds":[]}'::jsonb)
+      '{"readableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102"],"changeableFieldIds":[]}'::jsonb),
+    ('c4500000-0000-4000-8000-000000000005'::uuid,
+      'record_share.owned_read', 'Owned read', 'read', '5',
+      '{"routes":[{"kind":"ownership"}]}'::jsonb,
+      '{"readableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102","b4500000-0000-4000-8000-000000000103"],"changeableFieldIds":[]}'::jsonb),
+    ('c4500000-0000-4000-8000-000000000006'::uuid,
+      'record_share.owned_share', 'Owned share', 'share', '6',
+      '{"routes":[{"kind":"ownership"}]}'::jsonb, null::jsonb),
+    ('c4500000-0000-4000-8000-000000000007'::uuid,
+      'record_share.owned_update', 'Owned update', 'update', '7',
+      '{"routes":[{"kind":"ownership"}]}'::jsonb,
+      '{"readableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102","b4500000-0000-4000-8000-000000000103"],"changeableFieldIds":["b4500000-0000-4000-8000-000000000101","b4500000-0000-4000-8000-000000000102","b4500000-0000-4000-8000-000000000103"]}'::jsonb),
+    ('c4500000-0000-4000-8000-000000000008'::uuid,
+      'record_share.owned_share_relationship', 'Owned share (relationship)', 'share', '8',
+      '{"routes":[{"kind":"relationship","relationshipId":"f4500000-0000-4000-8000-000000000001","sourcePermissionId":"c4500000-0000-4000-8000-000000000005"}]}'::jsonb,
+      null::jsonb),
+    ('c4500000-0000-4000-8000-000000000009'::uuid,
+      'record_share.owned_share_conditional', 'Owned share (conditional)', 'share', '9',
+      ('{"routes":[{"kind":"ownership"}],"savedCondition":{"conditionId":"b4500000-0000-4000-8000-000000000401","publishedRevision":1,"contractFingerprint":"'
+        || ('sha256:' || pg_catalog.repeat('7', 64))
+        || '","parameterBindings":[]}}')::jsonb,
+      null::jsonb)
   ) as permission(
     permission_id, permission_key, label, action_kind, fingerprint_character,
     record_scope, field_policy
@@ -289,9 +381,10 @@ $function$;
 
 select pg_temp.seed_catalogue();
 
--- One custom role per permission, assigned as standing to GRANTOR alone.
--- Eligibility for both is necessary but not sufficient: reaching any given
--- record still requires an explicit direct_share row, seeded below.
+-- One custom role per permission, assigned as standing. Eligibility for a
+-- direct_share- or relationship-routed permission is necessary but not
+-- sufficient: reaching any given record still requires the matching real
+-- row (ownership/edge) or an explicit direct_share row, seeded below.
 create function pg_temp.seed_role(
   p_role_id uuid,
   p_role_key text,
@@ -371,15 +464,33 @@ select pg_temp.seed_role(
 select pg_temp.seed_role(
   '64500000-0000-4000-8000-000000000004', 'chain_read_all', 'c4500000-0000-4000-8000-000000000004'
 );
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000005', 'owned_read', 'c4500000-0000-4000-8000-000000000005'
+);
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000006', 'owned_share', 'c4500000-0000-4000-8000-000000000006'
+);
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000007', 'owned_update', 'c4500000-0000-4000-8000-000000000007'
+);
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000008', 'owned_share_relationship', 'c4500000-0000-4000-8000-000000000008'
+);
+select pg_temp.seed_role(
+  '64500000-0000-4000-8000-000000000009', 'owned_share_conditional', 'c4500000-0000-4000-8000-000000000009'
+);
 
 -- GRANTOR holds chain_read, chain_update and chain_share by standing
--- assignment -- chain_share (#37 slice 4) is what makes GRANTOR's own
--- existing positive-path cases below pass for the right reason. NO_SHARE_
--- GRANTOR holds chain_read and chain_update only, never chain_share: F1's
--- regression fixture. ALL_RECORDS_GRANTOR holds chain_share and
--- chain_read_all only -- both all_records-routed, no direct_share row of its
--- own anywhere below -- proving the all_records route admits a read ceiling
--- too, not only chain_read's own direct_share route.
+-- assignment. NO_SHARE_GRANTOR holds chain_read and chain_update only, never
+-- chain_share: F1's regression fixture. ALL_RECORDS_GRANTOR holds chain_share
+-- and chain_read_all only -- both all_records-routed, no direct_share row of
+-- its own anywhere below. OWNER_GRANTOR holds owned_read/owned_share/
+-- owned_update, all ownership-routed. RELATIONSHIP_GRANTOR holds owned_read
+-- (its own source-permission eligibility, over a record it owns directly),
+-- owned_share_relationship (relationship-routed) and chain_read_all (its
+-- read ceiling on the relationship target, proving all_records admits a read
+-- ceiling exactly as it already does for ALL_RECORDS_GRANTOR). CONDITION_
+-- GRANTOR holds owned_read and owned_share_conditional.
 insert into vortex_access.organization_role_assignments (
   organization_id, role_assignment_id, role_id, assignee_kind,
   organization_account_id, group_id, assignment_kind, revision,
@@ -408,7 +519,23 @@ from (values
   ('74500000-0000-4000-8000-000000000006'::uuid, '64500000-0000-4000-8000-000000000003'::uuid,
     '54500000-0000-4000-8000-000000000007'::uuid, 'a4500000-0000-4000-8000-000000000056'::uuid),
   ('74500000-0000-4000-8000-000000000007'::uuid, '64500000-0000-4000-8000-000000000004'::uuid,
-    '54500000-0000-4000-8000-000000000007'::uuid, 'a4500000-0000-4000-8000-000000000057'::uuid)
+    '54500000-0000-4000-8000-000000000007'::uuid, 'a4500000-0000-4000-8000-000000000057'::uuid),
+  ('74500000-0000-4000-8000-000000000301'::uuid, '64500000-0000-4000-8000-000000000005'::uuid,
+    '54500000-0000-4000-8000-000000000008'::uuid, 'a4500000-0000-4000-8000-000000000301'::uuid),
+  ('74500000-0000-4000-8000-000000000302'::uuid, '64500000-0000-4000-8000-000000000006'::uuid,
+    '54500000-0000-4000-8000-000000000008'::uuid, 'a4500000-0000-4000-8000-000000000302'::uuid),
+  ('74500000-0000-4000-8000-000000000303'::uuid, '64500000-0000-4000-8000-000000000007'::uuid,
+    '54500000-0000-4000-8000-000000000008'::uuid, 'a4500000-0000-4000-8000-000000000303'::uuid),
+  ('74500000-0000-4000-8000-000000000304'::uuid, '64500000-0000-4000-8000-000000000005'::uuid,
+    '54500000-0000-4000-8000-000000000009'::uuid, 'a4500000-0000-4000-8000-000000000304'::uuid),
+  ('74500000-0000-4000-8000-000000000305'::uuid, '64500000-0000-4000-8000-000000000008'::uuid,
+    '54500000-0000-4000-8000-000000000009'::uuid, 'a4500000-0000-4000-8000-000000000305'::uuid),
+  ('74500000-0000-4000-8000-000000000306'::uuid, '64500000-0000-4000-8000-000000000004'::uuid,
+    '54500000-0000-4000-8000-000000000009'::uuid, 'a4500000-0000-4000-8000-000000000306'::uuid),
+  ('74500000-0000-4000-8000-000000000307'::uuid, '64500000-0000-4000-8000-000000000005'::uuid,
+    '54500000-0000-4000-8000-000000000010'::uuid, 'a4500000-0000-4000-8000-000000000307'::uuid),
+  ('74500000-0000-4000-8000-000000000308'::uuid, '64500000-0000-4000-8000-000000000009'::uuid,
+    '54500000-0000-4000-8000-000000000010'::uuid, 'a4500000-0000-4000-8000-000000000308'::uuid)
 ) as assignment(role_assignment_id, role_id, account_id, correlation_id);
 
 -- ============================================================================
@@ -488,6 +615,84 @@ select
   op.now
 from (select pg_catalog.clock_timestamp() as now) as op;
 
+-- ============================================================================
+-- Real content rows. e...0001/0002/0005/0006/0007 are slice 3/4's own
+-- existing record ids -- every share above and below targets a real,
+-- active, ADMIN-owned row now, where before slice 5 it targeted no row at
+-- all. Everything from e...0020 on is slice 5's own: a relationship-source
+-- pair, one plain ownership pair, one condition-true/condition-false pair,
+-- one soft-deleted row and one disagreement-test row. e...0099 is
+-- deliberately never inserted.
+-- ============================================================================
+
+insert into vortex_access.test_share_rows (
+  organization_id, module_root_id, record_type_id, storage_contract_id,
+  record_id, application_root_id, owner_organization_account_id,
+  lifecycle_state, f1, f2, f3, f_flag, f_source_link
+)
+values
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000004', 'active', 'open-1', 'open-2', 'open-3', false, null),
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000002', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000004', 'active', 'open-1', 'open-2', 'open-3', false, null),
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000005', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000004', 'active', 'open-1', 'open-2', 'open-3', false, null),
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000006', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000004', 'active', 'open-1', 'open-2', 'open-3', false, null),
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000007', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000004', 'active', 'open-1', 'open-2', 'open-3', false, null),
+  -- Relationship source (owned by RELATIONSHIP_GRANTOR) and target (owned by
+  -- ADMIN, never RELATIONSHIP_GRANTOR): the target is reachable only through
+  -- the edge the source declares below.
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000021', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000004', 'active', 'open-21', 'open-22', 'open-23', false, null),
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000020', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000009', 'active', 'open-20', 'open-20', 'open-20', false,
+    'e4500000-0000-4000-8000-000000000021'),
+  -- Plain ownership: read-only and changeable proofs.
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000030', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000008', 'active', 'open-30', 'open-30', 'open-30', false, null),
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000031', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000008', 'active', 'open-31', 'open-31', 'open-31', false, null),
+  -- Condition-true / condition-false, both owned by CONDITION_GRANTOR.
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000040', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000010', 'active', 'open-40', 'open-40', 'open-40', true, null),
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000041', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000010', 'active', 'open-41', 'open-41', 'open-41', false, null),
+  -- Soft-deleted, owned by OWNER_GRANTOR -- without the lifecycle check this
+  -- would otherwise admit through the ownership route.
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000050', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000008', 'soft_deleted', 'open-50', 'open-50', 'open-50', false, null),
+  -- Disagreement-test row, owned by OWNER_GRANTOR.
+  ('24500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
+    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+    'e4500000-0000-4000-8000-000000000060', '34500000-0000-4000-8000-000000000001',
+    '54500000-0000-4000-8000-000000000008', 'active', 'open-60', 'open-60', 'open-60', false, null);
+
 -- Establishes the real session request context the protected functions
 -- sample via validated_human_request_context(). Callable repeatedly to
 -- switch the acting account between cases.
@@ -563,6 +768,300 @@ $function$;
 -- supabase/tests/445's own pattern.
 grant usage on schema extensions to vortex_request;
 
+-- Cross-statement checkpoints for the "writes nothing, including no Access
+-- version change" proofs below -- an absolute version number would depend on
+-- the exact order of every earlier case in this file; comparing against a
+-- value captured immediately before the refused attempt does not.
+create temporary table share_test_checkpoint (
+  checkpoint_key text primary key,
+  access_version bigint not null
+) on commit drop;
+
+-- ============================================================================
+-- Two fixed adapters (slice 5). Both security definer, owner postgres, empty
+-- search path. Each resolves its own installed binding (hardcoded, exactly
+-- as 430/445's own adapters), reads the real row(s) from test_share_rows,
+-- loads the real self-relationship edge when one exists, and calls the
+-- protected operation below -- never a decision, a permission, a field set
+-- or the record's binding from its own caller. The grant adapter's caller
+-- supplies only the target record id and the share's own terms (recipient,
+-- fields, window, reason, activity); the revoke adapter's caller supplies
+-- only the share id, expected revision, reason and activity -- exactly the
+-- same public shape the two protected functions had before slice 5, minus
+-- the five identifiers slice 5 moved into the trusted facts.
+-- ============================================================================
+
+create function vortex_access.test_share_grant(
+  p_direct_share_id uuid,
+  p_record_id uuid,
+  p_recipient_kind text,
+  p_organization_account_id uuid,
+  p_group_id uuid,
+  p_readable_field_ids uuid[],
+  p_changeable_field_ids uuid[],
+  p_starts_at timestamptz,
+  p_expires_at timestamptz,
+  p_reason text,
+  p_activity_source text,
+  p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  module_id constant uuid := '34500000-0000-4000-8000-000000000002';
+  type_id constant uuid := 'd4500000-0000-4000-8000-000000000001';
+  contract_id constant uuid := 'b4500000-0000-4000-8000-000000000001';
+  r1_id constant uuid := 'f4500000-0000-4000-8000-000000000001';
+  condition_id constant uuid := 'b4500000-0000-4000-8000-000000000401';
+  f1_id constant uuid := 'b4500000-0000-4000-8000-000000000101';
+  f2_id constant uuid := 'b4500000-0000-4000-8000-000000000102';
+  f3_id constant uuid := 'b4500000-0000-4000-8000-000000000103';
+  f_flag_id constant uuid := 'b4500000-0000-4000-8000-000000000104';
+  ctx_org uuid := vortex_context.organization_id();
+  target_row vortex_access.test_share_rows;
+  source_row vortex_access.test_share_rows;
+  target_records jsonb := '[]'::jsonb;
+  source_records jsonb := '[]'::jsonb;
+  edges jsonb := '[]'::jsonb;
+  facts jsonb;
+begin
+  select * into target_row from vortex_access.test_share_rows
+  where organization_id = ctx_org and record_id = p_record_id;
+  if found then
+    target_records := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordScope', pg_catalog.jsonb_build_object(
+        'storageScope', 'application_contained',
+        'organizationId', target_row.organization_id,
+        'moduleRootId', module_id, 'recordTypeId', type_id,
+        'storageContractId', contract_id,
+        'recordId', target_row.record_id,
+        'applicationRootId', target_row.application_root_id
+      ),
+      'ownerOrganizationAccountId', target_row.owner_organization_account_id,
+      'lifecycleState', target_row.lifecycle_state,
+      'fieldValues', pg_catalog.jsonb_build_object(
+        f1_id::text, target_row.f1, f2_id::text, target_row.f2,
+        f3_id::text, target_row.f3, f_flag_id::text, target_row.f_flag
+      )
+    ));
+  end if;
+
+  -- Every row that names this target as its own f_source_link is that
+  -- target's relationship source under R1 -- both a fact record and an
+  -- edge, exactly as 430's own alpha/beta adapter loads a related table.
+  for source_row in
+    select * from vortex_access.test_share_rows
+    where organization_id = ctx_org and f_source_link = p_record_id
+  loop
+    source_records := source_records || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordScope', pg_catalog.jsonb_build_object(
+        'storageScope', 'application_contained',
+        'organizationId', source_row.organization_id,
+        'moduleRootId', module_id, 'recordTypeId', type_id,
+        'storageContractId', contract_id,
+        'recordId', source_row.record_id,
+        'applicationRootId', source_row.application_root_id
+      ),
+      'ownerOrganizationAccountId', source_row.owner_organization_account_id,
+      'lifecycleState', source_row.lifecycle_state,
+      'fieldValues', pg_catalog.jsonb_build_object(
+        f1_id::text, source_row.f1, f2_id::text, source_row.f2,
+        f3_id::text, source_row.f3, f_flag_id::text, source_row.f_flag
+      )
+    ));
+    edges := edges || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'relationshipId', r1_id, 'fromRecordId', source_row.record_id, 'toRecordId', p_record_id
+    ));
+  end loop;
+
+  facts := pg_catalog.jsonb_build_object(
+    'binding', pg_catalog.jsonb_build_object(
+      'moduleRootId', module_id, 'recordTypeId', type_id,
+      'storageContractId', contract_id, 'storageScope', 'application_contained'
+    ),
+    'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'moduleRootId', module_id, 'recordTypeId', type_id,
+      'storageContractId', contract_id, 'storageScope', 'application_contained',
+      'ownershipMode', 'organization_account',
+      'fields', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object('fieldId', f1_id, 'type', 'text'),
+        pg_catalog.jsonb_build_object('fieldId', f2_id, 'type', 'text'),
+        pg_catalog.jsonb_build_object('fieldId', f3_id, 'type', 'text'),
+        pg_catalog.jsonb_build_object('fieldId', f_flag_id, 'type', 'yes_no')
+      )
+    )),
+    'relationships', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'relationshipId', r1_id, 'fromModuleRootId', module_id, 'fromRecordTypeId', type_id,
+      'toModuleRootId', module_id, 'toRecordTypeId', type_id
+    )),
+    'sharingConditions', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'conditionId', condition_id, 'sourceRecordTypeId', type_id,
+      'publishedRevision', 1,
+      'contractFingerprint', 'sha256:' || pg_catalog.repeat('7', 64),
+      'parameters', '[]'::jsonb,
+      'condition', pg_catalog.jsonb_build_object(
+        'kind', 'comparison', 'operator', 'equals',
+        'left', pg_catalog.jsonb_build_object('source', 'field', 'fieldId', f_flag_id),
+        'right', pg_catalog.jsonb_build_object('source', 'value', 'value', true)
+      ),
+      'declaredFieldIds', pg_catalog.jsonb_build_array(f_flag_id)
+    )),
+    'records', target_records || source_records,
+    'edges', edges
+  );
+
+  return vortex_access.grant_record_share_for_administration(
+    p_direct_share_id, p_record_id, p_recipient_kind, p_organization_account_id,
+    p_group_id, p_readable_field_ids, p_changeable_field_ids, p_starts_at,
+    p_expires_at, p_reason, p_activity_source, p_activity_id, facts
+  );
+end
+$function$;
+
+revoke execute on function vortex_access.test_share_grant(
+  uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text, text, uuid
+) from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_access.test_share_grant(
+  uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text, text, uuid
+) to vortex_request;
+
+create function vortex_access.test_share_revoke(
+  p_direct_share_id uuid,
+  p_expected_revision bigint,
+  p_reason text,
+  p_activity_source text,
+  p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  module_id constant uuid := '34500000-0000-4000-8000-000000000002';
+  type_id constant uuid := 'd4500000-0000-4000-8000-000000000001';
+  contract_id constant uuid := 'b4500000-0000-4000-8000-000000000001';
+  r1_id constant uuid := 'f4500000-0000-4000-8000-000000000001';
+  condition_id constant uuid := 'b4500000-0000-4000-8000-000000000401';
+  f1_id constant uuid := 'b4500000-0000-4000-8000-000000000101';
+  f2_id constant uuid := 'b4500000-0000-4000-8000-000000000102';
+  f3_id constant uuid := 'b4500000-0000-4000-8000-000000000103';
+  f_flag_id constant uuid := 'b4500000-0000-4000-8000-000000000104';
+  ctx_org uuid := vortex_context.organization_id();
+  share_row vortex_access.organization_direct_record_shares%rowtype;
+  target_row vortex_access.test_share_rows;
+  source_row vortex_access.test_share_rows;
+  target_records jsonb := '[]'::jsonb;
+  source_records jsonb := '[]'::jsonb;
+  edges jsonb := '[]'::jsonb;
+  facts jsonb;
+begin
+  -- The share's own stored record_id says which real row to read; if the
+  -- share itself does not exist, the protected function's own lookup
+  -- refuses before this (necessarily empty) facts payload is ever evaluated.
+  select * into share_row from vortex_access.organization_direct_record_shares
+  where organization_id = ctx_org and direct_share_id = p_direct_share_id;
+
+  if found then
+    select * into target_row from vortex_access.test_share_rows
+    where organization_id = ctx_org and record_id = share_row.record_id;
+    if found then
+      target_records := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordScope', pg_catalog.jsonb_build_object(
+          'storageScope', 'application_contained',
+          'organizationId', target_row.organization_id,
+          'moduleRootId', module_id, 'recordTypeId', type_id,
+          'storageContractId', contract_id,
+          'recordId', target_row.record_id,
+          'applicationRootId', target_row.application_root_id
+        ),
+        'ownerOrganizationAccountId', target_row.owner_organization_account_id,
+        'lifecycleState', target_row.lifecycle_state,
+        'fieldValues', pg_catalog.jsonb_build_object(
+          f1_id::text, target_row.f1, f2_id::text, target_row.f2,
+          f3_id::text, target_row.f3, f_flag_id::text, target_row.f_flag
+        )
+      ));
+
+      for source_row in
+        select * from vortex_access.test_share_rows
+        where organization_id = ctx_org and f_source_link = share_row.record_id
+      loop
+        source_records := source_records || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'recordScope', pg_catalog.jsonb_build_object(
+            'storageScope', 'application_contained',
+            'organizationId', source_row.organization_id,
+            'moduleRootId', module_id, 'recordTypeId', type_id,
+            'storageContractId', contract_id,
+            'recordId', source_row.record_id,
+            'applicationRootId', source_row.application_root_id
+          ),
+          'ownerOrganizationAccountId', source_row.owner_organization_account_id,
+          'lifecycleState', source_row.lifecycle_state,
+          'fieldValues', pg_catalog.jsonb_build_object(
+            f1_id::text, source_row.f1, f2_id::text, source_row.f2,
+            f3_id::text, source_row.f3, f_flag_id::text, source_row.f_flag
+          )
+        ));
+        edges := edges || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'relationshipId', r1_id, 'fromRecordId', source_row.record_id, 'toRecordId', share_row.record_id
+        ));
+      end loop;
+    end if;
+  end if;
+
+  facts := pg_catalog.jsonb_build_object(
+    'binding', pg_catalog.jsonb_build_object(
+      'moduleRootId', module_id, 'recordTypeId', type_id,
+      'storageContractId', contract_id, 'storageScope', 'application_contained'
+    ),
+    'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'moduleRootId', module_id, 'recordTypeId', type_id,
+      'storageContractId', contract_id, 'storageScope', 'application_contained',
+      'ownershipMode', 'organization_account',
+      'fields', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object('fieldId', f1_id, 'type', 'text'),
+        pg_catalog.jsonb_build_object('fieldId', f2_id, 'type', 'text'),
+        pg_catalog.jsonb_build_object('fieldId', f3_id, 'type', 'text'),
+        pg_catalog.jsonb_build_object('fieldId', f_flag_id, 'type', 'yes_no')
+      )
+    )),
+    'relationships', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'relationshipId', r1_id, 'fromModuleRootId', module_id, 'fromRecordTypeId', type_id,
+      'toModuleRootId', module_id, 'toRecordTypeId', type_id
+    )),
+    'sharingConditions', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'conditionId', condition_id, 'sourceRecordTypeId', type_id,
+      'publishedRevision', 1,
+      'contractFingerprint', 'sha256:' || pg_catalog.repeat('7', 64),
+      'parameters', '[]'::jsonb,
+      'condition', pg_catalog.jsonb_build_object(
+        'kind', 'comparison', 'operator', 'equals',
+        'left', pg_catalog.jsonb_build_object('source', 'field', 'fieldId', f_flag_id),
+        'right', pg_catalog.jsonb_build_object('source', 'value', 'value', true)
+      ),
+      'declaredFieldIds', pg_catalog.jsonb_build_array(f_flag_id)
+    )),
+    'records', target_records || source_records,
+    'edges', edges
+  );
+
+  return vortex_access.revoke_record_share_for_administration(
+    p_direct_share_id, p_expected_revision, p_reason, p_activity_source, p_activity_id, facts
+  );
+end
+$function$;
+
+revoke execute on function vortex_access.test_share_revoke(uuid, bigint, text, text, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_access.test_share_revoke(uuid, bigint, text, text, uuid)
+  to vortex_request;
+
 -- ============================================================================
 -- GRANT: happy path. GRANTOR's current authority on RECORD_A is read-only
 -- (F1, F2; no changeable field). Sharing exactly one readable field with no
@@ -574,10 +1073,8 @@ select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 
 select lives_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000101', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000101',
     'e4500000-0000-4000-8000-000000000001', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -624,10 +1121,8 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000102', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000102',
     'e4500000-0000-4000-8000-000000000001', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000103']::uuid[], array[]::uuid[],
@@ -648,10 +1143,8 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000103', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000103',
     'e4500000-0000-4000-8000-000000000001', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[],
@@ -673,10 +1166,8 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000104', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000104',
     'e4500000-0000-4000-8000-000000000001', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array[]::uuid[], array[]::uuid[],
@@ -696,10 +1187,8 @@ reset role;
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000105', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000105',
     'e4500000-0000-4000-8000-000000000001', 'organization_account',
     '54500000-0000-4000-8000-000000000005', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -709,10 +1198,8 @@ select throws_ok(
   'a recipient account in another organisation is refused'
 );
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000106', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000106',
     'e4500000-0000-4000-8000-000000000001', 'organization_account',
     'f4500000-0000-4000-8000-000000000999', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -722,10 +1209,8 @@ select throws_ok(
   'an unknown recipient account id is refused'
 );
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000107', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000107',
     'e4500000-0000-4000-8000-000000000001', 'group', null,
     '84500000-0000-4000-8000-000000000002',
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -735,10 +1220,8 @@ select throws_ok(
   'a Group in another organisation is refused'
 );
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000108', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000108',
     'e4500000-0000-4000-8000-000000000001', 'group', null,
     '84500000-0000-4000-8000-000000000003',
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -767,10 +1250,8 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select lives_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000109', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000109',
     'e4500000-0000-4000-8000-000000000002', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[],
@@ -796,10 +1277,8 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000110', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000110',
     'e4500000-0000-4000-8000-000000000002', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000102']::uuid[],
@@ -839,10 +1318,8 @@ select lives_ok(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000111', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000111',
     'e4500000-0000-4000-8000-000000000001', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -882,10 +1359,8 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select lives_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000112', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000112',
     'e4500000-0000-4000-8000-000000000005', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -900,14 +1375,14 @@ reset role;
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.revoke_record_share_for_administration(
+  $$select * from vortex_access.test_share_revoke(
     '94500000-0000-4000-8000-000000000112', 2,
     'Stale revocation attempt', 'web', 'a4500000-0000-4000-8000-000000000215')$$,
   '40001', 'Direct record-share revocation is stale or unavailable',
   'a stale expected revision refuses revocation'
 );
 select lives_ok(
-  $$select * from vortex_access.revoke_record_share_for_administration(
+  $$select * from vortex_access.test_share_revoke(
     '94500000-0000-4000-8000-000000000112', 1,
     'Correct revocation', 'web', 'a4500000-0000-4000-8000-000000000216')$$,
   'revocation with the correct expected revision succeeds'
@@ -954,7 +1429,7 @@ select lives_ok(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000001');
 set local role vortex_request;
 select lives_ok(
-  $$select * from vortex_access.revoke_record_share_for_administration(
+  $$select * from vortex_access.test_share_revoke(
     '94500000-0000-4000-8000-000000000109', 1,
     'Revoke record B share after source access narrowed',
     'web', 'a4500000-0000-4000-8000-000000000219')$$,
@@ -978,7 +1453,7 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000002');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.revoke_record_share_for_administration(
+  $$select * from vortex_access.test_share_revoke(
     '94500000-0000-4000-8000-000000000101', 1,
     'Recipient attempts to revoke their own received share',
     'web', 'a4500000-0000-4000-8000-000000000220')$$,
@@ -1008,10 +1483,8 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000006');
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000113', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000113',
     'e4500000-0000-4000-8000-000000000006', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -1041,10 +1514,8 @@ select is(
 select pg_temp.install_request_context('54500000-0000-4000-8000-000000000007');
 set local role vortex_request;
 select lives_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000114', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000114',
     'e4500000-0000-4000-8000-000000000007', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -1082,7 +1553,7 @@ select pg_temp.install_request_context(
 );
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.revoke_record_share_for_administration(
+  $$select * from vortex_access.test_share_revoke(
     '94500000-0000-4000-8000-000000000101', 1,
     'Delegated context attempts revocation', 'web',
     'a4500000-0000-4000-8000-000000000223')$$,
@@ -1109,10 +1580,8 @@ select pg_temp.install_request_context(
 );
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.grant_record_share_for_administration(
-    '94500000-0000-4000-8000-000000000115', 'application_contained',
-    '34500000-0000-4000-8000-000000000001', '34500000-0000-4000-8000-000000000002',
-    'd4500000-0000-4000-8000-000000000001', 'b4500000-0000-4000-8000-000000000001',
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000115',
     'e4500000-0000-4000-8000-000000000001', 'organization_account',
     '54500000-0000-4000-8000-000000000002', null,
     array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
@@ -1135,7 +1604,7 @@ select pg_temp.install_request_context(
 );
 set local role vortex_request;
 select throws_ok(
-  $$select * from vortex_access.revoke_record_share_for_administration(
+  $$select * from vortex_access.test_share_revoke(
     '94500000-0000-4000-8000-000000000101', 1,
     'Stale-context revocation attempt', 'web',
     'a4500000-0000-4000-8000-000000000225')$$,
@@ -1152,9 +1621,320 @@ select is(
 );
 
 -- ============================================================================
--- Boundary assertions: the restricted role can execute exactly these two
--- protected functions and none of the private writers, resolver or record
--- decision they call internally.
+-- GRANT (slice 5): an ownership-routed grantor shares successfully -- the
+-- case this whole slice exists for. OWNER_GRANTOR owns OWNERSHIP_RECORD
+-- directly: no direct share, no all_records permission, nothing but
+-- owned_read/owned_share, both ownership-routed and both evaluated against
+-- the record's real owner column for the first time.
+-- ============================================================================
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000008');
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000301',
+    'e4500000-0000-4000-8000-000000000030', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Ownership-routed share',
+    'web', 'a4500000-0000-4000-8000-000000000401')$$,
+  'an ownership-routed grantor -- owning the record directly, with no direct share and no all_records permission -- shares successfully'
+);
+reset role;
+select is(
+  (select pg_catalog.jsonb_build_object(
+    'state', state, 'readable', readable_field_ids, 'changeable', changeable_field_ids
+  ) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000301'),
+  pg_catalog.jsonb_build_object(
+    'state', 'active',
+    'readable', array['b4500000-0000-4000-8000-000000000101']::uuid[],
+    'changeable', array[]::uuid[]
+  ),
+  'the ownership-routed grant stores exactly the proposed subset'
+);
+
+-- The same ownership route also carries a changeable field -- the field
+-- ceiling is derived from ownership too, not only from direct_share.
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000008');
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000302',
+    'e4500000-0000-4000-8000-000000000031', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[],
+    array['b4500000-0000-4000-8000-000000000101']::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Ownership-routed changeable share',
+    'web', 'a4500000-0000-4000-8000-000000000402')$$,
+  'an ownership-routed grantor can also share a changeable field, proving the update ceiling is derived from ownership too'
+);
+reset role;
+select is(
+  (select pg_catalog.jsonb_build_object(
+    'readable', readable_field_ids, 'changeable', changeable_field_ids
+  ) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000302'),
+  pg_catalog.jsonb_build_object(
+    'readable', array['b4500000-0000-4000-8000-000000000101']::uuid[],
+    'changeable', array['b4500000-0000-4000-8000-000000000101']::uuid[]
+  ),
+  'the ownership-routed changeable grant stores exactly the proposed readable and changeable fields'
+);
+
+-- ============================================================================
+-- GRANT (slice 5): a relationship-routed grantor shares successfully.
+-- RELATIONSHIP_GRANTOR owns the source record (e...020) directly and holds
+-- owned_read (eligibility and ownership for that source permission) plus
+-- owned_share_relationship, routed through R1 (source->target self edge) to
+-- the target (e...021), which RELATIONSHIP_GRANTOR does not own -- ADMIN
+-- does. Their read ceiling on the target comes from chain_read_all
+-- (all_records), already proven independently by ALL_RECORDS_GRANTOR above;
+-- what is new here is that the share permission itself is relationship-
+-- routed and is evaluated rather than excluded.
+-- ============================================================================
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000009');
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000303',
+    'e4500000-0000-4000-8000-000000000021', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Relationship-routed share',
+    'web', 'a4500000-0000-4000-8000-000000000403')$$,
+  'a relationship-routed grantor -- reaching the target only through an edge from a record they own -- shares successfully'
+);
+reset role;
+select is(
+  (select pg_catalog.jsonb_build_object(
+    'state', state, 'readable', readable_field_ids, 'changeable', changeable_field_ids
+  ) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000303'),
+  pg_catalog.jsonb_build_object(
+    'state', 'active',
+    'readable', array['b4500000-0000-4000-8000-000000000101']::uuid[],
+    'changeable', array[]::uuid[]
+  ),
+  'the relationship-routed grant stores exactly the proposed subset'
+);
+
+-- ============================================================================
+-- GRANT (slice 5): a condition-scoped share permission is evaluated, not
+-- excluded. CONDITION_GRANTOR owns both records and holds the identical
+-- owned_share_conditional permission over both; only the record's own
+-- F_FLAG value differs. The outcome tracking that value -- not a constant
+-- refusal or a constant admission -- is what "evaluated rather than
+-- excluded" means.
+-- ============================================================================
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000010');
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000304',
+    'e4500000-0000-4000-8000-000000000040', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Condition-true share',
+    'web', 'a4500000-0000-4000-8000-000000000404')$$,
+  'a condition-scoped share permission admits when the saved condition currently evaluates true against the record''s real field value'
+);
+reset role;
+select is(
+  (select state from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000304'),
+  'active',
+  'the condition-true grant is stored active'
+);
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000010');
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000305',
+    'e4500000-0000-4000-8000-000000000041', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Condition-false share',
+    'web', 'a4500000-0000-4000-8000-000000000405')$$,
+  '42501', 'Protected record-share grant requires a current share permission',
+  'the same condition-scoped share permission refuses when the saved condition currently evaluates false against a different record -- proving it is evaluated, not excluded or constantly admitted'
+);
+reset role;
+select is(
+  (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000305'),
+  0::bigint,
+  'the condition-false refusal writes nothing'
+);
+
+-- ============================================================================
+-- GRANT (slice 5): a record that exists in no table refuses, and writes no
+-- share row, no Activity entry and no Access version change.
+-- ============================================================================
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000008');
+insert into share_test_checkpoint (checkpoint_key, access_version)
+select 'nonexistent_record', current_version from vortex_access.organization_access_versions
+where organization_id = '24500000-0000-4000-8000-000000000001';
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000306',
+    'e4500000-0000-4000-8000-000000000099', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Nonexistent record',
+    'web', 'a4500000-0000-4000-8000-000000000406')$$,
+  '42501', 'Protected record-share grant requires a current share permission',
+  'sharing a record that exists in no content table refuses'
+);
+reset role;
+select is(
+  (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000306'),
+  0::bigint,
+  'sharing a nonexistent record writes no share row'
+);
+select is(
+  (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and action = 'grant_direct_record_share'
+     and subject_ids = array['94500000-0000-4000-8000-000000000306']::uuid[]),
+  0::bigint,
+  'sharing a nonexistent record writes no Activity entry'
+);
+select is(
+  (select current_version from vortex_access.organization_access_versions
+   where organization_id = '24500000-0000-4000-8000-000000000001'),
+  (select access_version from share_test_checkpoint where checkpoint_key = 'nonexistent_record'),
+  'sharing a nonexistent record causes no Access version change'
+);
+
+-- ============================================================================
+-- GRANT (slice 5): a soft-deleted record refuses the same way, and writes
+-- the same nothing. SOFT_DELETED_RECORD is owned by OWNER_GRANTOR -- the
+-- very account attempting to share it, and the same account whose ownership
+-- route already succeeded twice above -- so this failure is attributable to
+-- the record's lifecycle state alone, not to a missing owner.
+-- ============================================================================
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000008');
+insert into share_test_checkpoint (checkpoint_key, access_version)
+select 'soft_deleted_record', current_version from vortex_access.organization_access_versions
+where organization_id = '24500000-0000-4000-8000-000000000001';
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.test_share_grant(
+    '94500000-0000-4000-8000-000000000307',
+    'e4500000-0000-4000-8000-000000000050', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Soft-deleted record',
+    'web', 'a4500000-0000-4000-8000-000000000407')$$,
+  '42501', 'Protected record-share grant requires a current share permission',
+  'sharing a soft-deleted record -- owned by the very grantor attempting to share it -- refuses'
+);
+reset role;
+select is(
+  (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000307'),
+  0::bigint,
+  'sharing a soft-deleted record writes no share row'
+);
+select is(
+  (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and action = 'grant_direct_record_share'
+     and subject_ids = array['94500000-0000-4000-8000-000000000307']::uuid[]),
+  0::bigint,
+  'sharing a soft-deleted record writes no Activity entry'
+);
+select is(
+  (select current_version from vortex_access.organization_access_versions
+   where organization_id = '24500000-0000-4000-8000-000000000001'),
+  (select access_version from share_test_checkpoint where checkpoint_key = 'soft_deleted_record'),
+  'sharing a soft-deleted record causes no Access version change'
+);
+
+-- ============================================================================
+-- GRANT (slice 5): a facts payload whose top-level binding names a module
+-- root and storage contract that disagree with the target record's own
+-- real, resolved scope cannot reach the persisted share row. Called
+-- directly against the protected function -- not through the adapter, and
+-- not as vortex_request -- because the adapter never accepts a module root
+-- or storage contract from its own caller at all (it resolves both itself,
+-- as the boundary assertions below confirm); this instead proves the
+-- protected function's own defence, the record decision's target-row check,
+-- refuses a facts object that disagrees with itself rather than trusting
+-- whichever binding a caller names.
+-- ============================================================================
+
+select pg_temp.install_request_context('54500000-0000-4000-8000-000000000008');
+select throws_ok(
+  $$select * from vortex_access.grant_record_share_for_administration(
+    '94500000-0000-4000-8000-000000000308',
+    'e4500000-0000-4000-8000-000000000060', 'organization_account',
+    '54500000-0000-4000-8000-000000000002', null,
+    array['b4500000-0000-4000-8000-000000000101']::uuid[], array[]::uuid[],
+    pg_catalog.clock_timestamp(), null, 'Disagreeing binding',
+    'web', 'a4500000-0000-4000-8000-000000000408',
+    pg_catalog.jsonb_build_object(
+      'binding', pg_catalog.jsonb_build_object(
+        'moduleRootId', '34500000-0000-4000-8000-000000000099',
+        'recordTypeId', 'd4500000-0000-4000-8000-000000000001',
+        'storageContractId', 'b4500000-0000-4000-8000-000000000099',
+        'storageScope', 'application_contained'
+      ),
+      'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'moduleRootId', '34500000-0000-4000-8000-000000000099',
+        'recordTypeId', 'd4500000-0000-4000-8000-000000000001',
+        'storageContractId', 'b4500000-0000-4000-8000-000000000099',
+        'storageScope', 'application_contained',
+        'ownershipMode', 'organization_account', 'fields', '[]'::jsonb
+      )),
+      'relationships', '[]'::jsonb,
+      'sharingConditions', '[]'::jsonb,
+      'records', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordScope', pg_catalog.jsonb_build_object(
+          'storageScope', 'application_contained',
+          'organizationId', '24500000-0000-4000-8000-000000000001',
+          'moduleRootId', '34500000-0000-4000-8000-000000000002',
+          'recordTypeId', 'd4500000-0000-4000-8000-000000000001',
+          'storageContractId', 'b4500000-0000-4000-8000-000000000001',
+          'recordId', 'e4500000-0000-4000-8000-000000000060',
+          'applicationRootId', '34500000-0000-4000-8000-000000000001'
+        ),
+        'ownerOrganizationAccountId', '54500000-0000-4000-8000-000000000008',
+        'lifecycleState', 'active',
+        'fieldValues', '{}'::jsonb
+      )),
+      'edges', '[]'::jsonb
+    ))$$,
+  '42501', 'Protected record-share grant requires a current share permission',
+  'a facts payload whose top-level binding names a different module root and storage contract than the target record''s own real, resolved scope refuses -- the disagreeing values never reach the persisted row'
+);
+select is(
+  (select pg_catalog.count(*) from vortex_access.organization_direct_record_shares
+   where organization_id = '24500000-0000-4000-8000-000000000001'
+     and direct_share_id = '94500000-0000-4000-8000-000000000308'),
+  0::bigint,
+  'the disagreeing-binding refusal writes nothing'
+);
+
+-- ============================================================================
+-- Boundary assertions. vortex_request can execute exactly the two fixed
+-- adapters -- not the protected functions themselves, and none of the
+-- private writers, resolver or record decision they call internally.
 -- ============================================================================
 
 select ok(
@@ -1162,8 +1942,8 @@ select ok(
   'vortex_request can execute ' || target.signature
 )
 from (values
-  ('vortex_access.grant_record_share_for_administration(uuid,text,uuid,uuid,uuid,uuid,uuid,text,uuid,uuid,uuid[],uuid[],timestamptz,timestamptz,text,text,uuid)'),
-  ('vortex_access.revoke_record_share_for_administration(uuid,bigint,text,text,uuid)')
+  ('vortex_access.test_share_grant(uuid,uuid,text,uuid,uuid,uuid[],uuid[],timestamptz,timestamptz,text,text,uuid)'),
+  ('vortex_access.test_share_revoke(uuid,bigint,text,text,uuid)')
 ) as target(signature)
 order by target.signature collate "C";
 
@@ -1172,6 +1952,8 @@ select ok(
   'vortex_request cannot execute ' || target.signature
 )
 from (values
+  ('vortex_access.grant_record_share_for_administration(uuid,uuid,text,uuid,uuid,uuid[],uuid[],timestamptz,timestamptz,text,text,uuid,jsonb)'),
+  ('vortex_access.revoke_record_share_for_administration(uuid,bigint,text,text,uuid,jsonb)'),
   ('vortex_access.grant_organization_direct_record_share(uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,text,uuid,uuid,uuid[],uuid[],timestamptz,timestamptz,text,uuid,uuid,text,uuid)'),
   ('vortex_access.revoke_organization_direct_record_share(uuid,uuid,bigint,text,uuid,uuid,text,uuid)'),
   ('vortex_access.resolve_record_field_bounds_internal(jsonb)'),
@@ -1182,8 +1964,9 @@ from (values
 ) as target(signature)
 order by target.signature collate "C";
 
--- The two protected functions are owner-held, security definer,
--- empty-search-path -- never invoker-rights, never a different owner.
+-- The two protected functions remain owner-held, security definer,
+-- empty-search-path -- never invoker-rights, never a different owner. Only
+-- their grant to vortex_request changed in slice 5, not their shape.
 select is(
   (
     select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -1207,6 +1990,37 @@ select is(
   ),
   'both protected functions are owner-held, security definer and empty-search-path'
 );
+
+-- The two fixed adapters are likewise owner-held, security definer,
+-- empty-search-path, exactly as 430/445's own adapters.
+select is(
+  (
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'owner', owner_role.rolname, 'securityDefiner', procedure_row.prosecdef,
+      'configuration', procedure_row.proconfig
+    ) order by procedure_row.proname)
+    from pg_catalog.pg_proc as procedure_row
+    join pg_catalog.pg_roles as owner_role on owner_role.oid = procedure_row.proowner
+    where procedure_row.pronamespace = 'vortex_access'::regnamespace
+      and procedure_row.proname in ('test_share_grant', 'test_share_revoke')
+  ),
+  (
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'owner', 'postgres', 'securityDefiner', true, 'configuration', array['search_path=""']
+    ) order by name.value)
+    from (values ('test_share_grant'), ('test_share_revoke')) as name(value)
+  ),
+  'both fixed adapters are owner-held, security definer and empty-search-path'
+);
+
+-- vortex_request holds no privilege at all on the content table -- not a row
+-- policy, an absent grant, exactly as 445's own content table.
+select ok(
+  not pg_catalog.has_table_privilege('vortex_request', 'vortex_access.test_share_rows', privilege.kind),
+  'vortex_request has no ' || privilege.kind || ' privilege on test_share_rows'
+)
+from (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) as privilege(kind)
+order by privilege.kind collate "C";
 
 set constraints all immediate;
 

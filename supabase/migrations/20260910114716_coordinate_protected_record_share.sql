@@ -1,12 +1,11 @@
 -- Protected same-organisation direct record sharing (#37 slice 3, corrected
--- in slice 4 after independent review found the share grant never checked a
--- record.share permission -- F1 below). Reuses #36's private structural
--- writers unchanged: they already do the revision check, Activity append and
--- Access invalidation. These two functions own what the writers deliberately
--- do not: confirming the acting context currently holds record.share at all,
--- and making sure a share can never give the recipient field access the
--- grantor does not currently hold themselves. No table changes, no second
--- writer, no second Activity append, no second Access change.
+-- in slice 4 to require record.share before any share, and in slice 5 to
+-- replace fabricated facts with the target record's real ones). Reuses #36's
+-- private structural writers unchanged: they already do the revision check,
+-- Activity append and Access invalidation. These two functions own what the
+-- writers deliberately do not: confirming the acting context currently holds
+-- record.share at all, and making sure a share can never give the recipient
+-- field access the grantor does not currently hold themselves.
 --
 -- F1. The grantor's own current share authority, and its current read (and,
 -- when relevant, update) ceiling, are re-derived here, fresh, under the same
@@ -16,67 +15,62 @@
 -- 1's field-bounds resolver (20260910094534_resolve_record_field_bounds.sql)
 -- are the only sources of that authority; this migration adds no second
 -- evaluator. Share authority is checked first, before any read/update
--- ceiling work and before any mutation: holding read (or even update)
--- authority is never, by itself, re-share authority. [Specification
--- 04](../../docs/specification/04-access-and-permissions.md) is explicit:
--- "The grantor must hold record.share ... A direct share cannot grant
--- delete, restore, export, re-share, ownership, role administration, or any
--- permission the grantor does not hold."
+-- ceiling work and before any mutation. [Specification
+-- 04](../../docs/specification/04-access-and-permissions.md): "The grantor
+-- must hold record.share ... A direct share cannot grant delete, restore,
+-- export, re-share, ownership, role administration, or any permission the
+-- grantor does not hold."
 --
--- That current-decision recomputation still needs a "records" fact for the
--- exact target and a permission "declaration" naming the candidate
--- permissions, exactly like every other caller of the private decision
--- engine (the neutral fixed adapters in SQL430/440/445). No generic,
--- storage-reading adapter exists yet for arbitrary application-defined
--- record types -- that is #45's explicit, separately-tracked scope
--- (docs/build-plan/issue-35-row-policy-composition.md, "Trusted record
--- adapters"). Building one here would be exactly the kind of unrequested
--- machinery the brief warns against, and accepting the target record's real
--- field/ownership facts as a parameter from vortex_request would reopen the
--- "generic wrapper accepting ownership/row/relationship JSON from a caller"
--- hole that same document rules out. So every declaration this migration
--- builds -- share, read and update alike -- is deliberately narrow: it looks
--- up every *current* record-scoped permission of that exact action on the
--- exact target record type from the live catalogue itself (never
--- caller-supplied), and evaluates it over the minimal facts that are safe to
--- assert without reading the record's real row -- identity/type/lifecycle
--- only, an empty relationship/condition graph, no claimed ownership. That is
--- sufficient, and sound, for the two record-scope routes that do not need a
--- real row read: an organisation/application-wide "all_records" grant, and
--- (for read/update only -- the record decision itself refuses a
--- "direct_share" route for any other action) an existing "direct_share"
--- already held by the grantor (read via #36's own real, generic
--- read_current_direct_record_share_contributions).
+-- F5 (slice 5). Both functions now take `p_facts jsonb` from the caller
+-- instead of fabricating it, and both are owner-only: their `vortex_request`
+-- grant is revoked below, exactly as #35's own record decision has never
+-- carried one. A trusted fixed adapter -- resolving its own installed
+-- binding, reading the record's real row from a real content table and
+-- loading its real relationship edges, exactly like #35's own neutral proof
+-- in supabase/tests/430_exact_record_access.test.sql and
+-- supabase/tests/445_record_field_projection.test.sql -- is the only path a
+-- request role has left to either function; the two adapters added in
+-- supabase/tests/450_protected_record_share.test.sql are that path for this
+-- proof, and #45 generates the permanent ones later.
 --
--- F3. Three catalogue shapes are excluded from every one of these
--- declarations -- share included -- each for a different reason. "ownership"
--- routes are not filtered out, but simply never admit, because the facts
--- above always assert no owner. "relationship" routes are filtered out
--- before evaluation, because an empty relationship graph would hard-fail
--- decision evaluation rather than gracefully refuse one route, per
--- 20260910040755's own "Record access facts are invalid" checks.
--- Saved-condition-scoped permissions are filtered out the same way, for the
--- same reason: an empty condition graph cannot soundly evaluate one either.
--- A refusal caused by a filtered-out relationship or saved-condition shape
--- says so (see the per-check messages below) rather than claiming the
--- grantor's authority was measured and found insufficient -- those are
--- different facts, and conflating them misdiagnoses a grantor who may well
--- hold that authority through a route this function cannot yet evaluate. A
--- grantor whose *only* current share, read or update authority is
--- ownership-routed, relationship-routed or condition-scoped cannot yet share
--- through this function. That is the concrete, reported gap, not a silently
--- narrowed test.
+-- This removes two consequences an independent review found: a record that
+-- did not exist, or was soft-deleted, could be shared, because the
+-- decision's lifecycle and existence checks were tautologies against an
+-- asserted 'active' record built from whatever identifiers the caller named
+-- for whatever record id it claimed; and a grantor whose only authority was
+-- ownership-routed could never share, because ownership never admits without
+-- the record's real owner, and every relationship- and condition-scoped
+-- permission was filtered out of evaluation entirely -- an empty
+-- relationship/condition graph would otherwise make the decision raise
+-- rather than gracefully refuse one route. With real facts, none of those
+-- three route kinds is filtered out any more (F3 below); they are evaluated
+-- like every other route, and the record's actual existence and lifecycle
+-- state decide the outcome instead of an assertion.
+--
+-- `moduleRootId`, `recordTypeId`, `storageContractId` and `storageScope` are
+-- read from the trusted facts' own `binding` -- the same binding the
+-- decision already cross-checks the declaration and the target row against
+-- -- never from a caller-supplied scalar naming the same thing a second,
+-- unchecked way. The persisted share row's `application_root_id` is the
+-- verified request context's own `applicationRootId`, which the decision
+-- already requires the target record's real scope to match before it admits
+-- anything.
+--
+-- F3. Every declaration this migration builds -- share, read and update
+-- alike -- looks up every *current* record-scoped permission of that exact
+-- action on the exact target record type from the live catalogue itself
+-- (never caller-supplied). No route shape is excluded from that lookup any
+-- more: ownership, direct_share, relationship and condition-scoped
+-- permissions are all passed to the decision and evaluated on their own
+-- merits against the adapter's real facts.
 
 -- Takes the exact target record, the recipient, the proposed readable and
--- changeable fields and the share's validity window. Never a decision, a
--- field-set ceiling, a permission or an allow flag from the caller.
+-- changeable fields, the share's validity window, and the trusted facts a
+-- fixed adapter resolved for the target record. Never a decision, a
+-- field-set ceiling, a permission, an allow flag or the record's binding
+-- from the caller directly -- the binding travels only inside p_facts.
 create function vortex_access.grant_record_share_for_administration(
   p_direct_share_id uuid,
-  p_storage_scope text,
-  p_application_root_id uuid,
-  p_module_root_id uuid,
-  p_record_type_id uuid,
-  p_storage_contract_id uuid,
   p_record_id uuid,
   p_recipient_kind text,
   p_organization_account_id uuid,
@@ -87,7 +81,8 @@ create function vortex_access.grant_record_share_for_administration(
   p_expires_at timestamptz,
   p_reason text,
   p_activity_source text,
-  p_activity_id uuid
+  p_activity_id uuid,
+  p_facts jsonb
 )
 returns jsonb
 language plpgsql
@@ -103,37 +98,28 @@ declare
   context_correlation_id uuid;
   context_application_root_id uuid;
   locked_access_version bigint;
-  target_facts jsonb;
+  facts_binding jsonb;
+  -- Prefixed target_* deliberately: an unqualified module_root_id/record_
+  -- type_id/storage_contract_id/storage_scope here would be ambiguous
+  -- against the identically named columns the queries below select from --
+  -- PL/pgSQL raises a hard error for that, not a silent wrong guess.
+  target_module_root_id uuid;
+  target_record_type_id uuid;
+  target_storage_contract_id uuid;
+  target_storage_scope text;
   needed record;
   required_permissions jsonb;
-  shape_excluded boolean;
   declaration jsonb;
   decision jsonb;
   bounds jsonb;
   share_admitted boolean := false;
-  share_shape_excluded boolean := false;
   read_admitted boolean := false;
-  read_shape_excluded boolean := false;
-  update_shape_excluded boolean := false;
   readable_ceiling uuid[] := array[]::uuid[];
   changeable_ceiling uuid[] := array[]::uuid[];
   granted record;
 begin
   if p_direct_share_id is null
     or not vortex_context.is_non_nil_uuid(p_direct_share_id::text)
-    or p_storage_scope is null
-    or p_storage_scope not in ('organization_shared', 'application_contained')
-    or (p_storage_scope = 'organization_shared' and p_application_root_id is not null)
-    or (p_storage_scope = 'application_contained' and (
-      p_application_root_id is null
-      or not vortex_context.is_non_nil_uuid(p_application_root_id::text)
-    ))
-    or p_module_root_id is null
-    or not vortex_context.is_non_nil_uuid(p_module_root_id::text)
-    or p_record_type_id is null
-    or not vortex_context.is_non_nil_uuid(p_record_type_id::text)
-    or p_storage_contract_id is null
-    or not vortex_context.is_non_nil_uuid(p_storage_contract_id::text)
     or p_record_id is null
     or not vortex_context.is_non_nil_uuid(p_record_id::text)
     or p_recipient_kind is null
@@ -165,7 +151,10 @@ begin
       'web', 'workflow', 'interface', 'connection', 'federation', 'system'
     )
     or p_activity_id is null
-    or not vortex_context.is_non_nil_uuid(p_activity_id::text) then
+    or not vortex_context.is_non_nil_uuid(p_activity_id::text)
+    or p_facts is null
+    or pg_catalog.jsonb_typeof(p_facts) <> 'object'
+    or pg_catalog.jsonb_typeof(p_facts -> 'binding') <> 'object' then
     raise exception using errcode = '22023',
       message = 'Protected record-share grant input is invalid';
   end if;
@@ -227,45 +216,28 @@ begin
       message = 'Protected record-share grant is unavailable';
   end if;
 
+  -- The binding this grant concerns comes from the caller's own trusted
+  -- facts -- the adapter's real, resolved projection of the target record --
+  -- never from a caller-supplied scalar naming the same module, record
+  -- type, storage contract or storage scope a second, unchecked way. The
+  -- decision below independently cross-checks this same binding against
+  -- both the declaration it builds and the target row inside p_facts
+  -- itself, so a facts payload that disagrees with the record it claims to
+  -- describe refuses there, before anything is admitted.
+  facts_binding := p_facts -> 'binding';
+  target_module_root_id := (facts_binding ->> 'moduleRootId')::uuid;
+  target_record_type_id := (facts_binding ->> 'recordTypeId')::uuid;
+  target_storage_contract_id := (facts_binding ->> 'storageContractId')::uuid;
+  target_storage_scope := facts_binding ->> 'storageScope';
+
   -- Steps 3 and 5: the grantor's current record decision, evaluated fresh
   -- under the lock just acquired. Read is always evaluated (a share must
   -- name at least one readable field); update is evaluated only when
   -- changeable fields are actually proposed, so a grantor with read but no
   -- update authority is never wrongly required to hold update authority
-  -- they do not need. Facts are the minimal, safe-to-assert projection
-  -- described above -- identity/type/lifecycle only, no claimed ownership,
-  -- no relationship or condition graph -- shared unchanged between both
-  -- decisions.
-  target_facts := pg_catalog.jsonb_build_object(
-    'binding', pg_catalog.jsonb_build_object(
-      'moduleRootId', p_module_root_id, 'recordTypeId', p_record_type_id,
-      'storageContractId', p_storage_contract_id, 'storageScope', p_storage_scope
-    ),
-    'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'moduleRootId', p_module_root_id, 'recordTypeId', p_record_type_id,
-      'storageContractId', p_storage_contract_id, 'storageScope', p_storage_scope,
-      'ownershipMode', 'none', 'fields', '[]'::jsonb
-    )),
-    'relationships', '[]'::jsonb,
-    'sharingConditions', '[]'::jsonb,
-    'records', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'recordScope', pg_catalog.jsonb_build_object(
-        'storageScope', p_storage_scope,
-        'organizationId', context_organization_id,
-        'moduleRootId', p_module_root_id,
-        'recordTypeId', p_record_type_id,
-        'storageContractId', p_storage_contract_id,
-        'recordId', p_record_id
-      ) || case when p_storage_scope = 'application_contained'
-        then pg_catalog.jsonb_build_object('applicationRootId', p_application_root_id)
-        else '{}'::jsonb
-      end,
-      'lifecycleState', 'active',
-      'fieldValues', '{}'::jsonb
-    )),
-    'edges', '[]'::jsonb
-  );
-
+  -- they do not need. Facts are the adapter's real projection of the target
+  -- record and its relationship/condition graph, shared unchanged between
+  -- every decision below.
   for needed in
     select 1 as step, 'share' as action_kind, 'record.share' as operation_key
     union all
@@ -275,11 +247,13 @@ begin
     where pg_catalog.cardinality(p_changeable_field_ids) > 0
     order by step
   loop
-    -- required_permissions carries only the entries this function can safely
-    -- evaluate (F3's exclusions); shape_excluded records whether at least
-    -- one *current* entry of this exact action kind existed but was
-    -- excluded, so the refusal below can name the real cause instead of
-    -- claiming a measured, insufficient authority.
+    -- required_permissions carries every *current* entry of this exact
+    -- action kind on the exact target record type -- ownership,
+    -- direct_share, relationship and condition-scoped alike (F3): none is
+    -- excluded any more, because the facts backing evaluation are now the
+    -- adapter's real projection of the record, not an empty stand-in that
+    -- would make a relationship or condition route hard-fail instead of
+    -- gracefully refuse.
     select
       pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object(
@@ -288,23 +262,8 @@ begin
           'permissionId', entry.permission_id
         )
         order by entry.owner_kind, entry.owner_id, entry.permission_id
-      ) filter (where
-        not (entry.record_scope ? 'savedCondition')
-        and not exists (
-          select 1
-          from pg_catalog.jsonb_array_elements(entry.record_scope -> 'routes') as route(value)
-          where route.value ->> 'kind' = 'relationship'
-        )
-      ),
-      pg_catalog.bool_or(
-        (entry.record_scope ? 'savedCondition')
-        or exists (
-          select 1
-          from pg_catalog.jsonb_array_elements(entry.record_scope -> 'routes') as route(value)
-          where route.value ->> 'kind' = 'relationship'
-        )
       )
-    into required_permissions, shape_excluded
+    into required_permissions
     from vortex_access.permission_catalogue_entries as entry
     join vortex_access.permission_registrations as registration
       on registration.organization_id = entry.organization_id
@@ -317,24 +276,16 @@ begin
       and entry.owner_kind in ('application', 'module')
       and (
         (entry.owner_kind = 'application' and entry.owner_id = context_application_root_id)
-        or (entry.owner_kind = 'module' and entry.owner_id = p_module_root_id)
+        or (entry.owner_kind = 'module' and entry.owner_id = target_module_root_id)
       )
-      and entry.record_type_id = p_record_type_id
+      and entry.record_type_id = target_record_type_id
       and entry.action_kind = needed.action_kind
       and entry.record_scope is not null;
 
-    if needed.action_kind = 'share' then
-      share_shape_excluded := coalesce(shape_excluded, false);
-    elsif needed.action_kind = 'read' then
-      read_shape_excluded := coalesce(shape_excluded, false);
-    else
-      update_shape_excluded := coalesce(shape_excluded, false);
-    end if;
-
-    -- No current evaluable candidate permission at all for this action kind:
-    -- leave it unadmitted below rather than calling the decision engine with
-    -- an empty requiredPermissions array, which it treats as a malformed
-    -- declaration, not a graceful refusal.
+    -- No current candidate permission at all for this action kind: leave it
+    -- unadmitted below rather than calling the decision engine with an empty
+    -- requiredPermissions array, which it treats as a malformed declaration,
+    -- not a graceful refusal.
     if required_permissions is null then
       continue;
     end if;
@@ -346,16 +297,13 @@ begin
         'kind', 'application', 'applicationRootId', context_application_root_id
       ),
       'requiredPermissions', required_permissions,
-      'recordBinding', pg_catalog.jsonb_build_object(
-        'moduleRootId', p_module_root_id, 'recordTypeId', p_record_type_id,
-        'storageContractId', p_storage_contract_id, 'storageScope', p_storage_scope
-      ),
+      'recordBinding', facts_binding,
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     );
 
     decision := vortex_access.evaluate_organization_record_access_internal(
-      declaration, p_record_id, target_facts
+      declaration, p_record_id, p_facts
     );
 
     if decision ->> 'outcome' = 'allowed' then
@@ -377,17 +325,14 @@ begin
   end loop;
 
   -- Step 3b (F1): the grantor must currently hold record.share for this
-  -- exact record type. Checked first -- before any ceiling comparison and
-  -- before any mutation -- and refused on its own terms: a missing share
-  -- permission is a different fact from a proposal that is merely too wide,
-  -- and the message says which one this is.
+  -- exact record type, over this exact record. Checked first -- before any
+  -- ceiling comparison and before any mutation. This is also where a target
+  -- record that does not exist, or is not active, ends up refused: every
+  -- decision above shares the same p_facts, so a record the decision cannot
+  -- find and verify as active admits nothing, for any action.
   if not share_admitted then
-    raise exception using errcode = '42501', message = case
-      when share_shape_excluded then
-        'Protected record-share grant cannot evaluate a condition-scoped or relationship-routed share permission'
-      else
-        'Protected record-share grant requires a current share permission'
-    end;
+    raise exception using errcode = '42501',
+      message = 'Protected record-share grant requires a current share permission';
   end if;
 
   -- Step 4: the proposed readable fields must be a subset of the grantor's
@@ -396,12 +341,8 @@ begin
   if not read_admitted
     or pg_catalog.cardinality(p_readable_field_ids) = 0
     or not (p_readable_field_ids <@ readable_ceiling) then
-    raise exception using errcode = '42501', message = case
-      when not read_admitted and read_shape_excluded then
-        'Protected record-share grant cannot evaluate a condition-scoped or relationship-routed read permission'
-      else
-        'Protected record-share grant exceeds current read authority'
-    end;
+    raise exception using errcode = '42501',
+      message = 'Protected record-share grant exceeds current read authority';
   end if;
 
   -- Step 6: the proposed changeable fields must be a subset of both the
@@ -413,24 +354,24 @@ begin
       not (p_changeable_field_ids <@ changeable_ceiling)
       or not (p_changeable_field_ids <@ p_readable_field_ids)
     ) then
-    raise exception using errcode = '42501', message = case
-      when not (p_changeable_field_ids <@ changeable_ceiling) and update_shape_excluded then
-        'Protected record-share grant cannot evaluate a condition-scoped or relationship-routed update permission'
-      else
-        'Protected record-share grant exceeds current update authority'
-    end;
+    raise exception using errcode = '42501',
+      message = 'Protected record-share grant exceeds current update authority';
   end if;
 
   -- Step 7: invoke the existing grant writer. It owns the revision check,
   -- Activity append and Access invalidation; nothing here duplicates them.
+  -- Every identifier passed through is either the verified request
+  -- context's own, or read from the trusted facts' own binding -- never a
+  -- caller-supplied scalar the decision above did not already verify.
   select result.* into strict granted
   from vortex_access.grant_organization_direct_record_share(
-    context_organization_id, p_direct_share_id, p_storage_scope,
-    p_application_root_id, p_module_root_id, p_record_type_id,
-    p_storage_contract_id, p_record_id, p_recipient_kind,
-    p_organization_account_id, p_group_id, p_readable_field_ids,
-    p_changeable_field_ids, p_starts_at, p_expires_at, p_reason,
-    context_account_id, context_correlation_id, p_activity_source, p_activity_id
+    context_organization_id, p_direct_share_id, target_storage_scope,
+    case when target_storage_scope = 'application_contained' then context_application_root_id else null end,
+    target_module_root_id, target_record_type_id, target_storage_contract_id, p_record_id,
+    p_recipient_kind, p_organization_account_id, p_group_id,
+    p_readable_field_ids, p_changeable_field_ids, p_starts_at, p_expires_at,
+    p_reason, context_account_id, context_correlation_id, p_activity_source,
+    p_activity_id
   ) as result;
 
   return pg_catalog.jsonb_build_object(
@@ -443,14 +384,16 @@ begin
 end
 $function$;
 
--- Takes only the share id and the expected revision. Revocation is a
--- narrowing operation: it is always permitted to someone with *current*
--- record.share authority over the share's exact record type (F4) -- never
--- waits for an approval, never requires that account to still hold the field
--- ceiling it was granted under, and never revives an already-expired or
--- already-revoked share -- all of that is the existing writer's own job.
+-- Takes only the share id, the expected revision, and the trusted facts a
+-- fixed adapter resolved for the share's own target record (read via the
+-- share's own stored record_id). Revocation is a narrowing operation: it is
+-- always permitted to someone with *current* record.share authority over
+-- the share's exact record -- never waits for an approval, never requires
+-- that account to still hold the field ceiling it was granted under, and
+-- never revives an already-expired or already-revoked share -- all of that
+-- is the existing writer's own job.
 --
--- F4 correction: current authority is now evaluated fresh, the same way the
+-- F4 correction: current authority is evaluated fresh, the same way the
 -- grant path evaluates it, rather than compared as raw `granted_by`
 -- identity. Identity comparison had it backwards in both directions: an
 -- account with current administrative or share authority who was not the
@@ -458,17 +401,20 @@ $function$;
 -- which the eligibility core refuses outright for a `permission`-authority
 -- declaration -- could revoke merely by sharing the grantor's own account
 -- id. Evaluating the decision fresh under the lock fixes both: any account
--- currently holding record.share for this record type may revoke regardless
--- of who granted it, and a delegated or support context is refused exactly
--- as it would be for a grant. This function takes no record-type parameters
--- of its own, so the facts and the permission lookup are built from the
--- share row's own stored binding, read under the lock below.
+-- currently holding record.share for this record may revoke regardless of
+-- who granted it, and a delegated or support context is refused exactly as
+-- it would be for a grant. This function takes no record-type parameters of
+-- its own: the declaration's binding is built from the share row's own
+-- stored, already-persisted columns (the most trustworthy source for what
+-- record type a share concerns), and the caller's facts must independently
+-- agree with it or the decision itself refuses.
 create function vortex_access.revoke_record_share_for_administration(
   p_direct_share_id uuid,
   p_expected_revision bigint,
   p_reason text,
   p_activity_source text,
-  p_activity_id uuid
+  p_activity_id uuid,
+  p_facts jsonb
 )
 returns jsonb
 language plpgsql
@@ -485,7 +431,7 @@ declare
   context_application_root_id uuid;
   locked_access_version bigint;
   current_share vortex_access.organization_direct_record_shares%rowtype;
-  target_facts jsonb;
+  declaration_binding jsonb;
   required_permissions jsonb;
   declaration jsonb;
   decision jsonb;
@@ -502,7 +448,10 @@ begin
       'web', 'workflow', 'interface', 'connection', 'federation', 'system'
     )
     or p_activity_id is null
-    or not vortex_context.is_non_nil_uuid(p_activity_id::text) then
+    or not vortex_context.is_non_nil_uuid(p_activity_id::text)
+    or p_facts is null
+    or pg_catalog.jsonb_typeof(p_facts) <> 'object'
+    or pg_catalog.jsonb_typeof(p_facts -> 'binding') <> 'object' then
     raise exception using errcode = '22023',
       message = 'Protected record-share revocation input is invalid';
   end if;
@@ -550,43 +499,14 @@ begin
   end if;
 
   -- Current authority over the share (F4): the acting context must currently
-  -- hold record.share for this exact record type, re-derived fresh under the
-  -- lock just acquired via the same decision engine the grant path uses --
-  -- never the share's own granted_by identity, and never the grantor's
-  -- present read/update field ceiling (revocation is a narrowing act, unlike
-  -- granting, so it needs neither). Facts are the same minimal,
-  -- safe-to-assert projection the grant path builds -- identity/type/
-  -- lifecycle only, no claimed ownership, no relationship or condition graph
-  -- -- built here from the share's own stored binding, since this function
-  -- takes no binding parameters of its own.
-  target_facts := pg_catalog.jsonb_build_object(
-    'binding', pg_catalog.jsonb_build_object(
-      'moduleRootId', current_share.module_root_id, 'recordTypeId', current_share.record_type_id,
-      'storageContractId', current_share.storage_contract_id, 'storageScope', current_share.storage_scope
-    ),
-    'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'moduleRootId', current_share.module_root_id, 'recordTypeId', current_share.record_type_id,
-      'storageContractId', current_share.storage_contract_id, 'storageScope', current_share.storage_scope,
-      'ownershipMode', 'none', 'fields', '[]'::jsonb
-    )),
-    'relationships', '[]'::jsonb,
-    'sharingConditions', '[]'::jsonb,
-    'records', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'recordScope', pg_catalog.jsonb_build_object(
-        'storageScope', current_share.storage_scope,
-        'organizationId', context_organization_id,
-        'moduleRootId', current_share.module_root_id,
-        'recordTypeId', current_share.record_type_id,
-        'storageContractId', current_share.storage_contract_id,
-        'recordId', current_share.record_id
-      ) || case when current_share.storage_scope = 'application_contained'
-        then pg_catalog.jsonb_build_object('applicationRootId', current_share.application_root_id)
-        else '{}'::jsonb
-      end,
-      'lifecycleState', 'active',
-      'fieldValues', '{}'::jsonb
-    )),
-    'edges', '[]'::jsonb
+  -- hold record.share for this exact record type, over this exact record,
+  -- re-derived fresh under the lock just acquired via the same decision
+  -- engine the grant path uses -- never the share's own granted_by identity,
+  -- and never the grantor's present read/update field ceiling (revocation is
+  -- a narrowing act, unlike granting, so it needs neither).
+  declaration_binding := pg_catalog.jsonb_build_object(
+    'moduleRootId', current_share.module_root_id, 'recordTypeId', current_share.record_type_id,
+    'storageContractId', current_share.storage_contract_id, 'storageScope', current_share.storage_scope
   );
 
   select pg_catalog.jsonb_agg(
@@ -614,15 +534,9 @@ begin
     )
     and entry.record_type_id = current_share.record_type_id
     and entry.action_kind = 'share'
-    and entry.record_scope is not null
-    and not (entry.record_scope ? 'savedCondition')
-    and not exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(entry.record_scope -> 'routes') as route(value)
-      where route.value ->> 'kind' = 'relationship'
-    );
+    and entry.record_scope is not null;
 
-  -- No current evaluable share permission at all: leave the decision unset
+  -- No current candidate share permission at all: leave the decision unset
   -- rather than calling the decision engine with an empty requiredPermissions
   -- array, exactly like the grant path.
   if required_permissions is not null then
@@ -633,16 +547,13 @@ begin
         'kind', 'application', 'applicationRootId', context_application_root_id
       ),
       'requiredPermissions', required_permissions,
-      'recordBinding', pg_catalog.jsonb_build_object(
-        'moduleRootId', current_share.module_root_id, 'recordTypeId', current_share.record_type_id,
-        'storageContractId', current_share.storage_contract_id, 'storageScope', current_share.storage_scope
-      ),
+      'recordBinding', declaration_binding,
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     );
 
     decision := vortex_access.evaluate_organization_record_access_internal(
-      declaration, current_share.record_id, target_facts
+      declaration, current_share.record_id, p_facts
     );
   end if;
 
@@ -668,28 +579,27 @@ begin
 end
 $function$;
 
+-- Owner-only: no request/runtime/module-owner/record-owner/record-adapter
+-- grant. A request role reaches either function only through a fixed
+-- trusted adapter that resolves its own binding, reads the record's real
+-- row and calls the operation below -- exactly as #35's own record decision
+-- is never callable directly.
 revoke execute on function vortex_access.grant_record_share_for_administration(
-  uuid, text, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, uuid[], uuid[],
-  timestamptz, timestamptz, text, text, uuid
-) from public, anon, authenticated, service_role, vortex_runtime;
+  uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text,
+  text, uuid, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
 revoke execute on function vortex_access.revoke_record_share_for_administration(
-  uuid, bigint, text, text, uuid
-) from public, anon, authenticated, service_role, vortex_runtime;
-
-grant execute on function vortex_access.grant_record_share_for_administration(
-  uuid, text, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, uuid[], uuid[],
-  timestamptz, timestamptz, text, text, uuid
-) to vortex_request;
-grant execute on function vortex_access.revoke_record_share_for_administration(
-  uuid, bigint, text, text, uuid
-) to vortex_request;
+  uuid, bigint, text, text, uuid, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
+  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
 
 comment on function vortex_access.grant_record_share_for_administration(
-  uuid, text, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, uuid[], uuid[],
-  timestamptz, timestamptz, text, text, uuid
+  uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text,
+  text, uuid, jsonb
 ) is
-  'Protected same-organisation direct-share grant: locks governance before confirming the grantor currently holds record.share and re-deriving their own current read/update ceiling from the live catalogue, requires the proposal to be a subset of that ceiling, then invokes the existing private writer.';
+  'Protected same-organisation direct-share grant: locks governance before confirming the grantor currently holds record.share and re-deriving their own current read/update ceiling from the live catalogue evaluated over the caller''s trusted facts, requires the proposal to be a subset of that ceiling, then invokes the existing private writer. Owner-only; a fixed trusted adapter supplies p_facts (the target record''s real row, relationships and conditions) and holds the only request-role grant, exactly as #35''s own record decision.';
 comment on function vortex_access.revoke_record_share_for_administration(
-  uuid, bigint, text, text, uuid
+  uuid, bigint, text, text, uuid, jsonb
 ) is
-  'Protected direct-share revocation: only an account currently holding record.share over the share''s exact record type, re-evaluated under the governance lock, may invoke the existing private writer -- never the share''s granted_by identity, and never a re-requirement of the acting account''s present field ceiling.';
+  'Protected direct-share revocation: only an account currently holding record.share over the share''s exact record, re-evaluated under the governance lock against the caller''s trusted facts, may invoke the existing private writer -- never the share''s granted_by identity, and never a re-requirement of the acting account''s present field ceiling. Owner-only; a fixed trusted adapter supplies p_facts and holds the only request-role grant.';
