@@ -1,5 +1,5 @@
 begin;
-select plan(44);
+select plan(51);
 
 set local search_path = pg_catalog, extensions, public;
 
@@ -1579,6 +1579,264 @@ select ok(
     'record_data.rt_64550000000040008000000000000006'
   ) is null,
   'every refused release gate leaves no storage, column or provision evidence');
+
+-- Transitive reachability: an Application may depend on a shared Module that
+-- itself depends on another shared Module, without declaring the second
+-- Module directly on the Application. vortex_module.provision_module_installation_storage
+-- must accept the same reachable set that vortex_definition.read_application_bound_release_set
+-- resolves, because both now call the one shared
+-- vortex_definition.reachable_module_dependency_edges walk.
+
+insert into vortex_definition.roots (
+  root_id, organization_id, kind, key, created_at, created_by
+) values
+  (
+    '34550000-0000-4000-8000-000000000005',
+    '24550000-0000-4000-8000-000000000001', 'application',
+    'vortex.storage_test.transitive_application', pg_catalog.statement_timestamp(),
+    '94550000-0000-4000-8000-000000000001'
+  ),
+  (
+    '44550000-0000-4000-8000-000000000006',
+    '24550000-0000-4000-8000-000000000002', 'module',
+    'vortex.storage_test.transitive_module_a', pg_catalog.statement_timestamp(),
+    '94550000-0000-4000-8000-000000000001'
+  ),
+  (
+    '44550000-0000-4000-8000-000000000007',
+    '24550000-0000-4000-8000-000000000002', 'module',
+    'vortex.storage_test.transitive_module_b', pg_catalog.statement_timestamp(),
+    '94550000-0000-4000-8000-000000000001'
+  );
+
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+) values (
+  '34550000-0000-4000-8000-000000000005', 1, '1.0.0',
+  pg_catalog.jsonb_build_object(
+    'source_contract_version', '1.0.0', 'kind', 'application',
+    'key', 'vortex.storage_test.transitive_application'
+  ),
+  'sha256:' || pg_catalog.repeat('1', 64), '1.0.0',
+  pg_temp.application_output('34550000-0000-4000-8000-000000000005'),
+  pg_catalog.jsonb_build_object(
+    'fingerprint', 'sha256:' || pg_catalog.repeat('1', 64)
+  ),
+  'sha256:' || pg_catalog.repeat('1', 64),
+  'sha256:' || pg_catalog.repeat('1', 64), '1.0.0',
+  'sha256:' || pg_catalog.repeat('1', 64), '[]'::jsonb,
+  'Transitive Application V1 release.', pg_catalog.statement_timestamp(),
+  '94550000-0000-4000-8000-000000000001'
+);
+
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+) values (
+  '44550000-0000-4000-8000-000000000006', 1, '2.0.0',
+  pg_catalog.jsonb_build_object(
+    'source_contract_version', '2.0.0', 'kind', 'module',
+    'key', 'vortex.storage_test.transitive_module_a'
+  ),
+  'sha256:' || pg_catalog.repeat('a', 64), '2.0.0',
+  pg_catalog.jsonb_build_object(
+    'kind', 'module', 'validationContractVersion', '2.0.0',
+    'canonical', pg_catalog.jsonb_build_object(
+      'envelope', pg_catalog.jsonb_build_object(
+        'rootId', '44550000-0000-4000-8000-000000000006'
+      ),
+      'content', pg_catalog.jsonb_build_object('recordTypes', '[]'::jsonb)
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    'fingerprint', 'sha256:' || pg_catalog.repeat('a', 64)
+  ),
+  'sha256:' || pg_catalog.repeat('a', 64),
+  'sha256:' || pg_catalog.repeat('a', 64), '2.0.0',
+  'sha256:' || pg_catalog.repeat('a', 64), '[]'::jsonb,
+  'Transitive Module A V2 release; a pass-through hop with no storage of its own installed here.',
+  pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'
+);
+
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+) values
+  (
+    '44550000-0000-4000-8000-000000000007', 1, '2.0.0',
+    pg_catalog.jsonb_build_object(
+      'source_contract_version', '2.0.0', 'kind', 'module',
+      'key', 'vortex.storage_test.transitive_module_b'
+    ),
+    'sha256:' || pg_catalog.repeat('b', 64), '2.0.0',
+    pg_temp.versioned_module_output(
+      '44550000-0000-4000-8000-000000000007', '2.0.0',
+      pg_temp.single_record_type(
+        '54550000-0000-4000-8000-000000000007',
+        '64550000-0000-4000-8000-000000000007',
+        '74550000-0000-4000-8000-000000000012'
+      )
+    ),
+    pg_catalog.jsonb_build_object(
+      'fingerprint', 'sha256:' || pg_catalog.repeat('b', 64)
+    ),
+    'sha256:' || pg_catalog.repeat('b', 64),
+    'sha256:' || pg_catalog.repeat('b', 64), '2.0.0',
+    'sha256:' || pg_catalog.repeat('b', 64), '[]'::jsonb,
+    'Transitive Module B V2 release one; the exact release the graph pins.',
+    pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'
+  ),
+  (
+    '44550000-0000-4000-8000-000000000007', 2, '2.1.0',
+    pg_catalog.jsonb_build_object(
+      'source_contract_version', '2.0.0', 'kind', 'module',
+      'key', 'vortex.storage_test.transitive_module_b'
+    ),
+    'sha256:' || pg_catalog.repeat('c', 64), '2.0.0',
+    pg_temp.versioned_module_output(
+      '44550000-0000-4000-8000-000000000007', '2.0.0',
+      pg_temp.single_record_type(
+        '54550000-0000-4000-8000-000000000007',
+        '64550000-0000-4000-8000-000000000007',
+        '74550000-0000-4000-8000-000000000012'
+      )
+    ),
+    pg_catalog.jsonb_build_object(
+      'fingerprint', 'sha256:' || pg_catalog.repeat('c', 64)
+    ),
+    'sha256:' || pg_catalog.repeat('c', 64),
+    'sha256:' || pg_catalog.repeat('c', 64), '2.0.0',
+    'sha256:' || pg_catalog.repeat('c', 64), '[]'::jsonb,
+    'Transitive Module B V2 release two; published but never pinned by the graph.',
+    pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'
+  );
+
+insert into vortex_definition.release_dependencies (
+  root_id, release_revision, dependency_kind, dependency_reference,
+  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
+  target_root_id, target_release_revision, catalogue_item_id
+) values
+  (
+    '34550000-0000-4000-8000-000000000005', 1, 'module',
+    'vortex.storage_test.transitive_module_a', '2.0.0',
+    'sha256:' || pg_catalog.repeat('a', 64), 'sha256:' || pg_catalog.repeat('a', 64),
+    '44550000-0000-4000-8000-000000000006', 1, null
+  ),
+  (
+    '44550000-0000-4000-8000-000000000006', 1, 'module',
+    'vortex.storage_test.transitive_module_b', '2.0.0',
+    'sha256:' || pg_catalog.repeat('b', 64), 'sha256:' || pg_catalog.repeat('b', 64),
+    '44550000-0000-4000-8000-000000000007', 1, null
+  );
+
+select ok(
+  not exists (
+    select 1 from vortex_definition.release_dependencies
+    where root_id = '34550000-0000-4000-8000-000000000005'
+      and target_root_id = '44550000-0000-4000-8000-000000000007'
+  ),
+  'the transitive Module is never declared directly on the Application');
+
+select pg_temp.initialize_storage_context();
+set local role vortex_request;
+create temporary table transitive_provision on commit drop as
+select * from vortex_module.provision_module_installation_storage(
+  '34550000-0000-4000-8000-000000000005', 1,
+  '44550000-0000-4000-8000-000000000007', 1, null
+);
+reset role;
+select is(
+  (select pg_catalog.concat_ws(':', state, changed) from transitive_provision),
+  'provisioned:t',
+  'a Module reachable only through the Application''s pinned dependency graph provisions storage');
+select ok(
+  (
+    select pg_catalog.to_regclass(
+      'record_data.rt_64550000000040008000000000000007'
+    ) is not null
+    and exists (
+      select 1 from vortex_record.storage_catalogue
+      where storage_contract_id = '64550000-0000-4000-8000-000000000007'
+    )
+    and exists (
+      select 1 from vortex_record.release_provisions
+      where module_root_id = '44550000-0000-4000-8000-000000000007'
+        and release_revision = 1
+    )
+    and exists (
+      select 1 from vortex_module.installation_bindings
+      where organization_id = '24550000-0000-4000-8000-000000000001'
+        and application_root_id = '34550000-0000-4000-8000-000000000005'
+        and module_root_id = '44550000-0000-4000-8000-000000000007'
+        and module_release_revision = 1
+        and state = 'provisioned'
+    )
+  ),
+  'the transitively reachable Module has real physical storage, a provision receipt and an inactive binding');
+
+select pg_temp.initialize_storage_context();
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_module.provision_module_installation_storage(
+    '34550000-0000-4000-8000-000000000005', 1,
+    '44550000-0000-4000-8000-000000000002', 1, null
+  )$$::text,
+  '23514'::char(5), 'Exact application Module binding is unavailable'::text,
+  'a Module unrelated to the Application''s dependency graph is refused'::text);
+reset role;
+
+select pg_temp.initialize_storage_context();
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_module.provision_module_installation_storage(
+    '34550000-0000-4000-8000-000000000005', 1,
+    '44550000-0000-4000-8000-000000000007', 2, null
+  )$$::text,
+  '23514'::char(5), 'Exact application Module binding is unavailable'::text,
+  'a reachable Module root at a release revision the graph does not pin is refused'::text);
+reset role;
+
+select pg_temp.initialize_storage_context(
+  p_application_root_id => '34550000-0000-4000-8000-000000000005'
+);
+set local role vortex_request;
+select ok(
+  (
+    select
+      (vortex_definition.read_application_bound_release_set(1) -> 'modules')
+        @> '[{"rootId":"44550000-0000-4000-8000-000000000006"}]'::jsonb
+      and (vortex_definition.read_application_bound_release_set(1) -> 'modules')
+        @> '[{"rootId":"44550000-0000-4000-8000-000000000007"}]'::jsonb
+      and not (vortex_definition.read_application_bound_release_set(1) -> 'modules')
+        @> '[{"rootId":"44550000-0000-4000-8000-000000000002"}]'::jsonb
+  ),
+  'the Definition reader resolves the exact same reachable set the provisioner just accepted');
+reset role;
+
+select ok(
+  pg_catalog.has_function_privilege(
+    'vortex_module_owner',
+    'vortex_definition.reachable_module_dependency_edges(uuid,bigint)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'vortex_request',
+    'vortex_definition.reachable_module_dependency_edges(uuid,bigint)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'public',
+    'vortex_definition.reachable_module_dependency_edges(uuid,bigint)', 'EXECUTE'
+  ),
+  'the shared reachability resolver stays owner-private behind Definition and Module boundaries');
 
 select * from finish();
 rollback;
