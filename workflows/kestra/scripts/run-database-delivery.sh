@@ -117,7 +117,7 @@ validate_verification_manifest() {
           LC_ALL=C sort
       ) |
         grep -o -i -E \
-          '(^|[^[:alnum:]_])create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(vortex_[a-z0-9_]+|record_data)' || true
+          '(^|[^[:alnum:]_])create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(vortex_[a-z0-9_]+|record_data)\b' || true
     } |
       sed --regexp-extended 's/.*(vortex_[a-z0-9_]+|record_data)$/\1/I' |
       tr '[:upper:]' '[:lower:]' |
