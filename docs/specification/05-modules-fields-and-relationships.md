@@ -122,7 +122,7 @@ The platform supports these twenty-two types:
 | `reference_number`       | Platform-issued sequence            | Digits, prefix, suffix, starting number                                                  |
 | `email_address`          | Email address                       | None                                                                                     |
 | `phone_number`           | Telephone number                    | Default country                                                                          |
-| `web_address`            | Web address                         | None                                                                                     |
+| `web_address`            | Web address                         | HTTPS only, no embedded credentials, at most 2,048 characters                            |
 | `table`                  | Repeating structured rows           | Columns and minimum/maximum rows                                                         |
 | `link`                   | Link to one record type             | Target, delete behaviour, reverse name                                                   |
 | `link_to_one_of_several` | Link to one of several record types | Allowed targets                                                                          |
@@ -178,7 +178,8 @@ claim that Record execution is already delivered.
   Neither the field default nor an edited value changes that origin.
 - Text format keys initially are `email_address`, `web_address` and `uuid`. They
   select the same email-address or HTTPS-address validation used by those field
-  types, or UUID syntax. Omission means ordinary
+  types (HTTPS scheme, no embedded credentials, at most 2,048 characters), or
+  UUID syntax. Omission means ordinary
   text. Unknown keys are not executable patterns or guessed validation rules.
 
 Every table column has settings for its declared scalar type, using the same

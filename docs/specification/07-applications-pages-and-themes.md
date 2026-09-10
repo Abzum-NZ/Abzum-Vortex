@@ -56,6 +56,14 @@ Navigation is an ordered tree of headings, page links, and approved external lin
 - An external link is visibly identified and must use an approved secure address.
 - Phone navigation uses the same information architecture in a compact form; it is not a separate definition.
 
+### Links to applications, pages, records and external addresses
+
+A navigation entry, link block or tile opens exactly one target kind: an application, a page, a record, or an external address. The target is definition or record data; it never grants access to what it names. Availability is resolved on the server for the current person before the link is sent: an application or page target requires current application access, a record target requires a current viewer-safe read of that record, and an external address is always available. An unavailable target renders one fixed neutral unavailable state with no name, icon, address or reason, and cannot be activated; not installed, withdrawn and refused are indistinguishable. The destination still performs its own checks when opened.
+
+An external address is HTTPS, carries no embedded credentials, is at most 2,048 characters and is visibly identified as external. It is always opened as a full document navigation and is never rendered inside the application shell. The platform never fetches an external address on the person's behalf.
+
+A link declares an open behaviour of replace or new page. Replace uses a client-side transition for an internal target, and a full document navigation, after unsaved-work protection, for an external one. New page opens a new browsing context without opener access or referrer.
+
 ## Semantic interface map
 
 Every published application produces one permission-filtered description of what the current person can see and do. The web interface renders it, and the governed [MCP surface](12-connections-and-interfaces.md#governed-mcp-access) exposes the same meaning to an authorised external client. This description is derived from the published application, page, form, query, action and access contracts; builders do not maintain a second agent-specific definition.
@@ -148,6 +156,8 @@ The App Builder lists Pages and Frontend Flows within the same application. Drop
 Two route families coexist. Platform account and administration routes keep their own reserved first segments, including `/organizations/{organizationId}` for platform-level organisation administration; they are not rewritten onto application addresses. The definition-led runtime application route is `/{organisation_short_name}/{application_key}/{page_key}`. Organisation short names are permanent within their environment and cannot use a platform-reserved first segment. The reserved segments are every platform first segment actually served — currently `auth`, `health`, `organizations` and `signed-in` — plus `signin` and `api`; adding a platform route and reserving its first segment are one change.
 
 An organisation-branded address may change presentation but never proves membership or grants access. The platform accepts an address only after its exact ownership and routing target have been verified, and an unknown address fails closed. Organisation subdomains and wildcard-domain routing are not part of the first release.
+
+An organisation may mark at most one active application registration as its default application. The organisation address without an application segment opens that application at its landing page when the current person may open it; otherwise it shows the organisation's application launcher, which lists only the applications that person may currently open. Marking a default is part of the protected application-lifecycle operation and grants nobody access. The neutral pre-organisation launcher is unchanged.
 
 ## Core UI continuity and motion
 
@@ -301,3 +311,11 @@ Every page and block follows [quality and acceptance](20-quality-and-acceptance.
 - Refreshing one list updates that list and its dependent totals without replacing unrelated blocks or losing their state.
 - Every page and independently loaded block demonstrates loading-to-content, success, recoverable failure, and reduced-motion behaviour where applicable.
 - Rapidly navigating from one record to another and opening another component cannot allow a late response or unfinished animation from the first record to reappear or replace the current state.
+
+## Landing Zone application
+
+The Landing Zone is an ordinary application that gives each person a personal start page inside one organisation. Vortex ships it alongside the other platform applications, and organisation provisioning installs it and marks it the organisation's default application through the same protected installation operation any application uses; provisioning supplies the authority and adds no separate installation path. An organisation may afterwards change or replace that default like any other application.
+
+Each person's tiles are records owned by their organisation account, in application-contained storage, under permissions whose only record scope is ownership; no permission in the application reads another person's tiles. A tile names an application, a page, a record or an external address and carries an open behaviour and a favourite flag and order.
+
+The page uses one shell with a required main slot and an optional rail slot. The rail holds registered blocks chosen in the application release and renders empty when none is placed; a block whose capability is unavailable in the organisation renders its unavailable state. The platform contributes only the permitted-applications read, the organisation default application and generic link, launcher and filter blocks; favourites and bookmarks are definition semantics.
