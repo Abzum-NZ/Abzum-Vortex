@@ -1003,6 +1003,15 @@ reset role;
 -- The native Module V3 root belongs to the installing organisation because
 -- the Application below is published against it through the writer, which
 -- accepts dependencies only within the Application's organisation.
+--
+-- Labelled legacy data: the Module roots and the eight Module releases in this
+-- section (roots 44550...003, ...004 and ...005) are inserted directly on
+-- purpose. They are storage-generator fixtures, and replaying them through
+-- vortex_definition.append_release is refused (23514 "Definition canonical
+-- release content does not belong to the locked root"); the later releases of
+-- ...005 are deliberately corrupt inputs to the generator's own gates, which no
+-- writer can store. None of them carries a dependency edge, so none bears on
+-- the Module pin-set rule.
 insert into vortex_definition.roots (
   root_id, organization_id, kind, key, created_at, created_by
 ) values
