@@ -266,7 +266,7 @@ These published roles are reusable templates. Registering the application regist
 - An untouched draft is removed after thirty days unless [privacy and retention](14-activity-privacy-and-retention.md) sets a shorter organisation policy.
 - Each configured protected operation revalidates and commits within its own short owning-service transaction. Earlier committed steps remain committed if a later step refuses or fails. Work requiring durable waits, autonomous retry or cross-session recovery starts a [workflow](09-workflows-and-pipelines.md); interactive sequencing alone does not require one.
 
-These are target form and flow semantics. The private form-draft runtime remains owned by [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), its typed flow bindings by [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), and the protected Record and Query execution/receipt boundaries by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50). Existing Definition drafts and the delivered Activity foundation do not constitute those runtimes.
+These are target form and flow semantics. The private form-draft runtime remains owned by [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), its typed flow bindings by [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), and the protected Record and Query execution/receipt boundaries by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54). Existing Definition drafts and the delivered Activity foundation do not constitute those runtimes.
 
 ## Public pages
 

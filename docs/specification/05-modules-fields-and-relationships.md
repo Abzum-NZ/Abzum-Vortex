@@ -281,7 +281,7 @@ A link field may target a record type in another module. The owning module decla
 
 Cross-module links follow the same relationship rules as intra-module links: one owning field, a generated or named reverse path, and a declared parent-deletion behaviour. The dependency graph built during [publication](03-composition-and-publication.md#dependency-graph) validates that the target module exists, the version is compatible, and the target record type is present.
 
-Removing a record type that is the target of a cross-module link is an incompatible change and is refused with links to every dependent module.
+Removing a record type from a new release is an incompatible change, but does not by itself prevent publishing an inert breaking release. Existing external consumers keep their exact older dependency pins. Publication refuses a dangling link inside the candidate release's own resolved dependency set; an explicit upgrade refuses adoption where that consumer's required target would be missing. See [publication and adoption](03-composition-and-publication.md).
 
 A relationship still joins records owned by the same organisation. Viewing a source organisation's record through a cross-organisation grant does not permit creating a stored relationship from a recipient-owned record to that source record. A separately designed federation-reference field would be required for that future behaviour.
 
@@ -313,5 +313,5 @@ Changing stored meaning is never an arbitrary in-place retype. Only a proven wid
 - A workflow-backed choice belongs to an application binding, not to the reusable module.
 - Every reference in the [CRM and Service Desk examples](appendices/worked-examples.md) resolves to a published module, application component, or documented platform definition.
 - A link field targeting a record type in another module requires a declared module dependency.
-- Removing a record type targeted by a cross-module link is refused with links to every dependent module.
+- A breaking release may omit a record type while existing external consumers remain pinned. A dangling link in the candidate's own dependency set or in an explicitly proposed consumer upgrade is refused with the affected reference; publication never silently retargets consumers.
 - A cross-organisation grant does not bypass the same-organisation rule for stored relationships.

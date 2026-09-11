@@ -12,7 +12,7 @@ apart from every other organisation's.
 
 | Document | Where |
 |---|---|
-| Platform Specification 2.21 | [docs/specification/README.md](docs/specification/README.md) |
+| Platform Specification | [Current approved version](docs/specification/README.md) |
 | Build Plan 2.23 | [docs/build-plan/README.md](docs/build-plan/README.md) |
 | Open business decisions | [docs/specification/appendices/decisions.md](docs/specification/appendices/decisions.md) |
 | Coverage of the earlier specification and plan | [docs/specification/appendices/traceability.md](docs/specification/appendices/traceability.md) |
@@ -21,7 +21,7 @@ apart from every other organisation's.
 | Earlier Platform Specification (superseded source) | [33 chapters and 5 appendices](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4) |
 | Earlier Build Plan (superseded source) | [Prerequisites, dependency map and ten phases](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef) |
 
-Platform Specification 2.21 and Build Plan 2.23 are authoritative. Change the specification before
+The current approved Platform Specification and Build Plan linked above are authoritative. Change the specification before
 changing behaviour, never after.
 
 ## What runs

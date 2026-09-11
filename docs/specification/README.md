@@ -2,8 +2,8 @@
 
 The [7 September whole-platform architecture review](../build-plan/architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](../build-plan/frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
 
-**Status:** Approved specification 2.22
-**Date:** 10 September 2026
+**Status:** Approved specification 2.24
+**Date:** 12 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
 **Source repository:** [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex)
@@ -11,7 +11,7 @@ The [7 September whole-platform architecture review](../build-plan/architecture-
 
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
 
-This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) is clear. The owner selected one Frontend Rule Designer, including configurable component data flows, per-node execution identities and reusable custom forms; collect-first atomic submission is optional, while configured sequential commits remain explicit. A future material uncertainty must be recorded there before implementation assumes an answer.
+This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) records the two outstanding initial-ownership and time-dependent-calculation choices from GitHub; only their affected behaviour is pending. The owner selected one Frontend Rule Designer, including configurable component data flows, per-node execution identities and reusable custom forms; collect-first atomic submission is optional, while configured sequential commits remain explicit. A future unresolved business choice must be recorded there before implementation assumes an answer.
 
 ## Architecture review additions
 
@@ -99,17 +99,18 @@ Words such as “organisation,” “module,” “application,” and “publis
 
 ## Authority and change rules
 
-- A published numbered version of this document is authoritative only when the [open decision register](appendices/decisions.md) contains no blocking entry.
+- The approved requirements remain authoritative when a new question is opened. An unresolved business decision blocks only the affected behaviour named in the [open decision register](appendices/decisions.md), not unrelated implementation or the entire specification.
 - A change to required behaviour updates this specification before the related [GitHub issue](https://github.com/orgs/Abzum-NZ/projects/2/views/1) is built.
-- A change must update the affected diagram, requirement, acceptance example, [data contract](appendices/data-contracts.md), [coverage map](appendices/traceability.md), [GitHub delivery map](appendices/github-delivery-map.md), and [build-plan dependency](../build-plan/README.md).
+- A change must check its impact on diagrams, requirements, acceptance examples, [data contracts](appendices/data-contracts.md), [coverage](appendices/traceability.md), [GitHub ownership](appendices/github-delivery-map.md) and [build-plan dependencies](../build-plan/README.md). Update the affected sources; do not duplicate an unchanged requirement or edit every document merely to record that review occurred.
 - The repository history is the revision record. Each published specification version also records a short human-readable summary in this file.
-- No issue, comment, fixture, or implementation detail overrides this specification. A conflict is recorded in the [decision register](appendices/decisions.md) and resolved before implementation continues.
+- No issue, comment, fixture, or implementation detail silently overrides this specification. Record a contradiction in its owning GitHub task and correct the affected specification before implementing changed behaviour. Engineering corrections are decided and reviewed by the engineering owner; only a genuinely unresolved business/product choice enters the [decision register](appendices/decisions.md). Continue unaffected work.
 - Every privileged contract must pass the normative [core contract admission test](appendices/core-contract-boundary.md#admission-test). Business-domain functionality is built as an ordinary Vortex application unless a documented platform invariant makes that impossible.
 
 ## Version history
 
 | Version | Status   | Date             | Summary                                                                                                                                                                                                                    |
 | ------- | -------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.24    | Approved | 12 September 2026 | Review correction: localise business-decision holds, distinguish engineering findings from product choices, and require impact-based documentation updates rather than duplicated change records. |
 | 2.23    | Approved | 11 September 2026 | Bound the request context to an owner-only row keyed to the establishing transaction (#386): session settings no longer carry identity, re-establishment is refused after a role reset, the two-role split is grant hygiene not an injection boundary, and the application-server trust ceiling is stated. |
 | 2.22    | Approved | 10 September 2026 | Defined links to applications, pages, records and external addresses with server-resolved availability and open behaviour; the organisation default application and permitted-applications read; and the Landing Zone as an ordinary application with organisation-account-owned tiles and a shell-slot rail. |
 | 2.21    | Approved | 7 September 2026 | Whole-platform architecture review; configurable read/write component flows, per-node execution identity, managed flows and truthful partial outcomes. Added the scoped Access prerequisite and reconciled task ownership. |

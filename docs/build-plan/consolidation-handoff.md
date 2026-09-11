@@ -1,5 +1,11 @@
 # Consolidation and next-agent handoff — 10 September 2026
 
+Historical stopping-point record. Work subsequently resumed and the live board
+now marks [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) and
+[#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) complete. The next-agent
+sequence below is not a current instruction to rebuild them; check current
+delivery evidence and dependencies first.
+
 [GitHub task board](https://github.com/orgs/Abzum-NZ/projects/2/views/1) ·
 [Build plan](README.md) · [Engine-first sequence](engine-first-application-delivery.md)
 
