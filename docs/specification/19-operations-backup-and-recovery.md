@@ -55,6 +55,16 @@ Backups cover the production [PostgreSQL](https://www.postgresql.org/docs/) data
 - A checksum and inventory prove completeness.
 - A scheduled restore test creates an isolated recovery environment and never overwrites production.
 
+### Surviving removals and revocations
+
+The existing independent R2 recovery location also holds an encrypted, content-free removal/revocation journal under its own prefix. This is the surviving evidence consumed by [#170](https://github.com/Abzum-NZ/Abzum-Vortex/issues/170), using the owning privacy and sharing operations; an outbox or receipt stored only in the source Supabase project cannot provide it. Entries contain operation/scope identifiers, source cluster, monotonic sequence, affected authority version, outcome and integrity evidence, never removed values, file bytes, credentials or profile details.
+
+After authorisation, the owning operation durably records an idempotent intent outside the source project before committing its local removal/revocation. It records the committed outcome externally before reporting success. A crash between these steps leaves an explicit unresolved intent; replay keeps that scope unavailable until the outcome is established and does not infer permission from an absent completion. Retries use the same operation identifier. External-journal failure prevents a success acknowledgement; existing local restrictions remain effective. This small durability handshake is required only for removal/revocation evidence and does not introduce a general distributed transaction or another backup programme.
+
+Each backup records its journal position. At recovery, fence the old writers and obtain a confirmed journal high-water mark from the surviving location. Prove every sequence after the backup position through that mark is present and integrity-checked, account for unresolved intents, and replay removals/revocations idempotently before opening affected data or access. A timestamp, latest available entry, source-project copy, or one-hour RPO is not a completeness proof. Missing entries, an unconfirmed high-water mark, or an unfenced writer keep the affected scope closed; if the missing scope cannot be identified, keep the restored cluster closed.
+
+Journal retention covers every still-restorable database/file recovery point, including the seven-day PITR window and delayed actual expiry of backup objects. It is independent of the 48-hour logical-backup cleanup and retains only the content-free evidence required to prevent restoration of removed content or authority. Purge an entry only once no retained recovery point can require it; record that eligibility in the existing retention process.
+
 ## Restore
 
 ```mermaid
@@ -65,7 +75,8 @@ sequenceDiagram
     participant Tests
     Operator->>Backup: Select verified recovery point
     Backup->>Isolated: Restore database, files and workflow state
-    Operator->>Isolated: Apply later privacy-removal receipts
+    Operator->>Isolated: Fence writers; verify surviving journal completeness
+    Operator->>Isolated: Replay later removals and revocations; resolve blocked scopes
     Isolated->>Tests: Run integrity, access and application checks
     Tests-->>Operator: Recovery report
     Operator->>Isolated: Approve for declared recovery use or destroy test copy
@@ -91,7 +102,13 @@ Supabase managed backups do not replace the independent copy because deleting or
 
 ## Support access
 
-Support access requires a named operator role, strong sign-in, a ticket, purpose, organisation approval where feasible, expiry, and activity entry visible to the organisation. Default support access is read-only impersonation of an existing permitted view. Any change requires separate approval and uses an ordinary named action.
+Support access is a protected, read-only Access operation, delivered in Phase 13 using Identity, Access and Activity. The operator signs in under their own global identity with current strong/recent authentication and an active support-operator role. An organisation account with explicit support-approval authority approves the exact operator, existing subject organisation account, organisation/application, permitted view/scope, purpose, ticket and expiry. The operator cannot approve their own session. Approval is mandatory: inability to obtain it leaves customer-content support unavailable. Ticket creation or editing and operator-role eligibility alone never grant access.
+
+Every request evaluates the intersection of the operator's current approved support scope, the subject account's current ordinary Access decision (including application, record, row and field restrictions), and the organisation-approved scope. Neither the operator nor the subject is replaced in attribution: Identity verifies the operator; Access resolves the subject view plus the support restriction; Activity records both identities, approval, purpose/ticket, operation, time and outcome. No subject password, session or refresh token is issued to the operator. The initiating operator identity remains immutable and the protected read uses a separately resolved context; the frontend cannot assemble an impersonation context.
+
+Reads, Query/Search results and file previews/downloads all enforce that intersection; private files use the ordinary authenticated gateway. Writes, named mutation actions, imports, exports, workflow starts, connection execution and delegating the support session are refused even when the subject could perform them. A customer-data change requires its separately approved ordinary named action under its own accountable actor, outside the support session. The support operation grants no change authority.
+
+The operator, approving organisation authority, or platform security authority may revoke a session; expiry, approval revocation, operator/subject suspension, loss of the operator role, or a change reducing either scope refuses the next request, including file ranges. Use existing Access versions and live identity/account checks. Organisation-visible Activity records approval, start, termination and protected reads without copying sensitive results. Content-free operational diagnostics remain available under their ordinary permissions when customer approval is unavailable; there is no emergency impersonation exception in this feature.
 
 ## Runbooks
 
@@ -107,6 +124,10 @@ At minimum, runbooks cover deployment failure, database migration failure, organ
 - R2 backup inventory never contains a successful Vortex logical backup whose requested expiry is more than 48 hours old without an alert and cleanup retry.
 - A log scan finds no credentials or sensitive values in successful and failing paths.
 - Support access expires automatically and appears in the organisation's activity.
+- A support operator cannot self-approve, enlarge a ticket into authority, out-read the subject or approved scope, or execute a mutation/export through an otherwise permitted subject account. Revocation and expiry refuse the next read, preview and range request, with both actors attributed.
 - Every production alert links to a tested runbook and an accountable owner.
 - Disabling one cluster's federation route stops new remote requests without requiring database credential rotation in every other cluster.
 - Restoring a source cluster replays later grant revocations and privacy-removal receipts before cross-cluster access is reopened.
+- A 10:00 backup, acknowledged 10:30 removal/revocation and 10:45 source-project loss restores using the surviving journal without resurrecting content or access. Missing sequences, uncertain completion and unavailable completeness evidence keep the affected scope closed.
+
+[Approved support delivery #409](https://github.com/Abzum-NZ/Abzum-Vortex/issues/409) owns this restricted support path; [#173](https://github.com/Abzum-NZ/Abzum-Vortex/issues/173) consumes its verified result before claiming readiness.

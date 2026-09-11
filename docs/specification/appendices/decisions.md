@@ -2,14 +2,9 @@
 
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Build plan](../../build-plan/README.md)
 
-Two product questions already recorded in GitHub on 12 September 2026 remain open below. The selected [Frontend Rule Designer](frontend-rule-designer.md) includes shared conditions, flow variables, extensible nodes, configurable read/write component flows, per-node Current user/Specified user/System execution, managed-flow controls and reusable forms. Those settled choices are not reopened.
-
 ## Open choices — reviewed 12 September 2026
 
-| Question and owner | Options and recommendation | Affected work only |
-| --- | --- | --- |
-| Initial record owner — Vijay | A: account-owned records default to their creator; Group-owned records require a selected current membership Group, as proposed in the task. B: the application explicitly configures the initial owner, restricted by separately enforced create/assignment authority. Recommend B with creator/current-Group defaults: it supports delegated creation without making an arbitrary submitted owner authoritative. | [Create adapters #402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402), [record lifecycle](../06-records-and-lifecycle.md), ownership input and its positive/refusal tests. Other storage work may continue. |
-| Time-dependent calculated values — Vijay | A: stored calculations remain save-time snapshots, with clearly separate current-time query expressions when needed. B: reads, filters and sorts must always evaluate time-dependent calculations at the current request time. Recommend A for the first release, explicitly labelled; B needs consistent query evaluation, not a background refresh that can still be stale. | [Calculations #48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48), [Query #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54), calculated-field semantics and freshness tests. Non-time-dependent totals may continue. |
+None. The owner approved creator/current-membership Group ownership and automatic deadline refresh. Permanent requirements, including account transfer and record lifecycle limits, are in [record ownership and lifecycle](record-ownership-and-lifecycle.md). Delivery gaps remain on the GitHub tasks, not here.
 
 Resolved choices have been incorporated into the permanent requirements, contracts, examples, acceptance tests, build phases, and linked GitHub work. They are intentionally absent here so implementation cannot mistake a resolved option for an open question.
 

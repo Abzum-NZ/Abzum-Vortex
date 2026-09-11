@@ -2,7 +2,7 @@
 
 The [7 September whole-platform architecture review](../build-plan/architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](../build-plan/frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
 
-**Status:** Approved specification 2.24
+**Status:** Approved specification 2.25
 **Date:** 12 September 2026
 **Owner:** [Abzum NZ](https://github.com/Abzum-NZ)
 
@@ -11,9 +11,11 @@ The [7 September whole-platform architecture review](../build-plan/architecture-
 
 This is a new specification for [Abzum Vortex](https://github.com/Abzum-NZ/Abzum-Vortex). It replaces the structure of the earlier [Platform Specification](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4), but does not silently discard its requirements. The [coverage map](appendices/traceability.md) records where each earlier chapter and build phase is addressed.
 
-This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) records the two outstanding initial-ownership and time-dependent-calculation choices from GitHub; only their affected behaviour is pending. The owner selected one Frontend Rule Designer, including configurable component data flows, per-node execution identities and reusable custom forms; collect-first atomic submission is optional, while configured sequential commits remain explicit. A future unresolved business choice must be recorded there before implementation assumes an answer.
+This document is the approved product contract for the current build scope. The [open decision register](appendices/decisions.md) is clear following the owner's approval of initial ownership and automatic deadline refresh. [Record ownership and lifecycle](appendices/record-ownership-and-lifecycle.md) defines these choices, account offboarding/transfers and organisation-bounded record-type policies. The owner selected one Frontend Rule Designer, including configurable component data flows, per-node execution identities and reusable custom forms; collect-first atomic submission is optional, while configured sequential commits remain explicit. A future unresolved business choice must be recorded there before implementation assumes an answer.
 
 ## Architecture review additions
+
+- [12 September findings and resolutions](../build-plan/spec-task-review-2026-09-12.md): specification/task reconciliation; implementation stays with the named delivery owners.
 
 - [Frontend Rule Designer](appendices/frontend-rule-designer.md): every configurable application action is flow-linked; App Builder supplies editable one-node defaults and custom flows. Includes triggers, shared conditions, typed variables, Page Designer forms, optional collect-first atomic submission, MCP app authoring, packaged registration and Kestra handoff. [Delivery ownership and dependencies](../build-plan/frontend-rule-designer.md).
 

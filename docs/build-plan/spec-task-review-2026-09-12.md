@@ -25,7 +25,11 @@ and the native dependency graph has no cycle. Native phase membership and prose
 can nevertheless be wrong. Initial completion was **66/190 (34.7%)**; adding the
 review task changes the denominator. No runtime, database or deployment changed.
 
-## Findings and smallest corrective action
+## Resolution status — 12 September 2026
+
+The historical findings below are reconciled in the [resolution and delivery map](ownership-lifecycle-review-resolution.md). Both product choices are approved and removed from the register. Corrected task bodies and native dependencies retain implementation ownership; #407/#408/#409 cover new/missing delivery. Documentation review and merge are tracked in [PR #406](https://github.com/Abzum-NZ/Abzum-Vortex/pull/406). This resolves requirements, not the future implementation tasks.
+
+## Historical findings and smallest corrective action
 
 P1 means resolve before the affected implementation; P2 means a required scoped
 correction or later delivery gap. Neither creates a project-wide approval hold.

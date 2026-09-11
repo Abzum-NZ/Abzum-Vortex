@@ -922,3 +922,12 @@ Errors sort deterministically by safe location and catalogue order. Duplicate pu
 ## Performance measurements
 
 Each measurement names operation, dataset, cache state, region, device, network, percentile, measured client/server/database time, code revision, and comparison baseline. Targets and regression thresholds create observations, alerts, and owned improvement work; performance results never automatically block a pull request or release. Safety, access, correctness, privacy, and accessibility gates remain independent.
+
+## Ownership transfer and lifecycle policy delivery contracts
+
+The normative [ownership/lifecycle contract](record-ownership-and-lifecycle.md) governs these planned additions; existing strict runtime schemas are not claimed to implement them yet.
+
+- Initial ownership is server-derived for account-owned records; Group input is a permanent current-membership Group reference, rechecked during creation.
+- Transfer commands identify source organisation account, selected application scopes (plus explicit shared scope), compatible target owner, command identity and expected revisions. Results distinguish completed, conflicted and refused items without exposing unreadable records. Historical authorship is unchanged.
+- A versioned lifecycle policy binds organisation, storage contract and optional contained application scope; age/count limits, permitted end action and exact registered workflow/destination references are validated against current organisation limits. Scope is never an untrusted table name. The same shared row set has one policy.
+- Deadline refresh metadata is engine-owned: exact record/definition revision and next transition. Clients cannot supply a calculated value or a successful refresh claim. The existing calculation engine and command evidence own execution.

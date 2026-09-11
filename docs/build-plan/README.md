@@ -11,11 +11,11 @@ The [Access consumer handoff](access-consumer-handoffs.md) keeps activation/invi
 
 The [7 September whole-platform architecture review](architecture-review-2026-09-07.md) reconciles configurable read/write data flows, managed-flow controls, per-node execution identity and truthful partial outcomes. [Delivery ownership](frontend-rule-designer.md) places the new headless [scoped execution-identity task](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) before flow execution. These are planned capabilities, not delivered runtimes.
 
-**Status:** Approved build plan 2.23
+**Status:** Approved build plan 2.24
 
 **Current delivery order: engines before designer.** Follow the [engine-first application delivery plan](engine-first-application-delivery.md): define complete applications in files, validate/publish/install them, and prove their real browser pages, data, permissions and configured flows before implementing the App Designer. Preserve the existing HTML prototype but defer further expansion. Runtime rendering and registered components are engine work, not dependent on a visual editor. Later designer and MCP authoring reuse the same protected definition operations and runtime; task numbers or phase labels do not override these corrected dependencies.
 
-**Date:** 7 September 2026
+**Date:** 12 September 2026
 
 **Governing specification:** [Abzum Vortex platform specification](../specification/README.md)
 
@@ -27,7 +27,11 @@ The [decision register](../specification/appendices/decisions.md) is clear. One 
 
 The [flow-first App Builder extension](frontend-rule-designer.md#flow-first-page-actions-and-mcp-authoring) makes action buttons, form submission and record gestures use application-owned Frontend Flows, including editable Save form defaults and presentation-only flows. Pages carry composition/bindings; existing protected services still execute business operations. The same capabilities support MCP app authoring. This is planned functionality, not delivered UI, and does not move the designer ahead of its Access and contract prerequisites.
 
-## Current delivery checkpoint — 6 September 2026
+## Current delivery checkpoint — 12 September 2026
+
+Follow the [review resolution and new pickup ordering](ownership-lifecycle-review-resolution.md). Ownership transfer #407 and lifecycle policies #408 precede their administration/runtime consumers; timed calculations #48/#62 feed Query #54 and first-app proof #327. Support #409 and recovery #170 remain later operations. The board's live state governs active work; the following dated receipts are historical completed foundations, not current in-progress claims.
+
+## Foundation evidence — 6 September 2026
 
 [Permission registry #32](https://github.com/Abzum-NZ/Abzum-Vortex/issues/32) is complete after independent full-task review and the exact hosted Testing receipt through D2. [Roles and Groups #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) is complete after A–E implementation, independent full-task review, normal PR delivery and exact hosted Testing verification; [invitation evidence](../evidence/issue-33-invitation-access/README.md#hosted-testing-follow-up--6-september-2026) records the delivered revision and coverage. Historical slice detail remains in the linked evidence and normative contracts; the current Phase 3 section lists only completed outcomes and remaining work.
 

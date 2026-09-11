@@ -204,6 +204,8 @@ or recover precision already lost in a historical number.
 
 ## Calculations and totals
 
+Deadline-based stored calculations refresh automatically at their next transition, not only at save time. [Scheduled calculations](appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations) defines rescheduling, catch-up and consistent read/filter/sort freshness through the same calculation engine.
+
 The [calculation-engine plan](../build-plan/issue-48-calculation-engine.md) defines
 the first executable arithmetic and missing-value meanings. Decimal/money
 calculations and average totals declare result precision from zero to twelve
