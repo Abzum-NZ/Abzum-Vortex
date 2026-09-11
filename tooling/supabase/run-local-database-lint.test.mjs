@@ -46,8 +46,10 @@ const createFixture = async (cliSource) => {
   return root;
 };
 
+const fixtureDatabaseUrl = "postgresql://postgres:throwaway@127.0.0.1:54999/postgres?sslmode=disable";
+
 describe("Local database lint launcher", () => {
-  test("launches the pinned package entry through Node with the complete manifest schemas", async () => {
+  test("launches the pinned package entry through Node against the given cluster with the complete manifest schemas", async () => {
     const root = await createFixture(
       "process.stdout.write(JSON.stringify(process.argv.slice(2)));\n",
     );
@@ -55,6 +57,7 @@ describe("Local database lint launcher", () => {
 
     const status = await runLocalDatabaseLint({
       root,
+      databaseUrl: fixtureDatabaseUrl,
       stdout: { write: (value) => (output += value) },
       stderr: { write: () => undefined },
     });
@@ -63,6 +66,8 @@ describe("Local database lint launcher", () => {
     expect(JSON.parse(output)).toEqual([
       "db",
       "lint",
+      "--db-url",
+      fixtureDatabaseUrl,
       "--schema",
       "public,vortex_fixture",
       "--level",
@@ -72,10 +77,16 @@ describe("Local database lint launcher", () => {
     ]);
   });
 
+  test("requires an explicit target database", async () => {
+    const root = await createFixture("process.exit(0);\n");
+
+    await expect(runLocalDatabaseLint({ root })).rejects.toThrow(/requires the verification cluster's databaseUrl/);
+  });
+
   test("returns the exact child failure status", async () => {
     const root = await createFixture("process.exit(23);\n");
 
-    await expect(runLocalDatabaseLint({ root })).resolves.toBe(23);
+    await expect(runLocalDatabaseLint({ root, databaseUrl: fixtureDatabaseUrl })).resolves.toBe(23);
   });
 
   test("propagates a launcher error", async () => {
@@ -85,6 +96,7 @@ describe("Local database lint launcher", () => {
     await expect(
       runLocalDatabaseLint({
         root,
+        databaseUrl: fixtureDatabaseUrl,
         spawn: () => ({ error: failure, status: null, stderr: "", stdout: "" }),
       }),
     ).rejects.toBe(failure);
