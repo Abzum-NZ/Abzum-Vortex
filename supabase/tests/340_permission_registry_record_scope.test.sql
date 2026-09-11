@@ -533,6 +533,200 @@ select is(
   'storage-shape refusal leaves Access unchanged'
 );
 
+-- Store-level shape enforcement (#387): every structural rule
+-- `permissionRecordScopeSchema` states in Zod now has a matching
+-- `vortex_access.permission_record_scope_is_valid` check on the column
+-- itself (permission_catalogue_entries_record_scope_value,
+-- 20260911101613_constrain_permission_record_scope_shape.sql), so illegal
+-- shapes are refused at the row, independent of the registration writer.
+-- The full shared corpus lives in
+-- 470_permission_record_scope_parity.test.sql; this proves the same
+-- refusal at the real table via a direct insert, bypassing the writer.
+create function pg_temp.record_scope_insert_sql(
+  p_permission_id uuid,
+  p_record_scope text
+)
+returns text
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.format(
+    $sql$insert into vortex_access.permission_catalogue_entries (
+      organization_id, registration_kind, registration_owner_id,
+      registration_revision, application_root_id, owner_kind, owner_id,
+      permission_id, permission_key, label, description, record_type_id,
+      action_kind, named_action, administrative, source_kind,
+      source_definition_key, source_root_id, source_version, source_revision,
+      source_validation_contract_version, source_content_fingerprint,
+      source_resolution_fingerprint, source_catalogue_fingerprint,
+      meaning_fingerprint, record_scope
+    ) values (
+      '23400000-0000-4000-8000-000000000001', 'application',
+      '33400000-0000-4000-8000-000000000001', 4,
+      '33400000-0000-4000-8000-000000000001', 'application',
+      '33400000-0000-4000-8000-000000000001',
+      %L, 'neutral.action.scope_check',
+      'Scope check', 'Store-check probe.',
+      '63400000-0000-4000-8000-000000000001', 'read', null, false,
+      'application', 'neutral.scope_application',
+      '33400000-0000-4000-8000-000000000001', '1.1.0', 2, '2.18.0',
+      'sha256:' || pg_catalog.repeat('4', 64),
+      'sha256:' || pg_catalog.repeat('5', 64),
+      null,
+      'sha256:' || pg_catalog.repeat('9', 64),
+      %L::jsonb
+    )$sql$,
+    p_permission_id, p_record_scope
+  )
+$function$;
+
+select throws_ok(
+  pg_temp.record_scope_insert_sql(illegal.permission_id, illegal.record_scope),
+  '23514',
+  null,
+  'store refuses ' || illegal.description
+)
+from (values
+  (
+    '43400000-0000-4000-8000-000000000010'::uuid,
+    '{"routes":[{"kind":"all_records"},{"kind":"ownership"}]}',
+    'an all-record route combined with another route'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000011'::uuid,
+    '{"routes":[{"kind":"direct_share"},{"kind":"ownership"}]}',
+    'routes out of canonical order'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000012'::uuid,
+    '{"routes":[{"kind":"ownership"}],"unexpected":true}',
+    'an unknown top-level key'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000013'::uuid,
+    '{"routes":[{"kind":"ownership"},{"kind":"ownership"}]}',
+    'duplicate routes'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000014'::uuid,
+    '{"routes":[]}',
+    'an empty routes array'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000015'::uuid,
+    '{"routes":[{"kind":"mystery"}]}',
+    'an unknown route kind'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000016'::uuid,
+    '{"routes":[{"kind":"relationship","sourcePermissionId":"43400000-0000-4000-8000-000000000001"}]}',
+    'a relationship route missing relationshipId'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000017'::uuid,
+    '{"routes":[{"kind":"relationship","relationshipId":"43400000-0000-4000-8000-000000000001"}]}',
+    'a relationship route missing sourcePermissionId'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000018'::uuid,
+    '{"routes":[{"kind":"all_records"}],"savedCondition":{"conditionId":"43400000-0000-4000-8000-000000000001","publishedRevision":1,"parameterBindings":[]}}',
+    'an invalid savedCondition'
+  )
+) as illegal(permission_id, record_scope, description)
+order by illegal.permission_id;
+
+select is(
+  (
+    select current_version
+    from vortex_access.organization_access_versions
+    where organization_id = '23400000-0000-4000-8000-000000000001'
+  ),
+  5::bigint,
+  'every store shape refusal above leaves Access unchanged'
+);
+
+insert into vortex_access.permission_catalogue_entries (
+  organization_id, registration_kind, registration_owner_id,
+  registration_revision, application_root_id, owner_kind, owner_id,
+  permission_id, permission_key, label, description, record_type_id,
+  action_kind, named_action, administrative, source_kind,
+  source_definition_key, source_root_id, source_version, source_revision,
+  source_validation_contract_version, source_content_fingerprint,
+  source_resolution_fingerprint, source_catalogue_fingerprint,
+  meaning_fingerprint, record_scope
+)
+select
+  '23400000-0000-4000-8000-000000000001', 'application',
+  '33400000-0000-4000-8000-000000000001', 4,
+  '33400000-0000-4000-8000-000000000001', 'application',
+  '33400000-0000-4000-8000-000000000001',
+  legal.permission_id, legal.permission_key,
+  'Scope check', 'Store-check probe.',
+  '63400000-0000-4000-8000-000000000001', 'read', null, false,
+  'application', 'neutral.scope_application',
+  '33400000-0000-4000-8000-000000000001', '1.1.0', 2, '2.18.0',
+  'sha256:' || pg_catalog.repeat('4', 64),
+  'sha256:' || pg_catalog.repeat('5', 64),
+  null,
+  legal.meaning_character,
+  legal.record_scope::jsonb
+from (values
+  (
+    '43400000-0000-4000-8000-000000000020'::uuid,
+    'neutral.action.scope_check_all_records',
+    'sha256:' || pg_catalog.repeat('a', 64),
+    '{"routes":[{"kind":"all_records"}]}'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000021'::uuid,
+    'neutral.action.scope_check_ownership',
+    'sha256:' || pg_catalog.repeat('b', 64),
+    '{"routes":[{"kind":"ownership"}]}'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000022'::uuid,
+    'neutral.action.scope_check_direct_share',
+    'sha256:' || pg_catalog.repeat('c', 64),
+    '{"routes":[{"kind":"direct_share"}]}'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000023'::uuid,
+    'neutral.action.scope_check_relationship',
+    'sha256:' || pg_catalog.repeat('d', 64),
+    '{"routes":[{"kind":"relationship","relationshipId":"43400000-0000-4000-8000-000000000030","sourcePermissionId":"43400000-0000-4000-8000-000000000031"}]}'
+  ),
+  (
+    '43400000-0000-4000-8000-000000000024'::uuid,
+    'neutral.action.scope_check_saved_condition',
+    'sha256:' || pg_catalog.repeat('e', 64),
+    '{"routes":[{"kind":"all_records"}],"savedCondition":{"conditionId":"43400000-0000-4000-8000-000000000032","publishedRevision":1,"contractFingerprint":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","parameterBindings":[{"key":"actor","source":"current_organization_account_id"}]}}'
+  )
+) as legal(permission_id, permission_key, meaning_character, record_scope);
+
+select is(
+  (
+    select pg_catalog.jsonb_agg(entry.record_scope order by entry.permission_id)
+    from vortex_access.permission_catalogue_entries as entry
+    where entry.organization_id = '23400000-0000-4000-8000-000000000001'
+      and entry.registration_owner_id = '33400000-0000-4000-8000-000000000001'
+      and entry.registration_revision = 4
+      and entry.permission_id in (
+        '43400000-0000-4000-8000-000000000020', '43400000-0000-4000-8000-000000000021',
+        '43400000-0000-4000-8000-000000000022', '43400000-0000-4000-8000-000000000023',
+        '43400000-0000-4000-8000-000000000024'
+      )
+  ),
+  pg_catalog.jsonb_build_array(
+    '{"routes":[{"kind":"all_records"}]}'::jsonb,
+    '{"routes":[{"kind":"ownership"}]}'::jsonb,
+    '{"routes":[{"kind":"direct_share"}]}'::jsonb,
+    '{"routes":[{"kind":"relationship","relationshipId":"43400000-0000-4000-8000-000000000030","sourcePermissionId":"43400000-0000-4000-8000-000000000031"}]}'::jsonb,
+    '{"routes":[{"kind":"all_records"}],"savedCondition":{"conditionId":"43400000-0000-4000-8000-000000000032","publishedRevision":1,"contractFingerprint":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","parameterBindings":[{"key":"actor","source":"current_organization_account_id"}]}}'::jsonb
+  ),
+  'the store accepts each legal record-scope shape -- one per route kind, plus a valid saved condition -- and preserves it exactly'
+);
+
 set constraints all immediate;
 
 select * from finish();
