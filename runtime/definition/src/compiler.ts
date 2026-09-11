@@ -1520,28 +1520,33 @@ const connectionSourceTransformPatterns = [
   /^body\/(?:health_operation|revocation_operation)$/,
 ] as const;
 
-function conditionSourcePathMatches(path: string, root: string): boolean {
+function conditionSourcePathPattern(root: string): RegExp {
   const prefix = root.replaceAll("#", "\\#").replaceAll("/", "\\/");
   return new RegExp(
     `^${prefix}(?:(?:\\/(?:all|any)\\/#)|(?:\\/not))*\\/(?:field|operator|parameter|value|(?:left|right)\\/(?:source|field|parameter|value))(?:\\/.*)?$`,
-  ).test(path);
+  );
 }
 
+// Built once: these run for every source leaf of every compile. No flags, so no lastIndex state.
+const conditionSourcePathPatterns = [
+  "body/actions/#/precondition",
+  "body/rules/#/condition",
+  "body/sharing_conditions/#/condition",
+  "body/record_types/#/fields/#/settings/filter",
+  "body/record_types/#/fields/#/settings/expression/condition",
+  "body/queries/#/filter",
+  "body/pipelines/#/transitions/#/gate",
+  "body/workflows/#/nodes/#/config/decisions/#/when",
+  "body/workflows/#/trigger/condition",
+  "body/pages/#/blocks/#/visibility_condition",
+  "body/pages/#/steps/#/blocks/#/visibility_condition",
+].map(conditionSourcePathPattern);
+const workflowConditionNodePathPattern = conditionSourcePathPattern(
+  "body/workflows/#/nodes/#/config",
+);
+
 function isConditionSourcePath(path: string): boolean {
-  const roots = [
-    "body/actions/#/precondition",
-    "body/rules/#/condition",
-    "body/sharing_conditions/#/condition",
-    "body/record_types/#/fields/#/settings/filter",
-    "body/record_types/#/fields/#/settings/expression/condition",
-    "body/queries/#/filter",
-    "body/pipelines/#/transitions/#/gate",
-    "body/workflows/#/nodes/#/config/decisions/#/when",
-    "body/workflows/#/trigger/condition",
-    "body/pages/#/blocks/#/visibility_condition",
-    "body/pages/#/steps/#/blocks/#/visibility_condition",
-  ];
-  return roots.some((root) => conditionSourcePathMatches(path, root));
+  return conditionSourcePathPatterns.some((pattern) => pattern.test(path));
 }
 
 function isWorkflowConditionNodePath(
@@ -1562,10 +1567,7 @@ function isWorkflowConditionNodePath(
   const body = asObject(source.body);
   const workflow = (body.workflows as JsonObject[])[sourcePath[2]];
   const node = workflow ? (workflow.nodes as JsonObject[])[sourcePath[4]] : undefined;
-  return (
-    node?.type === "condition" &&
-    conditionSourcePathMatches(normalizedPath, "body/workflows/#/nodes/#/config")
-  );
+  return node?.type === "condition" && workflowConditionNodePathPattern.test(normalizedPath);
 }
 
 function sourceTransformationApproved(source: JsonObject, sourcePath: Path): boolean {
