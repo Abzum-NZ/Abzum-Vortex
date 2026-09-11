@@ -96,8 +96,9 @@ table. It then enters the non-login `vortex_request` role with `SET LOCAL ROLE`
 before protected work.
 Only `vortex_runtime` may execute the initializer; only `vortex_request` may
 execute the read-only context accessors used by policies and service SQL.
-Commit or rollback clears the role and context before a pooled connection can
-be reused.
+Commit or rollback ends the transaction-local role. The context row outlives the
+transaction but is bound to its identifier, so no later transaction on a pooled
+connection can read it; each must establish its own.
 
 For a human organisation request, the browser supplies only one untrusted
 organisation identifier. The Identity service resolves the exact active identity,

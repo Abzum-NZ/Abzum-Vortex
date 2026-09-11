@@ -377,9 +377,9 @@ select is(
   'a forged context naming another identity''s account in the same organisation is ignored'
 );
 select is(
-  (select vortex_context.organization_id()),
-  '22000000-0000-4000-8000-000000000001'::uuid,
-  'the established organisation still governs after a same-organisation account forgery'
+  (select vortex_access.validated_human_request_context() ->> 'identityId'),
+  '42000000-0000-4000-8000-000000000001',
+  'the established identity still governs after a same-organisation account forgery'
 );
 
 reset role;
