@@ -23,12 +23,19 @@ pnpm db:verify
 database-only Postgres cluster: a disposable `vortex-verify-<id>` container and Docker network,
 started from the pinned Supabase Postgres image (the same image the Local stack and hosted
 Testing/Production use), migrated and seeded from the current working tree, and removed once the
-run finishes. `db:verify` runs pgTAP, the concurrency proofs and lint against that one cluster and
-no longer begins with `pnpm db:reset`. None of the four touch the Local stack (`supabase_db_*`) or
-any other worktree's cluster, so independent worktrees — and independent agents — can run any of
-them at the same time without sequencing. A cluster is kept, unremoved, only when its run fails, so
-its container can be inspected for diagnosis; clean up a kept cluster with
-`docker rm --force <container>` and `docker network rm <container>-net` once you are done with it.
+run finishes. The container and the network both carry a `vortex.verify.worktree=<absolute path>`
+label naming the exact worktree that started them, plus a `vortex.verify.run=<id>` label, and the
+cluster's name is printed as soon as it exists — `verification cluster: vortex-verify-<id> (network
+vortex-verify-<id>-net)` — so its owner never has to guess it from timing. `db:verify` runs pgTAP,
+the concurrency proofs and lint against that one cluster and no longer begins with `pnpm db:reset`.
+None of the four touch the Local stack (`supabase_db_*`) or any other worktree's cluster, so
+independent worktrees — and independent agents — can run any of them at the same time without
+sequencing. A cluster is kept, unremoved, only when its run fails, so its container can be inspected
+for diagnosis; the failure output names the kept cluster and its owner label. Run `pnpm db:clean`
+from the same worktree to remove every cluster it left behind: it selects strictly by that
+worktree's own `vortex.verify.worktree` label, never by container or network name, so it can never
+remove another worktree's — or another agent's — cluster; it prints each container and network it
+removes, and says plainly when there is nothing to remove.
 Because each run starts from a fresh cluster, `db:verify` proves tenant hierarchy, invitation
 acceptance, Access-version increments, organisation-context suspension/version races, lifecycle and
 Definition publication races through two real database connections on a database only this run has
