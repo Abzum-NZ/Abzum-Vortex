@@ -111,7 +111,7 @@ begin
     raise exception 'Writer fixture names a Module release that does not exist';
   end if;
 
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   perform vortex_context.initialize(pg_catalog.jsonb_build_object(
     'callerKind', 'system',
     'tenantId', context_tenant_id,
@@ -173,7 +173,7 @@ begin
     )
   ) as appended;
 
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   return appended_revision;
 end
 $function$;

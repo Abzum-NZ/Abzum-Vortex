@@ -25,7 +25,7 @@ declare
   operation_at timestamptz := pg_catalog.statement_timestamp();
   request_context jsonb;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   request_context := pg_catalog.jsonb_build_object(
     'callerKind', 'human',
     'identityAuthorityId', '94700000-0000-4000-8000-000000000001',
