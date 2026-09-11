@@ -30,6 +30,7 @@
     "db:concurrency": "pnpm auth:local:prepare && node tooling/supabase/run-local-concurrency-proof.mjs",
     "db:lint": "pnpm auth:local:prepare && node tooling/supabase/run-local-database-lint.mjs",
     "db:verify": "pnpm auth:local:prepare && node tooling/supabase/run-local-database-verify.mjs",
+    "db:clean": "node tooling/supabase/run-local-database-clean.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
