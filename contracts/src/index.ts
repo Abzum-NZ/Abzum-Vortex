@@ -42,7 +42,6 @@ export * from "./permissions";
 export * from "./permission-registry";
 export * from "./record-ownership-compatibility";
 export * from "./records";
-export * from "./record-field-access";
 export * from "./record-share-operations";
 export * from "./rule-graph-contracts";
 export * from "./rule-graph-source-contracts";
