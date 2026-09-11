@@ -152,6 +152,27 @@ export const resolveInstalledEventDefinitionContext = (
   )
     throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
 
+  const applicationModuleDependencies = app.dependencyManifest.filter(
+    (dependency): dependency is Extract<typeof dependency, { kind: "module" }> =>
+      dependency.kind === "module",
+  );
+  if (applicationModuleDependencies.length !== app.content.moduleBindings.length)
+    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
+
+  for (const declaredBinding of app.content.moduleBindings) {
+    const module = modulesByRoot.get(String(declaredBinding.moduleRootId));
+    const dependency = applicationModuleDependencies.find(
+      (entry) => entry.rootId === declaredBinding.moduleRootId,
+    );
+    if (
+      module === undefined ||
+      dependency === undefined ||
+      declaredBinding.resolvedVersion !== module.releaseVersion ||
+      !dependencyMatchesRead(dependency, module)
+    )
+      throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
+  }
+
   for (const module of moduleReads) {
     const binding = bindingsByRoot.get(String(module.rootId));
     const declaredDependencies = module.content.dependencies;
