@@ -454,7 +454,7 @@ declare
   current_access_version bigint;
   acting_identity_id uuid;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
   select version.current_version into strict current_access_version
   from vortex_access.organization_access_versions as version
@@ -978,7 +978,7 @@ select is(
 );
 
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- ============================================================================
 -- Boundary assertions.

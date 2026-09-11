@@ -181,8 +181,9 @@ application request.
 - The Vercel server connects as an environment-specific `vortex_runtime` login through Supabase's
   shared transaction pooler on port 6543. That login owns no object and has no direct service-table
   privilege. Inside an explicit transaction it may initialize the closed request context and enter
-  only the non-login `vortex_request` role, which has no ownership, schema or persistent-relation
-  creation, replication, superuser, or row-security-bypass capability.
+  only the non-login `vortex_request` role, which is grant hygiene rather than an injection boundary;
+  the established context row is the identity boundary. `vortex_request` has no ownership, schema or
+  persistent-relation creation, replication, superuser, or row-security-bypass capability.
 - Migrations create `vortex_runtime` without a password. Before a hosted environment may serve a
   protected request, an operator generates a different high-entropy password for that environment,
   assigns it to that exact role through the Supabase administrative path, and builds the restricted
@@ -217,10 +218,19 @@ has no Identity schema access and may execute only explicitly granted request fu
 Access's exact live human-context validator and central permission/delegation evaluator. It
 cannot call the legacy rich account list or standalone Access-version read, both of which are revoked
 from runtime use. Only `vortex_request` may execute the read-only context accessors used by row
-policies and service SQL. The database stores the whole context as one transaction-local value, not
-as independently reusable session settings. Missing, empty, malformed, incomplete, internally
+policies and service SQL. The database stores the whole context in one owner-only row bound to the
+establishing transaction (`vortex_context.request_contexts`, keyed by the server backend and stamped
+with the transaction identifier). No session setting carries it, so a value written into any
+setting is never read. The initializer establishes the row once per transaction and refuses a
+second establishment, including after the request role reverts to the runtime login with
+`SET ROLE` or `set_config('role', …)`, which PostgreSQL always permits; no runtime, request or
+record role can read or write the row. Missing, empty, malformed, incomplete, internally
 inconsistent, expired, inactive or stale context fails closed. Commit, rollback, and pooled
 connection reuse make the role and context unavailable to the next transaction.
+The database trusts the application server to name the human: a caller able to end the transaction
+and begin another as `vortex_runtime` is the application server, and the database does not verify
+the ES256 identity token itself. Protected requests run read-write on the primary; the
+establishment write and the resolver's row locks both refuse on a standby.
 
 Setting a structurally valid context is not itself an access grant. Access owns the human
 organisation composition; other services consume its resolved transaction rather than assembling

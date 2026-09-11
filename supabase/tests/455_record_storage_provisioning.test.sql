@@ -234,7 +234,7 @@ declare
   selected_access_version bigint;
   request_context jsonb;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   selected_access_version := p_access_version;
   if selected_access_version is null then
     select version.current_version into strict selected_access_version
