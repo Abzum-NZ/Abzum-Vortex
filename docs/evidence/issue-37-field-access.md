@@ -2,6 +2,104 @@
 
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and acceptance: [implementation plan](../build-plan/issue-37-field-access.md).
 
+## Remaining acceptance proofs — branch `feat/issue-37-remaining-proofs` — 11–12 September 2026
+
+Source: branch `feat/issue-37-remaining-proofs` from Testing `757f1bd` (PR #391),
+pushed with no pull request. It adds proofs and records only, with no migration
+or production code change. No production defect was found.
+
+- `8f0e5d3` records PR #385 and PR #388 below and corrects SQL440's comment,
+  which called the resolver "at parity" with the TypeScript engine PR #388
+  deleted. The header of
+  [`20260910094534_resolve_record_field_bounds.sql`](../../supabase/migrations/20260910094534_resolve_record_field_bounds.sql)
+  makes the same claim. Migrations are immutable, so it is left unchanged.
+- `d967de5` adds SQL447, the isolation matrix, and its writer-backed fixture
+  helper `supabase/tests/helpers/record-field-access-fixture.psql`.
+  Projection, change, protected grant and protected revoke are run in
+  both organisation directions and both application directions, through fixed
+  neutral adapters under `vortex_request`. The grant path includes
+  foreign-organisation and foreign-application targets and a foreign recipient.
+  Every refusal also asserts that no share, Activity or Access change was
+  written. `supabase/tests/helpers/definition-release-writer.psql` is copied
+  byte-identical from #45 (`50d6ac2`).
+- `dbfa520` adds SQL448 with before/after proofs. Each case is followed by a
+  projection and a change: account closed, role assignment revoked and
+  expired, Group membership revoked and expired, share revoked, and Access
+  version changed. SQL448 also closes three share-path gaps:
+  - an Activity failure in the protected grant rolls back the share and its
+    Access change together;
+  - a protected revoke writes exactly one Activity entry and one Access
+    change;
+  - with two shares for one recipient, revoking one leaves the survivor and an
+    independent ownership authority contributing.
+- `2dee492` adds `protected-record-share-authority-concurrency.test.sh` and
+  registers it in the verification manifest (27 proofs). A grant and a revoke
+  each block behind a real role-assignment revoke. Once that revoke commits,
+  each is refused and writes nothing.
+- `2ae4f1c` adds `runtime/definition/test/permission-field-policy-publication.test.ts`.
+  It tests field/record-type mismatch and sensitive explicit access at
+  publication, the layer that owns them. `ee986fb` rewords its header so it
+  names no private schema, which the boundary check requires.
+
+Every new test was shown to fail under a targeted mutation of the mechanism it
+depends on, then passed again on the restored tree. SQL mutations each ran on
+a fresh cluster. Each commit message lists its mutations and failure counts.
+
+Findings. None is a defect, and none was changed:
+
+- **Lock ordering (item 5).** Moving the governance lock after the authority
+  check cannot change the outcome by itself. Every authority writer advances
+  the Access version under that lock, and the post-lock comparison refuses the
+  stale request.
+  - With only that comparison removed, the request is still refused. The
+    grant's decision re-checks the context version, and revocation eligibility
+    is read after the lock.
+  - Only removing both lets a stale grant or revocation commit. The proof's
+    header states this.
+- **Organisation and application barriers (item 1).** An application-contained
+  row of another organisation is refused by the organisation and application
+  comparisons independently. Organisation-shared rows isolate the organisation
+  comparison.
+- **Revocation layers (item 1).** Revocation across organisations is refused by
+  the protected lookup, then by the #36 writer's lookup, and finally by the
+  revoker foreign key.
+- **Store check (item 4).** Registration's store check
+  (`permission_field_policy_is_valid`) validates shape only. Record-type
+  membership and explicit sensitive access are enforced only at publication:
+  - scoped alias resolution;
+  - the compiler's own provenance-completeness check;
+  - publication's record-type and provenance rules.
+
+  This is the same shape as #387 for record scope.
+
+Local verification, on the restored tree:
+
+- `pnpm db:verify` on a fresh `vortex-verify-*` cluster exited 0.
+  - pgTAP: `Files=72, Tests=3319`, `Result: PASS`.
+  - All 27 concurrency proofs passed.
+  - Database lint over the nine manifest schemas exited 0. Its only warnings
+    are in five functions this branch does not touch.
+- `pnpm verify` passed format, lint, typecheck (23 packages) and boundaries,
+  then stopped at `pnpm test` on the known #390 timeout. That one
+  `compiler.test.ts` case ran 5,327 ms against the 5,000 ms default. The other
+  1,809 tests passed and 3 were skipped. Run alone, the two compiler files
+  passed 84 of 84. The steps `pnpm verify` did not reach, run separately, also
+  passed: `pnpm fixtures` (17 tests) and `pnpm build` (23 packages).
+
+Hosted Testing: none. The branch has no pull request and is not merged, so no
+hosted Testing run exists for it.
+
+Not proved here:
+
+- Item 3(a) provokes the Activity failure only by reusing an Activity identity.
+  Other append failures are not provoked separately.
+- Record facts read before the lock that do not advance the Access version,
+  such as lifecycle, are outside item 5.
+- The item 4 tests use module permissions. Application permissions pass through
+  the same compiler resolution and publication check but are not exercised
+  here.
+- The expiry cases rely on a three-second expiry and a wall-clock wait.
+
 ## TypeScript field engine removed — PR #388 — 11 September 2026
 
 Source: [PR #388](https://github.com/Abzum-NZ/Abzum-Vortex/pull/388), head
