@@ -840,7 +840,7 @@ declare
   operation_at timestamptz := pg_catalog.statement_timestamp();
   current_access_version bigint;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   select version.current_version into strict current_access_version
   from vortex_access.organization_access_versions as version
   where version.organization_id = '24300000-0000-4000-8000-000000000001';
@@ -2714,8 +2714,8 @@ set constraints all deferred;
 
 -- Context helper: establishes vortex_context for whichever org/app/account
 -- the case under test needs. Re-establishing between blocks follows
--- supabase/tests/290:360-376's set_config('vortex.request_context','',true)
--- pattern.
+-- supabase/tests/290:360-376's pattern: as the owner, delete this backend's
+-- vortex_context.request_contexts row before initialising again.
 create function pg_temp.install_row_policy_context(
   p_organization_id uuid, p_application_root_id uuid, p_account_id uuid,
   p_identity_id uuid, p_access_version_delta bigint default 0
@@ -2729,7 +2729,7 @@ declare
   operation_at timestamptz := pg_catalog.statement_timestamp();
   current_access_version bigint;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   select version.current_version into strict current_access_version
   from vortex_access.organization_access_versions as version
   where version.organization_id = p_organization_id;
@@ -2913,7 +2913,7 @@ select ok(
 );
 
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- The reverse organisation direction: org2/app1/account2.
 select pg_temp.install_row_policy_context(
@@ -2963,7 +2963,7 @@ select throws_ok(
 );
 
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- Application separation, second half: the fixed app1 declaration refuses an
 -- app2 context uniformly, before any row is even considered.
@@ -2990,7 +2990,7 @@ select is(
   'the app2 context refusal is recorded as target_policy_unavailable'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- ============================================================================
 -- Complete-pair rule under the real role.
@@ -3022,7 +3022,7 @@ select is(
 );
 
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- account3 holds beta.read.shared but not beta.read.own: a row that is
 -- team-owned (account3 is a member) but never shared with account3 refuses.
@@ -3041,7 +3041,7 @@ select is(
 );
 
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- account4 holds only the non-record beta.settings.read.
 select pg_temp.install_row_policy_context(
@@ -3067,7 +3067,7 @@ select is(
   'permission_not_effective',
   'holding only a non-record permission leaves every alternative without an effective path'
 );
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- Withdrawing the catalogue continuity for a held single-alternative
 -- permission (beta.delete.own) refuses with permission_unavailable, both in
@@ -3134,7 +3134,7 @@ select is(
   'permission_unavailable',
   'the withdrawal is recorded as permission_unavailable, not a row-scope refusal'
 );
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- ============================================================================
 -- Context integrity.
@@ -3156,7 +3156,7 @@ select throws_ok(
   'a forged context naming an unknown account fails closed'
 );
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- A stale Access version fails closed.
 select pg_temp.install_row_policy_context(
@@ -3173,7 +3173,7 @@ select throws_ok(
   'a stale Access version fails closed'
 );
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- A revoked assignment refuses on the next context. beta.create.own is a
 -- single-alternative declaration, so revoking its one live assignment
@@ -3232,7 +3232,7 @@ select is(
   'permission_not_effective',
   'the revocation is recorded as permission_not_effective on the next context'
 );
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- ============================================================================
 -- UPDATE cannot widen scope.
@@ -3293,7 +3293,7 @@ select is(
 );
 
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- ============================================================================
 -- Expiry between the two UPDATE checks.
@@ -3444,7 +3444,7 @@ select ok(
   'expiry race: the two samples are strictly ordered in time, allowed before refused'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 
 -- ============================================================================
 -- Boundary assertions.

@@ -88,12 +88,17 @@ The Supabase project owner is an operational credential used by Kestra for
 migrations and controlled database verification. Vercel never receives it.
 The server runtime instead connects as the restricted `vortex_runtime` login.
 Inside one explicit transaction, that role establishes one complete
-transaction-local context through its private initializer and then enters the
-non-login `vortex_request` role with `SET LOCAL ROLE` before protected work.
+transaction-local context through its private initializer, which stores the
+validated context in the owner-only `vortex_context.request_contexts` row for the
+current backend and transaction and refuses re-establishment; a value written
+into any session setting is ignored, and neither login role can read or write the
+table. It then enters the non-login `vortex_request` role with `SET LOCAL ROLE`
+before protected work.
 Only `vortex_runtime` may execute the initializer; only `vortex_request` may
 execute the read-only context accessors used by policies and service SQL.
-Commit or rollback clears the role and context before a pooled connection can
-be reused.
+Commit or rollback ends the transaction-local role. The context row outlives the
+transaction but is bound to its identifier, so no later transaction on a pooled
+connection can read it; each must establish its own.
 
 For a human organisation request, the browser supplies only one untrusted
 organisation identifier. The Identity service resolves the exact active identity,
@@ -108,6 +113,9 @@ standalone Access-version reads are not runtime grants.
 Local and pgTAP checks may connect as the local owner and switch to the request
 role to prove its restrictions. An owner-control assertion may prove that a
 refused row exists, but it never represents an application success path.
+A suite that switches account mid-transaction clears the owner row
+(`delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();`)
+before initialising again.
 
 Before the Access service is available, the private Definition entry points accept only a validated
 system context. They derive tenant, organisation, actor, and time from trusted context/database state,

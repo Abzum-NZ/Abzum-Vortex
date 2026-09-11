@@ -401,7 +401,7 @@ select throws_ok(
 );
 
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_request;
 select throws_ok(
   $$select vortex_definition.read_consumer_release('module', '31000000-0000-4000-8000-000000000070', 1)$$,

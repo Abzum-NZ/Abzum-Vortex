@@ -251,10 +251,15 @@ The [existing transaction runner](../../db/src/request-transaction.ts) connects 
 `vortex_runtime` and temporarily selects `vortex_request`.
 [PostgreSQL permits resetting that role](https://www.postgresql.org/docs/current/sql-set-role.html),
 so arbitrary SQL executing with the runtime connection could regain its runtime
-capabilities. No user-facing adapter may accept SQL, caller-selected helper names
-or a final mutation plan. Parameterized fixed operations, server-only connection
-ownership and closed commands are part of the boundary; role switching alone is
-not evidence of protection from a compromised backend or stolen credential.
+capabilities. Since #386 that path cannot replace the established request context:
+it lives in an owner-only row the runtime login cannot write, and the initializer
+refuses a second establishment in the same transaction. Regaining the runtime role
+yields only the pre-request surface (scope resolvers, launcher, identity projection
+read/ensure, invitation acceptance). No user-facing adapter may accept SQL,
+caller-selected helper names or a final mutation plan. Parameterized fixed
+operations, server-only connection ownership and closed commands are part of the
+boundary; role switching alone is not evidence of protection from a compromised
+backend or stolen credential.
 
 Verify both cases honestly: a genuinely restricted database session cannot call
 the terminal writer/private helpers/raw tables; the real runtime connection can

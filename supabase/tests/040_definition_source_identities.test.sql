@@ -316,7 +316,7 @@ select is(
   'an authored id and mutable key resolve to the same permanent identity'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.identity_store_context());
 set local role vortex_request;
@@ -452,7 +452,7 @@ select is(
   'the draft stores only the renamed source revision current identity requirements'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.identity_store_context());
 set local role vortex_request;
@@ -571,7 +571,7 @@ select pg_catalog.set_config(
   ),
   true
 );
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.identity_store_context());
 set local role vortex_request;
@@ -616,7 +616,7 @@ select is(
   'removing components removes them from the current draft requirements without deleting history'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.identity_store_context());
 set local role vortex_request;
@@ -695,7 +695,7 @@ select is(
   'removal and reintroduction add no duplicate owner identities'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.identity_store_context());
 set local role vortex_request;
@@ -775,7 +775,7 @@ select pg_catalog.set_config(
   true
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.identity_store_context());
 set local role vortex_request;
@@ -851,7 +851,7 @@ select is(
   'a V2 named content slot retains its permanent identity across an alias rename'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.identity_store_context());
 set local role vortex_request;
