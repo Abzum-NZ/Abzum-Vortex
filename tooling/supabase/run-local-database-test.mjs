@@ -31,20 +31,40 @@ export const runLocalDatabaseTest = ({
 
   const createResult = spawn(
     "docker",
-    ["run", "-d", "--rm", "--name", helperName, "--network", networkName, pgProveImage, "/bin/sh", "-c", "sleep 3600"],
+    [
+      "run",
+      "-d",
+      "--rm",
+      "--name",
+      helperName,
+      "--network",
+      networkName,
+      pgProveImage,
+      "/bin/sh",
+      "-c",
+      "sleep 3600",
+    ],
     { encoding: "utf8" },
   );
   if (createResult.error) throw createResult.error;
   if (createResult.status !== 0)
-    throw new Error(`Failed to start the pgTAP harness container ${helperName}: ${createResult.stderr}`);
+    throw new Error(
+      `Failed to start the pgTAP harness container ${helperName}: ${createResult.stderr}`,
+    );
 
   try {
-    const copyResult = spawn("docker", ["cp", resolve(root, "supabase", "tests"), `${helperName}:/tests`], {
-      encoding: "utf8",
-    });
+    const copyResult = spawn(
+      "docker",
+      ["cp", resolve(root, "supabase", "tests"), `${helperName}:/tests`],
+      {
+        encoding: "utf8",
+      },
+    );
     if (copyResult.error) throw copyResult.error;
     if (copyResult.status !== 0)
-      throw new Error(`Failed to copy pgTAP tests into harness container ${helperName}: ${copyResult.stderr}`);
+      throw new Error(
+        `Failed to copy pgTAP tests into harness container ${helperName}: ${copyResult.stderr}`,
+      );
 
     const proveResult = spawn(
       "docker",
@@ -79,7 +99,8 @@ export const runLocalDatabaseTest = ({
 };
 
 if (import.meta.main) {
-  const { startVerificationDatabase, stopVerificationDatabase } = await import("./local-verification-database.mjs");
+  const { startVerificationDatabase, stopVerificationDatabase } =
+    await import("./local-verification-database.mjs");
   const handle = await startVerificationDatabase({ root: workspaceRoot });
   let status = 1;
   try {

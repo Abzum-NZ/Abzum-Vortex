@@ -41,11 +41,15 @@ export const runLocalConcurrencyProofs = async ({
 };
 
 if (import.meta.main) {
-  const { startVerificationDatabase, stopVerificationDatabase } = await import("./local-verification-database.mjs");
+  const { startVerificationDatabase, stopVerificationDatabase } =
+    await import("./local-verification-database.mjs");
   const handle = await startVerificationDatabase({ root: workspaceRoot });
   let status = 1;
   try {
-    status = await runLocalConcurrencyProofs({ root: workspaceRoot, containerName: handle.containerName });
+    status = await runLocalConcurrencyProofs({
+      root: workspaceRoot,
+      containerName: handle.containerName,
+    });
   } catch (error) {
     process.stderr.write(`${error?.stack ?? error}\n`);
     status = 1;

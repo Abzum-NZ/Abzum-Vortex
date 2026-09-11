@@ -8,8 +8,10 @@ const createFakeSpawn = ({ runStatus = 0, copyStatus = 0, proveStatus = 0 } = {}
   const calls = [];
   const spawn = (command, args, options) => {
     calls.push({ command, args, options });
-    if (args[0] === "run") return { status: runStatus, stdout: "", stderr: runStatus === 0 ? "" : "run failed" };
-    if (args[0] === "cp") return { status: copyStatus, stdout: "", stderr: copyStatus === 0 ? "" : "copy failed" };
+    if (args[0] === "run")
+      return { status: runStatus, stdout: "", stderr: runStatus === 0 ? "" : "run failed" };
+    if (args[0] === "cp")
+      return { status: copyStatus, stdout: "", stderr: copyStatus === 0 ? "" : "copy failed" };
     if (args[0] === "exec") return { status: proveStatus, stdout: "pg_prove output\n", stderr: "" };
     if (args[0] === "rm") return { status: 0, stdout: "", stderr: "" };
     throw new Error(`Unexpected spawn call in test fake: ${command} ${args.join(" ")}`);
@@ -41,11 +43,23 @@ describe("Local pgTAP runner", () => {
     expect(runCall.args).toEqual(expect.arrayContaining(["--name", helperName]));
 
     const copyCall = calls.find((call) => call.args[0] === "cp");
-    expect(copyCall.args).toEqual(["cp", resolve("/fake/root", "supabase", "tests"), `${helperName}:/tests`]);
+    expect(copyCall.args).toEqual([
+      "cp",
+      resolve("/fake/root", "supabase", "tests"),
+      `${helperName}:/tests`,
+    ]);
 
     const proveCall = calls.find((call) => call.args[0] === "exec");
     expect(proveCall.args).toEqual(
-      expect.arrayContaining(["PGPASSWORD=throwaway-pw", "--host", "vortex-verify-abc123", "--ext", ".sql", "--recurse", "/tests"]),
+      expect.arrayContaining([
+        "PGPASSWORD=throwaway-pw",
+        "--host",
+        "vortex-verify-abc123",
+        "--ext",
+        ".sql",
+        "--recurse",
+        "/tests",
+      ]),
     );
 
     expect(calls.filter((call) => call.args[0] === "rm")).toHaveLength(1);
@@ -80,7 +94,11 @@ describe("Local pgTAP runner", () => {
       stderr: mutedWriter,
     });
 
-    expect(calls.some((call) => call.args[0] === "rm" && call.args.includes("vortex-verify-abc123-pgtap"))).toBe(true);
+    expect(
+      calls.some(
+        (call) => call.args[0] === "rm" && call.args.includes("vortex-verify-abc123-pgtap"),
+      ),
+    ).toBe(true);
   });
 
   test("throws without starting a copy or pg_prove when the harness container fails to start", () => {

@@ -11,7 +11,8 @@ export const runLocalDatabaseLint = async ({
   stdout = process.stdout,
   stderr = process.stderr,
 } = {}) => {
-  if (!databaseUrl) throw new Error("Local database lint requires the verification cluster's databaseUrl");
+  if (!databaseUrl)
+    throw new Error("Local database lint requires the verification cluster's databaseUrl");
 
   const manifest = await loadDatabaseVerificationManifest(root);
   const cliPath = resolve(root, "node_modules", "supabase", "dist", "supabase.js");
@@ -40,7 +41,8 @@ export const runLocalDatabaseLint = async ({
 };
 
 if (import.meta.main) {
-  const { startVerificationDatabase, stopVerificationDatabase } = await import("./local-verification-database.mjs");
+  const { startVerificationDatabase, stopVerificationDatabase } =
+    await import("./local-verification-database.mjs");
   const handle = await startVerificationDatabase({ root: workspaceRoot });
   let status = 1;
   try {

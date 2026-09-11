@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 // Pinned Supabase Postgres image: the same image used by the shared development
 // stack (`supabase start`) and by hosted Testing/Production delivery. A fresh
@@ -12,7 +13,7 @@ export const verificationDatabaseImage = "public.ecr.aws/supabase/postgres:17.6.
 const readyTimeoutMs = 60_000;
 const readyPollIntervalMs = 200;
 
-const defaultWait = (ms) => new Promise((done) => setTimeout(done, ms));
+const defaultWait = (ms) => delay(ms);
 const defaultNow = () => Date.now();
 
 const randomId = () => randomBytes(6).toString("hex");
@@ -26,7 +27,8 @@ export class VerificationDatabaseStartupError extends Error {
   }
 }
 
-const removeNetwork = (networkName, spawn) => spawn("docker", ["network", "rm", networkName], { encoding: "utf8" });
+const removeNetwork = (networkName, spawn) =>
+  spawn("docker", ["network", "rm", networkName], { encoding: "utf8" });
 const removeContainer = (containerName, spawn) =>
   spawn("docker", ["rm", "--force", containerName], { encoding: "utf8" });
 
@@ -105,16 +107,22 @@ export const startVerificationDatabase = async ({
   }
   if (runResult.status !== 0) {
     removeNetwork(networkName, spawn);
-    throw new Error(`Failed to start the verification database container ${containerName}: ${runResult.stderr}`);
+    throw new Error(
+      `Failed to start the verification database container ${containerName}: ${runResult.stderr}`,
+    );
   }
 
   const partialHandle = Object.freeze({ id, containerName, networkName });
 
   const deadline = now() + readyTimeoutMs;
   for (;;) {
-    const check = spawn("docker", ["exec", containerName, "pg_isready", "-U", "postgres", "-h", "127.0.0.1"], {
-      encoding: "utf8",
-    });
+    const check = spawn(
+      "docker",
+      ["exec", containerName, "pg_isready", "-U", "postgres", "-h", "127.0.0.1"],
+      {
+        encoding: "utf8",
+      },
+    );
     if (check.status === 0) break;
 
     const inspect = spawn("docker", ["inspect", containerName, "--format", "{{.State.Running}}"], {
@@ -135,9 +143,13 @@ export const startVerificationDatabase = async ({
     await wait(readyPollIntervalMs);
   }
 
-  const portResult = spawn("docker", ["inspect", containerName, "--format", "{{json .NetworkSettings.Ports}}"], {
-    encoding: "utf8",
-  });
+  const portResult = spawn(
+    "docker",
+    ["inspect", containerName, "--format", "{{json .NetworkSettings.Ports}}"],
+    {
+      encoding: "utf8",
+    },
+  );
   if (portResult.status !== 0)
     throw new VerificationDatabaseStartupError(
       `Failed to read the published port of verification database container ${containerName}`,
@@ -163,13 +175,21 @@ export const startVerificationDatabase = async ({
   const handle = Object.freeze({ id, containerName, networkName, hostPort, url, password });
 
   const cliPath = resolve(root, "node_modules", "supabase", "dist", "supabase.js");
-  const pushResult = spawn(process.execPath, [cliPath, "db", "push", "--db-url", url, "--include-seed", "--yes"], {
-    cwd: root,
-    encoding: "utf8",
-  });
+  const pushResult = spawn(
+    process.execPath,
+    [cliPath, "db", "push", "--db-url", url, "--include-seed", "--yes"],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
   if (pushResult.stdout) stdout.write(pushResult.stdout);
   if (pushResult.stderr) stderr.write(pushResult.stderr);
-  if (pushResult.error) throw new VerificationDatabaseStartupError(pushResult.error.message, { handle, cause: pushResult.error });
+  if (pushResult.error)
+    throw new VerificationDatabaseStartupError(pushResult.error.message, {
+      handle,
+      cause: pushResult.error,
+    });
   if (pushResult.status !== 0)
     throw new VerificationDatabaseStartupError(
       `Applying migrations and seed to verification database container ${containerName} failed (exit ${pushResult.status})`,

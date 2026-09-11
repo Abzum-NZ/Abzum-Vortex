@@ -1,5 +1,8 @@
 import { resolve } from "node:path";
-import { startVerificationDatabase, stopVerificationDatabase } from "./local-verification-database.mjs";
+import {
+  startVerificationDatabase,
+  stopVerificationDatabase,
+} from "./local-verification-database.mjs";
 import { runLocalDatabaseTest } from "./run-local-database-test.mjs";
 import { runLocalConcurrencyProofs } from "./run-local-concurrency-proof.mjs";
 import { runLocalDatabaseLint } from "./run-local-database-lint.mjs";
@@ -17,7 +20,8 @@ export const runLocalDatabaseVerify = async ({ root = workspaceRoot } = {}) => {
   let status = 0;
   try {
     status = runLocalDatabaseTest({ root, ...handle });
-    if (status === 0) status = await runLocalConcurrencyProofs({ root, containerName: handle.containerName });
+    if (status === 0)
+      status = await runLocalConcurrencyProofs({ root, containerName: handle.containerName });
     if (status === 0) status = await runLocalDatabaseLint({ root, databaseUrl: handle.url });
   } catch (error) {
     process.stderr.write(`${error?.stack ?? error}\n`);

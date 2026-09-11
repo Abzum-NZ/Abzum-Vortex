@@ -24,7 +24,11 @@ const createFakeSpawn = ({
     const joined = args.join(" ");
 
     if (command === "docker" && args[0] === "network" && args[1] === "create")
-      return { status: networkCreateStatus, stdout: "", stderr: networkCreateStatus === 0 ? "" : "network failed" };
+      return {
+        status: networkCreateStatus,
+        stdout: "",
+        stderr: networkCreateStatus === 0 ? "" : "network failed",
+      };
     if (command === "docker" && args[0] === "network" && args[1] === "rm")
       return { status: 0, stdout: "", stderr: "" };
     if (command === "docker" && args[0] === "run")
@@ -44,7 +48,11 @@ const createFakeSpawn = ({
       };
     if (command === "docker" && args[0] === "rm") return { status: 0, stdout: "", stderr: "" };
     if (command !== "docker")
-      return { status: pushStatus, stdout: "push output\n", stderr: pushStatus === 0 ? "" : "push failed" };
+      return {
+        status: pushStatus,
+        stdout: "push output\n",
+        stderr: pushStatus === 0 ? "" : "push failed",
+      };
 
     throw new Error(`Unexpected spawn call in test fake: ${command} ${joined}`);
   };
@@ -69,7 +77,9 @@ describe("Local verification database lifecycle", () => {
     expect(handle.containerName).toMatch(/^vortex-verify-[0-9a-f]+$/);
     expect(handle.networkName).toBe(`${handle.containerName}-net`);
     expect(handle.hostPort).toBe("58201");
-    expect(handle.url).toBe(`postgresql://postgres:${handle.password}@127.0.0.1:58201/postgres?sslmode=disable`);
+    expect(handle.url).toBe(
+      `postgresql://postgres:${handle.password}@127.0.0.1:58201/postgres?sslmode=disable`,
+    );
     expect(handle.password.length).toBeGreaterThanOrEqual(32);
 
     const runCall = calls.find((call) => call.args[0] === "run");
@@ -96,7 +106,13 @@ describe("Local verification database lifecycle", () => {
   test("polls pg_isready until the container accepts connections before migrating", async () => {
     const { spawn, calls } = createFakeSpawn({ pgIsReadyFailures: 2 });
 
-    await startVerificationDatabase({ root: "/fake/root", spawn, wait: noopWait, stdout: mutedWriter, stderr: mutedWriter });
+    await startVerificationDatabase({
+      root: "/fake/root",
+      spawn,
+      wait: noopWait,
+      stdout: mutedWriter,
+      stderr: mutedWriter,
+    });
 
     const readyChecks = calls.filter((call) => call.args.includes("pg_isready"));
     expect(readyChecks).toHaveLength(3);
@@ -106,7 +122,13 @@ describe("Local verification database lifecycle", () => {
     const { spawn, calls } = createFakeSpawn({ runStatus: 1 });
 
     await expect(
-      startVerificationDatabase({ root: "/fake/root", spawn, wait: noopWait, stdout: mutedWriter, stderr: mutedWriter }),
+      startVerificationDatabase({
+        root: "/fake/root",
+        spawn,
+        wait: noopWait,
+        stdout: mutedWriter,
+        stderr: mutedWriter,
+      }),
     ).rejects.toThrow(/Failed to start the verification database container/);
 
     expect(calls.some((call) => call.args[0] === "network" && call.args[1] === "rm")).toBe(true);
@@ -133,9 +155,11 @@ describe("Local verification database lifecycle", () => {
 
     expect(failure).toBeInstanceOf(VerificationDatabaseStartupError);
     expect(failure.handle.containerName).toMatch(/^vortex-verify-/);
-    expect(calls.some((call) => call.args[0] === "rm" || (call.args[0] === "network" && call.args[1] === "rm"))).toBe(
-      false,
-    );
+    expect(
+      calls.some(
+        (call) => call.args[0] === "rm" || (call.args[0] === "network" && call.args[1] === "rm"),
+      ),
+    ).toBe(false);
   });
 
   test("keeps the container and reports the handle when migrations fail to apply", async () => {
@@ -151,16 +175,21 @@ describe("Local verification database lifecycle", () => {
 
     expect(failure).toBeInstanceOf(VerificationDatabaseStartupError);
     expect(failure.handle.url).toContain("sslmode=disable");
-    expect(calls.some((call) => call.args[0] === "rm" || (call.args[0] === "network" && call.args[1] === "rm"))).toBe(
-      false,
-    );
+    expect(
+      calls.some(
+        (call) => call.args[0] === "rm" || (call.args[0] === "network" && call.args[1] === "rm"),
+      ),
+    ).toBe(false);
   });
 });
 
 describe("Local verification database teardown", () => {
   test("removes the container and network by default", () => {
     const { spawn, calls } = createFakeSpawn();
-    stopVerificationDatabase({ containerName: "vortex-verify-abc123", networkName: "vortex-verify-abc123-net" }, { spawn });
+    stopVerificationDatabase(
+      { containerName: "vortex-verify-abc123", networkName: "vortex-verify-abc123-net" },
+      { spawn },
+    );
 
     expect(calls).toEqual([
       { command: "docker", args: ["rm", "--force", "vortex-verify-abc123"] },

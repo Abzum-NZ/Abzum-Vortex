@@ -46,7 +46,8 @@ const createFixture = async (cliSource) => {
   return root;
 };
 
-const fixtureDatabaseUrl = "postgresql://postgres:throwaway@127.0.0.1:54999/postgres?sslmode=disable";
+const fixtureDatabaseUrl =
+  "postgresql://postgres:throwaway@127.0.0.1:54999/postgres?sslmode=disable";
 
 describe("Local database lint launcher", () => {
   test("launches the pinned package entry through Node against the given cluster with the complete manifest schemas", async () => {
@@ -80,7 +81,9 @@ describe("Local database lint launcher", () => {
   test("requires an explicit target database", async () => {
     const root = await createFixture("process.exit(0);\n");
 
-    await expect(runLocalDatabaseLint({ root })).rejects.toThrow(/requires the verification cluster's databaseUrl/);
+    await expect(runLocalDatabaseLint({ root })).rejects.toThrow(
+      /requires the verification cluster's databaseUrl/,
+    );
   });
 
   test("returns the exact child failure status", async () => {

@@ -7,7 +7,9 @@ import { runLocalConcurrencyProofs } from "./run-local-concurrency-proof.mjs";
 const temporaryDirectories = [];
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true })));
+  await Promise.all(
+    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true })),
+  );
 });
 
 const fixtureProofScript = "echo fixture proof\n";
