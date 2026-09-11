@@ -344,8 +344,14 @@ for [#44](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44), then co-deliver t
 real [module lifecycle #43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43) and
 [storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) path. Protected
 save/read integration still requires the actual row/field Access engines.
-Do not close the field task on validation alone or call a module installed before
-its real storage and registrations are ready. [Query #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
+#44's remaining protected-save proofs (the writable-type round-trip and direct
+refusal of a gated choice at save) are now owned by
+[#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), hidden gated options by
+[#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), and database exact-value
+parity for V2 decimal and money in saved conditions by
+[#399](https://github.com/Abzum-NZ/Abzum-Vortex/issues/399); none of the three hold
+#44's closure. Do not call a module installed before its real storage and
+registrations are ready. [Query #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
 then executes against that installed storage; see [engine-first delivery](engine-first-application-delivery.md).
 
 **Current status — reported truthfully:** Phase 4 is engine slices proven locally
