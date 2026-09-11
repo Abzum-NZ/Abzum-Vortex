@@ -324,6 +324,64 @@ select is(
   'request sees the server-installed Identity Authority'
 );
 
+select pg_catalog.set_config(
+  'vortex.request_context',
+  pg_catalog.jsonb_build_object(
+    'callerKind', 'human',
+    'identityAuthorityId', '82000000-0000-4000-8000-000000000001',
+    'tenantId', '12000000-0000-4000-8000-000000000002',
+    'organizationId', '22000000-0000-4000-8000-000000000002',
+    'organizationAccountId', '52000000-0000-4000-8000-000000000002',
+    'identityId', '42000000-0000-4000-8000-000000000001',
+    'sessionId', '62000000-0000-4000-8000-000000000001',
+    'authenticationStrength', 'multi_factor',
+    'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
+    'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
+    'accessVersion', 4,
+    'correlationId', '72000000-0000-4000-8000-000000000010'
+  )::text,
+  true
+);
+select is(
+  (select vortex_access.validated_human_request_context() ->> 'organizationAccountId'),
+  '52000000-0000-4000-8000-000000000001',
+  'a forged context naming an active account in another organisation is ignored'
+);
+select is(
+  (select vortex_context.organization_id()),
+  '22000000-0000-4000-8000-000000000001'::uuid,
+  'the established organisation still governs after a cross-organisation forgery'
+);
+
+select pg_catalog.set_config(
+  'vortex.request_context',
+  pg_catalog.jsonb_build_object(
+    'callerKind', 'human',
+    'identityAuthorityId', '82000000-0000-4000-8000-000000000001',
+    'tenantId', '12000000-0000-4000-8000-000000000001',
+    'organizationId', '22000000-0000-4000-8000-000000000001',
+    'organizationAccountId', '52000000-0000-4000-8000-000000000004',
+    'identityId', '42000000-0000-4000-8000-000000000002',
+    'sessionId', '62000000-0000-4000-8000-000000000001',
+    'authenticationStrength', 'multi_factor',
+    'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
+    'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
+    'accessVersion', 3,
+    'correlationId', '72000000-0000-4000-8000-000000000010'
+  )::text,
+  true
+);
+select is(
+  (select vortex_access.validated_human_request_context() ->> 'organizationAccountId'),
+  '52000000-0000-4000-8000-000000000001',
+  'a forged context naming another identity''s account in the same organisation is ignored'
+);
+select is(
+  (select vortex_context.organization_id()),
+  '22000000-0000-4000-8000-000000000001'::uuid,
+  'the established organisation still governs after a same-organisation account forgery'
+);
+
 reset role;
 update vortex_access.organization_access_versions
 set current_version = 4,

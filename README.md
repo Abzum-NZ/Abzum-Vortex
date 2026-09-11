@@ -263,9 +263,10 @@ service-role key appears, treat it as a bug.
 | Kestra operational flows | Session pooler | 5432 | Migrations and access-rule tests need a real PostgreSQL session, which Supabase session mode preserves while remaining reachable over IPv4. Encrypted logical backup uses a dedicated read-only backup role. Each job uses its own narrow role, and business workflow steps do not use these connections. |
 
 The application disables prepared statements and keeps a minimal client pool. Every protected
-operation explicitly begins one transaction as `vortex_runtime`, establishes its transaction-local
-request context through the private initializer, enters the non-owning `vortex_request` role with
-`SET LOCAL ROLE`, completes the work, and commits or rolls back. Only `vortex_runtime` may execute
+operation explicitly begins one transaction as `vortex_runtime`, establishes its request context
+once, in an owner-only row bound to that transaction, through the private initializer, enters the
+non-owning `vortex_request` role with `SET LOCAL ROLE`, completes the work, and commits or rolls
+back. Only `vortex_runtime` may execute
 the initializer; only `vortex_request` may execute the context accessors used by protected service
 SQL. Transaction mode keeps one physical connection for that complete transaction; no operation
 relies on state from an earlier transaction. Start with one client connection per serverless instance
