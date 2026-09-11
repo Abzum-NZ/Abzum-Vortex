@@ -52,40 +52,6 @@ export const createDatabaseApplicationBoundReleaseSetRepository = (
   },
 });
 
-const dependencyMatches = (
-  dependency: Extract<ModuleRead["dependencyManifest"][number], { kind: "module" }>,
-  target: ModuleRead,
-): boolean =>
-  dependency.key === target.definitionKey &&
-  dependency.rootId === target.rootId &&
-  dependency.releaseRevision === target.releaseRevision &&
-  dependency.releaseVersion === target.releaseVersion &&
-  dependency.contentFingerprint === target.contentFingerprint &&
-  dependency.resolutionFingerprint === target.resolutionFingerprint;
-
-const verifyExactModuleClosure = (application: ApplicationRead, modules: ModuleRead[]): boolean => {
-  const modulesByRoot = new Map(modules.map((module) => [String(module.rootId), module]));
-  if (modulesByRoot.size !== modules.length) return false;
-  const pending = application.dependencyManifest.filter(
-    (dependency): dependency is Extract<typeof dependency, { kind: "module" }> =>
-      dependency.kind === "module",
-  );
-  const reached = new Set<string>();
-  while (pending.length > 0) {
-    const dependency = pending.pop()!;
-    const target = modulesByRoot.get(String(dependency.rootId));
-    if (target === undefined || !dependencyMatches(dependency, target)) return false;
-    if (reached.has(String(target.rootId))) continue;
-    reached.add(String(target.rootId));
-    pending.push(
-      ...target.dependencyManifest.filter(
-        (entry): entry is Extract<typeof entry, { kind: "module" }> => entry.kind === "module",
-      ),
-    );
-  }
-  return reached.size === modules.length;
-};
-
 export const createApplicationBoundReleaseSetService = (
   repository: ApplicationBoundReleaseSetRepository,
   catalogue: DefinitionPublicationCatalogue,
@@ -142,8 +108,6 @@ export const createApplicationBoundReleaseSetService = (
         )) as ModuleRead,
       );
     }
-    if (!verifyExactModuleClosure(application, modules))
-      throw new DefinitionConsumerReadError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
     const result = applicationBoundReleaseSetResultSchema.safeParse({ application, modules });
     if (!result.success)

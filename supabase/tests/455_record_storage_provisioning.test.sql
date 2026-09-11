@@ -1,5 +1,7 @@
+\ir helpers/definition-release-writer.psql
+
 begin;
-select plan(44);
+select plan(43);
 
 set local search_path = pg_catalog, extensions, public;
 
@@ -27,122 +29,86 @@ as $function$
   )
 $function$;
 
-create function pg_temp.module_output(p_revision bigint)
+-- Canonical content of the storage-test Module releases. The writer builds
+-- the rest of each compilation output from the release it appends.
+create function pg_temp.module_content(p_revision bigint)
 returns jsonb
 language sql
 stable
 set search_path = ''
 as $function$
   select pg_catalog.jsonb_build_object(
-    'kind', 'module',
-    'validationContractVersion', '2.0.0',
-    'canonical', pg_catalog.jsonb_build_object(
-      'envelope', pg_catalog.jsonb_build_object(
-        'rootId', '44550000-0000-4000-8000-000000000001'
-      ),
-      'content', pg_catalog.jsonb_build_object(
-        'recordTypes', pg_catalog.jsonb_build_array(
-          pg_catalog.jsonb_build_object(
-            'recordTypeId', '54550000-0000-4000-8000-000000000001',
-            'storageContractId', '64550000-0000-4000-8000-000000000001',
-            'storageScope', 'organization_shared',
-            'ownershipMode', 'group',
-            'fields', pg_catalog.jsonb_build_array(
-              pg_temp.storage_field(
-                '74550000-0000-4000-8000-000000000001', 'text', true, true, true, true
-              )
-            ) || case when p_revision >= 2 then pg_catalog.jsonb_build_array(
-              pg_temp.storage_field(
-                '74550000-0000-4000-8000-000000000003', 'whole_number', false,
-                false, true, true
-              )
-            ) else '[]'::jsonb end || case when p_revision >= 3 then pg_catalog.jsonb_build_array(
-              pg_temp.storage_field(
-                '74550000-0000-4000-8000-000000000004', 'long_text', false
-              )
-            ) else '[]'::jsonb end,
-            'relationships', '[]'::jsonb
-          ),
-          pg_catalog.jsonb_build_object(
-            'recordTypeId', '54550000-0000-4000-8000-000000000002',
-            'storageContractId', '64550000-0000-4000-8000-000000000002',
-            'storageScope', 'application_contained',
-            'ownershipMode', 'group',
-            'fields', pg_catalog.jsonb_build_array(
-              pg_temp.storage_field(
-                '74550000-0000-4000-8000-000000000002', 'link', false
-              )
-            ),
-            'relationships', case when p_revision < 3 then pg_catalog.jsonb_build_array(
-              pg_catalog.jsonb_build_object(
-                'relationshipId', '84550000-0000-4000-8000-000000000001',
-                'fromFieldId', '74550000-0000-4000-8000-000000000002',
-                'toRecordType', pg_catalog.jsonb_build_object(
-                  'recordTypeId', '54550000-0000-4000-8000-000000000001'
-                ),
-                'cardinality', 'many_to_one',
-                'onParentDelete', 'refuse'
-              )
-            ) else '[]'::jsonb end
+    'recordTypes', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', '54550000-0000-4000-8000-000000000001',
+        'storageContractId', '64550000-0000-4000-8000-000000000001',
+        'storageScope', 'organization_shared',
+        'ownershipMode', 'group',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.storage_field(
+            '74550000-0000-4000-8000-000000000001', 'text', true, true, true, true
           )
-        )
+        ) || case when p_revision >= 2 then pg_catalog.jsonb_build_array(
+          pg_temp.storage_field(
+            '74550000-0000-4000-8000-000000000003', 'whole_number', false,
+            false, true, true
+          )
+        ) else '[]'::jsonb end || case when p_revision >= 3 then pg_catalog.jsonb_build_array(
+          pg_temp.storage_field(
+            '74550000-0000-4000-8000-000000000004', 'long_text', false
+          )
+        ) else '[]'::jsonb end,
+        'relationships', '[]'::jsonb
+      ),
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', '54550000-0000-4000-8000-000000000002',
+        'storageContractId', '64550000-0000-4000-8000-000000000002',
+        'storageScope', 'application_contained',
+        'ownershipMode', 'group',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.storage_field(
+            '74550000-0000-4000-8000-000000000002', 'link', false
+          )
+        ),
+        'relationships', case when p_revision < 3 then pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'relationshipId', '84550000-0000-4000-8000-000000000001',
+            'fromFieldId', '74550000-0000-4000-8000-000000000002',
+            'toRecordType', pg_catalog.jsonb_build_object(
+              'recordTypeId', '54550000-0000-4000-8000-000000000001'
+            ),
+            'cardinality', 'many_to_one',
+            'onParentDelete', 'refuse'
+          )
+        ) else '[]'::jsonb end
       )
     )
   )
 $function$;
 
-create function pg_temp.application_output(
-  p_root_id uuid default '34550000-0000-4000-8000-000000000001'
-)
-returns jsonb
-language sql
-immutable
-set search_path = ''
-as $function$
-  select pg_catalog.jsonb_build_object(
-    'kind', 'application',
-    'validationContractVersion', '1.0.0',
-    'canonical', pg_catalog.jsonb_build_object(
-      'envelope', pg_catalog.jsonb_build_object(
-        'rootId', p_root_id
-      ),
-      'content', '{}'::jsonb
-    )
-  )
-$function$;
-
-create function pg_temp.newer_first_module_output(p_revision bigint)
+create function pg_temp.newer_first_module_content(p_revision bigint)
 returns jsonb
 language sql
 stable
 set search_path = ''
 as $function$
   select pg_catalog.jsonb_build_object(
-    'kind', 'module',
-    'validationContractVersion', '2.0.0',
-    'canonical', pg_catalog.jsonb_build_object(
-      'envelope', pg_catalog.jsonb_build_object(
-        'rootId', '44550000-0000-4000-8000-000000000002'
-      ),
-      'content', pg_catalog.jsonb_build_object(
-        'recordTypes', pg_catalog.jsonb_build_array(
-          pg_catalog.jsonb_build_object(
-            'recordTypeId', '54550000-0000-4000-8000-000000000003',
-            'storageContractId', '64550000-0000-4000-8000-000000000003',
-            'storageScope', 'organization_shared',
-            'ownershipMode', 'group',
-            'fields', pg_catalog.jsonb_build_array(
-              pg_temp.storage_field(
-                '74550000-0000-4000-8000-000000000005', 'text', true
-              )
-            ) || case when p_revision >= 2 then pg_catalog.jsonb_build_array(
-              pg_temp.storage_field(
-                '74550000-0000-4000-8000-000000000006', 'whole_number', false
-              )
-            ) else '[]'::jsonb end,
-            'relationships', '[]'::jsonb
+    'recordTypes', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', '54550000-0000-4000-8000-000000000003',
+        'storageContractId', '64550000-0000-4000-8000-000000000003',
+        'storageScope', 'organization_shared',
+        'ownershipMode', 'group',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.storage_field(
+            '74550000-0000-4000-8000-000000000005', 'text', true
           )
-        )
+        ) || case when p_revision >= 2 then pg_catalog.jsonb_build_array(
+          pg_temp.storage_field(
+            '74550000-0000-4000-8000-000000000006', 'whole_number', false
+          )
+        ) else '[]'::jsonb end,
+        'relationships', '[]'::jsonb
       )
     )
   )
@@ -564,192 +530,89 @@ insert into vortex_definition.roots (
   ),
   (
     '44550000-0000-4000-8000-000000000001',
-    '24550000-0000-4000-8000-000000000002', 'module',
+    '24550000-0000-4000-8000-000000000001', 'module',
     'vortex.storage_test.module', pg_catalog.statement_timestamp(),
     '94550000-0000-4000-8000-000000000001'
   ),
   (
     '44550000-0000-4000-8000-000000000002',
-    '24550000-0000-4000-8000-000000000002', 'module',
+    '24550000-0000-4000-8000-000000000001', 'module',
     'vortex.storage_test.newer_first_module', pg_catalog.statement_timestamp(),
+    '94550000-0000-4000-8000-000000000001'
+  ),
+  (
+    '44550000-0000-4000-8000-000000000006',
+    '24550000-0000-4000-8000-000000000002', 'module',
+    'vortex.storage_test.wrong_organization_module', pg_catalog.statement_timestamp(),
     '94550000-0000-4000-8000-000000000001'
   );
 
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-)
-select '44550000-0000-4000-8000-000000000001'::uuid, revision,
-  case revision when 1 then '2.0.0' when 2 then '2.1.0' else '2.2.0' end,
-  pg_catalog.jsonb_build_object(
-    'source_contract_version', '2.0.0', 'kind', 'module',
-    'key', 'vortex.storage_test.module'
-  ),
-  'sha256:' || pg_catalog.repeat('9', 64), '2.0.0',
-  pg_temp.module_output(revision),
-  pg_catalog.jsonb_build_object(
-    'fingerprint', 'sha256:' || pg_catalog.repeat(revision::text, 64)
-  ),
-  'sha256:' || pg_catalog.repeat(case revision when 1 then 'a' when 2 then 'b' else 'c' end, 64),
-  'sha256:' || pg_catalog.repeat(revision::text, 64), '2.0.0',
-  'sha256:' || pg_catalog.repeat('8', 64), '[]'::jsonb,
-  'Storage-test Module V2 release ' || revision::text || '.',
-  pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'::uuid
-from pg_catalog.generate_series(1, 3) as revisions(revision);
-
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-)
-select '34550000-0000-4000-8000-000000000001'::uuid, revision,
-  case revision when 1 then '1.0.0' when 2 then '1.1.0' else '1.2.0' end,
-  pg_catalog.jsonb_build_object(
-    'source_contract_version', '1.0.0', 'kind', 'application',
-    'key', 'vortex.storage_test.application'
-  ),
-  'sha256:' || pg_catalog.repeat('7', 64), '1.0.0',
-  pg_temp.application_output(),
-  pg_catalog.jsonb_build_object(
-    'fingerprint', 'sha256:' || pg_catalog.repeat(
-      case revision when 1 then '4' when 2 then '5' else '6' end, 64
-    )
-  ),
-  'sha256:' || pg_catalog.repeat(case revision when 1 then 'd' when 2 then 'e' else 'f' end, 64),
-  'sha256:' || pg_catalog.repeat(
-    case revision when 1 then '4' when 2 then '5' else '6' end, 64
-  ),
-  '1.0.0', 'sha256:' || pg_catalog.repeat('0', 64), '[]'::jsonb,
-  'Storage-test Application V1 release ' || revision::text || '.',
-  pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'::uuid
-from pg_catalog.generate_series(1, 3) as revisions(revision);
-
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-)
-select '44550000-0000-4000-8000-000000000002'::uuid, revision,
-  case revision when 1 then '2.0.0' else '2.1.0' end,
-  pg_catalog.jsonb_build_object(
-    'source_contract_version', '2.0.0', 'kind', 'module',
-    'key', 'vortex.storage_test.newer_first_module'
-  ),
-  'sha256:' || pg_catalog.repeat('6', 64), '2.0.0',
-  pg_temp.newer_first_module_output(revision),
-  pg_catalog.jsonb_build_object(
-    'fingerprint', 'sha256:' || pg_catalog.repeat(
-      case revision when 1 then '4' else '5' end, 64
-    )
-  ),
-  'sha256:' || pg_catalog.repeat(case revision when 1 then '6' else '7' end, 64),
-  'sha256:' || pg_catalog.repeat(case revision when 1 then '4' else '5' end, 64),
-  '2.0.0', 'sha256:' || pg_catalog.repeat('3', 64), '[]'::jsonb,
-  'Newer-first Module V2 release ' || revision::text || '.',
-  pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'::uuid
-from pg_catalog.generate_series(1, 2) as revisions(revision);
-
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-) values (
-  '34550000-0000-4000-8000-000000000003', 1, '1.0.0',
-  pg_catalog.jsonb_build_object(
-    'source_contract_version', '1.0.0', 'kind', 'application',
-    'key', 'vortex.storage_test.wrong_organization_application'
-  ),
-  'sha256:' || pg_catalog.repeat('2', 64), '1.0.0',
-  pg_temp.application_output('34550000-0000-4000-8000-000000000003'),
-  pg_catalog.jsonb_build_object(
-    'fingerprint', 'sha256:' || pg_catalog.repeat('2', 64)
-  ),
-  'sha256:' || pg_catalog.repeat('2', 64),
-  'sha256:' || pg_catalog.repeat('2', 64), '1.0.0',
-  'sha256:' || pg_catalog.repeat('2', 64), '[]'::jsonb,
-  'Wrong-organisation Application V1 release.', pg_catalog.statement_timestamp(),
-  '94550000-0000-4000-8000-000000000001'
+-- Every release in this section is published through the writer,
+-- vortex_definition.append_release, so each dependency edge carries the
+-- exact evidence of the Module release it pins and stays within its
+-- Application's organisation. The installing organisation owns both Modules
+-- it installs. The wrong-organisation Application depends on a Module of its
+-- own organisation, so the one reason it cannot be installed here is that it
+-- belongs to another organisation.
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000001', '2.0.0', '[]', pg_temp.module_content(1), '2.0.0'
 );
-
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-)
-select '34550000-0000-4000-8000-000000000004'::uuid, revision,
-  case revision when 1 then '1.0.0' else '1.1.0' end,
-  pg_catalog.jsonb_build_object(
-    'source_contract_version', '1.0.0', 'kind', 'application',
-    'key', 'vortex.storage_test.newer_first_application'
-  ),
-  'sha256:' || pg_catalog.repeat('1', 64), '1.0.0',
-  pg_temp.application_output('34550000-0000-4000-8000-000000000004'),
-  pg_catalog.jsonb_build_object(
-    'fingerprint', 'sha256:' || pg_catalog.repeat(
-      case revision when 1 then '8' else '9' end, 64
-    )
-  ),
-  'sha256:' || pg_catalog.repeat(case revision when 1 then '8' else '9' end, 64),
-  'sha256:' || pg_catalog.repeat(case revision when 1 then '8' else '9' end, 64),
-  '1.0.0', 'sha256:' || pg_catalog.repeat('1', 64), '[]'::jsonb,
-  'Newer-first Application V1 release ' || revision::text || '.',
-  pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'::uuid
-from pg_catalog.generate_series(1, 2) as revisions(revision);
-
-insert into vortex_definition.release_dependencies (
-  root_id, release_revision, dependency_kind, dependency_reference,
-  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
-  target_root_id, target_release_revision, catalogue_item_id
-)
-select '34550000-0000-4000-8000-000000000001'::uuid, revision, 'module',
-  'vortex.storage_test.module',
-  case revision when 1 then '2.0.0' when 2 then '2.1.0' else '2.2.0' end,
-  'sha256:' || pg_catalog.repeat(case revision when 1 then 'a' when 2 then 'b' else 'c' end, 64),
-  'sha256:' || pg_catalog.repeat(case revision when 1 then '1' when 2 then '2' else '3' end, 64),
-  '44550000-0000-4000-8000-000000000001'::uuid, revision, null
-from pg_catalog.generate_series(1, 3) as revisions(revision);
-
-insert into vortex_definition.release_dependencies (
-  root_id, release_revision, dependency_kind, dependency_reference,
-  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
-  target_root_id, target_release_revision, catalogue_item_id
-) values (
-  '34550000-0000-4000-8000-000000000003', 1, 'module',
-  'vortex.storage_test.module', '2.0.0',
-  'sha256:' || pg_catalog.repeat('a', 64),
-  'sha256:' || pg_catalog.repeat('2', 64),
-  '44550000-0000-4000-8000-000000000001', 1, null
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000001', '2.1.0', '[]', pg_temp.module_content(2), '2.0.0'
 );
-insert into vortex_definition.release_dependencies (
-  root_id, release_revision, dependency_kind, dependency_reference,
-  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
-  target_root_id, target_release_revision, catalogue_item_id
-)
-select '34550000-0000-4000-8000-000000000004'::uuid, revision, 'module',
-  'vortex.storage_test.newer_first_module',
-  case revision when 1 then '2.0.0' else '2.1.0' end,
-  'sha256:' || pg_catalog.repeat(case revision when 1 then '6' else '7' end, 64),
-  'sha256:' || pg_catalog.repeat(case revision when 1 then '4' else '5' end, 64),
-  '44550000-0000-4000-8000-000000000002'::uuid, revision, null
-from pg_catalog.generate_series(1, 2) as revisions(revision);
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000001', '2.2.0', '[]', pg_temp.module_content(3), '2.0.0'
+);
+select pg_temp.append_writer_release(
+  '34550000-0000-4000-8000-000000000001', '1.0.0',
+  '[["44550000-0000-4000-8000-000000000001", 1]]'
+);
+select pg_temp.append_writer_release(
+  '34550000-0000-4000-8000-000000000001', '1.1.0',
+  '[["44550000-0000-4000-8000-000000000001", 2]]'
+);
+select pg_temp.append_writer_release(
+  '34550000-0000-4000-8000-000000000001', '1.2.0',
+  '[["44550000-0000-4000-8000-000000000001", 3]]'
+);
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000002', '2.0.0', '[]',
+  pg_temp.newer_first_module_content(1), '2.0.0'
+);
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000002', '2.1.0', '[]',
+  pg_temp.newer_first_module_content(2), '2.0.0'
+);
+select pg_temp.append_writer_release(
+  '34550000-0000-4000-8000-000000000004', '1.0.0',
+  '[["44550000-0000-4000-8000-000000000002", 1]]'
+);
+select pg_temp.append_writer_release(
+  '34550000-0000-4000-8000-000000000004', '1.1.0',
+  '[["44550000-0000-4000-8000-000000000002", 2]]'
+);
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000006', '2.0.0', '[]',
+  pg_catalog.jsonb_build_object('recordTypes', pg_catalog.jsonb_build_array(
+    pg_temp.single_record_type(
+      '54550000-0000-4000-8000-000000000007',
+      '64550000-0000-4000-8000-000000000007',
+      '74550000-0000-4000-8000-000000000012'
+    )
+  )),
+  '2.0.0'
+);
+select pg_temp.append_writer_release(
+  '34550000-0000-4000-8000-000000000003', '1.0.0',
+  '[["44550000-0000-4000-8000-000000000006", 1]]'
+);
 
 select pg_temp.initialize_storage_context();
 set local role vortex_request;
 select throws_ok(
   $$select * from vortex_module.provision_module_installation_storage(
     '34550000-0000-4000-8000-000000000003', 1,
-    '44550000-0000-4000-8000-000000000001', 1, null
+    '44550000-0000-4000-8000-000000000006', 1, null
   )$$::text,
   'P0002'::char(5), 'Module installation evidence is unavailable'::text,
   'an Application release owned by another organisation is unavailable'::text
@@ -769,15 +632,6 @@ select is((select state from first_provision), 'provisioned',
   'the exact Application V1 to Module V2 binding remains inactive after provisioning');
 select is((select changed from first_provision), true,
   'first provisioning reports its real storage change');
-select is(
-  (
-    select root.organization_id
-    from vortex_definition.roots as root
-    where root.root_id = '44550000-0000-4000-8000-000000000001'
-  ),
-  '24550000-0000-4000-8000-000000000002'::uuid,
-  'an exact shared Module release may be owned outside the installing organisation'
-);
 select is(
   (
     select pg_catalog.concat_ws(':', state, binding_revision,
@@ -992,8 +846,7 @@ select ok(
     select catalogue.first_compatible_release_revision = 1
       and catalogue.last_compatible_release_revision = 2
       and catalogue.record_type_definition =
-        pg_temp.newer_first_module_output(2) #>
-          '{canonical,content,recordTypes,0}'
+        pg_temp.newer_first_module_content(2) #> '{recordTypes,0}'
       and mapping.state = 'active'
       and mapping.introduced_at_release_revision = 2
       and pg_catalog.to_regclass(
@@ -1147,12 +1000,24 @@ select throws_ok(
   'the request role cannot bypass Record through the generated table'::text);
 reset role;
 
+-- The native Module V3 root belongs to the installing organisation because
+-- the Application below is published against it through the writer, which
+-- accepts dependencies only within the Application's organisation.
+--
+-- Labelled legacy data: the Module roots and the eight Module releases in this
+-- section (roots 44550...003, ...004 and ...005) are inserted directly on
+-- purpose. They are storage-generator fixtures, and replaying them through
+-- vortex_definition.append_release is refused (23514 "Definition canonical
+-- release content does not belong to the locked root"); the later releases of
+-- ...005 are deliberately corrupt inputs to the generator's own gates, which no
+-- writer can store. None of them carries a dependency edge, so none bears on
+-- the Module pin-set rule.
 insert into vortex_definition.roots (
   root_id, organization_id, kind, key, created_at, created_by
 ) values
   (
     '44550000-0000-4000-8000-000000000003',
-    '24550000-0000-4000-8000-000000000002', 'module',
+    '24550000-0000-4000-8000-000000000001', 'module',
     'vortex.storage_test.native_v3_module', pg_catalog.statement_timestamp(),
     '94550000-0000-4000-8000-000000000001'
   ),
@@ -1357,39 +1222,11 @@ select ok(
   ),
   'native Module V3 storage records its table, column and exact provision receipt');
 
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-) values (
-  '34550000-0000-4000-8000-000000000002', 1, '1.0.0',
-  pg_catalog.jsonb_build_object(
-    'source_contract_version', '1.0.0', 'kind', 'application',
-    'key', 'vortex.storage_test.other_application'
-  ),
-  'sha256:' || pg_catalog.repeat('3', 64), '1.0.0',
-  pg_temp.application_output('34550000-0000-4000-8000-000000000002'),
-  pg_catalog.jsonb_build_object(
-    'fingerprint', 'sha256:' || pg_catalog.repeat('3', 64)
-  ),
-  'sha256:' || pg_catalog.repeat('3', 64),
-  'sha256:' || pg_catalog.repeat('3', 64), '1.0.0',
-  'sha256:' || pg_catalog.repeat('3', 64), '[]'::jsonb,
-  'Module V3 installing Application V1 release.',
-  pg_catalog.statement_timestamp(), '94550000-0000-4000-8000-000000000001'
-);
-insert into vortex_definition.release_dependencies (
-  root_id, release_revision, dependency_kind, dependency_reference,
-  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
-  target_root_id, target_release_revision, catalogue_item_id
-) values (
-  '34550000-0000-4000-8000-000000000002', 1, 'module',
-  'vortex.storage_test.native_v3_module', '1.0.0',
-  'sha256:' || pg_catalog.repeat('c', 64),
-  'sha256:' || pg_catalog.repeat('3', 64),
-  '44550000-0000-4000-8000-000000000003', 1, null
+-- Published through the writer, so the dependency edge carries the exact
+-- evidence of the native Module V3 release it pins.
+select pg_temp.append_writer_release(
+  '34550000-0000-4000-8000-000000000002', '1.0.0',
+  '[["44550000-0000-4000-8000-000000000003", 1]]'
 );
 
 select pg_temp.initialize_storage_context();
