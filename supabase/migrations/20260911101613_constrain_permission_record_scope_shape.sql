@@ -10,6 +10,26 @@
 -- (20260907223932_preserve_permission_field_policy.sql:21-95): pure,
 -- immutable, invoker-rights, empty search path, boolean-returning, never
 -- raising.
+--
+-- Every `or`-chained guard below is ordered so a missing key is refused by an
+-- explicit `?`/`?&` presence check before anything reads that key's value.
+-- `jsonb_typeof(x -> 'k') <> 'string'` alone is not such a check: when key
+-- `k` is absent, `x -> 'k'` is SQL NULL, `jsonb_typeof(NULL)` is SQL NULL,
+-- and `NULL <> 'string'` is NULL, not TRUE -- so in `IF a OR b THEN`,
+-- PL/pgSQL treats a NULL `b` as "don't take the branch" exactly like FALSE,
+-- and a route or binding missing that key sails through. This shipped once:
+-- a `parameterBindings` entry with no `key` at all (`{"source":
+-- "current_organization_account_id", "extra": 1}`, or a misspelling such as
+-- `{"kye": "actor", ...}`) reached `binding_key := binding_value ->> 'key'`
+-- as NULL, which then made every later NULL-typed comparison in the same
+-- loop (the regex match, the length check, the canonical-order check) pass
+-- instead of refuse, and it also permanently reset `previous_binding_key` to
+-- NULL, silently disabling the order/duplicate check for every binding after
+-- it in the same array. Independent review found the resulting disagreement:
+-- the store accepted such a scope while `evaluate_permission_saved_condition`
+-- (which does its own complete, independent shape check) refused it with
+-- 22023. Each affected guard below now leads with an explicit presence check
+-- so absence is refused before it is ever read.
 create function vortex_access.permission_record_scope_is_valid(p_record_scope jsonb)
 returns boolean
 language plpgsql
@@ -45,6 +65,7 @@ begin
     from pg_catalog.jsonb_array_elements(p_record_scope -> 'routes') as item(value)
   loop
     if pg_catalog.jsonb_typeof(route_value) <> 'object'
+      or not (route_value ? 'kind')
       or pg_catalog.jsonb_typeof(route_value -> 'kind') <> 'string' then
       return false;
     end if;
@@ -128,6 +149,7 @@ begin
       ) as item(value)
     loop
       if pg_catalog.jsonb_typeof(binding_value) <> 'object'
+        or not (binding_value ? 'key')
         or pg_catalog.jsonb_typeof(binding_value -> 'key') <> 'string' then
         return false;
       end if;
@@ -138,6 +160,11 @@ begin
       end if;
       select pg_catalog.count(*) into binding_key_count
       from pg_catalog.jsonb_object_keys(binding_value) as key;
+
+      if not (binding_value ? 'source')
+        or pg_catalog.jsonb_typeof(binding_value -> 'source') <> 'string' then
+        return false;
+      end if;
 
       if binding_value ->> 'source' = 'current_organization_account_id' then
         if binding_key_count <> 2 then

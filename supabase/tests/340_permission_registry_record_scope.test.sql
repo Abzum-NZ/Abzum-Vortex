@@ -727,6 +727,124 @@ select is(
   'the store accepts each legal record-scope shape -- one per route kind, plus a valid saved condition -- and preserves it exactly'
 );
 
+-- End-to-end (#387 review finding B1): the registration writer itself only
+-- confirms `recordScope` is a JSON object when present
+-- (apply_application_permission_registration_v1_internal); it does not
+-- re-check routes/savedCondition shape, so a keyless saved-condition binding
+-- (a well-formed JSON object, just not what Zod allows) reaches the same
+-- INSERT the raw-insert tests above exercise directly. Before the store
+-- check existed with this shape rule, the writer stored such a row. A fresh
+-- application root and a single release whose compilation_output already
+-- carries the keyless binding keep the writer's own stale-evidence check
+-- satisfied (candidate and release agree, since both come from the same
+-- permission literal), so the *store* check is what is being proven here,
+-- not a side effect of some other refusal.
+create function pg_temp.keyless_binding_permission()
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+    'permissionId', '43400000-0000-4000-8000-000000000040'::uuid,
+    'key', 'neutral.action.keyless_binding',
+    'label', 'Keyless binding',
+    'description', 'End-to-end keyless-binding probe.',
+    'recordTypeId', '63400000-0000-4000-8000-000000000001'::uuid,
+    'recordScope', (
+      '{"routes":[{"kind":"ownership"}],"savedCondition":{"conditionId":' ||
+      '"43400000-0000-4000-8000-000000000041","publishedRevision":1,' ||
+      '"contractFingerprint":"sha256:' || pg_catalog.repeat('a', 64) || '",' ||
+      '"parameterBindings":[{"source":"current_organization_account_id","extra":1}]}}'
+    )::jsonb,
+    'actionKind', 'read',
+    'namedAction', null,
+    'administrative', false
+  ))
+$function$;
+
+insert into vortex_definition.roots (
+  root_id, organization_id, kind, key, created_at, created_by
+) values (
+  '33400000-0000-4000-8000-000000000099',
+  '23400000-0000-4000-8000-000000000001', 'application',
+  'neutral.keyless_binding_application', pg_catalog.statement_timestamp(),
+  '93400000-0000-4000-8000-000000000001'
+);
+
+insert into vortex_definition.releases (
+  root_id, release_revision, release_version, authored_source,
+  authored_source_fingerprint, source_contract_version, compilation_output,
+  resolution_snapshot, content_fingerprint, resolution_fingerprint,
+  validation_contract_version, comparison_fingerprint, impact_reasons,
+  release_note, published_at, published_by
+) values (
+  '33400000-0000-4000-8000-000000000099', 1, '1.0.0',
+  pg_catalog.jsonb_build_object(
+    'source_contract_version', '1.0.0', 'kind', 'application',
+    'key', 'neutral.keyless_binding_application', 'body', '{}'::jsonb
+  ),
+  'sha256:' || pg_catalog.repeat('c', 64), '1.0.0',
+  pg_catalog.jsonb_build_object(
+    'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(
+      'content', pg_catalog.jsonb_build_object(
+        'permissions', pg_catalog.jsonb_build_array(pg_temp.keyless_binding_permission())
+      )
+    )
+  ),
+  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('d', 64)),
+  'sha256:' || pg_catalog.repeat('c', 64),
+  'sha256:' || pg_catalog.repeat('d', 64), '2.18.0',
+  'sha256:' || pg_catalog.repeat('e', 64), '[]'::jsonb, 'Keyless binding probe release',
+  pg_catalog.statement_timestamp(), '93400000-0000-4000-8000-000000000001'
+);
+
+create function pg_temp.keyless_binding_release()
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'kind', 'application', 'definitionKey', 'neutral.keyless_binding_application',
+    'rootId', '33400000-0000-4000-8000-000000000099'::uuid,
+    'releaseRevision', 1, 'releaseVersion', '1.0.0',
+    'validationContractVersion', '2.18.0',
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('c', 64),
+    'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('d', 64)
+  )
+$function$;
+
+select throws_ok(
+  pg_catalog.format(
+    'select * from vortex_access.apply_application_permission_registration_v1_internal(''register'',null,%L::jsonb,%L,%L)',
+    pg_catalog.jsonb_build_object(
+      'contractVersion', '1.0.0',
+      'organizationId', '23400000-0000-4000-8000-000000000001'::uuid,
+      'applicationRootId', '33400000-0000-4000-8000-000000000099'::uuid,
+      'applicationRelease', pg_temp.keyless_binding_release(),
+      'applicationCatalogueFingerprint', 'sha256:' || pg_catalog.repeat('f', 64),
+      'applicationPermissionIds', pg_catalog.jsonb_build_array(
+        '43400000-0000-4000-8000-000000000040'::uuid
+      ),
+      'entries', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'applicationRootId', '33400000-0000-4000-8000-000000000099'::uuid,
+        'ownerKind', 'application',
+        'ownerId', '33400000-0000-4000-8000-000000000099'::uuid,
+        'permission', pg_temp.keyless_binding_permission(),
+        'sourceRelease', pg_temp.keyless_binding_release(),
+        'meaningFingerprint', 'sha256:' || pg_catalog.repeat('9', 64)
+      )),
+      'candidateFingerprint', 'sha256:' || pg_catalog.repeat('0', 64)
+    )::text,
+    '93400000-0000-4000-8000-000000000001',
+    '73400000-0000-4000-8000-000000000099'
+  ),
+  '23514',
+  null,
+  'the registration writer refuses a keyless saved-condition binding end to end, via the store check'
+);
+
 set constraints all immediate;
 
 select * from finish();
