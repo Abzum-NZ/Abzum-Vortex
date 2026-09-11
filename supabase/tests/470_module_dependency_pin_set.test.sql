@@ -1,7 +1,7 @@
 \ir helpers/definition-release-writer.psql
 
 begin;
-select plan(33);
+select plan(36);
 
 set local search_path = pg_catalog, extensions, public;
 grant usage on schema extensions to vortex_request;
@@ -212,12 +212,19 @@ insert into vortex_identity.tenants (
 insert into vortex_identity.organizations (
   organization_id, tenant_id, parent_organization_id, short_name, display_name,
   state, created_at, created_by, state_changed_at, revision
-) values (
-  '24700000-0000-4000-8000-000000000001', '14700000-0000-4000-8000-000000000001',
-  null, 'pin_set_organisation', 'Pin set organisation', 'active',
-  pg_catalog.statement_timestamp(), '94700000-0000-4000-8000-000000000001',
-  pg_catalog.statement_timestamp(), 1
-);
+) values
+  (
+    '24700000-0000-4000-8000-000000000001', '14700000-0000-4000-8000-000000000001',
+    null, 'pin_set_organisation', 'Pin set organisation', 'active',
+    pg_catalog.statement_timestamp(), '94700000-0000-4000-8000-000000000001',
+    pg_catalog.statement_timestamp(), 1
+  ),
+  (
+    '24700000-0000-4000-8000-000000000002', '14700000-0000-4000-8000-000000000001',
+    null, 'pin_set_other_organisation', 'Pin set other organisation', 'active',
+    pg_catalog.statement_timestamp(), '94700000-0000-4000-8000-000000000001',
+    pg_catalog.statement_timestamp(), 1
+  );
 insert into vortex_identity.identity_projections (
   identity_id, state, created_at, state_changed_at, state_changed_by,
   state_change_correlation_id, revision
@@ -341,11 +348,14 @@ insert into vortex_access.organization_role_assignments (
   'a4700000-0000-4000-8000-000000000026'
 );
 
--- Roots, all in one organisation. Modules: S shared_module, P dependent_module,
--- C cycle_module, D cycle_bridge_module, U1 later_dependency_module, U3
--- later_application_module, X unrelated_module. Applications: Z application,
--- Y transitive_application, L legacy_application, E legacy_evidence_application
--- and W consistent_application.
+-- Roots, all in the first organisation except F. Modules: S shared_module, P
+-- dependent_module, C cycle_module, D cycle_bridge_module, U1
+-- later_dependency_module, U3 later_application_module, X unrelated_module.
+-- Applications: Z application, Y transitive_application, L
+-- legacy_application, E legacy_evidence_application, W consistent_application,
+-- V cross_organisation_application, R legacy_reference_application and Q
+-- legacy_kind_application. F other_organisation_module belongs to the second
+-- organisation.
 insert into vortex_definition.roots (
   root_id, organization_id, kind, key, created_at, created_by
 )
@@ -363,8 +373,18 @@ from (values
   ('34700000-0000-4000-8000-000000000002'::uuid, 'application', 'vortex.pin_set.transitive_application'),
   ('34700000-0000-4000-8000-000000000003'::uuid, 'application', 'vortex.pin_set.legacy_application'),
   ('34700000-0000-4000-8000-000000000004'::uuid, 'application', 'vortex.pin_set.legacy_evidence_application'),
-  ('34700000-0000-4000-8000-000000000005'::uuid, 'application', 'vortex.pin_set.consistent_application')
+  ('34700000-0000-4000-8000-000000000005'::uuid, 'application', 'vortex.pin_set.consistent_application'),
+  ('34700000-0000-4000-8000-000000000006'::uuid, 'application', 'vortex.pin_set.cross_organisation_application'),
+  ('34700000-0000-4000-8000-000000000007'::uuid, 'application', 'vortex.pin_set.legacy_reference_application'),
+  ('34700000-0000-4000-8000-000000000008'::uuid, 'application', 'vortex.pin_set.legacy_kind_application')
 ) as fixture(root_id, kind, key);
+insert into vortex_definition.roots (
+  root_id, organization_id, kind, key, created_at, created_by
+) values (
+  '44700000-0000-4000-8000-000000000008', '24700000-0000-4000-8000-000000000002', 'module',
+  'vortex.pin_set.other_organisation_module', pg_catalog.statement_timestamp(),
+  '94700000-0000-4000-8000-000000000001'
+);
 
 -- C@2 depends on D@1, which depends on C@1: a root-level cycle.
 select pg_temp.append_writer_release('44700000-0000-4000-8000-000000000003', '1.0.0');
@@ -420,6 +440,21 @@ select ok(
     where root_id = '34700000-0000-4000-8000-000000000001'
   ) is null,
   'the refused append stores no release or dependency row and leaves the current pointer unset'
+);
+
+-- F@1 is published through the writer in the second organisation. V declares
+-- it with F@1's exact evidence, so the only reason to refuse V is that F
+-- belongs to another organisation: Module dependencies stay within the
+-- Application's organisation until shared Modules are delivered.
+select pg_temp.append_writer_release('44700000-0000-4000-8000-000000000008', '1.0.0');
+select throws_ok(
+  $$select pg_temp.append_writer_release(
+    '34700000-0000-4000-8000-000000000006', '1.0.0',
+    '[["44700000-0000-4000-8000-000000000008", 1]]', '{"permissions": []}'
+  )$$::text,
+  '23514'::char(5),
+  'Module dependency does not identify an exact same-organization module release'::text,
+  'the writer refuses a Module dependency owned by another organisation'::text
 );
 
 -- W declares P and S at the revision P pins: S is reached by two edges with
@@ -497,13 +532,22 @@ select results_eq(
 -- through P and at 2 directly. E@1 gains an edge to P@1 carrying P@2's
 -- evidence fingerprint, a shape no writer revision stores (the target foreign
 -- key already pins version and content fingerprint); it exercises the
--- evidence rule the resolver took over from the readers.
+-- evidence rule the resolver took over from the readers. R@1 and Q@1 gain
+-- the two edges below, which no writer revision stores either, because every
+-- writer revision checks the target root's key and kind; they exercise the
+-- root-key and Module-kind rules the resolver also took over.
 select pg_temp.append_writer_release(
   '34700000-0000-4000-8000-000000000003', '1.0.0',
   '[["44700000-0000-4000-8000-000000000002", 1]]', '{"permissions": []}'
 );
 select pg_temp.append_writer_release(
   '34700000-0000-4000-8000-000000000004', '1.0.0', '[]', '{"permissions": []}'
+);
+select pg_temp.append_writer_release(
+  '34700000-0000-4000-8000-000000000007', '1.0.0', '[]', '{"permissions": []}'
+);
+select pg_temp.append_writer_release(
+  '34700000-0000-4000-8000-000000000008', '1.0.0', '[]', '{"permissions": []}'
 );
 insert into vortex_definition.release_dependencies (
   root_id, release_revision, dependency_kind, dependency_reference,
@@ -531,6 +575,31 @@ join vortex_definition.releases as target
   on target.root_id = legacy.target_root_id
   and target.release_revision = legacy.target_release_revision
 join vortex_definition.roots as target_root on target_root.root_id = target.root_id;
+-- R@1's edge to X@1 names S's key, and Q@1's Module edge targets the
+-- Application release W@1 under W's own key. Each carries its target's exact
+-- version and fingerprints, so only the root-key or the Module-kind rule can
+-- refuse it.
+insert into vortex_definition.release_dependencies (
+  root_id, release_revision, dependency_kind, dependency_reference,
+  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
+  target_root_id, target_release_revision, catalogue_item_id
+)
+select legacy.root_id, 1, 'module', legacy.dependency_reference, target.release_version,
+  target.content_fingerprint, target.resolution_fingerprint,
+  target.root_id, target.release_revision, null
+from (values
+  (
+    '34700000-0000-4000-8000-000000000007'::uuid,
+    '44700000-0000-4000-8000-000000000007'::uuid, 'vortex.pin_set.shared_module'
+  ),
+  (
+    '34700000-0000-4000-8000-000000000008'::uuid,
+    '34700000-0000-4000-8000-000000000005'::uuid, 'vortex.pin_set.consistent_application'
+  )
+) as legacy(root_id, target_root_id, dependency_reference)
+join vortex_definition.releases as target
+  on target.root_id = legacy.target_root_id
+  and target.release_revision = 1;
 
 -- Both legacy Applications hold an active binding for P@1, so the
 -- active-installation reader reaches its dependency checks.
@@ -567,6 +636,20 @@ select throws_ok(
   )$$::text,
   '23514'::char(5), 'Exact bound Module dependency evidence is inconsistent'::text,
   'the resolver refuses a stored edge whose evidence disagrees with its target release'::text
+);
+select throws_ok(
+  $$select * from vortex_definition.reachable_module_dependency_edges(
+    '34700000-0000-4000-8000-000000000007', 1
+  )$$::text,
+  '23514'::char(5), 'Exact bound Module dependency evidence is inconsistent'::text,
+  'the resolver refuses a stored edge whose reference is not its target root key'::text
+);
+select throws_ok(
+  $$select * from vortex_definition.reachable_module_dependency_edges(
+    '34700000-0000-4000-8000-000000000008', 1
+  )$$::text,
+  '23514'::char(5), 'Exact bound Module dependency evidence is inconsistent'::text,
+  'the resolver refuses a stored Module edge whose target is an Application release'::text
 );
 
 select pg_temp.pin_set_context('34700000-0000-4000-8000-000000000003');
