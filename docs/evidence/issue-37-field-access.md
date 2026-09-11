@@ -50,10 +50,12 @@ with no migration or production code change. No production defect was found.
 
 Each new test file, and the concurrency proof, was shown to fail under targeted
 mutations of the mechanisms it proves, and to pass again on the restored tree.
-That is a claim about each file, not each assertion. Positive controls,
-ground-truth reads and several no-effect checks pass under every mutation that
-was run. SQL mutations each ran on a fresh cluster. Each commit message lists
-its mutations and failure counts.
+That is a claim about each file, not each assertion. Some positive controls,
+ground-truth reads and no-effect checks pass under every mutation that was run;
+others fail under the mutations they depend on (for example `447` #25 under
+both post-lock comparison mutations, and `448` #64 when row scope keeps only
+the first share). SQL mutations each ran on a fresh cluster. Each commit message
+lists its mutations and failure counts.
 
 Findings. None is a defect, and none was changed:
 
