@@ -4,9 +4,10 @@ Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and accep
 
 ## Remaining acceptance proofs — branch `feat/issue-37-remaining-proofs` — 11–12 September 2026
 
-Source: branch `feat/issue-37-remaining-proofs` from Testing `757f1bd` (PR #391),
-pushed with no pull request. It adds proofs and records only, with no migration
-or production code change. No production defect was found.
+Source: branch `feat/issue-37-remaining-proofs`, started from Testing `757f1bd`
+(PR #391) and merged with Testing `debf306` (PRs #392, #394 and #397) in
+`9dec9c7`. It is pushed with no pull request. It adds proofs and records only,
+with no migration or production code change. No production defect was found.
 
 - `8f0e5d3` records PR #385 and PR #388 below and corrects SQL440's comment,
   which called the resolver "at parity" with the TypeScript engine PR #388
@@ -36,26 +37,44 @@ or production code change. No production defect was found.
   registers it in the verification manifest (27 proofs). A grant and a revoke
   each block behind a real role-assignment revoke. Once that revoke commits,
   each is refused and writes nothing.
+- `81cdd7e` adds three races to that proof after review. In each, the
+  account-lifecycle writer closes an account while the protected operation
+  waits at the lock: the grantor's (grant), a non-grantor revoker's (revoke),
+  and the share's own grantor's (revoke). Each is refused and writes nothing.
+  Every race now runs even after one commits, and the proof names each race
+  whose stale operation committed.
 - `2ae4f1c` adds `runtime/definition/test/permission-field-policy-publication.test.ts`.
   It tests field/record-type mismatch and sensitive explicit access at
   publication, the layer that owns them. `ee986fb` rewords its header so it
   names no private schema, which the boundary check requires.
 
-Every new test was shown to fail under a targeted mutation of the mechanism it
-depends on, then passed again on the restored tree. SQL mutations each ran on
-a fresh cluster. Each commit message lists its mutations and failure counts.
+Each new test file, and the concurrency proof, was shown to fail under targeted
+mutations of the mechanisms it proves, and to pass again on the restored tree.
+That is a claim about each file, not each assertion. Positive controls,
+ground-truth reads and several no-effect checks pass under every mutation that
+was run. SQL mutations each ran on a fresh cluster. Each commit message lists
+its mutations and failure counts.
 
 Findings. None is a defect, and none was changed:
 
-- **Lock ordering (item 5).** Moving the governance lock after the authority
-  check cannot change the outcome by itself. Every authority writer advances
-  the Access version under that lock, and the post-lock comparison refuses the
-  stale request.
-  - With only that comparison removed, the request is still refused. The
-    grant's decision re-checks the context version, and revocation eligibility
-    is read after the lock.
-  - Only removing both lets a stale grant or revocation commit. The proof's
-    header states this.
+- **Lock ordering (item 5).** The post-lock Access-version comparison alone is
+  sufficient on both paths. Every writer in the races advances the Access
+  version under the governance lock. So even with the lock moved after the
+  authority check, the comparison refuses all five races.
+  - Taking the lock first, without the comparison, is sufficient only for the
+    grant. The grant's record decision re-validates account state and Access
+    version after the lock.
+  - The revocation validates its context once, before the lock. Its grantor
+    branch checks identity only, and its eligibility check reuses that context.
+    With only the revocation's comparison removed, a revocation whose account
+    is closed while it waits commits. That happens both for a non-grantor
+    revoker and for the share's own grantor.
+  - Correction: the `89f8697` commit message, this section as first written
+    and the proof's header at `2dee492` said lock ordering and the post-lock
+    comparison were redundant with each other. That held only for the
+    role-assignment races the proof then contained. For revocation, the
+    comparison is the only check against an account closed mid-flight. Review
+    found this, and `81cdd7e` adds those races and corrects the header.
 - **Organisation and application barriers (item 1).** An application-contained
   row of another organisation is refused by the organisation and application
   comparisons independently. Organisation-shared rows isolate the organisation
@@ -70,21 +89,26 @@ Findings. None is a defect, and none was changed:
   - the compiler's own provenance-completeness check;
   - publication's record-type and provenance rules.
 
-  This is the same shape as #387 for record scope.
+  The record-scope store check that #387 added (PR #394, merged here) is
+  modelled on this one and is also shape-only. No store check compares a
+  policy's field identities with its record type's fields.
 
-Local verification, on the restored tree:
+Local verification, on the merged tree at `81cdd7e`:
 
 - `pnpm db:verify` on a fresh `vortex-verify-*` cluster exited 0.
-  - pgTAP: `Files=72, Tests=3319`, `Result: PASS`.
-  - All 27 concurrency proofs passed.
+  - pgTAP: `Files=74, Tests=3485`, `Result: PASS`.
+  - All 27 concurrency proofs passed, including the five protected-share
+    races.
   - Database lint over the nine manifest schemas exited 0. Its only warnings
     are in five functions this branch does not touch.
-- `pnpm verify` passed format, lint, typecheck (23 packages) and boundaries,
-  then stopped at `pnpm test` on the known #390 timeout. That one
-  `compiler.test.ts` case ran 5,327 ms against the 5,000 ms default. The other
-  1,809 tests passed and 3 were skipped. Run alone, the two compiler files
-  passed 84 of 84. The steps `pnpm verify` did not reach, run separately, also
-  passed: `pnpm fixtures` (17 tests) and `pnpm build` (23 packages).
+- `pnpm verify` exited 0. That covers format, lint, typecheck (23 packages),
+  boundaries, the test suite (1,819 passed and 3 skipped), 17 fixture tests
+  and the build (23 packages).
+
+Before the merge, at `89f8697`, `pnpm db:verify` gave `Files=72, Tests=3319`,
+with 27 proofs and lint passing. `pnpm verify` then stopped only on the known
+#390 compiler timeout, and the two compiler files passed 84 of 84 when run
+alone.
 
 Hosted Testing: none. The branch has no pull request and is not merged, so no
 hosted Testing run exists for it.
@@ -224,7 +248,9 @@ seven focused tests and the Access typecheck successfully, then the full shared
 worktree suite: 95 files passed (two skipped), 1,363 tests passed (three skipped),
 12 fixture checks, and all 23 package typechecks and boundaries. This is source
 and orchestration evidence, not a live sharing endpoint or completed SQL proof.
-The pending neutral database adapter tests remain separately required.
+The neutral database adapter tests it left pending arrived later: SQL440, SQL445
+and SQL450 in PR #385, then SQL447, SQL448 and the protected-share concurrency
+proof on `feat/issue-37-remaining-proofs`. Both are recorded above.
 
 ## Pure field-resolution checkpoint — 8 September 2026
 
@@ -267,9 +293,10 @@ receipt. The author also passed Contracts typecheck, lint and formatting.
 
 These are pure contracts/helpers, not a public endpoint or proof that all future
 query, filter, sort, export, semantic-map or form executors enforce fields. The
-actual neutral database projection/write and protected sharing proof remains
-required by [#37](../build-plan/issue-37-field-access.md). The private #35 SQL
-candidate is not delivered with this checkpoint.
+actual neutral database projection/write and protected sharing proof was still
+required by [#37](../build-plan/issue-37-field-access.md) at this checkpoint. It
+was delivered later in PR #385, recorded above. The private #35 SQL candidate is
+not delivered with this checkpoint.
 
 ## Isolated source delivery — 8 September 2026
 
