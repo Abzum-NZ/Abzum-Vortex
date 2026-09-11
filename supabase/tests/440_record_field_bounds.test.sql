@@ -573,11 +573,14 @@ select throws_ok(
 );
 
 -- The same superseded-source refusal fires on a mismatch in any of the three
--- fields brought to parity with contracts/src/record-field-access.ts's own
--- sourceMatches (F5): validationContractVersion, contentFingerprint and
--- resolutionFingerprint. A release that changed only its content or
--- resolution evidence, with revision and version unchanged, must still be
--- caught -- exercised here via validationContractVersion.
+-- evidence fields compared beyond the five identity/release fields (F5):
+-- validationContractVersion, contentFingerprint and resolutionFingerprint. A
+-- release that changed only its content or resolution evidence, with revision
+-- and version unchanged, must still be caught -- exercised here via
+-- validationContractVersion. This resolver is the only owner of field bounds.
+-- The TypeScript engine (contracts/src/record-field-access.ts) that the
+-- migration's own comment still calls it "at parity" with was deleted by PR
+-- #388; that migration comment is immutable history, not a parity claim.
 select throws_ok(
   $$
     select vortex_access.resolve_record_field_bounds_internal(

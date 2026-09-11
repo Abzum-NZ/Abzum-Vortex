@@ -2,6 +2,184 @@
 
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and acceptance: [implementation plan](../build-plan/issue-37-field-access.md).
 
+## Remaining acceptance proofs — branch `feat/issue-37-remaining-proofs` — 11–12 September 2026
+
+Source: branch `feat/issue-37-remaining-proofs`, started from Testing `757f1bd`
+(PR #391) and merged with Testing `debf306` (PRs #392, #394 and #397) in
+`9dec9c7`. It is pushed with no pull request. It adds proofs and records only,
+with no migration or production code change. No production defect was found.
+
+- `8f0e5d3` records PR #385 and PR #388 below and corrects SQL440's comment,
+  which called the resolver "at parity" with the TypeScript engine PR #388
+  deleted. The header of
+  [`20260910094534_resolve_record_field_bounds.sql`](../../supabase/migrations/20260910094534_resolve_record_field_bounds.sql)
+  makes the same claim. Migrations are immutable, so it is left unchanged.
+- `d967de5` adds SQL447, the isolation matrix, and its writer-backed fixture
+  helper `supabase/tests/helpers/record-field-access-fixture.psql`.
+  Projection, change, protected grant and protected revoke are run in
+  both organisation directions and both application directions, through fixed
+  neutral adapters under `vortex_request`. The grant path includes
+  foreign-organisation and foreign-application targets and a foreign recipient.
+  Every refusal also asserts that no share, Activity or Access change was
+  written. `supabase/tests/helpers/definition-release-writer.psql` is copied
+  byte-identical from #45 (`50d6ac2`).
+- `dbfa520` adds SQL448 with before/after proofs. Each case is followed by a
+  projection and a change: account closed, role assignment revoked and
+  expired, Group membership revoked and expired, share revoked, and Access
+  version changed. SQL448 also closes three share-path gaps:
+  - an Activity failure in the protected grant rolls back the share and its
+    Access change together;
+  - a protected revoke writes exactly one Activity entry and one Access
+    change;
+  - with two shares for one recipient, revoking one leaves the survivor and an
+    independent ownership authority contributing.
+- `2dee492` adds `protected-record-share-authority-concurrency.test.sh` and
+  registers it in the verification manifest (27 proofs). A grant and a revoke
+  each block behind a real role-assignment revoke. Once that revoke commits,
+  each is refused and writes nothing.
+- `81cdd7e` adds three races to that proof after review. In each, the
+  account-lifecycle writer closes an account while the protected operation
+  waits at the lock: the grantor's (grant), a non-grantor revoker's (revoke),
+  and the share's own grantor's (revoke). Each is refused and writes nothing.
+  Every race now runs even after one commits, and the proof names each race
+  whose stale operation committed.
+- `2ae4f1c` adds `runtime/definition/test/permission-field-policy-publication.test.ts`.
+  It tests field/record-type mismatch and sensitive explicit access at
+  publication, the layer that owns them. `ee986fb` rewords its header so it
+  names no private schema, which the boundary check requires.
+
+Each new test file, and the concurrency proof, was shown to fail under targeted
+mutations of the mechanisms it proves, and to pass again on the restored tree.
+That is a claim about each file, not each assertion. Some positive controls,
+ground-truth reads and no-effect checks pass under every mutation that was run;
+others fail under the mutations they depend on (for example `447` #25 under
+both post-lock comparison mutations, and `448` #64 when row scope keeps only
+the first share). SQL mutations each ran on a fresh cluster. Each commit message
+lists its mutations and failure counts.
+
+Findings. None is a defect, and none was changed:
+
+- **Lock ordering (item 5).** The post-lock Access-version comparison alone is
+  sufficient on both paths. Every writer in the races advances the Access
+  version under the governance lock. So even with the lock moved after the
+  authority check, the comparison refuses all five races.
+  - Taking the lock first, without the comparison, is sufficient only for the
+    grant. The grant's record decision re-validates account state and Access
+    version after the lock.
+  - The revocation validates its context once, before the lock. Its grantor
+    branch checks identity only, and its eligibility check reuses that context.
+    With only the revocation's comparison removed, a revocation whose account
+    is closed while it waits commits. That happens both for a non-grantor
+    revoker and for the share's own grantor.
+  - Correction: the `89f8697` commit message, this section as first written
+    and the proof's header at `2dee492` said lock ordering and the post-lock
+    comparison were redundant with each other. That held only for the
+    role-assignment races the proof then contained. For revocation, the
+    comparison is the only check against an account closed mid-flight. Review
+    found this, and `81cdd7e` adds those races and corrects the header.
+- **Organisation and application barriers (item 1).** An application-contained
+  row of another organisation is refused by the organisation and application
+  comparisons independently. Organisation-shared rows isolate the organisation
+  comparison.
+- **Revocation layers (item 1).** Revocation across organisations is refused by
+  the protected lookup, then by the #36 writer's lookup, and finally by the
+  revoker foreign key.
+- **Store check (item 4).** Registration's store check
+  (`permission_field_policy_is_valid`) validates shape only. Record-type
+  membership and explicit sensitive access are enforced only at publication:
+  - scoped alias resolution;
+  - the compiler's own provenance-completeness check;
+  - publication's record-type and provenance rules.
+
+  The record-scope store check that #387 added (PR #394, merged here) is
+  modelled on this one and is also shape-only. No store check compares a
+  policy's field identities with its record type's fields.
+
+Local verification, on the merged tree at `81cdd7e`:
+
+- `pnpm db:verify` on a fresh `vortex-verify-*` cluster exited 0.
+  - pgTAP: `Files=74, Tests=3485`, `Result: PASS`.
+  - All 27 concurrency proofs passed, including the five protected-share
+    races.
+  - Database lint over the nine manifest schemas exited 0. Its only warnings
+    are in five functions this branch does not touch.
+- `pnpm verify` exited 0. That covers format, lint, typecheck (23 packages),
+  boundaries, the test suite (1,819 passed and 3 skipped), 17 fixture tests
+  and the build (23 packages).
+
+Before the merge, at `89f8697`, `pnpm db:verify` gave `Files=72, Tests=3319`,
+with 27 proofs and lint passing. `pnpm verify` then stopped only on the known
+#390 compiler timeout, and the two compiler files passed 84 of 84 when run
+alone.
+
+Hosted Testing: none. The branch has no pull request and is not merged, so no
+hosted Testing run exists for it.
+
+Not proved here:
+
+- Item 3(a) provokes the Activity failure only by reusing an Activity identity.
+  Other append failures are not provoked separately.
+- Record facts read before the lock that do not advance the Access version,
+  such as lifecycle, are outside item 5.
+- The item 4 tests use module permissions. Application permissions pass through
+  the same compiler resolution and publication check but are not exercised
+  here.
+- The expiry cases rely on a three-second expiry and a wall-clock wait.
+
+## TypeScript field engine removed — PR #388 — 11 September 2026
+
+Source: [PR #388](https://github.com/Abzum-NZ/Abzum-Vortex/pull/388), head
+`661e5c3234de2d9bf61449eb6979791f8b9862bb`, merged into Testing at
+`2026-09-11T00:26:08Z` as `ba4dac8a6ed46d00d85406dd2240d5e157866b3b`. It deletes
+`contracts/src/record-field-access.ts`, its test file and the barrel export.
+That engine had no consumer and took policy declarations from its caller. The
+SQL resolver `vortex_access.resolve_record_field_bounds_internal` is now the
+only owner of field bounds. The query channels (filter, sort, group and
+aggregate) moved to [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54).
+
+Local verification, as reported on #37: repository-wide typecheck passed for all
+23 packages and the contracts suite passed 638 tests in 47 files. A
+repository-wide search found no remaining reference to a removed symbol.
+
+Hosted Testing, as recorded on #37 and not re-checked here: the
+`testing_database_delivery` execution recorded there as `41D7gITE` succeeded in
+45m 31s. It wrote the evidence record
+`database-testing-ba4dac8a6ed46d00d85406dd2240d5e157866b3b` at `01:11:42Z`.
+
+## Database field enforcement and protected sharing — PR #385 — 10 September 2026
+
+Source: [PR #385](https://github.com/Abzum-NZ/Abzum-Vortex/pull/385), head
+`af1117ab71092dde216eb102d8523cc5b818ad97`, merged into Testing at
+`2026-09-10T22:11:03Z` as `575d0b03d11e8bb5b85156c3cac1f46d06c34a6f`. It adds
+[`20260910094534_resolve_record_field_bounds.sql`](../../supabase/migrations/20260910094534_resolve_record_field_bounds.sql),
+[`20260910114716_coordinate_protected_record_share.sql`](../../supabase/migrations/20260910114716_coordinate_protected_record_share.sql)
+and SQL440, SQL445 and SQL450. It is built on #35's exact-record decision,
+which [PR #380](https://github.com/Abzum-NZ/Abzum-Vortex/pull/380) delivered
+into Testing as `645b4a61576f49d7dfae8c0055d03ae667b072a6` at `2026-09-10T09:17:31Z`.
+
+The resolver takes only an allowed decision and reads each contribution's policy
+from the live catalogue. It checks each policy against that contribution's exact
+source release and intersects each direct-share contribution with the share's
+own field sets. The fixed projection and change adapters withhold unreadable
+fields and refuse an unauthorised write as a whole. The protected grant requires
+a current `record.share` decision on the real target row and a readable
+ceiling, plus an update ceiling when changeable fields are proposed. Revocation
+requires the caller's application to match an application-contained share, and
+either the share's own non-delegated grantor or a current share permission whose
+scope needs no record row (all records, no saved condition). Four independent
+reviews examined the change and three rejected it before the fourth approved;
+the rejected findings are recorded on #37.
+
+Local verification, as reported on #37: 69 files and 3,112 SQL assertions
+passed, and `db:lint` was clean on both changed functions. The concurrency suite
+was not claimed at that point (#384).
+
+Hosted Testing, as recorded on #37 and not re-checked here: execution
+[`6vXnFUL80sLyqVApTjnU4n`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6vXnFUL80sLyqVApTjnU4n)
+validated Testing commit `575d0b03d11e8bb5b85156c3cac1f46d06c34a6f` and
+succeeded in 45m 27s. It wrote the evidence record
+`database-testing-575d0b03d11e8bb5b85156c3cac1f46d06c34a6f` at `22:56:33Z`.
+
 ## Reviewed neutral database candidate — 8 September 2026
 
 The local candidate implements private field resolution, protected projection and
@@ -30,11 +208,12 @@ rollback-only SQL430 + SQL440 + SQL445 passing 88 assertions; SQL445 alone passe
 | Shared neutral fixture | `f36321dcfc1ca416fef728b25de5f3fae2e89ae70a3bd11aa557b3784a6a534a` |
 | Extracted SQL430 row proof | `5e358040f3e9d58b5ee48d162f1ecd5ae9e173aa53cfb4509658939490c11ecc` |
 
-This candidate remains uncommitted and undelivered because its #35 SQL prerequisite
-is unfinished, including the separately recorded fixed-limit authorization. The
-existing cutoff was not changed. Migration versions must follow the current
-Testing history when this combined dependency is delivered. Permanent generated
-adapters belong to #45; no screen, transport or whole #37 completion is claimed.
+This 8 September candidate was not delivered as it stood. Its #35 prerequisite
+was re-implemented and delivered separately in PR #380, without the fixed limits
+recorded here. The field-bounds and protected-sharing SQL delivered to Testing
+is the later implementation merged in PR #385, recorded above. Permanent
+generated adapters belong to #45; no screen, transport or whole #37 completion is
+claimed.
 
 The author rebuilt only the disposable local Supabase database to apply the
 candidate, then used rollback-only tests. This was not a hosted reset; no
@@ -71,7 +250,9 @@ seven focused tests and the Access typecheck successfully, then the full shared
 worktree suite: 95 files passed (two skipped), 1,363 tests passed (three skipped),
 12 fixture checks, and all 23 package typechecks and boundaries. This is source
 and orchestration evidence, not a live sharing endpoint or completed SQL proof.
-The pending neutral database adapter tests remain separately required.
+The neutral database adapter tests it left pending arrived later: SQL440, SQL445
+and SQL450 in PR #385, then SQL447, SQL448 and the protected-share concurrency
+proof on `feat/issue-37-remaining-proofs`. Both are recorded above.
 
 ## Pure field-resolution checkpoint — 8 September 2026
 
@@ -114,9 +295,10 @@ receipt. The author also passed Contracts typecheck, lint and formatting.
 
 These are pure contracts/helpers, not a public endpoint or proof that all future
 query, filter, sort, export, semantic-map or form executors enforce fields. The
-actual neutral database projection/write and protected sharing proof remains
-required by [#37](../build-plan/issue-37-field-access.md). The private #35 SQL
-candidate is not delivered with this checkpoint.
+actual neutral database projection/write and protected sharing proof was still
+required by [#37](../build-plan/issue-37-field-access.md) at this checkpoint. It
+was delivered later in PR #385, recorded above. The private #35 SQL candidate is
+not delivered with this checkpoint.
 
 ## Isolated source delivery — 8 September 2026
 
