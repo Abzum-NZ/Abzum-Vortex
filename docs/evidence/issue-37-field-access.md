@@ -2,6 +2,60 @@
 
 Task: [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37). Scope and acceptance: [implementation plan](../build-plan/issue-37-field-access.md).
 
+## TypeScript field engine removed — PR #388 — 11 September 2026
+
+Source: [PR #388](https://github.com/Abzum-NZ/Abzum-Vortex/pull/388), head
+`661e5c3234de2d9bf61449eb6979791f8b9862bb`, merged into Testing at
+`2026-09-11T00:26:08Z` as `ba4dac8a6ed46d00d85406dd2240d5e157866b3b`. It deletes
+`contracts/src/record-field-access.ts`, its test file and the barrel export.
+That engine had no consumer and took policy declarations from its caller. The
+SQL resolver `vortex_access.resolve_record_field_bounds_internal` is now the
+only owner of field bounds. The query channels (filter, sort, group and
+aggregate) moved to [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54).
+
+Local verification, as reported on #37: repository-wide typecheck passed for all
+23 packages and the contracts suite passed 638 tests in 47 files. A
+repository-wide search found no remaining reference to a removed symbol.
+
+Hosted Testing, as recorded on #37 and not re-checked here: the
+`testing_database_delivery` execution recorded there as `41D7gITE` succeeded in
+45m 31s. It wrote the evidence record
+`database-testing-ba4dac8a6ed46d00d85406dd2240d5e157866b3b` at `01:11:42Z`.
+
+## Database field enforcement and protected sharing — PR #385 — 10 September 2026
+
+Source: [PR #385](https://github.com/Abzum-NZ/Abzum-Vortex/pull/385), head
+`af1117ab71092dde216eb102d8523cc5b818ad97`, merged into Testing at
+`2026-09-10T22:11:03Z` as `575d0b03d11e8bb5b85156c3cac1f46d06c34a6f`. It adds
+[`20260910094534_resolve_record_field_bounds.sql`](../../supabase/migrations/20260910094534_resolve_record_field_bounds.sql),
+[`20260910114716_coordinate_protected_record_share.sql`](../../supabase/migrations/20260910114716_coordinate_protected_record_share.sql)
+and SQL440, SQL445 and SQL450. It is built on #35's exact-record decision,
+which [PR #380](https://github.com/Abzum-NZ/Abzum-Vortex/pull/380) delivered
+into Testing as `645b4a61576f49d7dfae8c0055d03ae667b072a6` at `2026-09-10T09:17:31Z`.
+
+The resolver takes only an allowed decision and reads each contribution's policy
+from the live catalogue. It checks each policy against that contribution's exact
+source release and intersects each direct-share contribution with the share's
+own field sets. The fixed projection and change adapters withhold unreadable
+fields and refuse an unauthorised write as a whole. The protected grant requires
+a current `record.share` decision on the real target row and a readable
+ceiling, plus an update ceiling when changeable fields are proposed. Revocation
+requires the caller's application to match an application-contained share, and
+either the share's own non-delegated grantor or a current share permission whose
+scope needs no record row (all records, no saved condition). Four independent
+reviews examined the change and three rejected it before the fourth approved;
+the rejected findings are recorded on #37.
+
+Local verification, as reported on #37: 69 files and 3,112 SQL assertions
+passed, and `db:lint` was clean on both changed functions. The concurrency suite
+was not claimed at that point (#384).
+
+Hosted Testing, as recorded on #37 and not re-checked here: execution
+[`6vXnFUL80sLyqVApTjnU4n`](https://kestra.abzum.com/ui/main/executions/vortex.operations/testing_database_delivery/6vXnFUL80sLyqVApTjnU4n)
+validated Testing commit `575d0b03d11e8bb5b85156c3cac1f46d06c34a6f` and
+succeeded in 45m 27s. It wrote the evidence record
+`database-testing-575d0b03d11e8bb5b85156c3cac1f46d06c34a6f` at `22:56:33Z`.
+
 ## Reviewed neutral database candidate — 8 September 2026
 
 The local candidate implements private field resolution, protected projection and
@@ -30,11 +84,12 @@ rollback-only SQL430 + SQL440 + SQL445 passing 88 assertions; SQL445 alone passe
 | Shared neutral fixture | `f36321dcfc1ca416fef728b25de5f3fae2e89ae70a3bd11aa557b3784a6a534a` |
 | Extracted SQL430 row proof | `5e358040f3e9d58b5ee48d162f1ecd5ae9e173aa53cfb4509658939490c11ecc` |
 
-This candidate remains uncommitted and undelivered because its #35 SQL prerequisite
-is unfinished, including the separately recorded fixed-limit authorization. The
-existing cutoff was not changed. Migration versions must follow the current
-Testing history when this combined dependency is delivered. Permanent generated
-adapters belong to #45; no screen, transport or whole #37 completion is claimed.
+This 8 September candidate was not delivered as it stood. Its #35 prerequisite
+was re-implemented and delivered separately in PR #380, without the fixed limits
+recorded here. The field-bounds and protected-sharing SQL delivered to Testing
+is the later implementation merged in PR #385, recorded above. Permanent
+generated adapters belong to #45; no screen, transport or whole #37 completion is
+claimed.
 
 The author rebuilt only the disposable local Supabase database to apply the
 candidate, then used rollback-only tests. This was not a hosted reset; no
