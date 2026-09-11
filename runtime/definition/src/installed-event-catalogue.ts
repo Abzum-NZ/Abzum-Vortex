@@ -152,45 +152,6 @@ export const resolveInstalledEventDefinitionContext = (
   )
     throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
 
-  const applicationModuleDependencies = app.dependencyManifest.filter(
-    (dependency): dependency is Extract<typeof dependency, { kind: "module" }> =>
-      dependency.kind === "module",
-  );
-  if (applicationModuleDependencies.length !== app.content.moduleBindings.length)
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-
-  for (const declaredBinding of app.content.moduleBindings) {
-    const module = modulesByRoot.get(String(declaredBinding.moduleRootId));
-    const dependency = applicationModuleDependencies.find(
-      (entry) => entry.rootId === declaredBinding.moduleRootId,
-    );
-    if (
-      module === undefined ||
-      dependency === undefined ||
-      declaredBinding.resolvedVersion !== module.releaseVersion ||
-      !dependencyMatchesRead(dependency, module)
-    )
-      throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-  }
-
-  const pending = [...applicationModuleDependencies];
-  const reached = new Set<string>();
-  while (pending.length > 0) {
-    const dependency = pending.pop()!;
-    const module = modulesByRoot.get(String(dependency.rootId));
-    if (module === undefined || !dependencyMatchesRead(dependency, module))
-      throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-    if (reached.has(String(module.rootId))) continue;
-    reached.add(String(module.rootId));
-    pending.push(
-      ...module.dependencyManifest.filter(
-        (entry): entry is Extract<typeof entry, { kind: "module" }> => entry.kind === "module",
-      ),
-    );
-  }
-  if (reached.size !== moduleReads.length)
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-
   for (const module of moduleReads) {
     const binding = bindingsByRoot.get(String(module.rootId));
     const declaredDependencies = module.content.dependencies;
