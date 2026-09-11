@@ -12,7 +12,8 @@ grant usage on schema extensions to vortex_request;
 -- vortex_definition.append_release enforces it, and the two readers, the
 -- storage provisioner and the permission registry read their Module set from
 -- it. Every release below is published through append_release by
--- pg_temp.append_writer_release, except the legacy section, which says why.
+-- pg_temp.append_writer_release; only the legacy section adds dependency
+-- edges directly, and it says why.
 
 create function pg_temp.pin_set_context(p_application_root_id uuid default null)
 returns void
