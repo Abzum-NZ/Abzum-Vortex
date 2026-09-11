@@ -11,13 +11,13 @@ import { validateDefinitionSet } from "../src/validation";
 
 // #37: the two field-policy rules that are owned at publication, tested at that
 // layer rather than restated in the database resolver. Field bounds are
-// resolved only in SQL (vortex_access.resolve_record_field_bounds_internal),
+// resolved only in SQL (the Access schema's resolve_record_field_bounds_internal),
 // which contributes exactly the field identities a stored policy names. It has
 // no notion of record-type membership or of sensitivity. Registration's store
-// check (vortex_access.permission_field_policy_is_valid) validates shape only
-// -- canonical unique UUIDs, changeable within readable -- and registration
-// requires the candidate to equal the published release's permissions
-// exactly. So whether a policy may name a field at all is decided here:
+// check (permission_field_policy_is_valid) validates shape only -- canonical
+// unique UUIDs, changeable within readable -- and registration requires the
+// candidate to equal the published release's permissions exactly. So whether
+// a policy may name a field at all is decided here:
 //   * field/record-type mismatch: an authored alias resolves only within the
 //     permission's exact record type (compiler), and a compiled policy must
 //     name only that record type's fields (publication validation);
