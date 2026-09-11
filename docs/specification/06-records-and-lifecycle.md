@@ -19,6 +19,12 @@ Every record stores or exposes through one joined system record:
 
 Exact columns are defined in the [data contracts](appendices/data-contracts.md#record-storage-contract).
 
+Initial account ownership is the creator; initial Group ownership requires a
+selected current membership Group. Protected ownership transfer, account
+offboarding, per-record-type lifecycle limits and automatic deadline calculations
+follow [record ownership and lifecycle policies](appendices/record-ownership-and-lifecycle.md).
+These are required engine behaviours, not ordinary editable system fields.
+
 The record's physical table follows its storage contract, not the name of the organisation, application, module, or record type. Consequently, two organisations can each own an application named CRM without colliding, and CRM and Service Desk can use one organisation-owned Company record without copying it. The complete allocation rule is in [runtime storage](17-runtime-storage-and-caching.md#record-table-allocation).
 
 ## Save sequence

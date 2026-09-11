@@ -57,6 +57,13 @@ The classification controls search, exports, activity detail, masking in diagnos
 
 ## Retention policies
 
+Every installed record type has the explicit age/count and end-of-life policy in
+[record-type lifecycle policies](appendices/record-ownership-and-lifecycle.md#record-type-lifecycle-policy).
+Organisation ceilings constrain it; application setup selects it. Reuse this
+retention engine for selection, holds, bounded execution and removal evidence,
+including verified workflow archival. Do not apply a single tenant's policy to
+an entire physical table shared by multiple organisations.
+
 An organisation can choose approved retention periods within legal and platform safety bounds. A policy names the data category, optional version-pinned saved condition, active retention period, recovery period, removal schedule, and applicable legal-constraint keys. Commercial status never weakens privacy or retention correctness.
 
 - Shortening a period shows an impact preview and requires confirmation.
@@ -125,3 +132,5 @@ Privacy administrators act within one organisation. A tenant administrator may c
 The [foundation plan](../build-plan/issue-252-activity-foundation.md) defines one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. After rollback, an independently authorised operation-specific path may append a refusal using only verified local identifiers. Logging failure cannot convert refusal into success. This task proves the reusable composition; it does not claim that every existing service has already integrated it.
 
 [File-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) supplies current recovery/hold checks before automated purge. [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117) extends selection policies and all-store handling, not a duplicate deletion engine. Complete organisation archive/restore follows these policies in [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255).
+
+Completed removal/revocation evidence must survive loss of the source project. Follow the [external removal journal and restore completeness rules](19-operations-backup-and-recovery.md); a database backup alone is not evidence that later erasures stayed erased. This remains later recovery delivery, not a Kestra maintenance prerequisite for core engines.

@@ -85,6 +85,6 @@ flowchart TD
 | Shell | A reusable layout contained in an Application, with named page-content slots; never an independently published root. |
 | Slot | A registered, named, typed location containing one ordered list of child placements. |
 | Binding context | Explicit current page record, related-record/query context or row item against which fields and operation inputs resolve. |
-| Application-contained editable data module | An authoring group over the existing application-contained data definitions, released with its Application rather than as a new independent publication kind. |
+| Application-bound editable Module | A normal, independently versioned Module bound by an Application. Application-contained describes its row scope, not ownership of the Module definition or a third publication root. |
 
 See [page-builder contracts](page-builder-contracts.md) for normative identity, validation and migration rules.
