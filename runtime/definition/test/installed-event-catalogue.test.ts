@@ -381,6 +381,42 @@ describe("installed event Definition projector", () => {
     );
   });
 
+  it("refuses an exact Module read and active binding outside the Application's dependency closure", () => {
+    const unreachedContent = {
+      ...moduleTwoContent,
+      name: "Unreached",
+      description: "Exact Module consumer result that no installed dependency reaches.",
+      recordTypes: [recordType(id(13), "unreached", id(22), [field(id(14), "title", "none")])],
+    };
+    const unreached = moduleDefinitionConsumerReadResultV2Schema.parse({
+      ...moduleTwo,
+      definitionKey: "example.module_three",
+      rootId: id(15),
+      releaseRevision: 23,
+      releaseVersion: "2.3.0",
+      contentFingerprint: fingerprintCanonicalValue(unreachedContent),
+      resolutionFingerprint: fingerprint("3"),
+      content: unreachedContent,
+    });
+    expectCode(
+      () =>
+        projectInstalledEventCatalogue({
+          application,
+          modules: [moduleOne, moduleTwo, unreached],
+          bindings: [
+            ...bindings,
+            {
+              ...bindings[1]!,
+              moduleRootId: unreached.rootId,
+              bindingRevision: 9,
+              moduleReleaseRevision: unreached.releaseRevision,
+            },
+          ],
+        }),
+      "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
+    );
+  });
+
   it("accepts an exact foreign-owned Module but still refuses release substitution", () => {
     const foreignModule = { ...moduleOne, organizationId: id(90) };
     expect(
