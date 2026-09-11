@@ -1,41 +1,53 @@
 #!/usr/bin/env bash
-# #37: a concurrent authority change cannot let a stale protected share grant or
-# revocation commit.
+# #37: a concurrent authority or account change cannot let a stale protected
+# share grant or revocation commit.
 #
-# Two races, each through the fixed trusted adapter under the real
+# Five races, each through the fixed trusted adapter under the real
 # vortex_request role, against a real concurrent writer that holds the
-# organisation's governance lock with an uncommitted authority change:
-#   grant  -- the grantor's own role assignment is revoked mid-flight;
-#   revoke -- a non-grantor revoker's share-permission assignment is revoked
-#             mid-flight.
-# In both, the protected operation is observed blocked by that writer. Once
-# the writer commits, the protected operation must be refused with 42501 and
-# must leave no share, share-state, Activity or extra Access change behind.
+# organisation's governance lock with an uncommitted change:
+#   grant                 -- the grantor's own role assignment is revoked;
+#   grant-closed          -- the grantor's own account is closed;
+#   revoke                -- a non-grantor revoker's share-permission
+#                            assignment is revoked;
+#   revoke-closed         -- a non-grantor revoker's own account is closed;
+#   grantor-revoke-closed -- the share's own grantor revokes it while that
+#                            grantor's account is closed.
+# The role-assignment writer and the account-lifecycle writer both take that
+# lock and advance the Access version in the same transaction. In every race
+# the protected operation is observed blocked by the writer. Once the writer
+# commits, the protected operation must be refused with 42501 and must leave
+# no share, share-state, Activity or extra Access change behind. Every race
+# runs even when an earlier one commits, and the proof fails naming each race
+# whose stale operation committed.
 #
 # What enforces this, established by targeted mutation on fresh clusters:
-#   * Every writer that changes authority advances the organisation's Access
-#     version in the same transaction, under the same governance lock. Both
-#     protected functions lock that version first and compare it with the
-#     request context's version before evaluating any authority.
-#   * Moving the lock after the authority check cannot change this proof's
-#     outcome while that comparison remains: a change that commits between an
-#     early authority check and the lock still advances the version, so it is
-#     refused at the lock.
-#   * Removing only the comparison cannot change the outcome either while the
-#     lock stays first: authority is then evaluated after the competing change
-#     has committed, and sees it. The grant's decision re-validates the
-#     context's Access version, and revocation re-reads the revoked assignment.
+#   * Both protected functions lock the organisation's Access version and then
+#     compare it with the request context's version. That post-lock comparison
+#     alone is sufficient on both paths. Even with the lock moved after the
+#     authority check, every race is refused there: the authority check passes
+#     against the state before the change, but the writer has advanced the
+#     version by the time the lock is granted.
+#   * Taking the lock first, without the comparison, is sufficient only for the
+#     grant. The grant's record decision re-validates the request context
+#     after the lock -- account state and Access version -- and refuses both
+#     grant races. The revocation validates its context once, before the lock.
+#     Its grantor branch checks identity only, and its eligibility check reuses
+#     that pre-lock context and never re-reads account state. With only the
+#     revocation's comparison removed, revoke-closed and grantor-revoke-closed
+#     commit, and this proof fails. The assignment race is still refused,
+#     because eligibility re-reads the revoked assignment.
 #   * Moving the lock after the authority check and removing the comparison
-#     together lets the stale grant and the stale revocation commit. This proof
-#     fails under that mutation.
+#     together lets the stale operations of that path commit. This proof fails
+#     under that mutation on either path.
 #
 # Fixture: tenants, organisations, the first account, the definition root and
 # draft, and the neutral content table and adapters are inserted directly (no
 # writer exists for them). Every other account comes from invitation
 # acceptance. The release comes from vortex_definition.append_release. The
 # permissions come from the coordinated registration writer, the role and
-# assignments from their owning writers, and the setup share from the protected
-# grant itself.
+# assignments from their owning writers, and the setup shares from the
+# protected grant itself. Accounts are closed only by the account-lifecycle
+# writer, inside the races.
 set -euo pipefail
 
 run_uuid="${VORTEX_PROTECTED_SHARE_PROOF_RUN_ID:-}"
@@ -58,6 +70,8 @@ readonly tenant_id="10${run_uuid:2}" organization_id="20${run_uuid:2}"
 readonly actor_id="90${run_uuid:2}"
 readonly admin_identity="40${run_uuid:2}" grantor_identity="41${run_uuid:2}"
 readonly revoker_identity="42${run_uuid:2}" recipient_identity="43${run_uuid:2}"
+readonly closing_grantor_identity="44${run_uuid:2}" closing_revoker_identity="45${run_uuid:2}"
+readonly revoking_grantor_identity="46${run_uuid:2}"
 readonly admin_account="50${run_uuid:2}"
 readonly application_root="30${run_uuid:2}" module_root="31${run_uuid:2}"
 readonly record_type="32${run_uuid:2}" storage_contract="33${run_uuid:2}"
@@ -66,10 +80,17 @@ readonly permission_read="c1${run_uuid:2}" permission_share="c2${run_uuid:2}"
 readonly permission_update="c3${run_uuid:2}"
 readonly role_id="60${run_uuid:2}"
 readonly grantor_assignment="70${run_uuid:2}" revoker_assignment="71${run_uuid:2}"
+readonly closing_grantor_assignment="72${run_uuid:2}" closing_revoker_assignment="73${run_uuid:2}"
+readonly revoking_grantor_assignment="74${run_uuid:2}"
 readonly record_id="e1${run_uuid:2}"
 readonly setup_share="81${run_uuid:2}" race_share="82${run_uuid:2}"
+readonly closing_revoker_share="83${run_uuid:2}" revoking_grantor_share="84${run_uuid:2}"
+readonly closed_grant_share="85${run_uuid:2}"
 readonly setup_activity="a1${run_uuid:2}" race_grant_activity="a2${run_uuid:2}"
 readonly race_revoke_activity="a3${run_uuid:2}"
+readonly closing_revoker_share_activity="a4${run_uuid:2}" revoking_grantor_share_activity="a5${run_uuid:2}"
+readonly closed_grant_activity="a6${run_uuid:2}" closed_revoke_activity="a7${run_uuid:2}"
+readonly closed_grantor_revoke_activity="a8${run_uuid:2}"
 readonly identity_authority="cc${run_uuid:2}" session_id="b1${run_uuid:2}"
 readonly application_key="example.share_auth_${run_token:0:12}"
 proof_root="$(mktemp -d /tmp/vortex-protected-share.XXXXXX)"
@@ -82,6 +103,7 @@ run_sql() { "${psql_command[@]}" --command "$1"; }
 fixture_claimed=0
 declare -a worker_pids=()
 declare -A reaped_worker_pids=()
+declare -a started_races=() committed_races=()
 
 wait_for_file() {
   local candidate="$1" deadline=$((SECONDS + 20))
@@ -187,7 +209,8 @@ cleanup_fixture() {
     drop function if exists vortex_access.protected_share_race_revoke(uuid,bigint,text,text,uuid);
     drop table if exists vortex_access.protected_share_race_rows;
     delete from vortex_identity.identity_projections
-      where identity_id in ('$admin_identity','$grantor_identity','$revoker_identity','$recipient_identity');
+      where identity_id in ('$admin_identity','$grantor_identity','$revoker_identity','$recipient_identity',
+        '$closing_grantor_identity','$closing_revoker_identity','$revoking_grantor_identity');
     delete from vortex_identity.organizations where organization_id = '$organization_id';
     delete from vortex_identity.tenants where tenant_id = '$tenant_id' and short_name = '$short_name';
     commit;
@@ -198,7 +221,9 @@ finalize() {
   local original_status=$? cleanup_status=0 operation_status
   trap - EXIT INT TERM
   set +e
-  touch "$proof_root/grant-writer-release" "$proof_root/revoke-writer-release"
+  for race_name in "${started_races[@]:-}"; do
+    [ -n "$race_name" ] && touch "$proof_root/$race_name-writer-release"
+  done
   stop_owned_workers
   if [ "$original_status" -ne 0 ]; then
     echo 'protected-share authority proof failed; bounded diagnostics follow' >&2
@@ -259,16 +284,25 @@ run_sql "
   select * from vortex_identity.ensure_identity_projection('$grantor_identity','f2${run_uuid:2}');
   select * from vortex_identity.ensure_identity_projection('$revoker_identity','f3${run_uuid:2}');
   select * from vortex_identity.ensure_identity_projection('$recipient_identity','f4${run_uuid:2}');
+  select * from vortex_identity.ensure_identity_projection('$closing_grantor_identity','fa${run_uuid:2}');
+  select * from vortex_identity.ensure_identity_projection('$closing_revoker_identity','fb${run_uuid:2}');
+  select * from vortex_identity.ensure_identity_projection('$revoking_grantor_identity','fc${run_uuid:2}');
   insert into vortex_identity.organization_accounts (organization_account_id, organization_id, identity_id, display_name, state, activated_at, changed_at, state_changed_at, state_changed_by, state_change_correlation_id, revision)
   values ('$admin_account','$organization_id','$admin_identity','Administrator','active',pg_catalog.clock_timestamp()-interval '1 minute',pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),'$admin_account','f5${run_uuid:2}',1);
   $(human_context "$admin_account" "$admin_identity" 1 "f6${run_uuid:2}")
   select * from vortex_identity.create_organization_invitation('grantor-$run_token@example.test', $(sha "'grantor:$run_uuid'"), pg_catalog.clock_timestamp()+interval '1 day');
   select * from vortex_identity.create_organization_invitation('revoker-$run_token@example.test', $(sha "'revoker:$run_uuid'"), pg_catalog.clock_timestamp()+interval '1 day');
   select * from vortex_identity.create_organization_invitation('recipient-$run_token@example.test', $(sha "'recipient:$run_uuid'"), pg_catalog.clock_timestamp()+interval '1 day');
+  select * from vortex_identity.create_organization_invitation('closinggrantor-$run_token@example.test', $(sha "'closinggrantor:$run_uuid'"), pg_catalog.clock_timestamp()+interval '1 day');
+  select * from vortex_identity.create_organization_invitation('closingrevoker-$run_token@example.test', $(sha "'closingrevoker:$run_uuid'"), pg_catalog.clock_timestamp()+interval '1 day');
+  select * from vortex_identity.create_organization_invitation('revokinggrantor-$run_token@example.test', $(sha "'revokinggrantor:$run_uuid'"), pg_catalog.clock_timestamp()+interval '1 day');
   delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   select * from vortex_access.accept_organization_invitation($(sha "'grantor:$run_uuid'"), '$grantor_identity', 'grantor-$run_token@example.test', 'Grantor', 'f7${run_uuid:2}');
   select * from vortex_access.accept_organization_invitation($(sha "'revoker:$run_uuid'"), '$revoker_identity', 'revoker-$run_token@example.test', 'Revoker', 'f8${run_uuid:2}');
   select * from vortex_access.accept_organization_invitation($(sha "'recipient:$run_uuid'"), '$recipient_identity', 'recipient-$run_token@example.test', 'Recipient', 'f9${run_uuid:2}');
+  select * from vortex_access.accept_organization_invitation($(sha "'closinggrantor:$run_uuid'"), '$closing_grantor_identity', 'closinggrantor-$run_token@example.test', 'Closing grantor', 'fd${run_uuid:2}');
+  select * from vortex_access.accept_organization_invitation($(sha "'closingrevoker:$run_uuid'"), '$closing_revoker_identity', 'closingrevoker-$run_token@example.test', 'Closing revoker', 'fe${run_uuid:2}');
+  select * from vortex_access.accept_organization_invitation($(sha "'revokinggrantor:$run_uuid'"), '$revoking_grantor_identity', 'revokinggrantor-$run_token@example.test', 'Revoking grantor', 'ff${run_uuid:2}');
   commit;
 " >/dev/null
 fixture_claimed=1
@@ -279,18 +313,26 @@ account_for() {
 grantor_account="$(account_for "$grantor_identity")"
 revoker_account="$(account_for "$revoker_identity")"
 recipient_account="$(account_for "$recipient_identity")"
-[[ "$grantor_account" =~ ^[0-9a-f-]{36}$ && "$revoker_account" =~ ^[0-9a-f-]{36}$ && "$recipient_account" =~ ^[0-9a-f-]{36}$ ]] || {
-  echo 'protected-share proof could not read its invited accounts' >&2
-  exit 1
-}
+closing_grantor_account="$(account_for "$closing_grantor_identity")"
+closing_revoker_account="$(account_for "$closing_revoker_identity")"
+revoking_grantor_account="$(account_for "$revoking_grantor_identity")"
+for invited_account in "$grantor_account" "$revoker_account" "$recipient_account" \
+  "$closing_grantor_account" "$closing_revoker_account" "$revoking_grantor_account"; do
+  [[ "$invited_account" =~ ^[0-9a-f-]{36}$ ]] || {
+    echo 'protected-share proof could not read its invited accounts' >&2
+    exit 1
+  }
+done
 readonly grantor_account revoker_account recipient_account
+readonly closing_grantor_account closing_revoker_account revoking_grantor_account
 
 # ----------------------------------------------------------------------------
 # Authority. One application release (append_release, under a system context)
 # declares all_records read (F1, F2), update (F1, F2; changeable F1) and share
 # permissions on one neutral record type. The coordinated registration writer
 # installs it, the role writer builds one standing role over all three, and
-# the assignment writer gives that role to the grantor and to the revoker.
+# the assignment writer gives that role to every account that grants or
+# revokes below.
 # The definition root and its first draft are inserted directly, as the #45
 # release-writer fixture does.
 # ----------------------------------------------------------------------------
@@ -409,6 +451,15 @@ run_sql "
   select 1 from vortex_access.coordinate_organization_role_assignment_change('grant','$organization_id',
     '$revoker_assignment',null,'$role_id',1,'organization_account','$revoker_account',null,'standing',
     pg_catalog.clock_timestamp()-interval '1 minute',null,'$actor_id','e6${run_uuid:2}');
+  select 1 from vortex_access.coordinate_organization_role_assignment_change('grant','$organization_id',
+    '$closing_grantor_assignment',null,'$role_id',1,'organization_account','$closing_grantor_account',null,'standing',
+    pg_catalog.clock_timestamp()-interval '1 minute',null,'$actor_id','eb${run_uuid:2}');
+  select 1 from vortex_access.coordinate_organization_role_assignment_change('grant','$organization_id',
+    '$closing_revoker_assignment',null,'$role_id',1,'organization_account','$closing_revoker_account',null,'standing',
+    pg_catalog.clock_timestamp()-interval '1 minute',null,'$actor_id','ec${run_uuid:2}');
+  select 1 from vortex_access.coordinate_organization_role_assignment_change('grant','$organization_id',
+    '$revoking_grantor_assignment',null,'$role_id',1,'organization_account','$revoking_grantor_account',null,'standing',
+    pg_catalog.clock_timestamp()-interval '1 minute',null,'$actor_id','ed${run_uuid:2}');
   set constraints all immediate;
   commit;
 " >/dev/null
@@ -489,38 +540,69 @@ run_sql "
   commit;
 " >/dev/null
 
-# The setup share the revocation race targets: the grantor shares F1 with the
-# recipient through the protected grant, before either race.
-run_sql "
-  begin;
-  set local role vortex_runtime;
-  $(human_context "$grantor_account" "$grantor_identity" "$(current_version)" "e7${run_uuid:2}")
-  set local role vortex_request;
-  select vortex_access.protected_share_race_grant('$setup_share','$record_id','organization_account',
-    '$recipient_account',null,array['$field_one']::uuid[],array[]::uuid[],pg_catalog.clock_timestamp(),
-    null,'Protected share race setup share','web','$setup_activity');
-  commit;
-" >/dev/null
-[ "$(run_sql "select state||'|'||revision from vortex_access.organization_direct_record_shares where organization_id='$organization_id' and direct_share_id='$setup_share';")" = 'active|1' ] || {
-  echo 'protected-share proof setup share was not created' >&2
-  exit 1
+# The setup shares the revocation races target, each sharing F1 with the
+# recipient through the protected grant before any race: the grantor grants
+# the shares revoked by the revoker and by the closing revoker, and the
+# revoking grantor grants the share it later revokes itself.
+setup_share_grant() {
+  local share="$1" account="$2" identity="$3" activity="$4" correlation="$5"
+  run_sql "
+    begin;
+    set local role vortex_runtime;
+    $(human_context "$account" "$identity" "$(current_version)" "$correlation")
+    set local role vortex_request;
+    select vortex_access.protected_share_race_grant('$share','$record_id','organization_account',
+      '$recipient_account',null,array['$field_one']::uuid[],array[]::uuid[],pg_catalog.clock_timestamp(),
+      null,'Protected share race setup share','web','$activity');
+    commit;
+  " >/dev/null
+  [ "$(run_sql "select state||'|'||revision||'|'||granted_by from vortex_access.organization_direct_record_shares where organization_id='$organization_id' and direct_share_id='$share';")" = "active|1|$account" ] || {
+    echo 'protected-share proof setup share was not created' >&2
+    exit 1
+  }
 }
+setup_share_grant "$setup_share" "$grantor_account" "$grantor_identity" "$setup_activity" "e7${run_uuid:2}"
+setup_share_grant "$closing_revoker_share" "$grantor_account" "$grantor_identity" \
+  "$closing_revoker_share_activity" "ee${run_uuid:2}"
+setup_share_grant "$revoking_grantor_share" "$revoking_grantor_account" "$revoking_grantor_identity" \
+  "$revoking_grantor_share_activity" "ef${run_uuid:2}"
 
-# One race: an authority writer holds the governance lock with an uncommitted
-# revocation of the operating account's role assignment; the protected
-# operation, established at the pre-change Access version, must block behind
-# it and then be refused.
-race_before=''
+# One race: a writer holds the governance lock with an uncommitted change --
+# the role-assignment writer revoking an assignment, or the account-lifecycle
+# writer closing an account -- and the protected operation, established at the
+# pre-change Access version, must block behind it and then be refused. A stale
+# operation that commits is recorded rather than fatal, so every race runs.
+race_before='' race_outcome=''
 race() {
-  local name="$1" assignment="$2" account="$3" identity="$4" correlation="$5" operation_sql="$6"
-  local before holder holder_db loser loser_db
+  local name="$1" writer_kind="$2" writer_target="$3" account="$4" identity="$5"
+  local correlation="$6" operation_sql="$7"
+  local before writer_statement account_revision holder holder_db loser loser_db
   before="$(current_version)"
+  case "$writer_kind" in
+    assignment)
+      writer_statement="select 1 from vortex_access.coordinate_organization_role_assignment_change('revoke','$organization_id',
+  '$writer_target',1,null,null,null,null,null,null,null,null,'$actor_id','$correlation');"
+      ;;
+    closure)
+      account_revision="$(run_sql "select revision from vortex_identity.organization_accounts where organization_id='$organization_id' and organization_account_id='$writer_target' and state='active';")"
+      [[ "$account_revision" =~ ^[1-9][0-9]*$ ]] || {
+        echo "$name race: the account to close is not active" >&2
+        exit 1
+      }
+      writer_statement="$(human_context "$admin_account" "$admin_identity" "$before" "$correlation")
+select 1 from vortex_access.change_organization_account_state('$writer_target',$account_revision,'closed');"
+      ;;
+    *)
+      echo "$name race: unknown writer $writer_kind" >&2
+      exit 1
+      ;;
+  esac
+  started_races+=("$name")
   "${psql_command[@]}" >"$proof_root/$name-writer.log" 2>&1 <<SQL &
 begin;
 set local lock_timeout='30s'; set local statement_timeout='45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/$name-writer.pid'
-select 1 from vortex_access.coordinate_organization_role_assignment_change('revoke','$organization_id',
-  '$assignment',1,null,null,null,null,null,null,null,null,'$actor_id','$correlation');
+$writer_statement
 \! touch '$proof_root/$name-writer-ready'
 \! deadline=600; while [ ! -f '$proof_root/$name-writer-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/$name-writer-release' ]
 commit;
@@ -543,10 +625,13 @@ SQL
   loser_db="$(read_backend_pid "$proof_root/$name-operation.pid")"
   wait_for_database_blocker "$loser_db" "$holder_db"
   touch "$proof_root/$name-writer-release"
-  wait_owned_worker "$holder" || { echo "$name race: the authority writer failed" >&2; exit 1; }
+  wait_owned_worker "$holder" || { echo "$name race: the concurrent writer failed" >&2; exit 1; }
   if wait_owned_worker "$loser"; then
-    echo "$name race: the stale protected operation committed after its authority was revoked" >&2
-    exit 1
+    echo "$name race: the stale protected operation committed" >&2
+    committed_races+=("$name")
+    race_outcome=committed
+  else
+    race_outcome=refused
   fi
   race_before="$before"
 }
@@ -562,33 +647,71 @@ refused_by() {
   }
   printf '%s race refused: %s\n' "$name" "${line#ERROR: }"
 }
+readonly grant_refusals='Protected record-share grant is unavailable|Request access version is stale or unavailable|Protected record-share grant requires a current (share|read) permission|Organisation-account context is inactive or unavailable'
+readonly revoke_refusals='Protected record-share revocation is unavailable|Request access version is stale or unavailable'
 
-race grant "$grantor_assignment" "$grantor_account" "$grantor_identity" "e8${run_uuid:2}" "select vortex_access.protected_share_race_grant('$race_share','$record_id','organization_account','$recipient_account',null,array['$field_one']::uuid[],array[]::uuid[],pg_catalog.clock_timestamp(),null,'Grant racing the revocation of its own authority','web','$race_grant_activity');"
-grant_before="$race_before"
-refused_by grant 'Protected record-share grant is unavailable|Request access version is stale or unavailable|Protected record-share grant requires a current (share|read) permission'
-grant_state="$(run_sql "select pg_catalog.concat_ws('|',
-  version.current_version - $grant_before, version.change_reason,
-  (select count(*) from vortex_access.organization_direct_record_shares where organization_id='$organization_id' and direct_share_id='$race_share'),
-  (select count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id='$race_grant_activity'),
-  (select state from vortex_access.organization_role_assignments where organization_id='$organization_id' and role_assignment_id='$grantor_assignment'))
-  from vortex_access.organization_access_versions as version where version.organization_id='$organization_id';")"
-[ "$grant_state" = '1|role_assignment_changed|0|0|revoked' ] || {
-  printf 'grant race left unexpected state (version delta|reason|share rows|Activity|assignment): %q\n' "$grant_state" >&2
-  exit 1
+# What a refused race leaves behind: the Access version moved exactly once,
+# by the writer and for the writer's reason; the protected operation's share
+# and Activity untouched; the writer's own change in place.
+share_rows() { printf "select count(*) from vortex_access.organization_direct_record_shares where organization_id='%s' and direct_share_id='%s'" "$organization_id" "$1"; }
+share_state() { printf "select state||'/'||revision from vortex_access.organization_direct_record_shares where organization_id='%s' and direct_share_id='%s'" "$organization_id" "$1"; }
+assignment_state() { printf "select state from vortex_access.organization_role_assignments where organization_id='%s' and role_assignment_id='%s'" "$organization_id" "$1"; }
+account_state() { printf "select state from vortex_identity.organization_accounts where organization_id='%s' and organization_account_id='%s'" "$organization_id" "$1"; }
+expect_refused_state() {
+  local name="$1" expected="$2" share_sql="$3" activity="$4" target_sql="$5" actual
+  actual="$(run_sql "select pg_catalog.concat_ws('|',
+    version.current_version - $race_before, version.change_reason, ($share_sql),
+    (select count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id='$activity'),
+    ($target_sql))
+    from vortex_access.organization_access_versions as version where version.organization_id='$organization_id';")"
+  [ "$actual" = "$expected" ] || {
+    printf '%s race left unexpected state (version delta|reason|share|Activity|writer target): %q\n' "$name" "$actual" >&2
+    exit 1
+  }
 }
 
-race revoke "$revoker_assignment" "$revoker_account" "$revoker_identity" "ea${run_uuid:2}" "select vortex_access.protected_share_race_revoke('$setup_share',1,'Revocation racing the revocation of its own authority','web','$race_revoke_activity');"
-revoke_before="$race_before"
-refused_by revoke 'Protected record-share revocation is unavailable|Request access version is stale or unavailable'
-revoke_state="$(run_sql "select pg_catalog.concat_ws('|',
-  version.current_version - $revoke_before, version.change_reason,
-  (select state||'/'||revision from vortex_access.organization_direct_record_shares where organization_id='$organization_id' and direct_share_id='$setup_share'),
-  (select count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id='$race_revoke_activity'),
-  (select state from vortex_access.organization_role_assignments where organization_id='$organization_id' and role_assignment_id='$revoker_assignment'))
-  from vortex_access.organization_access_versions as version where version.organization_id='$organization_id';")"
-[ "$revoke_state" = '1|role_assignment_changed|active/1|0|revoked' ] || {
-  printf 'revoke race left unexpected state (version delta|reason|share|Activity|assignment): %q\n' "$revoke_state" >&2
-  exit 1
-}
+race grant assignment "$grantor_assignment" "$grantor_account" "$grantor_identity" "e8${run_uuid:2}" \
+  "select vortex_access.protected_share_race_grant('$race_share','$record_id','organization_account','$recipient_account',null,array['$field_one']::uuid[],array[]::uuid[],pg_catalog.clock_timestamp(),null,'Grant racing the revocation of its own authority','web','$race_grant_activity');"
+if [ "$race_outcome" = refused ]; then
+  refused_by grant "$grant_refusals"
+  expect_refused_state grant '1|role_assignment_changed|0|0|revoked' \
+    "$(share_rows "$race_share")" "$race_grant_activity" "$(assignment_state "$grantor_assignment")"
+fi
 
+race grant-closed closure "$closing_grantor_account" "$closing_grantor_account" "$closing_grantor_identity" "b2${run_uuid:2}" \
+  "select vortex_access.protected_share_race_grant('$closed_grant_share','$record_id','organization_account','$recipient_account',null,array['$field_one']::uuid[],array[]::uuid[],pg_catalog.clock_timestamp(),null,'Grant racing the closure of the grantor account','web','$closed_grant_activity');"
+if [ "$race_outcome" = refused ]; then
+  refused_by grant-closed "$grant_refusals"
+  expect_refused_state grant-closed '1|organization_account_closed|0|0|closed' \
+    "$(share_rows "$closed_grant_share")" "$closed_grant_activity" "$(account_state "$closing_grantor_account")"
+fi
+
+race revoke assignment "$revoker_assignment" "$revoker_account" "$revoker_identity" "ea${run_uuid:2}" \
+  "select vortex_access.protected_share_race_revoke('$setup_share',1,'Revocation racing the revocation of its own authority','web','$race_revoke_activity');"
+if [ "$race_outcome" = refused ]; then
+  refused_by revoke "$revoke_refusals"
+  expect_refused_state revoke '1|role_assignment_changed|active/1|0|revoked' \
+    "$(share_state "$setup_share")" "$race_revoke_activity" "$(assignment_state "$revoker_assignment")"
+fi
+
+race revoke-closed closure "$closing_revoker_account" "$closing_revoker_account" "$closing_revoker_identity" "b3${run_uuid:2}" \
+  "select vortex_access.protected_share_race_revoke('$closing_revoker_share',1,'Revocation racing the closure of the revoker account','web','$closed_revoke_activity');"
+if [ "$race_outcome" = refused ]; then
+  refused_by revoke-closed "$revoke_refusals"
+  expect_refused_state revoke-closed '1|organization_account_closed|active/1|0|closed' \
+    "$(share_state "$closing_revoker_share")" "$closed_revoke_activity" "$(account_state "$closing_revoker_account")"
+fi
+
+race grantor-revoke-closed closure "$revoking_grantor_account" "$revoking_grantor_account" "$revoking_grantor_identity" "b4${run_uuid:2}" \
+  "select vortex_access.protected_share_race_revoke('$revoking_grantor_share',1,'Revocation by its grantor racing the closure of the grantor account','web','$closed_grantor_revoke_activity');"
+if [ "$race_outcome" = refused ]; then
+  refused_by grantor-revoke-closed "$revoke_refusals"
+  expect_refused_state grantor-revoke-closed '1|organization_account_closed|active/1|0|closed' \
+    "$(share_state "$revoking_grantor_share")" "$closed_grantor_revoke_activity" "$(account_state "$revoking_grantor_account")"
+fi
+
+if [ "${#committed_races[@]}" -ne 0 ]; then
+  echo "protected record-share authority proof: stale operations committed in: ${committed_races[*]}" >&2
+  exit 1
+fi
 echo 'protected record-share authority concurrency proof passed'
