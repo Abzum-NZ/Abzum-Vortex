@@ -1,0 +1,997 @@
+-- Included by pgTAP suites with \ir, after helpers/definition-release-writer.psql.
+-- Shared #37 fixture for 447 and 448: controlled neutral storage, the fixed
+-- trusted adapters that reach #35's exact-record decision and #37's field
+-- bounds, and session-local builders that create every authority fact through
+-- its owning writer. Everything here is created inside the including test's
+-- transaction and rolled back with it; it never becomes part of a migrated
+-- database.
+--
+-- Writers used: vortex_access.initialize_organization_access_version,
+-- initialize_platform_permission_catalogue, vortex_identity.
+-- ensure_identity_projection, create_organization_invitation, vortex_access.
+-- accept_organization_invitation, vortex_definition.append_release (through
+-- pg_temp.append_writer_release), vortex_access.coordinate_application_access_
+-- change, coordinate_organization_role_change, coordinate_organization_role_
+-- assignment_change, coordinate_organization_group_change and coordinate_
+-- organization_group_membership_change. Shares are created and revoked only
+-- through the protected grant and revoke, reached through the fixed adapters.
+--
+-- Direct inserts, and why no writer can produce them:
+--   * tenants and organisations: no provisioning writer exists yet (#30);
+--   * each organisation's first account: invitation acceptance and stewardship
+--     adoption both require an existing active account to act;
+--   * definition roots: create_root generates its own root identifier, and the
+--     fixed adapters need fixed application identities -- the same reason the
+--     #45 release-writer fixtures insert roots directly;
+--   * neutral content rows and the owner-only binding/declaration tables: this
+--     is controlled neutral storage owned by the test. #45 generates the real
+--     storage, its writers and its adapters later.
+
+-- ============================================================================
+-- Controlled neutral storage and trusted-side tables. vortex_request receives
+-- no privilege on any of them.
+-- ============================================================================
+
+-- Two neutral bindings on one module: 'app' is application_contained storage
+-- (each row belongs to one application), 'org' is organization_shared storage
+-- (a row belongs to the organisation, not to any application).
+create table vortex_access.test_rfa_bindings (
+  binding_key text primary key check (binding_key in ('app', 'org')),
+  module_root_id uuid not null,
+  record_type_id uuid not null unique,
+  storage_contract_id uuid not null,
+  storage_scope text not null
+    check (storage_scope in ('organization_shared', 'application_contained')),
+  f1_id uuid not null,
+  f2_id uuid not null,
+  f3_id uuid not null
+);
+
+insert into vortex_access.test_rfa_bindings values
+  ('app', '34470000-0000-4000-8000-0000000000a0', 'd4470000-0000-4000-8000-0000000000a1',
+    'b4470000-0000-4000-8000-0000000000a1', 'application_contained',
+    'b4470000-0000-4000-8000-000000000a01', 'b4470000-0000-4000-8000-000000000a02',
+    'b4470000-0000-4000-8000-000000000a03'),
+  ('org', '34470000-0000-4000-8000-0000000000a0', 'd4470000-0000-4000-8000-0000000000b1',
+    'b4470000-0000-4000-8000-0000000000b1', 'organization_shared',
+    'b4470000-0000-4000-8000-000000000b01', 'b4470000-0000-4000-8000-000000000b02',
+    'b4470000-0000-4000-8000-000000000b03');
+
+create table vortex_access.test_rfa_rows (
+  binding_key text not null references vortex_access.test_rfa_bindings (binding_key),
+  organization_id uuid not null references vortex_identity.organizations (organization_id),
+  application_root_id uuid,
+  record_id uuid primary key,
+  owner_organization_account_id uuid not null,
+  lifecycle_state text not null default 'active'
+    check (lifecycle_state in ('active', 'soft_deleted', 'removal_pending')),
+  f1 text,
+  f2 text,
+  f3 text,
+  check ((binding_key = 'app') = (application_root_id is not null)),
+  foreign key (organization_id, owner_organization_account_id)
+    references vortex_identity.organization_accounts (organization_id, organization_account_id)
+);
+alter table vortex_access.test_rfa_rows enable row level security;
+alter table vortex_access.test_rfa_rows force row level security;
+
+-- The published declaration each application's read and update operations
+-- carry for one record type: its exact permission alternatives. An adapter
+-- selects the declaration for the verified context's own application on the
+-- trusted side; a caller never names one.
+create table vortex_access.test_rfa_declarations (
+  application_root_id uuid not null,
+  record_type_id uuid not null,
+  action_kind text not null check (action_kind in ('read', 'update')),
+  permission_ids uuid[] not null check (pg_catalog.cardinality(permission_ids) > 0),
+  primary key (application_root_id, record_type_id, action_kind)
+);
+
+-- Owner-only capture of every decision an adapter took, so a proof can inspect
+-- the matched contributions the field bounds were derived from.
+create table vortex_access.test_rfa_decisions (
+  decision_id bigint generated always as identity primary key,
+  operation text not null,
+  record_id uuid not null,
+  decision jsonb not null
+);
+
+-- ============================================================================
+-- Trusted-side builders (owner-only; no request-role grant).
+-- ============================================================================
+
+-- The adapter's facts: the stored row's own organisation, application,
+-- ownership, lifecycle and values, under its own binding. No relationship,
+-- saved condition or edge exists in this neutral catalogue, so none is loaded.
+create function vortex_access.test_rfa_facts(
+  p_row vortex_access.test_rfa_rows,
+  p_binding vortex_access.test_rfa_bindings
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'binding', pg_catalog.jsonb_build_object(
+      'moduleRootId', p_binding.module_root_id, 'recordTypeId', p_binding.record_type_id,
+      'storageContractId', p_binding.storage_contract_id, 'storageScope', p_binding.storage_scope
+    ),
+    'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'moduleRootId', p_binding.module_root_id, 'recordTypeId', p_binding.record_type_id,
+      'storageContractId', p_binding.storage_contract_id, 'storageScope', p_binding.storage_scope,
+      'ownershipMode', 'organization_account',
+      'fields', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object('fieldId', p_binding.f1_id, 'type', 'text'),
+        pg_catalog.jsonb_build_object('fieldId', p_binding.f2_id, 'type', 'text'),
+        pg_catalog.jsonb_build_object('fieldId', p_binding.f3_id, 'type', 'text')
+      )
+    )),
+    'relationships', '[]'::jsonb,
+    'sharingConditions', '[]'::jsonb,
+    'records', case when p_row.record_id is null then '[]'::jsonb else
+      pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordScope', pg_catalog.jsonb_build_object(
+          'storageScope', p_binding.storage_scope,
+          'organizationId', p_row.organization_id,
+          'moduleRootId', p_binding.module_root_id,
+          'recordTypeId', p_binding.record_type_id,
+          'storageContractId', p_binding.storage_contract_id,
+          'recordId', p_row.record_id
+        ) || case when p_binding.storage_scope = 'application_contained'
+          then pg_catalog.jsonb_build_object('applicationRootId', p_row.application_root_id)
+          else '{}'::jsonb end,
+        'ownerOrganizationAccountId', p_row.owner_organization_account_id,
+        'lifecycleState', p_row.lifecycle_state,
+        'fieldValues', pg_catalog.jsonb_build_object(
+          p_binding.f1_id::text, p_row.f1, p_binding.f2_id::text, p_row.f2,
+          p_binding.f3_id::text, p_row.f3
+        )
+      ))
+    end,
+    'edges', '[]'::jsonb
+  )
+$function$;
+
+-- The declaration for the verified context's own application, or null when
+-- that application publishes no operation of this action on this record type.
+create function vortex_access.test_rfa_declaration(
+  p_action_kind text,
+  p_binding vortex_access.test_rfa_bindings
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'operationKey', 'record.field_access.' || p_action_kind,
+    'action', pg_catalog.jsonb_build_object('actionKind', p_action_kind),
+    'target', pg_catalog.jsonb_build_object(
+      'kind', 'application', 'applicationRootId', declared.application_root_id
+    ),
+    'requiredPermissions', (
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'applicationRootId', declared.application_root_id, 'ownerKind', 'application',
+        'ownerId', declared.application_root_id, 'permissionId', permission.value
+      ) order by permission.value::text collate "C")
+      from pg_catalog.unnest(declared.permission_ids) as permission(value)
+    ),
+    'recordBinding', pg_catalog.jsonb_build_object(
+      'moduleRootId', p_binding.module_root_id, 'recordTypeId', p_binding.record_type_id,
+      'storageContractId', p_binding.storage_contract_id, 'storageScope', p_binding.storage_scope
+    ),
+    'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+    'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+  )
+  from vortex_access.test_rfa_declarations as declared
+  where declared.application_root_id = vortex_context.application_root_id()
+    and declared.record_type_id = p_binding.record_type_id
+    and declared.action_kind = p_action_kind
+$function$;
+
+revoke execute on function vortex_access.test_rfa_facts(
+  vortex_access.test_rfa_rows, vortex_access.test_rfa_bindings
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+revoke execute on function vortex_access.test_rfa_declaration(
+  text, vortex_access.test_rfa_bindings
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+-- ============================================================================
+-- Four fixed adapters: the only path vortex_request has to the neutral rows
+-- and to the protected share operations. Each is security definer, owned by
+-- postgres, with an empty search path. A caller supplies only a record or share
+-- identifier and the operation's own terms. It never supplies a permission, a
+-- field set, a binding, a table or a predicate. The row is loaded by its
+-- identifier alone, with no organisation or application filter here, so every
+-- refusal below comes from #35's decision, #37's field bounds or the protected
+-- share functions -- never from this test code.
+-- ============================================================================
+
+create function vortex_access.test_rfa_project(p_record_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  row_value vortex_access.test_rfa_rows;
+  binding_value vortex_access.test_rfa_bindings;
+  declaration jsonb;
+  decision jsonb;
+  bounds jsonb;
+  field_values jsonb;
+  result jsonb := pg_catalog.jsonb_build_object('outcome', 'allowed');
+  field_id text;
+begin
+  select * into row_value from vortex_access.test_rfa_rows where record_id = p_record_id;
+  if not found then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  select * into strict binding_value from vortex_access.test_rfa_bindings
+  where binding_key = row_value.binding_key;
+
+  declaration := vortex_access.test_rfa_declaration('read', binding_value);
+  if declaration is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+
+  decision := vortex_access.evaluate_organization_record_access_internal(
+    declaration, p_record_id, vortex_access.test_rfa_facts(row_value, binding_value)
+  );
+  insert into vortex_access.test_rfa_decisions (operation, record_id, decision)
+  values ('project', p_record_id, decision);
+  if decision ->> 'outcome' <> 'allowed' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+
+  bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+  field_values := pg_catalog.jsonb_build_object(
+    binding_value.f1_id::text, row_value.f1, binding_value.f2_id::text, row_value.f2,
+    binding_value.f3_id::text, row_value.f3
+  );
+  for field_id in
+    select item.value #>> '{}' from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') as item(value)
+  loop
+    result := result || pg_catalog.jsonb_build_object(field_id, field_values -> field_id);
+  end loop;
+  return result;
+end
+$function$;
+
+-- Applies exactly the proposed fields only when every one is inside the
+-- caller's current changeable set; any other field refuses the whole proposal
+-- before any update runs.
+create function vortex_access.test_rfa_change(p_record_id uuid, p_proposed jsonb)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  row_value vortex_access.test_rfa_rows;
+  binding_value vortex_access.test_rfa_bindings;
+  declaration jsonb;
+  decision jsonb;
+  bounds jsonb;
+  changeable text[];
+  proposed jsonb;
+  proposed_key text;
+  affected integer;
+begin
+  if p_proposed is null or pg_catalog.jsonb_typeof(p_proposed) <> 'object' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  select coalesce(pg_catalog.jsonb_object_agg(pg_catalog.lower(entry.key), entry.value), '{}'::jsonb)
+  into proposed
+  from pg_catalog.jsonb_each(p_proposed) as entry(key, value);
+
+  select * into row_value from vortex_access.test_rfa_rows where record_id = p_record_id;
+  if not found then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  select * into strict binding_value from vortex_access.test_rfa_bindings
+  where binding_key = row_value.binding_key;
+
+  declaration := vortex_access.test_rfa_declaration('update', binding_value);
+  if declaration is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+
+  decision := vortex_access.evaluate_organization_record_access_internal(
+    declaration, p_record_id, vortex_access.test_rfa_facts(row_value, binding_value)
+  );
+  insert into vortex_access.test_rfa_decisions (operation, record_id, decision)
+  values ('change', p_record_id, decision);
+  if decision ->> 'outcome' <> 'allowed' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+
+  bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+  select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
+  into changeable
+  from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
+
+  for proposed_key in select * from pg_catalog.jsonb_object_keys(proposed)
+  loop
+    if not (proposed_key = any (changeable)) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused');
+    end if;
+  end loop;
+
+  update vortex_access.test_rfa_rows
+  set
+    f1 = case when proposed ? binding_value.f1_id::text
+      then proposed ->> binding_value.f1_id::text else f1 end,
+    f2 = case when proposed ? binding_value.f2_id::text
+      then proposed ->> binding_value.f2_id::text else f2 end,
+    f3 = case when proposed ? binding_value.f3_id::text
+      then proposed ->> binding_value.f3_id::text else f3 end
+  where record_id = p_record_id;
+  get diagnostics affected = row_count;
+  return pg_catalog.jsonb_build_object('outcome', 'allowed', 'rowsChanged', affected);
+end
+$function$;
+
+-- Supplies the target row's real facts to the protected grant. A missing row
+-- is still handed on, as an empty record set under the 'app' binding, so that
+-- the protected grant -- not this adapter -- is what refuses it.
+create function vortex_access.test_rfa_grant(
+  p_direct_share_id uuid,
+  p_record_id uuid,
+  p_recipient_kind text,
+  p_organization_account_id uuid,
+  p_group_id uuid,
+  p_readable_field_ids uuid[],
+  p_changeable_field_ids uuid[],
+  p_starts_at timestamptz,
+  p_expires_at timestamptz,
+  p_reason text,
+  p_activity_source text,
+  p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  row_value vortex_access.test_rfa_rows;
+  binding_value vortex_access.test_rfa_bindings;
+begin
+  select * into row_value from vortex_access.test_rfa_rows where record_id = p_record_id;
+  select * into strict binding_value from vortex_access.test_rfa_bindings
+  where binding_key = coalesce(row_value.binding_key, 'app');
+
+  return vortex_access.grant_record_share_for_administration(
+    p_direct_share_id, p_record_id, p_recipient_kind, p_organization_account_id,
+    p_group_id, p_readable_field_ids, p_changeable_field_ids, p_starts_at,
+    p_expires_at, p_reason, p_activity_source, p_activity_id,
+    vortex_access.test_rfa_facts(row_value, binding_value)
+  );
+end
+$function$;
+
+create function vortex_access.test_rfa_revoke(
+  p_direct_share_id uuid,
+  p_expected_revision bigint,
+  p_reason text,
+  p_activity_source text,
+  p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+begin
+  return vortex_access.revoke_record_share_for_administration(
+    p_direct_share_id, p_expected_revision, p_reason, p_activity_source, p_activity_id
+  );
+end
+$function$;
+
+revoke execute on function vortex_access.test_rfa_project(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime;
+revoke execute on function vortex_access.test_rfa_change(uuid, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime;
+revoke execute on function vortex_access.test_rfa_grant(
+  uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text, text, uuid
+) from public, anon, authenticated, service_role, vortex_runtime;
+revoke execute on function vortex_access.test_rfa_revoke(uuid, bigint, text, text, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_access.test_rfa_project(uuid) to vortex_request;
+grant execute on function vortex_access.test_rfa_change(uuid, jsonb) to vortex_request;
+grant execute on function vortex_access.test_rfa_grant(
+  uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text, text, uuid
+) to vortex_request;
+grant execute on function vortex_access.test_rfa_revoke(uuid, bigint, text, text, uuid)
+  to vortex_request;
+
+-- ============================================================================
+-- Session-local builders. Each is called by the connecting owner role during
+-- fixture setup, never by vortex_request.
+-- ============================================================================
+
+create function pg_temp.rfa_sha(p_value text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $function$
+  select 'sha256:' || pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p_value, 'UTF8')), 'hex')
+$function$;
+
+-- The neutral binding's field identifier, as canonical text: pg_temp.rfa_field('app', 2).
+create function pg_temp.rfa_field(p_binding_key text, p_field integer)
+returns text
+language sql
+stable
+set search_path = ''
+as $function$
+  select (case p_field when 1 then binding.f1_id when 2 then binding.f2_id else binding.f3_id end)::text
+  from vortex_access.test_rfa_bindings as binding
+  where binding.binding_key = p_binding_key
+$function$;
+
+create function pg_temp.rfa_fields(p_binding_key text, p_fields integer[])
+returns uuid[]
+language sql
+stable
+set search_path = ''
+as $function$
+  select coalesce(pg_catalog.array_agg(pg_temp.rfa_field(p_binding_key, item.value)::uuid
+    order by pg_temp.rfa_field(p_binding_key, item.value) collate "C"), array[]::uuid[])
+  from pg_catalog.unnest(p_fields) as item(value)
+$function$;
+
+-- Direct insert (no provisioning writer exists): one active tenant and
+-- organisation, then the owning Access and platform-catalogue initialisers.
+create function pg_temp.rfa_organization(
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_short_name text
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.clock_timestamp();
+  actor_id constant uuid := '94470000-0000-4000-8000-000000000001';
+begin
+  insert into vortex_identity.tenants (
+    tenant_id, short_name, display_name, state, created_at, created_by,
+    state_changed_at, revision
+  )
+  select p_tenant_id, p_short_name, 'Field access ' || p_short_name, 'active',
+    operation_at, actor_id, operation_at, 1
+  where not exists (
+    select 1 from vortex_identity.tenants as tenant where tenant.tenant_id = p_tenant_id
+  );
+
+  insert into vortex_identity.organizations (
+    organization_id, tenant_id, short_name, display_name, state,
+    created_at, created_by, state_changed_at, revision
+  ) values (
+    p_organization_id, p_tenant_id, p_short_name, 'Field access ' || p_short_name,
+    'active', operation_at, actor_id, operation_at, 1
+  );
+
+  perform 1 from vortex_access.initialize_organization_access_version(
+    p_organization_id, actor_id, pg_catalog.gen_random_uuid()
+  );
+  perform 1 from vortex_access.initialize_platform_permission_catalogue(
+    p_organization_id, actor_id, pg_catalog.gen_random_uuid()
+  );
+end
+$function$;
+
+-- The organisation's first account. Its identity projection comes from the
+-- owning writer; the account itself is a direct insert, because every account
+-- writer (invitation acceptance, stewardship adoption) needs an existing
+-- active account to act.
+create function pg_temp.rfa_bootstrap_account(
+  p_organization_id uuid,
+  p_account_id uuid,
+  p_identity_id uuid,
+  p_display_name text
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.clock_timestamp();
+begin
+  perform 1 from vortex_identity.ensure_identity_projection(p_identity_id, pg_catalog.gen_random_uuid());
+  insert into vortex_identity.organization_accounts (
+    organization_account_id, organization_id, identity_id, display_name,
+    state, activated_at, changed_at, state_changed_at, state_changed_by,
+    state_change_correlation_id, revision
+  ) values (
+    p_account_id, p_organization_id, p_identity_id, p_display_name, 'active',
+    operation_at - interval '1 minute', operation_at, operation_at,
+    p_account_id, pg_catalog.gen_random_uuid(), 1
+  );
+end
+$function$;
+
+-- Every other account: the inviter issues an invitation under its own human
+-- context and the identity accepts it through the Access-owned acceptance
+-- writer. The account identifier is the one that writer generates.
+create function pg_temp.rfa_invited_account(
+  p_organization_id uuid,
+  p_inviter_account_id uuid,
+  p_identity_id uuid,
+  p_display_name text
+)
+returns uuid
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  invited_email text := 'person-' || p_identity_id::text || '@example.test';
+  token text := pg_temp.rfa_sha('invitation:' || p_organization_id::text || ':' || p_identity_id::text);
+  accepted record;
+begin
+  perform 1 from vortex_identity.ensure_identity_projection(p_identity_id, pg_catalog.gen_random_uuid());
+  perform pg_temp.rfa_context(p_organization_id, null, p_inviter_account_id);
+  perform 1 from vortex_identity.create_organization_invitation(
+    invited_email, token, pg_catalog.clock_timestamp() + interval '1 day'
+  );
+  perform pg_temp.rfa_clear_context();
+
+  select result.* into strict accepted
+  from vortex_access.accept_organization_invitation(
+    token, p_identity_id, invited_email, p_display_name, pg_catalog.gen_random_uuid()
+  ) as result;
+  if accepted.outcome <> 'accepted' then
+    raise exception 'Fixture invitation for % was not accepted: %', p_display_name, accepted.outcome;
+  end if;
+  return accepted.organization_account_id;
+end
+$function$;
+
+-- One canonical record permission over a neutral binding.
+create function pg_temp.rfa_permission(
+  p_permission_id uuid,
+  p_key text,
+  p_binding_key text,
+  p_action_kind text,
+  p_route_kind text,
+  p_readable integer[],
+  p_changeable integer[]
+)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'permissionId', p_permission_id,
+    'key', p_key,
+    'label', p_key,
+    'description', 'Field access fixture permission ' || p_key || '.',
+    'recordTypeId', binding.record_type_id,
+    'recordScope', pg_catalog.jsonb_build_object(
+      'routes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('kind', p_route_kind))
+    ),
+    'fieldPolicy', pg_catalog.jsonb_build_object(
+      'readableFieldIds', pg_catalog.to_jsonb(pg_temp.rfa_fields(p_binding_key, p_readable)),
+      'changeableFieldIds', pg_catalog.to_jsonb(pg_temp.rfa_fields(p_binding_key, p_changeable))
+    ),
+    'actionKind', p_action_kind,
+    'administrative', false
+  )
+  from vortex_access.test_rfa_bindings as binding
+  where binding.binding_key = p_binding_key
+$function$;
+
+-- Publishes one application release carrying p_permissions through
+-- vortex_definition.append_release, then registers it through the coordinated
+-- application-access writer, exactly as the platform installs an application.
+-- The definition root is inserted directly (see the file header).
+create function pg_temp.rfa_register_application(
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_key text,
+  p_permissions jsonb
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  actor_id constant uuid := '94470000-0000-4000-8000-000000000001';
+  release_row vortex_definition.releases%rowtype;
+  release_value jsonb;
+  entries jsonb;
+  candidate jsonb;
+  outcome record;
+begin
+  insert into vortex_definition.roots (root_id, organization_id, kind, key, created_at, created_by)
+  values (p_application_root_id, p_organization_id, 'application', p_key,
+    pg_catalog.clock_timestamp() - interval '1 minute', actor_id);
+
+  perform pg_temp.append_writer_release(
+    p_application_root_id, '1.0.0', '[]'::jsonb,
+    pg_catalog.jsonb_build_object('permissions', p_permissions)
+  );
+
+  select release.* into strict release_row
+  from vortex_definition.releases as release
+  where release.root_id = p_application_root_id and release.release_revision = 1;
+
+  release_value := pg_catalog.jsonb_build_object(
+    'kind', 'application', 'definitionKey', p_key, 'rootId', p_application_root_id,
+    'releaseRevision', release_row.release_revision,
+    'releaseVersion', release_row.release_version,
+    'validationContractVersion', release_row.validation_contract_version,
+    'contentFingerprint', release_row.content_fingerprint,
+    'resolutionFingerprint', release_row.resolution_fingerprint
+  );
+
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'applicationRootId', p_application_root_id, 'ownerKind', 'application',
+    'ownerId', p_application_root_id, 'permission', permission.value,
+    'sourceRelease', release_value,
+    'meaningFingerprint', pg_temp.rfa_sha('meaning:' || (permission.value ->> 'permissionId'))
+  ) order by (permission.value ->> 'key') collate "C", (permission.value ->> 'permissionId') collate "C")
+  into entries
+  from pg_catalog.jsonb_array_elements(p_permissions) as permission(value);
+
+  candidate := pg_catalog.jsonb_build_object(
+    'contractVersion', '1.0.0',
+    'organizationId', p_organization_id,
+    'applicationRootId', p_application_root_id,
+    'applicationRelease', release_value,
+    'applicationCatalogueFingerprint', pg_temp.rfa_sha('catalogue:' || p_application_root_id::text),
+    'applicationPermissionIds', (
+      select pg_catalog.jsonb_agg(entry.value #> '{permission,permissionId}' order by entry.ordinality)
+      from pg_catalog.jsonb_array_elements(entries) with ordinality as entry(value, ordinality)
+    ),
+    'entries', entries,
+    'candidateFingerprint', pg_temp.rfa_sha('candidate:' || p_application_root_id::text)
+  );
+
+  select result.* into strict outcome
+  from vortex_access.coordinate_application_access_change(
+    'register', null,
+    pg_catalog.jsonb_build_object(
+      'contractVersion', '1.0.0',
+      'preparationBasis', pg_catalog.jsonb_build_object('kind', 'registration_candidate'),
+      'permissionRegistration', candidate,
+      'templates', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'template', pg_catalog.jsonb_build_object(
+          'roleId', pg_catalog.gen_random_uuid(),
+          'key', 'fixture_template',
+          'name', 'Fixture template',
+          'homePageId', pg_catalog.gen_random_uuid(),
+          'permissionKeys', (
+            select pg_catalog.jsonb_agg(entry.value #> '{permission,key}' order by entry.ordinality)
+            from pg_catalog.jsonb_array_elements(entries) with ordinality as entry(value, ordinality)
+          ),
+          'permissionSelection', pg_catalog.jsonb_build_object('kind', 'exact')
+        ),
+        'sourceTemplateFingerprint', pg_temp.rfa_sha('template:' || p_application_root_id::text),
+        'sourcePermissions', entries,
+        'livePermissions', entries
+      )),
+      'candidateFingerprint', pg_temp.rfa_sha('preparation:' || p_application_root_id::text)
+    ),
+    p_organization_id, p_application_root_id, actor_id, pg_catalog.gen_random_uuid()
+  ) as result;
+  if outcome.outcome <> 'changed' then
+    raise exception 'Fixture registration of % was not applied', p_key;
+  end if;
+end
+$function$;
+
+-- A standing custom role over exact current permissions of one application,
+-- through the owning role writer.
+create function pg_temp.rfa_custom_role(
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_role_id uuid,
+  p_role_key text,
+  p_permission_ids uuid[]
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  refs jsonb;
+begin
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'kind', 'exact',
+    'applicationRootId', entry.application_root_id,
+    'ownerKind', entry.owner_kind,
+    'ownerId', entry.owner_id,
+    'permissionId', entry.permission_id,
+    'acceptedRegistrationRevision', registration.revision,
+    'catalogueFingerprint', registration.permission_catalogue_fingerprint,
+    'continuityRevision', continuity.continuity_revision,
+    'meaningFingerprint', entry.meaning_fingerprint
+  ) order by entry.application_root_id, entry.owner_kind collate "C", entry.owner_id, entry.permission_id)
+  into refs
+  from vortex_access.permission_registrations as registration
+  join vortex_access.permission_catalogue_entries as entry
+    on entry.organization_id = registration.organization_id
+    and entry.registration_kind = registration.registration_kind
+    and entry.registration_owner_id = registration.registration_owner_id
+    and entry.registration_revision = registration.revision
+  join vortex_access.permission_continuities as continuity
+    on continuity.organization_id = entry.organization_id
+    and continuity.application_root_id is not distinct from entry.application_root_id
+    and continuity.owner_kind = entry.owner_kind
+    and continuity.owner_id = entry.owner_id
+    and continuity.permission_id = entry.permission_id
+  where registration.organization_id = p_organization_id
+    and registration.registration_kind = 'application'
+    and registration.registration_owner_id = p_application_root_id
+    and registration.state = 'active'
+    and entry.permission_id = any (p_permission_ids);
+  if pg_catalog.jsonb_array_length(coalesce(refs, '[]'::jsonb)) <> pg_catalog.cardinality(p_permission_ids) then
+    raise exception 'Fixture role % names a permission that is not current', p_role_key;
+  end if;
+
+  perform 1 from vortex_access.coordinate_organization_role_change(
+    pg_catalog.jsonb_build_object(
+      'contractVersion', '1.0.0',
+      'candidate', pg_catalog.jsonb_build_object(
+        'operation', 'create_custom',
+        'organizationId', p_organization_id,
+        'roleId', p_role_id,
+        'key', p_role_key,
+        'label', 'Fixture ' || p_role_key,
+        'description', 'Field access fixture role ' || p_role_key || '.',
+        'privilegeClassification', 'standard',
+        'assignmentPolicy', pg_catalog.jsonb_build_object('kind', 'standing'),
+        'permissions', refs
+      ),
+      'roleCandidateFingerprint', pg_temp.rfa_sha('role:' || p_role_id::text)
+    ),
+    '94470000-0000-4000-8000-000000000001', pg_catalog.gen_random_uuid()
+  );
+end
+$function$;
+
+-- A standing role assignment to one account (p_account_id) or one Group
+-- (p_group_id), through the owning assignment writer.
+create function pg_temp.rfa_assign(
+  p_organization_id uuid,
+  p_assignment_id uuid,
+  p_role_id uuid,
+  p_account_id uuid,
+  p_group_id uuid default null,
+  p_expires_at timestamptz default null
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  role_revision bigint;
+begin
+  select role.live_revision into strict role_revision
+  from vortex_access.organization_roles as role
+  where role.organization_id = p_organization_id and role.role_id = p_role_id;
+
+  perform 1 from vortex_access.coordinate_organization_role_assignment_change(
+    'grant', p_organization_id, p_assignment_id, null, p_role_id, role_revision,
+    case when p_group_id is null then 'organization_account' else 'group' end,
+    p_account_id, p_group_id, 'standing',
+    pg_catalog.clock_timestamp() - interval '1 minute', p_expires_at,
+    '94470000-0000-4000-8000-000000000001', pg_catalog.gen_random_uuid()
+  );
+end
+$function$;
+
+create function pg_temp.rfa_revoke_assignment(p_organization_id uuid, p_assignment_id uuid)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  current_revision bigint;
+begin
+  select assignment.revision into strict current_revision
+  from vortex_access.organization_role_assignments as assignment
+  where assignment.organization_id = p_organization_id
+    and assignment.role_assignment_id = p_assignment_id;
+
+  perform 1 from vortex_access.coordinate_organization_role_assignment_change(
+    'revoke', p_organization_id, p_assignment_id, current_revision,
+    null, null, null, null, null, null, null, null,
+    '94470000-0000-4000-8000-000000000001', pg_catalog.gen_random_uuid()
+  );
+end
+$function$;
+
+create function pg_temp.rfa_group(p_organization_id uuid, p_group_id uuid, p_group_key text)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+begin
+  perform 1 from vortex_access.coordinate_organization_group_change(
+    'create_group', p_organization_id, p_group_id, null, p_group_key,
+    'Fixture ' || p_group_key, '94470000-0000-4000-8000-000000000001',
+    pg_catalog.gen_random_uuid()
+  );
+end
+$function$;
+
+create function pg_temp.rfa_membership(
+  p_organization_id uuid,
+  p_membership_id uuid,
+  p_group_id uuid,
+  p_account_id uuid,
+  p_expires_at timestamptz default null
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+begin
+  perform 1 from vortex_access.coordinate_organization_group_membership_change(
+    'add_membership', p_organization_id, p_membership_id, null, p_group_id,
+    p_account_id, pg_catalog.clock_timestamp() - interval '1 minute', p_expires_at,
+    null, '94470000-0000-4000-8000-000000000001', pg_catalog.gen_random_uuid()
+  );
+end
+$function$;
+
+create function pg_temp.rfa_remove_membership(p_organization_id uuid, p_membership_id uuid)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  current_revision bigint;
+begin
+  select membership.revision into strict current_revision
+  from vortex_access.organization_group_memberships as membership
+  where membership.organization_id = p_organization_id
+    and membership.membership_id = p_membership_id;
+
+  perform 1 from vortex_access.coordinate_organization_group_membership_change(
+    'remove_membership', p_organization_id, p_membership_id, current_revision,
+    null, null, null, null, null, '94470000-0000-4000-8000-000000000001',
+    pg_catalog.gen_random_uuid()
+  );
+end
+$function$;
+
+-- Direct insert into the test-owned neutral storage (see the file header).
+create function pg_temp.rfa_row(
+  p_binding_key text,
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_record_id uuid,
+  p_owner_account_id uuid,
+  p_label text
+)
+returns void
+language sql
+volatile
+set search_path = ''
+as $function$
+  insert into vortex_access.test_rfa_rows (
+    binding_key, organization_id, application_root_id, record_id,
+    owner_organization_account_id, f1, f2, f3
+  ) values (
+    p_binding_key, p_organization_id, p_application_root_id, p_record_id,
+    p_owner_account_id, p_label || '-f1', p_label || '-f2', p_label || '-f3'
+  )
+$function$;
+
+-- Ground truth for one neutral row, read by the owner, never through an adapter.
+create function pg_temp.rfa_values(p_record_id uuid)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object('f1', f1, 'f2', f2, 'f3', f3)
+  from vortex_access.test_rfa_rows where record_id = p_record_id
+$function$;
+
+-- A projection result's field keys, sorted, without the outcome marker.
+create function pg_temp.rfa_keys(p_projection jsonb)
+returns text[]
+language sql
+immutable
+set search_path = ''
+as $function$
+  select coalesce(pg_catalog.array_agg(item.key order by item.key collate "C"), array[]::text[])
+  from pg_catalog.jsonb_object_keys(p_projection - 'outcome') as item(key)
+$function$;
+
+create function pg_temp.rfa_clear_context()
+returns void
+language sql
+volatile
+set search_path = ''
+as $function$
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid()
+$function$;
+
+-- Establishes one verified human request context for this transaction, at the
+-- organisation's live Access version plus p_version_delta, after clearing any
+-- earlier one as the owner (#386: the context lives in an owner-only row).
+create function pg_temp.rfa_context(
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_account_id uuid,
+  p_version_delta bigint default 0,
+  p_correlation_id uuid default null
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  context_value jsonb;
+begin
+  perform pg_temp.rfa_clear_context();
+
+  select pg_catalog.jsonb_build_object(
+    'callerKind', 'human',
+    'identityAuthorityId', 'a4470000-0000-4000-8000-000000000091',
+    'tenantId', organization.tenant_id,
+    'organizationId', p_organization_id,
+    'organizationAccountId', p_account_id,
+    'identityId', account.identity_id,
+    'sessionId', 'a4470000-0000-4000-8000-000000000092',
+    'authenticationStrength', 'single_factor',
+    'issuedAt', operation_at,
+    'expiresAt', operation_at + interval '2 hours',
+    'accessVersion', version.current_version + p_version_delta,
+    'correlationId', coalesce(p_correlation_id, 'a4470000-0000-4000-8000-000000000093'::uuid),
+    'accessTokenIssuedAt', operation_at,
+    'primaryAuthenticatedAt', operation_at
+  ) || case when p_application_root_id is null then '{}'::jsonb
+    else pg_catalog.jsonb_build_object('applicationRootId', p_application_root_id) end
+  into strict context_value
+  from vortex_identity.organizations as organization
+  join vortex_access.organization_access_versions as version
+    on version.organization_id = organization.organization_id
+  join vortex_identity.organization_accounts as account
+    on account.organization_id = organization.organization_id
+    and account.organization_account_id = p_account_id
+  where organization.organization_id = p_organization_id;
+
+  perform vortex_context.initialize(context_value);
+end
+$function$;
+
+create function pg_temp.rfa_access_version(p_organization_id uuid)
+returns bigint
+language sql
+stable
+set search_path = ''
+as $function$
+  select version.current_version from vortex_access.organization_access_versions as version
+  where version.organization_id = p_organization_id
+$function$;

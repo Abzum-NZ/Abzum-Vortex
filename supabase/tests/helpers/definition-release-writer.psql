@@ -1,0 +1,179 @@
+-- Included by pgTAP suites with \ir. Session-local fixture writer: each call
+-- publishes one release through vortex_definition.append_release, the only
+-- writer of release_dependencies, so a fixture can hold only a closure the
+-- platform itself can store. Never becomes part of a migrated database.
+--
+-- p_module_targets lists the exact Module releases the new release depends on
+-- as [rootId, releaseRevision] pairs; each edge's evidence is copied from its
+-- target release. The helper advances the root's draft by one revision,
+-- establishes a system context for the root's organisation, appends, and
+-- clears the context again. It returns the appended release revision.
+create or replace function pg_temp.writer_fixture_fingerprint(p_value text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $function$
+  select 'sha256:' || pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(p_value, 'UTF8')), 'hex'
+  )
+$function$;
+
+create or replace function pg_temp.append_writer_release(
+  p_root_id uuid,
+  p_release_version text,
+  p_module_targets jsonb default '[]'::jsonb,
+  p_content jsonb default '{}'::jsonb,
+  p_contract_version text default '1.0.0'
+)
+returns bigint
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  actor_id constant uuid := '9f000000-0000-4000-8000-000000000001';
+  root_row vortex_definition.roots%rowtype;
+  context_tenant_id uuid;
+  draft_source_value jsonb;
+  draft_revision_value bigint;
+  source_fingerprint_value text;
+  content_fingerprint_value text;
+  resolution_fingerprint_value text;
+  dependencies_value jsonb;
+  appended_revision bigint;
+begin
+  select root.* into strict root_row
+  from vortex_definition.roots as root
+  where root.root_id = p_root_id;
+  select organization.tenant_id into strict context_tenant_id
+  from vortex_identity.organizations as organization
+  where organization.organization_id = root_row.organization_id;
+
+  draft_source_value := pg_catalog.jsonb_build_object(
+    'source_contract_version', p_contract_version,
+    'kind', root_row.kind,
+    'key', root_row.key
+  );
+  update vortex_definition.drafts as draft
+  set draft_revision = draft.draft_revision + 1,
+    draft_source = draft_source_value,
+    source_contract_version = p_contract_version,
+    source_fingerprint = pg_temp.writer_fixture_fingerprint(
+      p_root_id::text || ':source:' || (draft.draft_revision + 1)::text
+    ),
+    updated_at = pg_catalog.statement_timestamp(),
+    updated_by = actor_id
+  where draft.root_id = p_root_id
+  returning draft.draft_revision, draft.source_fingerprint
+  into draft_revision_value, source_fingerprint_value;
+  if not found then
+    insert into vortex_definition.drafts (
+      root_id, draft_revision, draft_source, source_contract_version,
+      source_fingerprint, updated_at, updated_by
+    ) values (
+      p_root_id, 1, draft_source_value, p_contract_version,
+      pg_temp.writer_fixture_fingerprint(p_root_id::text || ':source:1'),
+      pg_catalog.statement_timestamp(), actor_id
+    )
+    returning draft_revision, source_fingerprint
+    into draft_revision_value, source_fingerprint_value;
+  end if;
+
+  content_fingerprint_value := pg_temp.writer_fixture_fingerprint(
+    p_root_id::text || ':content:' || draft_revision_value::text
+  );
+  resolution_fingerprint_value := pg_temp.writer_fixture_fingerprint(
+    p_root_id::text || ':resolution:' || draft_revision_value::text
+  );
+
+  select coalesce(
+    pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'kind', 'module',
+        'key', target_root.key,
+        'rootId', target_release.root_id,
+        'releaseRevision', target_release.release_revision,
+        'releaseVersion', target_release.release_version,
+        'contentFingerprint', target_release.content_fingerprint,
+        'resolutionFingerprint', target_release.resolution_fingerprint
+      ) order by target_root.key collate "C"
+    ),
+    '[]'::jsonb
+  ) into dependencies_value
+  from pg_catalog.jsonb_array_elements(p_module_targets) as target(pair)
+  join vortex_definition.releases as target_release
+    on target_release.root_id = (target.pair ->> 0)::uuid
+    and target_release.release_revision = (target.pair ->> 1)::bigint
+  join vortex_definition.roots as target_root on target_root.root_id = target_release.root_id;
+  if pg_catalog.jsonb_array_length(dependencies_value)
+    <> pg_catalog.jsonb_array_length(p_module_targets) then
+    raise exception 'Writer fixture names a Module release that does not exist';
+  end if;
+
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+  perform vortex_context.initialize(pg_catalog.jsonb_build_object(
+    'callerKind', 'system',
+    'tenantId', context_tenant_id,
+    'organizationId', root_row.organization_id,
+    'sessionId', '9f000000-0000-4000-8000-000000000002',
+    'issuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
+    'expiresAt', pg_catalog.clock_timestamp() + interval '5 minutes',
+    'accessVersion', 1,
+    'correlationId', '9f000000-0000-4000-8000-000000000003',
+    'systemActorId', actor_id,
+    'authenticationStrength', 'service'
+  ));
+
+  select appended.release_revision into strict appended_revision
+  from vortex_definition.append_release(
+    p_root_id,
+    draft_revision_value,
+    source_fingerprint_value,
+    pg_catalog.jsonb_build_object(
+      'releaseVersion', p_release_version,
+      'compilationOutput', pg_catalog.jsonb_build_object(
+        'kind', root_row.kind,
+        'validationContractVersion', p_contract_version,
+        'resolutionFingerprint', resolution_fingerprint_value,
+        'artifact', pg_catalog.jsonb_build_object(
+          'kind', root_row.kind,
+          'rootId', p_root_id,
+          'definitionKey', root_row.key,
+          'exactVersion', p_release_version,
+          'contentFingerprint', content_fingerprint_value,
+          'resolutionFingerprint', resolution_fingerprint_value
+        ),
+        'canonical', pg_catalog.jsonb_build_object(
+          'envelope', pg_catalog.jsonb_build_object(
+            'kind', root_row.kind,
+            'key', root_row.key,
+            'rootId', p_root_id,
+            'organizationId', root_row.organization_id
+          ),
+          'content', p_content
+        )
+      ),
+      'resolutionSnapshot', pg_catalog.jsonb_build_object(
+        'fingerprint', resolution_fingerprint_value,
+        'definitions', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'kind', root_row.kind,
+          'key', root_row.key,
+          'rootId', p_root_id,
+          'exactVersion', p_release_version
+        ))
+      ),
+      'contentFingerprint', content_fingerprint_value,
+      'resolutionFingerprint', resolution_fingerprint_value,
+      'validationContractVersion', p_contract_version,
+      'comparisonFingerprint', content_fingerprint_value,
+      'impactReasons', '[]'::jsonb,
+      'releaseNote', 'Writer fixture ' || root_row.key || ' ' || p_release_version || '.',
+      'dependencies', dependencies_value
+    )
+  ) as appended;
+
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+  return appended_revision;
+end
+$function$;
