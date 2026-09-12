@@ -196,7 +196,7 @@ A Kestra outage after commit leaves the event or start intent pending for retry.
 
 ## Delivery guarantees
 
-The first [transactional append implementation](../build-plan/issue-60-transactional-event-append.md)
+The first [transactional append implementation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60)
 in [#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60) uses a private immutable
 outbox and one logged queue. The fixed append helper is available only to the
 non-login role owning protected Record adapters, never directly to runtime or
