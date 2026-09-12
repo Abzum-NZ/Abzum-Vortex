@@ -23,7 +23,7 @@ Native dependencies, not phase numbers alone, decide readiness. Definitions may 
 ## Review dispositions
 
 - R01–R02: tenant-qualified routes and independently versioned bound Modules; no third publication root. Owners #64/#52/#251.
-- R03: #47 now uses one #41 request refusal after rollback, distinct from successful effects and safe readable-field corrections.
+- R03: #47 now uses one #41 clean pre-write request refusal in the owning transaction, distinct from successful effects and safe readable-field corrections.
 - R04: approved ownership and deadline decisions incorporated; no remaining user hold.
 - R05–R07: later recovery/File identity/support delivery has exact contracts and owners #170/#92/#93/#156/#409.
 - R08–R09: remove invented inbound-delete opt-in and public history-format metadata promise; keep current access and internal restore verification.

@@ -717,15 +717,30 @@ select throws_ok(
   '42501'::char(5), 'Organization assignment ledger is unavailable',
   'an active account without assignments-read authority cannot inspect delegations'
 );
-select throws_ok(
-  $$ select * from vortex_access.revoke_organization_delegation_authority_for_administration(
+select results_eq(
+  $$ select outcome, delegation_summary is null
+     from vortex_access.revoke_organization_delegation_authority_for_administration(
     '83800000-0000-4000-8000-000000000001', 1,
     'a3800000-0000-4000-8000-000000000092') $$,
-  '42501'::char(5), null,
-  'delegation administration has no self-revocation shortcut'
+  $$ values ('refused'::text, true) $$,
+  'delegation administration has no self-revocation shortcut and records its clean refusal'
 );
 
 reset role;
+select is(
+  (
+    select activity.action || '|' || activity.actor_id::text || '|' ||
+      activity.subject_ids::text || '|' || activity.changed_field_ids::text || '|' ||
+      activity.source || '|' || activity.correlation_id::text || '|' || activity.outcome
+    from vortex_activity.organization_activity_entries as activity
+    where activity.organization_id = '23800000-0000-4000-8000-000000000001'
+      and activity.activity_id = 'a3800000-0000-4000-8000-000000000092'
+  ),
+  'revoke_delegation|53800000-0000-4000-8000-000000000002|' ||
+    '{23800000-0000-4000-8000-000000000001}|{}|web|' ||
+    'a3800000-0000-4000-8000-000000000099|refused',
+  'delegation refusal keeps only fixed organization-scoped content-free Activity evidence'
+);
 set constraints all immediate;
 
 select * from finish();
