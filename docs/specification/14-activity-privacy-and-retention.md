@@ -28,9 +28,10 @@ Activity does not store passwords, connection secrets, full sensitive values, pr
 
 Activity is append-only through ordinary product operations. Corrections create a later entry. Privileged retention work may remove protected content while preserving a non-content receipt.
 
-Successful changes and their completed Activity commit together. A known refused
-request records one content-free refusal through its protected owner after the
-unsuccessful change has rolled back, not one entry for each affected row. Only
+Successful changes and their completed Activity commit together. A clean permission
+refusal found by a protected owner before its first business write records one
+content-free refusal and returns from the same request transaction, not one entry
+for each affected row. Only
 verified local scope and fixed operation meaning may be recorded: submitted
 foreign/missing targets, private values and exception text are not safe evidence.
 Failures before a local organisation/account scope is established cannot nominate
@@ -127,9 +128,9 @@ Privacy administrators act within one organisation. A tenant administrator may c
 
 ## Foundation before integration
 
-[Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is delivered before Access/Record operations require atomic success evidence. Failed mutations create no success activity; safe refusal evidence may be appended separately after rollback. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) adds permitted views and complete service coverage to the same boundary.
+[Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is delivered before Access/Record operations require atomic success evidence. Failed mutations create no success activity. A supported owner may record a clean pre-write permission refusal in that request transaction; other failures record nothing. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) adds permitted views and complete service coverage to the same boundary.
 
-The [foundation plan](../build-plan/issue-252-activity-foundation.md) defines one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. After rollback, an independently authorised operation-specific path may append a refusal using only verified local identifiers. Logging failure cannot convert refusal into success. This task proves the reusable composition; it does not claim that every existing service has already integrated it.
+The [foundation plan](../build-plan/issue-252-activity-foundation.md) defines one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. It may append a clean pre-write refusal in that transaction using only established local identifiers. Logging failure cannot convert refusal into success. This task proves the reusable composition; it does not claim that every existing service has already integrated it.
 
 [File-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) supplies current recovery/hold checks before automated purge. [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117) extends selection policies and all-store handling, not a duplicate deletion engine. Complete organisation archive/restore follows these policies in [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255).
 

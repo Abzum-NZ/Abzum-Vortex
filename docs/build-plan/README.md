@@ -383,7 +383,7 @@ Exit proof:
 
 - Representative fixture records pass create/change/conflict/delete/restore tests without shipping fixture-specific behaviour.
 - Parent deletion is refused for unresolved required links except explicit dependent-child soft-delete; soft-deleted unique values remain reserved; mixed-currency totals refuse; and incompatible field changes follow add/migrate/switch/retire.
-- A failed save produces no record change, success activity entry or business event. Safe refusal evidence may be recorded outside the rolled-back mutation.
+- A failed save produces no record change, success activity entry or business event. Its owner may record only a clean permission refusal found before the first write, in the same request transaction.
 
 ## Phase 5 — Query, Rule and Event
 

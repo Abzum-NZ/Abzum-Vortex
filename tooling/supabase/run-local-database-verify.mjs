@@ -10,13 +10,14 @@ import { runLocalDatabaseLint } from "./run-local-database-lint.mjs";
 
 const workspaceRoot = resolve(import.meta.dirname, "../..");
 
-const runPinSetConsumerProof = ({ root, databaseUrl }) => {
+const runPostgresIntegrationProofs = ({ root, databaseUrl }) => {
   const result = spawnSync(
     process.execPath,
     [
       resolve(root, "node_modules", "vitest", "vitest.mjs"),
       "run",
       "tooling/supabase/permission-pin-set-postgres.integration.test.ts",
+      "tooling/supabase/access-refusal-postgres.integration.test.ts",
     ],
     {
       cwd: root,
@@ -39,7 +40,7 @@ export const runLocalDatabaseVerify = async ({ root = workspaceRoot } = {}) => {
   let status = 0;
   try {
     status = runLocalDatabaseTest({ root, ...handle });
-    if (status === 0) status = runPinSetConsumerProof({ root, databaseUrl: handle.url });
+    if (status === 0) status = runPostgresIntegrationProofs({ root, databaseUrl: handle.url });
     if (status === 0)
       status = await runLocalConcurrencyProofs({ root, containerName: handle.containerName });
     if (status === 0) status = await runLocalDatabaseLint({ root, databaseUrl: handle.url });
