@@ -60,7 +60,7 @@ import {
   type TypedConditionParameterDeclarationV2,
 } from "@vortex/rule";
 import { satisfies } from "semver";
-import { compileDefinitionWithContext } from "./compiler";
+import { compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compareDefinitionVersionImpact } from "./version-impact";
@@ -5850,16 +5850,14 @@ export function compileDefinitionSet(
   if (dependencyOutputs.some((output) => inputKeys.has(output.artifact.definitionKey)))
     throw new DefinitionCompilationError("vortex.definition.duplicate_source_key", "duplicate_key");
   const outputs: Output[] = [];
-  const compilePublicationRequest = compileDefinitionWithContext as (
+  // Each request was parsed above and the dependency outputs came out of the publication context
+  // schema, so the compiler is not asked to parse either a second time.
+  const compilePublicationRequest = compileParsedDefinition as (
     request: PublicationCompilationRequest,
-    context: { dependencyOutputs: readonly Output[] },
+    dependencyOutputs: readonly Output[],
   ) => Output;
   for (const request of ordered)
-    outputs.push(
-      compilePublicationRequest(request, {
-        dependencyOutputs: [...dependencyOutputs, ...outputs],
-      }),
-    );
+    outputs.push(compilePublicationRequest(request, [...dependencyOutputs, ...outputs]));
   const validation = validateDefinitionSet({
     requests: ordered,
     outputs,

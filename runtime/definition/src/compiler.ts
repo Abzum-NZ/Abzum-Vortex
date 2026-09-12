@@ -4743,14 +4743,35 @@ function parseDefinitionCompilationContext(
   return parsed.data.dependencyOutputs ?? [];
 }
 
+/**
+ * The limits definitionPublicationContextSchema places on dependencyOutputs, for outputs that
+ * already passed its element schema. parseDefinitionCompilationContext applied them on every
+ * compile, so a set whose dependency outputs repeat a subject it has just compiled is still
+ * refused here, with the same code and no location.
+ */
+function assertDependencyOutputLimits(
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): void {
+  const subjects = dependencyOutputs.map((output) =>
+    output.kind === "connection_type" ? output.canonical.key : output.canonical.envelope.key,
+  );
+  if (subjects.length > 10_000 || new Set(subjects).size !== subjects.length)
+    fail("vortex.definition.invalid_compilation_request", "invalid_value");
+}
+
 function compileDefinitionInternal(
   input: unknown,
   context?: DefinitionCompilationContext,
 ): DefinitionCompilationOutput {
   const parsed = definitionCompilationRequestSchema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const request = parsed.data;
-  const dependencyOutputs = parseDefinitionCompilationContext(context);
+  return compileParsedLegacyRequest(parsed.data, parseDefinitionCompilationContext(context));
+}
+
+function compileParsedLegacyRequest(
+  request: ParsedLegacyRequest,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): DefinitionCompilationOutput {
   const sourceDocument = request.source;
   const source = sourceDocument as unknown as JsonObject;
   try {
@@ -5284,10 +5305,15 @@ function compileApplicationV2Internal(
 ): ApplicationCompilationOutputV2 {
   const parsed = applicationCompilationRequestV2Schema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const request = parsed.data;
+  return compileParsedApplicationV2Request(parsed.data, parseDefinitionCompilationContext(context));
+}
+
+function compileParsedApplicationV2Request(
+  request: ParsedApplicationV2Request,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ApplicationCompilationOutputV2 {
   const source = request.source;
   const sourceObject = source as unknown as JsonObject;
-  const dependencyOutputs = parseDefinitionCompilationContext(context);
   try {
     const resolution = new Resolution(request.resolution, sourceObject);
     const valueIndex = applicationModuleValueIndex(sourceObject, resolution, dependencyOutputs);
@@ -5346,9 +5372,14 @@ function compileModuleV2Internal(
 ): ModuleCompilationOutputV2 {
   const parsed = moduleCompilationRequestV2Schema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const request = parsed.data;
+  return compileParsedModuleV2Request(parsed.data, parseDefinitionCompilationContext(context));
+}
+
+function compileParsedModuleV2Request(
+  request: ParsedModuleV2Request,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ModuleCompilationOutputV2 {
   const source = request.source as unknown as JsonObject;
-  const dependencyOutputs = parseDefinitionCompilationContext(context);
   try {
     const resolution = new Resolution(request.resolution, source);
     const canonical = moduleDraftV2Schema.parse(
@@ -5401,9 +5432,14 @@ function compileModuleV3Internal(
 ): ModuleCompilationOutputV3 {
   const parsed = moduleCompilationRequestV3Schema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const request = parsed.data;
+  return compileParsedModuleV3Request(parsed.data, parseDefinitionCompilationContext(context));
+}
+
+function compileParsedModuleV3Request(
+  request: ParsedModuleV3Request,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ModuleCompilationOutputV3 {
   const source = request.source as unknown as JsonObject;
-  const dependencyOutputs = parseDefinitionCompilationContext(context);
   try {
     const resolution = new Resolution(request.resolution, source);
     const definitionKey = request.source.key;
@@ -5524,6 +5560,59 @@ const explicitCompilationKind = (input: unknown): "module" | "application" | und
   const kind = (request.source as JsonObject).kind;
   return kind === "module" || kind === "application" ? kind : undefined;
 };
+
+/** Requests as this package's own schemas return them, carrying the ids compiling needs. */
+type ParsedLegacyRequest = ReturnType<typeof definitionCompilationRequestSchema.parse>;
+type ParsedApplicationV2Request = ReturnType<typeof applicationCompilationRequestV2Schema.parse>;
+type ParsedModuleV2Request = ReturnType<typeof moduleCompilationRequestV2Schema.parse>;
+type ParsedModuleV3Request = ReturnType<typeof moduleCompilationRequestV3Schema.parse>;
+
+/** The request shapes the compile entry points dispatch on, as they declare them. */
+type DispatchableCompilationRequest =
+  | DefinitionCompilationRequest
+  | ApplicationCompilationRequestV2
+  | ModuleCompilationRequestV2
+  | ModuleCompilationRequestV3;
+
+/**
+ * Package-internal compile entry for a request this package parsed and dependency outputs it
+ * parsed or produced, so neither is parsed a second time. index.ts and compiler-api.ts do not
+ * re-export it: callers outside this package use compileDefinition or
+ * compileDefinitionWithContext, which parse what they are given.
+ */
+export function compileParsedDefinition(
+  request: ApplicationCompilationRequestV2,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ApplicationCompilationOutputV2;
+export function compileParsedDefinition(
+  request: ModuleCompilationRequestV2,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ModuleCompilationOutputV2;
+export function compileParsedDefinition(
+  request: ModuleCompilationRequestV3,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ModuleCompilationOutputV3;
+export function compileParsedDefinition(
+  request: DefinitionCompilationRequest,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): DefinitionCompilationOutput;
+export function compileParsedDefinition(
+  request: DispatchableCompilationRequest,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): DefinitionCompilationOutput {
+  assertDependencyOutputLimits(dependencyOutputs);
+  const explicitKind = explicitCompilationKind(request);
+  if (explicitKind === "module")
+    return "sourceContractVersion" in request && request.sourceContractVersion === "3.0.0"
+      ? compileParsedModuleV3Request(request as ParsedModuleV3Request, dependencyOutputs)
+      : compileParsedModuleV2Request(request as ParsedModuleV2Request, dependencyOutputs);
+  if (explicitKind === "application")
+    return compileParsedApplicationV2Request(
+      request as ParsedApplicationV2Request,
+      dependencyOutputs,
+    );
+  return compileParsedLegacyRequest(request as ParsedLegacyRequest, dependencyOutputs);
+}
 
 export function compileDefinition(
   input: ApplicationCompilationRequestV2,
