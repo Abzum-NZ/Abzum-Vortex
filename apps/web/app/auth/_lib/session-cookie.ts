@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { CookieOptions } from "@supabase/ssr";
+import { isLoopbackHostname } from "@vortex/contracts";
 
 export const sessionCookieChunkSize = 3_180;
 export const sessionCookieMaximumChunks = 8;
@@ -27,7 +28,7 @@ const utf8Length = (value: string): number => new TextEncoder().encode(value).le
 
 export const identitySessionCookieProfile = (siteUrl: string): SessionCookieProfile => {
   const url = new URL(siteUrl);
-  const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname);
+  const loopback = isLoopbackHostname(url.hostname);
   const localHttp = url.protocol === "http:" && loopback;
   if (
     (!localHttp && url.protocol !== "https:") ||

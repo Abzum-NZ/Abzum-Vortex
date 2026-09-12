@@ -1,6 +1,6 @@
 import "server-only";
 
-import { sessionContextSchema, type SessionContext } from "@vortex/contracts";
+import { isLoopbackHostname, sessionContextSchema, type SessionContext } from "@vortex/contracts";
 import postgres, { type Row, type Sql, type TransactionSql } from "postgres";
 
 export type DatabaseValue = string | number | boolean | Date | Uint8Array | null;
@@ -126,14 +126,14 @@ export const parseRuntimeDatabaseConfiguration = (
   try {
     address = new URL(connectionString);
   } catch {
-    throw databaseError("DATABASE_CONFIGURATION_INVALID");
+    throw databaseError("DATABASE_ADDRESS_UNPARSEABLE");
   }
 
   const username = decodeURIComponent(address.username);
   const localLoopback =
     environmentName === "local" &&
     address.protocol === "postgresql:" &&
-    ["127.0.0.1", "localhost", "[::1]"].includes(address.hostname) &&
+    isLoopbackHostname(address.hostname) &&
     address.port === "54322" &&
     address.pathname === "/postgres" &&
     username === "vortex_runtime" &&
@@ -153,8 +153,8 @@ export const parseRuntimeDatabaseConfiguration = (
     address.pathname === "/postgres" &&
     /^vortex_runtime\.[a-z0-9]{20}$/.test(username) &&
     address.password.length > 0;
-  if (!validHostedAddress || !rootCertificate)
-    throw databaseError("DATABASE_CONFIGURATION_INVALID");
+  if (!validHostedAddress) throw databaseError("DATABASE_ADDRESS_NOT_ACCEPTED");
+  if (!rootCertificate) throw databaseError("DATABASE_ROOT_CERTIFICATE_MISSING");
 
   return {
     connectionString,

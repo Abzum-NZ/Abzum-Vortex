@@ -14,6 +14,15 @@ const validEnvironment = {
   VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT: "test-root-certificate",
 } as const;
 
+const thrownBy = (operation: () => unknown): Error => {
+  try {
+    operation();
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error("Expected parseRuntimeDatabaseConfiguration to throw");
+};
+
 describe("runtime database configuration", () => {
   it("accepts only the restricted runtime role over the Supavisor transaction endpoint", () => {
     expect(parseRuntimeDatabaseConfiguration(validEnvironment)).toEqual({
@@ -50,11 +59,32 @@ describe("runtime database configuration", () => {
         ...validEnvironment,
         VORTEX_RUNTIME_DATABASE_URL: connectionString,
       }),
-    ).toThrow("DATABASE_CONFIGURATION_INVALID");
+    ).toThrow("DATABASE_ADDRESS_NOT_ACCEPTED");
   });
 
   it("requires both the connection and trusted root certificate", () => {
     expect(() => parseRuntimeDatabaseConfiguration({})).toThrow("DATABASE_CONFIGURATION_MISSING");
+  });
+
+  it("flags a connection string that does not parse as a URL, without echoing it", () => {
+    const unparseableConnectionString = "not-a-postgres-url";
+    const error = thrownBy(() =>
+      parseRuntimeDatabaseConfiguration({
+        ...validEnvironment,
+        VORTEX_RUNTIME_DATABASE_URL: unparseableConnectionString,
+      }),
+    );
+    expect(error.message).toBe("DATABASE_ADDRESS_UNPARSEABLE");
+    expect(error.message).not.toContain(unparseableConnectionString);
+  });
+
+  it("flags an accepted hosted address that is missing its pinned root certificate", () => {
+    const withoutRootCertificate: Record<string, string | undefined> = { ...validEnvironment };
+    delete withoutRootCertificate.VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT;
+
+    const error = thrownBy(() => parseRuntimeDatabaseConfiguration(withoutRootCertificate));
+    expect(error.message).toBe("DATABASE_ROOT_CERTIFICATE_MISSING");
+    expect(error.message).not.toContain(validEnvironment.VORTEX_RUNTIME_DATABASE_URL);
   });
 
   it("accepts only the restricted runtime role on the exact Local Supabase loopback endpoint", () => {
@@ -82,7 +112,7 @@ describe("runtime database configuration", () => {
         VORTEX_ENVIRONMENT: "local",
         VORTEX_RUNTIME_DATABASE_URL: connectionString,
       }),
-    ).toThrow("DATABASE_CONFIGURATION_INVALID");
+    ).toThrow("DATABASE_ADDRESS_NOT_ACCEPTED");
   });
 
   it("disables prepared statements, limits the pool, and verifies TLS", () => {
