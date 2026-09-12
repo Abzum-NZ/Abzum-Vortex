@@ -142,7 +142,7 @@
       "label": "Record change"
     },
     {
-      "migration": "supabase/migrations/20260912192054_first_private_transactional_event_append.sql",
+      "migration": "supabase/migrations/20260913060000_first_private_transactional_event_append.sql",
       "proof": "supabase/tests/event-append-concurrency.test.sh",
       "label": "Event append"
     }
