@@ -1035,14 +1035,11 @@ reset role;
 -- the Application below is published against it through the writer, which
 -- accepts dependencies only within the Application's organisation.
 --
--- Labelled legacy data: the Module roots and the eight Module releases in this
--- section (roots 44550...003, ...004 and ...005) are inserted directly on
--- purpose. They are storage-generator fixtures, and replaying them through
--- vortex_definition.append_release is refused (23514 "Definition canonical
--- release content does not belong to the locked root"); the later releases of
--- ...005 are deliberately corrupt inputs to the generator's own gates, which no
--- writer can store. None of them carries a dependency edge, so none bears on
--- the Module pin-set rule.
+-- The valid native-V3 and compatible-upgrade releases below are published through
+-- the writer. Only root ...005 remains direct: its six releases are deliberately
+-- malformed inputs for the storage generator's refusal gates, so the writer must
+-- refuse them before those gates can be exercised. They carry no dependency edge
+-- and therefore do not affect the Module pin-set rule.
 insert into vortex_definition.roots (
   root_id, organization_id, kind, key, created_at, created_by
 ) values
@@ -1065,84 +1062,45 @@ insert into vortex_definition.roots (
     '94550000-0000-4000-8000-000000000001'
   );
 
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-) values (
-  '44550000-0000-4000-8000-000000000003', 1, '1.0.0',
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000003', '1.0.0', '[]',
   pg_catalog.jsonb_build_object(
-    'source_contract_version', '3.0.0', 'kind', 'module',
-    'key', 'vortex.storage_test.native_v3_module'
-  ),
-  'sha256:' || pg_catalog.repeat('a', 64), '3.0.0',
-  pg_temp.versioned_module_output(
-    '44550000-0000-4000-8000-000000000003', '3.0.0',
-    pg_temp.single_record_type(
+    'recordTypes', pg_catalog.jsonb_build_array(pg_temp.single_record_type(
       '54550000-0000-4000-8000-000000000004',
       '64550000-0000-4000-8000-000000000004',
       '74550000-0000-4000-8000-000000000007'
-    ),
-    pg_catalog.jsonb_build_array(
+    )),
+    'rules', pg_catalog.jsonb_build_array(
       pg_temp.storage_rule_graph('54550000-0000-4000-8000-000000000004')
     )
   ),
-  pg_catalog.jsonb_build_object(
-    'fingerprint', 'sha256:' || pg_catalog.repeat('b', 64)
-  ),
-  'sha256:' || pg_catalog.repeat('c', 64),
-  'sha256:' || pg_catalog.repeat('b', 64), '3.0.0',
-  'sha256:' || pg_catalog.repeat('d', 64), '[]'::jsonb,
-  'Native Module V3 storage release.', pg_catalog.statement_timestamp(),
-  '94550000-0000-4000-8000-000000000001'
+  '3.0.0'
 );
-
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-)
-select '44550000-0000-4000-8000-000000000004'::uuid, release.revision,
-  release.release_version,
-  pg_catalog.jsonb_build_object(
-    'source_contract_version', release.contract_version, 'kind', 'module',
-    'key', 'vortex.storage_test.rule_upgrade_module'
-  ),
-  'sha256:' || pg_catalog.repeat('e', 64), release.contract_version,
-  pg_temp.versioned_module_output(
-    '44550000-0000-4000-8000-000000000004', release.contract_version,
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000004', '1.0.0', '[]',
+  pg_catalog.jsonb_build_object('recordTypes', pg_catalog.jsonb_build_array(
     pg_temp.single_record_type(
       '54550000-0000-4000-8000-000000000005',
       '64550000-0000-4000-8000-000000000005',
       '74550000-0000-4000-8000-000000000008'
-    ),
-    case when release.contract_version = '3.0.0' then pg_catalog.jsonb_build_array(
-      pg_temp.storage_rule_graph('54550000-0000-4000-8000-000000000005')
-    ) end
-  ),
-  pg_catalog.jsonb_build_object(
-    'fingerprint', 'sha256:' || pg_catalog.repeat(release.revision::text, 64)
-  ),
-  'sha256:' || pg_catalog.repeat(release.content_digit, 64),
-  'sha256:' || pg_catalog.repeat(release.revision::text, 64),
-  release.contract_version, 'sha256:' || pg_catalog.repeat('e', 64), '[]'::jsonb,
-  release.release_note, pg_catalog.statement_timestamp(),
-  '94550000-0000-4000-8000-000000000001'::uuid
-from (
-  values
-    (
-      1::bigint, '2.0.0', '1.0.0', '7',
-      'Rule-upgrade Module V2 storage release.'
-    ),
-    (
-      2::bigint, '3.0.0', '1.1.0', '8',
-      'Rule-only Module V3 storage release.'
     )
-) as release(revision, contract_version, release_version, content_digit, release_note);
+  )),
+  '2.0.0'
+);
+select pg_temp.append_writer_release(
+  '44550000-0000-4000-8000-000000000004', '1.1.0', '[]',
+  pg_catalog.jsonb_build_object(
+    'recordTypes', pg_catalog.jsonb_build_array(pg_temp.single_record_type(
+      '54550000-0000-4000-8000-000000000005',
+      '64550000-0000-4000-8000-000000000005',
+      '74550000-0000-4000-8000-000000000008'
+    )),
+    'rules', pg_catalog.jsonb_build_array(
+      pg_temp.storage_rule_graph('54550000-0000-4000-8000-000000000005')
+    )
+  ),
+  '3.0.0'
+);
 
 insert into vortex_definition.releases (
   root_id, release_revision, release_version, authored_source,
