@@ -2,7 +2,6 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
-  definitionConsumerReadResultSchema,
   preparedApplicationRoleTemplatesSchema,
   projectLiveApplicationRolePermissions,
   revisionSchema,
@@ -21,12 +20,10 @@ import {
 } from "@vortex/contracts";
 import { canonicalJson, fingerprintCanonicalValue } from "@vortex/definition";
 import {
-  createPermissionRegistryDefinitionAdapter,
-  mapInDeterministicBatches,
-  permissionRegistryModuleReadConcurrency,
   PermissionRegistryPreparationError,
+  prepareApplicationPermissionRegistrationFromReleaseSet,
   verifyPreparedApplicationPermissionRegistration,
-  type PermissionRegistryDefinitionReader,
+  type PermissionRegistryDefinitionSetReader,
 } from "./permission-registry-definition-adapter";
 import type { PermissionRegistryPrivateRepository } from "./permission-registry-repository";
 import { isLiveSystemContext } from "./private-system-context";
@@ -63,7 +60,7 @@ export type PrepareCurrentApplicationRoleTemplatesCommand = Readonly<{
 }>;
 
 export interface ApplicationRoleTemplateAdapterDependencies {
-  readonly definitionReader: PermissionRegistryDefinitionReader;
+  readonly definitionReader: PermissionRegistryDefinitionSetReader;
   readonly permissionRegistryFacts: Pick<
     PermissionRegistryPrivateRepository,
     "lookup" | "readApplicationSnapshot"
@@ -120,51 +117,6 @@ const mapPermissionPreparationError = (error: unknown): never => {
     case "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID":
       throw evidenceError(error);
   }
-};
-
-const readExactApplication = async (
-  reader: PermissionRegistryDefinitionReader,
-  context: SessionContext,
-  registration: PreparedApplicationPermissionRegistration,
-): Promise<ApplicationDefinitionRead> => {
-  let candidate: unknown;
-  try {
-    candidate = await reader.read(context, {
-      kind: "application",
-      rootId: registration.applicationRootId,
-      selector: {
-        selection: "revision",
-        releaseRevision: registration.applicationRelease.releaseRevision,
-      },
-    });
-  } catch (error) {
-    throw new ApplicationRoleTemplatePreparationError(
-      "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE",
-      { cause: error },
-    );
-  }
-  const parsed = definitionConsumerReadResultSchema.safeParse(candidate);
-  if (
-    !parsed.success ||
-    parsed.data.kind !== "application" ||
-    parsed.data.organizationId !== context.organizationId ||
-    parsed.data.correlationId !== context.correlationId ||
-    parsed.data.rootId !== registration.applicationRootId
-  )
-    throw evidenceError();
-  const release = {
-    kind: parsed.data.kind,
-    definitionKey: parsed.data.definitionKey,
-    rootId: parsed.data.rootId,
-    releaseRevision: parsed.data.releaseRevision,
-    releaseVersion: parsed.data.releaseVersion,
-    validationContractVersion: parsed.data.validationContractVersion,
-    contentFingerprint: parsed.data.contentFingerprint,
-    resolutionFingerprint: parsed.data.resolutionFingerprint,
-  };
-  if (canonicalJson(release) !== canonicalJson(registration.applicationRelease))
-    throw evidenceError();
-  return parsed.data;
 };
 
 const candidateEvidenceKey = (candidate: PermissionRegistryEntryCandidate): string =>
@@ -278,28 +230,53 @@ const uniqueSourcePermissions = (
 };
 
 /** Fixed I/O concurrency, not an application permission or template limit. */
-export const applicationRoleTemplateFactReadConcurrency = permissionRegistryModuleReadConcurrency;
+export const applicationRoleTemplateFactReadConcurrency = 16;
+
+const mapInDeterministicBatches = async <Input>(
+  values: readonly Input[],
+  concurrency: number,
+  map: (value: Input) => Promise<unknown>,
+): Promise<void> => {
+  for (let start = 0; start < values.length; start += concurrency) {
+    const settled = await Promise.allSettled(
+      values.slice(start, start + concurrency).map((value) => map(value)),
+    );
+    for (const result of settled) if (result.status === "rejected") throw result.reason;
+  }
+};
 
 export const createApplicationRoleTemplateAdapter = (
   dependencies: ApplicationRoleTemplateAdapterDependencies,
 ) => {
-  const definitionAdapter = createPermissionRegistryDefinitionAdapter(
-    dependencies.definitionReader,
-  );
-
   const prepareDefinitionEvidence = async (
     context: SessionContext,
     applicationRootId: ApplicationRootId,
     releaseRevision: number,
   ) => {
-    const permissionRegistration = await definitionAdapter
-      .prepareApplicationRegistration(context, { applicationRootId, releaseRevision })
-      .catch(mapPermissionPreparationError);
-    const application = await readExactApplication(
-      dependencies.definitionReader,
-      context,
-      permissionRegistration,
-    );
+    let releaseSet;
+    try {
+      releaseSet = await dependencies.definitionReader.read(context, {
+        applicationRootId,
+        applicationReleaseRevision: releaseRevision,
+      });
+    } catch (error) {
+      throw new ApplicationRoleTemplatePreparationError(
+        "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE",
+        { cause: error },
+      );
+    }
+    const permissionRegistration = (() => {
+      try {
+        return prepareApplicationPermissionRegistrationFromReleaseSet(
+          context,
+          { applicationRootId, releaseRevision },
+          releaseSet,
+        );
+      } catch (error) {
+        return mapPermissionPreparationError(error);
+      }
+    })();
+    const application = releaseSet.application as ApplicationDefinitionRead;
     return { permissionRegistration, application };
   };
 

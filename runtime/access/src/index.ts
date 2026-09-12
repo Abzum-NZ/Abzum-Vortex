@@ -64,8 +64,9 @@ export {
   createPermissionRegistryDefinitionAdapter,
   PermissionRegistryPreparationError,
   permissionRegistryPreparationErrorCodes,
+  prepareApplicationPermissionRegistrationFromReleaseSet,
   verifyPreparedApplicationPermissionRegistration,
-  type PermissionRegistryDefinitionReader,
+  type PermissionRegistryDefinitionSetReader,
   type PermissionRegistryPreparationErrorCode,
   type PrepareApplicationPermissionRegistrationCommand,
 } from "./permission-registry-definition-adapter";

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   applicationBoundReleaseSetCommandSchema,
   applicationBoundReleaseSetResultSchema,
+  systemApplicationBoundReleaseSetCommandSchema,
+  systemApplicationBoundReleaseSetResultSchema,
   definitionConsumerReadCommandSchema,
   definitionConsumerReadResultSchema,
 } from "../src";
@@ -178,5 +180,23 @@ describe("definition consumer read contracts", () => {
         modules: [moduleResult],
       }).success,
     ).toBe(false);
+    expect(applicationBoundReleaseSetResultSchema.shape.modules.safeParse([]).success).toBe(false);
+  });
+
+  it("selects an exact system Application release and permits a zero-Module result", () => {
+    expect(
+      systemApplicationBoundReleaseSetCommandSchema.safeParse({
+        applicationRootId: ids.root,
+        applicationReleaseRevision: 3,
+      }).success,
+    ).toBe(true);
+    expect(
+      systemApplicationBoundReleaseSetCommandSchema.safeParse({
+        applicationReleaseRevision: 3,
+      }).success,
+    ).toBe(false);
+    expect(systemApplicationBoundReleaseSetResultSchema.shape.modules.safeParse([]).success).toBe(
+      true,
+    );
   });
 });

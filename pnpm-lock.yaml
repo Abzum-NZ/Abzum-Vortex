@@ -44,6 +44,9 @@ importers:
       next:
         specifier: 16.3.3
         version: 16.3.3(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      postgres:
+        specifier: 'catalog:'
+        version: 3.4.9
       prettier:
         specifier: 3.9.6
         version: 3.9.6
@@ -271,9 +274,15 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/db':
+        specifier: workspace:*
+        version: link:../../db
       '@vortex/definition':
         specifier: workspace:*
         version: link:../definition
+      '@vortex/module':
+        specifier: workspace:*
+        version: link:../module
       '@vortex/record':
         specifier: workspace:*
         version: link:../record

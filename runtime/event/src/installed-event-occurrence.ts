@@ -72,7 +72,7 @@ const fieldValueMatches = (
   field: ResolvedField,
   value: unknown,
 ): boolean =>
-  record.module.validationContractVersion === "2.0.0"
+  record.module.validationContractVersion !== "1.0.0"
     ? persistedRecordFieldValueMatches({
         validationContractVersion: "2.0.0",
         field: field as ModuleFieldV2,
