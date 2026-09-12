@@ -131,6 +131,11 @@ The platform supports these twenty-two types:
 | `total`                  | Aggregate across a relationship     | Relationship, operation, field, filter                                                   |
 | `attachment`             | One or more files                   | The canonical settings in [files and attachments](11-files-and-attachments.md)           |
 
+For a reference number, an omitted `startingNumber` means `1`; an explicit
+positive integer is used exactly. `digits` is a minimum display width, not a
+maximum: the numeric part grows without truncation when the sequence exceeds
+that width. Prefix and suffix remain unchanged.
+
 There is no separate duration type in this release. Each calendar page explicitly selects either start and end date-time fields, or a start date-time plus a whole-number duration field and unit. Missing or invalid inputs are shown as invalid data; the platform never guesses an end time or unit.
 
 ## Record value formats
@@ -273,9 +278,26 @@ Allowed parent-deletion behaviour is:
 - Empty an optional link.
 - Soft-delete dependent children.
 
-Emptying a required link is invalid. Deleting a referenced parent is refused while required links remain. A relationship may explicitly declare dependent ownership; only then may deleting the parent soft-delete its dependent children in the same protected operation.
+Emptying a required link is invalid. Deleting a referenced parent is refused
+while required links remain. Deleting a parent may soft-delete a child only when
+that child derives inherited ownership through this exact relationship.
+
+Dependent deletion is not a second relationship switch. It is valid only when
+the source record type already declares `ownershipMode` as inherited and names
+this exact relationship as its `ownershipRelationshipId`. The parent deletion
+also requires current update access to every child whose optional link is
+emptied, or current delete access to every inherited child that is soft-deleted.
+All affected link values, edges and record revisions change atomically.
 
 Many-to-many relationships use an explicit joining record type so ownership, permissions, activity, fields, and deletion behaviour remain visible.
+
+The first private relationship mutation in
+[#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402) supports the existing
+single-target to-one link facts. It enforces target uniqueness only for declared
+one-to-one relationships; many-to-one permits several sources. It does not infer
+polymorphic targets or implement a hidden many-to-many edge model. Those broader
+relationship integrations remain with
+[#49](https://github.com/Abzum-NZ/Abzum-Vortex/issues/49).
 
 ### Cross-module relationships
 

@@ -20,6 +20,12 @@ explicit target owner checked by the protected ownership operation. It cannot
 accept a caller-supplied actor or bypass assignment authority. Human creates keep
 the creator/current-membership defaults above.
 
+The initial private storage primitive in
+[#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402) accepts only a trusted
+human request context. Governed specified-account and System execution remain
+with [#322](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322); the primitive
+does not anticipate them with caller-selected ownership or authority.
+
 Later ownership changes use the protected named ownership action, not ordinary
 field updates. The new owner must be an active organisation account or active
 Group permitted by the record type's published ownership mode and the operator's

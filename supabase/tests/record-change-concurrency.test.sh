@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# #401: the fixed change adapter under real concurrency, through two sessions on
-# one provisioned record table.
+# #401/#402: the fixed change adapter and private reference allocator under real
+# concurrency, through two sessions on one provisioned record table.
 #
 #   conflict   -- two changes carrying the same expected concurrency number. The
 #                 second blocks on the row lock the first holds, and once the
@@ -10,6 +10,14 @@
 #                 writer revokes the acting account's own authority and commits.
 #                 When the lock is released the change is refused and writes
 #                 nothing.
+#   reference  -- two creates enter the same published reference-number scope.
+#                 The second waits on the first counter row and receives the
+#                 next exact value after the first commits; neither duplicates
+#                 or derives a number with max()+1.
+#   link/delete -- a link clear and deletion of its target wait on one source
+#                 row lock, then serialize. Both can complete, or the link clear
+#                 returns a stale conflict after delete clears it; no partial
+#                 edge/value/lifecycle state is possible.
 #
 # What enforces this, established by targeted mutation on fresh clusters:
 #   * The adapter locks the target row before it reads any other fact, and
@@ -46,6 +54,14 @@ readonly field_one='c4760000-0000-4000-8000-000000000014'
 readonly field_two='c4760000-0000-4000-8000-000000000015'
 readonly permission_read='c4760000-0000-4000-8000-000000000016'
 readonly permission_update='c4760000-0000-4000-8000-000000000017'
+readonly field_reference='c4760000-0000-4000-8000-000000000030'
+readonly permission_create='c4760000-0000-4000-8000-000000000031'
+readonly field_link='c4760000-0000-4000-8000-000000000032'
+readonly relationship_id='c4760000-0000-4000-8000-000000000033'
+readonly permission_delete='c4760000-0000-4000-8000-000000000034'
+readonly field_required_link='c4760000-0000-4000-8000-000000000035'
+readonly relationship_required='c4760000-0000-4000-8000-000000000036'
+readonly permission_restore='c4760000-0000-4000-8000-000000000037'
 readonly role_id='c4760000-0000-4000-8000-000000000018'
 readonly assignment_id='c4760000-0000-4000-8000-000000000019'
 readonly steward_role_id='c4760000-0000-4000-8000-00000000001a'
@@ -55,8 +71,18 @@ readonly installer_role_id='c4760000-0000-4000-8000-00000000001d'
 readonly installer_assignment_id='c4760000-0000-4000-8000-00000000001e'
 readonly conflict_record_id='c4760000-0000-4000-8000-000000000020'
 readonly revocation_record_id='c4760000-0000-4000-8000-000000000021'
+readonly link_source_record_id='c4760000-0000-4000-8000-000000000040'
+readonly link_target_record_id='c4760000-0000-4000-8000-000000000041'
+readonly anchor_record_id='c4760000-0000-4000-8000-000000000042'
+readonly link_add_source_record_id='c4760000-0000-4000-8000-000000000043'
+readonly link_add_target_record_id='c4760000-0000-4000-8000-000000000044'
+readonly restore_source_record_id='c4760000-0000-4000-8000-000000000045'
+readonly restore_target_record_id='c4760000-0000-4000-8000-000000000046'
 readonly physical_table='rt_c4760000000040008000000000000013'
 readonly column_one='f_c4760000000040008000000000000014'
+readonly column_reference='f_c4760000000040008000000000000030'
+readonly column_link='f_c4760000000040008000000000000032'
+readonly column_required_link='f_c4760000000040008000000000000035'
 
 fixture_claimed=0
 declare -a worker_pids=()
@@ -85,13 +111,28 @@ read_backend_pid() {
 }
 
 wait_for_database_blocker() {
-  local blocked_pid="$1" blocking_pid="$2" deadline=$((SECONDS + 20)) state
+  local blocked_pid="$1" blocking_pid="$2" label="${3:-record change}" deadline=$((SECONDS + 20)) state
   while ((SECONDS < deadline)); do
-    state="$(run_sql "select case when $blocking_pid = any(pg_catalog.pg_blocking_pids($blocked_pid)) then 'blocked' else '' end;")"
+    # PostgreSQL may queue the second waiter behind the first waiter for the
+    # same tuple. Follow the direct-blocker chain so the proof recognises that
+    # both commands are waiting on the holder without assuming queue order.
+    state="$(run_sql "with recursive blockers(pid) as (
+        select blocker from pg_catalog.unnest(pg_catalog.pg_blocking_pids($blocked_pid)) as blocker
+        union
+        select next_blocker
+        from blockers
+        cross join lateral pg_catalog.unnest(pg_catalog.pg_blocking_pids(blockers.pid)) as next_blocker
+      )
+      select case when exists (select 1 from blockers where pid = $blocking_pid)
+        then 'blocked' else '' end;")"
     [ "$state" = 'blocked' ] && return 0
     sleep 0.1
   done
-  echo 'record change proof did not observe the second change blocked at the row lock' >&2
+  printf 'record change proof did not observe %s blocked at the row lock\n' "$label" >&2
+  run_sql "select pg_catalog.concat_ws('|', pid::text, wait_event_type, wait_event,
+      pg_catalog.array_to_string(pg_catalog.pg_blocking_pids(pid), ','))
+    from pg_catalog.pg_stat_activity where pid in ($blocked_pid, $blocking_pid)
+    order by pid;" >&2 || true
   return 1
 }
 
@@ -137,6 +178,10 @@ cleanup_fixture() {
     \$cleanup\$;
     set local role vortex_record_owner;
     drop table if exists record_data.$physical_table;
+    delete from vortex_record.record_reference_counters
+      where organization_id = '$organization_id';
+    delete from vortex_record.record_data_versions
+      where organization_id = '$organization_id';
     delete from vortex_record.relationship_edges
       where from_storage_contract_id = '$storage_contract_id'
          or to_storage_contract_id = '$storage_contract_id';
@@ -191,7 +236,10 @@ finalize() {
   local original_status=$? cleanup_status=0 operation_status
   trap - EXIT INT TERM
   set +e
-  touch "$proof_root/conflict-release" "$proof_root/revocation-release" >/dev/null 2>&1 || true
+  touch "$proof_root/conflict-release" "$proof_root/revocation-release" \
+    "$proof_root/reference-release" >/dev/null 2>&1 || true
+  touch "$proof_root/link-delete-release" >/dev/null 2>&1 || true
+  touch "$proof_root/link-add-release" "$proof_root/restore-target-release" >/dev/null 2>&1 || true
   stop_owned_workers
   if [ "$original_status" -ne 0 ]; then
     echo 'record change concurrency proof failed; bounded diagnostics follow' >&2
@@ -219,10 +267,11 @@ trap 'exit 143' TERM
 schema_state="$(run_sql "
   select pg_catalog.concat_ws('|',
     pg_catalog.to_regprocedure('vortex_record.change_record(uuid,uuid,bigint,jsonb,uuid[])') is not null,
-    pg_catalog.to_regprocedure('vortex_record.read_record(uuid,uuid)') is not null
+    pg_catalog.to_regprocedure('vortex_record.read_record(uuid,uuid)') is not null,
+    pg_catalog.to_regprocedure('vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid)') is not null
   );
 ")"
-[ "$schema_state" = 't|t' ] || {
+[ "$schema_state" = 't|t|t' ] || {
   echo 'the record adapter migrations must already be applied to the proof database' >&2
   exit 1
 }
@@ -255,16 +304,35 @@ readonly permissions_sql="pg_catalog.jsonb_build_array(
     'label','Read','description','Read the concurrency record.','recordTypeId','$record_type_id',
     'recordScope','{\"routes\":[{\"kind\":\"all_records\"}]}'::jsonb,
     'fieldPolicy',pg_catalog.jsonb_build_object(
-      'readableFieldIds',pg_catalog.jsonb_build_array('$field_one','$field_two'),
+      'readableFieldIds',pg_catalog.jsonb_build_array('$field_one','$field_two','$field_reference','$field_link','$field_required_link'),
       'changeableFieldIds','[]'::jsonb),
     'actionKind','read','administrative',false),
   pg_catalog.jsonb_build_object('permissionId','$permission_update','key','record_change.update',
     'label','Update','description','Change the concurrency record.','recordTypeId','$record_type_id',
     'recordScope','{\"routes\":[{\"kind\":\"all_records\"}]}'::jsonb,
     'fieldPolicy',pg_catalog.jsonb_build_object(
-      'readableFieldIds',pg_catalog.jsonb_build_array('$field_one','$field_two'),
-      'changeableFieldIds',pg_catalog.jsonb_build_array('$field_one','$field_two')),
-    'actionKind','update','administrative',false))"
+      'readableFieldIds',pg_catalog.jsonb_build_array('$field_one','$field_two','$field_reference','$field_link','$field_required_link'),
+      'changeableFieldIds',pg_catalog.jsonb_build_array('$field_one','$field_two','$field_link','$field_required_link')),
+    'actionKind','update','administrative',false),
+  pg_catalog.jsonb_build_object('permissionId','$permission_create','key','record_change.create',
+    'label','Create','description','Create the reference concurrency record.','recordTypeId','$record_type_id',
+    'recordScope','{\"routes\":[{\"kind\":\"all_records\"}]}'::jsonb,
+    'fieldPolicy',pg_catalog.jsonb_build_object(
+      'readableFieldIds',pg_catalog.jsonb_build_array('$field_one','$field_two','$field_reference','$field_link','$field_required_link'),
+      'changeableFieldIds',pg_catalog.jsonb_build_array('$field_one','$field_two','$field_link','$field_required_link')),
+    'actionKind','create','administrative',false),
+  pg_catalog.jsonb_build_object('permissionId','$permission_delete','key','record_change.delete',
+    'label','Delete','description','Delete the concurrency record.','recordTypeId','$record_type_id',
+    'recordScope','{\"routes\":[{\"kind\":\"all_records\"}]}'::jsonb,
+    'fieldPolicy',pg_catalog.jsonb_build_object(
+      'readableFieldIds','[]'::jsonb,'changeableFieldIds','[]'::jsonb),
+    'actionKind','delete','administrative',false),
+  pg_catalog.jsonb_build_object('permissionId','$permission_restore','key','record_change.restore',
+    'label','Restore','description','Restore the concurrency record.','recordTypeId','$record_type_id',
+    'recordScope','{\"routes\":[{\"kind\":\"all_records\"}]}'::jsonb,
+    'fieldPolicy',pg_catalog.jsonb_build_object(
+      'readableFieldIds','[]'::jsonb,'changeableFieldIds','[]'::jsonb),
+    'actionKind','restore','administrative',false))"
 
 readonly module_content="pg_catalog.jsonb_build_object(
   'name','Record change concurrency','description','One record type for the change proof.',
@@ -280,9 +348,35 @@ readonly module_content="pg_catalog.jsonb_build_object(
         'settings',pg_catalog.jsonb_build_object('maxLength',200)),
       pg_catalog.jsonb_build_object('fieldId','$field_two','key','second','type','text',
         'required',false,'unique',false,'filterable',false,'sortable',false,
-        'settings',pg_catalog.jsonb_build_object('maxLength',200))),
-    'relationships','[]'::jsonb,
-    'standardActions',pg_catalog.jsonb_build_array('read','update'),
+        'settings',pg_catalog.jsonb_build_object('maxLength',200)),
+      pg_catalog.jsonb_build_object('fieldId','$field_reference','key','reference','type','reference_number',
+        'required',true,'unique',true,'filterable',true,'sortable',true,
+        'settings',pg_catalog.jsonb_build_object('prefix','RC-','digits',3)),
+      pg_catalog.jsonb_build_object('fieldId','$field_link','key','parent','type','link',
+        'required',false,'unique',false,'filterable',false,'sortable',false,
+        'settings',pg_catalog.jsonb_build_object(
+          'target',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','$module_root_id',
+            'recordTypeId','$record_type_id'),
+          'onParentDelete','empty_optional')),
+      pg_catalog.jsonb_build_object('fieldId','$field_required_link','key','required_parent','type','link',
+        'required',true,'unique',false,'filterable',false,'sortable',false,
+        'settings',pg_catalog.jsonb_build_object(
+          'target',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','$module_root_id',
+            'recordTypeId','$record_type_id'),
+          'onParentDelete','refuse'))),
+    'relationships',pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'relationshipId','$relationship_id','key','self_parent',
+      'fromRecordTypeId','$record_type_id','fromFieldId','$field_link',
+      'toRecordType',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','$module_root_id',
+        'recordTypeId','$record_type_id'),
+      'cardinality','many_to_one','onParentDelete','empty_optional'),
+      pg_catalog.jsonb_build_object(
+        'relationshipId','$relationship_required','key','required_parent',
+        'fromRecordTypeId','$record_type_id','fromFieldId','$field_required_link',
+        'toRecordType',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','$module_root_id',
+          'recordTypeId','$record_type_id'),
+        'cardinality','many_to_one','onParentDelete','refuse')),
+    'standardActions',pg_catalog.jsonb_build_array('create','read','update','delete','restore'),
     'customActionIds','[]'::jsonb)),
   'permissions',$permissions_sql,
   'actions','[]'::jsonb,'events','[]'::jsonb,'rules','[]'::jsonb,
@@ -506,12 +600,71 @@ run_sql "
   insert into record_data.$physical_table (
     organisation_id, module_root_id, record_type_id, storage_contract_id, record_id,
     application_root_id, definition_revision, lifecycle_state, concurrency_number,
-    created_at, created_by, updated_at, updated_by, $column_one
+    created_at, created_by, updated_at, updated_by, deleted_at, deleted_by,
+    $column_one, $column_reference,
+    $column_link, $column_required_link
   ) values
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$conflict_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id','start'),
+      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,'start','RC-EXIST-1',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$revocation_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id','start');
+      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,'start','RC-EXIST-2',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$link_source_record_id',
+      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      'link source','RC-EXIST-3',pg_catalog.jsonb_build_object(
+        'recordTypeId','$record_type_id','recordId','$link_target_record_id'),
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$link_target_record_id',
+      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      'link target','RC-EXIST-4',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$anchor_record_id',
+      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      'anchor','RC-EXIST-5',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$link_add_source_record_id',
+      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      'link add source','RC-EXIST-6',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$link_add_target_record_id',
+      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      'link add target','RC-EXIST-7',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$restore_target_record_id',
+      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      'restore target','RC-EXIST-8',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$restore_source_record_id',
+      null,1,'soft_deleted',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',
+      pg_catalog.statement_timestamp(),'$account_id',
+      'restore source','RC-EXIST-9',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$restore_target_record_id'));
+  insert into vortex_record.relationship_edges (
+    relationship_id, from_organisation_id, to_organisation_id,
+    from_application_root_id, to_application_root_id,
+    from_storage_contract_id, from_record_id, to_storage_contract_id, to_record_id
+  ) values (
+    '$relationship_id','$organization_id','$organization_id',null,null,
+    '$storage_contract_id','$link_source_record_id','$storage_contract_id','$link_target_record_id'
+  );
+  insert into vortex_record.relationship_edges (
+    relationship_id, from_organisation_id, to_organisation_id,
+    from_application_root_id, to_application_root_id,
+    from_storage_contract_id, from_record_id, to_storage_contract_id, to_record_id
+  ) select '$relationship_required','$organization_id','$organization_id',null,null,
+      '$storage_contract_id', source_id, '$storage_contract_id', target_id
+    from (values
+      ('$conflict_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$revocation_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$link_source_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$link_target_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$anchor_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$link_add_source_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$link_add_target_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$restore_target_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$restore_source_record_id'::uuid,'$restore_target_record_id'::uuid)
+    ) as required_edge(source_id, target_id);
   reset role;
   delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   commit;
@@ -522,6 +675,40 @@ change_statement() {
   printf "vortex_record.change_record('%s'::uuid,'%s'::uuid,1,
     pg_catalog.jsonb_build_object('%s','%s'), array['%s']::uuid[])" \
     "$record_type_id" "$record_id" "$field_one" "$value" "$field_one"
+}
+
+create_statement() {
+  local title="$1"
+  printf "vortex_record.create_record_internal('%s'::uuid,
+    pg_catalog.jsonb_build_object('%s','%s','%s',pg_catalog.jsonb_build_object(
+      'recordTypeId','%s','recordId','%s')),
+    array['%s','%s']::uuid[], null)" \
+    "$record_type_id" "$field_one" "$title" "$field_required_link" \
+    "$record_type_id" "$anchor_record_id" "$field_one" "$field_required_link"
+}
+
+relationship_clear_statement() {
+  printf "vortex_record.change_record_relationship_internal('%s'::uuid,'%s'::uuid,1,
+    '%s'::uuid,'null'::jsonb)" "$record_type_id" "$link_source_record_id" "$relationship_id"
+}
+
+relationship_add_statement() {
+  local source_id="$1" target_id="$2"
+  printf "vortex_record.change_record_relationship_internal('%s'::uuid,'%s'::uuid,1,
+    '%s'::uuid,pg_catalog.jsonb_build_object('recordTypeId','%s','recordId','%s'))" \
+    "$record_type_id" "$source_id" "$relationship_id" "$record_type_id" "$target_id"
+}
+
+delete_target_statement() {
+  local target_id="${1:-$link_target_record_id}"
+  printf "vortex_record.soft_delete_record_internal('%s'::uuid,'%s'::uuid,1)" \
+    "$record_type_id" "$target_id"
+}
+
+restore_statement() {
+  local source_id="$1"
+  printf "vortex_record.restore_record_internal('%s'::uuid,'%s'::uuid,1)" \
+    "$record_type_id" "$source_id"
 }
 
 # Ground truth for one row. The generated table's scope policy reads the request
@@ -559,8 +746,335 @@ row_state() {
   "
 }
 
+link_delete_state() {
+  run_sql "
+    begin;
+    delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+    $(human_context "(select current_version from vortex_access.organization_access_versions where organization_id='$organization_id')")
+    set local role vortex_record_adapter;
+    select pg_catalog.concat_ws('|', target.lifecycle_state, target.concurrency_number::text,
+      source.lifecycle_state, source.concurrency_number::text,
+      (source.$column_link is null)::text,
+      (select pg_catalog.count(*)::text from vortex_record.relationship_edges as edge
+       where edge.relationship_id='$relationship_id' and edge.from_record_id='$link_source_record_id'))
+    from record_data.$physical_table as target
+    cross join record_data.$physical_table as source
+    where target.record_id='$link_target_record_id' and source.record_id='$link_source_record_id';
+    reset role;
+    commit;
+  "
+}
+
+target_race_state() {
+  local source_id="$1" target_id="$2" relationship="$3"
+  run_sql "
+    begin;
+    delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+    $(human_context "(select current_version from vortex_access.organization_access_versions where organization_id='$organization_id')")
+    set local role vortex_record_adapter;
+    select pg_catalog.concat_ws('|', source.lifecycle_state, source.concurrency_number::text,
+      (source.$column_link is null)::text, target.lifecycle_state, target.concurrency_number::text,
+      (select pg_catalog.count(*)::text from vortex_record.relationship_edges as edge
+       where edge.relationship_id='$relationship' and edge.from_record_id='$source_id'))
+    from record_data.$physical_table as source
+    cross join record_data.$physical_table as target
+    where source.record_id='$source_id' and target.record_id='$target_id';
+    reset role;
+    commit;
+  "
+}
+
 # ----------------------------------------------------------------------------
-# Race one: two changes, one expected number.
+# Race zero: two creates in one published reference-number scope. The first
+# transaction holds the new counter row uncommitted so the second must wait for
+# that exact database lock before it can allocate the next value.
+# ----------------------------------------------------------------------------
+access_version="$(current_version)"
+
+"${psql_command[@]}" >"$proof_root/reference-first.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/reference-first.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select pg_catalog.concat_ws('|', result ->> 'outcome',
+  result -> 'values' ->> '$field_reference')
+from (select $(create_statement 'first reference') as result) as created
+\g '$proof_root/reference-first.result'
+reset role;
+\! touch '$proof_root/reference-first-ready'
+\! deadline=600; while [ ! -f '$proof_root/reference-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/reference-release' ]
+commit;
+SQL
+reference_first_pid=$!; worker_pids+=("$reference_first_pid")
+wait_for_file "$proof_root/reference-first-ready"
+reference_first_backend="$(read_backend_pid "$proof_root/reference-first.pid")"
+
+"${psql_command[@]}" >"$proof_root/reference-second.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/reference-second.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select pg_catalog.concat_ws('|', result ->> 'outcome',
+  result -> 'values' ->> '$field_reference')
+from (select $(create_statement 'second reference') as result) as created
+\g '$proof_root/reference-second.result'
+reset role;
+commit;
+SQL
+reference_second_pid=$!; worker_pids+=("$reference_second_pid")
+reference_second_backend="$(read_backend_pid "$proof_root/reference-second.pid")"
+wait_for_database_blocker "$reference_second_backend" "$reference_first_backend" 'the second reference create'
+touch "$proof_root/reference-release"
+
+wait_owned_worker "$reference_first_pid" || { echo 'the first reference create failed' >&2; exit 1; }
+wait_owned_worker "$reference_second_pid" || { echo 'the waiting reference create failed' >&2; exit 1; }
+
+reference_first_result="$(tr -d '[:space:]' <"$proof_root/reference-first.result")"
+reference_second_result="$(tr -d '[:space:]' <"$proof_root/reference-second.result")"
+[ "$reference_first_result" = 'completed|RC-001' ] || {
+  printf 'the first reference allocation was not exact: %q\n' "$reference_first_result" >&2; exit 1
+}
+[ "$reference_second_result" = 'completed|RC-002' ] || {
+  printf 'the waiting reference allocation was not exact: %q\n' "$reference_second_result" >&2; exit 1
+}
+reference_state="$(run_sql "select pg_catalog.concat_ws('|', pg_catalog.count(*)::text,
+  pg_catalog.count(distinct $column_reference)::text, pg_catalog.min($column_reference),
+  pg_catalog.max($column_reference)) from record_data.$physical_table
+  where $column_one in ('first reference','second reference');")"
+[ "$reference_state" = '2|2|RC-001|RC-002' ] || {
+  printf 'concurrent reference rows were not unique and exact: %q\n' "$reference_state" >&2; exit 1
+}
+echo "reference race: two rows received RC-001 and RC-002 under one locked scope"
+
+# ----------------------------------------------------------------------------
+# Race one: a link clear and deletion of that link's target contend on the same
+# source row. Once the fixture lock is released, database row locking either
+# serializes both operations or makes the late link command stale.
+# ----------------------------------------------------------------------------
+access_version="$(current_version)"
+
+"${psql_command[@]}" >"$proof_root/link-delete-holder.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/link-delete-holder.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select record_id from record_data.$physical_table
+where record_id='$link_source_record_id' for update \g /dev/null
+reset role;
+\! touch '$proof_root/link-delete-holder-ready'
+\! deadline=600; while [ ! -f '$proof_root/link-delete-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/link-delete-release' ]
+rollback;
+SQL
+link_holder_pid=$!; worker_pids+=("$link_holder_pid")
+wait_for_file "$proof_root/link-delete-holder-ready"
+link_holder_backend="$(read_backend_pid "$proof_root/link-delete-holder.pid")"
+
+"${psql_command[@]}" >"$proof_root/link-clear.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/link-clear.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select $(relationship_clear_statement) ->> 'outcome' \g '$proof_root/link-clear.result'
+reset role;
+commit;
+SQL
+link_clear_pid=$!; worker_pids+=("$link_clear_pid")
+link_clear_backend="$(read_backend_pid "$proof_root/link-clear.pid")"
+wait_for_database_blocker "$link_clear_backend" "$link_holder_backend" 'the link clear'
+
+"${psql_command[@]}" >"$proof_root/link-delete.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/link-delete.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select $(delete_target_statement) ->> 'outcome' \g '$proof_root/link-delete.result'
+reset role;
+commit;
+SQL
+link_delete_pid=$!; worker_pids+=("$link_delete_pid")
+link_delete_backend="$(read_backend_pid "$proof_root/link-delete.pid")"
+if ! wait_for_database_blocker "$link_delete_backend" "$link_holder_backend" 'the target delete'; then
+  if ! kill -0 "$link_delete_pid" >/dev/null 2>&1; then
+    wait_owned_worker "$link_delete_pid" || true
+    printf 'target delete completed before the source lock; result=%q\n' \
+      "$(tr -d '[:space:]' <"$proof_root/link-delete.result" 2>/dev/null || true)" >&2
+  fi
+  exit 1
+fi
+touch "$proof_root/link-delete-release"
+
+wait_owned_worker "$link_holder_pid" || { echo 'the link/delete holder failed' >&2; exit 1; }
+wait_owned_worker "$link_clear_pid" || { echo 'the racing link clear failed' >&2; exit 1; }
+wait_owned_worker "$link_delete_pid" || { echo 'the racing target delete failed' >&2; exit 1; }
+
+link_clear_result="$(tr -d '[:space:]' <"$proof_root/link-clear.result")"
+link_delete_result="$(tr -d '[:space:]' <"$proof_root/link-delete.result")"
+[[ "$link_clear_result" = 'completed' || "$link_clear_result" = 'conflict' ]] || {
+  printf 'the link clear neither serialized nor failed stale: %q\n' "$link_clear_result" >&2; exit 1
+}
+[ "$link_delete_result" = 'completed' ] || {
+  printf 'the target delete did not complete safely: %q\n' "$link_delete_result" >&2; exit 1
+}
+link_state="$(link_delete_state | tr -d '[:space:]')"
+[ "$link_state" = 'soft_deleted|2|active|2|true|0' ] || {
+  printf 'the link/delete race left partial state: %q\n' "$link_state" >&2; exit 1
+}
+echo "link/delete race: link=$link_clear_result delete=$link_delete_result state=$link_state"
+
+# ----------------------------------------------------------------------------
+# Race two: deleting a target wins the target-row lock before a new link add.
+# The waiting add must re-read the locked target and refuse; it cannot install a
+# value/edge that points at the now-deleted row.
+# ----------------------------------------------------------------------------
+access_version="$(current_version)"
+
+"${psql_command[@]}" >"$proof_root/link-add-holder.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/link-add-holder.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select record_id from record_data.$physical_table
+where record_id='$link_add_target_record_id' for update \g /dev/null
+reset role;
+\! touch '$proof_root/link-add-holder-ready'
+\! deadline=600; while [ ! -f '$proof_root/link-add-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/link-add-release' ]
+rollback;
+SQL
+link_add_holder_pid=$!; worker_pids+=("$link_add_holder_pid")
+wait_for_file "$proof_root/link-add-holder-ready"
+link_add_holder_backend="$(read_backend_pid "$proof_root/link-add-holder.pid")"
+
+"${psql_command[@]}" >"$proof_root/link-add-delete.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/link-add-delete.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select $(delete_target_statement "$link_add_target_record_id") ->> 'outcome'
+\g '$proof_root/link-add-delete.result'
+reset role;
+commit;
+SQL
+link_add_delete_pid=$!; worker_pids+=("$link_add_delete_pid")
+link_add_delete_backend="$(read_backend_pid "$proof_root/link-add-delete.pid")"
+wait_for_database_blocker "$link_add_delete_backend" "$link_add_holder_backend" 'the link-add target delete'
+
+"${psql_command[@]}" >"$proof_root/link-add.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/link-add.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
+from (select $(relationship_add_statement "$link_add_source_record_id" "$link_add_target_record_id") as result) as changed
+\g '$proof_root/link-add.result'
+reset role;
+commit;
+SQL
+link_add_pid=$!; worker_pids+=("$link_add_pid")
+link_add_backend="$(read_backend_pid "$proof_root/link-add.pid")"
+wait_for_database_blocker "$link_add_backend" "$link_add_holder_backend" 'the link add'
+touch "$proof_root/link-add-release"
+
+wait_owned_worker "$link_add_holder_pid" || { echo 'the link-add holder failed' >&2; exit 1; }
+wait_owned_worker "$link_add_delete_pid" || { echo 'the link-add target delete failed' >&2; exit 1; }
+wait_owned_worker "$link_add_pid" || { echo 'the waiting link add failed' >&2; exit 1; }
+
+link_add_delete_result="$(tr -d '[:space:]' <"$proof_root/link-add-delete.result")"
+link_add_result="$(tr -d '[:space:]' <"$proof_root/link-add.result")"
+[ "$link_add_delete_result" = 'completed' ] || {
+  printf 'the earlier target delete did not complete: %q\n' "$link_add_delete_result" >&2; exit 1
+}
+[ "$link_add_result" = 'refused|relationship_unavailable' ] || {
+  printf 'the waiting link add did not refuse the deleted target: %q\n' "$link_add_result" >&2; exit 1
+}
+link_add_state="$(target_race_state "$link_add_source_record_id" "$link_add_target_record_id" "$relationship_id" | tr -d '[:space:]')"
+[ "$link_add_state" = 'active|1|true|soft_deleted|2|0' ] || {
+  printf 'the link-add/delete race left partial state: %q\n' "$link_add_state" >&2; exit 1
+}
+echo "link-add/delete race: add=$link_add_result delete=$link_add_delete_result state=$link_add_state"
+
+# ----------------------------------------------------------------------------
+# Race three: a restore waits behind deletion of its required target. The
+# restore must recheck that locked target and refuse without reviving its row.
+# ----------------------------------------------------------------------------
+access_version="$(current_version)"
+
+"${psql_command[@]}" >"$proof_root/restore-target-holder.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/restore-target-holder.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select record_id from record_data.$physical_table
+where record_id='$restore_target_record_id' for update \g /dev/null
+reset role;
+\! touch '$proof_root/restore-target-holder-ready'
+\! deadline=600; while [ ! -f '$proof_root/restore-target-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/restore-target-release' ]
+rollback;
+SQL
+restore_holder_pid=$!; worker_pids+=("$restore_holder_pid")
+wait_for_file "$proof_root/restore-target-holder-ready"
+restore_holder_backend="$(read_backend_pid "$proof_root/restore-target-holder.pid")"
+
+"${psql_command[@]}" >"$proof_root/restore-target-delete.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/restore-target-delete.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select $(delete_target_statement "$restore_target_record_id") ->> 'outcome'
+\g '$proof_root/restore-target-delete.result'
+reset role;
+commit;
+SQL
+restore_delete_pid=$!; worker_pids+=("$restore_delete_pid")
+restore_delete_backend="$(read_backend_pid "$proof_root/restore-target-delete.pid")"
+wait_for_database_blocker "$restore_delete_backend" "$restore_holder_backend" 'the restore target delete'
+
+"${psql_command[@]}" >"$proof_root/restore-target.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/restore-target.pid'
+$(human_context "$access_version")
+set local role vortex_record_adapter;
+select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
+from (select $(restore_statement "$restore_source_record_id") as result) as restored
+\g '$proof_root/restore-target.result'
+reset role;
+commit;
+SQL
+restore_pid=$!; worker_pids+=("$restore_pid")
+restore_backend="$(read_backend_pid "$proof_root/restore-target.pid")"
+wait_for_database_blocker "$restore_backend" "$restore_holder_backend" 'the restore waiting on its target'
+touch "$proof_root/restore-target-release"
+
+wait_owned_worker "$restore_holder_pid" || { echo 'the restore-target holder failed' >&2; exit 1; }
+wait_owned_worker "$restore_delete_pid" || { echo 'the restore-target delete failed' >&2; exit 1; }
+wait_owned_worker "$restore_pid" || { echo 'the waiting restore failed' >&2; exit 1; }
+
+restore_delete_result="$(tr -d '[:space:]' <"$proof_root/restore-target-delete.result")"
+restore_result="$(tr -d '[:space:]' <"$proof_root/restore-target.result")"
+[ "$restore_delete_result" = 'completed' ] || {
+  printf 'the earlier required target delete did not complete: %q\n' "$restore_delete_result" >&2; exit 1
+}
+[ "$restore_result" = 'refused|record_unavailable' ] || {
+  printf 'restore did not refuse its deleted required target: %q\n' "$restore_result" >&2; exit 1
+}
+restore_state="$(target_race_state "$restore_source_record_id" "$restore_target_record_id" "$relationship_required" | tr -d '[:space:]')"
+[ "$restore_state" = 'soft_deleted|1|true|soft_deleted|2|1' ] || {
+  printf 'the restore/target-delete race left partial state: %q\n' "$restore_state" >&2; exit 1
+}
+echo "restore/target-delete race: restore=$restore_result delete=$restore_delete_result state=$restore_state"
+
+# ----------------------------------------------------------------------------
+# Race four: two changes, one expected number.
 # ----------------------------------------------------------------------------
 access_version="$(current_version)"
 
@@ -594,7 +1108,7 @@ commit;
 SQL
 second_pid=$!; worker_pids+=("$second_pid")
 second_backend="$(read_backend_pid "$proof_root/conflict-second.pid")"
-wait_for_database_blocker "$second_backend" "$first_backend"
+wait_for_database_blocker "$second_backend" "$first_backend" 'the second record change'
 touch "$proof_root/conflict-release"
 
 wait_owned_worker "$first_pid" || { echo 'the first change failed' >&2; exit 1; }
@@ -616,7 +1130,7 @@ conflict_state="$(row_state "$conflict_record_id")"
 echo "conflict race: second change returned conflict, row is $conflict_state"
 
 # ----------------------------------------------------------------------------
-# Race two: the acting account's own role assignment is revoked while a change
+# Race five: the acting account's own role assignment is revoked while a change
 # waits at the row lock.
 # ----------------------------------------------------------------------------
 access_version="$(current_version)"
@@ -652,7 +1166,7 @@ commit;
 SQL
 change_pid=$!; worker_pids+=("$change_pid")
 change_backend="$(read_backend_pid "$proof_root/revocation-change.pid")"
-wait_for_database_blocker "$change_backend" "$holder_backend"
+wait_for_database_blocker "$change_backend" "$holder_backend" 'the revocation-race change'
 
 run_sql "
   select 1 from vortex_access.coordinate_organization_role_assignment_change('revoke','$organization_id',

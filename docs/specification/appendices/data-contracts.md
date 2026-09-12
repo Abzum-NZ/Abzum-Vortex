@@ -495,6 +495,35 @@ Business fields are stored according to the published record-type contract. Orga
 
 The Record service owns a `data_version` for each organisation, storage contract, and applicable application root. A committed create, change, delete, restore, relationship change, or access-relevant ownership change increases it.
 
+Each reference-number field has one private counter keyed by organisation,
+storage contract, field and applicable application root. The database key treats
+the absent application root of organisation-shared storage as one real scope,
+without a sentinel identifier. The stored counter uses exact integer arithmetic.
+If `startingNumber` is omitted from the published field settings its value is
+`1`; an explicit positive integer overrides it. Prefix, suffix and minimum digit
+width are definition-owned inputs, not values supplied by a record command.
+The width is a minimum: formatting never truncates an allocated integer whose
+decimal representation is longer.
+
+Relationship edges and their owning link values change in the same transaction.
+The initial fixed mutation consumes a single resolved target and enforces target
+uniqueness only for one-to-one cardinality. Polymorphic target resolution and
+joining-record many-to-many behaviour are not implied by this private primitive.
+On parent deletion, `empty_optional` requires update permission on each changed
+child. `soft_delete_dependent` requires delete permission on each affected child
+and is allowed only for the exact relationship named by that child record type's
+inherited ownership contract.
+
+Private create, delete and restore primitives build the complete Record fact
+closure from the declaration for that exact action. They do not load facts for
+read or update and then evaluate a different action declaration. Relationship
+target selection and restore both lock the target row and recheck current
+eligibility after that lock before changing an edge or reactivating a record.
+Restore's retained-data check covers current required non-link presence and
+canonical storage shape plus fixed-target required-link value/edge consistency;
+the full final-value settings and live-reference validation belongs to the
+protected save command in [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47).
+
 Unique values remain reserved while `lifecycle_state` is `soft_deleted` or `removal_pending` and are released only by permanent removal.
 
 ## Record save command and result
