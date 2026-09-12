@@ -84,7 +84,7 @@ as $function$
       'recordTypeId', ('54700000-0000-4000-8000-' || pg_catalog.lpad(p_suffix::text, 12, '0'))::uuid,
       'storageContractId', ('64700000-0000-4000-8000-' || pg_catalog.lpad(p_suffix::text, 12, '0'))::uuid,
       'storageScope', 'organization_shared',
-      'ownershipMode', 'group',
+      'ownershipMode', 'team',
       'fields', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'fieldId', ('74700000-0000-4000-8000-' || pg_catalog.lpad(p_suffix::text, 12, '0'))::uuid,
         'type', 'text',
