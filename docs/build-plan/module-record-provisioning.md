@@ -166,8 +166,8 @@ Deliver the missing pieces in this order:
    [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). Read and change are
    delivered as one fixed parameterised pair over provisioned storage, with the
    complete record decision inside the adapter and the changeable-field bound
-   enforced beside the write. The next private storage slice is
-   [#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402): trusted-human
+   enforced beside the write. The private storage slice is implemented in
+   [#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402) and covers trusted-human
    create and initial ownership, per-scope locked reference allocation,
    single-target relationship edge changes, and revision-checked recoverable
    delete/restore. It remains ungranted to request/runtime roles and supplies

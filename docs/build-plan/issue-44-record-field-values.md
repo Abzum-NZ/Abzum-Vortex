@@ -104,7 +104,9 @@ an independent review of the actual implementation against this plan.
   belong to the File engine. Derived values remain owned by their relevant engines.
 
 The pure value-preparation slice does not require the whole Phase 3 epic to close.
-Full integration remains dependency-blocked under #47, #68 and #399 above, not #44.
+Full save and presentation integration remains with #47 and #68. #399's database
+parity implementation is merged to Testing; its exact hosted verification and
+issue closure remain pending.
 
 ## Root-cause gaps confirmed before runtime implementation
 
@@ -305,8 +307,8 @@ these definitions. Verify the real V2 compile/publication-test path and retain t
 existing V1 historical evaluator tests unchanged.
 
 The same versioned semantics must reach the database-backed saved-condition path
-before Module V2 is activated for records. Its current V1 implementation maps
-decimal and money fields to `number` and uses double-precision comparisons.
+before Module V2 is activated for records. The earlier V1 implementation mapped
+decimal and money fields to `number` and used double-precision comparisons.
 [Row enforcement #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) must select
 the supported Module pair from trusted definition evidence and use exact numeric
 comparison for V2 decimal/money values, with matching currency and parameter

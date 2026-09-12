@@ -83,6 +83,10 @@ business-domain name is present in the engine.
   intentionally skipped), **18/18 fixture tests**, and all 23 package builds
   passed, including the Next.js production build.
 
+Independent GPT-6 Astra review approved the corrected implementation in
+[PR #426](https://github.com/Abzum-NZ/Abzum-Vortex/pull/426), merged to Testing as
+`6c7837d`. Exact hosted Testing verification remains pending before issue closure.
+
 ## Explicitly not delivered
 
 - The public save command, Activity/Event effects, calculations, totals and

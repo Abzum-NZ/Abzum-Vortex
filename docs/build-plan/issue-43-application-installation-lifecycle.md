@@ -49,5 +49,7 @@ framework was added.
 | Concurrent lifecycle and authority changes | `module-storage-provisioning-concurrency.test.sh`; competing activation commands serialize so the second refuses stale without a mixed state, and a real assignment revocation makes a waiting activation refuse stale authority without changing its provisioned binding |
 | TypeScript behavior | `contracts/test/storage.test.ts` and `runtime/module/test/installation-lifecycle.test.ts` |
 
+Independent GPT-6 Astra review approved the corrected implementation in
+[PR #425](https://github.com/Abzum-NZ/Abzum-Vortex/pull/425), merged to Testing as
+`d171b3b`. Exact hosted Testing verification remains pending before issue closure.
 Local verification is implementation evidence, not hosted promotion evidence.
-Independent patch review remains mandatory before merge.
