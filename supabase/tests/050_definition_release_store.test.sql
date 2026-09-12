@@ -386,6 +386,11 @@ insert into vortex_definition.roots (
     '90000000-0000-4000-8000-000000000050'
   );
 
+-- Direct writes are intentional in this storage-owner suite. The assertions
+-- below exercise release-table and dependency-manifest foreign keys, checks,
+-- and append-only guards themselves; publishing through append_release would
+-- make the valid manifest setup immutable before those storage guarantees can
+-- be tested. This is not a runtime fixture path.
 insert into vortex_definition.releases (
   root_id, release_revision, release_version, authored_source,
   authored_source_fingerprint, source_contract_version, compilation_output, resolution_snapshot,
