@@ -8,6 +8,7 @@ import {
   semanticVersionSchema,
   timestampSchema,
 } from "./identifiers";
+import { isLoopbackHostname } from "./loopback-hostname";
 import {
   activityIdSchema,
   actorIdSchema,
@@ -111,7 +112,7 @@ export const identityAuthoritySchema = z
     const localLoopback =
       value.environment === "local" &&
       issuer.protocol === "http:" &&
-      ["127.0.0.1", "localhost", "[::1]"].includes(issuer.hostname);
+      isLoopbackHostname(issuer.hostname);
 
     if (issuer.pathname !== "/auth/v1")
       context.addIssue({
