@@ -229,6 +229,7 @@ select is(
     'read_publication_state',
     'read_release_history_entry',
     'read_restore_release_evidence',
+    'read_system_application_bound_release_set',
     'restore_release_draft',
     'save_draft'
   ],
@@ -304,6 +305,7 @@ select is(
     'read_publication_state',
     'read_release_history_entry',
     'read_restore_release_evidence',
+    'read_system_application_bound_release_set',
     'restore_release_draft',
     'save_draft'
   ],

@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import {
   startVerificationDatabase,
@@ -8,6 +9,24 @@ import { runLocalConcurrencyProofs } from "./run-local-concurrency-proof.mjs";
 import { runLocalDatabaseLint } from "./run-local-database-lint.mjs";
 
 const workspaceRoot = resolve(import.meta.dirname, "../..");
+
+const runPinSetConsumerProof = ({ root, databaseUrl }) => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolve(root, "node_modules", "vitest", "vitest.mjs"),
+      "run",
+      "tooling/supabase/permission-pin-set-postgres.integration.test.ts",
+    ],
+    {
+      cwd: root,
+      env: { ...process.env, VORTEX_TEST_DATABASE_URL: databaseUrl },
+      stdio: "inherit",
+    },
+  );
+  if (result.error) throw result.error;
+  return result.status ?? 1;
+};
 
 /**
  * Runs pgTAP, the concurrency proofs, and database lint against one fresh
@@ -20,6 +39,7 @@ export const runLocalDatabaseVerify = async ({ root = workspaceRoot } = {}) => {
   let status = 0;
   try {
     status = runLocalDatabaseTest({ root, ...handle });
+    if (status === 0) status = runPinSetConsumerProof({ root, databaseUrl: handle.url });
     if (status === 0)
       status = await runLocalConcurrencyProofs({ root, containerName: handle.containerName });
     if (status === 0) status = await runLocalDatabaseLint({ root, databaseUrl: handle.url });

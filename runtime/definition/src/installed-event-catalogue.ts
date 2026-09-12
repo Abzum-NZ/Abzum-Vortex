@@ -1,10 +1,12 @@
 import {
   applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
+  activeApplicationInstallationEvidenceSchema,
   installedEventDescriptorSchema,
-  moduleInstallationBindingEvidenceSchema,
   moduleDefinitionConsumerReadResultV1Schema,
   moduleDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultV3Schema,
+  systemApplicationBoundReleaseSetResultSchema,
   type DefinitionConsumerReadResult,
   type InstalledEventDescriptor,
   type ModuleInstallationBindingEvidence,
@@ -27,7 +29,11 @@ const applicationReadSchema = z.union([
 const moduleReadSchema = z.union([
   moduleDefinitionConsumerReadResultV1Schema,
   moduleDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultV3Schema,
 ]);
+const rawInstallationEvidenceSchema = z
+  .object(activeApplicationInstallationEvidenceSchema.shape)
+  .strict();
 
 /**
  * Evidence read from the Module installation binding owner. It is input to this
@@ -36,9 +42,8 @@ const moduleReadSchema = z.union([
 export type InstalledEventBindingEvidence = ModuleInstallationBindingEvidence;
 
 export type InstalledEventCatalogueInput = Readonly<{
-  application: unknown;
-  modules: readonly unknown[];
-  bindings: readonly unknown[];
+  definitions: unknown;
+  installation: unknown;
 }>;
 
 type ExactRelease = Readonly<{
@@ -87,17 +92,6 @@ const releaseOf = (read: ApplicationRead | ModuleRead): ExactRelease => ({
   resolutionFingerprint: read.resolutionFingerprint,
 });
 
-const dependencyMatchesRead = (
-  dependency: Extract<ApplicationRead["dependencyManifest"][number], { kind: "module" }>,
-  read: ModuleRead,
-): boolean =>
-  dependency.key === read.definitionKey &&
-  dependency.rootId === read.rootId &&
-  dependency.releaseRevision === read.releaseRevision &&
-  dependency.releaseVersion === read.releaseVersion &&
-  dependency.contentFingerprint === read.contentFingerprint &&
-  dependency.resolutionFingerprint === read.resolutionFingerprint;
-
 const standardKinds = [
   "created",
   "changed",
@@ -122,15 +116,22 @@ export type InstalledEventDefinitionContext = Readonly<{
 export const resolveInstalledEventDefinitionContext = (
   input: InstalledEventCatalogueInput,
 ): InstalledEventDefinitionContext => {
-  const application = applicationReadSchema.safeParse(input.application);
-  const modules = z.array(moduleReadSchema).safeParse(input.modules);
-  const bindings = z.array(moduleInstallationBindingEvidenceSchema).safeParse(input.bindings);
-  if (!application.success || !modules.success || !bindings.success)
+  const definitions = systemApplicationBoundReleaseSetResultSchema.safeParse(input.definitions);
+  const rawInstallation = rawInstallationEvidenceSchema.safeParse(input.installation);
+  if (
+    rawInstallation.success &&
+    rawInstallation.data.moduleBindings.some((binding) => binding.state !== "active")
+  )
+    throw new InstalledEventCatalogueError("INSTALLED_EVENT_BINDING_INACTIVE");
+  if (!definitions.success || !rawInstallation.success)
     throw new InstalledEventCatalogueError("INVALID_INSTALLED_EVENT_INPUT");
+  const installation = activeApplicationInstallationEvidenceSchema.safeParse(rawInstallation.data);
+  if (!installation.success)
+    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
 
-  const app = application.data;
-  const moduleReads = modules.data;
-  const bindingEvidence = bindings.data;
+  const app = applicationReadSchema.parse(definitions.data.application);
+  const moduleReads = z.array(moduleReadSchema).parse(definitions.data.modules);
+  const bindingEvidence = installation.data.moduleBindings;
   if (
     fingerprintCanonicalValue(app.content) !== app.contentFingerprint ||
     moduleReads.some(
@@ -138,9 +139,6 @@ export const resolveInstalledEventDefinitionContext = (
     )
   )
     throw new InstalledEventCatalogueError("INSTALLED_EVENT_RELEASE_MISMATCH");
-  if (bindingEvidence.some((binding) => binding.state !== "active"))
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_BINDING_INACTIVE");
-
   const modulesByRoot = new Map(moduleReads.map((module) => [String(module.rootId), module]));
   const bindingsByRoot = new Map(
     bindingEvidence.map((binding) => [String(binding.moduleRootId), binding]),
@@ -148,80 +146,24 @@ export const resolveInstalledEventDefinitionContext = (
   if (
     modulesByRoot.size !== moduleReads.length ||
     bindingsByRoot.size !== bindingEvidence.length ||
-    moduleReads.length !== bindingEvidence.length
+    moduleReads.length !== bindingEvidence.length ||
+    installation.data.organizationId !== app.organizationId ||
+    installation.data.applicationRootId !== app.rootId ||
+    installation.data.applicationReleaseRevision !== app.releaseRevision
   )
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-
-  const applicationModuleDependencies = app.dependencyManifest.filter(
-    (dependency): dependency is Extract<typeof dependency, { kind: "module" }> =>
-      dependency.kind === "module",
-  );
-  if (applicationModuleDependencies.length !== app.content.moduleBindings.length)
-    throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-
-  for (const declaredBinding of app.content.moduleBindings) {
-    const module = modulesByRoot.get(String(declaredBinding.moduleRootId));
-    const dependency = applicationModuleDependencies.find(
-      (entry) => entry.rootId === declaredBinding.moduleRootId,
-    );
-    if (
-      module === undefined ||
-      dependency === undefined ||
-      declaredBinding.resolvedVersion !== module.releaseVersion ||
-      !dependencyMatchesRead(dependency, module)
-    )
-      throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-  }
-
-  const pending = [...applicationModuleDependencies];
-  const reached = new Set<string>();
-  while (pending.length > 0) {
-    const dependency = pending.pop()!;
-    const module = modulesByRoot.get(String(dependency.rootId));
-    if (module === undefined || !dependencyMatchesRead(dependency, module))
-      throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-    if (reached.has(String(module.rootId))) continue;
-    reached.add(String(module.rootId));
-    pending.push(
-      ...module.dependencyManifest.filter(
-        (entry): entry is Extract<typeof entry, { kind: "module" }> => entry.kind === "module",
-      ),
-    );
-  }
-  if (reached.size !== moduleReads.length)
     throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
 
   for (const module of moduleReads) {
     const binding = bindingsByRoot.get(String(module.rootId));
-    const declaredDependencies = module.content.dependencies;
-    const manifestDependencies = module.dependencyManifest.filter(
-      (dependency): dependency is Extract<typeof dependency, { kind: "module" }> =>
-        dependency.kind === "module",
-    );
     if (
       binding === undefined ||
       binding.organizationId !== app.organizationId ||
       binding.applicationRootId !== app.rootId ||
       binding.applicationReleaseRevision !== app.releaseRevision ||
       binding.moduleReleaseRevision !== module.releaseRevision ||
-      manifestDependencies.length !== module.dependencyManifest.length ||
-      manifestDependencies.length !== declaredDependencies.length
+      module.correlationId !== app.correlationId
     )
       throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-    for (const declaredDependency of declaredDependencies) {
-      const dependency = manifestDependencies.find(
-        (entry) => entry.rootId === declaredDependency.moduleRootId,
-      );
-      const target = modulesByRoot.get(String(declaredDependency.moduleRootId));
-      if (
-        dependency === undefined ||
-        target === undefined ||
-        declaredDependency.moduleKey !== target.definitionKey ||
-        declaredDependency.resolvedVersion !== target.releaseVersion ||
-        !dependencyMatchesRead(dependency, target)
-      )
-        throw new InstalledEventCatalogueError("INSTALLED_EVENT_DEPENDENCY_MISMATCH");
-    }
   }
 
   const recordTypes = new Map<

@@ -21,6 +21,7 @@ export default defineConfig({
       "runtime/**/test/**/*.test.ts",
       "testing/fixtures/**/*.test.ts",
       "tooling/**/*.test.mjs",
+      "tooling/**/*.test.ts",
     ],
     coverage: {
       enabled: false,

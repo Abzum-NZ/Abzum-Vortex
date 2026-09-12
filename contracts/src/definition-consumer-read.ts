@@ -149,6 +149,14 @@ export const applicationBoundReleaseSetCommandSchema = z
   .object({ applicationReleaseRevision: javascriptSafeRevisionSchema })
   .strict();
 
+/** Exact Application root and revision selected by a protected system consumer. */
+export const systemApplicationBoundReleaseSetCommandSchema = z
+  .object({
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
 const applicationDefinitionConsumerReadResultSchema = z.union([
   applicationDefinitionConsumerReadResultV1Schema,
   applicationDefinitionConsumerReadResultV2Schema,
@@ -175,6 +183,26 @@ export const applicationBoundReleaseSetResultSchema = z
       });
   });
 
+/**
+ * The system consumer result may be an Application with no Module dependencies.
+ * The human Application-bound reader deliberately keeps its non-empty contract above.
+ */
+export const systemApplicationBoundReleaseSetResultSchema = z
+  .object({
+    application: applicationDefinitionConsumerReadResultSchema,
+    modules: z.array(moduleDefinitionConsumerReadResultSchema).max(10_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const roots = value.modules.map((module) => module.rootId);
+    if (new Set(roots).size !== roots.length)
+      context.addIssue({
+        code: "custom",
+        path: ["modules"],
+        message: "A system bound release set has one exact release per Module root",
+      });
+  });
+
 export type DefinitionConsumerReadCommand = z.infer<typeof definitionConsumerReadCommandSchema>;
 export type DefinitionConsumerReadSelector = z.infer<typeof definitionConsumerReadSelectorSchema>;
 export type DefinitionConsumerReadDependencyManifest = z.infer<
@@ -186,6 +214,12 @@ export type ApplicationBoundReleaseSetCommand = z.infer<
 >;
 export type ApplicationBoundReleaseSetResult = z.infer<
   typeof applicationBoundReleaseSetResultSchema
+>;
+export type SystemApplicationBoundReleaseSetCommand = z.infer<
+  typeof systemApplicationBoundReleaseSetCommandSchema
+>;
+export type SystemApplicationBoundReleaseSetResult = z.infer<
+  typeof systemApplicationBoundReleaseSetResultSchema
 >;
 export type ModuleDefinitionConsumerReadResultV1 = z.infer<
   typeof moduleDefinitionConsumerReadResultV1Schema
