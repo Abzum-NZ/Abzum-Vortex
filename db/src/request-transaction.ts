@@ -126,7 +126,7 @@ export const parseRuntimeDatabaseConfiguration = (
   try {
     address = new URL(connectionString);
   } catch {
-    throw databaseError("DATABASE_CONFIGURATION_INVALID");
+    throw databaseError("DATABASE_ADDRESS_UNPARSEABLE");
   }
 
   const username = decodeURIComponent(address.username);
@@ -153,8 +153,8 @@ export const parseRuntimeDatabaseConfiguration = (
     address.pathname === "/postgres" &&
     /^vortex_runtime\.[a-z0-9]{20}$/.test(username) &&
     address.password.length > 0;
-  if (!validHostedAddress || !rootCertificate)
-    throw databaseError("DATABASE_CONFIGURATION_INVALID");
+  if (!validHostedAddress) throw databaseError("DATABASE_ADDRESS_NOT_ACCEPTED");
+  if (!rootCertificate) throw databaseError("DATABASE_ROOT_CERTIFICATE_MISSING");
 
   return {
     connectionString,
