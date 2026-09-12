@@ -21,7 +21,7 @@ select no_plan();
 --     S  organization_shared, team ownership, every storage column type;
 --     C  application_contained, organization_account ownership, a link to S;
 --     R1 relationship C -> S, compiled from C's link field;
---     one saved condition over S's yes_no field;
+--     one saved condition over S's exact money field;
 --     the record-scoped permissions every viewer below holds.
 --   Application A1 binds M1 and declares one application-owned permission pair,
 --   so both owner kinds appear in the declaration the adapter builds.
@@ -98,6 +98,7 @@ select no_plan();
 \set f_note 'f4750000-0000-4000-8000-000000000023'
 \set relationship_one 'a4750000-0000-4000-8000-000000000001'
 \set condition_one 'a4750000-0000-4000-8000-000000000002'
+\set condition_two 'a4750000-0000-4000-8000-000000000003'
 
 -- ============================================================================
 -- Session-local fixture builders.
@@ -184,7 +185,7 @@ set search_path = ''
 as $function$
   select pg_catalog.jsonb_build_object(
     'name', 'Record adapter fixture',
-    'description', 'Two record types, one relationship and one saved condition.',
+    'description', 'Two record types, one relationship and one exact-money saved condition.',
     'dependencies', '[]'::jsonb,
     'recordTypes', pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(
@@ -280,7 +281,8 @@ as $function$
     'actions', '[]'::jsonb,
     'events', '[]'::jsonb,
     'rules', '[]'::jsonb,
-    'sharingConditions', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'sharingConditions', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
       'conditionId', 'a4750000-0000-4000-8000-000000000002',
       'sourceRecordTypeId', p_type_s,
       'key', 'flagged_only',
@@ -305,7 +307,40 @@ as $function$
         ),
         'expected', true
       ))
-    )),
+      ),
+      pg_catalog.jsonb_build_object(
+        'conditionId', 'a4750000-0000-4000-8000-000000000003',
+        'sourceRecordTypeId', p_type_s,
+        'key', 'exact_money_only',
+        'publishedRevision', 1,
+        'contractFingerprint', pg_temp.adapter_sha('condition:exact_money_only'),
+        'parameters', '[]'::jsonb,
+        'condition', pg_catalog.jsonb_build_object(
+          'kind', 'comparison', 'operator', 'in',
+          'left', pg_catalog.jsonb_build_object(
+            'source', 'field', 'fieldId', 'f4750000-0000-4000-8000-000000000005'
+          ),
+          'right', pg_catalog.jsonb_build_object(
+            'source', 'value', 'value', pg_catalog.jsonb_build_array(
+              null,
+              pg_catalog.jsonb_build_object('amount', '12.5', 'currency', 'NZD')
+            )
+          )
+        ),
+        'declaredFieldIds', pg_catalog.jsonb_build_array(
+          'f4750000-0000-4000-8000-000000000005'
+        ),
+        'publicationTests', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'name', 'Exact-money records only',
+          'parameters', '{}'::jsonb,
+          'fieldValues', pg_catalog.jsonb_build_object(
+            'f4750000-0000-4000-8000-000000000005',
+            pg_catalog.jsonb_build_object('amount', '12.5', 'currency', 'NZD')
+          ),
+          'expected', true
+        ))
+      )
+    ),
     'extensionPoints', '[]'::jsonb
   )
 $function$;
@@ -902,7 +937,7 @@ select pg_temp.append_writer_release(
         )),
         array[:'f_text']::uuid[], array[]::uuid[]),
       pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000008',
-        'record_adapters.shared.read_flagged', :'type_s', 'read',
+        'record_adapters.shared.read_condition', :'type_s', 'read',
         pg_catalog.jsonb_build_object(
           'routes', pg_catalog.jsonb_build_array(
             pg_catalog.jsonb_build_object('kind', 'all_records')
@@ -916,7 +951,7 @@ select pg_temp.append_writer_release(
         ),
         array[:'f_text', :'f_flag']::uuid[], array[]::uuid[]),
       pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000009',
-        'record_adapters.shared.update_flagged', :'type_s', 'update',
+        'record_adapters.shared.update_condition', :'type_s', 'update',
         pg_catalog.jsonb_build_object(
           'routes', pg_catalog.jsonb_build_array(
             pg_catalog.jsonb_build_object('kind', 'all_records')
@@ -946,7 +981,21 @@ select pg_temp.append_writer_release(
         'record_adapters.contained.update_all', :'type_c', 'update',
         '{"routes":[{"kind":"all_records"}]}'::jsonb,
         array[:'f_title', :'f_link', :'f_note']::uuid[],
-        array[:'f_title', :'f_note']::uuid[])
+        array[:'f_title', :'f_note']::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-00000000000e',
+        'record_adapters.shared.read_exact_money', :'type_s', 'read',
+        pg_catalog.jsonb_build_object(
+          'routes', pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object('kind', 'all_records')
+          ),
+          'savedCondition', pg_catalog.jsonb_build_object(
+            'conditionId', :'condition_two',
+            'publishedRevision', 1,
+            'contractFingerprint', pg_temp.adapter_sha('condition:exact_money_only'),
+            'parameterBindings', '[]'::jsonb
+          )
+        ),
+        array[:'f_text', :'f_money']::uuid[], array[]::uuid[])
     )
   ),
   '2.0.0'
@@ -1008,6 +1057,8 @@ select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1
 select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1',
   '54750000-0000-4000-8000-000000000005', 'Condition reader') as condition_account \gset
 select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1',
+  '54750000-0000-4000-8000-000000000009', 'Exact money reader') as exact_account \gset
+select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1',
   '54750000-0000-4000-8000-000000000006', 'Everything reader') as all_account \gset
 select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1',
   '54750000-0000-4000-8000-000000000007', 'Outsider') as outsider_account \gset
@@ -1062,6 +1113,9 @@ select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000
     'e4750000-0000-4000-8000-00000000000c',
     'e4750000-0000-4000-8000-00000000000d',
     'e4750000-0000-4000-8000-000000000010']::uuid[]);
+select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000000000028',
+  'adapter_exact_money_route',
+  array['e4750000-0000-4000-8000-00000000000e']::uuid[]);
 select pg_temp.adapter_role(:'org_two', :'app_three', '74750000-0000-4000-8000-000000000031',
   'adapter_other_organization',
   array['e4750000-0000-4000-8000-000000000101']::uuid[]);
@@ -1078,6 +1132,8 @@ select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-000000000045'
   '74750000-0000-4000-8000-000000000025', :'condition_account');
 select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-000000000046',
   '74750000-0000-4000-8000-000000000026', :'all_account');
+select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-000000000049',
+  '74750000-0000-4000-8000-000000000028', :'exact_account');
 -- An Application's permissions are registered under that Application, so a role
 -- built over A1's catalogue entries confers nothing in A2. The second
 -- application direction needs its own role over A2's own entries.
@@ -1456,6 +1512,29 @@ select is(
 -- (a) and (b) The read matrix, under the real vortex_request role.
 -- ============================================================================
 
+-- The private half of the same real adapter call proves where semantics come
+-- from. The exact installed release row is V2, and that pinned value is carried
+-- on the source record type which the following request-role read evaluates.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'exact_account');
+set local role vortex_record_adapter;
+create temporary table exact_money_loaded_facts on commit drop as
+select vortex_record.load_record_access_facts_internal(
+  :'type_s'::uuid, 'read', 'd5750000-0000-4000-8000-000000000001'::uuid, null
+) as loaded;
+reset role;
+select is(
+  (
+    select source_type.value ->> 'validationContractVersion'
+    from exact_money_loaded_facts as captured
+    cross join lateral pg_catalog.jsonb_array_elements(
+      captured.loaded #> '{facts,recordTypes}'
+    ) as source_type(value)
+    where source_type.value ->> 'recordTypeId' = :'type_s'
+  ),
+  '2.0.0',
+  'the real adapter facts carry the source record type contract version from the pinned Module release'
+);
+
 -- A Group member reaches the team-owned record through the ownership route, and
 -- sees exactly that permission's two fields. Every other field of the record --
 -- including the one no policy anywhere names -- is absent, not blank.
@@ -1623,21 +1702,22 @@ select is(
 );
 reset role;
 
--- A saved condition narrows an all-records route: the flagged record is
--- admitted and the unflagged one is not.
-select pg_temp.adapter_context(:'org_one', :'app_one', :'condition_account');
+-- A request-role adapter read uses the installed Module's V2 evidence and the
+-- stored exact money object: the exact positive match is admitted and the
+-- different stored amount is not.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'exact_account');
 set local role vortex_request;
 select is(
   vortex_record.read_record(
     :'type_s'::uuid, 'd5750000-0000-4000-8000-000000000001'::uuid
   ) ->> 'outcome',
   'allowed',
-  'a saved-condition-narrowed reader reads the record the condition admits'
+  'a V2 exact-money saved condition admits its stored positive match through the request-role adapter'
 );
 select is(
   vortex_record.read_record(:'type_s'::uuid, 'd5750000-0000-4000-8000-000000000002'::uuid),
   '{"outcome":"refused"}'::jsonb,
-  'and is refused the record the condition excludes'
+  'the same V2 exact-money saved condition refuses a stored non-matching amount through the request-role adapter'
 );
 reset role;
 

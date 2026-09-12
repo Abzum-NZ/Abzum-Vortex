@@ -1,4 +1,5 @@
 import { moduleFieldV2Schema, type ConditionNode, type ModuleFieldV2 } from "@vortex/contracts";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   evaluateTypedConditionV2,
@@ -114,6 +115,112 @@ const parameterOptions = (
 ) => ({ parameterDeclarations: declarations, parameterValues: values });
 
 describe("typed conditions V2", () => {
+  it("executes the shared PostgreSQL V2 exact-value parity corpus", () => {
+    const sql = readFileSync(
+      new URL(
+        "../../../supabase/tests/365_permission_saved_condition_parity.test.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const matches = [
+      ...sql.matchAll(/\$typed_condition_vectors\$([\s\S]*?)\$typed_condition_vectors\$/g),
+    ];
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.[1]).toBeDefined();
+
+    type ParityField = Readonly<{ fieldId: string; type: string; settings?: unknown }>;
+    type ParityBinding = Readonly<{
+      key: string;
+      source: "current_organization_account_id" | "literal";
+      value?: unknown;
+    }>;
+    type ParityVector = Readonly<{
+      name: string;
+      condition: unknown;
+      declaredFieldIds: string[];
+      fieldValues: Record<string, unknown>;
+      parameters: { key: string; type: string }[];
+      bindings: ParityBinding[];
+      actorId?: string;
+      expected: "true" | "false" | "error:22023";
+    }>;
+    const corpus = JSON.parse(matches[0]![1]!) as {
+      v2: {
+        sourceContractVersion: string;
+        fields: ParityField[];
+        vectors: ParityVector[];
+      };
+    };
+    expect(corpus.v2.sourceContractVersion).toBe("2.0.0");
+    expect(corpus.v2.vectors).toHaveLength(19);
+
+    const parityField = (entry: ParityField, index: number): ModuleFieldV2 => {
+      const settings = (() => {
+        switch (entry.type) {
+          case "whole_number":
+            return {};
+          case "decimal_number":
+            return { digitsBeforeDecimal: 30, decimalPlaces: 12 };
+          case "money":
+            return { currencyMode: "organization_default" };
+          case "calculation":
+            return {
+              resultType: "decimal_number",
+              expression: {
+                kind: "numeric",
+                operation: "add",
+                operands: [
+                  { source: "field", fieldId: "f3650000-0000-4000-8000-000000000012" },
+                  { source: "literal", value: "1" },
+                ],
+              },
+              dependencyFieldIds: ["f3650000-0000-4000-8000-000000000012"],
+            };
+          case "total":
+            return {
+              relationshipId: "a3650000-0000-4000-8000-000000000001",
+              operation: "sum",
+              resultType: "money",
+              fieldId: "f3650000-0000-4000-8000-000000000013",
+            };
+          default:
+            throw new Error(`Unsupported V2 parity field type ${entry.type}`);
+        }
+      })();
+      return field(entry.fieldId, `v2_parity_${index}`, entry.type, settings);
+    };
+    const parityFields = corpus.v2.fields.map(parityField);
+
+    for (const vector of corpus.v2.vectors) {
+      const parameterValues = Object.fromEntries(
+        vector.bindings.map((binding) => [
+          binding.key,
+          binding.source === "current_organization_account_id"
+            ? (vector.actorId ?? "53650000-0000-4000-8000-000000000001")
+            : binding.value,
+        ]),
+      );
+      const input = {
+        condition: vector.condition as ConditionNode,
+        sourceRecordFields: parityFields,
+        declaredFieldIds: vector.declaredFieldIds,
+        parameterDeclarations:
+          vector.parameters as TypedConditionEvaluationInputV2["parameterDeclarations"],
+        fieldValues: vector.fieldValues,
+        parameterValues,
+      } satisfies TypedConditionEvaluationInputV2;
+
+      if (vector.expected === "error:22023") {
+        expect(() => evaluateTypedConditionV2(input), vector.name).toThrowError(
+          TypedConditionEvaluationError,
+        );
+      } else {
+        expect(evaluateTypedConditionV2(input), vector.name).toBe(vector.expected === "true");
+      }
+    }
+  });
+
   it("compares exact decimals above the safe-integer limit across signs and scales", () => {
     const value = "90071992547409931234567890.12";
     expect(

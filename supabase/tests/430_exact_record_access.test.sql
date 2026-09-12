@@ -738,7 +738,7 @@ set search_path = ''
 as $function$
   select pg_catalog.jsonb_build_object(
     'recordTypes', '[
-      {"moduleRootId":"34300000-0000-4000-8000-000000000002","recordTypeId":"d4300000-0000-4000-8000-000000000001","storageContractId":"b4300000-0000-4000-8000-000000000001","storageScope":"application_contained","ownershipMode":"organization_account","fields":[{"fieldId":"b4300000-0000-4000-8000-000000000101","type":"yes_no"}]},
+      {"moduleRootId":"34300000-0000-4000-8000-000000000002","recordTypeId":"d4300000-0000-4000-8000-000000000001","storageContractId":"b4300000-0000-4000-8000-000000000001","storageScope":"application_contained","ownershipMode":"organization_account","validationContractVersion":"1.0.0","fields":[{"fieldId":"b4300000-0000-4000-8000-000000000101","type":"yes_no"}]},
       {"moduleRootId":"34300000-0000-4000-8000-000000000002","recordTypeId":"d4300000-0000-4000-8000-000000000002","storageContractId":"b4300000-0000-4000-8000-000000000002","storageScope":"application_contained","ownershipMode":"team","fields":[]},
       {"moduleRootId":"34300000-0000-4000-8000-000000000002","recordTypeId":"d4300000-0000-4000-8000-000000000003","storageContractId":"b4300000-0000-4000-8000-000000000003","storageScope":"application_contained","ownershipMode":"inherited","ownershipRelationshipId":"f4300000-0000-4000-8000-000000000003","fields":[]},
       {"moduleRootId":"34300000-0000-4000-8000-000000000002","recordTypeId":"d4300000-0000-4000-8000-000000000004","storageContractId":"b4300000-0000-4000-8000-000000000004","storageScope":"application_contained","ownershipMode":"none","fields":[]},
@@ -1559,6 +1559,7 @@ begin
         'storageContractId', beta_binding.storage_contract_id,
         'storageScope', 'application_contained',
         'ownershipMode', 'team',
+        'validationContractVersion', '1.0.0',
         'fields', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
           'fieldId', f_beta_actor_id, 'type', 'text'
         ))
@@ -1661,6 +1662,7 @@ begin
       'moduleRootId', module_id, 'recordTypeId', beta_type_id,
       'storageContractId', beta_binding.storage_contract_id,
       'storageScope', 'application_contained', 'ownershipMode', 'team',
+      'validationContractVersion', '1.0.0',
       'fields', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'fieldId', f_beta_actor_id, 'type', 'text'
       ))
@@ -3920,6 +3922,7 @@ begin
       'binding', record_binding,
       'recordTypes', pg_catalog.jsonb_build_array(record_binding || pg_catalog.jsonb_build_object(
         'ownershipMode', 'none',
+        'validationContractVersion', '1.0.0',
         'fields', pg_catalog.jsonb_build_array(
           pg_catalog.jsonb_build_object('fieldId', 'b4300000-0000-4000-8000-000000000398', 'type', 'text'),
           pg_catalog.jsonb_build_object('fieldId', 'b4300000-0000-4000-8000-000000000399', 'type', 'text')
