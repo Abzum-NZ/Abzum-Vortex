@@ -52,10 +52,13 @@ order by caller.role_name collate "C";
 -- Shared record-scope parity corpus (#387 review finding B1). Extends the
 -- original 36-vector corpus with an independently-built 106-vector probe
 -- (scratchpad/review-45-387/B-parity/make-corpus.mjs) verified against both
--- the real Zod schema and the pre-fix store, plus 12 new vectors adding an
+-- the real Zod schema and the pre-fix store, plus 13 new vectors adding an
 -- absent and a JSON-null vector for every required field at every level
 -- (routes; route objects incl. relationship's two id fields; the
 -- savedCondition envelope's four keys; each binding's key/source/value).
+-- Those 13 held only the JSON-null form of relationship's two id fields;
+-- #395 adds the two absent forms (relationship_id_missing,
+-- source_permission_id_missing).
 -- Six vectors the reviewer's probe found disagreeing for reasons unrelated
 -- to B1 are intentionally excluded -- known, accepted divergences, listed in
 -- the commit and PR report: the all-F UUID (SQL stricter than Zod for
@@ -178,6 +181,8 @@ select $record_scope_vectors$
     {"name": "top_routes_missing", "scope": {"savedCondition": {"conditionId": "34700000-0000-4000-8000-000000000001", "publishedRevision": 1, "contractFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "parameterBindings": []}}, "valid": false},
     {"name": "relationship_id_null", "scope": {"routes": [{"kind": "relationship", "relationshipId": null, "sourcePermissionId": "24700000-0000-4000-8000-000000000001"}]}, "valid": false},
     {"name": "source_permission_id_null", "scope": {"routes": [{"kind": "relationship", "relationshipId": "14700000-0000-4000-8000-000000000001", "sourcePermissionId": null}]}, "valid": false},
+    {"name": "relationship_id_missing", "scope": {"routes": [{"kind": "relationship", "sourcePermissionId": "24700000-0000-4000-8000-000000000001"}]}, "valid": false},
+    {"name": "source_permission_id_missing", "scope": {"routes": [{"kind": "relationship", "relationshipId": "14700000-0000-4000-8000-000000000001"}]}, "valid": false},
     {"name": "saved_condition_id_missing", "scope": {"routes": [{"kind": "ownership"}], "savedCondition": {"publishedRevision": 1, "contractFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "parameterBindings": []}}, "valid": false},
     {"name": "saved_condition_id_null", "scope": {"routes": [{"kind": "ownership"}], "savedCondition": {"conditionId": null, "publishedRevision": 1, "contractFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "parameterBindings": []}}, "valid": false},
     {"name": "saved_fingerprint_missing", "scope": {"routes": [{"kind": "ownership"}], "savedCondition": {"conditionId": "34700000-0000-4000-8000-000000000001", "publishedRevision": 1, "parameterBindings": []}}, "valid": false},
@@ -194,7 +199,7 @@ $record_scope_vectors$::jsonb as payload;
 
 select is(
   (select pg_catalog.jsonb_array_length(payload -> 'vectors') from record_scope_corpus),
-  113,
+  115,
   'the shared record-scope parity corpus contains the intended bounded vector set'
 );
 

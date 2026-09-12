@@ -96,7 +96,7 @@ describe("permission record scope", () => {
       valid: boolean;
     }>;
     const corpus = JSON.parse(matches[0]![1]!) as { vectors: RecordScopeVector[] };
-    expect(corpus.vectors).toHaveLength(113);
+    expect(corpus.vectors).toHaveLength(115);
 
     for (const vector of corpus.vectors)
       expect(permissionRecordScopeSchema.safeParse(vector.scope).success, vector.name).toBe(

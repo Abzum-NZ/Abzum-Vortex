@@ -3590,6 +3590,386 @@ select is(
   'the superseded binding''s decoy storage contract id never appears in any captured decision'
 );
 
+-- ============================================================================
+-- #395: saved-condition bindings stored in byte order, evaluated end to end.
+-- The compiler emits parameter bindings in code-point order, so [a1, a_b] is a
+-- valid published shape and the stored-scope CHECK accepts it. Under the
+-- database's ICU collation `a_b` sorts before `a1`, and the consumer's former
+-- binding-order re-check raised 22023 for every record evaluated under such a
+-- permission. This case stores that scope through the owning writers and
+-- evaluates it through the exact record decision, which must decide.
+--
+-- Writers used: vortex_definition.append_release (through
+-- pg_temp.append_writer_release), vortex_access.
+-- coordinate_application_access_change, coordinate_organization_role_change
+-- and coordinate_organization_role_assignment_change.
+-- Direct insert, and why no writer can produce it: the application's
+-- definition root, because create_root generates its own root identifier and
+-- this case needs a fixed one (as helpers/record-field-access-fixture.psql
+-- does). The record type, records and saved condition are facts jsonb, as
+-- everywhere else in this file.
+-- ============================================================================
+
+\ir helpers/definition-release-writer.psql
+
+insert into vortex_definition.roots (root_id, organization_id, kind, key, created_at, created_by)
+values (
+  '34300000-0000-4000-8000-000000000395', '24300000-0000-4000-8000-000000000001',
+  'application', 'example.binding_order', pg_catalog.clock_timestamp() - interval '1 minute',
+  '94300000-0000-4000-8000-000000000001'
+);
+
+create function pg_temp.binding_order_scope()
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'routes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('kind', 'all_records')),
+    'savedCondition', pg_catalog.jsonb_build_object(
+      'conditionId', 'b4300000-0000-4000-8000-000000000397',
+      'publishedRevision', 1,
+      'contractFingerprint', 'sha256:' || pg_catalog.repeat('5', 64),
+      'parameterBindings', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object('key', 'a1', 'source', 'literal', 'value', 'north'),
+        pg_catalog.jsonb_build_object('key', 'a_b', 'source', 'current_organization_account_id')
+      )
+    )
+  )
+$function$;
+
+-- Publishes one application release carrying the permission, registers it,
+-- and grants it to the acting account through a standing custom role.
+create function pg_temp.register_binding_order_permission()
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  fixture_organization_id constant uuid := '24300000-0000-4000-8000-000000000001';
+  fixture_application_root_id constant uuid := '34300000-0000-4000-8000-000000000395';
+  fixture_role_id constant uuid := '64300000-0000-4000-8000-000000000395';
+  actor_id constant uuid := '94300000-0000-4000-8000-000000000001';
+  permission jsonb := pg_catalog.jsonb_build_object(
+    'permissionId', 'c4300000-0000-4000-8000-000000000395',
+    'key', 'exact_record_access.binding_order',
+    'label', 'Binding order',
+    'description', 'Byte-ordered saved-condition bindings fixture.',
+    'recordTypeId', 'd4300000-0000-4000-8000-000000000395',
+    'recordScope', pg_temp.binding_order_scope(),
+    'actionKind', 'read',
+    'administrative', false
+  );
+  release_row vortex_definition.releases%rowtype;
+  release_value jsonb;
+  entry_value jsonb;
+  registered record;
+  refs jsonb;
+  role_revision bigint;
+begin
+  perform pg_temp.append_writer_release(
+    fixture_application_root_id, '1.0.0', '[]'::jsonb,
+    pg_catalog.jsonb_build_object('permissions', pg_catalog.jsonb_build_array(permission))
+  );
+  select release.* into strict release_row
+  from vortex_definition.releases as release
+  where release.root_id = fixture_application_root_id and release.release_revision = 1;
+
+  release_value := pg_catalog.jsonb_build_object(
+    'kind', 'application', 'definitionKey', 'example.binding_order',
+    'rootId', fixture_application_root_id,
+    'releaseRevision', release_row.release_revision,
+    'releaseVersion', release_row.release_version,
+    'validationContractVersion', release_row.validation_contract_version,
+    'contentFingerprint', release_row.content_fingerprint,
+    'resolutionFingerprint', release_row.resolution_fingerprint
+  );
+  entry_value := pg_catalog.jsonb_build_object(
+    'applicationRootId', fixture_application_root_id, 'ownerKind', 'application',
+    'ownerId', fixture_application_root_id, 'permission', permission,
+    'sourceRelease', release_value,
+    'meaningFingerprint', pg_temp.writer_fixture_fingerprint('meaning:binding_order')
+  );
+
+  select result.* into strict registered
+  from vortex_access.coordinate_application_access_change(
+    'register', null,
+    pg_catalog.jsonb_build_object(
+      'contractVersion', '1.0.0',
+      'preparationBasis', pg_catalog.jsonb_build_object('kind', 'registration_candidate'),
+      'permissionRegistration', pg_catalog.jsonb_build_object(
+        'contractVersion', '1.0.0',
+        'organizationId', fixture_organization_id,
+        'applicationRootId', fixture_application_root_id,
+        'applicationRelease', release_value,
+        'applicationCatalogueFingerprint',
+          pg_temp.writer_fixture_fingerprint('catalogue:binding_order'),
+        'applicationPermissionIds', pg_catalog.jsonb_build_array(permission -> 'permissionId'),
+        'entries', pg_catalog.jsonb_build_array(entry_value),
+        'candidateFingerprint', pg_temp.writer_fixture_fingerprint('candidate:binding_order')
+      ),
+      'templates', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'template', pg_catalog.jsonb_build_object(
+          'roleId', pg_catalog.gen_random_uuid(),
+          'key', 'binding_order_template',
+          'name', 'Binding order template',
+          'homePageId', pg_catalog.gen_random_uuid(),
+          'permissionKeys', pg_catalog.jsonb_build_array(permission -> 'key'),
+          'permissionSelection', pg_catalog.jsonb_build_object('kind', 'exact')
+        ),
+        'sourceTemplateFingerprint', pg_temp.writer_fixture_fingerprint('template:binding_order'),
+        'sourcePermissions', pg_catalog.jsonb_build_array(entry_value),
+        'livePermissions', pg_catalog.jsonb_build_array(entry_value)
+      )),
+      'candidateFingerprint', pg_temp.writer_fixture_fingerprint('preparation:binding_order')
+    ),
+    fixture_organization_id, fixture_application_root_id, actor_id,
+    'a4300000-0000-4000-8000-000000000395'
+  ) as result;
+  if registered.outcome <> 'changed' then
+    raise exception 'Binding-order registration was not applied';
+  end if;
+
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'kind', 'exact',
+    'applicationRootId', entry.application_root_id,
+    'ownerKind', entry.owner_kind,
+    'ownerId', entry.owner_id,
+    'permissionId', entry.permission_id,
+    'acceptedRegistrationRevision', registration.revision,
+    'catalogueFingerprint', registration.permission_catalogue_fingerprint,
+    'continuityRevision', continuity.continuity_revision,
+    'meaningFingerprint', entry.meaning_fingerprint
+  ))
+  into strict refs
+  from vortex_access.permission_registrations as registration
+  join vortex_access.permission_catalogue_entries as entry
+    on entry.organization_id = registration.organization_id
+    and entry.registration_kind = registration.registration_kind
+    and entry.registration_owner_id = registration.registration_owner_id
+    and entry.registration_revision = registration.revision
+  join vortex_access.permission_continuities as continuity
+    on continuity.organization_id = entry.organization_id
+    and continuity.application_root_id is not distinct from entry.application_root_id
+    and continuity.owner_kind = entry.owner_kind
+    and continuity.owner_id = entry.owner_id
+    and continuity.permission_id = entry.permission_id
+  where registration.organization_id = fixture_organization_id
+    and registration.registration_kind = 'application'
+    and registration.registration_owner_id = fixture_application_root_id
+    and registration.state = 'active';
+
+  perform 1 from vortex_access.coordinate_organization_role_change(
+    pg_catalog.jsonb_build_object(
+      'contractVersion', '1.0.0',
+      'candidate', pg_catalog.jsonb_build_object(
+        'operation', 'create_custom',
+        'organizationId', fixture_organization_id,
+        'roleId', fixture_role_id,
+        'key', 'binding_order',
+        'label', 'Binding order',
+        'description', 'Byte-ordered saved-condition bindings role.',
+        'privilegeClassification', 'standard',
+        'assignmentPolicy', pg_catalog.jsonb_build_object('kind', 'standing'),
+        'permissions', refs
+      ),
+      'roleCandidateFingerprint', pg_temp.writer_fixture_fingerprint('role:binding_order')
+    ),
+    actor_id, 'a4300000-0000-4000-8000-000000000396'
+  );
+
+  select role.live_revision into strict role_revision
+  from vortex_access.organization_roles as role
+  where role.organization_id = fixture_organization_id and role.role_id = fixture_role_id;
+
+  perform 1 from vortex_access.coordinate_organization_role_assignment_change(
+    'grant', fixture_organization_id, '74300000-0000-4000-8000-000000000395', null,
+    fixture_role_id, role_revision, 'organization_account',
+    '54300000-0000-4000-8000-000000000001', null, 'standing',
+    pg_catalog.clock_timestamp() - interval '1 minute', null,
+    actor_id, 'a4300000-0000-4000-8000-000000000397'
+  );
+end
+$function$;
+
+select pg_temp.register_binding_order_permission();
+
+select is(
+  (
+    select entry.record_scope
+    from vortex_access.permission_catalogue_entries as entry
+    where entry.organization_id = '24300000-0000-4000-8000-000000000001'
+      and entry.application_root_id = '34300000-0000-4000-8000-000000000395'
+      and entry.permission_id = 'c4300000-0000-4000-8000-000000000395'
+  ),
+  pg_temp.binding_order_scope(),
+  'the registration writer stores bindings [a1, a_b] in byte order and the stored-scope CHECK accepts them'
+);
+
+-- The acting account's request context in the new application, at the
+-- Access version the writers above advanced to.
+create function pg_temp.install_binding_order_context()
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  current_access_version bigint;
+begin
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+  select version.current_version into strict current_access_version
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = '24300000-0000-4000-8000-000000000001';
+
+  perform vortex_context.initialize(pg_catalog.jsonb_build_object(
+    'callerKind', 'human',
+    'identityAuthorityId', 'a4300000-0000-4000-8000-000000000091',
+    'tenantId', '14300000-0000-4000-8000-000000000001',
+    'organizationId', '24300000-0000-4000-8000-000000000001',
+    'organizationAccountId', '54300000-0000-4000-8000-000000000001',
+    'identityId', '44300000-0000-4000-8000-000000000001',
+    'applicationRootId', '34300000-0000-4000-8000-000000000395',
+    'sessionId', 'a4300000-0000-4000-8000-000000000092',
+    'authenticationStrength', 'single_factor',
+    'issuedAt', operation_at,
+    'expiresAt', operation_at + interval '2 hours',
+    'accessVersion', current_access_version,
+    'correlationId', 'a4300000-0000-4000-8000-000000000398',
+    'accessTokenIssuedAt', operation_at,
+    'primaryAuthenticatedAt', operation_at
+  ));
+end
+$function$;
+
+-- One exact record decision under the registered permission. The saved
+-- condition requires field ...0398 to equal the literal bound to `a1` and
+-- field ...0399 to equal the current account bound to `a_b`. Returns the
+-- outcome (and reason when refused), or the SQLSTATE the decision raised.
+create function pg_temp.binding_order_decision(p_record_id uuid)
+returns text
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  record_binding constant jsonb := pg_catalog.jsonb_build_object(
+    'moduleRootId', '34300000-0000-4000-8000-000000000002',
+    'recordTypeId', 'd4300000-0000-4000-8000-000000000395',
+    'storageContractId', 'b4300000-0000-4000-8000-000000000395',
+    'storageScope', 'application_contained'
+  );
+  decision jsonb;
+begin
+  decision := vortex_access.evaluate_organization_record_access_internal(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'record.read',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+      'target', pg_catalog.jsonb_build_object(
+        'kind', 'application', 'applicationRootId', '34300000-0000-4000-8000-000000000395'
+      ),
+      'requiredPermissions', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'applicationRootId', '34300000-0000-4000-8000-000000000395',
+        'ownerKind', 'application',
+        'ownerId', '34300000-0000-4000-8000-000000000395',
+        'permissionId', 'c4300000-0000-4000-8000-000000000395'
+      )),
+      'recordBinding', record_binding,
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    ),
+    p_record_id,
+    pg_catalog.jsonb_build_object(
+      'binding', record_binding,
+      'recordTypes', pg_catalog.jsonb_build_array(record_binding || pg_catalog.jsonb_build_object(
+        'ownershipMode', 'none',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object('fieldId', 'b4300000-0000-4000-8000-000000000398', 'type', 'text'),
+          pg_catalog.jsonb_build_object('fieldId', 'b4300000-0000-4000-8000-000000000399', 'type', 'text')
+        )
+      )),
+      'relationships', '[]'::jsonb,
+      'sharingConditions', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'conditionId', 'b4300000-0000-4000-8000-000000000397',
+        'sourceRecordTypeId', 'd4300000-0000-4000-8000-000000000395',
+        'publishedRevision', 1,
+        'contractFingerprint', 'sha256:' || pg_catalog.repeat('5', 64),
+        'parameters', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object('key', 'a1', 'type', 'text'),
+          pg_catalog.jsonb_build_object('key', 'a_b', 'type', 'text')
+        ),
+        'condition', pg_catalog.jsonb_build_object(
+          'kind', 'all',
+          'conditions', pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object(
+              'kind', 'comparison', 'operator', 'equals',
+              'left', pg_catalog.jsonb_build_object(
+                'source', 'field', 'fieldId', 'b4300000-0000-4000-8000-000000000398'
+              ),
+              'right', pg_catalog.jsonb_build_object('source', 'parameter', 'key', 'a1')
+            ),
+            pg_catalog.jsonb_build_object(
+              'kind', 'comparison', 'operator', 'equals',
+              'left', pg_catalog.jsonb_build_object(
+                'source', 'field', 'fieldId', 'b4300000-0000-4000-8000-000000000399'
+              ),
+              'right', pg_catalog.jsonb_build_object('source', 'parameter', 'key', 'a_b')
+            )
+          )
+        ),
+        'declaredFieldIds', pg_catalog.jsonb_build_array(
+          'b4300000-0000-4000-8000-000000000398', 'b4300000-0000-4000-8000-000000000399'
+        )
+      )),
+      'records', (
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'recordScope', pg_catalog.jsonb_build_object(
+            'storageScope', 'application_contained',
+            'organizationId', '24300000-0000-4000-8000-000000000001',
+            'moduleRootId', '34300000-0000-4000-8000-000000000002',
+            'recordTypeId', 'd4300000-0000-4000-8000-000000000395',
+            'storageContractId', 'b4300000-0000-4000-8000-000000000395',
+            'recordId', candidate.record_id,
+            'applicationRootId', '34300000-0000-4000-8000-000000000395'
+          ),
+          'lifecycleState', 'active',
+          'fieldValues', pg_catalog.jsonb_build_object(
+            'b4300000-0000-4000-8000-000000000398', candidate.region,
+            'b4300000-0000-4000-8000-000000000399', '54300000-0000-4000-8000-000000000001'
+          )
+        ) order by candidate.record_id)
+        from (values
+          ('e4300000-0000-4000-8000-000000000395'::uuid, 'north'),
+          ('e4300000-0000-4000-8000-000000000396'::uuid, 'south')
+        ) as candidate(record_id, region)
+      ),
+      'edges', '[]'::jsonb
+    )
+  );
+  return (decision ->> 'outcome') || coalesce(':' || (decision ->> 'reasonCode'), '');
+exception when others then
+  return 'error:' || sqlstate;
+end
+$function$;
+
+select pg_temp.install_binding_order_context();
+
+select is(
+  pg_temp.binding_order_decision('e4300000-0000-4000-8000-000000000395'),
+  'allowed',
+  'a stored scope with bindings [a1, a_b] yields an exact record decision, not 22023'
+);
+select is(
+  pg_temp.binding_order_decision('e4300000-0000-4000-8000-000000000396'),
+  'refused:record_scope_refused',
+  'the same bindings still narrow the record: one the saved condition excludes is refused, not raised'
+);
+
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+
 select * from finish();
 
 rollback;
