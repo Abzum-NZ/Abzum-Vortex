@@ -95,11 +95,11 @@ export const bootstrapIdentitySession = async (
             correlationIdSchema.parse(randomUUID()),
           );
           const staged = boundary.stage.snapshot();
-          if (outcome.kind === "active" && !staged.refused && staged.mutations.length > 0) {
+          if (staged.refused) {
+            outcome = invalid();
+          } else if (outcome.kind === "active") {
             await applyMutations(staged.mutations);
             committed = true;
-          } else if (staged.refused || outcome.kind === "active") {
-            outcome = invalid();
           }
         }
       }
