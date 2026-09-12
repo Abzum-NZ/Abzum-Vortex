@@ -14,13 +14,19 @@ readonly module_root_id='c4550000-0000-4000-8000-000000000011'
 readonly record_type_id='c4550000-0000-4000-8000-000000000012'
 readonly storage_contract_id='c4550000-0000-4000-8000-000000000013'
 readonly field_id='c4550000-0000-4000-8000-000000000014'
+readonly second_module_root_id='c4550000-0000-4000-8000-000000000015'
+readonly second_record_type_id='c4550000-0000-4000-8000-000000000016'
+readonly second_storage_contract_id='c4550000-0000-4000-8000-000000000017'
+readonly second_field_id='c4550000-0000-4000-8000-000000000018'
 readonly steward_role_id='c4550000-0000-4000-8000-000000000030'
 readonly steward_assignment_id='c4550000-0000-4000-8000-000000000031'
 readonly steward_delegation_id='c4550000-0000-4000-8000-000000000032'
 readonly installer_role_id='c4550000-0000-4000-8000-000000000033'
 readonly installer_assignment_id='c4550000-0000-4000-8000-000000000034'
+readonly revocation_activity_id='c4550000-0000-4000-8000-000000000060'
 readonly physical_table_token='rt_c4550000000040008000000000000013'
 readonly physical_column_token='f_c4550000000040008000000000000014'
+readonly second_physical_table_token='rt_c4550000000040008000000000000017'
 
 fixture_claimed=0
 declare -a worker_pids=()
@@ -115,6 +121,9 @@ cleanup_fixture() {
   run_sql "
     begin;
     set local session_replication_role = replica;
+    delete from vortex_activity.organization_activity_entries
+      where organization_id = '$organization_id'
+        and activity_id = '$revocation_activity_id';
     do \$proof\$
     begin
       if not exists (
@@ -128,6 +137,11 @@ cleanup_fixture() {
         where root_id = '$module_root_id'
           and key = 'vortex.storage_concurrency.module'
           and created_by = '$actor_id'
+      ) or not exists (
+        select 1 from vortex_definition.roots
+        where root_id = '$second_module_root_id'
+          and key = 'vortex.storage_concurrency.module_two'
+          and created_by = '$actor_id'
       ) then
         raise exception 'Module storage proof fixture ownership marker mismatch';
       end if;
@@ -137,23 +151,24 @@ cleanup_fixture() {
     delete from vortex_module.installation_bindings
       where organization_id = '$organization_id'
         and application_root_id = '$application_root_id'
-        and module_root_id = '$module_root_id';
+        and module_root_id in ('$module_root_id', '$second_module_root_id');
     reset role;
     set local role vortex_record_owner;
     drop table if exists record_data.$physical_table_token;
+    drop table if exists record_data.$second_physical_table_token;
     delete from vortex_record.relationship_edges
-      where from_storage_contract_id = '$storage_contract_id'
-         or to_storage_contract_id = '$storage_contract_id';
+      where from_storage_contract_id in ('$storage_contract_id', '$second_storage_contract_id')
+         or to_storage_contract_id in ('$storage_contract_id', '$second_storage_contract_id');
     delete from vortex_record.relationship_storage_mappings
-      where module_root_id = '$module_root_id'
-         or source_storage_contract_id = '$storage_contract_id';
+      where module_root_id in ('$module_root_id', '$second_module_root_id')
+         or source_storage_contract_id in ('$storage_contract_id', '$second_storage_contract_id');
     delete from vortex_record.field_storage_mappings
-      where storage_contract_id = '$storage_contract_id';
+      where storage_contract_id in ('$storage_contract_id', '$second_storage_contract_id');
     delete from vortex_record.storage_catalogue
-      where storage_contract_id = '$storage_contract_id'
-        and module_root_id = '$module_root_id';
+      where storage_contract_id in ('$storage_contract_id', '$second_storage_contract_id')
+        and module_root_id in ('$module_root_id', '$second_module_root_id');
     delete from vortex_record.release_provisions
-      where module_root_id = '$module_root_id';
+      where module_root_id in ('$module_root_id', '$second_module_root_id');
     reset role;
     do \$proof\$
     declare
@@ -174,14 +189,14 @@ cleanup_fixture() {
     end
     \$proof\$;
     delete from vortex_definition.release_dependencies
-      where root_id = '$application_root_id'
-         or target_root_id = '$module_root_id';
+      where root_id in ('$application_root_id', '$second_module_root_id')
+         or target_root_id in ('$module_root_id', '$second_module_root_id');
     delete from vortex_definition.releases
-      where root_id in ('$application_root_id', '$module_root_id');
+      where root_id in ('$application_root_id', '$module_root_id', '$second_module_root_id');
     delete from vortex_definition.drafts
-      where root_id in ('$application_root_id', '$module_root_id');
+      where root_id in ('$application_root_id', '$module_root_id', '$second_module_root_id');
     delete from vortex_definition.roots
-      where root_id in ('$application_root_id', '$module_root_id');
+      where root_id in ('$application_root_id', '$module_root_id', '$second_module_root_id');
     delete from vortex_identity.organization_accounts
       where organization_account_id = '$organization_account_id';
     delete from vortex_identity.identity_projections
@@ -201,6 +216,8 @@ finalize() {
   trap - EXIT INT TERM
   set +e
   touch "$proof_root/first-release" >/dev/null 2>&1 || true
+  touch "$proof_root/lifecycle-release" >/dev/null 2>&1 || true
+  touch "$proof_root/authority-release" >/dev/null 2>&1 || true
   stop_owned_workers
   cleanup_fixture
   operation_status=$?
@@ -246,6 +263,11 @@ schema_state="$(run_sql "
 
 run_sql "
   begin;
+  set local session_replication_role = replica;
+  delete from vortex_activity.organization_activity_entries
+    where organization_id = '$organization_id'
+      and activity_id = '$revocation_activity_id';
+  set local session_replication_role = origin;
   do \$proof\$
   begin
     if exists (select 1 from vortex_identity.tenants where tenant_id = '$tenant_id')
@@ -257,13 +279,14 @@ run_sql "
       )
       or exists (
         select 1 from vortex_definition.roots
-        where root_id in ('$application_root_id', '$module_root_id')
+        where root_id in ('$application_root_id', '$module_root_id', '$second_module_root_id')
       )
       or exists (
         select 1 from vortex_record.storage_catalogue
-        where storage_contract_id = '$storage_contract_id'
+        where storage_contract_id in ('$storage_contract_id', '$second_storage_contract_id')
       )
-      or pg_catalog.to_regclass('record_data.$physical_table_token') is not null then
+      or pg_catalog.to_regclass('record_data.$physical_table_token') is not null
+      or pg_catalog.to_regclass('record_data.$second_physical_table_token') is not null then
       raise exception 'Module storage proof fixture scope already exists';
     end if;
   end
@@ -391,7 +414,9 @@ run_sql "
     ('$application_root_id', '$organization_id', 'application',
       'vortex.storage_concurrency.application', pg_catalog.statement_timestamp(), '$actor_id'),
     ('$module_root_id', '$organization_id', 'module',
-      'vortex.storage_concurrency.module', pg_catalog.statement_timestamp(), '$actor_id');
+      'vortex.storage_concurrency.module', pg_catalog.statement_timestamp(), '$actor_id'),
+    ('$second_module_root_id', '$organization_id', 'module',
+      'vortex.storage_concurrency.module_two', pg_catalog.statement_timestamp(), '$actor_id');
   insert into vortex_definition.drafts (
     root_id, draft_revision, draft_source, source_contract_version, source_fingerprint,
     identity_requirements, updated_at, updated_by
@@ -402,6 +427,14 @@ run_sql "
         'key', 'vortex.storage_concurrency.module'
       ),
       '2.0.0', 'sha256:' || pg_catalog.repeat('1', 64),
+      '[]'::jsonb, pg_catalog.statement_timestamp(), '$actor_id'
+    ),
+    ('$second_module_root_id', 1,
+      pg_catalog.jsonb_build_object(
+        'source_contract_version', '2.0.0', 'kind', 'module',
+        'key', 'vortex.storage_concurrency.module_two'
+      ),
+      '2.0.0', 'sha256:' || pg_catalog.repeat('b', 64),
       '[]'::jsonb, pg_catalog.statement_timestamp(), '$actor_id'
     ),
     ('$application_root_id', 1,
@@ -506,7 +539,8 @@ run_sql "
               ),
               'relationships', '[]'::jsonb
             )
-          )
+          ),
+          'permissions', '[]'::jsonb
         ),
         'sha256:' || pg_catalog.repeat('3', 64),
         'sha256:' || pg_catalog.repeat('2', 64)
@@ -532,6 +566,70 @@ run_sql "
     )
   );
   select * from vortex_definition.append_release(
+    '$second_module_root_id'::uuid,
+    1,
+    'sha256:' || pg_catalog.repeat('b', 64),
+    pg_catalog.jsonb_build_object(
+      'releaseVersion', '2.0.0',
+      'compilationOutput', pg_temp.storage_concurrency_release_compilation(
+        '$second_module_root_id'::uuid,
+        '$organization_id'::uuid,
+        'module',
+        'vortex.storage_concurrency.module_two',
+        '2.0.0',
+        '2.0.0',
+        pg_catalog.jsonb_build_object(
+          'recordTypes', pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object(
+              'recordTypeId', '$second_record_type_id',
+              'storageContractId', '$second_storage_contract_id',
+              'storageScope', 'organization_shared', 'ownershipMode', 'team',
+              'fields', pg_catalog.jsonb_build_array(
+                pg_catalog.jsonb_build_object(
+                  'fieldId', '$second_field_id', 'type', 'text', 'required', true,
+                  'unique', false, 'filterable', true, 'sortable', true,
+                  'settings', '{}'::jsonb
+                )
+              ),
+              'relationships', '[]'::jsonb
+            )
+          ),
+          'permissions', '[]'::jsonb
+        ),
+        'sha256:' || pg_catalog.repeat('c', 64),
+        'sha256:' || pg_catalog.repeat('d', 64)
+      ),
+      'resolutionSnapshot', pg_catalog.jsonb_build_object(
+        'fingerprint', 'sha256:' || pg_catalog.repeat('d', 64),
+        'definitions', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'kind', 'module',
+            'key', 'vortex.storage_concurrency.module_two',
+            'rootId', '$second_module_root_id'::uuid,
+            'exactVersion', '2.0.0'
+          )
+        )
+      ),
+      'contentFingerprint', 'sha256:' || pg_catalog.repeat('c', 64),
+      'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('d', 64),
+      'validationContractVersion', '2.0.0',
+      'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('e', 64),
+      'impactReasons', '[]'::jsonb,
+      'releaseNote', 'Second storage concurrency Module V2.',
+      'dependencies', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'kind', 'module',
+          'key', 'vortex.storage_concurrency.module',
+          'rootId', '$module_root_id'::uuid,
+          'releaseRevision', 1,
+          'releaseVersion', '2.0.0',
+          'contentFingerprint', 'sha256:' || pg_catalog.repeat('3', 64),
+          'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('2', 64)
+        )
+      )
+    )
+  );
+  select * from vortex_definition.append_release(
     '$application_root_id'::uuid,
     1,
     'sha256:' || pg_catalog.repeat('5', 64),
@@ -544,7 +642,7 @@ run_sql "
         'vortex.storage_concurrency.application',
         '1.0.0',
         '1.0.0',
-        '{}'::jsonb,
+        pg_catalog.jsonb_build_object('permissions', '[]'::jsonb),
         'sha256:' || pg_catalog.repeat('6', 64),
         'sha256:' || pg_catalog.repeat('7', 64)
       ),
@@ -568,17 +666,40 @@ run_sql "
       'dependencies', pg_catalog.jsonb_build_array(
         pg_catalog.jsonb_build_object(
           'kind', 'module',
-          'key', 'vortex.storage_concurrency.module',
-          'rootId', '$module_root_id'::uuid,
+          'key', 'vortex.storage_concurrency.module_two',
+          'rootId', '$second_module_root_id'::uuid,
           'releaseRevision', 1,
           'releaseVersion', '2.0.0',
-          'contentFingerprint', 'sha256:' || pg_catalog.repeat('3', 64),
-          'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('2', 64)
+          'contentFingerprint', 'sha256:' || pg_catalog.repeat('c', 64),
+          'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('d', 64)
         )
       )
     )
   );
   reset role;
+  select * from vortex_access.apply_application_permission_registration_v1_internal(
+    'register', null,
+    pg_catalog.jsonb_build_object(
+      'contractVersion', '1.0.0',
+      'organizationId', '$organization_id'::uuid,
+      'applicationRootId', '$application_root_id'::uuid,
+      'applicationRelease', pg_catalog.jsonb_build_object(
+        'kind', 'application',
+        'definitionKey', 'vortex.storage_concurrency.application',
+        'rootId', '$application_root_id'::uuid,
+        'releaseRevision', 1,
+        'releaseVersion', '1.0.0',
+        'validationContractVersion', '1.0.0',
+        'contentFingerprint', 'sha256:' || pg_catalog.repeat('6', 64),
+        'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('7', 64)
+      ),
+      'applicationCatalogueFingerprint', 'sha256:' || pg_catalog.repeat('9', 64),
+      'applicationPermissionIds', '[]'::jsonb,
+      'entries', '[]'::jsonb,
+      'candidateFingerprint', 'sha256:' || pg_catalog.repeat('a', 64)
+    ),
+    '$actor_id', 'c4550000-0000-4000-8000-000000000029'
+  );
   commit;
 " >/dev/null
 fixture_claimed=1
@@ -705,4 +826,193 @@ final_state="$(run_sql "
   exit 1
 }
 
-echo 'Module storage provisioning concurrency proof passed'
+second_provision_state="$(run_sql "
+  begin;
+  select vortex_context.initialize($request_context);
+  set local role vortex_request;
+  select pg_catalog.concat_ws('|', state, changed, binding_revision)
+  from vortex_module.provision_module_installation_storage(
+    '$application_root_id', 1, '$second_module_root_id', 1, null
+  );
+  commit;
+")"
+second_provision_state="$(printf '%s' "$second_provision_state" | tr -d '[:space:]')"
+[ "$second_provision_state" = 'provisioned|t|1' ] || {
+  printf 'the second required Module was not provisioned exactly once: %q\n' \
+    "$second_provision_state" >&2
+  exit 1
+}
+
+# Two lifecycle commands for the same complete two-Module expected revision set
+# serialize through the existing Access/binding locks. The first activation holds
+# its transaction open; the second resumes after commit and must fail stale
+# without a mixed result.
+PGAPPNAME='vortex-module-lifecycle-first' \
+  "${psql_command[@]}" >"$proof_root/lifecycle-first.log" 2>&1 <<SQL &
+begin;
+set local statement_timeout = '45s';
+select vortex_context.initialize($request_context);
+set local role vortex_request;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/lifecycle-first.pid'
+select vortex_module.activate_application_installation(
+  '$application_root_id', 1,
+  '[{"moduleRootId":"$module_root_id","bindingRevision":1},{"moduleRootId":"$second_module_root_id","bindingRevision":1}]'
+) ->> 'changed'
+\g '$proof_root/lifecycle-first.result'
+\! touch '$proof_root/lifecycle-first-ready'
+\! deadline=600; while [ ! -f '$proof_root/lifecycle-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline - 1)); done; [ -f '$proof_root/lifecycle-release' ]
+commit;
+SQL
+lifecycle_first_pid=$!
+worker_pids+=("$lifecycle_first_pid")
+wait_for_file "$proof_root/lifecycle-first-ready"
+lifecycle_first_backend_pid="$(read_backend_pid "$proof_root/lifecycle-first.pid")"
+
+PGAPPNAME='vortex-module-lifecycle-second' \
+  "${psql_command[@]}" >"$proof_root/lifecycle-second.log" 2>&1 <<SQL &
+begin;
+set local statement_timeout = '45s';
+select vortex_context.initialize($request_context);
+set local role vortex_request;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/lifecycle-second.pid'
+select vortex_module.activate_application_installation(
+  '$application_root_id', 1,
+  '[{"moduleRootId":"$module_root_id","bindingRevision":1},{"moduleRootId":"$second_module_root_id","bindingRevision":1}]'
+);
+commit;
+SQL
+lifecycle_second_pid=$!
+worker_pids+=("$lifecycle_second_pid")
+lifecycle_second_backend_pid="$(read_backend_pid "$proof_root/lifecycle-second.pid")"
+wait_for_database_blocker "$lifecycle_second_backend_pid" "$lifecycle_first_backend_pid"
+touch "$proof_root/lifecycle-release"
+
+if ! wait_owned_worker "$lifecycle_first_pid"; then
+  echo 'the first lifecycle activation failed' >&2
+  sed -n '1,100p' "$proof_root/lifecycle-first.log" >&2
+  exit 1
+fi
+if wait_owned_worker "$lifecycle_second_pid"; then
+  echo 'the competing lifecycle activation unexpectedly reused a stale revision' >&2
+  exit 1
+fi
+grep -Fq 'ERROR:  Application installation bindings changed or are incomplete' \
+  "$proof_root/lifecycle-second.log" || {
+  echo 'the competing lifecycle activation did not fail stale after serialization' >&2
+  sed -n '1,100p' "$proof_root/lifecycle-second.log" >&2
+  exit 1
+}
+
+lifecycle_race_state="$(run_sql "
+  select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+  from vortex_module.installation_bindings
+  where organization_id = '$organization_id'
+    and application_root_id = '$application_root_id'
+    and module_root_id in ('$module_root_id', '$second_module_root_id');
+")"
+[ "$(tr -d '[:space:]' <"$proof_root/lifecycle-first.result")" = 'true' ] \
+  && [ "$lifecycle_race_state" = 'active:2,active:2' ] || {
+  printf 'the lifecycle race left unexpected state: %q\n' "$lifecycle_race_state" >&2
+  exit 1
+}
+
+# Restore only these owned fixture bindings so the independent authority race
+# can start from the original provisioned revisions.
+run_sql "
+  begin;
+  set local role vortex_module_owner;
+  update vortex_module.installation_bindings
+  set state = 'provisioned', binding_revision = 1,
+    changed_at = pg_catalog.statement_timestamp()
+  where organization_id = '$organization_id'
+    and application_root_id = '$application_root_id'
+    and module_root_id in ('$module_root_id', '$second_module_root_id');
+  commit;
+" >/dev/null
+
+# Authority changes and lifecycle changes serialize on the Access version row.
+# The revocation wins this ordering; the already-started activation therefore
+# resumes with stale Access facts and cannot partially activate the binding.
+PGAPPNAME='vortex-module-lifecycle-authority' \
+  "${psql_command[@]}" >"$proof_root/authority.log" 2>&1 <<SQL &
+begin;
+set local statement_timeout = '45s';
+select vortex_context.initialize($request_context);
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/authority.pid'
+select current_version
+from vortex_access.organization_access_versions
+where organization_id = '$organization_id'
+for update;
+\! touch '$proof_root/authority-ready'
+\! deadline=600; while [ ! -f '$proof_root/authority-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline - 1)); done; [ -f '$proof_root/authority-release' ]
+set local role vortex_request;
+select outcome
+from vortex_access.revoke_organization_role_assignment_for_administration(
+  '$installer_assignment_id', 1,
+  '$revocation_activity_id'
+)
+\g '$proof_root/authority.result'
+commit;
+SQL
+authority_pid=$!
+worker_pids+=("$authority_pid")
+wait_for_file "$proof_root/authority-ready"
+authority_backend_pid="$(read_backend_pid "$proof_root/authority.pid")"
+
+PGAPPNAME='vortex-module-lifecycle-activation' \
+  "${psql_command[@]}" >"$proof_root/activation.log" 2>&1 <<SQL &
+begin;
+set local statement_timeout = '45s';
+select vortex_context.initialize($request_context);
+set local role vortex_request;
+select pg_catalog.pg_backend_pid()
+\g '$proof_root/activation.pid'
+select vortex_module.activate_application_installation(
+  '$application_root_id', 1,
+  '[{"moduleRootId":"$module_root_id","bindingRevision":1},{"moduleRootId":"$second_module_root_id","bindingRevision":1}]'
+);
+commit;
+SQL
+activation_pid=$!
+worker_pids+=("$activation_pid")
+activation_backend_pid="$(read_backend_pid "$proof_root/activation.pid")"
+wait_for_database_blocker "$activation_backend_pid" "$authority_backend_pid"
+touch "$proof_root/authority-release"
+
+if ! wait_owned_worker "$authority_pid"; then
+  echo 'the assignment revocation failed during the lifecycle race' >&2
+  sed -n '1,100p' "$proof_root/authority.log" >&2
+  exit 1
+fi
+if wait_owned_worker "$activation_pid"; then
+  echo 'activation unexpectedly survived the serialized authority revocation' >&2
+  exit 1
+fi
+grep -Fq 'ERROR:  Application installation authority changed' "$proof_root/activation.log" || {
+  echo 'activation did not fail with stale Access facts after the authority change' >&2
+  sed -n '1,100p' "$proof_root/activation.log" >&2
+  exit 1
+}
+
+authority_race_state="$(run_sql "
+  select pg_catalog.concat_ws('|',
+    (select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+      from vortex_module.installation_bindings
+      where organization_id = '$organization_id'
+        and application_root_id = '$application_root_id'
+        and module_root_id in ('$module_root_id', '$second_module_root_id')),
+    (select state || ':' || revision
+      from vortex_access.organization_role_assignments
+      where organization_id = '$organization_id'
+        and role_assignment_id = '$installer_assignment_id')
+  );
+")"
+[ "$authority_race_state" = 'provisioned:1,provisioned:1|revoked:2' ] || {
+  printf 'the authority race left partial lifecycle state: %q\n' "$authority_race_state" >&2
+  exit 1
+}
+
+echo 'Module storage provisioning and lifecycle concurrency proofs passed'

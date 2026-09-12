@@ -313,8 +313,10 @@ A failed table-creation transaction rolls back its own new objects and changes,
 never a table or registration already used by another installation. If provisioning
 has succeeded but activation fails, the valid inactive structure remains available
 for retry. Activation is atomic and cannot report a usable binding before its
-required mappings, registrations and protected operations are ready. Detachment
-retains the stored records. The [coordinated implementation plan](../build-plan/module-record-provisioning.md)
+required mappings, exact Application permission registration and protected
+operations are ready. Published event declarations remain part of the pinned
+immutable definitions; activation does not duplicate them in a second catalogue.
+Detachment retains the stored records. The [coordinated implementation plan](../build-plan/module-record-provisioning.md)
 keeps these responsibilities with the existing Module, Record and Application engines.
 
 ### Record storage provisioning
@@ -339,8 +341,9 @@ Runtime installation reads follow the same distinction. A context-bound read
 returns the complete exact active Application dependency set, including its
 explicitly pinned shared Modules, without a general cross-organisation definition
 lookup. Ordinary discovery does not require installation-management permission
-and grants no record access. Unrelated detached history does not invalidate a
-complete current installation. See the [active installation read plan](../build-plan/issue-43-active-installation-read.md).
+and grants no record access. It refuses a detached target. Unrelated detached
+history does not invalidate a complete current installation. See the
+[active installation read plan](../build-plan/issue-43-active-installation-read.md).
 
 The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
 is the organisation-scoped platform permission
@@ -378,13 +381,15 @@ tables and remains subject to row security.
 
 ```mermaid
 flowchart LR
-    I[Install exact application release] --> M[Module: check authority and binding revision]
-    M --> D[Read exact published modules and dependencies]
-    D --> R[Record: protected generic provisioner]
-    R --> C[Lock catalogue and create or reuse compatible storage]
-    C --> P[Commit provisioned, inactive]
-    P --> A[Check permissions, events and dependencies]
-    A --> B[Activate binding in a new transaction]
+    I[Select exact Application release] --> D[Resolve complete direct and transitive Module pins]
+    D --> R[Record: provision or reuse compatible storage]
+    R --> P[Commit every binding as provisioned]
+    P --> A[Module: check current Access authority and exact permission registration]
+    A --> L[Lock every required binding in canonical order]
+    L --> V[Recheck Access and exact revisions and release evidence]
+    V --> B[Activate the whole pin set atomically]
+    B --> X[Runtime reader accepts exact active set]
+    B --> T[Detach later: retain storage and records]
 ```
 
 Lock the installation and storage identities in a consistent order. First create
@@ -411,9 +416,22 @@ Concurrent first requests serialize on these same identities. An older pinned
 release may reuse a newer compatible storage shape containing additional nullable
 fields, without removing those mappings or downgrading the shared catalogue.
 
-Activation rechecks current authority and binding revision after the required
-registrations exist. Failure cannot expose a partial active installation and
-does not destroy valid inactive/shared structures. Populated changes use the
+Activation and detach accept the complete canonically ordered Module pin set and
+the expected revision of every binding. Completeness is derived again from the
+exact published Application release, so a caller cannot omit or insert a Module.
+Both operations check current Access authority, lock every required binding in
+Module identity order, then recheck Access and every binding's exact Application
+release, Module release, content, resolution and revision evidence. Activation
+additionally checks generator evidence and obtains the complete storage-contract
+set through a narrow Record-owned exact-provision read; Module does not read
+Record's private provision tables. Detach does not repeat the storage/generator
+read because it preserves rather than advertises usable storage.
+All bindings change together or none do. An unchanged exact retry returns the
+current result; a stale revision refuses rather than adding a receipt, fingerprint
+or lifecycle counter. Failure cannot expose a partial active installation and
+does not destroy valid inactive/shared structures. Detach changes only the target
+Application's bindings, so another Application sharing a Module remains active.
+Populated changes use the
 same owning primitives in bounded add/migrate/switch/retire steps, orchestrated
 through Kestra when durable data movement is necessary. Initial creation needs
 no new worker, queue or owner credential in Vercel.
