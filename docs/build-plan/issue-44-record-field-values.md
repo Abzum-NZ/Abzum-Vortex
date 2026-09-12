@@ -86,23 +86,25 @@ an independent review of the actual implementation against this plan.
 
 ## What remains before closing the whole task
 
-- [Record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) and
-  [save lifecycle #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) must save
-  and read back the supported values through real protected adapters. This cannot
-  be replaced by an in-memory validator roundtrip.
+- [Save lifecycle #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) owns the
+  round-trip of every writable type except attachment through real protected
+  adapters, and the direct refusal of a gated choice at save; both need the
+  protected save. This cannot be replaced by an in-memory validator roundtrip.
 - [Row enforcement #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) and
-  [field access #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) remain
-  prerequisites of that integrated save/read path. Permission-gated options must
-  be hidden from an unauthorised caller and refused on a direct server save.
-- Missing personal-data declarations must still fail publication with a field
-  location. Existing publication evidence should be reused rather than creating
-  a new publication gate.
+  [field access #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) are closed.
+  Hiding a permission-gated option from a caller without the permission is owned by
+  [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68).
+- [Database exact-value parity #399](https://github.com/Abzum-NZ/Abzum-Vortex/issues/399)
+  owns V2 decimal and money exact-value parity in saved conditions.
+- A missing personal-data declaration is located by the versioned definition
+  validation contract (`validateDefinitionSource`), which the draft store and
+  the module designer use; the store and publication themselves fail closed
+  with a coarse code and no location, by design.
 - Attachments remain file references here; real upload/download and file access
   belong to the File engine. Derived values remain owned by their relevant engines.
 
 The pure value-preparation slice does not require the whole Phase 3 epic to close.
-Full integration remains dependency-blocked where the actual owning engines are
-not ready. Do not close #44 merely because the first slice passes.
+Full integration remains dependency-blocked under #47, #68 and #399 above, not #44.
 
 ## Root-cause gaps confirmed before runtime implementation
 
