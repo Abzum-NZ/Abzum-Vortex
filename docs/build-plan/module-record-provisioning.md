@@ -109,14 +109,16 @@ including locally owned Applications with exact shared external Modules. It does
 not activate bindings or require installation-management permission for ordinary
 runtime discovery. Protected operations still check their own current authority.
 
-The delivered first provisioner currently accepts only direct Application-to-Module
-dependencies. Before claiming complete installation, extend its fixed Module
-coordinator to accept an exact Module reachable through the Application's pinned
-Module dependency graph, preserving the same Access and release checks. Use a
-forward migration, not an edit to the delivered migration or a requirement that
-administrators duplicate indirect dependencies on the Application. Prove actual
-provisioning of Application-to-A-to-shared-B and refusal of an unrelated B. The
-reader's manually activated fixtures do not satisfy this installation acceptance.
+Transitive Module dependencies are delivered. One resolver,
+`vortex_definition.reachable_module_dependency_edges`, owns the rule that an
+Application's dependency closure pins each Module root at exactly one revision,
+the publication writer refuses a closure that breaks it, and the coordinator,
+both readers and the permission registry all read their Module set from it. An
+exact Module reachable only through another Module is provisioned and registered;
+an unrelated or substituted Module release is refused. The provisioner also
+accepts the compiled ownership value `team`, which is what the compiler actually
+emits for a Group-owned record type; the superseded runtime term `group` is
+refused rather than carried as a second spelling.
 
 Treat #43, #45 and #50's registration slice as coordinated work, not a sequence
 requiring a fake completed install before its storage exists. Likewise, #44's
@@ -153,7 +155,11 @@ existing request transaction rather than introducing another transaction framewo
 Deliver the missing pieces in this order:
 
 1. Complete the fixed protected storage adapters and their row/field checks in
-   [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
+   [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). Read and change are
+   delivered as one fixed parameterised pair over provisioned storage, with the
+   complete record decision inside the adapter and the changeable-field bound
+   enforced beside the write; create, delete, restore, reference numbers and
+   relationship-edge writes follow in the next slice.
 2. Define the protected save command/result and its existing specified retry
    receipt, including refusal of a reused command identity with different inputs.
 3. Add the private outbox and logged queue append required by
@@ -317,6 +323,9 @@ Use the real restricted request role for allow/refuse checks. Generated storage
 must set grants and row policies explicitly; do not rely on Supabase's changing
 [default table exposure](https://supabase.com/docs/guides/database/postgres/row-level-security#grants-and-policies).
 Raw content access must not bypass the field projection/change bounds already
-required by [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). Run the existing
+required by [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). The fixed
+read and change adapters enforce those bounds on real provisioned tables, and
+the request role holds no privilege on any `record_data` table, so the adapters
+are its only route to a record. Run the existing
 database tests and advisors for the actual generated objects and obtain independent
 actual-work review. No new test framework or infrastructure service is required.

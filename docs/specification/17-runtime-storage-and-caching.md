@@ -365,8 +365,13 @@ Recheck the actor and scope from the trusted transaction context, not
 The database owns the only DDL generator. TypeScript services call that fixed
 operation and parse its result; they do not maintain a second SQL generator.
 The generated structure includes the declared fields, complete scope keys,
-Group ownership (`owner_group_id`), relationships, four row policies and fixed
-field-aware record adapters. Adapters construct trusted relationship evidence;
+Group ownership (`owner_group_id`), relationships and four row policies. Those
+policies are the scope-only isolation backstop; the complete record decision
+runs inside the adapter, once for a read and over both the old and the proposed
+row for a change. The adapters are not generated per table: one fixed
+parameterised pair, keyed by record-type identity, resolves the physical table
+and columns through the protected catalogue, so one audited path serves every
+record type. Adapters construct trusted relationship evidence;
 callers cannot supply the access graph. Raw content-table access stays denied.
 An adapter execution role receives only the required DML, does not own those
 tables and remains subject to row security.
