@@ -203,3 +203,7 @@ Actual save proofs must cover valid self-type hierarchies, an actual refused
 record-level cycle, a relationship move updating both parents, concurrent child
 changes and rollback without partial totals or events. These are #47 integration
 requirements; this pure evaluator does not implement them.
+
+## Approved deadline refresh — 12 September 2026
+
+Implement [scheduled time-based calculations](../specification/appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations) in the existing engine: next due time, protected revision-checked refresh, cancellation/rescheduling, bounded catch-up and retry-safe effects. [#62](https://github.com/Abzum-NZ/Abzum-Vortex/issues/62) consumes this operation for scheduled delivery; [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) ensures overdue values cannot silently determine reads, filters, sorting or totals. Test a passed deadline with no user save, a changed deadline, deleted record, duplicate job, concurrent edit and scheduler downtime. Do not deploy a workflow per record or build another formula engine.

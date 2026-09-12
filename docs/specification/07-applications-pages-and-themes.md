@@ -19,7 +19,7 @@ flowchart TD
     APP --> THEME[Theme]
 ```
 
-All these application components are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
+These application components, including exact Module bindings, are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). The bound Modules remain independently versioned definitions; their record types, fields and relationships publish with the Module. A page or workflow can have its own stable identifier and editing history without acquiring an independent live version.
 
 Installing, updating or withdrawing an application requires its declared application-management operation and current authorised scope; permission to manage roles or assignments alone does not authorise an application lifecycle change. The [Application engine](../build-plan/issue-64-application-runtime.md) supplies this protected operation binding and composes the current Access decision, exact affected scope, existing private lifecycle writer and Activity in the same transaction. It reuses the [Access administration transaction pattern](../build-plan/issue-40-protected-access-administration.md), preserves supplier and final-steward safeguards and exposes no unbound installation or withdrawal endpoint. The [consumer handoff](../build-plan/access-consumer-handoffs.md) keeps that concrete composition with its real operation owner; earlier Access foundations do not fabricate the missing caller or permission.
 
@@ -39,7 +39,7 @@ An application records:
 
 - Permanent key, display name, description, icon, and organisation-visible ownership.
 - The modules and version ranges it requires.
-- Module bindings and application-contained record types.
+- Exact bindings to independently published Modules, whose record types declare organisation-shared or application-contained row scope. Row scope does not change definition ownership or publication.
 - Navigation tree, reusable shells with named content slots, and pages.
 - Application role templates. Live organisation assignments are managed separately through [Access](04-access-and-permissions.md#one-organisation-managed-catalogue).
 - Actions, rules, events, workflows, and pipelines.
@@ -153,11 +153,13 @@ The App Builder lists Pages and Frontend Flows within the same application. Drop
 
 ## Addresses and routing
 
-Two route families coexist. Platform account and administration routes keep their own reserved first segments, including `/organizations/{organizationId}` for platform-level organisation administration; they are not rewritten onto application addresses. The definition-led runtime application route is `/{organisation_short_name}/{application_key}/{page_key}`. Organisation short names are permanent within their environment and cannot use a platform-reserved first segment. The reserved segments are every platform first segment actually served — currently `auth`, `health`, `organizations` and `signed-in` — plus `signin` and `api`; adding a platform route and reserving its first segment are one change.
+Two route families coexist. Platform account and administration routes keep their own reserved first segments, including `/organizations/{organizationId}` for platform-level organisation administration; they are not rewritten onto application addresses. The definition-led runtime application route is `/{tenant_short_name}/{organisation_short_name}/{application_key}/{page_key}`. The server resolves the tenant within the addressed cluster, then the organisation within that tenant, then its exact application registration and page. It never chooses an organisation from its short name alone or from the person's current membership. Tenant short names are permanent and unique within their cluster; organisation short names are permanent and unique only within their tenant, as specified in [People and organisations](02-people-organisations-and-sign-in.md#tenant-and-organisation-hierarchy).
+
+Tenant short names occupy the first segment and cannot use a platform-reserved first segment. This restriction does not apply to organisation short names in the second segment. The reserved segments are every platform first segment actually served — currently `auth`, `health`, `organizations` and `signed-in` — plus `signin` and `api`; adding a platform route and reserving its first segment are one change. Unknown tenant/organisation combinations fail closed. Route resolution never grants membership, application entry or record access.
 
 An organisation-branded address may change presentation but never proves membership or grants access. The platform accepts an address only after its exact ownership and routing target have been verified, and an unknown address fails closed. Organisation subdomains and wildcard-domain routing are not part of the first release.
 
-An organisation may mark at most one active application registration as its default application. The organisation address without an application segment opens that application at its landing page when the current person may open it; otherwise it shows the organisation's application launcher, which lists only the applications that person may currently open. Marking a default is part of the protected application-lifecycle operation and grants nobody access. The neutral pre-organisation launcher is unchanged.
+An organisation may mark at most one active application registration as its default application. Its address `/{tenant_short_name}/{organisation_short_name}` without an application segment opens that application at its landing page when the current person may open it; otherwise it shows the organisation's application launcher, which lists only the applications that person may currently open. An application address without a page segment opens that application's landing page under the same checks. Marking a default is part of the protected application-lifecycle operation and grants nobody access. The neutral pre-organisation launcher is unchanged.
 
 ## Core UI continuity and motion
 
@@ -266,7 +268,7 @@ These published roles are reusable templates. Registering the application regist
 - An untouched draft is removed after thirty days unless [privacy and retention](14-activity-privacy-and-retention.md) sets a shorter organisation policy.
 - Each configured protected operation revalidates and commits within its own short owning-service transaction. Earlier committed steps remain committed if a later step refuses or fails. Work requiring durable waits, autonomous retry or cross-session recovery starts a [workflow](09-workflows-and-pipelines.md); interactive sequencing alone does not require one.
 
-These are target form and flow semantics. The private form-draft runtime remains owned by [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), its typed flow bindings by [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), and the protected Record and Query execution/receipt boundaries by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50). Existing Definition drafts and the delivered Activity foundation do not constitute those runtimes.
+These are target form and flow semantics. The private form-draft runtime remains owned by [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68), its typed flow bindings by [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), and the protected Record and Query execution/receipt boundaries by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54). Existing Definition drafts and the delivered Activity foundation do not constitute those runtimes.
 
 ## Public pages
 

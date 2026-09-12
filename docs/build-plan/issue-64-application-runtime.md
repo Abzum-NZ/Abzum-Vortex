@@ -6,7 +6,7 @@ Task: [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64). This is engine 
 
 ## What will be built
 
-1. Assemble an application from an exact published definition and module bindings. Resolve its launcher, landing page, stable routes, ordered navigation, pages and registered blocks without requiring a visual editor or Puck state. Labels may change without changing route/permanent identities; phone navigation uses the same tree as desktop.
+1. Assemble an application from an exact published definition and exact bindings to independently versioned Modules. Application-contained row scope does not change Module definition ownership. Resolve its launcher, landing page, stable routes, ordered navigation, pages and registered blocks without requiring a visual editor or Puck state. Use `/{tenant_short_name}/{organisation_short_name}/{application_key}/{page_key}` and resolve the tenant before its organisation. Reserve platform first segments against tenant short names, not organisation short names; preserve tenant-local organisation-name uniqueness. Labels may change without changing route/permanent identities; phone navigation uses the same tree as desktop.
 2. Wire the shared renderer and semantic page/control projection to the same installed artifact. Reuse the query, form/action, flow, Access and theme owners. No application-name checks, sample rows in core, parallel renderer or page-specific save handler.
 3. Implement explicit install/upgrade/withdrawal and readiness through the concrete lifecycle boundary owned here, reusing [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40)'s governance-first transaction pattern and existing private Access writer. Never give the application an owner connection or direct raw registry access. Publication alone changes no installation. Register exact permission declarations and role templates without granting account or Group access.
 4. Preserve organisation-owned roles, compatible shared-module suppliers and separate application contexts. Upgrade/removal/withdrawal uses the existing same-transaction catalogue and Access-version composition. Changed, removed/readded or reactivated authority needs the established fresh IAM acceptance; custom roles are not overwritten and old grants do not silently resume.
@@ -70,6 +70,8 @@ delegation permits governance of the new permission without granting its use.
 - [ ] Actual restricted runtime/request connections prove authorised success, wrong organisation/application/version and missing-authority refusal, stale changes and rollback. Registration creates no automatic assignments.
 - [ ] The exact declared lifecycle permission, locked full affected scope, existing Access writer and Activity compose atomically; caller-selected permissions, scope or owner credentials cannot bypass this boundary. Required IAM acceptance is not fabricated.
 - [ ] Two identically named applications remain distinct; a custom organisation role can select exact permissions across them without label-based authority.
+- [ ] Two tenants with the same organisation short name and matching application/page keys resolve to separate exact installations, including when the same person belongs to both. Wrong tenant/organisation combinations and unauthorised entry refuse. Platform routes keep their reserved first segments; reserved tenant names refuse while those organisation names work in the second segment. Organisation and application addresses without later segments resolve their launcher/default/landing page under current access checks.
+- [ ] Editing or publishing a bound Module changes no installed Application. Explicit Application rebinding/publication and installation upgrade adopt its exact compatible release through #43/#45; application-contained rows remain isolated by Application root and organisation, independently of Module release ownership.
 - [ ] Missing dependencies, undelivered workflow/connection capabilities and incomplete governed setup are visible, not reported as successful installation.
 - [ ] Capture desktop/phone runtime screenshots and a file-defined application walkthrough. Independent review covers the actual engine and full local/hosted evidence.
 
@@ -94,3 +96,7 @@ changes no authorisation semantics.
 - [Access model](../specification/04-access-and-permissions.md)
 - [Frontend flow architecture](../specification/appendices/frontend-rule-designer.md)
 - [Page contracts](../specification/appendices/page-builder-contracts.md)
+
+## Lifecycle policy activation dependency
+
+Consume [#408](https://github.com/Abzum-NZ/Abzum-Vortex/issues/408)'s current organisation-bounded policy for every installed record type. Preserve policy identity across application upgrades and shared bindings. Do not activate a selected end action until its actual engine is available; definition authoring itself may precede that capability.
