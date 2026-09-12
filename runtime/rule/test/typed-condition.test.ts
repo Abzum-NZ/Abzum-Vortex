@@ -136,10 +136,12 @@ describe("typed conditions", () => {
       expected: "true" | "false" | "error:22023";
     }>;
     const corpus = JSON.parse(matches[0]![1]!) as {
+      sourceContractVersion: string;
       fields: ParityField[];
       vectors: ParityVector[];
     };
-    expect(corpus.vectors).toHaveLength(44);
+    expect(corpus.sourceContractVersion).toBe("1.0.0");
+    expect(corpus.vectors).toHaveLength(46);
 
     const parityField = (entry: ParityField, index: number): FieldDefinition => {
       const settings = (() => {

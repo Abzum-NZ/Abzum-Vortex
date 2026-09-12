@@ -933,7 +933,7 @@ begin
     and vortex_access.evaluate_permission_saved_condition(
       permission_scope,
       '{"conditionId":"c3800000-0000-4000-8000-000000000001","sourceRecordTypeId":"53800000-0000-4000-8000-000000000001","publishedRevision":1,"contractFingerprint":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","parameters":[{"key":"actor","type":"text"}],"condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3800000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"actor"}},"declaredFieldIds":["f3800000-0000-4000-8000-000000000001"]}'::jsonb,
-      '{"recordTypeId":"53800000-0000-4000-8000-000000000001","fields":[{"fieldId":"f3800000-0000-4000-8000-000000000001","type":"text"}]}'::jsonb,
+      '{"recordTypeId":"53800000-0000-4000-8000-000000000001","validationContractVersion":"1.0.0","fields":[{"fieldId":"f3800000-0000-4000-8000-000000000001","type":"text"}]}'::jsonb,
       candidate.field_values,
       decision.organization_account_id
     )

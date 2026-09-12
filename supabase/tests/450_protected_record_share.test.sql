@@ -898,6 +898,7 @@ begin
       'moduleRootId', module_id, 'recordTypeId', type_id,
       'storageContractId', contract_id, 'storageScope', 'application_contained',
       'ownershipMode', 'organization_account',
+      'validationContractVersion', '1.0.0',
       'fields', pg_catalog.jsonb_build_array(
         pg_catalog.jsonb_build_object('fieldId', f1_id, 'type', 'text'),
         pg_catalog.jsonb_build_object('fieldId', f2_id, 'type', 'text'),

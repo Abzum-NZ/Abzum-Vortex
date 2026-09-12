@@ -312,7 +312,13 @@ the supported Module pair from trusted definition evidence and use exact numeric
 comparison for V2 decimal/money values, with matching currency and parameter
 rules. Reuse the existing evaluator boundary and parity tests; do not infer a
 version from a JSON value or reinterpret historical V1 evidence. This is an
-integration prerequisite, not delivered by the schema-only slice.
+integration prerequisite, not delivered by the schema-only slice. Database
+parity is now delivered by [#399](https://github.com/Abzum-NZ/Abzum-Vortex/issues/399):
+the fixed record adapter carries each source record type's pinned Module
+`validationContractVersion`, the saved-condition evaluator selects V1 only for
+`1.0.0` and exact semantics for `2.0.0`/`3.0.0`, and request-role adapter tests
+cover matching and non-matching stored money values without weakening the V1
+corpus or the existing evaluator boundary.
 
 ```mermaid
 flowchart LR
