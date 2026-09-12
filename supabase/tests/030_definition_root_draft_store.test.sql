@@ -163,13 +163,18 @@ select results_eq(
       array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('roots', 'module_installation_definition_roots_read',
       array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    -- #401: the fixed record adapters read the pinned release content that is
+    -- their exact installed definition, so their owner reads `releases` and
+    -- nothing else in this schema -- no roots, no dependencies, and no write.
+    ('releases', 'record_adapter_definition_releases_read',
+      array['vortex_record_adapter']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('release_dependencies', 'record_storage_definition_dependencies_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('releases', 'record_storage_definition_releases_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('roots', 'record_storage_definition_roots_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text)$$,
-  'Definition row policies permit only the exact private Module and Record owner reads'
+  'Definition row policies permit only the exact private Module and Record owner reads and the record adapter''s release read'
 );
 select is(
   (

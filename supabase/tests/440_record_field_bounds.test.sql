@@ -5,11 +5,21 @@ set local search_path = pg_catalog, extensions, public;
 select no_plan();
 
 -- Function shape and ACL assertions for the one new object in
--- 20260910094534_resolve_record_field_bounds.sql. It is owner-only: it takes
--- only the decision and looks each contribution's field policy up from the
--- live permission catalogue itself, so no request/runtime/module-owner/
--- record-owner/record-adapter role may call it, and no caller may supply a
--- declarations parameter of its own.
+-- 20260910094534_resolve_record_field_bounds.sql. It takes only the decision
+-- and looks each contribution's field policy up from the live permission
+-- catalogue itself, so no caller may supply a declarations parameter of its
+-- own.
+--
+-- #401 (20260912011556_fixed_record_adapters.sql) changed its security mode
+-- and its ACL, and both are asserted here. It is now SECURITY DEFINER, still
+-- owner-held by postgres with an empty search path, because the fixed record
+-- adapters that call it are owned by vortex_record_adapter, which holds no
+-- privilege on the Access catalogue tables the resolver reads and is
+-- deliberately granted none (#401 keeps every Access table out of the adapter
+-- role). Definer rights are what let the adapter resolve field bounds without
+-- that grant. Exactly one role gains execution -- vortex_record_adapter, the
+-- owner of those adapters -- and every other role, including vortex_request,
+-- still cannot call it.
 select has_function(
   'vortex_access', 'resolve_record_field_bounds_internal',
   array['jsonb'],
@@ -30,10 +40,10 @@ select is(
       'vortex_access.resolve_record_field_bounds_internal(jsonb)'::regprocedure
   ),
   pg_catalog.jsonb_build_object(
-    'owner', 'postgres', 'securityDefiner', false, 'volatility', 's',
+    'owner', 'postgres', 'securityDefiner', true, 'volatility', 's',
     'configuration', array['search_path=""']
   ),
-  'the field-bounds resolver is owner-held, stable, invoker-rights and empty-search-path'
+  'the field-bounds resolver is owner-held, stable, definer-rights and empty-search-path'
 );
 select ok(
   not pg_catalog.has_function_privilege(
@@ -46,9 +56,39 @@ select ok(
 from (values
   ('public'), ('anon'), ('authenticated'), ('service_role'),
   ('vortex_runtime'), ('vortex_request'), ('vortex_module_owner'),
-  ('vortex_record_owner'), ('vortex_record_adapter')
+  ('vortex_record_owner')
 ) as caller(role_name)
 order by caller.role_name collate "C";
+-- The one role that may call it, and the exact ACL that says so: definer
+-- rights would be a privilege escalation if any other role could reach them.
+select ok(
+  pg_catalog.has_function_privilege(
+    'vortex_record_adapter',
+    'vortex_access.resolve_record_field_bounds_internal(jsonb)',
+    'EXECUTE'
+  ),
+  'the record-adapter owner can execute the private field-bounds resolver'
+);
+select is(
+  (
+    select pg_catalog.array_agg(
+      grantee_role.rolname || '=' || privilege.privilege_type
+      order by grantee_role.rolname collate "C"
+    )
+    from pg_catalog.pg_proc as procedure_row
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(
+        procedure_row.proacl,
+        pg_catalog.acldefault('f', procedure_row.proowner)
+      )
+    ) as privilege
+    join pg_catalog.pg_roles as grantee_role on grantee_role.oid = privilege.grantee
+    where procedure_row.oid =
+      'vortex_access.resolve_record_field_bounds_internal(jsonb)'::regprocedure
+  ),
+  array['postgres=EXECUTE', 'vortex_record_adapter=EXECUTE'],
+  'the resolver grants execution to its owner and the record-adapter owner alone'
+);
 
 -- ============================================================================
 -- Fixture. One tenant/organisation/Access-version scope and one application

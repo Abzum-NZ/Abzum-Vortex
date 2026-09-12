@@ -90,9 +90,43 @@ select ok(
 from (values
   ('public'), ('anon'), ('authenticated'), ('service_role'),
   ('vortex_runtime'), ('vortex_request'), ('vortex_module_owner'),
-  ('vortex_record_owner'), ('vortex_record_adapter')
+  ('vortex_record_owner')
 ) as caller(role_name)
 order by caller.role_name collate "C";
+-- #401 (20260912011556_fixed_record_adapters.sql) granted exactly one role
+-- execution of the decision: vortex_record_adapter, which owns the fixed record
+-- adapters. That is the grant this function's own comment anticipated ("#45
+-- grants its own adapter owner later"). The row-scope composer above keeps no
+-- grant at all, including for that role: it is reached only by recursion inside
+-- this decision, never by an adapter directly.
+select ok(
+  pg_catalog.has_function_privilege(
+    'vortex_record_adapter',
+    'vortex_access.evaluate_organization_record_access_internal(jsonb,uuid,jsonb)',
+    'EXECUTE'
+  ),
+  'the record-adapter owner can execute the private decision function'
+);
+select is(
+  (
+    select pg_catalog.array_agg(
+      grantee_role.rolname || '=' || privilege.privilege_type
+      order by grantee_role.rolname collate "C"
+    )
+    from pg_catalog.pg_proc as procedure_row
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(
+        procedure_row.proacl,
+        pg_catalog.acldefault('f', procedure_row.proowner)
+      )
+    ) as privilege
+    join pg_catalog.pg_roles as grantee_role on grantee_role.oid = privilege.grantee
+    where procedure_row.oid =
+      'vortex_access.evaluate_organization_record_access_internal(jsonb,uuid,jsonb)'::regprocedure
+  ),
+  array['postgres=EXECUTE', 'vortex_record_adapter=EXECUTE'],
+  'the decision grants execution to its owner and the record-adapter owner alone'
+);
 
 -- ============================================================================
 -- Fixture. One tenant/organisation/Access-version scope, one acting account
