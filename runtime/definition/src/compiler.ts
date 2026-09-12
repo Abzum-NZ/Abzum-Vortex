@@ -1800,10 +1800,29 @@ function provenanceFor(
   return entries;
 }
 
+type ResolutionSnapshot =
+  DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
+
+/**
+ * Narrowing key only. Every lookup still applies its own predicate to the entries it finds, so
+ * a separator inside an alias can widen the candidates but never change what matches.
+ */
+const identityLookupKey = (definitionKey: string, kind: string, alias: string): string =>
+  `${definitionKey}\0${kind}\0${alias}`;
+
 class Resolution {
   readonly snapshot:
     DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
   readonly sourceLocation: DefinitionValidationLocation;
+  /** Filled by the constructor passes that already visit every definition and identity. */
+  private readonly definitionsByKey = new Map<
+    string,
+    ResolutionSnapshot["definitions"][number][]
+  >();
+  private readonly identitiesByLookup = new Map<
+    string,
+    ResolutionSnapshot["identities"][number][]
+  >();
 
   constructor(
     snapshot:
@@ -1871,6 +1890,9 @@ class Resolution {
         `${definition.key}:root`,
         "vortex.definition.duplicate_resolution",
       );
+      const sameKey = this.definitionsByKey.get(definition.key);
+      if (sameKey) sameKey.push(definition);
+      else this.definitionsByKey.set(definition.key, [definition]);
     }
     const identities = new Set<string>();
     for (const identity of snapshot.identities) {
@@ -1913,6 +1935,10 @@ class Resolution {
         componentOwner,
         "vortex.definition.duplicate_identity_resolution",
       );
+      const lookupKey = identityLookupKey(identity.definitionKey, identity.kind, identity.alias);
+      const sameLookup = this.identitiesByLookup.get(lookupKey);
+      if (sameLookup) sameLookup.push(identity);
+      else this.identitiesByLookup.set(lookupKey, [identity]);
     }
     for (const group of identityOwnerGroups.values())
       if (group.identifiers.size !== 1)
@@ -1957,7 +1983,7 @@ class Resolution {
   }
 
   definition(key: string, kind?: "module" | "application" | "connection_type") {
-    const matches = this.snapshot.definitions.filter(
+    const matches = (this.definitionsByKey.get(key) ?? []).filter(
       (entry) => entry.key === key && (kind === undefined || entry.kind === kind),
     );
     const location = this.location(kind ?? "module", key);
@@ -1969,7 +1995,9 @@ class Resolution {
   }
 
   id(definitionKey: string, kind: string, alias: string, scope?: string): string {
-    const matches = this.snapshot.identities.filter(
+    const matches = (
+      this.identitiesByLookup.get(identityLookupKey(definitionKey, kind, alias)) ?? []
+    ).filter(
       (entry) =>
         entry.definitionKey === definitionKey &&
         entry.kind === kind &&
@@ -2024,13 +2052,18 @@ class Resolution {
 
   permission(key: string, allowedDefinitionKeys: readonly string[]): string {
     const allowed = new Set(allowedDefinitionKeys);
-    const matches = this.snapshot.identities.filter(
-      (entry) =>
-        allowed.has(entry.definitionKey) &&
-        entry.scope === "content" &&
-        entry.kind === "permission" &&
-        entry.alias === key,
-    );
+    const matches = [...allowed]
+      .flatMap(
+        (definitionKey) =>
+          this.identitiesByLookup.get(identityLookupKey(definitionKey, "permission", key)) ?? [],
+      )
+      .filter(
+        (entry) =>
+          allowed.has(entry.definitionKey) &&
+          entry.scope === "content" &&
+          entry.kind === "permission" &&
+          entry.alias === key,
+      );
     const unique = [...new Set(matches.map((entry) => entry.identifier))];
     if (unique.length === 0)
       fail(
@@ -2053,13 +2086,18 @@ class Resolution {
     allowedDefinitionKeys: readonly string[],
   ): string {
     const allowed = new Set(allowedDefinitionKeys);
-    const matches = this.snapshot.identities.filter(
-      (entry) =>
-        allowed.has(entry.definitionKey) &&
-        entry.scope === "content" &&
-        entry.kind === kind &&
-        entry.alias === key,
-    );
+    const matches = [...allowed]
+      .flatMap(
+        (definitionKey) =>
+          this.identitiesByLookup.get(identityLookupKey(definitionKey, kind, key)) ?? [],
+      )
+      .filter(
+        (entry) =>
+          allowed.has(entry.definitionKey) &&
+          entry.scope === "content" &&
+          entry.kind === kind &&
+          entry.alias === key,
+      );
     const unique = [...new Set(matches.map((entry) => entry.identifier))];
     if (unique.length === 0)
       fail("vortex.definition.missing_identity", "unresolved_reference", this.location(kind, key));
