@@ -93,5 +93,14 @@ proof. The failures did not reproduce, and the Event patch changes no Access
 operation. This task does not mask either failure or broaden Event behavior to
 compensate for it.
 
-Independent actual-patch review and hosted delivery remain to be recorded after
-those gates complete; this document does not claim them in advance.
+Independent GPT-6 Astra review approved the corrected implementation in
+[PR #427](https://github.com/Abzum-NZ/Abzum-Vortex/pull/427), merged to Testing as
+`769cb11d263ddd5f689558cc9d704813c98be8e5`. Read-only hosted history inspection
+confirmed that Testing has applied migrations `20260913010000` and
+`20260913030000`, but not this task's earlier `20260912192054`. The hosted runner
+refuses this older pending migration under its current ordering rule. Fresh-local
+success therefore does not prove the existing Testing database's upgrade path.
+The migration-order repair tracked by
+[consolidation PR #419](https://github.com/Abzum-NZ/Abzum-Vortex/pull/419) must be
+reviewed and applied before exact hosted Testing verification can complete.
+Hosted verification remains pending; review approval does not establish delivery.

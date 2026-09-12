@@ -52,4 +52,7 @@ introduced.
 
 ## Verification
 
-Final local and hosted receipts are recorded after independent review and merge.
+Independent GPT-6 Astra review approved the implementation in
+[PR #424](https://github.com/Abzum-NZ/Abzum-Vortex/pull/424), merged to Testing as
+`c8d0141`. Its committed integration proof and database checks are local evidence.
+Exact hosted Testing verification remains pending before issue closure.
