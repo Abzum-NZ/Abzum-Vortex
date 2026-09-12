@@ -174,7 +174,9 @@ Deliver the missing pieces in this order:
    primitives to the complete save orchestration rather than a second endpoint.
 2. Define the protected save command/result and its existing specified retry
    receipt, including refusal of a reused command identity with different inputs.
-3. Add the private outbox and logged queue append required by
+3. Add the private outbox and Basic logged queue append in
+   [#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400), which is the
+   transactional prerequisite for
    [#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60). Use the existing
    per-record event sequence contract: one save can announce several occurrences,
    so its record concurrency number alone cannot uniquely order those occurrences.
@@ -226,13 +228,18 @@ operation may call the private Event helper. Browser, request and runtime roles
 receive no direct append, outbox or queue capability. This is the intentional
 database composition boundary; it creates no reverse TypeScript package import.
 
-The helper checks the actual binding/release and derives scope, actor, time and
-sequence from database-controlled operation facts. It accepts no caller-selected
-queue, sequence or `saveSucceeded` claim. The existing Record row lock serializes
-sequence allocation from the prior outbox maximum; the uniqueness key follows
-the actual record identity, without adding Application scope to an
-organisation-shared record. Each real occurrence receives its own identifier.
-An exact command-receipt retry returns the stored outcome without appending again.
+The helper takes the shared form of the Module lifecycle lock and only then
+rereads the exact active binding, installation and release. Activation, detach or
+replacement takes the exclusive form of the same lock, so an append cannot carry
+stale installation evidence past a lifecycle change. The helper derives scope,
+actor, time and sequence from database-controlled operation facts and accepts no
+caller-selected queue, sequence or `saveSucceeded` claim. It explicitly confirms
+that the actual generated Record row was returned and locks that row before
+allocating from the prior outbox maximum. Different records in the same
+Application and Module remain independent; the uniqueness key follows the actual
+record identity without adding Application scope to an organisation-shared
+record. Each real occurrence receives its own identifier. An exact command-receipt
+retry returns the stored outcome without appending again.
 
 Use one [Basic logged Supabase Queue](https://supabase.com/docs/guides/queues/quickstart#queue-types)
 and a private immutable outbox. The minimal V2 queue message carries contract
@@ -307,11 +314,13 @@ Event-helper access. Also prove an untrusted save command cannot inject generate
 values or bypass validation. A restricted `current_user` test must not be described
 as proof that the underlying runtime `session_user` cannot reset its role.
 
-Concrete missing integrations are the Module active-binding reader/activation,
-protected Record writer and 30-day command receipt, the private Event queue/outbox
-migration, and Application composition. Co-deliver these required parts; a new
-reviewed migration is ordinary implementation work, not a user approval gate.
-Dispatcher, webhook, consumer and Kestra work are outside this first append slice.
+Concrete missing integrations are the protected Record writer and command receipt,
+plus Application composition. [#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400)
+owns the first private Event queue/outbox migration and append helper; it does not
+set a receipt-retention default. Co-deliver the remaining save parts without
+turning a reviewed migration into a user approval gate. Dispatcher, webhook,
+consumer and Kestra work are outside this first append slice and remain
+[event delivery #60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60).
 
 Prove direct request-role event fabrication fails, a committed save creates its
 matching effects, a forced append failure rolls all of them back, exact retries
@@ -319,13 +328,13 @@ create no duplicates, and concurrent saves maintain per-record sequence. A mocke
 participant is not evidence of database atomicity.
 
 Co-deliver the protected [save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)
-with the transactional enqueue slice of [event delivery #60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60)
-on the real [record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
-Neither task requires the other whole task to be marked Done first. Requiring
-all of Phase 4 before #60 would prevent Phase 4 from proving its own atomic
-record/event acceptance. #60 therefore depends on the concrete storage boundary,
-not the whole phase epic. Its ordered dispatch, duplicate-safe consumers and
-recovery acceptance remain required before closing #60.
+with the private transactional append delivered by
+[#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400) on the real
+[record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
+[#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60) consumes that committed
+outbox and queue afterward; it does not own the initial append. Its ordered
+dispatch, duplicate-safe consumers and recovery acceptance remain required
+before closing #60.
 
 The save owns one short transaction: current authority, inputs and revisions are
 checked; record changes, success activity, declared event/start intent and logged
