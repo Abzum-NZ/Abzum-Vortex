@@ -598,7 +598,9 @@ select * from vortex_definition.append_release(
   )
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+reset role;
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+set local role vortex_runtime;
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.scope_scale_context_org_161());
 set local role vortex_request;
@@ -642,7 +644,9 @@ select * from vortex_definition.append_release(
   )
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+reset role;
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+set local role vortex_runtime;
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.scope_scale_context());
 set local role vortex_request;

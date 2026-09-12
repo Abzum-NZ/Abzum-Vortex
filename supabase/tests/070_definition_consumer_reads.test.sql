@@ -477,7 +477,9 @@ $function$;
 grant execute on function pg_temp.consumer_read_system_context_org_71() to vortex_runtime, vortex_request;
 
 set local role vortex_runtime;
-select pg_catalog.set_config('vortex.request_context', '', true);
+reset role;
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.consumer_read_system_context_org_71());
 set local role vortex_request;
 set local search_path = pg_catalog, extensions, public;
@@ -538,7 +540,9 @@ $function$;
 grant execute on function pg_temp.consumer_read_context() to vortex_runtime, vortex_request;
 
 set local role vortex_runtime;
-select pg_catalog.set_config('vortex.request_context', '', true);
+reset role;
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.consumer_read_context());
 set local role vortex_request;
 set local search_path = pg_catalog, extensions, public;

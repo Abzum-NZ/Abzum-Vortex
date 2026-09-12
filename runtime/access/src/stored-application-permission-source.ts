@@ -12,7 +12,6 @@ import { withResolvedRequestTransaction } from "@vortex/db";
 import {
   createDatabaseDefinitionConsumerReadService,
   type ImmutableDefinitionPublicationCatalogueDefinition,
-  createDatabaseApplicationBoundReleaseSetService,
 } from "@vortex/definition";
 import type { HumanOrganizationRequestDependencies } from "./human-organization-request";
 import { createPermissionRegistryDefinitionAdapter } from "./permission-registry-definition-adapter";
@@ -61,14 +60,7 @@ export const createStoredApplicationPermissionSource = (
             dependencies.definitionCatalogue,
             transaction,
           );
-          const boundReleaseSet = createDatabaseApplicationBoundReleaseSetService(
-            dependencies.definitionCatalogue,
-            transaction,
-          );
-          const definitionAdapter = createPermissionRegistryDefinitionAdapter({
-            reader,
-            boundReleaseSet,
-          });
+          const definitionAdapter = createPermissionRegistryDefinitionAdapter(reader);
           const permissionRegistration = await definitionAdapter.prepareApplicationRegistration(
             systemContext,
             {
