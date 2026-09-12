@@ -166,8 +166,12 @@ Deliver the missing pieces in this order:
    [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). Read and change are
    delivered as one fixed parameterised pair over provisioned storage, with the
    complete record decision inside the adapter and the changeable-field bound
-   enforced beside the write; create, delete, restore, reference numbers and
-   relationship-edge writes follow in the next slice.
+   enforced beside the write. The next private storage slice is
+   [#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402): trusted-human
+   create and initial ownership, per-scope locked reference allocation,
+   single-target relationship edge changes, and revision-checked recoverable
+   delete/restore. It remains ungranted to request/runtime roles and supplies
+   primitives to the complete save orchestration rather than a second endpoint.
 2. Define the protected save command/result and its existing specified retry
    receipt, including refusal of a reused command identity with different inputs.
 3. Add the private outbox and logged queue append required by
@@ -191,6 +195,27 @@ whole save task closes. Its transactional totals and concurrent-save proof are
 co-delivered with [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), not
 deferred until after a supposedly complete save engine. These are delivery
 boundaries, not claims that the missing integrations already exist.
+
+For #402 specifically, test real published and provisioned definitions. Account
+ownership is derived; Group ownership accepts only a selected current membership.
+An omitted reference start is one and an explicit non-one start is exact. Digit
+width is a minimum and never truncates a wider allocated integer. The
+counter scope uses a null-safe database key, and concurrent creates serialize on
+that counter. Link values and canonical edges remain atomic. A concurrent link
+change and parent deletion serialize on the affected source row; after the lock,
+deletion rechecks that the current link still names that parent before applying
+the declared action. Optional clearing requires child update authority and exact
+inherited-dependent deletion requires child delete authority. Create, delete and
+restore load the fact closure for their actual action. Restore uses the retained
+row but rechecks current access and definition, current required non-link
+presence/canonical storage shape, and exact fixed-target required relationship
+value/edge/target consistency after locking the target. Full final-value
+settings and live-reference validation remains in
+[#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47). Link-add versus target
+delete and restore versus required-target delete must have two-session proofs.
+Do not add System/specified-account execution, public save commands, Activity,
+Events, receipts, lifecycle scheduling, transfer, polymorphic links or an
+implicit many-to-many edge engine to this slice.
 
 #### Event append authority
 
