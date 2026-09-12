@@ -18,6 +18,7 @@ const runPostgresIntegrationProofs = ({ root, databaseUrl }) => {
       "run",
       "tooling/supabase/permission-pin-set-postgres.integration.test.ts",
       "tooling/supabase/access-refusal-postgres.integration.test.ts",
+      "tooling/supabase/event-append-postgres.integration.test.ts",
     ],
     {
       cwd: root,

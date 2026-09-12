@@ -52,11 +52,13 @@ existing safe operation error. No new translation engine or free-text diagnostic
 channel is introduced. A valid response shape is not itself proof that its fields
 are safe to disclose.
 
-Exact retries use the existing thirty-day command receipt during real save
-implementation. That internal receipt is separate from the public response:
-current Access and field projection still apply, so replay cannot reveal an old
-response after permission removal. The pure contracts do not implement a receipt,
-background dispatch, authorization or persistence.
+Exact retries use the existing command receipt during real save implementation.
+Its retention is an explicit operational policy owned outside this contract; this
+plan neither assumes nor creates a fixed retention period. The internal receipt is
+separate from the public response: current Access and field projection still
+apply, so replay cannot reveal an old response after permission removal. The pure
+contracts do not implement a receipt, background dispatch, authorization or
+persistence.
 
 ```mermaid
 flowchart LR

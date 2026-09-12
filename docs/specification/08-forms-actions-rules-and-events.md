@@ -196,20 +196,30 @@ A Kestra outage after commit leaves the event or start intent pending for retry.
 
 ## Delivery guarantees
 
-The first [transactional append implementation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60)
-in [#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60) uses a private immutable
-outbox and one logged queue. The fixed append helper is available only to the
+The first [transactional append implementation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400)
+in [#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400) installs a private immutable
+outbox and one Basic logged queue. The fixed append helper is available only to the
 non-login role owning protected Record adapters, never directly to runtime or
 browser callers. Current verified context supplies actor and correlation; the
 database supplies occurrence time. Previous record-editor metadata must not be
 mistaken for the actor of a new event. The minimal queue message carries V2
 `occurrenceId`, not record contents or a reusable event-declaration identifier.
 
+The helper coordinates with the existing Module lifecycle lock before it rereads
+the exact active installation, binding and release. Activation, detach or
+replacement therefore cannot leave a waiting append using stale installation
+evidence. That lifecycle lock is shared by appends; the actual generated Record
+row remains the ordering lock, so different records in the same Application and
+Module can proceed independently. A missing row or a row contained by another
+Application is refused without an outbox row, queue message or partial batch.
+
 Sequence follows actual record identity. An organisation-shared record has one
 sequence across consuming Applications; application-contained records retain
 their Application scope. The locked row and indexed outbox maximum provide the
 sequence, without a second counter or timestamp ordering mechanism. The private
 append prerequisite alone is not the complete protected save or dispatcher.
+Ordered delivery, claiming, retries, consumer receipts and recovery remain
+[event delivery #60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60).
 
 - The record change, activity, event outbox row and logged queue message are written in the same database transaction. Dispatch starts only after commit; it is not responsible for filling a gap between a committed record and its event.
 - Event preparation and event persistence are distinct. The required Event participant prepares exact occurrence facts; the protected Record database save invokes the private Event append helper unconditionally. Request/runtime roles cannot call that helper directly or fabricate a save-success claim. See the [reviewed save/event boundary](../build-plan/module-record-provisioning.md#event-append-authority).
