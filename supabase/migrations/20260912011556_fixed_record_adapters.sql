@@ -97,6 +97,16 @@
 -- reference numbers and relationship-edge writes (#402); activation (#43);
 -- save, receipts, Activity and events (#47, #400). The relationship-edge scope
 -- trigger is untouched and stays SECURITY INVOKER.
+--
+-- Nothing below calls a helper outside the exact grant list above. The nil-UUID
+-- and temporal shape checks are written inline rather than borrowed from
+-- `vortex_context.is_non_nil_uuid` or
+-- `vortex_access.typed_condition_temporal_value_internal`, because reaching
+-- either would mean granting this role something #401 does not list, and the
+-- boundary inventory in 475 asserts that exact set. Inline is the smaller
+-- change: the UUID parameters are already typed, so a nil comparison is exact,
+-- and the two temporal formats are checked by pattern and then by the cast that
+-- has to succeed anyway for the value to be stored.
 
 -- ============================================================================
 -- The resolver's security mode, and the exact privileges the adapter owner
@@ -196,7 +206,7 @@ create function vortex_record.canonical_record_value_matches(
 )
 returns boolean
 language plpgsql
-immutable
+stable
 security invoker
 set search_path = ''
 as $function$
@@ -206,6 +216,12 @@ declare
   -- `normalizeExactDecimal` emits (contracts/src/exact-decimal.ts:49-72).
   canonical_decimal constant text :=
     '^(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]*[1-9])?))$';
+  uuid_pattern constant text :=
+    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+  nil_uuid_text constant text := '00000000-0000-0000-0000-000000000000';
+  date_pattern constant text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}$';
+  date_time_pattern constant text :=
+    '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$';
   value_text text;
 begin
   if p_value is null then
@@ -229,7 +245,8 @@ begin
       and p_value - array['organizationAccountId']::text[] = '{}'::jsonb
       and p_value ? 'organizationAccountId'
       and pg_catalog.jsonb_typeof(p_value -> 'organizationAccountId') = 'string'
-      and vortex_context.is_non_nil_uuid(p_value ->> 'organizationAccountId');
+      and (p_value ->> 'organizationAccountId') ~ uuid_pattern
+      and pg_catalog.lower(p_value ->> 'organizationAccountId') <> nil_uuid_text;
   elsif p_field_type = 'several_choices' then
     return pg_catalog.jsonb_typeof(p_value) = 'array'
       and not exists (
@@ -241,7 +258,8 @@ begin
       and not exists (
         select 1 from pg_catalog.jsonb_array_elements(p_value) as member(value)
         where pg_catalog.jsonb_typeof(member.value) is distinct from 'string'
-          or not vortex_context.is_non_nil_uuid(member.value #>> '{}')
+          or (member.value #>> '{}') !~ uuid_pattern
+          or pg_catalog.lower(member.value #>> '{}') = nil_uuid_text
       );
   elsif p_field_type = 'table' then
     return pg_catalog.jsonb_typeof(p_value) = 'array';
@@ -264,17 +282,38 @@ begin
   elsif p_database_value_type = 'boolean' then
     return pg_catalog.jsonb_typeof(p_value) = 'boolean';
   elsif p_database_value_type = 'date' then
-    return pg_catalog.jsonb_typeof(p_value) = 'string'
-      and vortex_access.typed_condition_temporal_value_internal(
-        p_value #>> '{}', 'date'
-      ) is not null;
+    if pg_catalog.jsonb_typeof(p_value) is distinct from 'string' then
+      return false;
+    end if;
+    value_text := p_value #>> '{}';
+    if value_text !~ date_pattern then
+      return false;
+    end if;
+    begin
+      perform value_text::date;
+    exception when invalid_datetime_format or datetime_field_overflow
+      or invalid_text_representation then
+      return false;
+    end;
+    return true;
   elsif p_database_value_type = 'timestamp_with_time_zone' then
     -- The instant is stored; the offset it arrived with is not preserved, and
-    -- the read codec returns UTC `Z`.
-    return pg_catalog.jsonb_typeof(p_value) = 'string'
-      and vortex_access.typed_condition_temporal_value_internal(
-        p_value #>> '{}', 'date_time'
-      ) is not null;
+    -- the read codec returns UTC `Z`. The pattern requires an explicit offset,
+    -- so the stored instant never depends on the session time zone.
+    if pg_catalog.jsonb_typeof(p_value) is distinct from 'string' then
+      return false;
+    end if;
+    value_text := p_value #>> '{}';
+    if value_text !~ date_time_pattern then
+      return false;
+    end if;
+    begin
+      perform value_text::timestamptz;
+    exception when invalid_datetime_format or datetime_field_overflow
+      or invalid_text_representation then
+      return false;
+    end;
+    return true;
   elsif p_database_value_type = 'text' then
     return pg_catalog.jsonb_typeof(p_value) = 'string';
   elsif p_database_value_type = 'json' then
@@ -312,6 +351,7 @@ security invoker
 set search_path = ''
 as $function$
 declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   context_value jsonb;
   context_organization_id uuid;
   context_application_root_id uuid;
@@ -363,8 +403,8 @@ declare
   target_definition_revision bigint;
   facts jsonb;
 begin
-  if not vortex_context.is_non_nil_uuid(p_record_type_id::text)
-    or not vortex_context.is_non_nil_uuid(p_record_id::text)
+  if p_record_type_id is null or p_record_type_id = nil_uuid
+    or p_record_id is null or p_record_id = nil_uuid
     or p_action_kind not in ('read', 'update')
     or (p_expected_concurrency_number is not null
       and p_expected_concurrency_number not between 1 and 9007199254740991) then
@@ -641,7 +681,10 @@ begin
   from pg_catalog.jsonb_each(permission_by_id) as declared(key, value)
   where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
     and declared.value ->> 'actionKind' = p_action_kind
-    and declared.value -> 'namedAction' is null
+    -- `->>` and not `->`: a permission that declares no named action is stored
+    -- here as JSON null, which `-> 'namedAction' is null` would never match, so
+    -- that test would leave every declaration empty and refuse every record.
+    and (declared.value ->> 'namedAction') is null
     and (
       (declared.value ->> 'ownerKind') = 'application'
       or (declared.value ->> 'ownerId')::uuid = target_module_root_id
@@ -970,8 +1013,8 @@ declare
   field_id text;
 begin
   if p_record_type_id is null or p_record_id is null
-    or not vortex_context.is_non_nil_uuid(p_record_type_id::text)
-    or not vortex_context.is_non_nil_uuid(p_record_id::text) then
+    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_record_id = '00000000-0000-0000-0000-000000000000'::uuid then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
 
@@ -1061,8 +1104,8 @@ begin
   -- The next number must still fit the column's own range, so the highest
   -- accepted expected number is one below its maximum.
   if p_record_type_id is null or p_record_id is null
-    or not vortex_context.is_non_nil_uuid(p_record_type_id::text)
-    or not vortex_context.is_non_nil_uuid(p_record_id::text)
+    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_record_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_expected_concurrency_number is null
     or p_expected_concurrency_number not between 1 and 9007199254740990
     or p_final_values is null
