@@ -1,7 +1,7 @@
 \ir helpers/definition-release-writer.psql
 
 begin;
-select plan(36);
+select plan(74);
 
 set local search_path = pg_catalog, extensions, public;
 grant usage on schema extensions to vortex_request;
@@ -864,13 +864,303 @@ select results_eq(
   'the bound reader returns exactly the pins of the Application release'::text
 );
 
--- No activation operation exists yet; the provisioned bindings are made
--- active directly, as the active-installation reader suite does.
+-- Activation cannot omit or insert a dependency, and permission readiness is
+-- read from Access rather than supplied by the lifecycle caller.
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1}]'
+  )$$::text,
+  '23514'::char(5), 'Application installation binding set is incomplete'::text,
+  'activation refuses an expected revision set that omits a transitive dependency'::text
+);
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000007","bindingRevision":1}]'
+  )$$::text,
+  '23514'::char(5), 'Application installation binding set is incomplete'::text,
+  'activation refuses an expected revision set that inserts an unrelated Module'::text
+);
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+  )$$::text,
+  '40001'::char(5), 'Application permission registration is stale or unavailable'::text,
+  'activation refuses a missing exact Access permission registration'::text
+);
+reset role;
+select is(
+  (
+    select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000002'
+  ),
+  'provisioned:1,provisioned:1',
+  'refused activation leaves the complete provisioned binding set unchanged'
+);
+
+create temporary table saved_missing_binding on commit drop as
+select * from vortex_module.installation_bindings
+where organization_id = '24700000-0000-4000-8000-000000000001'
+  and application_root_id = '34700000-0000-4000-8000-000000000002'
+  and module_root_id = '44700000-0000-4000-8000-000000000002';
+grant select on saved_missing_binding to vortex_module_owner;
+set local role vortex_module_owner;
+delete from vortex_module.installation_bindings
+where organization_id = '24700000-0000-4000-8000-000000000001'
+  and application_root_id = '34700000-0000-4000-8000-000000000002'
+  and module_root_id = '44700000-0000-4000-8000-000000000002';
+reset role;
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+  )$$::text,
+  '40001'::char(5), 'Application installation bindings changed or are incomplete'::text,
+  'activation refuses a missing required binding'
+);
+reset role;
+select is(
+  (
+    select pg_catalog.concat_ws(':', pg_catalog.count(*), pg_catalog.min(state),
+      pg_catalog.min(binding_revision))
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000002'
+  ),
+  '1:provisioned:1',
+  'a missing-binding refusal does not partially activate the remaining binding'
+);
+set local role vortex_module_owner;
+insert into vortex_module.installation_bindings select * from saved_missing_binding;
+update vortex_module.installation_bindings
+set content_fingerprint = 'sha256:' || pg_catalog.repeat('e', 64)
+where organization_id = '24700000-0000-4000-8000-000000000001'
+  and application_root_id = '34700000-0000-4000-8000-000000000002'
+  and module_root_id = '44700000-0000-4000-8000-000000000002';
+reset role;
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+  )$$::text,
+  '40001'::char(5), 'Application installation bindings changed or are incomplete'::text,
+  'activation refuses substituted binding release evidence'
+);
+reset role;
+select is(
+  (
+    select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000002'
+  ),
+  'provisioned:1,provisioned:1',
+  'a substituted-evidence refusal changes no binding state or revision'
+);
+set local role vortex_module_owner;
+update vortex_module.installation_bindings as binding
+set content_fingerprint = release.content_fingerprint
+from vortex_definition.releases as release
+where binding.organization_id = '24700000-0000-4000-8000-000000000001'
+  and binding.application_root_id = '34700000-0000-4000-8000-000000000002'
+  and binding.module_root_id = '44700000-0000-4000-8000-000000000002'
+  and release.root_id = binding.module_root_id
+  and release.release_revision = binding.module_release_revision;
+create temporary table saved_storage_contract_ids on commit drop as
+select module_root_id, storage_contract_ids
+from vortex_module.installation_bindings
+where organization_id = '24700000-0000-4000-8000-000000000001'
+  and application_root_id = '34700000-0000-4000-8000-000000000002'
+  and module_root_id = '44700000-0000-4000-8000-000000000002';
+update vortex_module.installation_bindings
+set storage_contract_ids = array['64700000-0000-4000-8000-000000000009'::uuid]
+where organization_id = '24700000-0000-4000-8000-000000000001'
+  and application_root_id = '34700000-0000-4000-8000-000000000002'
+  and module_root_id = '44700000-0000-4000-8000-000000000002';
+reset role;
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+  )$$::text,
+  '40001'::char(5), 'Application installation storage evidence changed or is incomplete'::text,
+  'activation refuses substituted nonempty Record-owned storage provision evidence'
+);
+reset role;
+select is(
+  (
+    select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000002'
+  ),
+  'provisioned:1,provisioned:1',
+  'a substituted storage-evidence refusal leaves every binding unchanged'
+);
+set local role vortex_module_owner;
+update vortex_module.installation_bindings as binding
+set storage_contract_ids = saved.storage_contract_ids
+from saved_storage_contract_ids as saved
+where binding.organization_id = '24700000-0000-4000-8000-000000000001'
+  and binding.application_root_id = '34700000-0000-4000-8000-000000000002'
+  and binding.module_root_id = '44700000-0000-4000-8000-000000000002'
+  and saved.module_root_id = binding.module_root_id;
+reset role;
+set local role vortex_record_owner;
+create temporary table saved_module_release_provision on commit drop as
+select * from vortex_record.release_provisions
+where module_root_id = '44700000-0000-4000-8000-000000000002'
+  and release_revision = 1;
+delete from vortex_record.release_provisions
+where module_root_id = '44700000-0000-4000-8000-000000000002'
+  and release_revision = 1;
+reset role;
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+  )$$::text,
+  'P0002'::char(5), 'Application installation evidence is unavailable'::text,
+  'activation refuses a missing Record-owned release provision'
+);
+reset role;
+select is(
+  (
+    select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000002'
+  ),
+  'provisioned:1,provisioned:1',
+  'a missing release-provision refusal leaves every binding unchanged'
+);
+select is(
+  (
+    select pg_catalog.count(*)
+    from vortex_record.release_provisions
+    where module_root_id = '44700000-0000-4000-8000-000000000002'
+      and release_revision = 1
+  ),
+  0::bigint,
+  'activation does not recreate missing Record-owned provision evidence'
+);
+set local role vortex_record_owner;
+insert into vortex_record.release_provisions
+select * from saved_module_release_provision;
+reset role;
 set local role vortex_module_owner;
 update vortex_module.installation_bindings
 set state = 'active'
 where organization_id = '24700000-0000-4000-8000-000000000001'
+  and application_root_id = '34700000-0000-4000-8000-000000000002'
+  and module_root_id = '44700000-0000-4000-8000-000000000001';
+reset role;
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+  )$$::text,
+  '40001'::char(5), 'Application installation bindings changed or are incomplete'::text,
+  'activation refuses a mixed active and provisioned binding set'
+);
+reset role;
+select is(
+  (
+    select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000002'
+  ),
+  'active:1,provisioned:1',
+  'a mixed-state refusal cannot advance either binding revision'
+);
+set local role vortex_module_owner;
+update vortex_module.installation_bindings
+set state = 'provisioned'
+where organization_id = '24700000-0000-4000-8000-000000000001'
   and application_root_id = '34700000-0000-4000-8000-000000000002';
+reset role;
+
+-- The permission registry carries exactly the declared permissions of the pins.
+select throws_ok(
+  $$select * from vortex_access.apply_application_permission_registration_v1_internal(
+    'register', null,
+    pg_temp.pin_set_registration_candidate(
+      '34700000-0000-4000-8000-000000000002', 1,
+      '[["44700000-0000-4000-8000-000000000002", 1]]'
+    ),
+    '94700000-0000-4000-8000-000000000001',
+    'a4700000-0000-4000-8000-000000000031'
+  )$$::text,
+  '40001'::char(5), 'Module permission declarations are stale or unavailable'::text,
+  'a registration that omits the permissions of a Module reached through another Module is refused'::text
+);
+select lives_ok(
+  $$select * from vortex_access.apply_application_permission_registration_v1_internal(
+    'register', null,
+    pg_temp.pin_set_registration_candidate(
+      '34700000-0000-4000-8000-000000000002', 1,
+      '[["44700000-0000-4000-8000-000000000001", 1], ["44700000-0000-4000-8000-000000000002", 1]]'
+    ),
+    '94700000-0000-4000-8000-000000000001',
+    'a4700000-0000-4000-8000-000000000032'
+  )$$::text,
+  'a registration carrying the permissions of every pinned Module is accepted'::text
+);
+
+select pg_temp.pin_set_context();
+set local role vortex_request;
+create temporary table transitive_activation on commit drop as
+select vortex_module.activate_application_installation(
+  '34700000-0000-4000-8000-000000000002', 1,
+  '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+) as result;
+reset role;
+select is(
+  (
+    select pg_catalog.concat_ws(':', result ->> 'state', result ->> 'changed',
+      result #>> '{moduleBindings,0,bindingRevision}',
+      result #>> '{moduleBindings,1,bindingRevision}')
+    from transitive_activation
+  ),
+  'active:true:2:2',
+  'the protected activation changes the complete direct and transitive binding set atomically'
+);
+
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select is(
+  vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":2},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":2}]'
+  ) ->> 'changed',
+  'false',
+  'an exact activation retry reports the already active binding set without another revision'
+);
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+  )$$::text,
+  '40001'::char(5), 'Application installation bindings changed or are incomplete'::text,
+  'a stale activation retry is refused without changing the active installation'::text
+);
 reset role;
 select pg_temp.pin_set_context('34700000-0000-4000-8000-000000000002');
 set local role vortex_request;
@@ -941,32 +1231,6 @@ where organization_id = '24700000-0000-4000-8000-000000000001'
   and module_root_id = '44700000-0000-4000-8000-000000000001';
 reset role;
 
--- The permission registry carries exactly the declared permissions of the pins.
-select throws_ok(
-  $$select * from vortex_access.apply_application_permission_registration_v1_internal(
-    'register', null,
-    pg_temp.pin_set_registration_candidate(
-      '34700000-0000-4000-8000-000000000002', 1,
-      '[["44700000-0000-4000-8000-000000000002", 1]]'
-    ),
-    '94700000-0000-4000-8000-000000000001',
-    'a4700000-0000-4000-8000-000000000031'
-  )$$::text,
-  '40001'::char(5), 'Module permission declarations are stale or unavailable'::text,
-  'a registration that omits the permissions of a Module reached through another Module is refused'::text
-);
-select lives_ok(
-  $$select * from vortex_access.apply_application_permission_registration_v1_internal(
-    'register', null,
-    pg_temp.pin_set_registration_candidate(
-      '34700000-0000-4000-8000-000000000002', 1,
-      '[["44700000-0000-4000-8000-000000000001", 1], ["44700000-0000-4000-8000-000000000002", 1]]'
-    ),
-    '94700000-0000-4000-8000-000000000001',
-    'a4700000-0000-4000-8000-000000000032'
-  )$$::text,
-  'a registration carrying the permissions of every pinned Module is accepted'::text
-);
 select is(
   (
     select pg_catalog.count(*)
@@ -980,6 +1244,316 @@ select is(
   ),
   1::bigint,
   'the permissions of a Module reached only through another Module are registered'
+);
+
+-- A second Application uses the same two organisation-shared Modules through
+-- its own independent bindings. Detaching the first Application must not
+-- disturb the second binding set or the shared storage.
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_module.provision_module_installation_storage(
+      '34700000-0000-4000-8000-000000000005', 1,
+      '44700000-0000-4000-8000-000000000001', 1, null
+    );
+    select * from vortex_module.provision_module_installation_storage(
+      '34700000-0000-4000-8000-000000000005', 1,
+      '44700000-0000-4000-8000-000000000002', 1, null
+    )$$::text,
+  'another Application provisions independent bindings to the same shared Modules'::text
+);
+reset role;
+select lives_ok(
+  $$select * from vortex_access.apply_application_permission_registration_v1_internal(
+    'register', null,
+    pg_temp.pin_set_registration_candidate(
+      '34700000-0000-4000-8000-000000000005', 1,
+      '[["44700000-0000-4000-8000-000000000001", 1], ["44700000-0000-4000-8000-000000000002", 1]]'
+    ),
+    '94700000-0000-4000-8000-000000000001',
+    'a4700000-0000-4000-8000-000000000033'
+  )$$::text,
+  'the second Application registers its own exact permission snapshot'::text
+);
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select is(
+  vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000005', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":1},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":1}]'
+  ) ->> 'changed',
+  'true',
+  'the second Application activates its complete shared-Module binding set'
+);
+reset role;
+
+set local session_replication_role = replica;
+set local role vortex_record_owner;
+grant insert, select on record_data.rt_64700000000040008000000000000001 to postgres;
+reset role;
+insert into record_data.rt_64700000000040008000000000000001 (
+  organisation_id, module_root_id, record_type_id, storage_contract_id,
+  record_id, application_root_id, definition_revision, owner_group_id,
+  lifecycle_state, concurrency_number, created_at, created_by, updated_at, updated_by,
+  f_74700000000040008000000000000001
+) values (
+  '24700000-0000-4000-8000-000000000001',
+  '44700000-0000-4000-8000-000000000001',
+  '54700000-0000-4000-8000-000000000001',
+  '64700000-0000-4000-8000-000000000001',
+  'd4700000-0000-4000-8000-000000000001', null, 1,
+  'd4700000-0000-4000-8000-000000000002', 'active', 1,
+  pg_catalog.statement_timestamp(), '54700000-0000-4000-8000-000000000010',
+  pg_catalog.statement_timestamp(), '54700000-0000-4000-8000-000000000010',
+  'Retained shared record'
+);
+set local session_replication_role = origin;
+
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select is(
+  (
+    select pg_catalog.concat_ws(':', result ->> 'state', result ->> 'changed',
+      result #>> '{moduleBindings,0,bindingRevision}',
+      result #>> '{moduleBindings,1,bindingRevision}')
+    from (
+      select vortex_module.detach_application_installation(
+        '34700000-0000-4000-8000-000000000002', 1,
+        '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":2},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":2}]'
+      ) as result
+    ) as detached
+  ),
+  'detached:true:3:3',
+  'detach changes the complete target Application binding set in one operation'
+);
+reset role;
+select pg_temp.pin_set_context('34700000-0000-4000-8000-000000000002');
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.read_current_active_installation()$$::text,
+  'P0002'::char(5), 'Active Application installation is unavailable'::text,
+  'the ordinary active reader refuses the detached Application'
+);
+reset role;
+select pg_temp.pin_set_context('34700000-0000-4000-8000-000000000005');
+set local role vortex_request;
+select is(
+  pg_catalog.jsonb_array_length(
+    vortex_module.read_current_active_installation() -> 'moduleBindings'
+  ),
+  2,
+  'another Application sharing the Modules remains active after target detach'
+);
+reset role;
+select ok(
+  (
+    select pg_catalog.count(*) = 2 and pg_catalog.bool_and(state = 'detached')
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000002'
+      and module_root_id in (
+        '44700000-0000-4000-8000-000000000001',
+        '44700000-0000-4000-8000-000000000002'
+      )
+  )
+  and (
+    select pg_catalog.count(*) = 2 and pg_catalog.bool_and(state = 'active')
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000005'
+  )
+  and (
+    select pg_catalog.count(*) = 2
+    from vortex_record.release_provisions
+    where module_root_id in (
+      '44700000-0000-4000-8000-000000000001',
+      '44700000-0000-4000-8000-000000000002'
+    )
+  )
+  and exists (
+    select 1 from record_data.rt_64700000000040008000000000000001
+    where record_id = 'd4700000-0000-4000-8000-000000000001'
+      and f_74700000000040008000000000000001 = 'Retained shared record'
+  ),
+  'detach retains the target bindings and shared storage while preserving the other Application'
+);
+
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select is(
+  vortex_module.detach_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":3},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":3}]'
+  ) ->> 'changed',
+  'false',
+  'an exact detach retry reports the retained detached binding set without another revision'
+);
+select throws_ok(
+  $$select vortex_module.detach_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":2},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":2}]'
+  )$$::text,
+  '40001'::char(5), 'Application installation bindings changed or are incomplete'::text,
+  'a stale detach retry is refused without changing retained bindings'
+);
+reset role;
+
+-- Re-provisioning the retained detached bindings reuses the existing storage.
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_module.provision_module_installation_storage(
+      '34700000-0000-4000-8000-000000000002', 1,
+      '44700000-0000-4000-8000-000000000001', 1, 3
+    );
+    select * from vortex_module.provision_module_installation_storage(
+      '34700000-0000-4000-8000-000000000002', 1,
+      '44700000-0000-4000-8000-000000000002', 1, 3
+    )$$::text,
+  'detached bindings can be provisioned again against their exact retained storage'
+);
+reset role;
+select lives_ok(
+  $$select * from vortex_access.apply_application_permission_registration_v1_internal(
+    'update', 1,
+    pg_temp.pin_set_registration_candidate(
+      '34700000-0000-4000-8000-000000000002', 2,
+      '[["44700000-0000-4000-8000-000000000001", 1], ["44700000-0000-4000-8000-000000000002", 1], ["44700000-0000-4000-8000-000000000006", 1]]'
+    ),
+    '94700000-0000-4000-8000-000000000001',
+    'a4700000-0000-4000-8000-000000000036'
+  )$$::text,
+  'the fixture advances the Access registration to another exact Application release'
+);
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":4},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":4}]'
+  )$$::text,
+  '40001'::char(5), 'Application permission registration is stale or unavailable'::text,
+  'activation refuses an active Access registration for a different Application release'
+);
+reset role;
+select lives_ok(
+  $$select * from vortex_access.apply_application_permission_registration_v1_internal(
+    'update', 2,
+    pg_temp.pin_set_registration_candidate(
+      '34700000-0000-4000-8000-000000000002', 1,
+      '[["44700000-0000-4000-8000-000000000001", 1], ["44700000-0000-4000-8000-000000000002", 1]]'
+    ),
+    '94700000-0000-4000-8000-000000000001',
+    'a4700000-0000-4000-8000-000000000037'
+  )$$::text,
+  'the fixture restores the exact release registration before withdrawal'
+);
+select lives_ok(
+  $$select * from vortex_access.withdraw_application_permission_registration_v1_internal(
+    '24700000-0000-4000-8000-000000000001'::uuid,
+    '34700000-0000-4000-8000-000000000002'::uuid, 3::bigint,
+    '94700000-0000-4000-8000-000000000001'::uuid,
+    'a4700000-0000-4000-8000-000000000034'::uuid
+  )$$::text,
+  'the fixture withdraws the first Application permission registration'
+);
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.activate_application_installation(
+    '34700000-0000-4000-8000-000000000002', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":4},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":4}]'
+  )$$::text,
+  '40001'::char(5), 'Application permission registration is stale or unavailable'::text,
+  'activation refuses a withdrawn permission registration'
+);
+reset role;
+select is(
+  (
+    select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000002'
+      and module_root_id in (
+        '44700000-0000-4000-8000-000000000001',
+        '44700000-0000-4000-8000-000000000002'
+      )
+  ),
+  'provisioned:4,provisioned:4',
+  'a refused activation preserves valid inactive provisioning for a later retry'
+);
+
+-- Remove the caller's lifecycle assignment through the real protected Access
+-- operation. A refreshed context still cannot run another lifecycle change.
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select lives_ok(
+  $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
+    '74700000-0000-4000-8000-000000000011', 1,
+    'a4700000-0000-4000-8000-000000000035'
+  )$$::text,
+  'the real Access operation revokes the caller lifecycle assignment'
+);
+reset role;
+select pg_temp.pin_set_context();
+set local role vortex_request;
+select throws_ok(
+  $$select vortex_module.detach_application_installation(
+    '34700000-0000-4000-8000-000000000005', 1,
+    '[{"moduleRootId":"44700000-0000-4000-8000-000000000001","bindingRevision":2},{"moduleRootId":"44700000-0000-4000-8000-000000000002","bindingRevision":2}]'
+  )$$::text,
+  '42501'::char(5), 'Application installation authority is unavailable'::text,
+  'revoked lifecycle authority cannot detach another Application'
+);
+reset role;
+select is(
+  (
+    select pg_catalog.string_agg(state || ':' || binding_revision, ',' order by module_root_id)
+    from vortex_module.installation_bindings
+    where organization_id = '24700000-0000-4000-8000-000000000001'
+      and application_root_id = '34700000-0000-4000-8000-000000000005'
+  ),
+  'active:2,active:2',
+  'refused authority leaves the other Application active and unchanged'
+);
+
+select ok(
+  pg_catalog.has_function_privilege(
+    'vortex_module_owner',
+    'vortex_access.lock_application_installation_authority()', 'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'vortex_module_owner',
+    'vortex_access.read_application_permission_snapshot(uuid,uuid)', 'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'vortex_module_owner',
+    'vortex_record.read_exact_module_storage_provision(uuid,bigint)', 'EXECUTE'
+  )
+  and not pg_catalog.has_table_privilege(
+    'vortex_module_owner', 'vortex_access.permission_registrations', 'SELECT'
+  )
+  and not pg_catalog.has_table_privilege(
+    'vortex_module_owner', 'vortex_record.release_provisions', 'SELECT'
+  )
+  and not exists (
+    select 1 from (values ('public'), ('anon'), ('authenticated'), ('service_role'),
+      ('vortex_runtime'), ('vortex_request'), ('vortex_record_owner'),
+      ('vortex_record_adapter')) as denied(role_name)
+    where pg_catalog.has_function_privilege(
+      denied.role_name,
+      'vortex_access.lock_application_installation_authority()', 'EXECUTE'
+    )
+  )
+  and not exists (
+    select 1 from (values ('public'), ('anon'), ('authenticated'), ('service_role'),
+      ('vortex_runtime'), ('vortex_request'), ('vortex_record_adapter')) as denied(role_name)
+    where pg_catalog.has_function_privilege(
+      denied.role_name,
+      'vortex_record.read_exact_module_storage_provision(uuid,bigint)', 'EXECUTE'
+    )
+  ),
+  'Module consumes only narrow Access and Record-owned lifecycle evidence operations'
 );
 
 select ok(

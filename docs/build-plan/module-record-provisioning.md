@@ -9,8 +9,10 @@
 An exact published module release becomes usable in the intended organisation
 and application without copying its definition or creating per-organisation
 tables. Module owns binding activation and detachment; Record owns the protected
-storage catalogue, physical mappings and record adapters. The application-level
-installation operation remains with
+storage catalogue, physical mappings and record adapters. The fixed lower-level
+Application-wide activation/detach operations are delivered by
+[#43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43); the installation,
+upgrade and runtime assembly orchestration remains with
 [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64).
 
 Reuse the existing Definition publication/readback, permission registry, request
@@ -28,20 +30,23 @@ request connection database-owner permissions.
    for arbitrary app installation. There is no per-customer migration, caller SQL
    or runtime DDL credential. Follow the [record-table allocation rule](../specification/17-runtime-storage-and-caching.md#record-table-allocation)
    and [provisioning boundary](../specification/17-runtime-storage-and-caching.md#record-storage-provisioning).
-3. Prepare actual permission and event registrations. The event-registration slice
-   of [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) can be co-delivered here;
-   its system-field and protected-action completion still needs real record storage.
-   This does not require a new event queue or a successful mock registration.
-   The [event availability plan](issue-50-system-fields-actions-events.md) uses
-   exact immutable definitions and real binding state, not a copied catalogue
-   or a boolean claiming registration succeeded.
-4. Activate the exact organisation/application binding only when its required
-   mappings, registrations and protected operations are ready. A retry reuses the
-   existing compatible storage and registration identities.
+3. Register the Application's exact permission snapshot through Access. Published
+   event declarations remain in the immutable definitions and are consumed from
+   there; installation does not copy them into another catalogue or create a mock
+   readiness flag.
+4. Activate all direct and transitively required Module bindings together only
+   when every exact binding is provisioned and the exact permission snapshot is
+   current. The command supplies the complete canonical pin set with each current
+   binding revision. Omitted, inserted, mixed or substituted evidence refuses the
+   whole operation. Activation also rechecks each binding through Record's narrow
+   protected exact-release provision read, including its complete storage-contract
+   set; Module receives that result without reading Record's private tables. An exact
+   retry uses the existing binding revisions.
 5. Exercise real protected create/read through
    [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), including the field
-   preparation supplied by [#44](issue-44-record-field-values.md). Detachment keeps
-   data and refuses removal that breaks another active binding's dependencies.
+   preparation supplied by [#44](issue-44-record-field-values.md). Detachment changes
+   only that Application's complete pin set and keeps its storage and records;
+   another Application using the same Module keeps its own active bindings.
 
 ## Dependencies and failure behavior
 
@@ -70,11 +75,13 @@ Groups, including `owner_group_id` in the illustrative fixture and its validator
 
 First create/compatible provisioning locks the binding and storage identities and
 commits objects plus mappings as inactive. Activation is a separate transaction
-after real registrations and protected adapters exist. Later populated changes
+after exact permission registration and protected adapters exist. Published event
+declarations are read from the pinned definitions rather than copied during
+activation. Later populated changes
 may use Kestra over the same bounded operations; no new worker/queue is needed
 for initial creation. Test the generic operation with fixture definitions as
-inputs, not hardcoded business-schema migrations. This decision was independently
-reviewed before implementation; the actual implementation still requires review.
+inputs, not hardcoded business-schema migrations. The implementation remains
+subject to independent patch review.
 
 The first provisioning proof must distinguish locally owned Application roots
 from shared Module dependencies, support response-lost retries of the original
@@ -104,10 +111,11 @@ acceptance. Inactive structural provisioning and catalogue development may proce
 independently before those checks complete; no active installation or protected
 data path is claimed early.
 
-The next read-only slice supplies [exact active installation evidence](issue-43-active-installation-read.md),
+The delivered reader supplies [exact active installation evidence](issue-43-active-installation-read.md),
 including locally owned Applications with exact shared external Modules. It does
-not activate bindings or require installation-management permission for ordinary
-runtime discovery. Protected operations still check their own current authority.
+not require installation-management permission for ordinary runtime discovery
+and refuses a detached target. Protected operations still check their own current
+authority.
 
 Transitive Module dependencies are delivered. One resolver,
 `vortex_definition.reachable_module_dependency_edges`, owns the rule that an
