@@ -1,6 +1,6 @@
 import "server-only";
 
-import { sessionContextSchema, type SessionContext } from "@vortex/contracts";
+import { isLoopbackHostname, sessionContextSchema, type SessionContext } from "@vortex/contracts";
 import postgres, { type Row, type Sql, type TransactionSql } from "postgres";
 
 export type DatabaseValue = string | number | boolean | Date | Uint8Array | null;
@@ -133,7 +133,7 @@ export const parseRuntimeDatabaseConfiguration = (
   const localLoopback =
     environmentName === "local" &&
     address.protocol === "postgresql:" &&
-    ["127.0.0.1", "localhost", "[::1]"].includes(address.hostname) &&
+    isLoopbackHostname(address.hostname) &&
     address.port === "54322" &&
     address.pathname === "/postgres" &&
     username === "vortex_runtime" &&

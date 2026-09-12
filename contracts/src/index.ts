@@ -18,6 +18,7 @@ export * from "./identifiers";
 export * from "./identity-access";
 export * from "./integration-contracts";
 export * from "./lineage";
+export * from "./loopback-hostname";
 export * from "./module-contracts";
 export * from "./module-contracts-v2";
 export * from "./module-contracts-v3";
