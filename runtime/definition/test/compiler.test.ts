@@ -70,6 +70,10 @@ const publicationContext = (
   requests: ReturnType<typeof requestFor>[],
   outputs: ReturnType<typeof compileDefinition>[],
 ) => ({ requests, outputs, ...publicationOptions });
+// The fixture set never changes, so it is compiled once for the file. Scenarios clone these
+// outputs before mutating them; every compile of a mutated source or set stays in its own test.
+const baseRequests = sources.map(requestFor);
+const baseOutputs = baseRequests.map(compileDefinition);
 const withResolutionFingerprint = (value: typeof resolution) => ({
   ...value,
   fingerprint: fingerprintCanonicalValue({
@@ -827,9 +831,9 @@ describe("authored definition compiler", () => {
       (source) => source.kind === "module" && source.key === "vortex.crm.tags",
     );
     if (!tagSource || tagSource.kind !== "module") throw new Error("Expected tag module");
-    const dependencyOutputs = sources
-      .filter((source) => source.kind === "module" && source.key !== tagSource.key)
-      .map((source) => compileDefinition(requestFor(source)));
+    const dependencyOutputs = structuredClone(baseOutputs).filter(
+      (output) => output.kind === "module" && output.artifact.definitionKey !== tagSource.key,
+    );
     const tagRequest = requestFor(tagSource);
     const tagOutput = compileDefinition(tagRequest);
     expect(
@@ -862,7 +866,7 @@ describe("authored definition compiler", () => {
     ).toContain("vortex.definition.module_record_references");
 
     const requests = sources.map(requestFor);
-    const outputs = requests.map(compileDefinition);
+    const outputs = structuredClone(baseOutputs);
     const moduleRecord = (candidates: typeof outputs, moduleKey: string, recordKey: string) => {
       const module = candidates.find(
         (output) => output.kind === "module" && output.canonical.envelope.key === moduleKey,
@@ -1260,7 +1264,7 @@ describe("authored definition compiler", () => {
       definitionSemanticRules.length,
     );
     expect(definitionSemanticRules.every((rule) => rule.requiredContext.length > 0)).toBe(true);
-    const outputs = sources.map((source) => compileDefinition(requestFor(source)));
+    const outputs = structuredClone(baseOutputs);
     const context = publicationContext(sources.map(requestFor), outputs);
     expect(
       definitionSemanticRules.every((rule) =>
@@ -1993,7 +1997,7 @@ describe("authored definition compiler", () => {
     expect(validateDefinitionSource(wrongInput).valid).toBe(false);
 
     const requests = sources.map(requestFor);
-    const outputs = structuredClone(requests.map(compileDefinition));
+    const outputs = structuredClone(baseOutputs);
     const application = outputs.find(
       (output) =>
         output.kind === "application" &&
@@ -2283,7 +2287,7 @@ describe("authored definition compiler", () => {
     expect(validateDefinitionSource(linkSource).valid).toBe(false);
 
     const requests = sources.map(requestFor);
-    const outputs = structuredClone(requests.map(compileDefinition));
+    const outputs = structuredClone(baseOutputs);
     const organisationModule = outputs.find(
       (output) =>
         output.kind === "module" && output.artifact.definitionKey === "vortex.crm.organisations",
@@ -2343,9 +2347,9 @@ describe("authored definition compiler", () => {
 
   it("publishes one application against already-compiled immutable dependencies", () => {
     const application = sources.find((source) => source.key === "vortex.app.crm")!;
-    const dependencies = sources
-      .filter((source) => source.kind !== "application")
-      .map((source) => compileDefinition(requestFor(source)));
+    const dependencies = structuredClone(baseOutputs).filter(
+      (output) => output.kind !== "application",
+    );
     const outputs = compileDefinitionSet([requestFor(application)], {
       dependencyOutputs: dependencies,
       publishedHistories: [{ kind: "application", definitionKey: application.key, history: [] }],
@@ -2468,7 +2472,7 @@ describe("authored definition compiler", () => {
 
   it("binds compiled artifacts and application dependencies to exact immutable content", () => {
     const requests = sources.map(requestFor);
-    const outputs = requests.map(compileDefinition);
+    const outputs = structuredClone(baseOutputs);
     const changedContent = structuredClone(outputs);
     const module = changedContent.find((output) => output.kind === "module");
     if (!module || module.kind !== "module") throw new Error("Expected module output");
@@ -2478,9 +2482,9 @@ describe("authored definition compiler", () => {
     ).toContainEqual(expect.objectContaining({ ruleCode: "vortex.definition.artifact_binding" }));
 
     const application = sources.find((source) => source.key === "vortex.app.crm")!;
-    const dependencyOutputs = sources
-      .filter((source) => source.kind !== "application")
-      .map((source) => compileDefinition(requestFor(source)));
+    const dependencyOutputs = structuredClone(baseOutputs).filter(
+      (output) => output.kind !== "application",
+    );
     const staleDependency = structuredClone(dependencyOutputs);
     const bindingKey =
       application.kind === "application" ? application.body.module_bindings[0]?.module : undefined;
@@ -2505,7 +2509,7 @@ describe("authored definition compiler", () => {
 
   it("validates interface shapes against their exact action and query targets", () => {
     const requests = sources.map(requestFor);
-    const outputs = requests.map(compileDefinition);
+    const outputs = structuredClone(baseOutputs);
     const changed = structuredClone(outputs);
     const application = changed.find(
       (output) =>
@@ -2528,7 +2532,7 @@ describe("authored definition compiler", () => {
 
   it("refuses calculation dependency cycles", () => {
     const requests = sources.map(requestFor);
-    const outputs = requests.map(compileDefinition);
+    const outputs = structuredClone(baseOutputs);
     const changed = structuredClone(outputs);
     const module = changed.find(
       (output) => output.kind === "module" && output.artifact.definitionKey === "vortex.crm.people",
@@ -2875,7 +2879,7 @@ describe("authored definition compiler", () => {
 
   it("refuses stale module references and unresolved workflow triggers", () => {
     const requests = sources.map(requestFor);
-    const outputs = requests.map(compileDefinition);
+    const outputs = structuredClone(baseOutputs);
     const invalidModuleOutputs = structuredClone(outputs);
     const module = invalidModuleOutputs.find((output) => output.kind === "module");
     if (!module || module.kind !== "module") throw new Error("Expected module output");
@@ -2930,8 +2934,7 @@ describe("authored definition compiler", () => {
 
   describe("page record scope and public-surface regression coverage", () => {
     const compiledRequests = () => sources.map(requestFor);
-    const compiledOutputs = (requests: ReturnType<typeof requestFor>[]) =>
-      requests.map(compileDefinition);
+    const compiledOutputs = () => structuredClone(baseOutputs);
     const applicationOutput = (outputs: ReturnType<typeof compileDefinition>[], key: string) => {
       const output = outputs.find(
         (candidate) => candidate.kind === "application" && candidate.artifact.definitionKey === key,
@@ -2953,7 +2956,7 @@ describe("authored definition compiler", () => {
 
     it("refuses a page query or form commit action whose subject record differs from the page", () => {
       const requests = compiledRequests();
-      const outputs = structuredClone(compiledOutputs(requests));
+      const outputs = compiledOutputs();
       const application = applicationOutput(outputs, "vortex.app.service_desk");
       const pages = application.canonical.content.pages;
       const queries = application.canonical.content.queries;
@@ -2970,7 +2973,7 @@ describe("authored definition compiler", () => {
       );
 
       const formRequests = compiledRequests();
-      const formOutputs = structuredClone(compiledOutputs(formRequests));
+      const formOutputs = compiledOutputs();
       const formApplication = applicationOutput(formOutputs, "vortex.app.service_desk");
       const form = formApplication.canonical.content.pages.find((page) => page.type === "form");
       if (!form || form.type !== "form") throw new Error("Expected a form page");
@@ -3001,7 +3004,7 @@ describe("authored definition compiler", () => {
 
       for (const scenario of scenarios) {
         const requests = compiledRequests();
-        const outputs = structuredClone(compiledOutputs(requests));
+        const outputs = compiledOutputs();
         const application = applicationOutput(outputs, "vortex.app.service_desk");
         const page = application.canonical.content.pages.find(
           (candidate) => candidate.type === "detail",
@@ -3060,7 +3063,7 @@ describe("authored definition compiler", () => {
       const queryProperties = ["filter", "groupByFieldIds", "aggregates", "sort"] as const;
       for (const property of queryProperties) {
         const requests = compiledRequests();
-        const outputs = structuredClone(compiledOutputs(requests));
+        const outputs = compiledOutputs();
         const application = applicationOutput(outputs, "vortex.app.service_desk");
         const page = application.canonical.content.pages.find(
           (candidate) => candidate.type === "public",
@@ -3102,7 +3105,7 @@ describe("authored definition compiler", () => {
       }
 
       const permissionRequests = compiledRequests();
-      const permissionOutputs = structuredClone(compiledOutputs(permissionRequests));
+      const permissionOutputs = compiledOutputs();
       const permissionApplication = applicationOutput(permissionOutputs, "vortex.app.service_desk");
       const publicPage = permissionApplication.canonical.content.pages.find(
         (candidate) => candidate.type === "public",
@@ -3119,7 +3122,7 @@ describe("authored definition compiler", () => {
       );
 
       const subjectRequests = compiledRequests();
-      const subjectOutputs = structuredClone(compiledOutputs(subjectRequests));
+      const subjectOutputs = compiledOutputs();
       const subjectApplication = applicationOutput(subjectOutputs, "vortex.app.service_desk");
       const subjectPage = subjectApplication.canonical.content.pages.find(
         (candidate) => candidate.type === "public",
@@ -3132,7 +3135,7 @@ describe("authored definition compiler", () => {
       );
 
       const effectRequests = compiledRequests();
-      const effectOutputs = structuredClone(compiledOutputs(effectRequests));
+      const effectOutputs = compiledOutputs();
       const effectApplication = applicationOutput(effectOutputs, "vortex.app.service_desk");
       const effectPage = effectApplication.canonical.content.pages.find(
         (candidate) => candidate.type === "public",
@@ -3171,7 +3174,7 @@ describe("authored definition compiler", () => {
       );
 
       const crossRecordRequests = compiledRequests();
-      const crossRecordOutputs = structuredClone(compiledOutputs(crossRecordRequests));
+      const crossRecordOutputs = compiledOutputs();
       const crossRecordApplication = applicationOutput(
         crossRecordOutputs,
         "vortex.app.service_desk",
@@ -3236,7 +3239,7 @@ describe("authored definition compiler", () => {
     it("accepts only public-safe action interfaces", () => {
       const preparePublicActionInterface = () => {
         const requests = compiledRequests();
-        const outputs = structuredClone(compiledOutputs(requests));
+        const outputs = compiledOutputs();
         const application = applicationOutput(outputs, "vortex.app.service_desk");
         const operation = application.canonical.content.interfaces
           .flatMap((definition) => definition.operations)
@@ -3328,7 +3331,7 @@ describe("authored definition compiler", () => {
 
     it("checks the complete field surface of a public query interface", () => {
       const requests = compiledRequests();
-      const outputs = structuredClone(compiledOutputs(requests));
+      const outputs = compiledOutputs();
       const application = applicationOutput(outputs, "vortex.app.service_desk");
       const operation = application.canonical.content.interfaces
         .flatMap((definition) => definition.operations)
@@ -3377,7 +3380,7 @@ describe("authored definition compiler", () => {
 
     it("refuses relationship copying from a public page without an explicit relationship contract", () => {
       const requests = compiledRequests();
-      const outputs = structuredClone(compiledOutputs(requests));
+      const outputs = compiledOutputs();
       const application = applicationOutput(outputs, "vortex.app.service_desk");
       const page = application.canonical.content.pages.find(
         (candidate) => candidate.type === "public",
@@ -3480,7 +3483,7 @@ describe("authored definition compiler", () => {
 
     it("binds the application dependency manifest one-for-one to its declared bindings", () => {
       const requests = sources.map(requestFor);
-      const baseline = requests.map(compileDefinition);
+      const baseline = structuredClone(baseOutputs);
       const application = baseline.find(
         (output) =>
           output.kind === "application" && output.artifact.definitionKey === "vortex.app.crm",
@@ -3532,7 +3535,7 @@ describe("authored definition compiler", () => {
 
     it("requires declared application dependency ranges to accept their resolved versions", () => {
       const requests = sources.map(requestFor);
-      const baseline = requests.map(compileDefinition);
+      const baseline = structuredClone(baseOutputs);
 
       const moduleMismatch = structuredClone(baseline);
       const moduleApplication = moduleMismatch.find(
@@ -3569,7 +3572,7 @@ describe("authored definition compiler", () => {
 
     it("requires each connection binding to use an exact internally consistent artifact", () => {
       const requests = sources.map(requestFor);
-      const baseline = requests.map(compileDefinition);
+      const baseline = structuredClone(baseOutputs);
       const application = baseline.find(
         (output) =>
           output.kind === "application" && output.artifact.definitionKey === "vortex.app.crm",
@@ -3642,9 +3645,9 @@ describe("authored definition compiler", () => {
       const application = sources.find((source) => source.key === "vortex.app.crm");
       if (!application || application.kind !== "application")
         throw new Error("Expected application fixture");
-      const dependencies = sources
-        .filter((source) => source.kind !== "application")
-        .map((source) => compileDefinition(requestFor(source)));
+      const dependencies = structuredClone(baseOutputs).filter(
+        (output) => output.kind !== "application",
+      );
       const callerResolution = withResolutionFingerprint({
         ...resolution,
         definitions: [...resolution.definitions].reverse(),
@@ -3668,7 +3671,7 @@ describe("authored definition compiler", () => {
 
     it("binds a connection canonical version to its exact artifact version", () => {
       const requests = sources.map(requestFor);
-      const outputs = structuredClone(requests.map(compileDefinition));
+      const outputs = structuredClone(baseOutputs);
       const connection = outputs.find((output) => output.kind === "connection_type");
       if (!connection || connection.kind !== "connection_type")
         throw new Error("Expected connection output");
@@ -3679,7 +3682,7 @@ describe("authored definition compiler", () => {
 
     it("binds a child workflow trigger bidirectionally to its exact parent node", () => {
       const requests = sources.map(requestFor);
-      const baseline = structuredClone(requests.map(compileDefinition));
+      const baseline = structuredClone(baseOutputs);
       expect(failureCodes(requests, baseline)).not.toContain(
         "vortex.definition.workflow_trigger_reference",
       );
@@ -3738,7 +3741,7 @@ describe("authored definition compiler", () => {
 
     it("retains the same failure at two distinct component locations", () => {
       const requests = sources.map(requestFor);
-      const outputs = structuredClone(requests.map(compileDefinition));
+      const outputs = structuredClone(baseOutputs);
       const application = outputs.find(
         (output) =>
           output.kind === "application" &&
@@ -3855,7 +3858,7 @@ describe("authored definition compiler", () => {
 
     it("enforces link targets and file references in workflow node inputs", () => {
       const requests = sources.map(requestFor);
-      const linkOutputs = structuredClone(requests.map(compileDefinition));
+      const linkOutputs = structuredClone(baseOutputs);
       const linkApplication = linkOutputs.find(
         (output) =>
           output.kind === "application" &&
@@ -3902,7 +3905,7 @@ describe("authored definition compiler", () => {
       );
 
       for (const workflowKey of ["crm_opportunity_won", "crm_data_hygiene"] as const) {
-        const fileOutputs = structuredClone(requests.map(compileDefinition));
+        const fileOutputs = structuredClone(baseOutputs);
         const fileApplication = fileOutputs.find(
           (output) =>
             output.kind === "application" && output.artifact.definitionKey === "vortex.app.crm",
@@ -4037,7 +4040,7 @@ describe("authored definition compiler", () => {
 
     it("acknowledges only the exact message that triggered the workflow", () => {
       const requests = sources.map(requestFor);
-      const baseline = requests.map(compileDefinition);
+      const baseline = structuredClone(baseOutputs);
       const application = baseline.find(
         (output) =>
           output.kind === "application" &&
@@ -4099,7 +4102,7 @@ describe("authored definition compiler", () => {
 
     it("waits only on a date-time field from the workflow current record", () => {
       const requests = sources.map(requestFor);
-      const baseline = requests.map(compileDefinition);
+      const baseline = structuredClone(baseOutputs);
       const application = baseline.find(
         (output) =>
           output.kind === "application" &&

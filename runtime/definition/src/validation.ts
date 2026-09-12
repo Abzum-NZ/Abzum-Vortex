@@ -60,7 +60,7 @@ import {
   type TypedConditionParameterDeclarationV2,
 } from "@vortex/rule";
 import { satisfies } from "semver";
-import { compileDefinitionWithContext } from "./compiler";
+import { compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { compareDefinitionVersionImpact } from "./version-impact";
@@ -144,6 +144,20 @@ export type DefinitionSetValidationContext = Readonly<{
   dependencyOutputs?: readonly Output[];
   publishedHistories?: readonly PublishedDefinitionHistory[];
 }>;
+
+/**
+ * Work validateDefinitionSet derives once per call and hands to the rules that would otherwise
+ * repeat it per rule. A rule invoked directly with a plain context derives its own, unchanged.
+ */
+type PreparedValidationContext = DefinitionSetValidationContext &
+  Readonly<{
+    parsedSources?: readonly ReturnType<typeof parseEditSaveSource>[];
+    walkCanonicalValues?: ReturnType<typeof createContractValueWalker>;
+  }>;
+
+/** The sources the edit-save rules judge, in the order their parsed results are held. */
+const editSaveSources = (context: DefinitionSetValidationContext): readonly unknown[] =>
+  context.rawSources ?? context.requests.map((request) => request.source);
 
 const allValidationOutputs = (context: DefinitionSetValidationContext): readonly Output[] => [
   ...(context.dependencyOutputs ?? []),
@@ -375,9 +389,9 @@ function artifactBindingRule(context: DefinitionSetValidationContext): Definitio
   return failures;
 }
 
-function localIdentityRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
+function localIdentityRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
-  const values = context.rawSources ?? context.requests.map((request) => request.source);
+  const values = editSaveSources(context);
   for (const [index, source] of values.entries()) {
     const sourceKey =
       source !== null && typeof source === "object" && !Array.isArray(source)
@@ -389,7 +403,7 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
         return String(object(canonical.envelope ?? canonical).key) === sourceKey;
       }) ?? context.outputs[index];
     let duplicate = false;
-    const parsed = parseEditSaveSource(source);
+    const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(source);
     if (!parsed.success) continue;
     walkDefinitionContract(parsed.schema, parsed.data, (schema, value) => {
       if (schema === jsonValueSchema) return;
@@ -425,56 +439,51 @@ function localIdentityRule(context: DefinitionSetValidationContext): DefinitionR
   return failures;
 }
 
-function sourceShapeRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
-  return (context.rawSources ?? context.requests.map((request) => request.source)).flatMap(
-    (source): DefinitionRuleFailure[] => {
-      const parsed = parseEditSaveSource(source);
-      if (parsed.success) return [];
-      const translation = sourceTranslationContext(source);
-      if (!translation)
-        return parsed.error.issues.map((issue) => ({
-          ruleCode: "vortex.definition.source_shape",
-          family:
-            issue.code === "unrecognized_keys"
-              ? ("unknown_property" as const)
-              : issue.code === "invalid_value"
-                ? ("unsupported_choice" as const)
-                : issue.code === "too_small" && issue.origin === "array"
-                  ? ("too_few_items" as const)
-                  : issue.code === "too_big" && issue.origin === "array"
-                    ? ("too_many_items" as const)
-                    : issue.code === "invalid_type" && "input" in issue && issue.input === undefined
-                      ? ("required_value" as const)
-                      : ("invalid_value" as const),
-        }));
-      const translated = translateDefinitionSchemaError(parsed.error, {
-        correlationId: "00000000-0000-4000-8000-000000000000",
-        rootLocation: translation.rootLocation,
-        pathMap: translation.pathMap,
-        requiredPaths: parsed.error.issues
-          .filter(
-            (issue) =>
-              issue.code === "invalid_type" && "input" in issue && issue.input === undefined,
-          )
-          .map((issue) =>
-            issue.path.filter((part): part is string | number => typeof part !== "symbol"),
-          ),
-      });
-      return translated.errors.map((error) => ({
+function sourceShapeRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
+  return editSaveSources(context).flatMap((source, index): DefinitionRuleFailure[] => {
+    const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(source);
+    if (parsed.success) return [];
+    const translation = sourceTranslationContext(source);
+    if (!translation)
+      return parsed.error.issues.map((issue) => ({
         ruleCode: "vortex.definition.source_shape",
-        family: schemaFailureFamily[error.code],
-        ...(error.location ? { location: error.location } : {}),
+        family:
+          issue.code === "unrecognized_keys"
+            ? ("unknown_property" as const)
+            : issue.code === "invalid_value"
+              ? ("unsupported_choice" as const)
+              : issue.code === "too_small" && issue.origin === "array"
+                ? ("too_few_items" as const)
+                : issue.code === "too_big" && issue.origin === "array"
+                  ? ("too_many_items" as const)
+                  : issue.code === "invalid_type" && "input" in issue && issue.input === undefined
+                    ? ("required_value" as const)
+                    : ("invalid_value" as const),
       }));
-    },
-  );
+    const translated = translateDefinitionSchemaError(parsed.error, {
+      correlationId: "00000000-0000-4000-8000-000000000000",
+      rootLocation: translation.rootLocation,
+      pathMap: translation.pathMap,
+      requiredPaths: parsed.error.issues
+        .filter(
+          (issue) => issue.code === "invalid_type" && "input" in issue && issue.input === undefined,
+        )
+        .map((issue) =>
+          issue.path.filter((part): part is string | number => typeof part !== "symbol"),
+        ),
+    });
+    return translated.errors.map((error) => ({
+      ruleCode: "vortex.definition.source_shape",
+      family: schemaFailureFamily[error.code],
+      ...(error.location ? { location: error.location } : {}),
+    }));
+  });
 }
 
-function sourceLocalReferenceRule(
-  context: DefinitionSetValidationContext,
-): DefinitionRuleFailure[] {
+function sourceLocalReferenceRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
-  for (const raw of context.rawSources ?? context.requests.map((request) => request.source)) {
-    const parsed = parseEditSaveSource(raw);
+  for (const [index, raw] of editSaveSources(context).entries()) {
+    const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
     if (!parsed.success) continue;
     const source = parsed.data;
     const walkValues = createContractValueWalker([{ schema: parsed.schema, value: source }]);
@@ -900,12 +909,10 @@ function sourceConditionTypesValid(
   return leftType === rightType || (leftType === "date_time" && rightType === "date");
 }
 
-function sourceTypeCompatibilityRule(
-  context: DefinitionSetValidationContext,
-): DefinitionRuleFailure[] {
+function sourceTypeCompatibilityRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
   const failures: DefinitionRuleFailure[] = [];
-  for (const raw of context.rawSources ?? context.requests.map((request) => request.source)) {
-    const parsed = parseEditSaveSource(raw);
+  for (const [index, raw] of editSaveSources(context).entries()) {
+    const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(raw);
     if (!parsed.success || parsed.data.kind !== "module") continue;
     const source = parsed.data;
     const moduleV2 = source.source_contract_version === "2.0.0" || isV3ModuleSource(source);
@@ -1170,14 +1177,15 @@ function provenanceRule(context: DefinitionSetValidationContext): DefinitionRule
     const representedCanonicalPaths = new Set(
       output.provenance.map((entry) => pathKey(entry.canonicalPath)),
     );
+    const sourceLeafPaths = leafPaths(request?.source);
     const expectedSourcePaths = request
-      ? leafPaths(request.source).filter(
+      ? sourceLeafPaths.filter(
           (path) =>
             !(path.length === 1 && (path[0] === "source_contract_version" || path[0] === "kind")),
         )
       : [];
     const expectedCanonicalPaths = leafPaths(output.canonical);
-    const sourceLeafKeys = new Set(leafPaths(request?.source).map(pathKey));
+    const sourceLeafKeys = new Set(sourceLeafPaths.map(pathKey));
     const canonicalLeafKeys = new Set(expectedCanonicalPaths.map(pathKey));
     const entriesAreTraceable = output.provenance.every((entry) => {
       const sourcePathIsLeaf =
@@ -2116,8 +2124,8 @@ function permissionRecordScopesValid(
   return valid;
 }
 
-function moduleReferenceRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
-  const walkValues = canonicalValueWalker(context);
+function moduleReferenceRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
+  const walkValues = context.walkCanonicalValues ?? canonicalValueWalker(context);
   const failures: DefinitionRuleFailure[] = [];
   const moduleOutputs = context.outputs.filter((output) => output.kind === "module");
   const availableModuleOutputs = allValidationOutputs(context).filter(
@@ -3212,8 +3220,8 @@ function workflowValueRecordType(
   return undefined;
 }
 
-function applicationRule(context: DefinitionSetValidationContext): DefinitionRuleFailure[] {
-  const walkValues = canonicalValueWalker(context);
+function applicationRule(context: PreparedValidationContext): DefinitionRuleFailure[] {
+  const walkValues = context.walkCanonicalValues ?? canonicalValueWalker(context);
   const failures: DefinitionRuleFailure[] = [];
   const availableOutputs = allValidationOutputs(context);
   const modules = availableOutputs.filter((output) => output.kind === "module");
@@ -5623,8 +5631,17 @@ export function validateDefinitionSet(
   const eligibleRules = definitionSemanticRules
     .filter((rule) => validationStageRank[rule.stage] <= validationStageRank[stage])
     .filter((rule) => hasRequiredContext(context, rule.requiredContext));
+  // Each source is parsed once here instead of once per edit-save rule. The canonical walker is
+  // built on first use, so a call whose rules never walk the compiled set still builds none.
+  let canonicalWalker: ReturnType<typeof createContractValueWalker> | undefined;
+  const preparedContext: PreparedValidationContext = {
+    ...context,
+    parsedSources: editSaveSources(context).map((source) => parseEditSaveSource(source)),
+    walkCanonicalValues: (value, visit) =>
+      (canonicalWalker ??= canonicalValueWalker(context))(value, visit),
+  };
   const failures: DefinitionRuleFailure[] = [];
-  for (const rule of eligibleRules) failures.push(...rule.run(context));
+  for (const rule of eligibleRules) failures.push(...rule.run(preparedContext));
   const safeLocationKey = (location: DefinitionValidationLocation | undefined) =>
     location
       ? JSON.stringify([
@@ -5833,16 +5850,14 @@ export function compileDefinitionSet(
   if (dependencyOutputs.some((output) => inputKeys.has(output.artifact.definitionKey)))
     throw new DefinitionCompilationError("vortex.definition.duplicate_source_key", "duplicate_key");
   const outputs: Output[] = [];
-  const compilePublicationRequest = compileDefinitionWithContext as (
+  // Each request was parsed above and the dependency outputs came out of the publication context
+  // schema, so the compiler is not asked to parse either a second time.
+  const compilePublicationRequest = compileParsedDefinition as (
     request: PublicationCompilationRequest,
-    context: { dependencyOutputs: readonly Output[] },
+    dependencyOutputs: readonly Output[],
   ) => Output;
   for (const request of ordered)
-    outputs.push(
-      compilePublicationRequest(request, {
-        dependencyOutputs: [...dependencyOutputs, ...outputs],
-      }),
-    );
+    outputs.push(compilePublicationRequest(request, [...dependencyOutputs, ...outputs]));
   const validation = validateDefinitionSet({
     requests: ordered,
     outputs,
