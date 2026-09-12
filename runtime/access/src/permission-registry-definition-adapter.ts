@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
+  type ApplicationBoundReleaseSetResult,
   definitionConsumerReadResultSchema,
   permissionRegistryDefinitionReleaseSchema,
   platformIdSchema,
@@ -178,6 +179,50 @@ const exactRead = async (
   return parsed.data;
 };
 
+type ApplicationRelease = Extract<DefinitionConsumerReadResult, { kind: "application" }>;
+type ModuleRelease = Extract<DefinitionConsumerReadResult, { kind: "module" }>;
+type ModuleBinding = ApplicationRelease["content"]["moduleBindings"][number];
+type ModuleDependency = Extract<
+  ApplicationRelease["dependencyManifest"][number],
+  { kind: "module" },
+>;
+
+const requireDirectModuleBindingEvidence = (
+  bindings: readonly ModuleBinding[],
+  dependencies: readonly ModuleDependency[],
+  modulesByRoot: ReadonlyMap<string, ModuleRelease>,
+): void => {
+  if (
+    new Set(bindings.map((binding) => binding.moduleRootId)).size !==
+      bindings.length
+  )
+    throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
+
+  for (const declaredBinding of bindings) {
+    const dependency = dependencies.find((candidate) => candidate.rootId === declaredBinding.moduleRootId);
+    const moduleRelease = modulesByRoot.get(String(declaredBinding.moduleRootId));
+    if (
+      dependency === undefined ||
+      moduleRelease === undefined ||
+      dependency.releaseVersion !== declaredBinding.resolvedVersion ||
+      moduleRelease.kind !== "module" ||
+      moduleRelease.definitionKey !== dependency.key ||
+      moduleRelease.releaseRevision !== dependency.releaseRevision ||
+      moduleRelease.releaseVersion !== dependency.releaseVersion ||
+      moduleRelease.contentFingerprint !== dependency.contentFingerprint ||
+      moduleRelease.resolutionFingerprint !== dependency.resolutionFingerprint
+    )
+      throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
+  }
+};
+
+export type PermissionRegistryDefinitionAdapterDependencies = Readonly<{
+  reader: PermissionRegistryDefinitionReader;
+  boundReleaseSet?: {
+    read(command: { applicationReleaseRevision: number }): Promise<ApplicationBoundReleaseSetResult>;
+  };
+}>;
+
 export const verifyPreparedApplicationPermissionRegistration = (
   candidateValue: unknown,
 ): PreparedApplicationPermissionRegistration => {
@@ -235,8 +280,12 @@ export const verifyPreparedApplicationPermissionRegistration = (
 };
 
 export const createPermissionRegistryDefinitionAdapter = (
-  reader: PermissionRegistryDefinitionReader,
-) => ({
+  dependencies: PermissionRegistryDefinitionAdapterDependencies | PermissionRegistryDefinitionReader,
+) => {
+  const reader = "reader" in dependencies ? dependencies.reader : (dependencies as PermissionRegistryDefinitionReader);
+  const boundReleaseSet = "boundReleaseSet" in dependencies ? dependencies.boundReleaseSet : undefined;
+  if (reader === undefined) throw new Error("PERMISSION_REGISTRY_DEFINITION_READER_UNAVAILABLE");
+  return ({
   async prepareApplicationRegistration(
     contextCandidate: SessionContext,
     commandCandidate: PrepareApplicationPermissionRegistrationCommand,
@@ -255,11 +304,23 @@ export const createPermissionRegistryDefinitionAdapter = (
         "INVALID_PERMISSION_REGISTRY_PREPARATION_COMMAND",
       );
 
-    const applicationCandidate = await exactRead(reader, context.data, {
-      kind: "application",
-      rootId: applicationRootId.data,
-      selector: { selection: "revision", releaseRevision: releaseRevision.data },
-    });
+    const boundSet =
+      boundReleaseSet === undefined
+        ? undefined
+        : await boundReleaseSet
+            .read({ applicationReleaseRevision: releaseRevision.data })
+            .catch(() => {
+              throw new PermissionRegistryPreparationError(
+                "PERMISSION_REGISTRY_DEFINITION_UNAVAILABLE",
+              );
+            });
+    const applicationCandidate =
+      boundSet?.application ??
+      (await exactRead(reader, context.data, {
+        kind: "application",
+        rootId: applicationRootId.data,
+        selector: { selection: "revision", releaseRevision: releaseRevision.data },
+      }));
     if (
       applicationCandidate.kind !== "application" ||
       applicationCandidate.organizationId !== context.data.organizationId ||
@@ -273,55 +334,78 @@ export const createPermissionRegistryDefinitionAdapter = (
 
     const moduleBindings = applicationCandidate.content.moduleBindings;
     const moduleDependencies = applicationCandidate.dependencyManifest.filter(
-      (entry) => entry.kind === "module",
+      (entry): entry is ModuleDependency => entry.kind === "module",
     );
-    if (
-      new Set(moduleBindings.map((binding) => binding.moduleRootId)).size !==
-        moduleBindings.length ||
-      new Set(moduleDependencies.map((dependency) => dependency.rootId)).size !==
-        moduleDependencies.length ||
-      moduleBindings.length !== moduleDependencies.length
-    )
+    if (moduleDependencies.length === 0 && moduleBindings.length > 0)
       throw new PermissionRegistryPreparationError(
         "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID",
       );
 
-    const modules = await mapInDeterministicBatches(
-      moduleBindings,
-      permissionRegistryModuleReadConcurrency,
-      async (binding) => {
-        const dependency = moduleDependencies.find(
-          (candidate) => candidate.rootId === binding.moduleRootId,
+    let modules: readonly ModuleRelease[];
+
+    if (boundSet !== undefined) {
+      const modulesByRoot = new Map(
+        boundSet.modules.map((module) => [String(module.rootId), module as ModuleRelease] as const),
+      );
+      if (modulesByRoot.size !== boundSet.modules.length)
+        throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
+      requireDirectModuleBindingEvidence(
+        moduleBindings,
+        moduleDependencies,
+        modulesByRoot,
+      );
+      if (modulesByRoot.size < moduleDependencies.length)
+        throw new PermissionRegistryPreparationError(
+          "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID",
         );
-        if (!dependency || dependency.releaseVersion !== binding.resolvedVersion)
-          throw new PermissionRegistryPreparationError(
-            "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID",
+      modules = [...modulesByRoot.values()];
+    } else {
+      if (
+        new Set(moduleDependencies.map((dependency) => dependency.rootId)).size !==
+          moduleDependencies.length ||
+        moduleBindings.length !== moduleDependencies.length
+      )
+        throw new PermissionRegistryPreparationError(
+          "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID",
+        );
+
+      modules = await mapInDeterministicBatches(
+        moduleBindings,
+        permissionRegistryModuleReadConcurrency,
+        async (binding) => {
+          const dependency = moduleDependencies.find(
+            (candidate) => candidate.rootId === binding.moduleRootId,
           );
-        const moduleCandidate = await exactRead(reader, context.data, {
-          kind: "module",
-          rootId: dependency.rootId,
-          selector: {
-            selection: "revision",
-            releaseRevision: dependency.releaseRevision,
-          },
-        });
-        if (
-          moduleCandidate.kind !== "module" ||
-          moduleCandidate.organizationId !== context.data.organizationId ||
-          moduleCandidate.correlationId !== context.data.correlationId ||
-          moduleCandidate.rootId !== dependency.rootId ||
-          moduleCandidate.definitionKey !== dependency.key ||
-          moduleCandidate.releaseRevision !== dependency.releaseRevision ||
-          moduleCandidate.releaseVersion !== dependency.releaseVersion ||
-          moduleCandidate.contentFingerprint !== dependency.contentFingerprint ||
-          moduleCandidate.resolutionFingerprint !== dependency.resolutionFingerprint
-        )
-          throw new PermissionRegistryPreparationError(
+          if (!dependency || dependency.releaseVersion !== binding.resolvedVersion)
+            throw new PermissionRegistryPreparationError(
+              "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID",
+            );
+          const moduleCandidate = await exactRead(reader, context.data, {
+            kind: "module",
+            rootId: dependency.rootId,
+            selector: {
+              selection: "revision",
+              releaseRevision: dependency.releaseRevision,
+            },
+          });
+          if (
+            moduleCandidate.kind !== "module" ||
+            moduleCandidate.organizationId !== context.data.organizationId ||
+            moduleCandidate.correlationId !== context.data.correlationId ||
+            moduleCandidate.rootId !== dependency.rootId ||
+            moduleCandidate.definitionKey !== dependency.key ||
+            moduleCandidate.releaseRevision !== dependency.releaseRevision ||
+            moduleCandidate.releaseVersion !== dependency.releaseVersion ||
+            moduleCandidate.contentFingerprint !== dependency.contentFingerprint ||
+            moduleCandidate.resolutionFingerprint !== dependency.resolutionFingerprint
+          )
+            throw new PermissionRegistryPreparationError(
             "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID",
-          );
-        return moduleCandidate;
-      },
-    );
+            );
+          return moduleCandidate;
+        },
+      );
+    }
 
     const catalogue = applicationCatalogue(applicationCandidate.content.permissions);
     validateApplicationWildcardEvidence(applicationCandidate, catalogue);
@@ -349,3 +433,4 @@ export const createPermissionRegistryDefinitionAdapter = (
     });
   },
 });
+};

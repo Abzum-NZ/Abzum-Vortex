@@ -5,17 +5,24 @@ import { createStoredApplicationPermissionSource } from "../src/stored-applicati
 
 vi.mock("server-only", () => ({}));
 
-const { read, prepareApplicationRegistration, createReader } = vi.hoisted(() => {
+const {
+  read,
+  prepareApplicationRegistration,
+  createReader,
+  createBoundReleaseSetService,
+} = vi.hoisted(() => {
   const read = vi.fn();
   return {
     read,
     prepareApplicationRegistration: vi.fn(),
     createReader: vi.fn(() => ({ read })),
+    createBoundReleaseSetService: vi.fn(),
   };
 });
 
 vi.mock("@vortex/definition", () => ({
   createDatabaseDefinitionConsumerReadService: createReader,
+  createDatabaseApplicationBoundReleaseSetService: createBoundReleaseSetService,
 }));
 
 vi.mock("../src/permission-registry-definition-adapter", () => ({
@@ -72,6 +79,7 @@ describe("stored application permission source", () => {
     read.mockReset().mockResolvedValue(applicationRelease);
     prepareApplicationRegistration.mockReset().mockResolvedValue(permissionRegistration);
     createReader.mockClear();
+    createBoundReleaseSetService.mockClear();
   });
 
   it("uses the resolved request transaction for one exact immutable release and registration", async () => {
@@ -94,6 +102,10 @@ describe("stored application permission source", () => {
       permissionRegistration,
     });
     expect(createReader).toHaveBeenCalledWith(
+      { connectionTypeReleases: [], platformThemeReleases: [] },
+      requestTransaction,
+    );
+    expect(createBoundReleaseSetService).toHaveBeenCalledWith(
       { connectionTypeReleases: [], platformThemeReleases: [] },
       requestTransaction,
     );

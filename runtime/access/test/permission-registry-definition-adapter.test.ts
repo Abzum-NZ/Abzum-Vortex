@@ -222,6 +222,20 @@ const prepare = (
       releaseRevision: applicationResult.releaseRevision,
     },
   );
+const prepareWithBoundReleaseSet = (
+  reader: PermissionRegistryDefinitionReader,
+  boundReleaseSet: {
+    read: (command: { applicationReleaseRevision: number }) => Promise<unknown>;
+  },
+  selectedContext: SessionContext = context(),
+) =>
+  createPermissionRegistryDefinitionAdapter({
+    reader,
+    boundReleaseSet,
+  }).prepareApplicationRegistration(selectedContext, {
+    applicationRootId: applicationResult.rootId,
+    releaseRevision: applicationResult.releaseRevision,
+  });
 
 describe("permission registry Definition adapter", () => {
   it("bounds an exact 10,000-item scheduling input without imposing a catalogue limit", async () => {
@@ -346,6 +360,27 @@ describe("permission registry Definition adapter", () => {
     expect(moduleEntries.map((entry) => entry.ownerId)).toEqual(
       [...scaledModules.keys()].sort(compareCanonicalStrings),
     );
+  });
+
+  it("uses the bound release-set service for module evidence and does not read modules individually", async () => {
+    const boundModules = [...moduleResults.values()];
+    const boundReleaseSet = vi.fn(async () => ({
+      application: applicationResult,
+      modules: boundModules,
+    }));
+    const moduleReads = vi.fn(async (_context: SessionContext, _command: DefinitionConsumerReadCommand) => {
+      throw new Error("module read should not happen with bound set");
+    });
+    const prepared = await prepareWithBoundReleaseSet(
+      { read: moduleReads },
+      { read: boundReleaseSet },
+    );
+
+    expect(boundReleaseSet).toHaveBeenCalledWith({
+      applicationReleaseRevision: applicationResult.releaseRevision,
+    });
+    expect(moduleReads).not.toHaveBeenCalled();
+    expect(prepared.applicationRootId).toBe(applicationResult.rootId);
   });
 
   it("builds deterministic app and bound-module evidence only from exact #22 reads", async () => {
