@@ -96,9 +96,10 @@ an independent review of the actual implementation against this plan.
   [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68).
 - [Database exact-value parity #399](https://github.com/Abzum-NZ/Abzum-Vortex/issues/399)
   owns V2 decimal and money exact-value parity in saved conditions.
-- Missing personal-data declarations must still fail publication with a field
-  location. Existing publication evidence should be reused rather than creating
-  a new publication gate.
+- A missing personal-data declaration is located by the versioned definition
+  validation contract (`validateDefinitionSource`), which the draft store and
+  the module designer use; the store and publication themselves fail closed
+  with a coarse code and no location, by design.
 - Attachments remain file references here; real upload/download and file access
   belong to the File engine. Derived values remain owned by their relevant engines.
 
