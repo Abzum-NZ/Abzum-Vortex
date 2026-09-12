@@ -1,7 +1,7 @@
 \ir helpers/definition-release-writer.psql
 
 begin;
-select plan(43);
+select plan(45);
 
 set local search_path = pg_catalog, extensions, public;
 
@@ -43,7 +43,7 @@ as $function$
         'recordTypeId', '54550000-0000-4000-8000-000000000001',
         'storageContractId', '64550000-0000-4000-8000-000000000001',
         'storageScope', 'organization_shared',
-        'ownershipMode', 'group',
+        'ownershipMode', 'team',
         'fields', pg_catalog.jsonb_build_array(
           pg_temp.storage_field(
             '74550000-0000-4000-8000-000000000001', 'text', true, true, true, true
@@ -64,7 +64,7 @@ as $function$
         'recordTypeId', '54550000-0000-4000-8000-000000000002',
         'storageContractId', '64550000-0000-4000-8000-000000000002',
         'storageScope', 'application_contained',
-        'ownershipMode', 'group',
+        'ownershipMode', 'team',
         'fields', pg_catalog.jsonb_build_array(
           pg_temp.storage_field(
             '74550000-0000-4000-8000-000000000002', 'link', false
@@ -98,7 +98,7 @@ as $function$
         'recordTypeId', '54550000-0000-4000-8000-000000000003',
         'storageContractId', '64550000-0000-4000-8000-000000000003',
         'storageScope', 'organization_shared',
-        'ownershipMode', 'group',
+        'ownershipMode', 'team',
         'fields', pg_catalog.jsonb_build_array(
           pg_temp.storage_field(
             '74550000-0000-4000-8000-000000000005', 'text', true
@@ -128,7 +128,7 @@ as $function$
     'recordTypeId', p_record_type_id,
     'storageContractId', p_storage_contract_id,
     'storageScope', 'organization_shared',
-    'ownershipMode', 'group',
+    'ownershipMode', 'team',
     'fields', pg_catalog.jsonb_build_array(
       pg_temp.storage_field(p_field_id, 'text', true)
     ),
@@ -990,6 +990,37 @@ select is(
   'e4550000-0000-4000-8000-000000000012',
   'application-contained storage separates another application in the same organisation');
 
+-- #401: both storage-test record types compile to `team`, so the generated
+-- owner check is the Group one. The team-owned rows inserted above are the
+-- positive half of that check; this is the negative half, proving the generated
+-- table refuses an account-owned row for a Group-owned record type rather than
+-- accepting either owner column.
+select pg_temp.initialize_storage_context(
+  p_application_root_id => '34550000-0000-4000-8000-000000000001'
+);
+select throws_ok(
+  $$set local role vortex_record_adapter;
+  insert into record_data.rt_64550000000040008000000000000001 (
+    organisation_id, module_root_id, record_type_id, storage_contract_id,
+    record_id, application_root_id, definition_revision,
+    owner_organisation_account_id, lifecycle_state, concurrency_number,
+    created_at, created_by, updated_at, updated_by,
+    f_74550000000040008000000000000001
+  ) values (
+    '24550000-0000-4000-8000-000000000001',
+    '44550000-0000-4000-8000-000000000001',
+    '54550000-0000-4000-8000-000000000001',
+    '64550000-0000-4000-8000-000000000001',
+    'e4550000-0000-4000-8000-000000000014', null, 2,
+    '54550000-0000-4000-8000-000000000010', 'active', 1,
+    pg_catalog.statement_timestamp(), '54550000-0000-4000-8000-000000000010',
+    pg_catalog.statement_timestamp(), '54550000-0000-4000-8000-000000000010',
+    'Account-owned row'
+  ); reset role;$$::text,
+  '23514'::char(5), null,
+  'a compiled team-owned record type generates the Group owner check'::text);
+reset role;
+
 select pg_temp.initialize_storage_context(
   p_application_root_id => '34550000-0000-4000-8000-000000000001'
 );
@@ -1168,6 +1199,18 @@ from (
         pg_temp.refused_module_output(), '{canonical,envelope}', '{}'::jsonb
       ),
       'Refused missing embedded root identity.'
+    ),
+    -- #401: the superseded runtime term `group` in place of the compiled wire
+    -- value `team`. Every other gate above passes for this release -- the
+    -- contracts agree, the embedded kind and root identity are right -- so the
+    -- ownership value is the only reason it is refused.
+    (
+      6::bigint, '3.0.0', '3.0.0',
+      pg_catalog.jsonb_set(
+        pg_temp.refused_module_output(),
+        '{canonical,content,recordTypes,0,ownershipMode}', '"group"'::jsonb
+      ),
+      'Refused superseded runtime ownership term.'
     )
 ) as gate(revision, source_contract_version, validation_contract_version,
   compilation_output, release_note);
@@ -1402,6 +1445,18 @@ select throws_ok(
   ); reset role;$$::text,
   '23514'::char(5), 'Exact Module release is incompatible'::text,
   'a missing embedded root identity cannot evade the gate'::text);
+reset role;
+-- #401: `group` is the runtime term, never a compiled wire value. The
+-- provisioner accepts the compiled `team` only, so a release carrying the
+-- runtime term is refused rather than silently provisioned under a second
+-- spelling of one meaning.
+select throws_ok(
+  $$set local role vortex_module_owner;
+  select * from vortex_record.provision_exact_module_storage(
+    '44550000-0000-4000-8000-000000000005', 6
+  ); reset role;$$::text,
+  '42501'::char(5), 'Module record storage definition is invalid'::text,
+  'the superseded runtime ownership term is refused'::text);
 reset role;
 select ok(
   not exists (

@@ -135,6 +135,11 @@
       "migration": "supabase/migrations/20260910114716_coordinate_protected_record_share.sql",
       "proof": "supabase/tests/protected-record-share-authority-concurrency.test.sh",
       "label": "Protected record-share authority"
+    },
+    {
+      "migration": "supabase/migrations/20260912011556_fixed_record_adapters.sql",
+      "proof": "supabase/tests/record-change-concurrency.test.sh",
+      "label": "Record change"
     }
   ],
   "lintSchemas": [

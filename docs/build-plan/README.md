@@ -360,9 +360,10 @@ then executes against that installed storage; see [engine-first delivery](engine
 
 **Current status — reported truthfully:** Phase 4 is engine slices proven locally
 — field values, calculations, the storage provisioner, the exact
-active-installation read and the shared before-save interpreter — with no
-complete protected data path until #35/#37 enforcement, the generated storage
-adapters, binding activation and the protected save/query land. No local pooler
+active-installation read, the shared before-save interpreter and the fixed
+record read/change adapters over provisioned storage — with no
+complete protected data path until create/delete/restore, binding activation and
+the protected save/query land. No local pooler
 expansion is scheduled; intentional publication caps remain deferred.
 
 **Outcome:** Builders can install modules and people can safely create, change, delete and restore records with all field and relationship rules enforced.
