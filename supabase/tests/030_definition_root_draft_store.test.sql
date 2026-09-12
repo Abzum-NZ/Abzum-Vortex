@@ -163,13 +163,18 @@ select results_eq(
       array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('roots', 'module_installation_definition_roots_read',
       array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    -- #401: the fixed record adapters read the pinned release content that is
+    -- their exact installed definition, so their owner reads `releases` and
+    -- nothing else in this schema -- no roots, no dependencies, and no write.
+    ('releases', 'record_adapter_definition_releases_read',
+      array['vortex_record_adapter']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('release_dependencies', 'record_storage_definition_dependencies_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('releases', 'record_storage_definition_releases_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('roots', 'record_storage_definition_roots_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text)$$,
-  'Definition row policies permit only the exact private Module and Record owner reads'
+  'Definition row policies permit only the exact private Module and Record owner reads and the record adapter''s release read'
 );
 select is(
   (
@@ -577,7 +582,7 @@ select is(
   'authored JSON values and array order are preserved'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.definition_test_context(
   'system',
@@ -628,7 +633,7 @@ select pg_catalog.set_config(
   ),
   true
 );
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.definition_test_context(
   'system',
@@ -757,7 +762,7 @@ select is(
   'the successful save derives its update actor from current context'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.definition_test_context(
   'system',
@@ -789,7 +794,7 @@ select throws_ok(
 );
 reset role;
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.definition_test_context(
   'system',
@@ -821,7 +826,7 @@ select throws_ok(
 );
 reset role;
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.definition_test_context(
   'public',
@@ -872,13 +877,13 @@ select throws_ok(
       pg_temp.definition_root_requirements('vortex.malformed.refused', 'malformed_refused')
     )
   $$,
-  '22023'::char(5),
-  'Stored Vortex request context is invalid',
-  'malformed stored context fails closed before creation'
+  '42501'::char(5),
+  'Definition root and draft operations require system context',
+  'a junk value written into the session setting is ignored; the established public context still governs'
 );
 reset role;
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_request;
 select throws_ok(
   $$

@@ -205,7 +205,7 @@ insert into vortex_definition.drafts (
   '90000000-0000-4000-8000-000000000060'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -431,7 +431,7 @@ select is(
   'published history binds a module dependency to its immutable published release reference'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -450,7 +450,7 @@ select is(
 
 reset role;
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -644,7 +644,7 @@ create trigger release_dependencies_test_abort
 before insert on vortex_definition.release_dependencies
 for each row execute function pg_temp.abort_definition_dependency_write();
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -799,7 +799,7 @@ create trigger roots_pointer_test_abort
 before update of current_release_revision on vortex_definition.roots
 for each row execute function pg_temp.abort_definition_pointer_write();
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -853,7 +853,7 @@ create trigger releases_test_abort
 before insert on vortex_definition.releases
 for each row execute function pg_temp.abort_definition_release_write();
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -892,7 +892,7 @@ select is(
 );
 drop trigger releases_test_abort on vortex_definition.releases;
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -943,7 +943,7 @@ select is(
   'duplicate platform-block refusal leaves the discovery pointer unchanged'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -1044,7 +1044,7 @@ update vortex_definition.roots
 set current_release_revision = 10000
 where root_id = '30000000-0000-4000-8000-000000000063'::uuid;
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
@@ -1063,7 +1063,7 @@ select throws_ok(
 );
 reset role;
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;

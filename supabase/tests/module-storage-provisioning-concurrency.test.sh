@@ -496,7 +496,7 @@ run_sql "
             pg_catalog.jsonb_build_object(
               'recordTypeId', '$record_type_id',
               'storageContractId', '$storage_contract_id',
-              'storageScope', 'organization_shared', 'ownershipMode', 'group',
+              'storageScope', 'organization_shared', 'ownershipMode', 'team',
               'fields', pg_catalog.jsonb_build_array(
                 pg_catalog.jsonb_build_object(
                   'fieldId', '$field_id', 'type', 'text', 'required', true,

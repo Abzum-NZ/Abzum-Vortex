@@ -284,11 +284,17 @@ select results_eq(
       'SELECT' collate "C", 'true' collate "C", null::text collate "C"),
     ('releases', 'module_installation_definition_releases_read',
       array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    -- #401: the fixed record adapters read the pinned release content that is
+    -- their exact installed definition. The read is `releases` only: their
+    -- owner holds no policy on `release_dependencies`, and none of these
+    -- policies permits a write.
+    ('releases', 'record_adapter_definition_releases_read',
+      array['vortex_record_adapter']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('release_dependencies', 'record_storage_definition_dependencies_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('releases', 'record_storage_definition_releases_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text)$$,
-  'immutable release row policies permit only the exact private Module and Record owner reads'
+  'immutable release row policies permit only the exact private Module and Record owner reads and the record adapter''s release read'
 );
 select ok(
   not pg_catalog.has_table_privilege(

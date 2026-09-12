@@ -707,7 +707,7 @@ select is(
   'one direct standing assignment may qualify with the required thirteen plus accepted extras'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(
   pg_catalog.jsonb_build_object(
     'callerKind', 'human',
@@ -813,7 +813,7 @@ select * from vortex_access.coordinate_organization_delegation_authority_change(
   'a2600000-0000-4000-8000-000000000013'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(
   pg_catalog.jsonb_build_object(
     'callerKind', 'human',

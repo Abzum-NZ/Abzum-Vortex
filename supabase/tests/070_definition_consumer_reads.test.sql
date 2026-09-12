@@ -657,7 +657,7 @@ select throws_ok(
 );
 
 reset role;
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_request;
 set local search_path = pg_catalog, extensions, public;
 select throws_ok(

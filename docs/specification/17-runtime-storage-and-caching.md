@@ -181,8 +181,9 @@ application request.
 - The Vercel server connects as an environment-specific `vortex_runtime` login through Supabase's
   shared transaction pooler on port 6543. That login owns no object and has no direct service-table
   privilege. Inside an explicit transaction it may initialize the closed request context and enter
-  only the non-login `vortex_request` role, which has no ownership, schema or persistent-relation
-  creation, replication, superuser, or row-security-bypass capability.
+  only the non-login `vortex_request` role, which is grant hygiene rather than an injection boundary;
+  the established context row is the identity boundary. `vortex_request` has no ownership, schema or
+  persistent-relation creation, replication, superuser, or row-security-bypass capability.
 - Migrations create `vortex_runtime` without a password. Before a hosted environment may serve a
   protected request, an operator generates a different high-entropy password for that environment,
   assigns it to that exact role through the Supabase administrative path, and builds the restricted
@@ -217,10 +218,19 @@ has no Identity schema access and may execute only explicitly granted request fu
 Access's exact live human-context validator and central permission/delegation evaluator. It
 cannot call the legacy rich account list or standalone Access-version read, both of which are revoked
 from runtime use. Only `vortex_request` may execute the read-only context accessors used by row
-policies and service SQL. The database stores the whole context as one transaction-local value, not
-as independently reusable session settings. Missing, empty, malformed, incomplete, internally
+policies and service SQL. The database stores the whole context in one owner-only row bound to the
+establishing transaction (`vortex_context.request_contexts`, keyed by the server backend and stamped
+with the transaction identifier). No session setting carries it, so a value written into any
+setting is never read. The initializer establishes the row once per transaction and refuses a
+second establishment, including after the request role reverts to the runtime login with
+`SET ROLE` or `set_config('role', …)`, which PostgreSQL always permits; no runtime, request or
+record role can read or write the row. Missing, empty, malformed, incomplete, internally
 inconsistent, expired, inactive or stale context fails closed. Commit, rollback, and pooled
 connection reuse make the role and context unavailable to the next transaction.
+The database trusts the application server to name the human: a caller able to end the transaction
+and begin another as `vortex_runtime` is the application server, and the database does not verify
+the ES256 identity token itself. Protected requests run read-write on the primary; the
+establishment write and the resolver's row locks both refuse on a standby.
 
 Setting a structurally valid context is not itself an access grant. Access owns the human
 organisation composition; other services consume its resolved transaction rather than assembling
@@ -355,8 +365,13 @@ Recheck the actor and scope from the trusted transaction context, not
 The database owns the only DDL generator. TypeScript services call that fixed
 operation and parse its result; they do not maintain a second SQL generator.
 The generated structure includes the declared fields, complete scope keys,
-Group ownership (`owner_group_id`), relationships, four row policies and fixed
-field-aware record adapters. Adapters construct trusted relationship evidence;
+Group ownership (`owner_group_id`), relationships and four row policies. Those
+policies are the scope-only isolation backstop; the complete record decision
+runs inside the adapter, once for a read and over both the old and the proposed
+row for a change. The adapters are not generated per table: one fixed
+parameterised pair, keyed by record-type identity, resolves the physical table
+and columns through the protected catalogue, so one audited path serves every
+record type. Adapters construct trusted relationship evidence;
 callers cannot supply the access graph. Raw content-table access stays denied.
 An adapter execution role receives only the required DML, does not own those
 tables and remains subject to row security.
@@ -564,3 +579,7 @@ The first release does not place cross-organisation shared-record results in the
 The [page-builder adapter](appendices/page-builder-contracts.md) remains inside the existing Page/Definition/Query/Record/Access boundaries. It introduces no per-application service or separate renderer/database. [Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252), [entitlement decisions #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) and [file-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) precede their first consuming operation; later privacy/metering work extends those same boundaries.
 
 Realtime channel admission must use credentials accepted by the destination cluster. Do not assume a token issued by a separate Identity Authority project automatically authorises that cluster's Realtime service. [#56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56) proves access-change invalidation/reauthorisation for local subscriptions; [#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156) proves the cross-cluster path. Broadcast only the minimal permitted content-free signal and reload through current access checks.
+
+## Storage HTTP identity handoff
+
+Storage requests use the [File gateway's destination-signed, exact-object and operation scoped JWT](11-files-and-attachments.md), including when Identity Authority and storage are on different clusters. This is a narrow Storage credential, not a broad service role or access to private Vortex schemas. The File gateway rechecks live Access before issuing the credential; Storage independently restricts its signed scope. Hosted proof belongs to [#92](https://github.com/Abzum-NZ/Abzum-Vortex/issues/92).

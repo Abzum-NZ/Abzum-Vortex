@@ -19,7 +19,7 @@ declare
   operation_at timestamptz := pg_catalog.clock_timestamp();
   current_access_version bigint;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   select version.current_version into strict current_access_version
   from vortex_access.organization_access_versions as version
   where version.organization_id = '23700000-0000-4000-8000-000000000001';
