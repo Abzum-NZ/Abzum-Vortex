@@ -274,6 +274,11 @@ select $typed_condition_vectors$
       "declaredFieldIds":[],"fieldValues":{},"parameters":[],"bindings":[{"key":"extra","source":"literal","value":1}],"expected":"error:22023"
     },
     {
+      "name":"bindings_in_byte_order_not_icu_order",
+      "condition":{"kind":"all","conditions":[{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"a1"}},{"kind":"comparison","operator":"not_equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"a_b"}}]},
+      "declaredFieldIds":["f3650000-0000-4000-8000-000000000001"],"fieldValues":{"f3650000-0000-4000-8000-000000000001":"north"},"parameters":[{"key":"a1","type":"text"},{"key":"a_b","type":"text"}],"bindings":[{"key":"a1","source":"literal","value":"north"},{"key":"a_b","source":"literal","value":"south"}],"expected":"true"
+    },
+    {
       "name":"missing_field_value_refuses",
       "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000001"},"right":{"source":"value","value":"alpha"}},
       "declaredFieldIds":["f3650000-0000-4000-8000-000000000001"],"fieldValues":{},"parameters":[],"bindings":[],"expected":"error:22023"
@@ -314,7 +319,7 @@ $typed_condition_vectors$::jsonb as payload;
 
 select is(
   (select pg_catalog.jsonb_array_length(payload -> 'vectors') from typed_condition_corpus),
-  43,
+  44,
   'the shared parity corpus contains the intended bounded vector set'
 );
 
