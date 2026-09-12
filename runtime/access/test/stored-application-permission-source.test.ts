@@ -5,20 +5,16 @@ import { createStoredApplicationPermissionSource } from "../src/stored-applicati
 
 vi.mock("server-only", () => ({}));
 
-const {
-  read,
-  prepareApplicationRegistration,
-  createReader,
-  createBoundReleaseSetService,
-} = vi.hoisted(() => {
-  const read = vi.fn();
-  return {
-    read,
-    prepareApplicationRegistration: vi.fn(),
-    createReader: vi.fn(() => ({ read })),
-    createBoundReleaseSetService: vi.fn(),
-  };
-});
+const { read, prepareApplicationRegistration, createReader, createBoundReleaseSetService } =
+  vi.hoisted(() => {
+    const read = vi.fn();
+    return {
+      read,
+      prepareApplicationRegistration: vi.fn(),
+      createReader: vi.fn(() => ({ read })),
+      createBoundReleaseSetService: vi.fn(),
+    };
+  });
 
 vi.mock("@vortex/definition", () => ({
   createDatabaseDefinitionConsumerReadService: createReader,

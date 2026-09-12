@@ -368,7 +368,7 @@ describe("permission registry Definition adapter", () => {
       application: applicationResult,
       modules: boundModules,
     }));
-    const moduleReads = vi.fn(async (_context: SessionContext, _command: DefinitionConsumerReadCommand) => {
+    const moduleReads = vi.fn(async () => {
       throw new Error("module read should not happen with bound set");
     });
     const prepared = await prepareWithBoundReleaseSet(

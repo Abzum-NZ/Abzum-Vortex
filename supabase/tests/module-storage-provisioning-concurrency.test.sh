@@ -178,6 +178,8 @@ cleanup_fixture() {
          or target_root_id = '$module_root_id';
     delete from vortex_definition.releases
       where root_id in ('$application_root_id', '$module_root_id');
+    delete from vortex_definition.drafts
+      where root_id in ('$application_root_id', '$module_root_id');
     delete from vortex_definition.roots
       where root_id in ('$application_root_id', '$module_root_id');
     delete from vortex_identity.organization_accounts
@@ -390,74 +392,193 @@ run_sql "
       'vortex.storage_concurrency.application', pg_catalog.statement_timestamp(), '$actor_id'),
     ('$module_root_id', '$organization_id', 'module',
       'vortex.storage_concurrency.module', pg_catalog.statement_timestamp(), '$actor_id');
-  insert into vortex_definition.releases (
-    root_id, release_revision, release_version, authored_source,
-    authored_source_fingerprint, source_contract_version, compilation_output,
-    resolution_snapshot, content_fingerprint, resolution_fingerprint,
-    validation_contract_version, comparison_fingerprint, impact_reasons,
-    release_note, published_at, published_by
+  insert into vortex_definition.drafts (
+    root_id, draft_revision, draft_source, source_contract_version, source_fingerprint,
+    identity_requirements, updated_at, updated_by
   ) values
-  (
-    '$module_root_id', 1, '2.0.0',
-    pg_catalog.jsonb_build_object(
-      'source_contract_version', '2.0.0', 'kind', 'module',
-      'key', 'vortex.storage_concurrency.module'
+    ('$module_root_id', 1,
+      pg_catalog.jsonb_build_object(
+        'source_contract_version', '2.0.0', 'kind', 'module',
+        'key', 'vortex.storage_concurrency.module'
+      ),
+      '2.0.0', 'sha256:' || pg_catalog.repeat('1', 64),
+      '[]'::jsonb, pg_catalog.statement_timestamp(), '$actor_id'
     ),
-    'sha256:' || pg_catalog.repeat('1', 64), '2.0.0',
-    pg_catalog.jsonb_build_object(
-      'kind', 'module', 'validationContractVersion', '2.0.0',
+    ('$application_root_id', 1,
+      pg_catalog.jsonb_build_object(
+        'source_contract_version', '1.0.0', 'kind', 'application',
+        'key', 'vortex.storage_concurrency.application'
+      ),
+      '1.0.0', 'sha256:' || pg_catalog.repeat('5', 64),
+      '[]'::jsonb, pg_catalog.statement_timestamp(), '$actor_id'
+    );
+  create function pg_temp.storage_concurrency_context()
+  returns jsonb
+  language sql
+  volatile
+  set search_path = ''
+  as \$function\$
+    select pg_catalog.jsonb_build_object(
+      'callerKind', 'system',
+      'tenantId', '$tenant_id'::uuid,
+      'organizationId', '$organization_id'::uuid,
+      'sessionId', 'c4550000-0000-4000-8000-000000000050'::uuid,
+      'issuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
+      'expiresAt', pg_catalog.clock_timestamp() + interval '5 minutes',
+      'accessVersion', 1,
+      'correlationId', 'c4550000-0000-4000-8000-000000000051'::uuid,
+      'systemActorId', '$actor_id'::uuid,
+      'authenticationStrength', 'service'
+    )
+  \$function\$;
+  create function pg_temp.storage_concurrency_release_compilation(
+    p_root_id uuid,
+    p_organization_id uuid,
+    p_kind text,
+    p_key text,
+    p_release_version text,
+    p_validation_contract_version text,
+    p_canonical_content jsonb,
+    p_content_fingerprint text,
+    p_resolution_fingerprint text
+  )
+  returns jsonb
+  language sql
+  stable
+  set search_path = ''
+  as \$function\$
+    select pg_catalog.jsonb_build_object(
+      'kind', p_kind,
+      'resolutionFingerprint', p_resolution_fingerprint,
+      'artifact', pg_catalog.jsonb_build_object(
+        'kind', p_kind,
+        'rootId', p_root_id,
+        'definitionKey', p_key,
+        'exactVersion', p_release_version,
+        'contentFingerprint', p_content_fingerprint,
+        'resolutionFingerprint', p_resolution_fingerprint
+      ),
       'canonical', pg_catalog.jsonb_build_object(
-        'envelope', pg_catalog.jsonb_build_object('rootId', '$module_root_id'),
-        'content', pg_catalog.jsonb_build_object(
-          'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-            'recordTypeId', '$record_type_id',
-            'storageContractId', '$storage_contract_id',
-            'storageScope', 'organization_shared', 'ownershipMode', 'group',
-            'fields', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-              'fieldId', '$field_id', 'type', 'text', 'required', true,
-              'unique', false, 'filterable', true, 'sortable', true,
-              'settings', '{}'::jsonb
-            )),
-            'relationships', '[]'::jsonb
-          ))
+        'envelope', pg_catalog.jsonb_build_object(
+          'kind', p_kind,
+          'key', p_key,
+          'rootId', p_root_id,
+          'organizationId', p_organization_id
+        ),
+        'content', p_canonical_content
+      ),
+      'validationContractVersion', p_validation_contract_version
+    )
+  \$function\$;
+  grant execute on function pg_temp.storage_concurrency_context() to vortex_runtime;
+  grant execute on function pg_temp.storage_concurrency_release_compilation(
+    uuid, uuid, text, text, text, text, jsonb, text, text
+  ) to vortex_request;
+  grant usage on schema extensions to vortex_runtime, vortex_request;
+  set local role vortex_runtime;
+  select vortex_context.initialize(pg_temp.storage_concurrency_context());
+  set local role vortex_request;
+  select * from vortex_definition.append_release(
+    '$module_root_id'::uuid,
+    1,
+    'sha256:' || pg_catalog.repeat('1', 64),
+    pg_catalog.jsonb_build_object(
+      'releaseVersion', '2.0.0',
+      'compilationOutput', pg_temp.storage_concurrency_release_compilation(
+        '$module_root_id'::uuid,
+        '$organization_id'::uuid,
+        'module',
+        'vortex.storage_concurrency.module',
+        '2.0.0',
+        '2.0.0',
+        pg_catalog.jsonb_build_object(
+          'recordTypes', pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object(
+              'recordTypeId', '$record_type_id',
+              'storageContractId', '$storage_contract_id',
+              'storageScope', 'organization_shared', 'ownershipMode', 'group',
+              'fields', pg_catalog.jsonb_build_array(
+                pg_catalog.jsonb_build_object(
+                  'fieldId', '$field_id', 'type', 'text', 'required', true,
+                  'unique', false, 'filterable', true, 'sortable', true,
+                  'settings', '{}'::jsonb
+                )
+              ),
+              'relationships', '[]'::jsonb
+            )
+          )
+        ),
+        'sha256:' || pg_catalog.repeat('3', 64),
+        'sha256:' || pg_catalog.repeat('2', 64)
+      ),
+      'resolutionSnapshot', pg_catalog.jsonb_build_object(
+        'fingerprint', 'sha256:' || pg_catalog.repeat('2', 64),
+        'definitions', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'kind', 'module',
+            'key', 'vortex.storage_concurrency.module',
+            'rootId', '$module_root_id'::uuid,
+            'exactVersion', '2.0.0'
+          )
+        )
+      ),
+      'contentFingerprint', 'sha256:' || pg_catalog.repeat('3', 64),
+      'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('2', 64),
+      'validationContractVersion', '2.0.0',
+      'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('4', 64),
+      'impactReasons', '[]'::jsonb,
+      'releaseNote', 'Storage concurrency Module V2.',
+      'dependencies', '[]'::jsonb
+    )
+  );
+  select * from vortex_definition.append_release(
+    '$application_root_id'::uuid,
+    1,
+    'sha256:' || pg_catalog.repeat('5', 64),
+    pg_catalog.jsonb_build_object(
+      'releaseVersion', '1.0.0',
+      'compilationOutput', pg_temp.storage_concurrency_release_compilation(
+        '$application_root_id'::uuid,
+        '$organization_id'::uuid,
+        'application',
+        'vortex.storage_concurrency.application',
+        '1.0.0',
+        '1.0.0',
+        '{}'::jsonb,
+        'sha256:' || pg_catalog.repeat('6', 64),
+        'sha256:' || pg_catalog.repeat('7', 64)
+      ),
+      'resolutionSnapshot', pg_catalog.jsonb_build_object(
+        'fingerprint', 'sha256:' || pg_catalog.repeat('7', 64),
+        'definitions', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'kind', 'application',
+            'key', 'vortex.storage_concurrency.application',
+            'rootId', '$application_root_id'::uuid,
+            'exactVersion', '1.0.0'
+          )
+        )
+      ),
+      'contentFingerprint', 'sha256:' || pg_catalog.repeat('6', 64),
+      'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('7', 64),
+      'validationContractVersion', '1.0.0',
+      'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('8', 64),
+      'impactReasons', '[]'::jsonb,
+      'releaseNote', 'Storage concurrency Application V1.',
+      'dependencies', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'kind', 'module',
+          'key', 'vortex.storage_concurrency.module',
+          'rootId', '$module_root_id'::uuid,
+          'releaseRevision', 1,
+          'releaseVersion', '2.0.0',
+          'contentFingerprint', 'sha256:' || pg_catalog.repeat('3', 64),
+          'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('2', 64)
         )
       )
-    ),
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('2', 64)),
-    'sha256:' || pg_catalog.repeat('3', 64),
-    'sha256:' || pg_catalog.repeat('2', 64), '2.0.0',
-    'sha256:' || pg_catalog.repeat('4', 64), '[]'::jsonb,
-    'Storage concurrency Module V2.', pg_catalog.statement_timestamp(), '$actor_id'
-  ),
-  (
-    '$application_root_id', 1, '1.0.0',
-    pg_catalog.jsonb_build_object(
-      'source_contract_version', '1.0.0', 'kind', 'application',
-      'key', 'vortex.storage_concurrency.application'
-    ),
-    'sha256:' || pg_catalog.repeat('5', 64), '1.0.0',
-    pg_catalog.jsonb_build_object(
-      'kind', 'application', 'validationContractVersion', '1.0.0',
-      'canonical', pg_catalog.jsonb_build_object(
-        'envelope', pg_catalog.jsonb_build_object('rootId', '$application_root_id'),
-        'content', '{}'::jsonb
-      )
-    ),
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('6', 64)),
-    'sha256:' || pg_catalog.repeat('7', 64),
-    'sha256:' || pg_catalog.repeat('6', 64), '1.0.0',
-    'sha256:' || pg_catalog.repeat('8', 64), '[]'::jsonb,
-    'Storage concurrency Application V1.', pg_catalog.statement_timestamp(), '$actor_id'
+    )
   );
-  insert into vortex_definition.release_dependencies (
-    root_id, release_revision, dependency_kind, dependency_reference,
-    dependency_version, dependency_content_fingerprint, evidence_fingerprint,
-    target_root_id, target_release_revision, catalogue_item_id
-  ) values (
-    '$application_root_id', 1, 'module', 'vortex.storage_concurrency.module',
-    '2.0.0', 'sha256:' || pg_catalog.repeat('3', 64),
-    'sha256:' || pg_catalog.repeat('2', 64), '$module_root_id', 1, null
-  );
+  reset role;
   commit;
 " >/dev/null
 fixture_claimed=1
