@@ -42,20 +42,60 @@ select is((select state from vortex_identity.read_tenant_organization('45300000-
 select is((select outcome from vortex_identity.list_tenant_administrator_assignments('45300000-0000-4000-8000-000000000001','15300000-0000-4000-8000-000000000001',10,null)),'active','assignment outcome is derived at read time');
 select throws_ok($$select * from vortex_identity.list_tenant_hierarchy('45300000-0000-4000-8000-000000000001','15300000-0000-4000-8000-000000000002',10,null)$$,'V3101',null,'a foreign or unauthorized tenant is one safe refusal');
 
-select is((select outcome from vortex_identity.grant_tenant_administrator(
+select is((select outcome||'|'||revision from vortex_identity.grant_tenant_administrator(
  '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000001','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
- '15300000-0000-4000-8000-000000000001','45300000-0000-4000-8000-000000000002','["platform.tenant.hierarchy.read"]',now()-interval '1 minute',null)),'accepted','current manager grants a canonical subset');
-select is((select outcome from vortex_identity.grant_tenant_administrator(
+ '15300000-0000-4000-8000-000000000001','45300000-0000-4000-8000-000000000002','["platform.tenant.hierarchy.read"]',now()-interval '1 minute',null)),'accepted|1','current manager grants a canonical subset at revision one');
+select is((select outcome||'|'||revision from vortex_identity.grant_tenant_administrator(
  '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000001','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
- '15300000-0000-4000-8000-000000000001','45300000-0000-4000-8000-000000000002','["platform.tenant.hierarchy.read"]',now()-interval '1 minute',null)),'replayed','an exact duplicate replays without mutation');
+ '15300000-0000-4000-8000-000000000001','45300000-0000-4000-8000-000000000002','["platform.tenant.hierarchy.read"]',now()-interval '1 minute',null)),'replayed|1','an exact duplicate replays revision one without mutation');
+create temporary table original_tenant_grant_provenance on commit drop as
+select assignment_id, granted_at, granted_by_actor_id, grant_correlation_id
+from vortex_identity.tenant_administrator_assignments
+where tenant_id='15300000-0000-4000-8000-000000000001'
+  and identity_id='45300000-0000-4000-8000-000000000002';
 select throws_ok($$select * from vortex_identity.grant_tenant_administrator(
  '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000002','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
  '15300000-0000-4000-8000-000000000001','45300000-0000-4000-8000-000000000002','["platform.tenant.organizations.create"]',now()-interval '1 minute',null)$$,'V3101',null,'a manager cannot grant a capability outside their current effective set');
+select is((select outcome||'|'||revision from vortex_identity.change_tenant_administrator(
+ '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000004','sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+ '15300000-0000-4000-8000-000000000001',(select assignment_id from original_tenant_grant_provenance),1,
+ '["platform.tenant.administrators.read"]',now()-interval '1 minute',null)),'accepted|2','an authorized assignment change produces revision two');
+select is((select outcome||'|'||revision from vortex_identity.change_tenant_administrator(
+ '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000004','sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+ '15300000-0000-4000-8000-000000000001',(select assignment_id from original_tenant_grant_provenance),1,
+ '["platform.tenant.administrators.read"]',now()-interval '1 minute',null)),'replayed|2','an exact assignment change retry replays revision two');
+select throws_ok($$select * from vortex_identity.change_tenant_administrator(
+ '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000004','sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+ '15300000-0000-4000-8000-000000000001',(select assignment_id from original_tenant_grant_provenance),1,
+ '["platform.tenant.hierarchy.read"]',now()-interval '1 minute',null)$$,'V3001',null,'a changed assignment payload conflicts with the accepted duplicate key');
+select throws_ok($$select * from vortex_identity.change_tenant_administrator(
+ '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000005','sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+ '15300000-0000-4000-8000-000000000001','35300000-0000-4000-8000-000000000001',1,
+ '["platform.tenant.administrators.read"]',now()-interval '1 minute',null)$$,'V3103',null,'a change cannot remove the final qualifying permanent manager');
 select throws_ok($$select * from vortex_identity.revoke_tenant_administrator(
  '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000003','sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
  '15300000-0000-4000-8000-000000000001','35300000-0000-4000-8000-000000000001',1)$$,'V3103',null,'the last qualifying permanent manager cannot be revoked');
-select is((select current_version from vortex_access.organization_access_versions where organization_id='25300000-0000-4000-8000-000000000001'),7::bigint,'tenant assignment changes do not increment organization Access version');
-select is((select count(*) from vortex_identity.accepted_administration_receipts where tenant_id='15300000-0000-4000-8000-000000000001'),1::bigint,'replay stores one minimal accepted receipt');
+select is((select outcome||'|'||revision from vortex_identity.revoke_tenant_administrator(
+ '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000006','sha256:6666666666666666666666666666666666666666666666666666666666666666',
+ '15300000-0000-4000-8000-000000000001',(select assignment_id from original_tenant_grant_provenance),2)),'accepted|3','an authorized revocation produces revision three');
+select is((select outcome||'|'||revision from vortex_identity.revoke_tenant_administrator(
+ '45300000-0000-4000-8000-000000000001','b5300000-0000-4000-8000-000000000006','sha256:6666666666666666666666666666666666666666666666666666666666666666',
+ '15300000-0000-4000-8000-000000000001',(select assignment_id from original_tenant_grant_provenance),2)),'replayed|3','an exact revocation retry replays revision three');
+select is((select revision from vortex_identity.tenant_administrator_assignments where assignment_id=(select assignment_id from original_tenant_grant_provenance)),3::bigint,'the stored assignment retains the resulting revision');
+select ok((select revoked_at is not null and revoked_at=changed_at
+  and revoked_by_actor_id=changed_by_actor_id
+  and revocation_correlation_id=change_correlation_id
+  from vortex_identity.tenant_administrator_assignments
+  where assignment_id=(select assignment_id from original_tenant_grant_provenance)),
+  'revocation writes complete matching current-change evidence');
+select is((select row(assignment.granted_at,assignment.granted_by_actor_id,assignment.grant_correlation_id)::text
+  from vortex_identity.tenant_administrator_assignments assignment
+  where assignment.assignment_id=(select assignment_id from original_tenant_grant_provenance)),
+  (select row(original.granted_at,original.granted_by_actor_id,original.grant_correlation_id)::text
+   from original_tenant_grant_provenance original),
+  'change and revocation preserve original grant provenance');
+select is((select current_version from vortex_access.organization_access_versions where organization_id='25300000-0000-4000-8000-000000000001'),7::bigint,'tenant grant, change and revoke do not increment organization Access version');
+select is((select count(*) from vortex_identity.accepted_administration_receipts where tenant_id='15300000-0000-4000-8000-000000000001'),3::bigint,'each accepted grant, change and revoke stores exactly one receipt while replay and refusals store none');
 
 select * from finish();
 rollback;
