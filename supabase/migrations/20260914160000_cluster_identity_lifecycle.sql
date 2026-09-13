@@ -271,6 +271,7 @@ declare
   resulting_revision bigint;
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
   evaluated_at timestamptz;
+  persisted_state_changed_at timestamptz;
 begin
   if p_operation not in (
       'suspend_cluster_identity',
@@ -419,13 +420,15 @@ begin
       message = 'Administration scope is unavailable';
   end if;
 
-  evaluated_at := greatest(
-    pg_catalog.clock_timestamp(), current_changed_at
-  );
+  -- Eligibility is always evaluated against a fresh database observation made
+  -- after every governance and projection lock. A future-skewed audit value is
+  -- compatible with the projection trigger, but never grants future authority.
+  evaluated_at := pg_catalog.clock_timestamp();
+  persisted_state_changed_at := greatest(evaluated_at, current_changed_at);
   resulting_revision := current_revision + 1;
   update vortex_identity.identity_projections as projection
   set state = resulting_state,
-    state_changed_at = evaluated_at,
+    state_changed_at = persisted_state_changed_at,
     state_changed_by = p_operator_actor_id,
     state_change_correlation_id = new_correlation_id,
     revision = resulting_revision

@@ -229,13 +229,21 @@ insert into vortex_identity.tenant_administrator_assignments (
     '95500000-0000-4000-8000-000000000001',
     'a5500000-0000-4000-8000-000000000015', null, null, null);
 
+-- A future-skewed audit timestamp remains compatible with the projection
+-- trigger, but must never advance the authority eligibility clock. The only
+-- candidate replacement starts one day from now and is therefore ineligible.
+update vortex_identity.identity_projections
+set state_changed_at = now() + interval '2 days',
+  revision = 2
+where identity_id = '45500000-0000-4000-8000-000000000001';
+
 select throws_ok(
   $$select * from vortex_identity.suspend_cluster_identity(
     'c5500000-0000-4000-8000-000000000001',
     '95500000-0000-4000-8000-000000000001',
     'd5500000-0000-4000-8000-000000000020',
     'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-    '45500000-0000-4000-8000-000000000001', 1
+    '45500000-0000-4000-8000-000000000001', 2
   )$$,
   'V3002'::char(5), 'Permanent tenant manager is required',
   'non-permanent tenant assignments cannot replace the final manager'
@@ -243,8 +251,18 @@ select throws_ok(
 select is(
   (select state || '|' || revision from vortex_identity.identity_projections
     where identity_id = '45500000-0000-4000-8000-000000000001'),
-  'active|1',
+  'active|2',
   'a failed multi-scope lifecycle command rolls the projection back'
+);
+select is(
+  (select pg_catalog.count(*)
+    from vortex_identity.accepted_administration_receipts
+    where actor_id = '95500000-0000-4000-8000-000000000001'
+      and cluster_id = 'c5500000-0000-4000-8000-000000000001'
+      and operation_key = 'suspend_cluster_identity'
+      and duplicate_key = 'd5500000-0000-4000-8000-000000000020'),
+  0::bigint,
+  'future audit time cannot accept a scheduled replacement or write a receipt'
 );
 
 insert into vortex_identity.tenant_administrator_assignments (
@@ -266,7 +284,7 @@ select is(
     '95500000-0000-4000-8000-000000000001',
     'd5500000-0000-4000-8000-000000000021',
     'sha256:2222222222222222222222222222222222222222222222222222222222222222',
-    '45500000-0000-4000-8000-000000000001', 1
+    '45500000-0000-4000-8000-000000000001', 2
   )),
   'accepted',
   'a qualifying permanent replacement permits the tenant manager transition'
