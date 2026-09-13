@@ -134,6 +134,17 @@ const occurrenceChangedClosureSetupId = id(113);
 const commandRuleDeferredTotalId = id(114);
 const activityRuleDeferredTotalId = id(115);
 const occurrenceRuleDeferredTotalId = id(116);
+const commandRuleDeferredFilterId = id(117);
+const activityRuleDeferredFilterId = id(118);
+const occurrenceRuleDeferredFilterId = id(119);
+const commandRuleUnrelatedTitleId = id(120);
+const activityRuleUnrelatedTitleId = id(121);
+const occurrenceRuleUnrelatedTitleId = id(122);
+const commandRuleStableOperandId = id(123);
+const activityRuleStableOperandId = id(124);
+const occurrenceRuleStableOperandId = id(125);
+const activityRuleStableOperandReplayId = id(126);
+const activityRuleStableOperandConflictId = id(127);
 const publishedAt = "2026-09-13T00:00:00.000Z";
 
 const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse({
@@ -298,8 +309,8 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
               relationship: "example.record_save_proof:total_child.parent",
               operation: "sum",
               result_type: "decimal_number",
-              field: "amount",
-              filter: { field: "included", operator: "equals", value: true },
+              field: "aggregate_amount",
+              filter: { field: "included_for_total", operator: "equals", value: true },
             },
           },
           {
@@ -401,6 +412,90 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
             personal_data: "none",
             public_display: "refused",
             settings: {},
+          },
+          {
+            id: "field_total_child_filter_operand",
+            key: "filter_operand",
+            type: "decimal_number",
+            label: "Filter operand",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: { digits_before_decimal: 20, decimal_places: 6 },
+          },
+          {
+            id: "field_total_child_amount_step_one",
+            key: "amount_step_one",
+            type: "calculation",
+            label: "Amount step one",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              result_type: "decimal_number",
+              decimal_places: 6,
+              expression: {
+                operation: "numeric",
+                numeric_operation: "add",
+                operands: [
+                  { source: "field", field: "amount" },
+                  { source: "literal", value: "0" },
+                ],
+              },
+            },
+          },
+          {
+            id: "field_total_child_aggregate_amount",
+            key: "aggregate_amount",
+            type: "calculation",
+            label: "Aggregate amount",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              result_type: "decimal_number",
+              decimal_places: 6,
+              expression: {
+                operation: "numeric",
+                numeric_operation: "add",
+                operands: [
+                  { source: "field", field: "amount_step_one" },
+                  { source: "literal", value: "0" },
+                ],
+              },
+            },
+          },
+          {
+            id: "field_total_child_included_for_total",
+            key: "included_for_total",
+            type: "calculation",
+            label: "Included for total",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              result_type: "yes_no",
+              expression: {
+                operation: "condition",
+                condition: {
+                  field: "filter_operand",
+                  operator: "greater_than",
+                  value: "0",
+                },
+              },
+            },
           },
           {
             id: "field_total_child_money",
@@ -664,7 +759,17 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
                 recordType === "total_parent"
                   ? ["title", "included_total", "display_total", "money_total"]
                   : recordType === "total_child"
-                    ? ["title", "amount", "included", "money_amount", "parent"]
+                    ? [
+                        "title",
+                        "amount",
+                        "included",
+                        "filter_operand",
+                        "amount_step_one",
+                        "aggregate_amount",
+                        "included_for_total",
+                        "money_amount",
+                        "parent",
+                      ]
                     : recordType === "ruled_child"
                       ? ["title", "parent"]
                       : ["title", "children_total", "parent"],
@@ -674,7 +779,7 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
                   : recordType === "total_parent"
                     ? ["title"]
                     : recordType === "total_child"
-                      ? ["title", "amount", "included", "money_amount", "parent"]
+                      ? ["title", "amount", "included", "filter_operand", "money_amount", "parent"]
                       : recordType === "ruled_child"
                         ? ["title", "parent"]
                         : ["title", "parent"],
@@ -872,6 +977,13 @@ const totalChildStorageId = componentId("storage_contract", "storage_total_child
 const totalChildTitleFieldId = componentId("field", "field_total_child_title");
 const totalChildAmountFieldId = componentId("field", "field_total_child_amount");
 const totalChildIncludedFieldId = componentId("field", "field_total_child_included");
+const totalChildFilterOperandFieldId = componentId("field", "field_total_child_filter_operand");
+const totalChildAmountStepOneFieldId = componentId("field", "field_total_child_amount_step_one");
+const totalChildAggregateAmountFieldId = componentId("field", "field_total_child_aggregate_amount");
+const totalChildIncludedForTotalFieldId = componentId(
+  "field",
+  "field_total_child_included_for_total",
+);
 const totalChildMoneyFieldId = componentId("field", "field_total_child_money");
 const totalChildParentFieldId = componentId("field", "field_total_child_parent");
 const totalRelationshipId = componentId("relationship", "relationship_total_parent");
@@ -1406,6 +1518,11 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityChangedClosureSetupId,
         activityChangedClosureId,
         activityRuleDeferredTotalId,
+        activityRuleDeferredFilterId,
+        activityRuleUnrelatedTitleId,
+        activityRuleStableOperandId,
+        activityRuleStableOperandReplayId,
+        activityRuleStableOperandConflictId,
         activityRevokedReplayId,
         activityRevokedWriteId,
       ];
@@ -1433,6 +1550,9 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         occurrenceChangedClosureSetupId,
         occurrenceChangedClosureId,
         occurrenceRuleDeferredTotalId,
+        occurrenceRuleDeferredFilterId,
+        occurrenceRuleUnrelatedTitleId,
+        occurrenceRuleStableOperandId,
       ];
       const service = createRecordSaveService({
         identityAuthorityId,
@@ -1752,6 +1872,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           [totalChildTitleFieldId]: "Contributing child",
           [totalChildAmountFieldId]: "10.25",
           [totalChildIncludedFieldId]: true,
+          [totalChildFilterOperandFieldId]: "1",
           [totalChildParentFieldId]: {
             recordTypeId: totalParentRecordTypeId,
             recordId: parentOneId,
@@ -1791,10 +1912,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         [totalChildAmountFieldId]: "12.5",
       });
       await updateTotalChild(commandChildFilterId, 2, {
-        [totalChildIncludedFieldId]: false,
+        [totalChildFilterOperandFieldId]: "-1",
       });
       await updateTotalChild(commandChildReincludeId, 3, {
-        [totalChildIncludedFieldId]: true,
+        [totalChildFilterOperandFieldId]: "1",
       });
       const moveCommand = {
         contractVersion: "2.0.0" as const,
@@ -1863,6 +1984,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           [totalChildTitleFieldId]: "Concurrent child",
           [totalChildAmountFieldId]: "1",
           [totalChildIncludedFieldId]: true,
+          [totalChildFilterOperandFieldId]: "1",
           [totalChildParentFieldId]: {
             recordTypeId: totalParentRecordTypeId,
             recordId: parentTwoId,
@@ -2468,7 +2590,12 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         effects: await countTerminalEffects(),
         child: await admin.unsafe(
           `select concurrency_number::text as revision,
-             f_${totalChildAmountFieldId.replaceAll("-", "")}::text as amount
+             f_${totalChildTitleFieldId.replaceAll("-", "")} as title,
+             f_${totalChildAmountFieldId.replaceAll("-", "")}::text as amount,
+             f_${totalChildFilterOperandFieldId.replaceAll("-", "")}::text as filter_operand,
+             f_${totalChildAmountStepOneFieldId.replaceAll("-", "")}::text as amount_step_one,
+             f_${totalChildAggregateAmountFieldId.replaceAll("-", "")}::text as aggregate_amount,
+             f_${totalChildIncludedForTotalFieldId.replaceAll("-", "")} as included_for_total
            from record_data.rt_${totalChildStorageId.replaceAll("-", "")}
            where organisation_id = $1 and record_id = $2`,
           [organizationId, childId],
@@ -2499,6 +2626,83 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         value: { outcome: "refused", error: { code: "operation_refused" } },
       });
       expect(await readRuleDeferredTotalState()).toEqual(beforeRuleDeferredTotal);
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandRuleDeferredFilterId,
+          operation: "update",
+          recordTypeId: totalChildRecordTypeId,
+          recordId: childId,
+          expectedConcurrencyNumber: 10,
+          submittedValues: { [totalChildFilterOperandFieldId]: "-1" },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "operation_refused" } },
+      });
+      expect(await readRuleDeferredTotalState()).toEqual(beforeRuleDeferredTotal);
+
+      const beforeRuleTitle = await readRuleDeferredTotalState();
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandRuleUnrelatedTitleId,
+          operation: "update",
+          recordTypeId: totalChildRecordTypeId,
+          recordId: childId,
+          expectedConcurrencyNumber: 10,
+          submittedValues: { [totalChildTitleFieldId]: "Rule-safe title" },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "saved", concurrencyNumber: 11 },
+      });
+      const afterRuleTitle = await readRuleDeferredTotalState();
+      expect(afterRuleTitle.parents).toEqual(beforeRuleTitle.parents);
+      expect(afterRuleTitle.child).toEqual([
+        expect.objectContaining({ revision: "11", title: "Rule-safe title" }),
+      ]);
+
+      const stableOperandCommand = {
+        contractVersion: "2.0.0" as const,
+        commandId: commandRuleStableOperandId,
+        operation: "update" as const,
+        recordTypeId: totalChildRecordTypeId,
+        recordId: childId,
+        expectedConcurrencyNumber: 11,
+        submittedValues: { [totalChildFilterOperandFieldId]: "2" },
+      };
+      const beforeStableOperand = await readRuleDeferredTotalState();
+      await expect(service.save(session, selection, stableOperandCommand)).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "saved", concurrencyNumber: 12 },
+      });
+      const afterStableOperand = await readRuleDeferredTotalState();
+      expect(afterStableOperand.parents).toEqual(beforeStableOperand.parents);
+      expect(afterStableOperand.child).toEqual([
+        expect.objectContaining({
+          revision: "12",
+          filter_operand: "2",
+          aggregate_amount: "21",
+          included_for_total: true,
+        }),
+      ]);
+      const beforeStableReplay = await readRuleDeferredTotalState();
+      await expect(service.save(session, selection, stableOperandCommand)).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "saved", concurrencyNumber: 12 },
+      });
+      expect(await readRuleDeferredTotalState()).toEqual(beforeStableReplay);
+      await expect(
+        service.save(session, selection, {
+          ...stableOperandCommand,
+          submittedValues: { [totalChildFilterOperandFieldId]: "3" },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "conflict" } },
+      });
+      expect(await readRuleDeferredTotalState()).toEqual(beforeStableReplay);
       await admin.begin(async (transaction) => {
         await transaction`set local session_replication_role = replica`;
         await transaction`update vortex_definition.releases

@@ -75,15 +75,17 @@ successful retry), observes the row-lock wait, and asserts the old/new parent
 totals and exact terminal-effect deltas without any post-save repair. A fresh
 disposable PostgreSQL run again passed **85 files / 4,036 tests**.
 
-The final Rule-boundary correction uses only the already installed catalogue and
-root closure when protected preparation defers. A change to a declared aggregate
-source/filter field or its total-bearing relationship is refused before the base
-write, while unrelated fields and receipt replay retain the existing base path.
-The real save-service proof installs an unrelated Rule, attempts a contributing
-child value change, and confirms the source, both parents, receipt, Activity,
-Event and queue remain unchanged. The installed-definition integration passed
-twice consecutively after the focused correction; the ACL remained **13/13** and
-the focused suite remained **4 files / 30 tests**.
+The final Rule-boundary correction uses only the already installed catalogue,
+root closure, and the source values already finalized by the ordinary calculation
+engine when protected total preparation defers. Membership retains its old/new
+target check; declared aggregate and filter input fields compare finalized values
+with the authoritative stored snapshot, treating absent stored values as null.
+The real installed save-service proof shows an amount flowing through two
+calculations into a parent sum and a calculated filter input both refuse atomically.
+It also shows that a title edit and an operand edit whose calculated aggregate/
+filter inputs stay unchanged save normally, exact replay is effect-free, and a
+changed-input duplicate conflicts. No calculation-specific SQL walk or new state
+was added.
 
 ## Delivered scope under review
 

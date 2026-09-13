@@ -885,8 +885,8 @@ begin
                 dependency_contract -> 'sourceFieldIds'
               ) item(value)
             loop
-              if p_submitted_values ? dependency_field_id and
-                p_submitted_values -> dependency_field_id is distinct from
+              if p_final_values ? dependency_field_id and
+                p_final_values -> dependency_field_id is distinct from
                   coalesce(root_snapshot -> 'existingValues' -> dependency_field_id, 'null'::jsonb) then
                 contributes_to_total := true;
                 exit;

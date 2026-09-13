@@ -280,9 +280,15 @@ export const calculateLockedRelationshipTotalSave = (
         values[node.field.fieldId] = evaluated.setValues[node.field.fieldId]!;
       else delete values[node.field.fieldId];
     } else {
+      const evaluationRecordType = calculationRecordType(record.recordType, node.field.fieldId);
+      const evaluationFieldIds: ReadonlySet<string> = new Set(
+        evaluationRecordType.fields.map((field) => field.fieldId),
+      );
       const evaluated = evaluateRecordCalculationsV2({
-        recordType: calculationRecordType(record.recordType, node.field.fieldId),
-        authoritativeFieldValues: values,
+        recordType: evaluationRecordType,
+        authoritativeFieldValues: Object.fromEntries(
+          Object.entries(values).filter(([fieldId]) => evaluationFieldIds.has(fieldId)),
+        ),
         clock: input.clock,
       });
       if (!evaluated.success)
