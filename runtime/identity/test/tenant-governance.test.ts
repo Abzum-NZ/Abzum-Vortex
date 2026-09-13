@@ -126,4 +126,88 @@ describe("tenant governance service", () => {
     ).resolves.toEqual({ outcome: "refused", code: "invalid_request" });
     expect(runtimeTransaction).not.toHaveBeenCalled();
   });
+
+  it("passes only verified identity and the narrow rename command", async () => {
+    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+    const service = createTenantGovernanceService({
+      runtimeTransaction: runner(
+        [
+          {
+            outcome: "accepted",
+            operation: "rename_tenant_organization",
+            organization_id: id(11),
+            revision: "4",
+            correlation_id: id(7),
+            accepted_at: new Date("2026-09-14T00:01:00Z"),
+            access_version: 99,
+          },
+        ],
+        calls,
+      ),
+    });
+
+    await expect(
+      service.renameOrganization(session(), {
+        operation: "rename_tenant_organization",
+        duplicateKey: id(3),
+        tenantId: id(4),
+        organizationId: id(11),
+        expectedRevision: 3,
+        displayName: "New display name",
+      }),
+    ).resolves.toEqual({
+      outcome: "accepted",
+      operation: "rename_tenant_organization",
+      organizationId: id(11),
+      revision: 4,
+      correlationId: id(7),
+      acceptedAt: "2026-09-14T00:01:00.000Z",
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.text).toContain("vortex_identity.rename_tenant_organization");
+    expect(calls[0]?.values[0]).toBe(id(1));
+    expect(calls[0]?.values.slice(3)).toEqual([id(4), id(11), 3, "New display name"]);
+    expect(calls[0]?.values).not.toContain(99);
+  });
+
+  it("requires an explicit parent or root and maps stale reparent revisions", async () => {
+    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+    const stale = Object.assign(new Error("stale"), { code: "V3102" });
+    const runtimeTransaction = vi.fn(async () => {
+      throw stale;
+    });
+    const service = createTenantGovernanceService({ runtimeTransaction });
+
+    await expect(
+      service.reparentOrganization(session(), {
+        operation: "reparent_tenant_organization",
+        duplicateKey: id(3),
+        tenantId: id(4),
+        organizationId: id(11),
+        expectedRevision: 3,
+        parentOrganizationId: null,
+      }),
+    ).resolves.toEqual({
+      outcome: "refused",
+      operation: "reparent_tenant_organization",
+      code: "stale_revision",
+    });
+    expect(runtimeTransaction).toHaveBeenCalledOnce();
+    expect(calls).toHaveLength(0);
+
+    await expect(
+      service.reparentOrganization(session(), {
+        operation: "reparent_tenant_organization",
+        duplicateKey: id(3),
+        tenantId: id(4),
+        organizationId: id(11),
+        expectedRevision: 3,
+      } as never),
+    ).resolves.toEqual({
+      outcome: "refused",
+      operation: "reparent_tenant_organization",
+      code: "invalid_command",
+    });
+    expect(runtimeTransaction).toHaveBeenCalledOnce();
+  });
 });

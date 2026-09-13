@@ -1,6 +1,8 @@
 import {
   changeTenantAdministratorCommandSchema,
   grantTenantAdministratorCommandSchema,
+  renameTenantOrganizationCommandSchema,
+  reparentTenantOrganizationCommandSchema,
   tenantAssignmentQuerySchema,
   tenantHierarchyQuerySchema,
   tenantLauncherQuerySchema,
@@ -63,6 +65,62 @@ describe("tenant governance contracts", () => {
         capabilities: ["platform.tenant.hierarchy.read"],
         startsAt: "2026-09-14T00:00:00.000Z",
         expiresAt: "2026-09-13T00:00:00.000Z",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts only the two narrow organization hierarchy mutations", () => {
+    expect(
+      renameTenantOrganizationCommandSchema.safeParse({
+        operation: "rename_tenant_organization",
+        duplicateKey: id(5),
+        tenantId: id(2),
+        organizationId: id(4),
+        expectedRevision: 3,
+        displayName: "Renamed organisation",
+      }).success,
+    ).toBe(true);
+    expect(
+      reparentTenantOrganizationCommandSchema.safeParse({
+        operation: "reparent_tenant_organization",
+        duplicateKey: id(6),
+        tenantId: id(2),
+        organizationId: id(4),
+        expectedRevision: 3,
+        parentOrganizationId: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects implicit or expanded organization changes", () => {
+    expect(
+      renameTenantOrganizationCommandSchema.safeParse({
+        operation: "rename_tenant_organization",
+        duplicateKey: id(5),
+        tenantId: id(2),
+        organizationId: id(4),
+        expectedRevision: 3,
+        displayName: "",
+      }).success,
+    ).toBe(false);
+    expect(
+      reparentTenantOrganizationCommandSchema.safeParse({
+        operation: "reparent_tenant_organization",
+        duplicateKey: id(6),
+        tenantId: id(2),
+        organizationId: id(4),
+        expectedRevision: 3,
+      }).success,
+    ).toBe(false);
+    expect(
+      reparentTenantOrganizationCommandSchema.safeParse({
+        operation: "reparent_tenant_organization",
+        duplicateKey: id(6),
+        tenantId: id(2),
+        organizationId: id(4),
+        expectedRevision: 3,
+        parentOrganizationId: id(7),
+        state: "suspended",
       }).success,
     ).toBe(false);
   });

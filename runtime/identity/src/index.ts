@@ -57,6 +57,8 @@ export {
   listTenantHierarchy,
   listTenantLauncher,
   readTenantOrganization,
+  renameTenantOrganization,
+  reparentTenantOrganization,
   revokeTenantAdministrator,
   type TenantGovernanceServiceDependencies,
 } from "./tenant-governance";

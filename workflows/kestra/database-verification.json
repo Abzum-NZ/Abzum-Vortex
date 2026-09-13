@@ -160,6 +160,11 @@
       "migration": "supabase/migrations/20260913143000_tenant_governance.sql",
       "proof": "supabase/tests/tenant-governance-concurrency.test.sh",
       "label": "Tenant governance"
+    },
+    {
+      "migration": "supabase/migrations/20260914100000_tenant_organization_hierarchy_commands.sql",
+      "proof": "supabase/tests/tenant-organization-hierarchy-commands-concurrency.test.sh",
+      "label": "Tenant organization hierarchy commands"
     }
   ],
   "lintSchemas": [
