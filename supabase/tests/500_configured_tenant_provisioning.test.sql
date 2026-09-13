@@ -362,5 +362,69 @@ select is(
   'a refused provisioning transaction writes no accepted receipt'
 );
 
+insert into vortex_identity.organizations (
+  organization_id, tenant_id, short_name, display_name, state, created_at,
+  created_by, state_changed_at, revision
+) values (
+  '25000000-0000-4000-8000-000000000011',
+  '15000000-0000-4000-8000-000000000010', 'invalid_evidence',
+  'Invalid evidence organisation', 'active', pg_catalog.clock_timestamp(),
+  '95000000-0000-4000-8000-000000000010', pg_catalog.clock_timestamp(), 1
+);
+insert into vortex_identity.organization_accounts (
+  organization_account_id, organization_id, identity_id, display_name, state,
+  activated_at, changed_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+) values (
+  '55000000-0000-4000-8000-000000000011',
+  '25000000-0000-4000-8000-000000000011',
+  '45000000-0000-4000-8000-000000000011', 'Invalid evidence steward',
+  'active', pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+  pg_catalog.clock_timestamp(), '95000000-0000-4000-8000-000000000010',
+  'a5000000-0000-4000-8000-000000000013', 1
+);
+create function pg_temp.corrupt_configured_adoption_continuity()
+returns trigger language plpgsql as $function$
+begin
+  if new.organization_id = '25000000-0000-4000-8000-000000000011' then
+    new.meaning_fingerprint := 'sha256:' || pg_catalog.repeat('f', 64);
+  end if;
+  return new;
+end
+$function$;
+create trigger corrupt_configured_adoption_continuity
+before insert on vortex_access.permission_continuities
+for each row execute function pg_temp.corrupt_configured_adoption_continuity();
+
+select throws_ok(
+  $$select * from vortex_identity.adopt_organization(
+    '95000000-0000-4000-8000-000000000010',
+    'd5000000-0000-4000-8000-000000000012',
+    'sha256:abababababababababababababababababababababababababababababababab',
+    '15000000-0000-4000-8000-000000000010',
+    '25000000-0000-4000-8000-000000000011',
+    '45000000-0000-4000-8000-000000000011',
+    '55000000-0000-4000-8000-000000000011'
+  )$$,
+  '23514'::char(5),
+  'An adopted organization requires a permanent steward',
+  'invalid function-created evidence refuses before returning to runtime'
+);
+select is(
+  (select pg_catalog.count(*) from vortex_access.organization_access_versions
+    where organization_id = '25000000-0000-4000-8000-000000000011'),
+  0::bigint,
+  'invalid deferred evidence rolls back the full adoption composition'
+);
+select is(
+  (select pg_catalog.count(*) from vortex_identity.accepted_administration_receipts
+    where tenant_id = '15000000-0000-4000-8000-000000000010'
+      and duplicate_key = 'd5000000-0000-4000-8000-000000000012'),
+  0::bigint,
+  'invalid deferred evidence writes no accepted administration receipt'
+);
+drop trigger corrupt_configured_adoption_continuity
+  on vortex_access.permission_continuities;
+
 select * from finish();
 rollback;

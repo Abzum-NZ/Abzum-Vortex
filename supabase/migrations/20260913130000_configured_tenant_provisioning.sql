@@ -219,6 +219,17 @@ begin
     new_correlation_id
   ) as adopted;
 
+  -- #33 queues this evidence trigger. Validate it while the privileged boundary
+  -- is still active so a runtime-role commit cannot bypass or fail its reads.
+  set constraints
+    vortex_access.permission_continuities_evidence,
+    vortex_access.organization_role_revisions_evidence
+    immediate;
+  set constraints
+    vortex_access.permission_continuities_evidence,
+    vortex_access.organization_role_revisions_evidence
+    deferred;
+
   select pg_catalog.array_agg(subject_id order by subject_id),
     pg_catalog.array_agg(subject_revision order by subject_id)
   into result_subject_ids, result_subject_revisions
@@ -418,6 +429,9 @@ declare
   resulting_access_version bigint;
   result_subject_ids uuid[];
   result_subject_revisions bigint[];
+  authoritative_tenant_id uuid;
+  authoritative_organization_id uuid;
+  authoritative_account_id uuid;
 begin
   if not vortex_context.is_non_nil_uuid(p_operator_actor_id::text)
     or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
@@ -430,8 +444,27 @@ begin
     raise exception using errcode = '22023', message = 'Organization adoption input is invalid';
   end if;
 
-  perform 1 from vortex_identity.tenants as tenant
-  where tenant.tenant_id = p_tenant_id and tenant.state = 'active'
+  -- This is deliberately an unlocked eligibility probe. Existing request
+  -- resolution locks Access first and then authoritatively locks Identity, so
+  -- adoption must follow that same order.
+  perform 1
+  from vortex_identity.organizations as organization
+  join vortex_identity.tenants as tenant
+    on tenant.tenant_id = organization.tenant_id
+  where organization.organization_id = p_organization_id
+    and organization.tenant_id = p_tenant_id
+    and organization.state = 'active'
+    and tenant.state = 'active';
+  if not found then
+    raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
+  end if;
+
+  perform 1 from vortex_access.initialize_organization_access_version(
+    p_organization_id, p_operator_actor_id, new_correlation_id
+  );
+  perform 1
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = p_organization_id
   for update;
   if not found then
     raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
@@ -467,32 +500,26 @@ begin
     raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
   end if;
 
-  perform 1 from vortex_identity.organizations as organization
-  where organization.organization_id = p_organization_id
-    and organization.tenant_id = p_tenant_id and organization.state = 'active'
-  for update;
-  if not found then
-    raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
-  end if;
-  select account.revision into account_revision
-  from vortex_identity.organization_accounts as account
-  join vortex_identity.identity_projections as projection
-    on projection.identity_id = account.identity_id
-  where account.organization_account_id = p_organization_account_id
-    and account.organization_id = p_organization_id
-    and account.identity_id = p_steward_identity_id
-    and account.state = 'active' and projection.state = 'active'
-  for update of account, projection;
-  if not found then
-    raise exception using errcode = 'V3002', message = 'Nominated steward is unavailable';
-  end if;
-
-  perform 1 from vortex_access.initialize_organization_access_version(
-    p_organization_id, p_operator_actor_id, new_correlation_id
-  );
   perform 1 from vortex_access.initialize_platform_permission_catalogue(
     p_organization_id, p_operator_actor_id, new_correlation_id
   );
+
+  select scope.tenant_id, scope.organization_id,
+    scope.organization_account_id, account.revision
+  into authoritative_tenant_id, authoritative_organization_id,
+    authoritative_account_id, account_revision
+  from vortex_identity.resolve_active_organization_account(
+    p_steward_identity_id, p_organization_id
+  ) as scope
+  join vortex_identity.organization_accounts as account
+    on account.organization_account_id = scope.organization_account_id;
+  if not found or authoritative_account_id is distinct from p_organization_account_id then
+    raise exception using errcode = 'V3002', message = 'Nominated steward is unavailable';
+  end if;
+  if authoritative_tenant_id is distinct from p_tenant_id
+    or authoritative_organization_id is distinct from p_organization_id then
+    raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
+  end if;
 
   select stored.* into requirement
   from vortex_access.organization_stewardship_requirements as stored
@@ -521,6 +548,17 @@ begin
       new_correlation_id
     ) as adopted;
   end if;
+
+  -- #33 queues this evidence trigger. Validate it while the privileged boundary
+  -- is still active so a runtime-role commit cannot bypass or fail its reads.
+  set constraints
+    vortex_access.permission_continuities_evidence,
+    vortex_access.organization_role_revisions_evidence
+    immediate;
+  set constraints
+    vortex_access.permission_continuities_evidence,
+    vortex_access.organization_role_revisions_evidence
+    deferred;
 
   select pg_catalog.array_agg(subject_id order by subject_id),
     pg_catalog.array_agg(subject_revision order by subject_id)
