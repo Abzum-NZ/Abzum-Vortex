@@ -10,7 +10,6 @@ import {
 } from "./identifiers";
 import { isLoopbackHostname } from "./loopback-hostname";
 import {
-  activityIdSchema,
   actorIdSchema,
   applicationRootIdSchema,
   grantConsentDecisionIdSchema,
@@ -31,6 +30,7 @@ import {
   recordTypeIdSchema,
   roleIdSchema,
   sessionIdSchema,
+  tenantAdministratorAssignmentIdSchema,
   tenantIdSchema,
 } from "./identifiers";
 import { correlationIdSchema, jsonValueSchema } from "./common";
@@ -57,21 +57,128 @@ export const tenantSchema = z
     message: "The tenant state-change time cannot precede its creation time",
   });
 
+/** The complete structural authority catalogue; tenant assignments never name permissions or roles. */
+export const tenantStructuralCapabilityKeys = [
+  "platform.tenant.administrators.manage",
+  "platform.tenant.administrators.read",
+  "platform.tenant.hierarchy.read",
+  "platform.tenant.organizations.create",
+  "platform.tenant.organizations.lifecycle",
+  "platform.tenant.organizations.rename",
+  "platform.tenant.organizations.reparent",
+] as const;
+
+export const tenantStructuralCapabilitySchema = z.enum(tenantStructuralCapabilityKeys);
+
+/** One stable, deduplicated capability set: callers cannot encode the same authority twice or reorder it. */
+export const tenantStructuralCapabilitySetSchema = z
+  .array(tenantStructuralCapabilitySchema)
+  .min(1)
+  .superRefine((capabilities, context) => {
+    for (let index = 1; index < capabilities.length; index += 1)
+      if (capabilities[index - 1]! >= capabilities[index]!)
+        context.addIssue({
+          code: "custom",
+          path: [index],
+          message: "Tenant structural capabilities must be unique and sorted in canonical order",
+        });
+  });
+
 export const tenantAdministratorAssignmentSchema = z
   .object({
-    assignmentId: platformIdSchema,
+    assignmentId: tenantAdministratorAssignmentIdSchema,
     tenantId: tenantIdSchema,
     identityId: identityIdSchema,
-    state: z.enum(["active", "revoked", "expired"]),
-    permissionKeys: z.array(namespacedKeySchema).min(1),
-    createdByIdentityId: identityIdSchema,
+    capabilities: tenantStructuralCapabilitySetSchema,
     startsAt: timestampSchema,
     expiresAt: timestampSchema.optional(),
+    revision: revisionSchema,
+    grantedAt: timestampSchema,
+    grantedByActorId: actorIdSchema,
+    grantCorrelationId: correlationIdSchema,
+    changedAt: timestampSchema,
+    changedByActorId: actorIdSchema,
+    changeCorrelationId: correlationIdSchema,
     revokedAt: timestampSchema.optional(),
-    revokedByIdentityId: identityIdSchema.optional(),
-    activityId: activityIdSchema,
+    revokedByActorId: actorIdSchema.optional(),
+    revocationCorrelationId: correlationIdSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Assignment expiry must be later than its start",
+      });
+
+    if (Date.parse(value.changedAt) < Date.parse(value.grantedAt))
+      context.addIssue({
+        code: "custom",
+        path: ["changedAt"],
+        message: "Assignment change time cannot precede its grant",
+      });
+
+    const hasAnyRevocation =
+      value.revokedAt !== undefined ||
+      value.revokedByActorId !== undefined ||
+      value.revocationCorrelationId !== undefined;
+    const hasCompleteRevocation =
+      value.revokedAt !== undefined &&
+      value.revokedByActorId !== undefined &&
+      value.revocationCorrelationId !== undefined;
+    if (hasAnyRevocation && !hasCompleteRevocation)
+      context.addIssue({
+        code: "custom",
+        path: ["revokedAt"],
+        message: "Revocation evidence must be all present or all absent",
+      });
+
+    if (hasCompleteRevocation) {
+      const revokedAt = value.revokedAt!;
+      const revokedByActorId = value.revokedByActorId!;
+      const revocationCorrelationId = value.revocationCorrelationId!;
+      if (
+        Date.parse(revokedAt) < Date.parse(value.grantedAt) ||
+        Date.parse(value.changedAt) !== Date.parse(revokedAt) ||
+        value.changedByActorId !== revokedByActorId ||
+        value.changeCorrelationId !== revocationCorrelationId
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["revokedAt"],
+          message: "A revoked assignment's current change must be its complete revocation evidence",
+        });
+    }
+  });
+
+export const tenantAdministratorAssignmentOutcomeSchema = z.enum([
+  "scheduled",
+  "active",
+  "expired",
+  "revoked",
+]);
+
+/** Derive timing from trusted facts at one explicit instant; there is no editable assignment status. */
+export const deriveTenantAdministratorAssignmentOutcome = (
+  assignment: unknown,
+  evaluatedAt: unknown,
+): z.infer<typeof tenantAdministratorAssignmentOutcomeSchema> => {
+  const parsedAssignment = tenantAdministratorAssignmentSchema.parse(assignment);
+  const evaluatedTime = Date.parse(timestampSchema.parse(evaluatedAt));
+  if (
+    parsedAssignment.revokedAt !== undefined &&
+    Date.parse(parsedAssignment.revokedAt) <= evaluatedTime
+  )
+    return "revoked";
+  if (evaluatedTime < Date.parse(parsedAssignment.startsAt)) return "scheduled";
+  if (
+    parsedAssignment.expiresAt !== undefined &&
+    evaluatedTime >= Date.parse(parsedAssignment.expiresAt)
+  )
+    return "expired";
+  return "active";
+};
 
 export const organizationSchema = z
   .object({
@@ -1706,6 +1813,9 @@ export const grantConsentDecisionSchema = z
 
 export type Tenant = z.infer<typeof tenantSchema>;
 export type TenantAdministratorAssignment = z.infer<typeof tenantAdministratorAssignmentSchema>;
+export type TenantAdministratorAssignmentOutcome = z.infer<
+  typeof tenantAdministratorAssignmentOutcomeSchema
+>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type IdentityAuthority = z.infer<typeof identityAuthoritySchema>;
 export type IdentityProjection = z.infer<typeof identityProjectionSchema>;

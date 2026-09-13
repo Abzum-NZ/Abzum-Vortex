@@ -66,6 +66,8 @@ import {
   sourceQualifiedConditionSchema,
   supabaseIdentityClaimsSchema,
   tenantSchema,
+  tenantAdministratorAssignmentSchema,
+  deriveTenantAdministratorAssignmentOutcome,
   verifiedIdentitySchema,
   readOrganizationAccessVersionCommandSchema,
   readAccessVersionChangeReasonV1,
@@ -470,6 +472,85 @@ describe("tenant and organisation persistence contracts", () => {
         createdAt: "2026-09-03T12:00:00.000+12:00",
         stateChangedAt: "2026-09-02T23:59:59.000Z",
       }).success,
+    ).toBe(false);
+  });
+});
+
+describe("tenant structural-administrator assignment contracts", () => {
+  const assignment = {
+    assignmentId: id(720),
+    tenantId: id(721),
+    identityId: id(722),
+    capabilities: ["platform.tenant.administrators.manage", "platform.tenant.organizations.create"],
+    startsAt: "2026-09-13T00:00:00.000Z",
+    expiresAt: "2026-09-20T00:00:00.000Z",
+    revision: 1,
+    grantedAt: "2026-09-12T00:00:00.000Z",
+    grantedByActorId: id(723),
+    grantCorrelationId: id(724),
+    changedAt: "2026-09-12T00:00:00.000Z",
+    changedByActorId: id(723),
+    changeCorrelationId: id(724),
+  } as const;
+
+  test("accepts only closed canonical structural capability facts", () => {
+    expect(tenantAdministratorAssignmentSchema.safeParse(assignment).success).toBe(true);
+    expect(
+      tenantAdministratorAssignmentSchema.safeParse({
+        ...assignment,
+        capabilities: [...assignment.capabilities].reverse(),
+      }).success,
+    ).toBe(false);
+    expect(
+      tenantAdministratorAssignmentSchema.safeParse({
+        ...assignment,
+        capabilities: ["platform.tenant.records.read"],
+      }).success,
+    ).toBe(false);
+    expect(
+      tenantAdministratorAssignmentSchema.safeParse({
+        ...assignment,
+        activityId: id(725),
+      }).success,
+    ).toBe(false);
+  });
+
+  test("derives temporal outcome without an editable state", () => {
+    expect(deriveTenantAdministratorAssignmentOutcome(assignment, "2026-09-12T12:00:00.000Z")).toBe(
+      "scheduled",
+    );
+    expect(deriveTenantAdministratorAssignmentOutcome(assignment, "2026-09-13T12:00:00.000Z")).toBe(
+      "active",
+    );
+    expect(deriveTenantAdministratorAssignmentOutcome(assignment, "2026-09-20T00:00:00.000Z")).toBe(
+      "expired",
+    );
+  });
+
+  test("requires exact all-or-none revocation and current-change evidence", () => {
+    expect(
+      tenantAdministratorAssignmentSchema.safeParse({
+        ...assignment,
+        revokedAt: "2026-09-14T00:00:00.000Z",
+      }).success,
+    ).toBe(false);
+    const revoked = {
+      ...assignment,
+      revision: 2,
+      revokedAt: "2026-09-14T00:00:00.000Z",
+      revokedByActorId: id(726),
+      revocationCorrelationId: id(727),
+      changedAt: "2026-09-14T00:00:00.000Z",
+      changedByActorId: id(726),
+      changeCorrelationId: id(727),
+    } as const;
+    expect(tenantAdministratorAssignmentSchema.safeParse(revoked).success).toBe(true);
+    expect(deriveTenantAdministratorAssignmentOutcome(revoked, "2026-09-15T00:00:00.000Z")).toBe(
+      "revoked",
+    );
+    expect(
+      tenantAdministratorAssignmentSchema.safeParse({ ...revoked, changedByActorId: id(728) })
+        .success,
     ).toBe(false);
   });
 });
