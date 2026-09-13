@@ -39,13 +39,14 @@ Delivered on `testing`:
 - **Slice 3A** — human tenant authority, bounded tenant reads, and
   tenant-administrator grant, change and revoke
   ([PR #445](https://github.com/Abzum-NZ/Abzum-Vortex/pull/445)).
+- **Slice 3B** — protected display-name rename and same-tenant/root reparent
+  ([PR #446](https://github.com/Abzum-NZ/Abzum-Vortex/pull/446)).
 
-The active implementation assignment is **Slice 3B only: rename and reparent
-an existing organisation**. It is intentionally separate from organisation
-creation and lifecycle transitions so its hierarchy behaviour, authority and
-concurrency proof can be reviewed on their own. Delivery to Testing remains a
-closure gate for the exact revision; it does not prevent this independently
-unblocked slice from being built and reviewed.
+Slices 1, 2, 3A and 3B are merged to Testing; their exact hosted verification
+remains a delivery gate. The next implementation assignment is **Slice 3C only:
+suspend, reactivate and administratively archive an existing organisation**. It
+is intentionally separate from organisation creation so lifecycle, stewardship
+readiness and hierarchy races can be reviewed on their own.
 
 ## Outcome
 
@@ -227,18 +228,17 @@ a foreign or inactive target exists.
 - **Delivered 3A:** tenant launcher and bounded deterministic hierarchy and
   administrator reads; grant, change and revoke tenant assignments with exact
   capability, revision, duplicate and final-manager protection.
-- **Current 3B:** rename an existing organisation's display name, or reparent an
+- **Delivered 3B:** rename an existing organisation's display name, or reparent an
   existing organisation to a same-tenant parent or to the tenant root. Both use
   the exact `organizations.rename` or `organizations.reparent` capability,
   expected organisation revision, existing tenant serialization, existing
   receipt semantics and a post-wait authority recheck. Reparenting reuses #23's
   same-tenant, self-parent and cycle constraints. It does not alter descendants:
   their existing links make them move with the subtree.
+- **Current 3C:** suspend, reactivate and administratively archive an existing
+  organisation under the lifecycle capability and established structural rules.
 - **Later, separately picked up:** tenant-authorised organisation creation with
-  explicit steward composition; suspend, reactivate and administrative archive;
-  tenant lifecycle. Lifecycle keeps the existing non-cascading rule: parent
-  suspension neither rewrites nor blocks an independently active child; archive
-  is terminal when that later slice delivers it.
+  explicit steward composition; tenant lifecycle.
 
 ### 4. System-only cluster lifecycle
 
@@ -285,6 +285,61 @@ Do not add a generic command dispatcher, a hierarchy representation, a policy
 engine, a counter, a history table or another receipt mechanism. The existing
 parent links, governance locks, capability catalogue and accepted receipts are
 the complete implementation basis.
+
+## Slice 3C — protected organisation lifecycle
+
+This slice has exactly three commands: suspend an `active` organisation,
+reactivate a `suspended` organisation, and administratively archive an `active`
+or `suspended` organisation. Every command uses the exact current
+`platform.tenant.organizations.lifecycle` capability, verified session identity,
+active selected tenant, target expected revision and existing accepted receipt.
+No target-organisation account is required or granted.
+
+A successful new transition changes only organisation state, state-change time
+and the existing revision, increments that revision once and commits one accepted
+receipt atomically. Exact replay first rechecks current tenant authority and then
+returns its original accepted result before current target-state or revision
+checks. A changed-input duplicate conflicts. Same-state commands,
+archived/removal-pending source states, stale or exhausted revisions and failed
+transactions leave no state change or accepted receipt.
+
+Suspension affects only the named organisation. An independently active child
+remains active and enterable under its own valid tenant/account context. Archive
+is terminal in this task and refuses while the named organisation has an active
+or suspended direct child. It does not automatically archive, move or change
+descendants. None of these operations changes identity, names, parent links,
+accounts, roles, settings, installations, records, retention state, provider
+identity or Access version.
+
+Reactivation requires an existing `organization_stewardship_requirements` fact
+and the delivered current `organization_has_permanent_steward` predicate under
+the target organisation's governance lock at fresh database time. Calling the
+assert helper alone is insufficient because its defined no-requirement outcome
+does not refuse. A qualifying replacement steward is valid; the operation must
+not recreate stewardship adoption or historical grants.
+
+Reactivation remains valid under a suspended parent. An archived or
+removal-pending parent refuses under #23's structural rules. Reuse a stored
+management-application requirement when it exists; do not manufacture one for a
+current requirement that has no binding.
+
+Acquire the target organisation's existing governance row **for update** before
+the tenant and Identity locks, then recheck authority (including an active
+cluster-local identity projection) and readiness after waits. This preserves
+the compatible ordering with request resolution; do not append an Access lock to
+the tenant-first Slice 3B sequence. Tenant serialization covers the child-state
+check and lifecycle write. No generic lifecycle framework, counter, history,
+retry system or new stewardship evaluator is permitted.
+
+Prove valid transitions without local membership; exact capability separation;
+safe foreign/missing and temporal-authority refusals; expected revision, replay,
+changed-payload conflict and rollback; non-cascading suspension; archive refusal
+for active and suspended children; reactivation refusal for missing/nonqualifying
+stewardship and success for a qualifying replacement steward. Separate-session
+proof covers archive versus child attachment/reactivation, competing transitions,
+authority expiry while queued, reactivation versus a supported stewardship/account
+mutation, and lifecycle versus request resolution. The result must show no invalid
+state, leaked receipt or lock-order deadlock.
 
 ### 5. Organisation-local reads
 
