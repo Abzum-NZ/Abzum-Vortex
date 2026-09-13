@@ -1,0 +1,155 @@
+create function pg_temp.seed_management_application_fixture(
+  p_organization_id uuid,
+  p_organization_account_id uuid,
+  p_application_root_id uuid,
+  p_source_role_id uuid,
+  p_role_id uuid,
+  p_permission_id uuid,
+  p_assignment_id uuid,
+  p_actor_id uuid,
+  p_definition_key text,
+  p_role_key text,
+  p_fingerprint_character text
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.clock_timestamp();
+  correlation_id uuid := pg_catalog.gen_random_uuid();
+begin
+  insert into vortex_access.permission_registration_revisions (
+    organization_id, registration_kind, registration_owner_id, revision,
+    state, operation, source_definition_key, source_version, source_revision,
+    validation_contract_version, source_content_fingerprint,
+    source_resolution_fingerprint, permission_catalogue_fingerprint,
+    candidate_fingerprint, changed_at, changed_by, change_correlation_id
+  ) values (
+    p_organization_id, 'application', p_application_root_id, 1,
+    'active', 'register', p_definition_key, '1.0.0', 1, '1.0.0',
+    'sha256:' || pg_catalog.repeat(p_fingerprint_character, 64),
+    'sha256:' || pg_catalog.repeat('1', 64),
+    'sha256:' || pg_catalog.repeat('2', 64),
+    'sha256:' || pg_catalog.repeat('3', 64), operation_at,
+    p_actor_id, correlation_id
+  );
+
+  insert into vortex_access.permission_registrations (
+    organization_id, registration_kind, registration_owner_id, state,
+    revision, source_definition_key, source_version, source_revision,
+    validation_contract_version, source_content_fingerprint,
+    source_resolution_fingerprint, permission_catalogue_fingerprint,
+    candidate_fingerprint, changed_at, changed_by, change_correlation_id
+  ) values (
+    p_organization_id, 'application', p_application_root_id, 'active', 1,
+    p_definition_key, '1.0.0', 1, '1.0.0',
+    'sha256:' || pg_catalog.repeat(p_fingerprint_character, 64),
+    'sha256:' || pg_catalog.repeat('1', 64),
+    'sha256:' || pg_catalog.repeat('2', 64),
+    'sha256:' || pg_catalog.repeat('3', 64), operation_at,
+    p_actor_id, correlation_id
+  );
+
+  insert into vortex_access.permission_catalogue_entries (
+    organization_id, registration_kind, registration_owner_id,
+    registration_revision, application_root_id, owner_kind, owner_id,
+    permission_id, permission_key, label, description, record_type_id,
+    action_kind, named_action, administrative, source_kind,
+    source_definition_key, source_root_id, source_version, source_revision,
+    source_validation_contract_version, source_content_fingerprint,
+    source_resolution_fingerprint, source_catalogue_fingerprint,
+    meaning_fingerprint
+  ) values (
+    p_organization_id, 'application', p_application_root_id, 1,
+    p_application_root_id, 'application', p_application_root_id,
+    p_permission_id, p_definition_key || '.records.read', 'View records',
+    'View neutral management records.', null, 'read', null, false,
+    'application', p_definition_key, p_application_root_id, '1.0.0', 1,
+    '1.0.0', 'sha256:' || pg_catalog.repeat(p_fingerprint_character, 64),
+    'sha256:' || pg_catalog.repeat('1', 64), null,
+    'sha256:' || pg_catalog.repeat(p_fingerprint_character, 64)
+  );
+
+  insert into vortex_access.permission_continuities (
+    organization_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id, state,
+    continuity_revision, meaning_fingerprint,
+    last_processed_registration_revision, changed_at
+  ) values (
+    p_organization_id, p_application_root_id, 'application',
+    p_application_root_id, p_permission_id, 'application',
+    p_application_root_id, 'available', 1,
+    'sha256:' || pg_catalog.repeat(p_fingerprint_character, 64), 1,
+    operation_at
+  );
+
+  insert into vortex_access.application_role_template_continuities (
+    organization_id, application_root_id, source_role_id, state,
+    continuity_revision, source_template_fingerprint,
+    last_processed_registration_revision, changed_at
+  ) values (
+    p_organization_id, p_application_root_id, p_source_role_id, 'available',
+    1, 'sha256:' || pg_catalog.repeat('4', 64), 1, operation_at
+  );
+
+  insert into vortex_access.organization_roles (
+    organization_id, role_id, role_kind, role_key, application_root_id,
+    source_role_id, live_revision, created_by, created_at
+  ) values (
+    p_organization_id, p_role_id, 'application', p_role_key,
+    p_application_root_id, p_source_role_id, 1, p_actor_id, operation_at
+  );
+
+  insert into vortex_access.organization_role_permission_entries (
+    organization_id, role_id, role_revision, entry_ordinal, role_kind,
+    role_application_root_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id,
+    accepted_registration_revision, catalogue_fingerprint,
+    continuity_revision, meaning_fingerprint
+  ) values (
+    p_organization_id, p_role_id, 1, 1, 'application',
+    p_application_root_id, p_application_root_id, 'application',
+    p_application_root_id, p_permission_id, 'application',
+    p_application_root_id, 1, 'sha256:' || pg_catalog.repeat('2', 64), 1,
+    'sha256:' || pg_catalog.repeat(p_fingerprint_character, 64)
+  );
+
+  insert into vortex_access.organization_role_revisions (
+    organization_id, role_id, revision, role_kind, application_root_id,
+    lifecycle, privilege_classification, assignment_policy,
+    policy_continuity_revision, authority_continuity_revision,
+    role_key, label, description, source_definition_key,
+    source_release_revision, source_release_version,
+    source_validation_contract_version, source_content_fingerprint,
+    source_resolution_fingerprint, source_template_fingerprint,
+    source_catalogue_fingerprint, accepted_registration_revision,
+    template_continuity_revision, accepted_grant_fingerprint,
+    changed_by, changed_at, change_correlation_id
+  ) values (
+    p_organization_id, p_role_id, 1, 'application', p_application_root_id,
+    'active', 'standard', 'standing', 1, 1, p_role_key,
+    'Management application role', 'A neutral accepted standing role.',
+    p_definition_key, 1, '1.0.0', '1.0.0',
+    'sha256:' || pg_catalog.repeat(p_fingerprint_character, 64),
+    'sha256:' || pg_catalog.repeat('1', 64),
+    'sha256:' || pg_catalog.repeat('4', 64),
+    'sha256:' || pg_catalog.repeat('2', 64), 1, 1,
+    'sha256:' || pg_catalog.repeat('5', 64), p_actor_id, operation_at,
+    correlation_id
+  );
+
+  insert into vortex_access.organization_role_assignments (
+    organization_id, role_assignment_id, role_id, assignee_kind,
+    organization_account_id, group_id, assignment_kind, revision,
+    starts_at, expires_at, state, granted_by, granted_at,
+    grant_correlation_id, changed_by, changed_at, change_correlation_id
+  ) values (
+    p_organization_id, p_assignment_id, p_role_id, 'organization_account',
+    p_organization_account_id, null, 'standing', 1,
+    operation_at - interval '1 minute', null, 'live', p_actor_id,
+    operation_at, correlation_id, p_actor_id, operation_at, correlation_id
+  );
+end
+$function$;

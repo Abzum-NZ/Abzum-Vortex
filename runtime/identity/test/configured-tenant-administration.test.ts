@@ -268,4 +268,57 @@ describe("configured tenant administration service", () => {
       }),
     ).resolves.toMatchObject({ outcome: "refused", code: "stale_revision" });
   });
+
+  it("uses configured facts for tenant lifecycle and never accepts caller authority", async () => {
+    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+    const service = createConfiguredTenantAdministrationService({
+      environment,
+      runtimeTransaction: runner(
+        [
+          {
+            outcome: "accepted",
+            operation: "suspend_tenant",
+            tenant_id: id(60),
+            revision: "4",
+            correlation_id: id(61),
+            accepted_at: new Date("2026-09-14T12:00:00.000Z"),
+          },
+        ],
+        calls,
+      ),
+    });
+
+    await expect(
+      service.suspendTenant({
+        operation: "suspend_tenant",
+        duplicateKey: id(62),
+        tenantId: id(60),
+        expectedRevision: 3,
+      }),
+    ).resolves.toMatchObject({ outcome: "accepted", tenantId: id(60), revision: 4 });
+    expect(calls[0]?.text).toContain("vortex_identity.suspend_tenant");
+    expect(calls[0]?.values.slice(0, 3)).toEqual([
+      environment.VORTEX_CLUSTER_ID,
+      environment.VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID,
+      id(62),
+    ]);
+
+    const refused = createConfiguredTenantAdministrationService({
+      environment,
+      runtimeTransaction: vi.fn(),
+    });
+    await expect(
+      refused.reactivateTenant({
+        operation: "reactivate_tenant",
+        duplicateKey: id(63),
+        tenantId: id(60),
+        expectedRevision: 4,
+        systemActorId: id(64),
+      } as never),
+    ).resolves.toEqual({
+      outcome: "refused",
+      operation: "reactivate_tenant",
+      code: "invalid_command",
+    });
+  });
 });

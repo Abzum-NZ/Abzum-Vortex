@@ -99,6 +99,15 @@ than applying a partial change. Reactivation restores only the projection; it ne
 revives a previously revoked or expired account, role, assignment or delegation.
 The protected implementation belongs to [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30).
 
+A configured system operator may also suspend or reactivate one tenant. Suspension
+prevents later entry to every organisation in that tenant without changing any
+child organisation, account, projection, role, assignment, setting, or Access
+fact. Reactivation restores only tenant eligibility; each organisation and account
+continues to meet its own current entry and access rules. Both transitions preserve
+existing steward and permanent-manager requirements, use fresh database time for
+that decision, and never manufacture adoption or revive grants. [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
+owns this protected system operation.
+
 ## Identity across clusters
 
 Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It is implemented with [Supabase Auth](https://supabase.com/docs/guides/auth) and issues short-lived identity tokens using the managed P-256 `ES256` [asymmetric signing key and published key set](https://supabase.com/docs/guides/auth/signing-keys). A cluster verifies a token through the authority's standard JWKS endpoint, ensures or loads its minimal cluster-local identity projection, and then loads only active organisation accounts stored in that cluster. Testing proves this boundary with two independently configured verifier instances; it does not pretend that a second physical Testing cluster exists.
