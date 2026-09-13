@@ -52,6 +52,7 @@ export {
 export {
   archiveTenantOrganization,
   changeTenantAdministrator,
+  createTenantOrganization,
   createTenantGovernanceService,
   grantTenantAdministrator,
   listTenantAdministratorAssignments,

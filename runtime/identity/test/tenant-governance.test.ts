@@ -30,6 +30,80 @@ const runner =
     });
 
 describe("tenant governance service", () => {
+  it("passes only verified identity and explicit creation facts", async () => {
+    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+    const service = createTenantGovernanceService({
+      runtimeTransaction: runner(
+        [
+          {
+            outcome: "accepted",
+            operation: "create_tenant_organization",
+            organization_id: id(11),
+            organization_revision: 1n,
+            organization_account_id: id(12),
+            organization_account_revision: "1",
+            access_version: 3n,
+            correlation_id: id(13),
+            accepted_at: new Date("2026-09-14T04:01:00Z"),
+          },
+        ],
+        calls,
+      ),
+    });
+
+    await expect(
+      service.createOrganization(session(), {
+        operation: "create_tenant_organization",
+        duplicateKey: id(3),
+        tenantId: id(4),
+        parentOrganizationId: null,
+        shortName: "new_organization",
+        displayName: "New organisation",
+        organizationSteward: {
+          identityId: id(5),
+          accountDisplayName: "Initial steward",
+          accountLanguage: "en-NZ",
+          accountTimeZone: "Pacific/Auckland",
+        },
+        runtimeSettings: {
+          language: "en-NZ",
+          timeZone: "Pacific/Auckland",
+          currency: "NZD",
+          dateFormat: "medium",
+          numberFormat: "auto",
+        },
+      }),
+    ).resolves.toEqual({
+      outcome: "accepted",
+      operation: "create_tenant_organization",
+      organizationId: id(11),
+      organizationRevision: 1,
+      organizationAccountId: id(12),
+      organizationAccountRevision: 1,
+      accessVersion: 3,
+      correlationId: id(13),
+      acceptedAt: "2026-09-14T04:01:00.000Z",
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.text).toContain("vortex_identity.create_tenant_organization");
+    expect(calls[0]?.values[0]).toBe(id(1));
+    expect(calls[0]?.values.slice(3)).toEqual([
+      id(4),
+      null,
+      "new_organization",
+      "New organisation",
+      id(5),
+      "Initial steward",
+      "en-NZ",
+      "Pacific/Auckland",
+      "en-NZ",
+      "Pacific/Auckland",
+      "NZD",
+      "medium",
+      "auto",
+    ]);
+  });
+
   it("returns only bounded safe hierarchy fields through one operation", async () => {
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
     const runtimeTransaction = vi.fn(

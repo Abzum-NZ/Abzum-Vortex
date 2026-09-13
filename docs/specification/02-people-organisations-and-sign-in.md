@@ -47,6 +47,21 @@ The [IAM application](appendices/iam-application.md) manages role grants, user-l
 
 Protected tenant-governance operations use a server-resolved verified identity and current tenant-administrator assignment; they do not require an active account inside the target organisation. Otherwise an administrator could not create the first organisation or restore a suspended organisation. The Identity service validates the selected tenant and target, the current assignment, expected revision and each lifecycle transition inside its protected transaction. This narrow tenant context cannot read organisation records or be used as an organisation request context. System-only first provisioning remains separate and idempotent. Organisation-local application data and account operations still require their documented organisation authorization path. Administrative runtime-settings reads require the exact organisation `.read` permission and the [#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430) reader. [Issue #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns this distinction; it does not weaken [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27)'s active-account entry checks.
 
+A tenant administrator with the exact organisation-creation capability may create one
+organisation only with an explicit permanent short name, display name, parent choice
+and runtime-settings values and an explicitly nominated existing active identity as its organisation
+steward. The operation creates the steward's local account and invokes the existing
+stewardship adoption in one transaction. It never gives the creator a local account,
+role, or access unless the creator is the stated nominee; it neither discovers,
+creates nor revives identities. A root explicitly has no parent. A child has an
+existing same-tenant active or suspended parent; foreign, archived or pending-removal
+parents refuse. Creation changes no parent facts, and an exact retry returns its
+recorded result rather than recreating later-changed access. [Protected
+administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) composes
+the existing [runtime-settings initializer #430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430)
+and [stewardship boundary #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33);
+it does not introduce a second provisioning or access evaluator.
+
 Organisation lifecycle commands are limited to `active → suspended`, `suspended → active` and `active/suspended → archived`. They require the exact current tenant lifecycle capability, an expected organisation revision and the protected duplicate-receipt rules. A reactivation also requires both an existing organisation stewardship requirement and a current qualifying permanent steward at the fresh post-lock evaluation time; it does not recreate adoption, revive historical grants or assume the original steward remains. Suspension changes only the named organisation. Archive refuses while it has an active or suspended direct child and changes no descendant, account, role, record, setting or Access-version fact.
 
 ```mermaid

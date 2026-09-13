@@ -6,6 +6,8 @@ import {
   archiveTenantOrganizationResultSchema,
   changeTenantAdministratorCommandSchema,
   changeTenantAdministratorResultSchema,
+  createTenantOrganizationCommandSchema,
+  createTenantOrganizationResultSchema,
   grantTenantAdministratorCommandSchema,
   grantTenantAdministratorResultSchema,
   identitySessionSchema,
@@ -31,6 +33,8 @@ import {
   type ArchiveTenantOrganizationResult,
   type ChangeTenantAdministratorCommand,
   type ChangeTenantAdministratorResult,
+  type CreateTenantOrganizationCommand,
+  type CreateTenantOrganizationResult,
   type GrantTenantAdministratorCommand,
   type GrantTenantAdministratorResult,
   type IdentitySession,
@@ -77,6 +81,17 @@ type OrganizationMutationRow = DatabaseRow & {
   operation: unknown;
   organization_id: unknown;
   revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+};
+type OrganizationCreationRow = DatabaseRow & {
+  outcome: unknown;
+  operation: unknown;
+  organization_id: unknown;
+  organization_revision: unknown;
+  organization_account_id: unknown;
+  organization_account_revision: unknown;
+  access_version: unknown;
   correlation_id: unknown;
   accepted_at: unknown;
 };
@@ -158,6 +173,18 @@ const organizationMutationResult = (row: OrganizationMutationRow | undefined) =>
     operation: row.operation,
     organizationId: row.organization_id,
     revision: revision(row.revision),
+    correlationId: row.correlation_id,
+    acceptedAt: timestamp(row.accepted_at),
+  };
+const organizationCreationResult = (row: OrganizationCreationRow | undefined) =>
+  row && {
+    outcome: row.outcome,
+    operation: row.operation,
+    organizationId: row.organization_id,
+    organizationRevision: revision(row.organization_revision),
+    organizationAccountId: row.organization_account_id,
+    organizationAccountRevision: revision(row.organization_account_revision),
+    accessVersion: revision(row.access_version),
     correlationId: row.correlation_id,
     acceptedAt: timestamp(row.accepted_at),
   };
@@ -282,6 +309,37 @@ export const createTenantGovernanceService = (
           outcome: "refused",
           operation: "grant_tenant_administrator",
           code: mutationCode(error),
+        };
+      }
+    },
+    async createOrganization(
+      session: IdentitySession,
+      candidate: CreateTenantOrganizationCommand,
+    ): Promise<CreateTenantOrganizationResult> {
+      const verified = sessionIdentity(session);
+      const command = createTenantOrganizationCommandSchema.safeParse(candidate);
+      if (!verified.success || !command.success)
+        return {
+          outcome: "refused",
+          operation: "create_tenant_organization",
+          code: "invalid_command",
+        };
+      try {
+        const value = command.data;
+        const steward = value.organizationSteward;
+        const settings = value.runtimeSettings;
+        const rows = await run(
+          (tx) =>
+            tx.query<OrganizationCreationRow>`select * from vortex_identity.create_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.parentOrganizationId}::uuid, ${value.shortName}::text, ${value.displayName}::text, ${steward.identityId}::uuid, ${steward.accountDisplayName}::text, ${steward.accountLanguage}::text, ${steward.accountTimeZone}::text, ${settings.language}::text, ${settings.timeZone}::text, ${settings.currency}::text, ${settings.dateFormat}::text, ${settings.numberFormat}::text)`,
+        );
+        return createTenantOrganizationResultSchema.parse(
+          organizationCreationResult(rows.length === 1 ? rows[0] : undefined),
+        );
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "create_tenant_organization",
+          code: organizationMutationCode(error),
         };
       }
     },
@@ -496,6 +554,7 @@ export const listTenantLauncher = defaultService.listTenants;
 export const listTenantHierarchy = defaultService.listHierarchy;
 export const readTenantOrganization = defaultService.readOrganization;
 export const listTenantAdministratorAssignments = defaultService.listAssignments;
+export const createTenantOrganization = defaultService.createOrganization;
 export const grantTenantAdministrator = defaultService.grant;
 export const changeTenantAdministrator = defaultService.change;
 export const revokeTenantAdministrator = defaultService.revoke;

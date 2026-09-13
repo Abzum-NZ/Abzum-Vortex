@@ -170,6 +170,11 @@
       "migration": "supabase/migrations/20260914120000_tenant_organization_lifecycle_commands.sql",
       "proof": "supabase/tests/tenant-organization-lifecycle-commands-concurrency.test.sh",
       "label": "Tenant organization lifecycle commands"
+    },
+    {
+      "migration": "supabase/migrations/20260914140000_tenant_organization_creation.sql",
+      "proof": "supabase/tests/tenant-organization-creation-concurrency.test.sh",
+      "label": "Tenant organization creation"
     }
   ],
   "lintSchemas": [
