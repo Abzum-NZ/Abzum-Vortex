@@ -189,6 +189,22 @@ begin
     '54850000-0000-4000-8000-000000000001', operation_at
   );
 
+  insert into vortex_access.permission_continuities (
+    organization_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id, state,
+    continuity_revision, meaning_fingerprint,
+    last_processed_registration_revision, changed_at
+  )
+  select entry.organization_id, null, entry.owner_kind, entry.owner_id,
+    entry.permission_id, 'platform', entry.registration_owner_id,
+    'available', 1, entry.meaning_fingerprint, entry.registration_revision,
+    operation_at
+  from vortex_access.permission_catalogue_entries as entry
+  where entry.organization_id = '24850000-0000-4000-8000-000000000001'
+    and entry.permission_id = 'c658c254-2884-414a-9012-512c0cfe4b34'
+    and entry.registration_kind = 'platform'
+    and entry.registration_revision = 1;
+
   insert into vortex_access.organization_role_permission_entries (
     organization_id, role_id, role_revision, entry_ordinal, role_kind,
     role_application_root_id, application_root_id, owner_kind, owner_id,
@@ -218,6 +234,15 @@ begin
     and continuity.permission_id = entry.permission_id
   where entry.organization_id = '24850000-0000-4000-8000-000000000001'
     and entry.permission_id = 'c658c254-2884-414a-9012-512c0cfe4b34';
+
+  if (
+    select pg_catalog.count(*)
+    from vortex_access.organization_role_permission_entries
+    where organization_id = '24850000-0000-4000-8000-000000000001'
+      and role_id = '64850000-0000-4000-8000-000000000001'
+  ) <> 1 then
+    raise exception 'Runtime-settings fixture did not receive exactly one fixed manage permission';
+  end if;
 
   insert into vortex_access.organization_role_revisions (
     organization_id, role_id, revision, role_kind, lifecycle,
@@ -254,8 +279,6 @@ begin
   );
 end
 $function$;
-
-select pg_temp.seed_runtime_settings_manage_role();
 
 create temporary table runtime_settings_access_versions on commit drop as
 select organization_id, current_version
@@ -390,9 +413,6 @@ select ok(
 rollback to savepoint runtime_settings_without_stage;
 
 savepoint runtime_settings_without_manage_permission;
-delete from vortex_access.organization_role_assignments
-where organization_id = '24850000-0000-4000-8000-000000000001'
-  and role_assignment_id = '74850000-0000-4000-8000-000000000002';
 set local role vortex_runtime;
 select vortex_identity.stage_organization_runtime_settings_update(
   pg_catalog.jsonb_build_object(
@@ -414,6 +434,8 @@ select ok(
   'a no-manage-permission refusal leaves persisted settings unchanged'
 );
 rollback to savepoint runtime_settings_without_manage_permission;
+
+select pg_temp.seed_runtime_settings_manage_role();
 
 savepoint runtime_settings_stale_revision;
 set local role vortex_runtime;
