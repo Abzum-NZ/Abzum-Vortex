@@ -759,9 +759,10 @@ as $function$
 declare
   result_value jsonb;
   parent_value jsonb;
+  prepared_parent jsonb;
+  preparation_value jsonb;
+  reduced_final_values jsonb;
   context_value jsonb;
-  catalogue jsonb;
-  closure_value jsonb;
   expected_parents jsonb;
   supplied_parents jsonb;
 begin
@@ -780,43 +781,67 @@ begin
         (context_value ->> 'organizationAccountId')::uuid
       and receipt.command_id = p_command_id
   ) then
-    catalogue := vortex_record.relationship_total_catalogue_internal();
-    closure_value := vortex_record.discover_relationship_total_closure_internal(
-      catalogue, p_operation, p_record_type_id, p_record_id, p_submitted_values
+    -- The writer repeats the protected preparation itself.  Closure identity,
+    -- revisions and the complete generated-field set therefore never depend
+    -- on caller-controlled transaction state or a replayable preparation token.
+    preparation_value := vortex_record.prepare_relationship_total_save(
+      p_command_id, p_operation, p_record_type_id, p_record_id,
+      p_expected_concurrency_number, p_submitted_values, p_selected_group_id,
+      p_activity_id
     );
-    if closure_value is null then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
-      );
+    if preparation_value ->> 'outcome' in ('restart', 'conflict', 'refused', 'refused_recorded') then
+      return preparation_value;
     end if;
-    select coalesce(pg_catalog.jsonb_agg(
-      pg_catalog.jsonb_build_object(
-        'recordTypeId', item.value -> 'recordTypeId',
-        'recordId', item.value -> 'recordId',
-        'expectedConcurrencyNumber', item.value -> 'concurrencyNumber'
-      ) order by item.value ->> 'recordTypeId', item.value ->> 'recordId'
-    ), '[]'::jsonb) into expected_parents
-    from pg_catalog.jsonb_array_elements(closure_value -> 'records') item(value)
-    where item.value ->> 'recordKey' <> 'root';
-    select coalesce(pg_catalog.jsonb_agg(
-      pg_catalog.jsonb_build_object(
-        'recordTypeId', item.value -> 'recordTypeId',
-        'recordId', item.value -> 'recordId',
-        'expectedConcurrencyNumber', item.value -> 'expectedConcurrencyNumber'
-      ) order by item.value ->> 'recordTypeId', item.value ->> 'recordId'
-    ), '[]'::jsonb) into supplied_parents
-    from pg_catalog.jsonb_array_elements(p_parent_mutations) item(value)
-    where pg_catalog.jsonb_typeof(item.value) = 'object'
-      and item.value ?& array[
-        'recordTypeId', 'recordId', 'expectedConcurrencyNumber', 'finalValues'
-      ]
-      and pg_catalog.jsonb_typeof(item.value -> 'finalValues') = 'object';
-    if supplied_parents is distinct from expected_parents
-      or pg_catalog.jsonb_array_length(supplied_parents) <>
-        pg_catalog.jsonb_array_length(p_parent_mutations) then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
-      );
+    if preparation_value ->> 'outcome' <> 'prepared' then
+      if pg_catalog.jsonb_array_length(p_parent_mutations) = 0 then
+        preparation_value := null;
+      else
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+        );
+      end if;
+    else
+      select coalesce(pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'recordTypeId', item.value -> 'recordTypeId',
+          'recordId', item.value -> 'recordId',
+          'expectedConcurrencyNumber', item.value -> 'concurrencyNumber',
+          'finalFieldIds', coalesce((
+            select pg_catalog.jsonb_agg(
+              pg_catalog.lower(field.value ->> 'fieldId')
+              order by pg_catalog.lower(field.value ->> 'fieldId') collate "C"
+            )
+            from pg_catalog.jsonb_array_elements(item.value -> 'recordType' -> 'fields') field(value)
+            where field.value ->> 'type' in ('total', 'calculation')
+          ), '[]'::jsonb)
+        ) order by item.value ->> 'recordTypeId', item.value ->> 'recordId'
+      ), '[]'::jsonb) into expected_parents
+      from pg_catalog.jsonb_array_elements(preparation_value -> 'records') item(value)
+      where item.value ->> 'recordKey' <> 'root';
+      select coalesce(pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'recordTypeId', item.value -> 'recordTypeId',
+          'recordId', item.value -> 'recordId',
+          'expectedConcurrencyNumber', item.value -> 'expectedConcurrencyNumber',
+          'finalFieldIds', coalesce((
+            select pg_catalog.jsonb_agg(field_id order by field_id collate "C")
+            from pg_catalog.jsonb_object_keys(item.value -> 'finalValues') field(field_id)
+          ), '[]'::jsonb)
+        ) order by item.value ->> 'recordTypeId', item.value ->> 'recordId'
+      ), '[]'::jsonb) into supplied_parents
+      from pg_catalog.jsonb_array_elements(p_parent_mutations) item(value)
+      where pg_catalog.jsonb_typeof(item.value) = 'object'
+        and item.value ?& array[
+          'recordTypeId', 'recordId', 'expectedConcurrencyNumber', 'finalValues'
+        ]
+        and pg_catalog.jsonb_typeof(item.value -> 'finalValues') = 'object';
+      if supplied_parents is distinct from expected_parents
+        or pg_catalog.jsonb_array_length(supplied_parents) <>
+          pg_catalog.jsonb_array_length(p_parent_mutations) then
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+        );
+      end if;
     end if;
   end if;
   result_value := vortex_record.save_base_record(
@@ -836,11 +861,21 @@ begin
     ]) then
       raise exception using errcode = '22023', message = 'Relationship total parent mutation is incomplete';
     end if;
+    select item.value into strict prepared_parent
+    from pg_catalog.jsonb_array_elements(preparation_value -> 'records') item(value)
+    where item.value ->> 'recordTypeId' = parent_value ->> 'recordTypeId'
+      and item.value ->> 'recordId' = parent_value ->> 'recordId';
+    select coalesce(pg_catalog.jsonb_object_agg(entry.key, entry.value), '{}'::jsonb)
+      into reduced_final_values
+    from pg_catalog.jsonb_each(parent_value -> 'finalValues') entry(key, value)
+    where entry.value is distinct from coalesce(
+      prepared_parent -> 'existingValues' -> entry.key, 'null'::jsonb
+    );
     perform vortex_record.apply_relationship_total_parent_internal(
       (parent_value ->> 'recordTypeId')::uuid,
       (parent_value ->> 'recordId')::uuid,
       (parent_value ->> 'expectedConcurrencyNumber')::bigint,
-      parent_value -> 'finalValues'
+      reduced_final_values
     );
   end loop;
   return result_value;

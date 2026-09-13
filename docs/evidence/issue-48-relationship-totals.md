@@ -39,9 +39,12 @@ database proof injects a canonical Rule into the already published/provisioned/
 installed test release under replication-disabled fault setup, calls the protected
 runtime preflight, and observes only `defer` with no effects. The obsolete unjoined
 base writer is no longer executable by `vortex_runtime`; the composed writer also
-refuses a contributing update whose supplied parent closure is empty or mismatched.
-The ACL contract proves the closed operation surface and the real runtime proof
-confirms this refusal is effect-free.
+reruns the protected preflight inside its own security-definer execution and
+matches the supplied parent identities, revisions, and complete generated-field
+set to that fresh authoritative closure. No caller-set session state or preparation
+token participates. The real runtime proof supplies the correct parent identity
+and revision with `finalValues: {}` and confirms refusal leaves the source, parent,
+receipt, Activity, Event and queue unchanged.
 
 Verification completed on a fresh disposable database:
 
@@ -63,6 +66,14 @@ also attempted: its Record-independent Access-administration fixture failed to
 reach its barrier after reporting a stale organisation-account revision. That
 runner is not claimed green; the two Stage 2B real lock-wait cases above both
 passed deterministically in the focused PostgreSQL integration.
+
+The second review correction reran the focused **4 files / 30 tests**, the
+transactional-total ACL **13/13**, and the real installed-definition PostgreSQL
+integration **1/1** successfully after a fresh local reset. The changed-closure
+case now records exactly two real request transactions (the restarted attempt and
+successful retry), observes the row-lock wait, and asserts the old/new parent
+totals and exact terminal-effect deltas without any post-save repair. A fresh
+disposable PostgreSQL run again passed **85 files / 4,036 tests**.
 
 ## Delivered scope under review
 

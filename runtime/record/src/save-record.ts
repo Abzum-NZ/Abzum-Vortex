@@ -59,6 +59,7 @@ type RelationshipTotalPreparationOutcome =
     }>;
 
 type StoredResult =
+  | Readonly<{ outcome: "restart" }>
   | Readonly<{
       outcome: "saved";
       recordId: string;
@@ -692,6 +693,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               occurrenceId,
               "parentMutations" in values ? values.parentMutations : [],
             );
+            if (stored.outcome === "restart") return restartRelationshipTotalSave;
             if (stored.outcome === "refused_recorded") return recordedRefusal;
             if (stored.outcome === "conflict")
               return safeRefusal(prepared.correlationId, "conflict");

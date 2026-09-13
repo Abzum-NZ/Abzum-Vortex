@@ -128,6 +128,9 @@ const activityMixedCurrencyId = id(107);
 const commandChangedClosureId = id(108);
 const activityChangedClosureId = id(109);
 const occurrenceChangedClosureId = id(110);
+const commandChangedClosureSetupId = id(111);
+const activityChangedClosureSetupId = id(112);
+const occurrenceChangedClosureSetupId = id(113);
 const publishedAt = "2026-09-13T00:00:00.000Z";
 
 const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse({
@@ -1349,6 +1352,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         await transaction`reset role`;
       });
 
+      let requestTransactionAttempts = 0;
       const resolvedRequestTransaction = createResolvedRequestTransactionRunner({
         transaction: async <Result>(
           operation: (transaction: {
@@ -1357,10 +1361,12 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
               ...values: readonly DatabaseValue[]
             ): Promise<readonly ResultRow[]>;
           }) => Promise<Result>,
-        ) =>
-          runtime.begin(async (transaction) =>
+        ) => {
+          requestTransactionAttempts += 1;
+          return runtime.begin(async (transaction) =>
             operation(requestTransaction(transaction)),
-          ) as Promise<Result>,
+          ) as Promise<Result>;
+        },
       });
       const activityIds = [
         activityCreateId,
@@ -1394,6 +1400,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityRecursiveCycleId,
         activityMoneySourceId,
         activityMixedCurrencyId,
+        activityChangedClosureSetupId,
         activityChangedClosureId,
         activityRevokedReplayId,
         activityRevokedWriteId,
@@ -1419,6 +1426,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         occurrenceRecursiveParentId,
         occurrenceRecursiveLeafId,
         occurrenceMoneySourceId,
+        occurrenceChangedClosureSetupId,
         occurrenceChangedClosureId,
       ];
       const service = createRecordSaveService({
@@ -1994,7 +2002,15 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
             ${JSON.stringify({ [totalChildAmountFieldId]: "22" })}::text::jsonb,
             ${JSON.stringify({ [totalChildAmountFieldId]: "22" })}::text::jsonb,
             null::uuid, ${activityUnjoinedWriterId}::uuid,
-            ${occurrenceUnjoinedWriterId}::uuid, '[]'::jsonb
+            ${occurrenceUnjoinedWriterId}::uuid,
+            ${JSON.stringify([
+              {
+                recordTypeId: totalParentRecordTypeId,
+                recordId: parentTwoId,
+                expectedConcurrencyNumber: 6,
+                finalValues: {},
+              },
+            ])}::text::jsonb
           ) as result`;
         return row?.result;
       });
@@ -2003,6 +2019,26 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         reasonCode: "unsupported_relationship_total_save",
       });
       expect(await countTerminalEffects()).toEqual(beforeUnjoinedWriter);
+      await expect(
+        admin.unsafe(
+          `select child.concurrency_number::text as child_revision,
+             child.f_${totalChildAmountFieldId.replaceAll("-", "")}::text as child_amount,
+             parent.concurrency_number::text as parent_revision,
+             parent.${totalColumn}::text as parent_total
+           from record_data.rt_${totalChildStorageId.replaceAll("-", "")} child
+           join ${totalParentTable} parent
+             on parent.organisation_id = child.organisation_id and parent.record_id = $3
+           where child.organisation_id = $1 and child.record_id = $2`,
+          [organizationId, childId, parentTwoId],
+        ),
+      ).resolves.toEqual([
+        {
+          child_revision: "7",
+          child_amount: "21",
+          parent_revision: "6",
+          parent_total: "24",
+        },
+      ]);
 
       const beforeParentActivityFailure = await countTerminalEffects();
       await admin.unsafe(`
@@ -2199,7 +2235,28 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       );
 
       expect(totalParentStorageId.localeCompare(totalChildStorageId)).toBeLessThan(0);
-      const closureLockParentId = [parentOneId, parentTwoId].sort()[0]!;
+      const [lowerParentId, higherParentId] = [parentOneId, parentTwoId].sort();
+      if (lowerParentId === undefined || higherParentId === undefined)
+        throw new Error("Changed-closure parent order is unavailable");
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandChangedClosureSetupId,
+          operation: "update",
+          recordTypeId: totalChildRecordTypeId,
+          recordId: childId,
+          expectedConcurrencyNumber: 8,
+          submittedValues: {
+            [totalChildParentFieldId]: {
+              recordTypeId: totalParentRecordTypeId,
+              recordId: higherParentId,
+            },
+          },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "saved", concurrencyNumber: 9 },
+      });
       let releaseClosureLock!: () => void;
       let reportClosureLock!: () => void;
       const closureLockReleased = new Promise<void>((resolve) => {
@@ -2209,11 +2266,12 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         reportClosureLock = resolve;
       });
       const beforeChangedClosure = await countTerminalEffects();
+      const beforeChangedClosureAttempts = requestTransactionAttempts;
       const closureBlocker = admin.begin(async (transaction) => {
         await transaction.unsafe(
           `select 1 from ${totalParentTable}
            where organisation_id = $1 and record_id = $2 for update`,
-          [organizationId, closureLockParentId],
+          [organizationId, lowerParentId],
         );
         reportClosureLock();
         await closureLockReleased;
@@ -2225,11 +2283,11 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         operation: "update",
         recordTypeId: totalChildRecordTypeId,
         recordId: childId,
-        expectedConcurrencyNumber: 8,
+        expectedConcurrencyNumber: 9,
         submittedValues: {
           [totalChildParentFieldId]: {
             recordTypeId: totalParentRecordTypeId,
-            recordId: parentOneId,
+            recordId: lowerParentId,
           },
         },
       });
@@ -2254,36 +2312,52 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           [
             organizationId,
             childId,
-            JSON.stringify({ recordTypeId: totalParentRecordTypeId, recordId: parentOneId }),
+            JSON.stringify({ recordTypeId: totalParentRecordTypeId, recordId: lowerParentId }),
           ],
         );
         await transaction`set local role vortex_record_owner`;
         await transaction`update vortex_record.relationship_edges
-          set to_record_id = ${parentOneId}::uuid
+          set to_record_id = ${lowerParentId}::uuid
           where relationship_id = ${totalRelationshipId}::uuid
             and from_organisation_id = ${organizationId}::uuid
             and from_record_id = ${childId}::uuid`;
         await transaction`reset role`;
+        await transaction.unsafe(
+          `update ${totalParentTable}
+           set ${totalColumn} = $3::numeric, ${displayColumn} = $4::numeric,
+             ${totalMoneyColumn} = null,
+             concurrency_number = concurrency_number + 1
+           where organisation_id = $1 and record_id = $2`,
+          [
+            organizationId,
+            higherParentId,
+            higherParentId === parentTwoId ? "3" : "0",
+            higherParentId === parentTwoId ? "4" : "1",
+          ],
+        );
       });
       releaseClosureLock();
       await closureBlocker;
       await expect(changedClosureSave).resolves.toMatchObject({
         kind: "available",
-        value: { outcome: "saved", concurrencyNumber: 9 },
+        value: { outcome: "saved", concurrencyNumber: 10 },
       });
+      expect(requestTransactionAttempts - beforeChangedClosureAttempts).toBe(2);
       const afterChangedClosure = await countTerminalEffects();
       expect(
         Number(afterChangedClosure.receipt_count) - Number(beforeChangedClosure.receipt_count),
       ).toBe(1);
-      await raceAdmin.unsafe(
-        `update ${totalParentTable}
-         set ${totalColumn} = 3, ${displayColumn} = 4, ${totalMoneyColumn} = null
-         where organisation_id = $1 and record_id = $2`,
-        [organizationId, parentTwoId],
-      );
+      expect({
+        activities:
+          Number(afterChangedClosure.activity_count) - Number(beforeChangedClosure.activity_count),
+        outbox:
+          Number(afterChangedClosure.outbox_count) - Number(beforeChangedClosure.outbox_count),
+        queue: Number(afterChangedClosure.queue_count) - Number(beforeChangedClosure.queue_count),
+      }).toEqual({ activities: 2, outbox: 2, queue: 2 });
       await expect(
         admin.unsafe(
-          `select record_id::text as record_id, ${totalColumn}::text as total
+          `select record_id::text as record_id, ${totalColumn}::text as total,
+             ${displayColumn}::text as display, ${totalMoneyColumn} as money
            from ${totalParentTable}
            where organisation_id = $1 and record_id in ($2, $3)
            order by record_id`,
@@ -2291,8 +2365,18 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         ),
       ).resolves.toEqual(
         [
-          { record_id: parentOneId, total: "21" },
-          { record_id: parentTwoId, total: "3" },
+          {
+            record_id: lowerParentId,
+            total: lowerParentId === parentTwoId ? "24" : "21",
+            display: lowerParentId === parentTwoId ? "25" : "22",
+            money: { amount: "5.25", currency: "NZD" },
+          },
+          {
+            record_id: higherParentId,
+            total: higherParentId === parentTwoId ? "3" : "0",
+            display: higherParentId === parentTwoId ? "4" : "1",
+            money: null,
+          },
         ].sort((left, right) => left.record_id.localeCompare(right.record_id)),
       );
 

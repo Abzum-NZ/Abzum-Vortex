@@ -331,8 +331,17 @@ export const calculateLockedRelationshipTotalSave = (
         issues: [{ code: "invalid_input", recordKey: record.recordKey, path: [] }],
       };
     const result = finalized.get(record.recordKey)!;
-    const finalValues: Record<string, JsonValue | null> = { ...result.setValues };
-    for (const fieldId of result.clearFieldIds) finalValues[fieldId] = null;
+    const finalValues: Record<string, JsonValue | null> = {};
+    for (const field of derivedFields(record.recordType)) {
+      const existingValue = record.existingValues[field.fieldId];
+      finalValues[field.fieldId] = hasOwn(result.setValues, field.fieldId)
+        ? result.setValues[field.fieldId]!
+        : result.clearFieldIds.includes(field.fieldId)
+          ? null
+          : existingValue === undefined
+            ? null
+            : (existingValue as JsonValue);
+    }
     parentMutations.push({
       recordTypeId: record.recordType.recordTypeId,
       recordId: record.recordId,
