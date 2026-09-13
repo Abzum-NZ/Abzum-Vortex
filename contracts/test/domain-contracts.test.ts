@@ -39,6 +39,7 @@ import {
   organizationAccessVersionSchema,
   organizationLauncherEntrySchema,
   organizationLauncherResolutionSchema,
+  organizationRuntimeSettingsSchema,
   organizationSelectionCandidateSchema,
   organizationSchema,
   pageTypeKeys,
@@ -326,6 +327,68 @@ describe("identity projection, organisation-account and invitation contracts", (
         acceptedAt: "2026-09-03T23:59:59.000Z",
         acceptedOrganizationAccountId: account.organizationAccountId,
       }).success,
+    ).toBe(false);
+  });
+
+  test("requires canonical organisation runtime settings", () => {
+    const settings = {
+      organizationId: account.organizationId,
+      language: "en-NZ",
+      timeZone: "Pacific/Auckland",
+      currency: "NZD",
+      dateFormat: "medium",
+      numberFormat: "auto",
+      revision: 1,
+    } as const;
+
+    expect(organizationRuntimeSettingsSchema.parse(settings)).toEqual(settings);
+    for (const dateFormat of ["short", "medium", "long", "full"])
+      expect(organizationRuntimeSettingsSchema.safeParse({ ...settings, dateFormat }).success).toBe(
+        true,
+      );
+    for (const numberFormat of ["auto", "always", "min2", "never"])
+      expect(
+        organizationRuntimeSettingsSchema.safeParse({ ...settings, numberFormat }).success,
+      ).toBe(true);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, language: "en-nz" }).success,
+    ).toBe(false);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, timeZone: "Pacific/Invalid" })
+        .success,
+    ).toBe(false);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, timeZone: "UTC" }).success,
+    ).toBe(true);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, timeZone: "Etc/UTC" }).success,
+    ).toBe(true);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, timeZone: "Asia/Kolkata" })
+        .success,
+    ).toBe(true);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, timeZone: "Asia/Calcutta" })
+        .success,
+    ).toBe(false);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, currency: "ZZZ" }).success,
+    ).toBe(false);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, currency: "BGN" }).success,
+    ).toBe(false);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, currency: "nzd" }).success,
+    ).toBe(false);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, dateFormat: "regional" }).success,
+    ).toBe(false);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, numberFormat: "dot_decimal" })
+        .success,
+    ).toBe(false);
+    expect(
+      organizationRuntimeSettingsSchema.safeParse({ ...settings, locale: "en-NZ" }).success,
     ).toBe(false);
   });
 });
