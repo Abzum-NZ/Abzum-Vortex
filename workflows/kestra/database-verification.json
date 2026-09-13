@@ -185,6 +185,11 @@
       "migration": "supabase/migrations/20260914180000_configured_tenant_lifecycle.sql",
       "proof": "supabase/tests/configured-tenant-lifecycle-concurrency.test.sh",
       "label": "Configured tenant lifecycle"
+    },
+    {
+      "migration": "supabase/migrations/20260914200000_organization_local_administration_reads.sql",
+      "proof": "supabase/tests/organization-local-administration-reads-concurrency.test.sh",
+      "label": "Organization local administration reads"
     }
   ],
   "lintSchemas": [
