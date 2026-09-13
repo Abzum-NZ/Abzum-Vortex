@@ -145,6 +145,11 @@
       "migration": "supabase/migrations/20260913060000_first_private_transactional_event_append.sql",
       "proof": "supabase/tests/event-append-concurrency.test.sh",
       "label": "Event append"
+    },
+    {
+      "migration": "supabase/migrations/20260913110000_organization_runtime_settings.sql",
+      "proof": "supabase/tests/organization-runtime-settings-concurrency.test.sh",
+      "label": "Organization runtime settings"
     }
   ],
   "lintSchemas": [

@@ -27,6 +27,11 @@ type ResolvedRequestTransactionRunner = <Scope, Result>(
   operation: (transaction: RequestDatabaseTransaction, scope: Scope) => Promise<Result>,
 ) => Promise<Result>;
 
+type ChangePreparation = (
+  transaction: RuntimeDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+) => Promise<void>;
+
 export type HumanOrganizationRequestResult<Result> =
   | Readonly<{ kind: "available"; value: Result }>
   | Readonly<{ kind: "unavailable" }>
@@ -93,6 +98,7 @@ export const createHumanOrganizationRequestService = (
       transaction: RequestDatabaseTransaction,
       scope: SelectedOrganizationScope,
     ) => Promise<Result>,
+    prepare?: ChangePreparation,
   ): Promise<HumanOrganizationRequestResult<Result>> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate = organizationSelectionCandidateSchema.safeParse(candidate);
@@ -196,6 +202,7 @@ export const createHumanOrganizationRequestService = (
           accessVersion: scope.accessVersion,
           correlationId,
         });
+        if (prepare !== undefined) await prepare(transaction, scope);
         return { context, scope };
       }, operation);
       return { kind: "available", value };
@@ -225,6 +232,16 @@ export const createHumanOrganizationRequestService = (
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("change", session, candidate, operation),
+    runChangePrepared: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      prepare: ChangePreparation,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+      ) => Promise<Result>,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode("change", session, candidate, operation, prepare),
     resolve: (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
