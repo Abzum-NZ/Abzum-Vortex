@@ -1,6 +1,7 @@
 import {
   archiveTenantOrganizationCommandSchema,
   changeTenantAdministratorCommandSchema,
+  createTenantOrganizationCommandSchema,
   grantTenantAdministratorCommandSchema,
   reactivateTenantOrganizationCommandSchema,
   renameTenantOrganizationCommandSchema,
@@ -26,6 +27,49 @@ const grant = () => ({
 });
 
 describe("tenant governance contracts", () => {
+  it("requires an explicit parent choice, steward nominee and complete runtime settings for creation", () => {
+    const command = {
+      operation: "create_tenant_organization" as const,
+      duplicateKey: id(1),
+      tenantId: id(2),
+      parentOrganizationId: null,
+      shortName: "new_organization",
+      displayName: "New organisation",
+      organizationSteward: {
+        identityId: id(3),
+        accountDisplayName: "Initial steward",
+        accountLanguage: "en-NZ",
+        accountTimeZone: "Pacific/Auckland",
+      },
+      runtimeSettings: {
+        language: "en-NZ",
+        timeZone: "Pacific/Auckland",
+        currency: "NZD",
+        dateFormat: "medium" as const,
+        numberFormat: "auto" as const,
+      },
+    };
+    expect(createTenantOrganizationCommandSchema.safeParse(command).success).toBe(true);
+    expect(
+      createTenantOrganizationCommandSchema.safeParse({
+        ...command,
+        parentOrganizationId: undefined,
+      }).success,
+    ).toBe(false);
+    expect(
+      createTenantOrganizationCommandSchema.safeParse({
+        ...command,
+        creatorReceivesMembership: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      createTenantOrganizationCommandSchema.safeParse({
+        ...command,
+        runtimeSettings: { ...command.runtimeSettings, currency: "nzd" },
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires explicit bounded keyset pagination", () => {
     expect(tenantLauncherQuerySchema.safeParse({ limit: 100 }).success).toBe(true);
     expect(tenantLauncherQuerySchema.safeParse({}).success).toBe(false);
