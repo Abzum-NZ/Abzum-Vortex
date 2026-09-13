@@ -251,7 +251,7 @@ a foreign or inactive target exists.
 - **Delivered 4A:** configured-system suspension, reactivation and closure of one
   cluster-local identity projection, preserving every affected scope's current
   stewardship requirements.
-- **Current 4B:** configured-system suspension or reactivation of one tenant,
+- **Delivered 4B:** configured-system suspension or reactivation of one tenant,
   preserving its existing readiness facts without rewriting any child scope.
 
 ### 4. System-only cluster lifecycle
@@ -264,7 +264,7 @@ a foreign or inactive target exists.
   tenant rows `FOR UPDATE`, then the target projection `FOR UPDATE`, each in
   stable identifier order, rechecks membership, and fails stale rather than
   expanding a lock set or retrying automatically.
-- **Current 4B:** suspend/reactivate one tenant through the configured system
+- **Delivered 4B:** suspend/reactivate one tenant through the configured system
   operator. It preserves existing organisation/tenant stewardship while leaving
   child organisation state, accounts, assignments and Access versions unchanged.
 - Neither slice mutates provider/Auth identity or sessions, another cluster,
@@ -519,7 +519,8 @@ This slice provides five server-only operations through the existing resolved
 organisation request: `listOrganizationAccounts`, `readOrganizationAccount`,
 `listOrganizationInvitations`, `readOrganizationInvitation`, and
 `readOrganizationRuntimeSettings`. The list inputs accept only page size from 1
-to 100 and an optional non-nil local cursor. Detail inputs accept exactly one
+to 100 and an optional non-nil account or invitation ID used only as an ordering
+cursor. Detail inputs accept exactly one
 non-nil organisation-local ID. Callers never provide a tenant, selected account,
 Access version, authority declaration, clock, or correlation.
 
