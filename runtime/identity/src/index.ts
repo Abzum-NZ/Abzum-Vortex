@@ -14,6 +14,13 @@ export {
 } from "./auth-journeys";
 export { createIdentityVerifier, type IdentityVerifier } from "./identity-verifier";
 export {
+  adoptOrganization,
+  adoptTenant,
+  createConfiguredTenantAdministrationService,
+  provisionTenant,
+  type ConfiguredTenantAdministrationDependencies,
+} from "./configured-tenant-administration";
+export {
   createDefaultIdentitySessionService,
   createIdentitySessionService,
   type IdentitySessionServiceDependencies,

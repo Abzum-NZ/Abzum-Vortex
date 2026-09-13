@@ -63,6 +63,8 @@ export const retentionPolicyIdSchema = stableId<"RetentionPolicyId">();
 export const removalReceiptIdSchema = stableId<"RemovalReceiptId">();
 /** Permanent current-fact identity for one tenant structural-administrator assignment. */
 export const tenantAdministratorAssignmentIdSchema = stableId<"TenantAdministratorAssignmentId">();
+export const administrationDuplicateKeySchema = stableId<"AdministrationDuplicateKey">();
+export const administrationReceiptIdSchema = stableId<"AdministrationReceiptId">();
 export const meteringEventIdSchema = stableId<"MeteringEventId">();
 
 export const builderKeySchema = z
@@ -147,6 +149,8 @@ export type ActivityId = z.infer<typeof activityIdSchema>;
 export type RetentionPolicyId = z.infer<typeof retentionPolicyIdSchema>;
 export type RemovalReceiptId = z.infer<typeof removalReceiptIdSchema>;
 export type TenantAdministratorAssignmentId = z.infer<typeof tenantAdministratorAssignmentIdSchema>;
+export type AdministrationDuplicateKey = z.infer<typeof administrationDuplicateKeySchema>;
+export type AdministrationReceiptId = z.infer<typeof administrationReceiptIdSchema>;
 export type MeteringEventId = z.infer<typeof meteringEventIdSchema>;
 export type BuilderKey = z.infer<typeof builderKeySchema>;
 export type NamespacedKey = z.infer<typeof namespacedKeySchema>;

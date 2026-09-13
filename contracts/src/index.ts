@@ -47,5 +47,6 @@ export * from "./record-share-operations";
 export * from "./rule-graph-contracts";
 export * from "./rule-graph-source-contracts";
 export * from "./storage";
+export * from "./tenant-provisioning";
 export * from "./validation-errors";
 export * from "./version-impact";
