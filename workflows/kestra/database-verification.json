@@ -150,6 +150,11 @@
       "migration": "supabase/migrations/20260913110000_organization_runtime_settings.sql",
       "proof": "supabase/tests/organization-runtime-settings-concurrency.test.sh",
       "label": "Organization runtime settings"
+    },
+    {
+      "migration": "supabase/migrations/20260913130000_configured_tenant_provisioning.sql",
+      "proof": "supabase/tests/configured-tenant-provisioning-concurrency.test.sh",
+      "label": "Configured tenant provisioning"
     }
   ],
   "lintSchemas": [
