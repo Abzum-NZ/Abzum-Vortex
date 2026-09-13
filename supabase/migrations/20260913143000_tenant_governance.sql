@@ -37,8 +37,8 @@ language plpgsql volatile security definer set search_path = ''
 as $function$
 declare evaluated_at timestamptz := pg_catalog.clock_timestamp();
 begin
-  if not vortex_context.is_non_nil_uuid(p_identity_id::text)
-    or p_limit not between 1 and 101
+  if p_identity_id is null or not vortex_context.is_non_nil_uuid(p_identity_id::text)
+    or p_limit is null or p_limit not between 1 and 101
     or (p_after is not null and not vortex_context.is_non_nil_uuid(p_after::text)) then
     raise exception using errcode = '22023', message = 'Tenant launcher request is invalid';
   end if;
@@ -66,9 +66,9 @@ returns table (organization_id uuid, parent_organization_id uuid, short_name tex
 language plpgsql volatile security definer set search_path = ''
 as $function$
 begin
-  if not vortex_context.is_non_nil_uuid(p_identity_id::text)
-    or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
-    or p_limit not between 1 and 101
+  if p_identity_id is null or not vortex_context.is_non_nil_uuid(p_identity_id::text)
+    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+    or p_limit is null or p_limit not between 1 and 101
     or (p_after is not null and not vortex_context.is_non_nil_uuid(p_after::text)) then
     raise exception using errcode = '22023', message = 'Tenant hierarchy request is invalid';
   end if;
@@ -89,9 +89,9 @@ returns table (organization_id uuid, parent_organization_id uuid, short_name tex
 language plpgsql volatile security definer set search_path = ''
 as $function$
 begin
-  if not vortex_context.is_non_nil_uuid(p_identity_id::text)
-    or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
-    or not vortex_context.is_non_nil_uuid(p_organization_id::text) then
+  if p_identity_id is null or not vortex_context.is_non_nil_uuid(p_identity_id::text)
+    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+    or p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text) then
     raise exception using errcode = '22023', message = 'Tenant organization request is invalid';
   end if;
   perform vortex_identity.require_current_tenant_capability(p_identity_id, p_tenant_id, 'platform.tenant.hierarchy.read', pg_catalog.clock_timestamp());
@@ -111,9 +111,9 @@ language plpgsql volatile security definer set search_path = ''
 as $function$
 declare evaluated_at timestamptz := pg_catalog.clock_timestamp();
 begin
-  if not vortex_context.is_non_nil_uuid(p_identity_id::text)
-    or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
-    or p_limit not between 1 and 101
+  if p_identity_id is null or not vortex_context.is_non_nil_uuid(p_identity_id::text)
+    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+    or p_limit is null or p_limit not between 1 and 101
     or (p_after is not null and not vortex_context.is_non_nil_uuid(p_after::text)) then
     raise exception using errcode = '22023', message = 'Tenant assignment request is invalid';
   end if;
@@ -156,10 +156,12 @@ declare capabilities text[]; evaluated_at timestamptz; receipt vortex_identity.a
   new_assignment_id uuid := pg_catalog.gen_random_uuid(); new_correlation_id uuid := pg_catalog.gen_random_uuid();
 begin
   capabilities := vortex_identity.tenant_capabilities_from_json(p_capabilities);
-  if not vortex_context.is_non_nil_uuid(p_actor_identity_id::text) or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or not vortex_context.is_non_nil_uuid(p_tenant_id::text) or not vortex_context.is_non_nil_uuid(p_subject_identity_id::text)
-    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' or capabilities is null
-    or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
+  if p_actor_identity_id is null or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
+    or p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+    or p_subject_identity_id is null or not vortex_context.is_non_nil_uuid(p_subject_identity_id::text)
+    or p_command_fingerprint is null or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' or capabilities is null
+    or p_starts_at is null or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_expires_at is not null and (p_expires_at <= p_starts_at or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz))) then
     raise exception using errcode = '22023', message = 'Tenant assignment command is invalid';
   end if;
@@ -208,10 +210,13 @@ declare capabilities text[]; evaluated_at timestamptz; target_identity_id uuid; 
   receipt vortex_identity.accepted_administration_receipts%rowtype; new_correlation_id uuid := pg_catalog.gen_random_uuid(); resulting_revision bigint;
 begin
   capabilities := vortex_identity.tenant_capabilities_from_json(p_capabilities);
-  if not vortex_context.is_non_nil_uuid(p_actor_identity_id::text) or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or not vortex_context.is_non_nil_uuid(p_tenant_id::text) or not vortex_context.is_non_nil_uuid(p_assignment_id::text)
-    or p_expected_revision not between 1 and 9007199254740991 or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$'
-    or capabilities is null or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
+  if p_actor_identity_id is null or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
+    or p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+    or p_assignment_id is null or not vortex_context.is_non_nil_uuid(p_assignment_id::text)
+    or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991
+    or p_command_fingerprint is null or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$'
+    or capabilities is null or p_starts_at is null or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_expires_at is not null and (p_expires_at <= p_starts_at or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz))) then
     raise exception using errcode = '22023', message = 'Tenant assignment command is invalid';
   end if;
@@ -260,9 +265,12 @@ as $function$
 declare evaluated_at timestamptz; target_identity_id uuid; current_revision bigint; current_revoked_at timestamptz;
   receipt vortex_identity.accepted_administration_receipts%rowtype; new_correlation_id uuid:=pg_catalog.gen_random_uuid(); resulting_revision bigint;
 begin
-  if not vortex_context.is_non_nil_uuid(p_actor_identity_id::text) or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or not vortex_context.is_non_nil_uuid(p_tenant_id::text) or not vortex_context.is_non_nil_uuid(p_assignment_id::text)
-    or p_expected_revision not between 1 and 9007199254740991 or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
+  if p_actor_identity_id is null or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
+    or p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+    or p_assignment_id is null or not vortex_context.is_non_nil_uuid(p_assignment_id::text)
+    or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991
+    or p_command_fingerprint is null or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
     raise exception using errcode='22023',message='Tenant assignment command is invalid'; end if;
   perform 1 from vortex_identity.tenants tenant where tenant.tenant_id=p_tenant_id for update;
   if not found then raise exception using errcode='V3101',message='Tenant operation is unavailable'; end if;

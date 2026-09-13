@@ -36,6 +36,7 @@ values('35300000-0000-4000-8000-000000000001','15300000-0000-4000-8000-000000000
  array['platform.tenant.administrators.manage','platform.tenant.administrators.read','platform.tenant.hierarchy.read'],now()-interval '1 hour',null,1,now()-interval '1 hour','95300000-0000-4000-8000-000000000001','a5300000-0000-4000-8000-000000000004',now()-interval '1 hour','95300000-0000-4000-8000-000000000001','a5300000-0000-4000-8000-000000000004');
 
 select is((select count(*) from vortex_identity.list_tenant_launcher('45300000-0000-4000-8000-000000000001',2,null)),1::bigint,'launcher exposes only active effective tenant contexts');
+select throws_ok($$select * from vortex_identity.list_tenant_launcher(null,2,null)$$,'22023',null,'a null identity is an invalid request, never ambient authority');
 select is((select count(*) from vortex_identity.list_tenant_hierarchy('45300000-0000-4000-8000-000000000001','15300000-0000-4000-8000-000000000001',1,null)),1::bigint,'hierarchy read is bounded');
 select is((select state from vortex_identity.read_tenant_organization('45300000-0000-4000-8000-000000000001','15300000-0000-4000-8000-000000000001','25300000-0000-4000-8000-000000000002')),'suspended','exact organization read returns the selected same-tenant structural row');
 select is((select outcome from vortex_identity.list_tenant_administrator_assignments('45300000-0000-4000-8000-000000000001','15300000-0000-4000-8000-000000000001',10,null)),'active','assignment outcome is derived at read time');
