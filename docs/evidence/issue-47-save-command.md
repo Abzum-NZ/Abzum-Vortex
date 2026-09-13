@@ -1,42 +1,47 @@
-# Shared record-save command — local contract evidence
+# Protected base Record save — local evidence
 
 [Task #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) ·
 [Implementation plan](../build-plan/issue-47-save-command.md) ·
-[Specification](../specification/appendices/data-contracts.md#record-save-command-and-result)
+[Record specification](../specification/06-records-and-lifecycle.md) ·
+[Save contract](../specification/appendices/data-contracts.md#record-save-command-and-result)
 
-## Bounded implementation
+## Candidate implementation under review
 
-The existing Record contract file defines strict V2 create/update commands and
-saved, correction-required and refused responses. Forms, flow nodes, imports and
-MCP can use this same boundary. It contains no application-specific fields,
-database access, preliminary save engine, Event stub or caller-provided authority.
-Its existing public export is unchanged.
+The local #47 candidate adds one strict ordinary-human create/update service,
+one server-only preparation operation, one fixed terminal writer, and a private
+command receipt. It composes the already delivered Record, Activity and Event
+owners without exposing their primitives.
 
-Create omits an existing record identifier and revision; update requires both.
-Sparse submitted field maps preserve missing/null distinctions, empty changes and
-exact decimal text. Saved and conflict projections contain readable values, not
-the full internal stored-record contract. Only conflict allows an optional current
-projection. Shape validation does not establish authorization or disclosure safety.
+Create may select one currently eligible owner Group. Update retains its existing
+owner and requires the last observed concurrency number. Both operations derive
+scope, actor, exact installed definition and permissions from the verified
+request. Private preparation values never become a public projection.
 
-## Frozen implementation
+The terminal transaction commits the Record/fixed relationship changes, success
+Activity, required standard Event, queue message and receipt together. A verified
+clean update denial records one organisation-only Activity; invalid, stale and
+unverified requests do not. Exact retry reprojects through current Access before
+returning and cannot repeat effects or disclose withdrawn values.
 
-| File | SHA-256 |
+Unused named-action or custom-Event declarations do not disable ordinary saves.
+Actual immediate Rules, calculations/totals, named action execution, broader
+relationship shapes, System execution and Event delivery consumers retain their
+linked owners in the [implementation plan](../build-plan/issue-47-save-command.md#supported-now-and-later-owners).
+
+## Local verification
+
+The candidate must retain exact command output in the review handoff rather than
+freezing unverifiable hashes before review. Current required evidence is:
+
+| Proof | Required result |
 | --- | --- |
-| `contracts/src/records.ts` | `7c3fbda9815ba11c8b44f34dab4319177458d17535fe041ea1ab03a48159abf5` |
-| `contracts/test/records.test.ts` | `4cd3e50b3dffd6658a9c7d70709c0cdbb68a295db197552353354c3e4726c997` |
+| Clean local migration reset | Full ordered migration chain applies. |
+| Focused Record database test | Base save, ACL, refusal, retry, relationships and forced rollback pass. |
+| Compiler-backed PostgreSQL integration | Real public service create/update/retry/conflict/current projection passes over a restricted runtime connection. |
+| Record runtime tests | Public mapping, hidden-field containment and no duplicate terminal refusal pass. |
+| Two-session proof | One same-revision save wins, one returns stale conflict, and only one effect set remains. |
+| Full database/type/lint/format checks | No regression in the delivered foundations. |
 
-The author reports 54/54 focused Record/general contract tests, Contracts
-typecheck, scoped lint, formatting and diff checks passing. The independent Sol
-reviewer approved the exact frozen implementation with no findings, independently
-ran the same two-file focused suite (54/54 passed), and checked the scoped patch
-and documentation. These checks are not a hosted save test.
-
-## Remaining acceptance
-
-The real protected save still must resolve exact installed definitions and
-current Access, apply field/reference validation, rules, calculations and totals,
-and atomically commit records, relationships, Activity, Events and the command
-receipt. Current readability must be reapplied on receipt replay. Those are
-remaining requirements of the same task, not successful mocks supplied by this
-contract slice. No database, hosted environment or release was changed by this
-implementation. The whole task remains open.
+This evidence remains local and provisional until an independent GPT-6 Astra
+review approves the exact patch and the same revision passes hosted Testing.
+No merge, deployment or production change is claimed here.

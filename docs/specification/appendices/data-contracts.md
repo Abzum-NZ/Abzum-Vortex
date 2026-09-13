@@ -537,7 +537,10 @@ contract prerequisite from the protected save implementation.
 Both operations carry contract version `2.0.0`, command identifier, record-type
 identifier and submitted values keyed by permanent field identifiers. Create has
 no existing record identifier or expected concurrency number; update requires
-both. Omitted fields remain untouched on update, null requests a clear, and an
+both. A Group-owned create may include one selected Group identifier; the server
+accepts it only while the person is a current member and never accepts an
+arbitrary owner account. Update cannot use this input. Omitted fields remain
+untouched on update, null requests a clear, and an
 empty field map is valid. Exact decimal text is preserved. The server supplies
 organisation, application, actor, installed definitions and generated values;
 none are caller-provided authority properties.
@@ -550,6 +553,8 @@ or `field_refused`. Other refusals reuse the existing safe operation-error
 contract. Conflict responses may include current readable values only when
 current access permits; they never promise disclosure of a now-inaccessible row.
 The same current-access rule applies when an internal command receipt is replayed.
+An unused named-action or custom-Event declaration does not itself prevent this
+ordinary save. Their invocation/effects remain separate typed operations.
 
 These schemas describe messages, not successful authorization or persistence.
 The [save sequence](../06-records-and-lifecycle.md#save-sequence) remains the one

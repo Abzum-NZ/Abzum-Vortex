@@ -70,6 +70,23 @@ readonly steward_delegation_id='c4760000-0000-4000-8000-00000000001c'
 readonly installer_role_id='c4760000-0000-4000-8000-00000000001d'
 readonly installer_assignment_id='c4760000-0000-4000-8000-00000000001e'
 readonly conflict_record_id='c4760000-0000-4000-8000-000000000020'
+readonly base_save_command_one='c4760000-0000-4000-8000-000000000050'
+readonly base_save_command_two='c4760000-0000-4000-8000-000000000051'
+readonly base_save_activity_one='c4760000-0000-4000-8000-000000000052'
+readonly base_save_activity_two='c4760000-0000-4000-8000-000000000053'
+readonly base_save_event_one='c4760000-0000-4000-8000-000000000054'
+readonly base_save_event_two='c4760000-0000-4000-8000-000000000055'
+readonly same_command_record_id='c4760000-0000-4000-8000-000000000022'
+readonly same_save_command='c4760000-0000-4000-8000-000000000056'
+readonly same_save_activity_one='c4760000-0000-4000-8000-000000000057'
+readonly same_save_event_one='c4760000-0000-4000-8000-000000000058'
+readonly same_save_activity_two='c4760000-0000-4000-8000-000000000059'
+readonly same_save_event_two='c4760000-0000-4000-8000-00000000005a'
+readonly owner_group_id='c4760000-0000-4000-8000-000000000060'
+readonly owner_membership_id='c4760000-0000-4000-8000-000000000061'
+readonly group_save_command='c4760000-0000-4000-8000-000000000063'
+readonly group_save_activity='c4760000-0000-4000-8000-000000000064'
+readonly group_save_event='c4760000-0000-4000-8000-000000000065'
 readonly revocation_record_id='c4760000-0000-4000-8000-000000000021'
 readonly link_source_record_id='c4760000-0000-4000-8000-000000000040'
 readonly link_target_record_id='c4760000-0000-4000-8000-000000000041'
@@ -193,6 +210,17 @@ cleanup_fixture() {
       where storage_contract_id = '$storage_contract_id';
     delete from vortex_record.release_provisions where module_root_id = '$module_root_id';
     reset role;
+    set local role vortex_record_adapter;
+    delete from vortex_record.save_command_receipts
+      where organization_id = '$organization_id';
+    reset role;
+    delete from pgmq.q_vortex_event_occurrences
+      where message ->> 'occurrenceId' in (
+        '$base_save_event_one', '$base_save_event_two',
+        '$same_save_event_one', '$same_save_event_two', '$group_save_event'
+      );
+    delete from vortex_event.event_outbox
+      where organization_id = '$organization_id';
     set local role vortex_module_owner;
     delete from vortex_module.installation_bindings where organization_id = '$organization_id';
     reset role;
@@ -236,7 +264,9 @@ finalize() {
   local original_status=$? cleanup_status=0 operation_status
   trap - EXIT INT TERM
   set +e
-  touch "$proof_root/conflict-release" "$proof_root/revocation-release" \
+  touch "$proof_root/conflict-release" "$proof_root/base-save-release" \
+    "$proof_root/same-command-release" "$proof_root/group-membership-release" \
+    "$proof_root/revocation-release" \
     "$proof_root/reference-release" >/dev/null 2>&1 || true
   touch "$proof_root/link-delete-release" >/dev/null 2>&1 || true
   touch "$proof_root/link-add-release" "$proof_root/restore-target-release" >/dev/null 2>&1 || true
@@ -268,10 +298,11 @@ schema_state="$(run_sql "
   select pg_catalog.concat_ws('|',
     pg_catalog.to_regprocedure('vortex_record.change_record(uuid,uuid,bigint,jsonb,uuid[])') is not null,
     pg_catalog.to_regprocedure('vortex_record.read_record(uuid,uuid)') is not null,
-    pg_catalog.to_regprocedure('vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid)') is not null
+    pg_catalog.to_regprocedure('vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid)') is not null,
+    pg_catalog.to_regprocedure('vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)') is not null
   );
 ")"
-[ "$schema_state" = 't|t|t' ] || {
+[ "$schema_state" = 't|t|t|t' ] || {
   echo 'the record adapter migrations must already be applied to the proof database' >&2
   exit 1
 }
@@ -341,7 +372,7 @@ readonly module_content="pg_catalog.jsonb_build_object(
     'recordTypeId','$record_type_id','key','change_type','singularLabel','Change record',
     'pluralLabel','Change records','titleFieldId','$field_one',
     'storageContractId','$storage_contract_id','storageScope','organization_shared',
-    'ownershipMode','none',
+    'ownershipMode','team',
     'fields',pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object('fieldId','$field_one','key','first','type','text',
         'required',false,'unique',false,'filterable',false,'sortable',false,
@@ -410,6 +441,14 @@ run_sql "
   select * from vortex_access.revise_platform_permission_catalogue_metadata('$organization_id',1,'1.0.0','1.0.1','$actor_id','c4760000-0000-4000-8000-0000000000a5');
   select * from vortex_access.coordinate_organization_stewardship_adoption('$organization_id','$account_id','$steward_role_id','change_steward','Change steward','Permanent stewardship for the change proof.','$steward_assignment_id','$steward_delegation_id','$identity_id','c4760000-0000-4000-8000-0000000000a6');
   select * from vortex_access.adopt_shipped_platform_permission_catalogue('$organization_id',2,'1.1.0','sha256:cb42d4b24ebead7fe9e4ba6358115ceb3ae752d3a0b4cbedc458dcb218013778','$actor_id','c4760000-0000-4000-8000-0000000000a7');
+  select * from vortex_access.coordinate_organization_group_change(
+    'create_group','$organization_id','$owner_group_id',null,
+    'record_change_owners','Record change owners','$actor_id',
+    'c4760000-0000-4000-8000-000000000066');
+  select * from vortex_access.coordinate_organization_group_membership_change(
+    'add_membership','$organization_id','$owner_membership_id',null,
+    '$owner_group_id','$account_id',pg_catalog.clock_timestamp()-interval '1 minute',
+    null,null,'$actor_id','c4760000-0000-4000-8000-000000000067');
 
   insert into vortex_access.organization_roles (organization_id, role_id, role_kind, role_key, live_revision, created_by, created_at)
   values ('$organization_id','$installer_role_id','custom','application_installer',1,'$actor_id',pg_catalog.statement_timestamp());
@@ -599,44 +638,47 @@ run_sql "
   set local role vortex_record_adapter;
   insert into record_data.$physical_table (
     organisation_id, module_root_id, record_type_id, storage_contract_id, record_id,
-    application_root_id, definition_revision, lifecycle_state, concurrency_number,
+    application_root_id, definition_revision, owner_group_id, lifecycle_state, concurrency_number,
     created_at, created_by, updated_at, updated_by, deleted_at, deleted_by,
     $column_one, $column_reference,
     $column_link, $column_required_link
   ) values
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$conflict_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,'start','RC-EXIST-1',null,
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,'start','RC-EXIST-1',null,
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$revocation_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,'start','RC-EXIST-2',null,
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,'start','RC-EXIST-2',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$same_command_record_id',
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,'start','RC-EXIST-10',null,
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$link_source_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
       'link source','RC-EXIST-3',pg_catalog.jsonb_build_object(
         'recordTypeId','$record_type_id','recordId','$link_target_record_id'),
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$link_target_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
       'link target','RC-EXIST-4',null,
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$anchor_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
       'anchor','RC-EXIST-5',null,
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$link_add_source_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
       'link add source','RC-EXIST-6',null,
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$link_add_target_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
       'link add target','RC-EXIST-7',null,
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$restore_target_record_id',
-      null,1,'active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
       'restore target','RC-EXIST-8',null,
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id')),
     ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$restore_source_record_id',
-      null,1,'soft_deleted',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',
+      null,1,'$owner_group_id','soft_deleted',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',
       pg_catalog.statement_timestamp(),'$account_id',
       'restore source','RC-EXIST-9',null,
       pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$restore_target_record_id'));
@@ -657,6 +699,7 @@ run_sql "
     from (values
       ('$conflict_record_id'::uuid,'$anchor_record_id'::uuid),
       ('$revocation_record_id'::uuid,'$anchor_record_id'::uuid),
+      ('$same_command_record_id'::uuid,'$anchor_record_id'::uuid),
       ('$link_source_record_id'::uuid,'$anchor_record_id'::uuid),
       ('$link_target_record_id'::uuid,'$anchor_record_id'::uuid),
       ('$anchor_record_id'::uuid,'$anchor_record_id'::uuid),
@@ -682,9 +725,10 @@ create_statement() {
   printf "vortex_record.create_record_internal('%s'::uuid,
     pg_catalog.jsonb_build_object('%s','%s','%s',pg_catalog.jsonb_build_object(
       'recordTypeId','%s','recordId','%s')),
-    array['%s','%s']::uuid[], null)" \
+    array['%s','%s']::uuid[], '%s'::uuid)" \
     "$record_type_id" "$field_one" "$title" "$field_required_link" \
-    "$record_type_id" "$anchor_record_id" "$field_one" "$field_required_link"
+    "$record_type_id" "$anchor_record_id" "$field_one" "$field_required_link" \
+    "$owner_group_id"
 }
 
 relationship_clear_statement() {
@@ -1130,7 +1174,230 @@ conflict_state="$(row_state "$conflict_record_id")"
 echo "conflict race: second change returned conflict, row is $conflict_state"
 
 # ----------------------------------------------------------------------------
-# Race five: the acting account's own role assignment is revoked while a change
+# Race five: two complete base-save commands carry the same expected Record
+# revision. The second waits for the first transaction and then returns a stale
+# conflict. Only the winning command may retain its receipt, Activity, Event
+# and queue message.
+# ----------------------------------------------------------------------------
+access_version="$(current_version)"
+
+"${psql_command[@]}" >"$proof_root/base-save-first.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/base-save-first.pid'
+$(human_context "$access_version")
+set local role vortex_runtime;
+select vortex_record.save_base_record(
+  '$base_save_command_one','update','$record_type_id','$conflict_record_id',2,
+  pg_catalog.jsonb_build_object('$field_one','first base writer'),
+  pg_catalog.jsonb_build_object('$field_one','first base writer'),null,
+  '$base_save_activity_one','$base_save_event_one'
+) ->> 'outcome' \g '$proof_root/base-save-first.result'
+reset role;
+\! touch '$proof_root/base-save-first-ready'
+\! deadline=600; while [ ! -f '$proof_root/base-save-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/base-save-release' ]
+commit;
+SQL
+base_save_first_pid=$!; worker_pids+=("$base_save_first_pid")
+wait_for_file "$proof_root/base-save-first-ready"
+base_save_first_backend="$(read_backend_pid "$proof_root/base-save-first.pid")"
+
+"${psql_command[@]}" >"$proof_root/base-save-second.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/base-save-second.pid'
+$(human_context "$access_version")
+set local role vortex_runtime;
+select vortex_record.save_base_record(
+  '$base_save_command_two','update','$record_type_id','$conflict_record_id',2,
+  pg_catalog.jsonb_build_object('$field_one','second base writer'),
+  pg_catalog.jsonb_build_object('$field_one','second base writer'),null,
+  '$base_save_activity_two','$base_save_event_two'
+) ->> 'outcome' \g '$proof_root/base-save-second.result'
+reset role;
+commit;
+SQL
+base_save_second_pid=$!; worker_pids+=("$base_save_second_pid")
+base_save_second_backend="$(read_backend_pid "$proof_root/base-save-second.pid")"
+wait_for_database_blocker "$base_save_second_backend" "$base_save_first_backend" \
+  'the second base Record save'
+touch "$proof_root/base-save-release"
+
+wait_owned_worker "$base_save_first_pid" || { echo 'the first base save failed' >&2; exit 1; }
+wait_owned_worker "$base_save_second_pid" || { echo 'the waiting base save failed' >&2; exit 1; }
+
+base_save_first_result="$(tr -d '[:space:]' <"$proof_root/base-save-first.result")"
+base_save_second_result="$(tr -d '[:space:]' <"$proof_root/base-save-second.result")"
+[ "$base_save_first_result" = 'saved' ] || {
+  printf 'the first base save did not commit: %q\n' "$base_save_first_result" >&2; exit 1
+}
+[ "$base_save_second_result" = 'conflict' ] || {
+  printf 'the waiting base save did not return stale conflict: %q\n' "$base_save_second_result" >&2; exit 1
+}
+base_save_state="$(row_state "$conflict_record_id")"
+[ "$base_save_state" = '3|first base writer' ] || {
+  printf 'the two base saves left an unexpected Record state: %q\n' "$base_save_state" >&2; exit 1
+}
+base_save_effects="$(run_sql "select pg_catalog.concat_ws('|',
+  (select pg_catalog.count(*) from vortex_record.save_command_receipts where organization_id='$organization_id' and command_id in ('$base_save_command_one','$base_save_command_two')),
+  (select pg_catalog.count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id in ('$base_save_activity_one','$base_save_activity_two')),
+  (select pg_catalog.count(*) from vortex_event.event_outbox where organization_id='$organization_id' and occurrence_id in ('$base_save_event_one','$base_save_event_two')),
+  (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences where message ->> 'occurrenceId' in ('$base_save_event_one','$base_save_event_two')));")"
+[ "$base_save_effects" = '1|1|1|1' ] || {
+  printf 'the two base saves retained partial or duplicate effects: %q\n' "$base_save_effects" >&2; exit 1
+}
+echo "base save race: second save returned conflict, row is $base_save_state, effects are $base_save_effects"
+
+# ----------------------------------------------------------------------------
+# Race six: the same complete command reaches the terminal save concurrently.
+# The receipt identity serializes the calls: the first performs one complete
+# effect set and the second replays it after the first commits.
+# ----------------------------------------------------------------------------
+access_version="$(current_version)"
+
+"${psql_command[@]}" >"$proof_root/same-command-first.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/same-command-first.pid'
+$(human_context "$access_version")
+set local role vortex_runtime;
+select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed')
+from (select vortex_record.save_base_record(
+  '$same_save_command','update','$record_type_id','$same_command_record_id',1,
+  pg_catalog.jsonb_build_object('$field_one','same command writer'),
+  pg_catalog.jsonb_build_object('$field_one','same command writer'),null,
+  '$same_save_activity_one','$same_save_event_one'
+) as result) as saved \g '$proof_root/same-command-first.result'
+reset role;
+\! touch '$proof_root/same-command-first-ready'
+\! deadline=600; while [ ! -f '$proof_root/same-command-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/same-command-release' ]
+commit;
+SQL
+same_command_first_pid=$!; worker_pids+=("$same_command_first_pid")
+wait_for_file "$proof_root/same-command-first-ready"
+same_command_first_backend="$(read_backend_pid "$proof_root/same-command-first.pid")"
+
+"${psql_command[@]}" >"$proof_root/same-command-second.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/same-command-second.pid'
+$(human_context "$access_version")
+set local role vortex_runtime;
+select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed')
+from (select vortex_record.save_base_record(
+  '$same_save_command','update','$record_type_id','$same_command_record_id',1,
+  pg_catalog.jsonb_build_object('$field_one','same command writer'),
+  pg_catalog.jsonb_build_object('$field_one','same command writer'),null,
+  '$same_save_activity_two','$same_save_event_two'
+) as result) as saved \g '$proof_root/same-command-second.result'
+reset role;
+commit;
+SQL
+same_command_second_pid=$!; worker_pids+=("$same_command_second_pid")
+same_command_second_backend="$(read_backend_pid "$proof_root/same-command-second.pid")"
+wait_for_database_blocker "$same_command_second_backend" "$same_command_first_backend" \
+  'the repeated base Record save command'
+touch "$proof_root/same-command-release"
+
+wait_owned_worker "$same_command_first_pid" || { echo 'the first same-command save failed' >&2; exit 1; }
+wait_owned_worker "$same_command_second_pid" || { echo 'the repeated same-command save failed' >&2; exit 1; }
+
+same_command_first_result="$(tr -d '[:space:]' <"$proof_root/same-command-first.result")"
+same_command_second_result="$(tr -d '[:space:]' <"$proof_root/same-command-second.result")"
+[ "$same_command_first_result" = 'saved|false' ] || {
+  printf 'the first same-command save did not commit exactly once: %q\n' "$same_command_first_result" >&2; exit 1
+}
+[ "$same_command_second_result" = 'saved|true' ] || {
+  printf 'the repeated same-command save did not replay: %q\n' "$same_command_second_result" >&2; exit 1
+}
+same_command_state="$(row_state "$same_command_record_id")"
+[ "$same_command_state" = '2|same command writer' ] || {
+  printf 'the repeated command left an unexpected Record state: %q\n' "$same_command_state" >&2; exit 1
+}
+same_command_effects="$(run_sql "select pg_catalog.concat_ws('|',
+  (select pg_catalog.count(*) from vortex_record.save_command_receipts where organization_id='$organization_id' and command_id='$same_save_command'),
+  (select pg_catalog.count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id in ('$same_save_activity_one','$same_save_activity_two')),
+  (select pg_catalog.count(*) from vortex_event.event_outbox where organization_id='$organization_id' and occurrence_id in ('$same_save_event_one','$same_save_event_two')),
+  (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences where message ->> 'occurrenceId' in ('$same_save_event_one','$same_save_event_two')));")"
+[ "$same_command_effects" = '1|1|1|1' ] || {
+  printf 'the repeated command retained partial or duplicate effects: %q\n' "$same_command_effects" >&2; exit 1
+}
+echo "same-command race: replay=$same_command_second_result, row is $same_command_state, effects are $same_command_effects"
+
+# ----------------------------------------------------------------------------
+# Race seven: a Group membership removal and a Group-owned shared Record create
+# serialize on the exact membership row. The save carries the last committed
+# Access version, which remains valid while the removal is uncommitted, then its
+# production Group-owner check waits for the removal's membership lock. Once the
+# removal commits, the check sees no live membership and the save refuses without
+# a Record, receipt, Activity, Event or queue effect.
+# ----------------------------------------------------------------------------
+access_version="$(current_version)"
+
+"${psql_command[@]}" >"$proof_root/group-membership-removal.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/group-membership-removal.pid'
+select * from vortex_access.coordinate_organization_group_membership_change(
+  'remove_membership','$organization_id','$owner_membership_id',1,
+  null,null,null,null,null,'$actor_id','c4760000-0000-4000-8000-000000000062'
+) \g /dev/null
+\! touch '$proof_root/group-membership-removal-ready'
+\! deadline=600; while [ ! -f '$proof_root/group-membership-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/group-membership-release' ]
+commit;
+SQL
+group_removal_pid=$!; worker_pids+=("$group_removal_pid")
+wait_for_file "$proof_root/group-membership-removal-ready"
+group_removal_backend="$(read_backend_pid "$proof_root/group-membership-removal.pid")"
+
+"${psql_command[@]}" >"$proof_root/group-owned-save.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/group-owned-save.pid'
+$(human_context "$access_version")
+set local role vortex_runtime;
+select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
+from (select vortex_record.save_base_record(
+  '$group_save_command','create','$record_type_id',null,null,
+  pg_catalog.jsonb_build_object(
+    '$field_one','removed Group save',
+    '$field_required_link',pg_catalog.jsonb_build_object(
+      'recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+  pg_catalog.jsonb_build_object(
+    '$field_one','removed Group save',
+    '$field_required_link',pg_catalog.jsonb_build_object(
+      'recordTypeId','$record_type_id','recordId','$anchor_record_id')),
+  '$owner_group_id','$group_save_activity','$group_save_event'
+) as result) as saved \g '$proof_root/group-owned-save.result'
+reset role;
+commit;
+SQL
+group_save_pid=$!; worker_pids+=("$group_save_pid")
+group_save_backend="$(read_backend_pid "$proof_root/group-owned-save.pid")"
+wait_for_database_blocker "$group_save_backend" "$group_removal_backend" \
+  'the Group-owned shared Record save'
+touch "$proof_root/group-membership-release"
+
+wait_owned_worker "$group_removal_pid" || { echo 'the Group membership removal failed' >&2; exit 1; }
+wait_owned_worker "$group_save_pid" || { echo 'the Group-owned save invocation failed' >&2; exit 1; }
+group_save_result="$(tr -d '[:space:]' <"$proof_root/group-owned-save.result")"
+[ "$group_save_result" = 'refused|owner_unavailable' ] || {
+  printf 'the save did not refuse the removed Group owner: %q\n' "$group_save_result" >&2; exit 1
+}
+group_save_state="$(run_sql "select pg_catalog.concat_ws('|',
+  (select state from vortex_access.organization_group_memberships where organization_id='$organization_id' and membership_id='$owner_membership_id'),
+  (select pg_catalog.count(*) from record_data.$physical_table where $column_one='removed Group save'),
+  (select pg_catalog.count(*) from vortex_record.save_command_receipts where organization_id='$organization_id' and command_id='$group_save_command'),
+  (select pg_catalog.count(*) from vortex_activity.organization_activity_entries where organization_id='$organization_id' and activity_id='$group_save_activity'),
+  (select pg_catalog.count(*) from vortex_event.event_outbox where organization_id='$organization_id' and occurrence_id='$group_save_event'),
+  (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences where message ->> 'occurrenceId'='$group_save_event'));")"
+[ "$group_save_state" = 'revoked|0|0|0|0|0' ] || {
+  printf 'the Group removal/save race left partial effects: %q\n' "$group_save_state" >&2; exit 1
+}
+echo "Group membership/save race: save=$group_save_result, state=$group_save_state"
+
+# ----------------------------------------------------------------------------
+# Race eight: the acting account's own role assignment is revoked while a change
 # waits at the row lock.
 # ----------------------------------------------------------------------------
 access_version="$(current_version)"

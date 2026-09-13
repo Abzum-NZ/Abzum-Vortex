@@ -1023,6 +1023,11 @@ select pg_temp.append_writer_release(
             'kind', 'relationship',
             'relationshipId', :'relationship_one',
             'sourcePermissionId', 'e4750000-0000-4000-8000-00000000000a'
+          ),
+          pg_catalog.jsonb_build_object(
+            'kind', 'relationship',
+            'relationshipId', :'relationship_required',
+            'sourcePermissionId', 'e4750000-0000-4000-8000-00000000000a'
           )
         )),
         array[:'f_text']::uuid[], array[]::uuid[]),
@@ -1124,7 +1129,16 @@ select pg_temp.append_writer_release(
       pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000018',
         'record_adapters.inherited.delete_all', :'type_i', 'delete',
         '{"routes":[{"kind":"ownership"}]}'::jsonb,
-        array[]::uuid[], array[]::uuid[])
+        array[]::uuid[], array[]::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000019',
+        'record_adapters.inherited.read_own', :'type_i', 'read',
+        '{"routes":[{"kind":"ownership"}]}'::jsonb,
+        array[:'f_inherited_title', :'f_inherited_owner']::uuid[], array[]::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-00000000001a',
+        'record_adapters.inherited.update_own', :'type_i', 'update',
+        '{"routes":[{"kind":"ownership"}]}'::jsonb,
+        array[:'f_inherited_title', :'f_inherited_owner']::uuid[],
+        array[:'f_inherited_title', :'f_inherited_owner']::uuid[])
     )
   ),
   '2.0.0'
@@ -1237,7 +1251,9 @@ select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000
   array['e4750000-0000-4000-8000-000000000003',
     'e4750000-0000-4000-8000-000000000004',
     'e4750000-0000-4000-8000-000000000013',
-    'e4750000-0000-4000-8000-000000000015']::uuid[]);
+    'e4750000-0000-4000-8000-000000000015',
+    'e4750000-0000-4000-8000-000000000019',
+    'e4750000-0000-4000-8000-00000000001a']::uuid[]);
 select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000000000022',
   'adapter_contained_owner',
   array['e4750000-0000-4000-8000-00000000000a',
@@ -1479,7 +1495,16 @@ insert into record_data.rt_b4750000000040008000000000000001 (
     'Shared four', true, 11, 4.25,
     '{"amount":"4.25","currency":"NZD"}'::jsonb, '2026-03-07',
     '2026-03-07T08:09:10Z', '[]'::jsonb, null,
-    '{"blocks":[]}'::jsonb, '[]'::jsonb, '[]'::jsonb, 'Never readable four');
+    '{"blocks":[]}'::jsonb, '[]'::jsonb, '[]'::jsonb, 'Never readable four'),
+  (:'org_one', :'module_one', :'type_s', :'storage_s',
+    'd5750000-0000-4000-8000-000000000005', null, 1,
+    '84750000-0000-4000-8000-000000000001', 'active', 1,
+    pg_catalog.statement_timestamp(), '64750000-0000-4000-8000-0000000000a1',
+    pg_catalog.statement_timestamp(), '64750000-0000-4000-8000-0000000000a1',
+    'Shared five', true, 13, 5.25,
+    '{"amount":"5.25","currency":"NZD"}'::jsonb, '2026-03-08',
+    '2026-03-08T09:10:11Z', '[]'::jsonb, null,
+    '{"blocks":[]}'::jsonb, '[]'::jsonb, '[]'::jsonb, 'Never readable five');
 insert into record_data.rt_b4750000000040008000000000000002 (
   organisation_id, module_root_id, record_type_id, storage_contract_id, record_id,
   application_root_id, definition_revision, owner_organisation_account_id,
@@ -1498,7 +1523,7 @@ insert into record_data.rt_b4750000000040008000000000000002 (
   ),
   'Contained note',
   pg_catalog.jsonb_build_object(
-    'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000001'
+    'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000005'
   )
 );
 reset role;
@@ -1578,7 +1603,7 @@ insert into vortex_record.relationship_edges (
     :'storage_s', 'd5750000-0000-4000-8000-000000000004'),
   (:'relationship_required', :'org_one', :'org_one', :'app_one', null,
     :'storage_c', 'd5750000-0000-4000-8000-000000000011',
-    :'storage_s', 'd5750000-0000-4000-8000-000000000001'),
+    :'storage_s', 'd5750000-0000-4000-8000-000000000005'),
   (:'relationship_required', :'org_one', :'org_one', :'app_two', null,
     :'storage_c', 'd5750000-0000-4000-8000-000000000012',
     :'storage_s', 'd5750000-0000-4000-8000-000000000002'),
@@ -1605,7 +1630,7 @@ select * from vortex_access.grant_organization_direct_record_share(
 
 -- Test-only pgTAP visibility while vortex_request is the active role,
 -- following the same line in 445, 450 and 455. It grants no Vortex privilege.
-grant usage on schema extensions to vortex_request;
+grant usage on schema extensions to vortex_request, vortex_runtime;
 
 -- ============================================================================
 -- (i) Boundary inventory. What the request role cannot reach matters as much as
@@ -2986,6 +3011,876 @@ select is(
   'soft_deleted|3|soft_deleted|2',
   'the exact inherited-owner dependent and parent are soft-deleted atomically'
 );
+
+-- ============================================================================
+-- #47 base slice: one server preparation read and one terminal save.
+-- ============================================================================
+
+select ok(
+  pg_catalog.has_function_privilege(
+    'vortex_runtime',
+    'vortex_record.prepare_base_record_save(uuid,text,uuid,uuid,bigint,jsonb,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'only the trusted server role receives the private save preparation read'
+);
+select ok(
+  pg_catalog.has_function_privilege(
+    'vortex_runtime',
+    'vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'the trusted server role can invoke the one terminal save writer'
+);
+select ok(
+  not pg_catalog.has_function_privilege(
+    candidate.role_name,
+    'vortex_record.prepare_base_record_save(uuid,text,uuid,uuid,bigint,jsonb,uuid,uuid)',
+    'EXECUTE'
+  ) and not pg_catalog.has_function_privilege(
+    candidate.role_name,
+    'vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)',
+    'EXECUTE'
+  ) and not pg_catalog.has_function_privilege(
+    candidate.role_name,
+    'vortex_record.append_base_save_activity_internal(uuid,text,uuid,uuid[],text)',
+    'EXECUTE'
+  ),
+  candidate.role_name || ' cannot prepare, write or append Activity for a Record save'
+)
+from (values ('vortex_request'), ('anon'), ('authenticated'), ('service_role'))
+  as candidate(role_name);
+select ok(
+  not pg_catalog.has_table_privilege(
+    candidate.role_name, 'vortex_activity.organization_activity_entries', 'SELECT,INSERT,UPDATE,DELETE'
+  ) and not pg_catalog.has_table_privilege(
+    candidate.role_name, 'vortex_event.event_outbox', 'SELECT,INSERT,UPDATE,DELETE'
+  ) and not pg_catalog.has_table_privilege(
+    candidate.role_name, 'vortex_record.save_command_receipts', 'SELECT,INSERT,UPDATE,DELETE'
+  ),
+  candidate.role_name || ' has no raw Activity, Event outbox or receipt access'
+)
+from (values
+  ('vortex_runtime'), ('vortex_request'), ('anon'), ('authenticated'), ('service_role')
+) as candidate(role_name);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_runtime;
+create temporary table base_preparation on commit drop as
+select vortex_record.prepare_base_record_save(
+  'a4750000-0000-4000-8000-000000000100'::uuid,
+  'create', :'type_c'::uuid, null, null,
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Prepared base record',
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ), null, 'a4750000-0000-4000-8000-000000000109'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from base_preparation),
+  'prepared',
+  'server preparation resolves the real active installed Record definition'
+);
+select ok(
+  (select result ? 'existingValues' from base_preparation)
+  and not pg_catalog.has_function_privilege(
+    'vortex_request',
+    'vortex_record.prepare_base_record_save(uuid,text,uuid,uuid,bigint,jsonb,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'private preparation values stay behind the server-only operation'
+);
+
+set local role vortex_runtime;
+create temporary table base_create_save on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000101'::uuid,
+  'create', :'type_c'::uuid, null, null,
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Base saved record',
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Base saved record',
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ),
+  null,
+  'a4750000-0000-4000-8000-000000000102'::uuid,
+  'a4750000-0000-4000-8000-000000000103'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from base_create_save),
+  'saved',
+  'the terminal save creates an ordinary human Record through the real private primitive'
+);
+select result ->> 'recordId' as base_saved_record_id from base_create_save \gset
+select is((
+  select pg_catalog.concat_ws('|',
+    stored.state, stored.operation, stored.concurrency_number::text,
+    activity.outcome, activity.action,
+    event.envelope #>> '{descriptor,eventKind}')
+  from vortex_record.save_command_receipts as stored
+  join vortex_activity.organization_activity_entries as activity
+    on activity.organization_id = stored.organization_id
+    and activity.activity_id = 'a4750000-0000-4000-8000-000000000102'
+  join vortex_event.event_outbox as event
+    on event.organization_id = stored.organization_id
+    and event.occurrence_id = 'a4750000-0000-4000-8000-000000000103'
+  where stored.command_id = 'a4750000-0000-4000-8000-000000000101'
+), 'completed|create|1|completed|create_record|created',
+  'Record, success Activity, standard Event and completed receipt commit together');
+select is((
+  select pg_catalog.count(*)
+  from pgmq.q_vortex_event_occurrences as message
+  where message.message ->> 'occurrenceId' =
+    'a4750000-0000-4000-8000-000000000103'
+), 1::bigint, 'the save commits one minimal queue message');
+
+set local role vortex_runtime;
+create temporary table base_exact_retry on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000101'::uuid,
+  'create', :'type_c'::uuid, null, null,
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Base saved record',
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Base saved record',
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ),
+  null,
+  'a4750000-0000-4000-8000-000000000104'::uuid,
+  'a4750000-0000-4000-8000-000000000105'::uuid
+) as result;
+create temporary table base_conflicting_retry on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000101'::uuid,
+  'create', :'type_c'::uuid, null, null,
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Different command content',
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Different command content',
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ),
+  null,
+  'a4750000-0000-4000-8000-000000000106'::uuid,
+  'a4750000-0000-4000-8000-000000000107'::uuid
+) as result;
+reset role;
+select is(
+  (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed')
+   from base_exact_retry),
+  'saved|true',
+  'an exact retry returns the current readable projection without repeating effects'
+);
+select is(
+  (select result ->> 'reasonCode' from base_conflicting_retry),
+  'command_identity_conflict',
+  'the same scoped command identity refuses different normalized content'
+);
+select is((
+  select pg_catalog.concat_ws('|',
+    pg_catalog.count(*) filter (
+      where activity_id in (
+        'a4750000-0000-4000-8000-000000000102',
+        'a4750000-0000-4000-8000-000000000104',
+        'a4750000-0000-4000-8000-000000000106'
+      )
+    ),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id in (
+        'a4750000-0000-4000-8000-000000000103',
+        'a4750000-0000-4000-8000-000000000105',
+        'a4750000-0000-4000-8000-000000000107'
+      ))
+  )
+  from vortex_activity.organization_activity_entries
+), '1|1', 'retry and conflicting reuse create no extra Activity or Event effects');
+
+-- A clean, scope-verified Access denial is owned by preparation so the public
+-- service cannot bypass or duplicate its one content-free refusal Activity.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'outsider_account');
+set local role vortex_runtime;
+create temporary table base_preparation_access_refusal on commit drop as
+select vortex_record.prepare_base_record_save(
+  'a4750000-0000-4000-8000-000000000116'::uuid,
+  'update', :'type_c'::uuid, :'base_saved_record_id'::uuid, 1,
+  pg_catalog.jsonb_build_object(:'f_title', 'Never disclose this value'), null,
+  'a4750000-0000-4000-8000-000000000118'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from base_preparation_access_refusal),
+  'refused_recorded',
+  'verified clean update denial is recorded before the service returns'
+);
+select is((
+  select pg_catalog.concat_ws('|', activity.action, activity.outcome,
+    (activity.subject_ids = array[:'org_one']::uuid[])::text,
+    (activity.changed_field_ids = array[]::uuid[])::text,
+    (not (:'base_saved_record_id'::uuid = any(activity.subject_ids)))::text,
+    pg_catalog.count(*)::text)
+  from vortex_activity.organization_activity_entries as activity
+  where activity.organization_id = :'org_one'::uuid
+    and activity.activity_id = 'a4750000-0000-4000-8000-000000000118'
+  group by activity.action, activity.outcome, activity.subject_ids,
+    activity.changed_field_ids
+), 'update_record|refused|true|true|true|1',
+  'the refusal Activity names only the organisation and contains no Record or field identity');
+
+-- A response-lost update retry reaches the completed receipt before the stale
+-- expected revision. It is then projected again through current read access.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_runtime;
+create temporary table base_update_save on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000131'::uuid,
+  'update', :'type_c'::uuid, :'base_saved_record_id'::uuid, 1,
+  pg_catalog.jsonb_build_object(:'f_title', 'Updated once'),
+  pg_catalog.jsonb_build_object(:'f_title', 'Updated once'),
+  null,
+  'a4750000-0000-4000-8000-000000000132'::uuid,
+  'a4750000-0000-4000-8000-000000000133'::uuid
+) as result;
+create temporary table base_update_response_lost_retry on commit drop as
+select vortex_record.prepare_base_record_save(
+  'a4750000-0000-4000-8000-000000000131'::uuid,
+  'update', :'type_c'::uuid, :'base_saved_record_id'::uuid, 1,
+  pg_catalog.jsonb_build_object(:'f_title', 'Updated once'), null,
+  'a4750000-0000-4000-8000-000000000134'::uuid
+) as result;
+create temporary table base_update_conflicting_retry on commit drop as
+select vortex_record.prepare_base_record_save(
+  'a4750000-0000-4000-8000-000000000131'::uuid,
+  'update', :'type_c'::uuid, :'base_saved_record_id'::uuid, 1,
+  pg_catalog.jsonb_build_object(:'f_title', 'Different update'), null,
+  'a4750000-0000-4000-8000-000000000135'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'concurrencyNumber' from base_update_save), '2',
+  'the base update increments the Record revision exactly once'
+);
+select is(
+  (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed',
+    result ->> 'concurrencyNumber') from base_update_response_lost_retry),
+  'saved|true|2',
+  'an update response-lost retry resolves its receipt before stale revision preparation'
+);
+select is(
+  (select result ->> 'reasonCode' from base_update_conflicting_retry),
+  'command_identity_conflict',
+  'a response-lost retry with different content refuses the command identity'
+);
+select is((
+  select pg_catalog.concat_ws('|', stored.concurrency_number::text,
+    pg_catalog.count(distinct activity.activity_id)::text,
+    pg_catalog.count(distinct event.occurrence_id)::text)
+  from vortex_record.save_command_receipts as stored
+  left join vortex_activity.organization_activity_entries as activity
+    on activity.organization_id = stored.organization_id
+    and activity.activity_id = 'a4750000-0000-4000-8000-000000000132'
+  left join vortex_event.event_outbox as event
+    on event.organization_id = stored.organization_id
+    and event.occurrence_id = 'a4750000-0000-4000-8000-000000000133'
+  where stored.command_id = 'a4750000-0000-4000-8000-000000000131'
+  group by stored.concurrency_number
+), '2|1|1', 'the update retry creates no duplicate receipt, Activity or Event');
+
+-- Every relationship target is validated, loaded and included in the final
+-- access decision before the first value or edge mutation.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_runtime;
+create temporary table base_scalar_invalid_link on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000141'::uuid,
+  'update', :'type_c'::uuid, :'base_saved_record_id'::uuid, 2,
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Must not persist',
+    :'f_link', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000099'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Must not persist',
+    :'f_link', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000099'
+    ),
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ), null,
+  'a4750000-0000-4000-8000-000000000142'::uuid,
+  'a4750000-0000-4000-8000-000000000143'::uuid
+) as result;
+create temporary table base_first_valid_second_invalid_link on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000151'::uuid,
+  'update', :'type_c'::uuid, :'base_saved_record_id'::uuid, 2,
+  pg_catalog.jsonb_build_object(
+    :'f_link', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000005'
+    ),
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000099'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Updated once',
+    :'f_link', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000005'
+    ),
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000099'
+    )
+  ), null,
+  'a4750000-0000-4000-8000-000000000152'::uuid,
+  'a4750000-0000-4000-8000-000000000153'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'reasonCode' from base_scalar_invalid_link),
+  'relationship_unavailable',
+  'a scalar plus invalid relationship target refuses before mutation'
+);
+select is(
+  (select result ->> 'reasonCode' from base_first_valid_second_invalid_link),
+  'relationship_unavailable',
+  'a valid first and invalid second relationship refuse before either edge changes'
+);
+select is((
+  select pg_catalog.concat_ws('|', stored.concurrency_number::text,
+    stored.f_f4750000000040008000000000000021,
+    (select pg_catalog.count(*) from vortex_record.relationship_edges as edge
+      where edge.from_record_id = :'base_saved_record_id'::uuid
+        and edge.relationship_id = :'relationship_one'
+        and edge.to_record_id = 'd5750000-0000-4000-8000-000000000005'),
+    (select pg_catalog.count(*) from vortex_record.relationship_edges as edge
+      where edge.from_record_id = :'base_saved_record_id'::uuid
+        and edge.relationship_id = :'relationship_required'
+        and edge.to_record_id = 'd5750000-0000-4000-8000-000000000001'))
+  from record_data.rt_b4750000000040008000000000000002 as stored
+  where stored.record_id = :'base_saved_record_id'::uuid
+), '2|Updated once|0|1', 'both refused updates leave scalar values and both edges unchanged');
+select is((
+  select pg_catalog.concat_ws('|',
+    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+      where command_id in ('a4750000-0000-4000-8000-000000000141',
+        'a4750000-0000-4000-8000-000000000151')),
+    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+      where activity_id in ('a4750000-0000-4000-8000-000000000142',
+        'a4750000-0000-4000-8000-000000000152')),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id in ('a4750000-0000-4000-8000-000000000143',
+        'a4750000-0000-4000-8000-000000000153')))
+), '0|0|0', 'pre-write relationship refusals leave no receipt, Activity or Event');
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'member_account');
+set local role vortex_runtime;
+create temporary table base_group_save on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000111'::uuid,
+  'create', :'type_s'::uuid, null, null,
+  pg_catalog.jsonb_build_object(:'f_text', 'Group-owned base record'),
+  pg_catalog.jsonb_build_object(:'f_text', 'Group-owned base record'),
+  '84750000-0000-4000-8000-000000000001'::uuid,
+  'a4750000-0000-4000-8000-000000000112'::uuid,
+  'a4750000-0000-4000-8000-000000000113'::uuid
+) as result;
+reset role;
+select is((
+  select owner_group_id
+  from record_data.rt_b4750000000040008000000000000001
+  where record_id = (select (result ->> 'recordId')::uuid from base_group_save)
+), '84750000-0000-4000-8000-000000000001'::uuid,
+  'Group ownership is selected only at create and rechecked against current membership');
+
+-- A fresh inherited-ownership fixture proves that the update decision is made
+-- from the complete proposed relationship graph, not from the old edge.
+select pg_temp.adapter_clear_context();
+select pg_temp.adapter_role(
+  :'org_one', :'app_one', '74750000-0000-4000-8000-000000000029',
+  'base_save_target_reader',
+  array['e4750000-0000-4000-8000-000000000001']::uuid[]
+);
+select pg_temp.adapter_assign(
+  :'org_one', '74750000-0000-4000-8000-00000000004a',
+  '74750000-0000-4000-8000-000000000029', :'member_account'
+);
+select * from vortex_access.coordinate_organization_group_change(
+  'create_group', :'org_one', '84750000-0000-4000-8000-000000000003', null,
+  'base_save_other_group', 'Base save other group', :'actor',
+  'c4750000-0000-4000-8000-000000000191'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', '64750000-0000-4000-8000-0000000000a1');
+set local role vortex_record_adapter;
+insert into record_data.rt_b4750000000040008000000000000001 (
+  organisation_id, module_root_id, record_type_id, storage_contract_id, record_id,
+  application_root_id, definition_revision, owner_group_id, lifecycle_state,
+  concurrency_number, created_at, created_by, updated_at, updated_by,
+  f_f4750000000040008000000000000001
+) values (
+  :'org_one', :'module_one', :'type_s', :'storage_s',
+  'd5750000-0000-4000-8000-000000000005', null, 1,
+  '84750000-0000-4000-8000-000000000003', 'active', 1,
+  pg_catalog.statement_timestamp(), '64750000-0000-4000-8000-0000000000a1',
+  pg_catalog.statement_timestamp(), '64750000-0000-4000-8000-0000000000a1',
+  'Other group target'
+);
+insert into record_data.rt_b4750000000040008000000000000003 (
+  organisation_id, module_root_id, record_type_id, storage_contract_id, record_id,
+  application_root_id, definition_revision, lifecycle_state, concurrency_number,
+  created_at, created_by, updated_at, updated_by,
+  f_f4750000000040008000000000000031,
+  f_f4750000000040008000000000000032
+) values (
+  :'org_one', :'module_one', :'type_i', :'storage_i',
+  'd5750000-0000-4000-8000-000000000039', :'app_one', 1,
+  'active', 1, pg_catalog.statement_timestamp(),
+  '64750000-0000-4000-8000-0000000000a1', pg_catalog.statement_timestamp(),
+  '64750000-0000-4000-8000-0000000000a1', 'Fresh inherited child',
+  pg_catalog.jsonb_build_object(
+    'recordTypeId', :'type_s',
+    'recordId', 'd5750000-0000-4000-8000-000000000001'
+  )
+);
+reset role;
+set local role vortex_record_owner;
+insert into vortex_record.relationship_edges (
+  relationship_id, from_organisation_id, to_organisation_id,
+  from_application_root_id, to_application_root_id, from_storage_contract_id,
+  from_record_id, to_storage_contract_id, to_record_id
+) values (
+  :'relationship_inherited', :'org_one', :'org_one', :'app_one', null,
+  :'storage_i', 'd5750000-0000-4000-8000-000000000039', :'storage_s',
+  'd5750000-0000-4000-8000-000000000001'
+);
+reset role;
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'member_account');
+set local role vortex_runtime;
+create temporary table base_link_only_forbidden_proposal on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000161'::uuid,
+  'update', :'type_i'::uuid,
+  'd5750000-0000-4000-8000-000000000039'::uuid, 1,
+  pg_catalog.jsonb_build_object(
+    :'f_inherited_owner', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000005'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_inherited_title', 'Fresh inherited child',
+    :'f_inherited_owner', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000005'
+    )
+  ), null,
+  'a4750000-0000-4000-8000-000000000162'::uuid,
+  'a4750000-0000-4000-8000-000000000163'::uuid
+) as result;
+create temporary table base_mixed_forbidden_proposal on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000171'::uuid,
+  'update', :'type_i'::uuid,
+  'd5750000-0000-4000-8000-000000000039'::uuid, 1,
+  pg_catalog.jsonb_build_object(
+    :'f_inherited_title', 'Must not persist',
+    :'f_inherited_owner', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000005'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_inherited_title', 'Must not persist',
+    :'f_inherited_owner', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000005'
+    )
+  ), null,
+  'a4750000-0000-4000-8000-000000000172'::uuid,
+  'a4750000-0000-4000-8000-000000000173'::uuid
+) as result;
+reset role;
+select is(
+  (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
+    from base_link_only_forbidden_proposal),
+  'refused_recorded|proposed_record_refused',
+  'a link-only update cannot move inherited ownership beyond current authority'
+);
+select is(
+  (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
+    from base_mixed_forbidden_proposal),
+  'refused_recorded|proposed_record_refused',
+  'a mixed update cannot write scalars before forbidden final relationship facts are refused'
+);
+select is((
+  select pg_catalog.concat_ws('|', stored.concurrency_number::text,
+    stored.f_f4750000000040008000000000000031,
+    stored.f_f4750000000040008000000000000032 ->> 'recordId',
+    (select pg_catalog.count(*) from vortex_record.relationship_edges as edge
+      where edge.relationship_id = :'relationship_inherited'
+        and edge.from_record_id = stored.record_id
+        and edge.to_record_id = 'd5750000-0000-4000-8000-000000000001'))
+  from record_data.rt_b4750000000040008000000000000003 as stored
+  where stored.record_id = 'd5750000-0000-4000-8000-000000000039'
+), '1|Fresh inherited child|d5750000-0000-4000-8000-000000000001|1',
+  'forbidden final relationship facts leave the source Record and edge unchanged');
+select is((
+  select pg_catalog.concat_ws('|',
+    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+      where command_id in ('a4750000-0000-4000-8000-000000000161',
+        'a4750000-0000-4000-8000-000000000171')),
+    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+      where activity_id in ('a4750000-0000-4000-8000-000000000162',
+        'a4750000-0000-4000-8000-000000000172')),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id in ('a4750000-0000-4000-8000-000000000163',
+        'a4750000-0000-4000-8000-000000000173')))
+), '0|2|0', 'forbidden proposed facts leave no receipt or Event and one refusal Activity each');
+select ok((
+  select pg_catalog.bool_and(
+    activity.subject_ids = array[:'org_one']::uuid[]
+    and activity.changed_field_ids = array[]::uuid[]
+    and not ('d5750000-0000-4000-8000-000000000039'::uuid = any(activity.subject_ids))
+  )
+  from vortex_activity.organization_activity_entries as activity
+  where activity.activity_id in (
+    'a4750000-0000-4000-8000-000000000162',
+    'a4750000-0000-4000-8000-000000000172'
+  )
+), 'proposed-facts refusal Activities contain only the organisation subject');
+
+create function pg_temp.force_base_event_failure()
+returns trigger language plpgsql set search_path = '' as $function$
+begin
+  raise exception using errcode = 'P4751', message = 'forced base Event failure';
+end
+$function$;
+create trigger force_base_event_failure
+before insert on vortex_event.event_outbox
+for each row execute function pg_temp.force_base_event_failure();
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_runtime;
+select throws_ok(
+  pg_catalog.format(
+    'select vortex_record.save_base_record(%L::uuid,''create'',%L::uuid,null,null,%L::jsonb,%L::jsonb,null,%L::uuid,%L::uuid)',
+    'a4750000-0000-4000-8000-000000000121', :'type_c',
+    pg_catalog.jsonb_build_object(
+      :'f_title', 'Rolled back base record',
+      :'f_link_required', pg_catalog.jsonb_build_object(
+        'recordTypeId', :'type_s',
+        'recordId', 'd5750000-0000-4000-8000-000000000001'
+      )
+    )::text,
+    pg_catalog.jsonb_build_object(
+      :'f_title', 'Rolled back base record',
+      :'f_link_required', pg_catalog.jsonb_build_object(
+        'recordTypeId', :'type_s',
+        'recordId', 'd5750000-0000-4000-8000-000000000001'
+      )
+    )::text,
+    'a4750000-0000-4000-8000-000000000122',
+    'a4750000-0000-4000-8000-000000000123'
+  ),
+  'P4751'::char(5), 'forced base Event failure',
+  'an Event append failure escapes the terminal save'
+);
+reset role;
+drop trigger force_base_event_failure on vortex_event.event_outbox;
+select is((
+  select pg_catalog.concat_ws('|',
+    (select pg_catalog.count(*) from record_data.rt_b4750000000040008000000000000002
+      where f_f4750000000040008000000000000021 = 'Rolled back base record'),
+    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+      where command_id = 'a4750000-0000-4000-8000-000000000121'),
+    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+      where activity_id = 'a4750000-0000-4000-8000-000000000122'),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id = 'a4750000-0000-4000-8000-000000000123')
+  )
+), '0|0|0|0', 'failed Event append rolls back Record, receipt, Activity and Event');
+
+create function pg_temp.force_base_queue_failure()
+returns trigger language plpgsql set search_path = '' as $function$
+begin
+  raise exception using errcode = 'P4752', message = 'forced base queue failure';
+end
+$function$;
+create trigger force_base_queue_failure
+before insert on pgmq.q_vortex_event_occurrences
+for each row execute function pg_temp.force_base_queue_failure();
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_runtime;
+select throws_ok(
+  pg_catalog.format(
+    'select vortex_record.save_base_record(%L::uuid,''update'',%L::uuid,%L::uuid,2,%L::jsonb,%L::jsonb,null,%L::uuid,%L::uuid)',
+    'a4750000-0000-4000-8000-000000000201', :'type_c', :'base_saved_record_id',
+    pg_catalog.jsonb_build_object(:'f_title', 'Queue rollback')::text,
+    pg_catalog.jsonb_build_object(:'f_title', 'Queue rollback')::text,
+    'a4750000-0000-4000-8000-000000000202',
+    'a4750000-0000-4000-8000-000000000203'
+  ),
+  'P4752'::text, 'forced base queue failure'::text,
+  'a queue append failure escapes the terminal save'::text
+);
+reset role;
+drop trigger force_base_queue_failure on pgmq.q_vortex_event_occurrences;
+select is((
+  select pg_catalog.concat_ws('|', stored.concurrency_number::text,
+    stored.f_f4750000000040008000000000000021,
+    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+      where command_id = 'a4750000-0000-4000-8000-000000000201'),
+    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+      where activity_id = 'a4750000-0000-4000-8000-000000000202'),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id = 'a4750000-0000-4000-8000-000000000203'),
+    (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences as message
+      where message.message ->> 'occurrenceId' =
+        'a4750000-0000-4000-8000-000000000203'))
+  from record_data.rt_b4750000000040008000000000000002 as stored
+  where stored.record_id = :'base_saved_record_id'::uuid
+), '2|Updated once|0|0|0|0',
+  'queue failure rolls back Record, receipt, Activity, Event and queue message');
+
+create function pg_temp.force_base_receipt_completion_failure()
+returns trigger language plpgsql set search_path = '' as $function$
+begin
+  if new.state = 'completed' then
+    raise exception using errcode = 'P4753', message = 'forced receipt completion failure';
+  end if;
+  return new;
+end
+$function$;
+grant execute on function pg_temp.force_base_receipt_completion_failure()
+  to vortex_record_adapter;
+set local role vortex_record_adapter;
+create trigger force_base_receipt_completion_failure
+before update on vortex_record.save_command_receipts
+for each row execute function pg_temp.force_base_receipt_completion_failure();
+reset role;
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_runtime;
+select throws_ok(
+  pg_catalog.format(
+    'select vortex_record.save_base_record(%L::uuid,''update'',%L::uuid,%L::uuid,2,%L::jsonb,%L::jsonb,null,%L::uuid,%L::uuid)',
+    'a4750000-0000-4000-8000-000000000211', :'type_c', :'base_saved_record_id',
+    pg_catalog.jsonb_build_object(:'f_title', 'Receipt rollback')::text,
+    pg_catalog.jsonb_build_object(:'f_title', 'Receipt rollback')::text,
+    'a4750000-0000-4000-8000-000000000212',
+    'a4750000-0000-4000-8000-000000000213'
+  ),
+  'P4753'::text, 'forced receipt completion failure'::text,
+  'a receipt completion failure escapes the terminal save'::text
+);
+reset role;
+set local role vortex_record_adapter;
+drop trigger force_base_receipt_completion_failure
+  on vortex_record.save_command_receipts;
+reset role;
+select is((
+  select pg_catalog.concat_ws('|', stored.concurrency_number::text,
+    stored.f_f4750000000040008000000000000021,
+    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+      where command_id = 'a4750000-0000-4000-8000-000000000211'),
+    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+      where activity_id = 'a4750000-0000-4000-8000-000000000212'),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id = 'a4750000-0000-4000-8000-000000000213'),
+    (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences as message
+      where message.message ->> 'occurrenceId' =
+        'a4750000-0000-4000-8000-000000000213'))
+  from record_data.rt_b4750000000040008000000000000002 as stored
+  where stored.record_id = :'base_saved_record_id'::uuid
+), '2|Updated once|0|0|0|0',
+  'receipt failure rolls back Record, receipt, Activity, Event and queue message');
+
+-- Complete proposed relationship facts are not a blanket restriction: a
+-- readable allowed fixed target replaces the edge and advances the source
+-- Record exactly once.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_runtime;
+create temporary table base_allowed_relationship_replacement on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000181'::uuid,
+  'update', :'type_c'::uuid, :'base_saved_record_id'::uuid, 2,
+  pg_catalog.jsonb_build_object(
+    :'f_link', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000002'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Updated once',
+    :'f_link', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    ),
+    :'f_link_required', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ), null,
+  'a4750000-0000-4000-8000-000000000182'::uuid,
+  'a4750000-0000-4000-8000-000000000183'::uuid
+) as result;
+reset role;
+select is(
+  (select pg_catalog.concat_ws('|', result ->> 'outcome',
+    result ->> 'concurrencyNumber') from base_allowed_relationship_replacement),
+  'saved|3',
+  'an allowed final relationship replacement completes'
+);
+select is((
+  select pg_catalog.concat_ws('|', stored.concurrency_number::text,
+    stored.f_f4750000000040008000000000000022 ->> 'recordId',
+    pg_catalog.count(edge.*)::text)
+  from record_data.rt_b4750000000040008000000000000002 as stored
+  left join vortex_record.relationship_edges as edge
+    on edge.relationship_id = :'relationship_one'
+    and edge.from_record_id = stored.record_id
+    and edge.to_record_id = 'd5750000-0000-4000-8000-000000000001'
+  where stored.record_id = :'base_saved_record_id'::uuid
+  group by stored.concurrency_number,
+    stored.f_f4750000000040008000000000000022
+), '3|d5750000-0000-4000-8000-000000000001|1',
+  'the allowed replacement stores one matching value and edge');
+
+-- The replacement target is readable only through this source's other current
+-- relationship. Its trusted target closure therefore contains the source's old
+-- values and old optional edge. The terminal save must collapse that repeated
+-- source identity, apply the proposed source values once and remove the old
+-- optional edge after all target closures have been assembled.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'related_account');
+set local role vortex_runtime;
+create temporary table base_recursive_target_relationship_replacement on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000191'::uuid,
+  'update', :'type_c'::uuid,
+  'd5750000-0000-4000-8000-000000000011'::uuid, 1,
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Contained one changed',
+    :'f_link', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000005'
+    )
+  ),
+  pg_catalog.jsonb_build_object(
+    :'f_title', 'Contained one changed',
+    :'f_link', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s',
+      'recordId', 'd5750000-0000-4000-8000-000000000005'
+    )
+  ), null,
+  'a4750000-0000-4000-8000-000000000192'::uuid,
+  'a4750000-0000-4000-8000-000000000193'::uuid
+) as result;
+reset role;
+select is(
+  (select pg_catalog.concat_ws('|', result ->> 'outcome',
+    result ->> 'concurrencyNumber')
+   from base_recursive_target_relationship_replacement),
+  'saved|2',
+  'a target closure that reaches the changed source does not duplicate or stale-refuse it'
+);
+select is((
+  select pg_catalog.concat_ws('|',
+    stored.concurrency_number::text,
+    stored.f_f4750000000040008000000000000021,
+    stored.f_f4750000000040008000000000000022 ->> 'recordId',
+    (select pg_catalog.count(*) from vortex_record.relationship_edges as edge
+      where edge.relationship_id = :'relationship_one'
+        and edge.from_record_id = stored.record_id
+        and edge.to_record_id = 'd5750000-0000-4000-8000-000000000004'),
+    (select pg_catalog.count(*) from vortex_record.relationship_edges as edge
+      where edge.relationship_id = :'relationship_one'
+        and edge.from_record_id = stored.record_id
+        and edge.to_record_id = 'd5750000-0000-4000-8000-000000000005'),
+    (select pg_catalog.count(*) from vortex_record.relationship_edges as edge
+      where edge.relationship_id = :'relationship_required'
+        and edge.from_record_id = stored.record_id
+        and edge.to_record_id = 'd5750000-0000-4000-8000-000000000005')
+  )
+  from record_data.rt_b4750000000040008000000000000002 as stored
+  where stored.record_id = 'd5750000-0000-4000-8000-000000000011'
+), '2|Contained one changed|d5750000-0000-4000-8000-000000000005|0|1|1',
+  'the final source values and replacement edge win without restoring the removed edge');
+
+-- Current Group eligibility is checked at the terminal mutation. Removing the
+-- membership cannot be bypassed by a previously prepared Group selection.
+select pg_temp.adapter_clear_context();
+create temporary table base_removed_group_membership on commit drop as
+select * from vortex_access.coordinate_organization_group_membership_change(
+  'remove_membership', :'org_one',
+  '84750000-0000-4000-8000-000000000011', 1,
+  null, null, null, null, null, :'actor',
+  'c4750000-0000-4000-8000-000000000221'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'member_account');
+set local role vortex_runtime;
+create temporary table base_revoked_group_create on commit drop as
+select vortex_record.save_base_record(
+  'a4750000-0000-4000-8000-000000000222'::uuid,
+  'create', :'type_s'::uuid, null, null,
+  pg_catalog.jsonb_build_object(:'f_text', 'Revoked Group must refuse'),
+  pg_catalog.jsonb_build_object(:'f_text', 'Revoked Group must refuse'),
+  '84750000-0000-4000-8000-000000000001'::uuid,
+  'a4750000-0000-4000-8000-000000000223'::uuid,
+  'a4750000-0000-4000-8000-000000000224'::uuid
+) as result;
+reset role;
+select is(
+  (select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
+    from base_revoked_group_create),
+  'refused|owner_unavailable',
+  'a removed Group membership refuses the selected Group at terminal create'
+);
+select is((
+  select pg_catalog.concat_ws('|',
+    (select pg_catalog.count(*) from record_data.rt_b4750000000040008000000000000001
+      where f_f4750000000040008000000000000001 = 'Revoked Group must refuse'),
+    (select pg_catalog.count(*) from vortex_record.save_command_receipts
+      where command_id = 'a4750000-0000-4000-8000-000000000222'),
+    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+      where activity_id = 'a4750000-0000-4000-8000-000000000223'
+        and outcome = 'refused'),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id = 'a4750000-0000-4000-8000-000000000224'))
+), '0|0|0|0',
+  'the unavailable Group selection writes no Record, receipt, Activity or Event');
 
 select * from finish();
 rollback;

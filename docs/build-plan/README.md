@@ -340,6 +340,13 @@ Prove allowed and refused cases using actual non-owner database roles and the ow
 
 **13 September checkpoint:** fixed read/change adapters [#401](https://github.com/Abzum-NZ/Abzum-Vortex/issues/401) are Done through [PR #416](https://github.com/Abzum-NZ/Abzum-Vortex/pull/416). Activation/detach [#43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43), exact-value conditions [#399](https://github.com/Abzum-NZ/Abzum-Vortex/issues/399), create/delete/restore/reference/edges [#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402), consumers [#403](https://github.com/Abzum-NZ/Abzum-Vortex/issues/403) and fixture follow-up [#417](https://github.com/Abzum-NZ/Abzum-Vortex/issues/417) are In review. Transactional event append [#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400) is In progress; its [implementation evidence](../evidence/issue-400-private-event-append.md) records focused verification without claiming review or delivery. Saves [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) remain Backlog pending their real prerequisites; stored calculations [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) then follow #47. Populated incompatible changes [#404](https://github.com/Abzum-NZ/Abzum-Vortex/issues/404) remain Backlog after [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64). Phase epics retain their full integration acceptance.
 
+**13 September save update:** the [#47 save plan](issue-47-save-command.md)
+supersedes the earlier “Backlog” sentence above. Its base ordinary-human
+create/update candidate is implemented locally over the merged Record, Access,
+installation and transactional Event foundations. It remains In progress until
+independent review and the exact hosted Testing revision pass. [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48)
+still follows #47 and is not included in the base slice.
+
 **Current project epic:** [#42](https://github.com/Abzum-NZ/Abzum-Vortex/issues/42)
 
 **Needs:** Phase 3.
