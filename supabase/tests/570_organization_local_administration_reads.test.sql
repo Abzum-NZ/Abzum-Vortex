@@ -729,6 +729,13 @@ select results_eq(
   $$values ('unavailable'::text)$$,
   'a foreign account detail has the same unavailable outcome as absence'
 );
+select results_eq(
+  $$select outcome from vortex_access.read_organization_account_for_administration(
+      '55700000-0000-4000-8000-000000000099'
+    )$$,
+  $$values ('unavailable'::text)$$,
+  'a missing account ID has the safe unavailable outcome'
+);
 select throws_ok(
   $$select * from vortex_access.list_organization_accounts_for_administration(null, 0)$$,
   '22023'::char(5), 'Organization account administration page input is invalid',
@@ -821,6 +828,13 @@ select results_eq(
     )$$,
   $$values ('unavailable'::text)$$,
   'a foreign invitation detail has the same unavailable outcome as absence'
+);
+select results_eq(
+  $$select outcome from vortex_access.read_organization_invitation_for_administration(
+      '35700000-0000-4000-8000-000000000099'
+    )$$,
+  $$values ('unavailable'::text)$$,
+  'a missing invitation ID has the safe unavailable outcome'
 );
 select throws_ok(
   $$select * from vortex_access.list_organization_invitations_for_administration(
