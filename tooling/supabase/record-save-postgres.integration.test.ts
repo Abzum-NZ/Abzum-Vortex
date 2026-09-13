@@ -567,6 +567,11 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           ${organizationId}, ${tenantId}, 'record_save_service', 'Record save service', 'active',
           pg_catalog.statement_timestamp(), ${actorId}, pg_catalog.statement_timestamp(), 1
         )`;
+        await transaction`set local role vortex_runtime`;
+        await transaction`select * from vortex_identity.initialize_organization_runtime_settings(
+          ${organizationId}::uuid, 'en-NZ', 'Pacific/Auckland', 'NZD', 'medium', 'auto'
+        )`;
+        await transaction`reset role`;
         await transaction`select * from vortex_identity.ensure_identity_projection(
           ${identityId}::uuid, ${id(19)}::uuid
         )`;

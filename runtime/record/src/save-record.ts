@@ -16,6 +16,7 @@ import {
 } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
@@ -232,6 +233,21 @@ const persist = async (
   return candidate as StoredResult;
 };
 
+/**
+ * The Record service owns the privileged prepare/persist boundary, while
+ * Access owns the request-scoped settings read. Keep that read between those
+ * two phases: a replay or refusal never observes settings, and persistence
+ * always resumes with the runtime role.
+ */
+const readOrganizationRuntimeSettings = async (transaction: RequestDatabaseTransaction) => {
+  await transaction.query`set local role vortex_request`;
+  try {
+    return await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
+  } finally {
+    await transaction.query`set local role vortex_runtime`;
+  }
+};
+
 export type RecordSaveServiceDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     activityId?: () => string;
@@ -271,15 +287,19 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             ? recordedRefusal
             : safeRefusal(prepared.correlationId, "operation_refused");
 
+        const settings = await readOrganizationRuntimeSettings(transaction);
         const values = prepareRecordFieldValuesV2({
           operation: command.data.operation,
           recordType: prepared.recordType,
           submittedValues: command.data.submittedValues,
+          ...(settings?.currency === undefined ? {} : { organizationCurrency: settings.currency }),
           ...(command.data.operation === "update"
             ? { existingValues: prepared.existingValues }
             : {}),
         });
         if (!values.success) {
+          if (values.issues.some((issue) => issue.code === "organization_currency_required"))
+            return safeRefusal(prepared.correlationId, "operation_refused");
           const corrections = correctionsFor(values.issues, prepared.readableFieldIds);
           return corrections === undefined || corrections.length === 0
             ? safeRefusal(prepared.correlationId, "operation_refused")
