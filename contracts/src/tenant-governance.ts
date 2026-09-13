@@ -9,10 +9,8 @@ import {
   tenantIdSchema,
   timestampSchema,
 } from "./identifiers";
-import {
-  tenantStructuralCapabilitySetSchema,
-  tenantStructuralCapabilitySchema,
-} from "./identity-access";
+import { tenantStructuralCapabilitySetSchema } from "./identity-access";
+import type { tenantStructuralCapabilitySchema } from "./identity-access";
 
 const pageLimitSchema = z.number().int().min(1).max(100);
 const pageFor = <Cursor extends z.ZodType>(cursor: Cursor) =>
