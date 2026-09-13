@@ -97,6 +97,7 @@ export const createHumanOrganizationRequestService = (
     operation: (
       transaction: RequestDatabaseTransaction,
       scope: SelectedOrganizationScope,
+      issuedAt: string,
     ) => Promise<Result>,
     prepare?: ChangePreparation,
   ): Promise<HumanOrganizationRequestResult<Result>> => {
@@ -128,26 +129,27 @@ export const createHumanOrganizationRequestService = (
       return { kind: "unavailable" };
 
     try {
-      const value = await runTransaction(async (transaction) => {
-        const rows =
-          verifiedCandidate.data.applicationRootId === undefined
-            ? mode === "change"
-              ? await transaction.query<ScopeRow>`
+      const value = await runTransaction(
+        async (transaction) => {
+          const rows =
+            verifiedCandidate.data.applicationRootId === undefined
+              ? mode === "change"
+                ? await transaction.query<ScopeRow>`
                   select *
                   from vortex_access.resolve_human_organization_change_scope(
                     ${verifiedSession.data.identityId}::uuid,
                     ${verifiedCandidate.data.organizationId}::uuid
                   )
                 `
-              : await transaction.query<ScopeRow>`
+                : await transaction.query<ScopeRow>`
                   select *
                   from vortex_access.resolve_human_organization_scope(
                     ${verifiedSession.data.identityId}::uuid,
                     ${verifiedCandidate.data.organizationId}::uuid
                   )
                 `
-            : mode === "change"
-              ? await transaction.query<ScopeRow>`
+              : mode === "change"
+                ? await transaction.query<ScopeRow>`
                   select *
                   from vortex_access.resolve_human_application_change_scope(
                     ${verifiedSession.data.identityId}::uuid,
@@ -155,7 +157,7 @@ export const createHumanOrganizationRequestService = (
                     ${verifiedCandidate.data.applicationRootId}::uuid
                   )
                 `
-              : await transaction.query<ScopeRow>`
+                : await transaction.query<ScopeRow>`
                   select *
                   from vortex_access.resolve_human_application_scope(
                     ${verifiedSession.data.identityId}::uuid,
@@ -163,48 +165,53 @@ export const createHumanOrganizationRequestService = (
                     ${verifiedCandidate.data.applicationRootId}::uuid
                   )
                 `;
-        const scope = parseScope(rows);
-        if (
-          (verifiedCandidate.data.applicationRootId === undefined) !==
-            (scope.applicationRootId === undefined) ||
-          (verifiedCandidate.data.applicationRootId !== undefined &&
-            scope.applicationRootId !== undefined &&
-            !representsSameUuid(verifiedCandidate.data.applicationRootId, scope.applicationRootId))
-        )
-          throw new Error("INVALID_SCOPE_RESULT");
-        const context: SessionContext = sessionContextSchema.parse({
-          callerKind: "human",
-          identityAuthorityId: configuredAuthority,
-          tenantId: scope.tenantId,
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          ...(scope.applicationRootId === undefined
-            ? {}
-            : { applicationRootId: scope.applicationRootId }),
-          identityId: verifiedSession.data.identityId,
-          sessionId: verifiedSession.data.sessionId,
-          authenticationStrength: verifiedSession.data.authenticationStrength,
-          ...(hasAuthenticationEvidence
-            ? {
-                accessTokenIssuedAt: verifiedSession.data.accessTokenIssuedAt,
-                ...(verifiedSession.data.primaryAuthenticatedAt === undefined
-                  ? {}
-                  : { primaryAuthenticatedAt: verifiedSession.data.primaryAuthenticatedAt }),
-                ...(verifiedSession.data.multiFactorAuthenticatedAt === undefined
-                  ? {}
-                  : {
-                      multiFactorAuthenticatedAt: verifiedSession.data.multiFactorAuthenticatedAt,
-                    }),
-              }
-            : {}),
-          issuedAt,
-          expiresAt: verifiedSession.data.accessTokenExpiresAt,
-          accessVersion: scope.accessVersion,
-          correlationId,
-        });
-        if (prepare !== undefined) await prepare(transaction, scope);
-        return { context, scope };
-      }, operation);
+          const scope = parseScope(rows);
+          if (
+            (verifiedCandidate.data.applicationRootId === undefined) !==
+              (scope.applicationRootId === undefined) ||
+            (verifiedCandidate.data.applicationRootId !== undefined &&
+              scope.applicationRootId !== undefined &&
+              !representsSameUuid(
+                verifiedCandidate.data.applicationRootId,
+                scope.applicationRootId,
+              ))
+          )
+            throw new Error("INVALID_SCOPE_RESULT");
+          const context: SessionContext = sessionContextSchema.parse({
+            callerKind: "human",
+            identityAuthorityId: configuredAuthority,
+            tenantId: scope.tenantId,
+            organizationId: scope.organizationId,
+            organizationAccountId: scope.organizationAccountId,
+            ...(scope.applicationRootId === undefined
+              ? {}
+              : { applicationRootId: scope.applicationRootId }),
+            identityId: verifiedSession.data.identityId,
+            sessionId: verifiedSession.data.sessionId,
+            authenticationStrength: verifiedSession.data.authenticationStrength,
+            ...(hasAuthenticationEvidence
+              ? {
+                  accessTokenIssuedAt: verifiedSession.data.accessTokenIssuedAt,
+                  ...(verifiedSession.data.primaryAuthenticatedAt === undefined
+                    ? {}
+                    : { primaryAuthenticatedAt: verifiedSession.data.primaryAuthenticatedAt }),
+                  ...(verifiedSession.data.multiFactorAuthenticatedAt === undefined
+                    ? {}
+                    : {
+                        multiFactorAuthenticatedAt: verifiedSession.data.multiFactorAuthenticatedAt,
+                      }),
+                }
+              : {}),
+            issuedAt,
+            expiresAt: verifiedSession.data.accessTokenExpiresAt,
+            accessVersion: scope.accessVersion,
+            correlationId,
+          });
+          if (prepare !== undefined) await prepare(transaction, scope);
+          return { context, scope };
+        },
+        (transaction, scope) => operation(transaction, scope, issuedAt),
+      );
       return { kind: "available", value };
     } catch (error) {
       return databaseCode(error) === "42501"
@@ -220,6 +227,7 @@ export const createHumanOrganizationRequestService = (
       operation: (
         transaction: RequestDatabaseTransaction,
         scope: SelectedOrganizationScope,
+        issuedAt: string,
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("read", session, candidate, operation),
@@ -229,6 +237,7 @@ export const createHumanOrganizationRequestService = (
       operation: (
         transaction: RequestDatabaseTransaction,
         scope: SelectedOrganizationScope,
+        issuedAt: string,
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("change", session, candidate, operation),
@@ -239,6 +248,7 @@ export const createHumanOrganizationRequestService = (
       operation: (
         transaction: RequestDatabaseTransaction,
         scope: SelectedOrganizationScope,
+        issuedAt: string,
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("change", session, candidate, operation, prepare),
