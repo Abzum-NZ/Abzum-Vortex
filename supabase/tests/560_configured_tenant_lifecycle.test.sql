@@ -1,4 +1,5 @@
 \ir helpers/private-schema-assertions.psql
+\ir helpers/management-application-fixture.psql
 
 begin;
 set local search_path = pg_catalog, extensions, public;
@@ -339,6 +340,270 @@ select is(
       and duplicate_key = 'd5600000-0000-4000-8000-000000000031'),
   0::bigint,
   'failed readiness writes no accepted lifecycle receipt'
+);
+
+-- Removing tenant-level adoption evidence must not bypass an adopted
+-- organisation's independent stewardship requirement. This fixture keeps a
+-- stored management-application requirement on a suspended organisation.
+create temporary table legacy_adopted_tenant on commit drop as
+select * from vortex_identity.provision_tenant(
+  'c5600000-0000-4000-8000-000000000001',
+  '95600000-0000-4000-8000-000000000001',
+  'd5600000-0000-4000-8000-000000000040',
+  'sha256:' || pg_catalog.repeat('4', 64),
+  'legacy_adopted', 'Legacy adopted tenant', 'legacy_adopted_root',
+  'Legacy adopted root',
+  '45600000-0000-4000-8000-000000000040',
+  '45600000-0000-4000-8000-000000000041',
+  'Original steward', 'en-NZ', 'Pacific/Auckland',
+  'en-NZ', 'Pacific/Auckland', 'NZD', 'medium', 'auto'
+);
+
+delete from vortex_identity.accepted_administration_receipts as receipt
+using legacy_adopted_tenant as fixture
+where receipt.cluster_id = 'c5600000-0000-4000-8000-000000000001'
+  and receipt.operation_key = 'provision_tenant'
+  and receipt.subject_ids @> array[fixture.tenant_id];
+
+select pg_temp.seed_management_application_fixture(
+  fixture.root_organization_id,
+  fixture.organization_account_id,
+  '35600000-0000-4000-8000-000000000040',
+  '45600000-0000-4000-8000-000000000042',
+  '65600000-0000-4000-8000-000000000040',
+  '45600000-0000-4000-8000-000000000043',
+  '75600000-0000-4000-8000-000000000040',
+  '95600000-0000-4000-8000-000000000001',
+  'example.lifecycle_management', 'lifecycle_management', '6'
+)
+from legacy_adopted_tenant as fixture;
+
+create temporary table legacy_management_activation on commit drop as
+select activation.*
+from legacy_adopted_tenant as fixture
+cross join lateral vortex_access.coordinate_organization_management_application_requirement(
+  'activate_management_application_requirement',
+  fixture.root_organization_id, 1,
+  '35600000-0000-4000-8000-000000000040',
+  '65600000-0000-4000-8000-000000000040', 1,
+  '95600000-0000-4000-8000-000000000001',
+  'a5600000-0000-4000-8000-000000000040'
+) as activation;
+select is(
+  (select outcome || '|' || (requirement ->> 'revision')
+    from legacy_management_activation),
+  'changed|2',
+  'the adopted organisation stores its management-application requirement'
+);
+
+update vortex_identity.organizations as organization
+set state = 'suspended', state_changed_at = pg_catalog.clock_timestamp(),
+  revision = organization.revision + 1
+from legacy_adopted_tenant as fixture
+where organization.organization_id = fixture.root_organization_id;
+
+select lifecycle.outcome
+from legacy_adopted_tenant as fixture
+cross join lateral vortex_identity.suspend_tenant(
+  'c5600000-0000-4000-8000-000000000001',
+  '95600000-0000-4000-8000-000000000001',
+  'd5600000-0000-4000-8000-000000000041',
+  'sha256:' || pg_catalog.repeat('5', 64), fixture.tenant_id, 1
+) as lifecycle;
+
+update vortex_access.organization_role_assignments as assignment
+set state = 'revoked', revision = 2,
+  changed_by = '95600000-0000-4000-8000-000000000001',
+  changed_at = pg_catalog.statement_timestamp(),
+  change_correlation_id = 'a5600000-0000-4000-8000-000000000041',
+  revoked_by = '95600000-0000-4000-8000-000000000001',
+  revoked_at = pg_catalog.statement_timestamp(),
+  revocation_correlation_id = 'a5600000-0000-4000-8000-000000000041'
+from legacy_adopted_tenant as fixture
+where assignment.organization_id = fixture.root_organization_id
+  and assignment.role_assignment_id =
+    '75600000-0000-4000-8000-000000000040';
+
+select is(
+  (select pg_catalog.count(*)
+    from vortex_identity.accepted_administration_receipts as receipt
+    join legacy_adopted_tenant as fixture
+      on receipt.tenant_id = fixture.tenant_id
+    where receipt.operation_key in ('adopt_tenant', 'provision_tenant')),
+  0::bigint,
+  'the fixture has no tenant adoption or provisioning evidence'
+);
+select ok(
+  not vortex_access.organization_has_permanent_steward(
+    (select root_organization_id from legacy_adopted_tenant),
+    pg_catalog.clock_timestamp()
+  ),
+  'the suspended adopted organisation lacks its required current steward'
+);
+
+select throws_ok(
+  pg_catalog.format(
+    'select * from vortex_identity.reactivate_tenant(%L,%L,%L,%L,%L,2)',
+    'c5600000-0000-4000-8000-000000000001',
+    '95600000-0000-4000-8000-000000000001',
+    'd5600000-0000-4000-8000-000000000042',
+    'sha256:' || pg_catalog.repeat('7', 64),
+    (select tenant_id from legacy_adopted_tenant)
+  ),
+  'V3002'::char(5), 'Permanent organisation steward is required',
+  'legacy tenant reactivation still refuses an adopted organisation without its required steward'
+);
+select is(
+  (select tenant.state || '|' || tenant.revision
+    from vortex_identity.tenants as tenant
+    join legacy_adopted_tenant as fixture
+      on fixture.tenant_id = tenant.tenant_id),
+  'suspended|2',
+  'the stewardship refusal leaves the legacy tenant unchanged'
+);
+select is(
+  (select pg_catalog.count(*)
+    from vortex_identity.accepted_administration_receipts as receipt
+    join legacy_adopted_tenant as fixture
+      on receipt.tenant_id = fixture.tenant_id
+    where receipt.operation_key = 'reactivate_tenant'
+      and receipt.duplicate_key =
+        'd5600000-0000-4000-8000-000000000042'),
+  0::bigint,
+  'the stewardship refusal writes no accepted reactivation receipt'
+);
+
+insert into vortex_identity.identity_projections (
+  identity_id, state, created_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+) values (
+  '45600000-0000-4000-8000-000000000044', 'active',
+  pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+  '95600000-0000-4000-8000-000000000001',
+  'a5600000-0000-4000-8000-000000000044', 1
+);
+insert into vortex_identity.organization_accounts (
+  organization_account_id, organization_id, identity_id, display_name,
+  state, activated_at, changed_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+)
+select '55600000-0000-4000-8000-000000000044',
+  fixture.root_organization_id,
+  '45600000-0000-4000-8000-000000000044', 'Replacement steward',
+  'active', pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+  pg_catalog.clock_timestamp(),
+  '95600000-0000-4000-8000-000000000001',
+  'a5600000-0000-4000-8000-000000000044', 1
+from legacy_adopted_tenant as fixture;
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, group_id, assignment_kind, revision,
+  starts_at, expires_at, state, granted_by, granted_at,
+  grant_correlation_id, changed_by, changed_at, change_correlation_id
+)
+select fixture.root_organization_id,
+  '75600000-0000-4000-8000-000000000044',
+  requirement.original_role_id, 'organization_account',
+  '55600000-0000-4000-8000-000000000044', null, 'standing', 1,
+  pg_catalog.clock_timestamp() - interval '1 minute', null, 'live',
+  '95600000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a5600000-0000-4000-8000-000000000045',
+  '95600000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a5600000-0000-4000-8000-000000000045'
+from legacy_adopted_tenant as fixture
+join vortex_access.organization_stewardship_requirements as requirement
+  on requirement.organization_id = fixture.root_organization_id;
+insert into vortex_access.organization_delegation_authorities (
+  organization_id, delegation_authority_id, holder_kind,
+  organization_account_id, group_id, scope_kind, bounded_permissions,
+  scope_fingerprint, revision, starts_at, expires_at, state, granted_by,
+  granted_at, grant_correlation_id, changed_by, changed_at,
+  change_correlation_id
+)
+select fixture.root_organization_id,
+  '85600000-0000-4000-8000-000000000044', 'organization_account',
+  '55600000-0000-4000-8000-000000000044', null,
+  'organization_catalogue', null, null, 1,
+  pg_catalog.clock_timestamp() - interval '1 minute', null, 'live',
+  '95600000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a5600000-0000-4000-8000-000000000046',
+  '95600000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a5600000-0000-4000-8000-000000000046'
+from legacy_adopted_tenant as fixture;
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, group_id, assignment_kind, revision,
+  starts_at, expires_at, state, granted_by, granted_at,
+  grant_correlation_id, changed_by, changed_at, change_correlation_id
+)
+select fixture.root_organization_id,
+  '75600000-0000-4000-8000-000000000045',
+  '65600000-0000-4000-8000-000000000040', 'organization_account',
+  '55600000-0000-4000-8000-000000000044', null, 'standing', 1,
+  pg_catalog.clock_timestamp() - interval '1 minute', null, 'live',
+  '95600000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a5600000-0000-4000-8000-000000000047',
+  '95600000-0000-4000-8000-000000000001', pg_catalog.clock_timestamp(),
+  'a5600000-0000-4000-8000-000000000047'
+from legacy_adopted_tenant as fixture;
+
+select ok(
+  vortex_access.organization_has_permanent_steward(
+    (select root_organization_id from legacy_adopted_tenant),
+    pg_catalog.clock_timestamp()
+  ),
+  'a qualifying replacement satisfies both stewardship requirements'
+);
+create temporary table legacy_child_snapshot on commit drop as
+select organization.state as organization_state,
+  organization.revision as organization_revision,
+  access.current_version as access_version,
+  pg_catalog.count(account.organization_account_id) as account_count
+from legacy_adopted_tenant as fixture
+join vortex_identity.organizations as organization
+  on organization.organization_id = fixture.root_organization_id
+join vortex_access.organization_access_versions as access
+  on access.organization_id = organization.organization_id
+join vortex_identity.organization_accounts as account
+  on account.organization_id = organization.organization_id
+group by organization.state, organization.revision, access.current_version;
+
+select is(
+  (select outcome || '|' || revision
+    from vortex_identity.reactivate_tenant(
+      'c5600000-0000-4000-8000-000000000001',
+      '95600000-0000-4000-8000-000000000001',
+      'd5600000-0000-4000-8000-000000000042',
+      'sha256:' || pg_catalog.repeat('7', 64),
+      (select tenant_id from legacy_adopted_tenant), 2
+    )),
+  'accepted|3',
+  'the same refused command succeeds after a qualifying replacement exists'
+);
+select is(
+  (select row(organization.state, organization.revision,
+      access.current_version,
+      (select pg_catalog.count(*)
+       from vortex_identity.organization_accounts as account
+       where account.organization_id = organization.organization_id))::text
+    from legacy_adopted_tenant as fixture
+    join vortex_identity.organizations as organization
+      on organization.organization_id = fixture.root_organization_id
+    join vortex_access.organization_access_versions as access
+      on access.organization_id = organization.organization_id),
+  (select row(organization_state, organization_revision,
+    access_version, account_count)::text from legacy_child_snapshot),
+  'reactivation leaves the suspended organisation and its child facts unchanged'
+);
+select is(
+  (select state || '|' || revision
+    from vortex_access.organization_role_assignments
+    where organization_id =
+      (select root_organization_id from legacy_adopted_tenant)
+      and role_assignment_id =
+        '75600000-0000-4000-8000-000000000040'),
+  'revoked|2',
+  'reactivation does not restore the revoked management grant'
 );
 
 select * from finish();

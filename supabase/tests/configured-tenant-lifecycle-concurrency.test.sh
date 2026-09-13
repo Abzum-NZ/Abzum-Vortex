@@ -25,6 +25,8 @@ readonly duplicate_identity="56${run_uuid:2}" duplicate_identity_lifecycle="66${
 readonly duplicate_reactivate_four="76${run_uuid:2}" duplicate_steward="86${run_uuid:2}"
 readonly duplicate_steward_lifecycle="96${run_uuid:2}" duplicate_reactivate_five="a6${run_uuid:2}"
 readonly duplicate_request_lifecycle="b7${run_uuid:2}" duplicate_reactivate_six="c7${run_uuid:2}"
+readonly duplicate_final_suspend="d7${run_uuid:2}" duplicate_steward_refusal="e7${run_uuid:2}"
+readonly final_steward_correlation="f7${run_uuid:2}"
 
 proof_root="$(mktemp -d /tmp/vortex-configured-tenant-lifecycle.XXXXXX)"
 readonly proof_root
@@ -68,7 +70,7 @@ cleanup() {
   touch "$proof_root/release-same" "$proof_root/release-compete" \
     "$proof_root/release-create" "$proof_root/release-manager" \
     "$proof_root/release-identity" "$proof_root/release-steward" \
-    "$proof_root/release-request"
+    "$proof_root/release-request" "$proof_root/release-steward-refusal"
   for worker in "${workers[@]}"; do wait "$worker" >/dev/null 2>&1 || true; done
   if [ "$fixture_created" = 1 ]; then
     run_sql "begin; set local session_replication_role=replica;
@@ -143,8 +145,11 @@ readonly tenant_id root_id original_manager_assignment_id steward_account_id
 }
 fixture_created=1
 
-read -r steward_role_id <<<"$(run_sql "select original_role_id from vortex_access.organization_stewardship_requirements where organization_id='$root_id';")"
-readonly steward_role_id
+IFS='|' read -r steward_role_id original_steward_assignment_id <<<"$(run_sql "
+  select original_role_id::text||'|'||original_role_assignment_id::text
+  from vortex_access.organization_stewardship_requirements
+  where organization_id='$root_id';")"
+readonly steward_role_id original_steward_assignment_id
 run_sql "
   insert into vortex_identity.identity_projections(
     identity_id,state,created_at,state_changed_at,state_changed_by,state_change_correlation_id,revision
@@ -373,11 +378,60 @@ grep -Fq 'Organisation selection is unavailable' <<<"$request_after_suspend" || 
 }
 [ "$(run_sql "select outcome||'|'||revision from vortex_identity.reactivate_tenant('$cluster_id','$operator_id','$duplicate_reactivate_six','sha256:4545454545454545454545454545454545454545454545454545454545454545','$tenant_id',12);")" = 'accepted|13' ] || { echo 'sixth reactivation failed' >&2; exit 1; }
 
-[ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where cluster_id='$cluster_id' and operation_key in ('suspend_tenant','reactivate_tenant') and duplicate_key in ('$duplicate_compete_two','$duplicate_create_lifecycle');")" = 0 ] || {
+# A queued reactivation must evaluate the stewardship state that commits ahead
+# of it. The direct mutation models already-stored legacy damage: it owns the
+# governance row, removes the last live steward, and advances Access before
+# committing. Reactivation then refuses without changing tenant state or
+# recording acceptance.
+[ "$(run_sql "select outcome||'|'||revision from vortex_identity.suspend_tenant('$cluster_id','$operator_id','$duplicate_final_suspend','sha256:5656565656565656565656565656565656565656565656565656565656565656','$tenant_id',13);")" = 'accepted|14' ] || { echo 'final suspension failed' >&2; exit 1; }
+receipt_count_before="$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where tenant_id='$tenant_id' and operation_key='reactivate_tenant' and duplicate_key='$duplicate_steward_refusal';")"
+readonly receipt_count_before
+"${psql_command[@]}" >"$proof_root/steward-refusal.log" 2>&1 <<SQL &
+begin; set local lock_timeout='25s'; set local statement_timeout='35s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/steward-refusal.pid'
+select current_version from vortex_access.organization_access_versions
+where organization_id='$root_id' for update;
+update vortex_access.organization_role_assignments
+set state='revoked',revision=revision+1,changed_by='$operator_id',
+  changed_at=statement_timestamp(),change_correlation_id='$final_steward_correlation',
+  revoked_by='$operator_id',revoked_at=statement_timestamp(),
+  revocation_correlation_id='$final_steward_correlation'
+where organization_id='$root_id'
+  and role_assignment_id='$original_steward_assignment_id' and state='live';
+select current_version from vortex_access.increment_organization_access_version(
+  '$root_id','$operator_id','$final_steward_correlation','stewardship_changed');
+\! touch '$proof_root/steward-refusal.ready'
+\! while [ ! -f '$proof_root/release-steward-refusal' ]; do sleep 0.05; done
+commit;
+SQL
+w=$!; workers+=("$w"); wait_file "$proof_root/steward-refusal.ready"; steward_refusal_pid="$(read_pid "$proof_root/steward-refusal.pid")"
+steward_refusal_lifecycle="$(lifecycle_call reactivate_tenant "$duplicate_steward_refusal" "$(printf '7%.0s' {1..64})" 14)"
+"${psql_command[@]}" >"$proof_root/steward-refusal-lifecycle.log" 2>&1 <<SQL &
+begin; set local lock_timeout='25s'; set local statement_timeout='35s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/steward-refusal-lifecycle.pid'
+\set ON_ERROR_STOP off
+$steward_refusal_lifecycle;
+\echo :SQLSTATE
+rollback;
+SQL
+w=$!; workers+=("$w"); steward_refusal_lifecycle_pid="$(read_pid "$proof_root/steward-refusal-lifecycle.pid")"
+wait_blocked "$steward_refusal_lifecycle_pid" "$steward_refusal_pid" 'reactivation queued behind committed stewardship loss'
+touch "$proof_root/release-steward-refusal"; wait_worker "${workers[14]}" "$proof_root/steward-refusal.log" 'committed stewardship loss'; wait_worker "${workers[15]}" "$proof_root/steward-refusal-lifecycle.log" 'reactivation after stewardship loss'
+grep -qx 'V3002' "$proof_root/steward-refusal-lifecycle.log" || { echo 'reactivation did not refuse committed stewardship loss' >&2; cat "$proof_root/steward-refusal-lifecycle.log" >&2; exit 1; }
+[ "$(run_sql "select state||'|'||revision from vortex_identity.tenants where tenant_id='$tenant_id';")" = 'suspended|14' ] || {
+  echo 'refused reactivation changed the tenant' >&2
+  exit 1
+}
+[ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where tenant_id='$tenant_id' and operation_key='reactivate_tenant' and duplicate_key='$duplicate_steward_refusal';")" = "$receipt_count_before" ] || {
+  echo 'refused reactivation wrote an accepted receipt' >&2
+  exit 1
+}
+
+[ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where cluster_id='$cluster_id' and operation_key in ('suspend_tenant','reactivate_tenant') and duplicate_key in ('$duplicate_compete_two','$duplicate_create_lifecycle','$duplicate_steward_refusal');")" = 0 ] || {
   echo 'a stale concurrency path wrote a tenant lifecycle receipt' >&2
   exit 1
 }
-[ "$(run_sql "select state||'|'||revision from vortex_identity.tenants where tenant_id='$tenant_id';")" = 'active|13' ] || {
+[ "$(run_sql "select state||'|'||revision from vortex_identity.tenants where tenant_id='$tenant_id';")" = 'suspended|14' ] || {
   echo 'configured tenant lifecycle proof ended with unexpected tenant state' >&2
   exit 1
 }
