@@ -41,12 +41,14 @@ Delivered on `testing`:
   ([PR #445](https://github.com/Abzum-NZ/Abzum-Vortex/pull/445)).
 - **Slice 3B** — protected display-name rename and same-tenant/root reparent
   ([PR #446](https://github.com/Abzum-NZ/Abzum-Vortex/pull/446)).
+- **Slice 3C** — protected organisation lifecycle: suspend, reactivate and
+  administrative archive ([PR #448](https://github.com/Abzum-NZ/Abzum-Vortex/pull/448)).
 
-Slices 1, 2, 3A and 3B are merged to Testing; their exact hosted verification
-remains a delivery gate. The next implementation assignment is **Slice 3C only:
-suspend, reactivate and administratively archive an existing organisation**. It
-is intentionally separate from organisation creation so lifecycle, stewardship
-readiness and hierarchy races can be reviewed on their own.
+Slices 1, 2, 3A, 3B and 3C are merged to Testing; their exact hosted verification
+remains a delivery gate. The next implementation assignment is **Slice 3D only:
+tenant-authorised organisation creation**. It is intentionally separate from
+lifecycle so the first human-created organisation, explicit steward composition,
+and parent/authority races can be reviewed on their own.
 
 ## Outcome
 
@@ -235,10 +237,12 @@ a foreign or inactive target exists.
   receipt semantics and a post-wait authority recheck. Reparenting reuses #23's
   same-tenant, self-parent and cycle constraints. It does not alter descendants:
   their existing links make them move with the subtree.
-- **Current 3C:** suspend, reactivate and administratively archive an existing
+- **Delivered 3C:** suspend, reactivate and administratively archive an existing
   organisation under the lifecycle capability and established structural rules.
-- **Later, separately picked up:** tenant-authorised organisation creation with
-  explicit steward composition; tenant lifecycle.
+- **Current 3D:** tenant-authorised creation of one organisation with an explicit
+  existing active steward nominee and explicit runtime settings, using delivered
+  provisioning composition.
+- **Later, separately picked up:** tenant lifecycle.
 
 ### 4. System-only cluster lifecycle
 
@@ -340,6 +344,65 @@ proof covers archive versus child attachment/reactivation, competing transitions
 authority expiry while queued, reactivation versus a supported stewardship/account
 mutation, and lifecycle versus request resolution. The result must show no invalid
 state, leaked receipt or lock-order deadlock.
+
+## Slice 3D — tenant-authorised organisation creation
+
+This slice has one server-only, channel-neutral command:
+`create_tenant_organization`. It creates exactly one active organisation inside
+the caller's selected tenant. Its input is an explicit duplicate key, tenant ID,
+nullable parent ID (explicit `null` means a root), permanent short name, display
+name, nominated organisation-steward identity, that steward account's display
+name/language/time zone, and the five explicit runtime settings owned by
+[#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430): language, time zone,
+currency, date format and number format. Server/database facts supply IDs, actor,
+correlation, time and initial revisions. Creation has no expected prior revision.
+
+The verified caller must have an active local identity projection, active selected
+tenant and the exact current `platform.tenant.organizations.create` capability.
+Tenant `.manage`, organisation membership and every other capability refuse; no
+target organisation account is required. The nominated steward is an explicitly
+nominated verified identity with an existing active local projection. This human
+command neither creates nor revives a projection, performs provider/email lookup,
+or grants the creator anything by default. The creator obtains an account, role or
+stewardship only when explicitly nominated.
+
+On first application, the transaction creates the active organisation, the
+nominated steward's active organisation account, #430 runtime settings, its
+private Access baseline and platform catalogue, and invokes the delivered
+[#33 stewardship adoption](../evidence/issue-33-stewardship/README.md). It does
+not create a tenant, tenant-administrator assignment, invitation, IAM installation
+or binding, parent membership, inherited business access, second stewardship
+evaluator, or new system-operator wrapper. All failures roll back the entire set.
+
+The parent is either `null` or an existing same-tenant organisation. An active or
+suspended parent is valid; a missing, foreign, archived or removal-pending parent
+refuses. Creation changes no parent revision, lifecycle, settings, descendants or
+Access version. It preserves #23's immutable scope, tenant-local short-name
+uniqueness and hierarchy constraints without imposing a single-root policy.
+
+Acquire tenant serialization, then compatible sorted identity-projection and
+caller-assignment locks. Check authority at fresh database time after waits. An
+exact accepted receipt is checked before current parent, nominee or created-scope
+state; its exact retry returns the original identifiers, revisions and time, while
+a changed payload conflicts. On a first application, lock and recheck parent and
+nominee eligibility, create the transaction-private organisation governance
+baseline, apply the owned settings and stewardship compositions, and write the
+receipt atomically. Recheck temporal authority after any further blocking
+acquisition. Existing organisation governance follows governance-before-tenant;
+this new private governance row needs no existing-row lock inversion. Tenant
+serialization protects creation versus parent archive.
+
+Proof must cover root and child creation, explicit self/different nominee, and no
+creator membership for a different nominee; exact capability and tenant/projection/
+nominee/temporal refusals; settings and minimum stewardship facts; simultaneous
+same-key creation producing exactly one complete organisation/account/settings/
+stewardship set and one receipt; changed-input conflict; competing same-short-name
+creation with no orphan facts;
+creation versus parent archive, caller authority change/revoke/expiry, request
+resolution and supported governance operations without a lock-order deadlock; and
+exact replay after later account/stewardship mutation without restoring historical
+grants. Do not add a generic dispatcher, retry framework, history, counter,
+policy engine, UI, MCP transport or AI behaviour.
 
 ### 5. Organisation-local reads
 
