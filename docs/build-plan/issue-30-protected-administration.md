@@ -570,16 +570,82 @@ Account or invitation mutation, offboarding, ownership transfer, Groups, PIM,
 general query/filter engines, UI, application definitions, MCP/AI, provider
 operations and Production deployment remain outside this slice.
 
-### 6. Organisation-local changes
+## Slice 6 — planned organisation-local account lifecycle and invitations
 
-- Use a task-owned governance-first resolver and the sole
-  [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) decision in the same
-  transaction for each exact `.manage` operation.
-- Invoke the delivered guarded account-state writer. Account and Access version
-  change together or neither, and the final permanent steward remains valid.
-- Invoke the [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) no-intent
-  invitation create/revoke composition. Return the raw secret only for the first
-  committed creation; an exact replay returns metadata without a secret.
+After Slice 5's exact delivery verification, this slice will add five
+server-only commands: `suspendOrganizationAccount`,
+`reactivateOrganizationAccount`, `closeOrganizationAccount`,
+`createOrganizationInvitation`, and `revokeOrganizationInvitation`. Account
+changes accept one local account ID, positive expected revision and duplicate
+key. Invitation creation accepts a trimmed/lower-cased valid email, a future
+expiry and duplicate key; revocation accepts one local invitation ID, positive
+expected revision and duplicate key. All identifiers and duplicate keys are
+non-nil UUIDs. Unknown fields refuse. A caller never supplies actor, tenant,
+resolved organisation/account, authority, permission, Access version, clock,
+correlation, role/Group intent, secret or fingerprint.
+
+The commands reuse `createHumanOrganizationRequestService.runChange` and its
+delivered governance-first resolver; no task-specific resolver or second
+permission evaluator is introduced. Account commands require only
+`platform.organization.accounts.manage`; invitation commands require only
+`platform.organization.invitations.manage`. The exact decision occurs inside
+the same transaction. A `.read` permission, the other `.manage` permission,
+membership, tenant administration, a role name, or configured-system authority
+never substitutes. No new MFA, approval, or IAM workflow is introduced for
+these account-only, no-intent operations.
+
+The protected Access wrappers call the existing owners rather than duplicate
+their rules: account transitions use the guarded account-state writer, which
+owns same-transaction Access invalidation and the permanent-steward assertion;
+invitations use [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24)'s
+no-intent create/revoke writers. A successful account transition is respectively
+`active → suspended`, `suspended/closed → active`, or `active/suspended →
+closed`. Closing is not deletion or offboarding: the same local account can be
+reactivated under the existing contract. Existing qualifying authority can then
+be effective again; revoked or expired authority does not revive. Invitation
+revoke accepts unaccepted, unrevoked invitations, including expired invitations;
+accepted or already-revoked invitations refuse. These commands neither create
+accounts, roles, assignments or intents nor change provider/session state.
+
+The current organisation account, tenant, fixed operation and duplicate key use
+the existing receipt model. Its canonical input fingerprint includes the
+resolved organisation and command, and its stored subjects include the
+organisation and target. Current request eligibility and the exact permission
+are checked before a receipt may replay. An exact accepted retry returns recorded
+minimal evidence; changed input conflicts; a now-ineligible caller cannot use a
+replay to regain entry. Account outcomes include operation, organisation, target,
+target revision, receipt/correlation ID, accepted server time and recorded Access
+version. Invitation outcomes contain equivalent non-secret evidence. Raw
+invitation secret material exists only in the first committed creation response,
+after commit; it is never retained in a receipt, replay, error, log or Activity
+record. A lost first response cannot recover a secret: an authorised
+administrator revokes and creates a fresh invitation instead.
+
+Use fresh database time after resolver waits. Reuse existing target locks,
+stewardship checks and lock order; do not add a retry layer, generic mutation
+framework, new history/counter/policy evaluator or dispatcher. Missing and
+foreign targets share safe unavailable behaviour. Same-state, prohibited,
+stale or exhausted-revision transitions refuse without accepted receipt or
+mutation. An accepted account command changes its target, Access version and
+receipt together or changes none; invitation creation/revocation rolls back
+both writer and receipt together on failure.
+
+Proof must execute the exact request-role boundary, including each precise
+permission, cross-permission/member/tenant-only refusal, direct-table/helper ACL
+denial, closed-account reactivation, invitation pending/expired/accepted/revoked
+states, strict input/results, no secret on replay/error, permanent-steward
+protection, receipt rollback and replay scope. Use representative real races for
+same-key duplicates, changed-input duplicates, competing account revisions,
+remaining-steward transitions, invitation acceptance versus revoke, inactive
+account versus invitation acceptance, authority change while queued, and overlap
+with request reads/projection/tenant lifecycle. Do not create an exhaustive
+cross-product of equivalent races.
+
+Profile/preferences editing, direct account creation, invitation acceptance
+redesign, invitation intents, role/Group/PIM/delegation changes, workflow
+approvals, email delivery, UI/routes, MCP/AI, runtime-settings mutation,
+provider/session changes, record ownership transfer, deletion/retention and
+Production deployment remain outside Slice 6.
 
 ### 7. Integrated evidence and delivery
 
@@ -660,6 +726,6 @@ delivery. Production remains separately gated.
 - Environment-wide provider/Auth disablement, cross-cluster identity changes and
   immediate token-revocation claims; these belong to
   [#171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171).
-- Generic Activity/refusal persistence before
-  [#252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) and
-  [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115).
+- Generic Activity/refusal delivery beyond the existing lifecycle audit facts and
+  accepted receipts. [#252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252)
+  is already complete and does not need to be reopened for this slice.

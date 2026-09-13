@@ -88,6 +88,21 @@ creator/audit attribution.
 5. Leaving, suspending, or closing an organisation account affects only that organisation. Suspending or closing the cluster-local identity projection prevents entry to every account in that cluster. Environment-wide identity disablement and session revocation are protected Identity Authority operations delivered by [operational readiness](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not a meaning assigned to a cluster row.
 6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the Access service's one live version for that organisation. Account activation, reactivation, suspension and closure change Identity state and that version together or change neither.
 
+An organisation administrator with the exact account-management permission may
+suspend, reactivate, or close a local organisation account through a protected
+operation. Those changes affect only that account and preserve the existing
+permanent-steward safeguard. Closing is not deletion or offboarding: the same
+local account may later be reactivated under current authority. Reactivation does
+not create or restore roles, Groups, assignments, or delegations; any retained
+authority is effective only if it is still valid, while revoked or expired
+authority remains unavailable. An administrator with the separate exact
+invitation-management permission may create a no-intent invitation or revoke an
+unaccepted invitation, including an expired one. The invitation secret is
+returned only on first successful creation and cannot be recovered from a retry.
+[#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns these protected
+administrative commands; role and access grants remain governed by the
+[IAM application](appendices/iam-application.md).
+
 A configured system operator may suspend, reactivate, or close one local identity
 projection through a protected cluster command. The change is local to that cluster:
 it does not alter the provider identity, authentication sessions, another cluster,
