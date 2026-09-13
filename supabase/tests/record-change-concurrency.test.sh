@@ -299,10 +299,12 @@ schema_state="$(run_sql "
     pg_catalog.to_regprocedure('vortex_record.change_record(uuid,uuid,bigint,jsonb,uuid[])') is not null,
     pg_catalog.to_regprocedure('vortex_record.read_record(uuid,uuid)') is not null,
     pg_catalog.to_regprocedure('vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid)') is not null,
-    pg_catalog.to_regprocedure('vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)') is not null
+    pg_catalog.to_regprocedure('vortex_record.save_base_record_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb)') is not null,
+    pg_catalog.has_function_privilege('vortex_runtime', 'vortex_record.save_base_record_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb)', 'EXECUTE'),
+    not pg_catalog.has_function_privilege('vortex_runtime', 'vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)', 'EXECUTE')
   );
 ")"
-[ "$schema_state" = 't|t|t|t' ] || {
+[ "$schema_state" = 't|t|t|t|t|t' ] || {
   echo 'the record adapter migrations must already be applied to the proof database' >&2
   exit 1
 }
@@ -1187,11 +1189,11 @@ set local lock_timeout='30s'; set local statement_timeout='45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/base-save-first.pid'
 $(human_context "$access_version")
 set local role vortex_runtime;
-select vortex_record.save_base_record(
+select vortex_record.save_base_record_with_relationship_totals(
   '$base_save_command_one','update','$record_type_id','$conflict_record_id',2,
   pg_catalog.jsonb_build_object('$field_one','first base writer'),
   pg_catalog.jsonb_build_object('$field_one','first base writer'),null,
-  '$base_save_activity_one','$base_save_event_one'
+  '$base_save_activity_one','$base_save_event_one','[]'::jsonb
 ) ->> 'outcome' \g '$proof_root/base-save-first.result'
 reset role;
 \! touch '$proof_root/base-save-first-ready'
@@ -1208,11 +1210,11 @@ set local lock_timeout='30s'; set local statement_timeout='45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/base-save-second.pid'
 $(human_context "$access_version")
 set local role vortex_runtime;
-select vortex_record.save_base_record(
+select vortex_record.save_base_record_with_relationship_totals(
   '$base_save_command_two','update','$record_type_id','$conflict_record_id',2,
   pg_catalog.jsonb_build_object('$field_one','second base writer'),
   pg_catalog.jsonb_build_object('$field_one','second base writer'),null,
-  '$base_save_activity_two','$base_save_event_two'
+  '$base_save_activity_two','$base_save_event_two','[]'::jsonb
 ) ->> 'outcome' \g '$proof_root/base-save-second.result'
 reset role;
 commit;
@@ -1262,11 +1264,11 @@ select pg_catalog.pg_backend_pid() \g '$proof_root/same-command-first.pid'
 $(human_context "$access_version")
 set local role vortex_runtime;
 select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed')
-from (select vortex_record.save_base_record(
+from (select vortex_record.save_base_record_with_relationship_totals(
   '$same_save_command','update','$record_type_id','$same_command_record_id',1,
   pg_catalog.jsonb_build_object('$field_one','same command writer'),
   pg_catalog.jsonb_build_object('$field_one','same command writer'),null,
-  '$same_save_activity_one','$same_save_event_one'
+  '$same_save_activity_one','$same_save_event_one','[]'::jsonb
 ) as result) as saved \g '$proof_root/same-command-first.result'
 reset role;
 \! touch '$proof_root/same-command-first-ready'
@@ -1284,11 +1286,11 @@ select pg_catalog.pg_backend_pid() \g '$proof_root/same-command-second.pid'
 $(human_context "$access_version")
 set local role vortex_runtime;
 select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed')
-from (select vortex_record.save_base_record(
+from (select vortex_record.save_base_record_with_relationship_totals(
   '$same_save_command','update','$record_type_id','$same_command_record_id',1,
   pg_catalog.jsonb_build_object('$field_one','same command writer'),
   pg_catalog.jsonb_build_object('$field_one','same command writer'),null,
-  '$same_save_activity_two','$same_save_event_two'
+  '$same_save_activity_two','$same_save_event_two','[]'::jsonb
 ) as result) as saved \g '$proof_root/same-command-second.result'
 reset role;
 commit;
@@ -1357,7 +1359,7 @@ select pg_catalog.pg_backend_pid() \g '$proof_root/group-owned-save.pid'
 $(human_context "$access_version")
 set local role vortex_runtime;
 select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-from (select vortex_record.save_base_record(
+from (select vortex_record.save_base_record_with_relationship_totals(
   '$group_save_command','create','$record_type_id',null,null,
   pg_catalog.jsonb_build_object(
     '$field_one','removed Group save',
@@ -1367,7 +1369,7 @@ from (select vortex_record.save_base_record(
     '$field_one','removed Group save',
     '$field_required_link',pg_catalog.jsonb_build_object(
       'recordTypeId','$record_type_id','recordId','$anchor_record_id')),
-  '$owner_group_id','$group_save_activity','$group_save_event'
+  '$owner_group_id','$group_save_activity','$group_save_event','[]'::jsonb
 ) as result) as saved \g '$proof_root/group-owned-save.result'
 reset role;
 commit;
