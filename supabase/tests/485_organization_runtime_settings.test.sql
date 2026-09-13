@@ -398,20 +398,6 @@ select ok(
   'a refused direct staging-table write leaves persisted settings unchanged'
 );
 
-savepoint runtime_settings_without_stage;
-set local role vortex_request;
-select throws_ok(
-  $$select * from vortex_access.update_organization_runtime_settings_for_administration(1)$$,
-  '42501'::char(5), 'Organization runtime settings update is unavailable',
-  'a request cannot update settings without a transaction-bound staged change'
-);
-reset role;
-select ok(
-  pg_temp.runtime_settings_are_unchanged(),
-  'a no-staging refusal leaves persisted settings unchanged'
-);
-rollback to savepoint runtime_settings_without_stage;
-
 savepoint runtime_settings_without_manage_permission;
 set local role vortex_runtime;
 select vortex_identity.stage_organization_runtime_settings_update(
@@ -436,6 +422,20 @@ select ok(
 rollback to savepoint runtime_settings_without_manage_permission;
 
 select pg_temp.seed_runtime_settings_manage_role();
+
+savepoint runtime_settings_without_stage;
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.update_organization_runtime_settings_for_administration(1)$$,
+  '42501'::char(5), 'Organization runtime settings update is unavailable',
+  'a request cannot update settings without a transaction-bound staged change'
+);
+reset role;
+select ok(
+  pg_temp.runtime_settings_are_unchanged(),
+  'a no-staging refusal leaves persisted settings unchanged'
+);
+rollback to savepoint runtime_settings_without_stage;
 
 savepoint runtime_settings_stale_revision;
 set local role vortex_runtime;
