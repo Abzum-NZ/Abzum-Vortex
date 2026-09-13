@@ -6,16 +6,28 @@ import {
   adoptOrganizationResultSchema,
   adoptTenantCommandSchema,
   adoptTenantResultSchema,
+  closeClusterIdentityCommandSchema,
+  closeClusterIdentityResultSchema,
   configuredTenantAdministrationOperatorContextSchema,
   provisionTenantCommandSchema,
   provisionTenantResultSchema,
+  reactivateClusterIdentityCommandSchema,
+  reactivateClusterIdentityResultSchema,
+  suspendClusterIdentityCommandSchema,
+  suspendClusterIdentityResultSchema,
   type AdoptOrganizationCommand,
   type AdoptOrganizationResult,
   type AdoptTenantCommand,
   type AdoptTenantResult,
+  type CloseClusterIdentityCommand,
+  type CloseClusterIdentityResult,
   type ConfiguredTenantAdministrationOperatorContext,
   type ProvisionTenantCommand,
   type ProvisionTenantResult,
+  type ReactivateClusterIdentityCommand,
+  type ReactivateClusterIdentityResult,
+  type SuspendClusterIdentityCommand,
+  type SuspendClusterIdentityResult,
 } from "@vortex/contracts";
 import {
   withRuntimeTransaction,
@@ -61,6 +73,14 @@ type AdoptOrganizationRow = DatabaseRow & {
   organization_id: unknown;
   organization_account_id: unknown;
   access_version: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+};
+type ClusterIdentityLifecycleRow = DatabaseRow & {
+  outcome: unknown;
+  operation: unknown;
+  identity_id: unknown;
+  revision: unknown;
   correlation_id: unknown;
   accepted_at: unknown;
 };
@@ -110,6 +130,8 @@ const refusalCode = (error: unknown) => {
       return "operation_unavailable" as const;
   }
 };
+const lifecycleRefusalCode = (error: unknown) =>
+  databaseCode(error) === "V3102" ? ("stale_revision" as const) : refusalCode(error);
 
 const one = <Row extends DatabaseRow>(rows: readonly Row[]): Row | undefined =>
   rows.length === 1 ? rows[0] : undefined;
@@ -119,6 +141,16 @@ export const createConfiguredTenantAdministrationService = (
 ) => {
   const operator = configuredContext(dependencies.environment ?? process.env);
   const run = dependencies.runtimeTransaction ?? withRuntimeTransaction;
+
+  const lifecycleResult = (row: ClusterIdentityLifecycleRow | undefined) =>
+    row && {
+      outcome: row.outcome,
+      operation: row.operation,
+      identityId: row.identity_id,
+      revision: revision(row.revision),
+      correlationId: row.correlation_id,
+      acceptedAt: timestamp(row.accepted_at),
+    };
 
   return Object.freeze({
     async provisionTenant(candidate: ProvisionTenantCommand): Promise<ProvisionTenantResult> {
@@ -272,6 +304,98 @@ export const createConfiguredTenantAdministrationService = (
         return { outcome: "refused", operation: "adopt_organization", code: refusalCode(error) };
       }
     },
+
+    async suspendClusterIdentity(
+      candidate: SuspendClusterIdentityCommand,
+    ): Promise<SuspendClusterIdentityResult> {
+      const command = suspendClusterIdentityCommandSchema.safeParse(candidate);
+      if (!command.success)
+        return {
+          outcome: "refused",
+          operation: "suspend_cluster_identity",
+          code: "invalid_command",
+        };
+      if (!operator)
+        return {
+          outcome: "refused",
+          operation: "suspend_cluster_identity",
+          code: "operator_not_configured",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (transaction) =>
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.suspend_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
+        return suspendClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "suspend_cluster_identity",
+          code: lifecycleRefusalCode(error),
+        };
+      }
+    },
+
+    async reactivateClusterIdentity(
+      candidate: ReactivateClusterIdentityCommand,
+    ): Promise<ReactivateClusterIdentityResult> {
+      const command = reactivateClusterIdentityCommandSchema.safeParse(candidate);
+      if (!command.success)
+        return {
+          outcome: "refused",
+          operation: "reactivate_cluster_identity",
+          code: "invalid_command",
+        };
+      if (!operator)
+        return {
+          outcome: "refused",
+          operation: "reactivate_cluster_identity",
+          code: "operator_not_configured",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (transaction) =>
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.reactivate_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
+        return reactivateClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "reactivate_cluster_identity",
+          code: lifecycleRefusalCode(error),
+        };
+      }
+    },
+
+    async closeClusterIdentity(
+      candidate: CloseClusterIdentityCommand,
+    ): Promise<CloseClusterIdentityResult> {
+      const command = closeClusterIdentityCommandSchema.safeParse(candidate);
+      if (!command.success)
+        return { outcome: "refused", operation: "close_cluster_identity", code: "invalid_command" };
+      if (!operator)
+        return {
+          outcome: "refused",
+          operation: "close_cluster_identity",
+          code: "operator_not_configured",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (transaction) =>
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.close_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
+        return closeClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "close_cluster_identity",
+          code: lifecycleRefusalCode(error),
+        };
+      }
+    },
   });
 };
 
@@ -279,3 +403,6 @@ const defaultService = createConfiguredTenantAdministrationService();
 export const provisionTenant = defaultService.provisionTenant;
 export const adoptTenant = defaultService.adoptTenant;
 export const adoptOrganization = defaultService.adoptOrganization;
+export const suspendClusterIdentity = defaultService.suspendClusterIdentity;
+export const reactivateClusterIdentity = defaultService.reactivateClusterIdentity;
+export const closeClusterIdentity = defaultService.closeClusterIdentity;
