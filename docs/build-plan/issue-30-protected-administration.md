@@ -27,8 +27,12 @@ own protected operations. Adding a whole-task dependency would create no useful
 code or authority boundary.
 
 This work unlocks [the isolation suite #29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29),
-[administration applications #72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72)
-and [guided IAM setup #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
+[administration applications #72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72),
+[guided IAM setup #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267),
+[account offboarding #407](https://github.com/Abzum-NZ/Abzum-Vortex/issues/407)
+and [organisation-bounded record-type lifecycle policies #408](https://github.com/Abzum-NZ/Abzum-Vortex/issues/408).
+The latter two consume protected account and organisation facts; neither is a
+prerequisite for Slice 6.
 
 Delivered on `testing`:
 
@@ -612,8 +616,9 @@ the existing receipt model. Its canonical input fingerprint includes the
 resolved organisation and command, and its stored subjects include the
 organisation and target. Current request eligibility and the exact permission
 are checked before a receipt may replay. An exact accepted retry returns recorded
-minimal evidence; changed input conflicts; a now-ineligible caller cannot use a
-replay to regain entry. Account outcomes include operation, organisation, target,
+minimal evidence before checking the target's current state or expected revision;
+later target changes do not alter that recorded result. Changed input conflicts;
+a now-ineligible caller cannot use a replay to regain entry. Account outcomes include operation, organisation, target,
 target revision, receipt/correlation ID, accepted server time and recorded Access
 version. Invitation outcomes contain equivalent non-secret evidence. Raw
 invitation secret material exists only in the first committed creation response,
@@ -626,9 +631,10 @@ stewardship checks and lock order; do not add a retry layer, generic mutation
 framework, new history/counter/policy evaluator or dispatcher. Missing and
 foreign targets share safe unavailable behaviour. Same-state, prohibited,
 stale or exhausted-revision transitions refuse without accepted receipt or
-mutation. An accepted account command changes its target, Access version and
-receipt together or changes none; invitation creation/revocation rolls back
-both writer and receipt together on failure.
+mutation. An accepted account command changes its target, increments Access
+exactly once and writes its receipt together or changes none. Invitation
+creation/revocation does not increment Access and rolls back both writer and
+receipt together on failure. Receipt replay increments nothing.
 
 Proof must execute the exact request-role boundary, including each precise
 permission, cross-permission/member/tenant-only refusal, direct-table/helper ACL
