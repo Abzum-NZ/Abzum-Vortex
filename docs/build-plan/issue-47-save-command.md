@@ -31,7 +31,8 @@ permits them.
 ```mermaid
 flowchart LR
     C[Strict human save command] --> P[Private preparation]
-    P --> V[Typed final-value validation]
+    P --> S[Access-owned current organisation settings]
+    S --> V[Typed final-value validation]
     V --> W[Fixed terminal writer]
     W --> R[Record and fixed relationships]
     W --> A[Activity]
@@ -56,6 +57,16 @@ fixed relationship facts. A permitted relationship replacement proceeds; a final
 relationship state that removes update authority refuses before any mutation.
 Any later relationship, Activity, Event, queue or receipt failure aborts the same
 transaction, so partial saves cannot commit.
+
+The settings read occurs only after the protected preparation has established an
+authorised Application request and before field defaults are prepared. It runs
+under the request role through Access's exact-context reader, then the service
+restores the runtime role before the fixed terminal writer. A malformed, denied,
+stale or exact-replay request never reads settings. A missing settings row is
+not invented: explicit money and fields with no organisation-currency default
+remain valid, while a default that needs the missing currency refuses without
+any terminal effect. A fresh command observes the current currency; an exact
+retry resolves its stored receipt and never recomputes defaults.
 
 A verified clean Access denial records exactly one content-free refusal Activity
 inside the owning database operation. Its only subject is the verified
@@ -117,6 +128,9 @@ neutral definitions through the real restricted runtime transaction. It covers:
 - atomic Record, Activity, standard Event, queue and receipt commit/rollback;
 - exact response-lost replay, changed-payload conflict and current projection
   after access withdrawal;
+- Access-owned runtime-setting reads: request/runtime role ordering, no read on
+  early exits, fresh currency changes, replay stability, and missing/malformed
+  settings without terminal effects;
 - a real two-session same-revision save race that serializes to one winner and
   one stale conflict without partial effects;
 - ACL proof that request, runtime and Data API roles have no raw content,

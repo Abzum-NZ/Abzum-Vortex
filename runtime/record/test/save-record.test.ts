@@ -337,6 +337,36 @@ describe("base Record save service", () => {
     expect(settingsReads).toBe(0);
   });
 
+  it("does not read settings for a malformed command or stale preparation", async () => {
+    let settingsReads = 0;
+    let terminalCalls = 0;
+    const requestQuery: RequestQuery = async <Row extends DatabaseRow>(strings) => {
+      const sql = strings.join("$value");
+      if (sql.includes("prepare_base_record_save"))
+        return [
+          { preparation: { outcome: "conflict", correlationId: ids.correlation } },
+        ] as unknown as readonly Row[];
+      if (sql.includes("read_current_organization_runtime_settings_for_application"))
+        settingsReads += 1;
+      if (sql.includes("save_base_record")) terminalCalls += 1;
+      return [] as unknown as readonly Row[];
+    };
+    const service = createRecordSaveService({
+      identityAuthorityId: ids.authority,
+      clock: () => new Date("2026-09-08T01:00:00.000Z"),
+      correlationId: () => ids.correlation,
+      resolvedRequestTransaction: transactionRunner(requestQuery),
+    });
+
+    await expect(service.save(session, selection, {})).resolves.toEqual({ kind: "unavailable" });
+    await expect(service.save(session, selection, updateCommand("Stale"))).resolves.toMatchObject({
+      kind: "available",
+      value: { outcome: "refused", error: { code: "conflict" } },
+    });
+    expect(settingsReads).toBe(0);
+    expect(terminalCalls).toBe(0);
+  });
+
   it("does not disclose an unreadable invalid required field in validation output", async () => {
     let terminalCalls = 0;
     const privateValue = "private-existing-value-that-must-not-escape";
@@ -496,8 +526,10 @@ describe("base Record save service", () => {
     for (const scenario of scenarios) {
       let terminalCalls = 0;
       let settingsReads = 0;
+      const roles: string[] = [];
       const requestQuery: RequestQuery = async <Row extends DatabaseRow>(strings) => {
         const sql = strings.join("$value");
+        if (sql.startsWith("set local role")) roles.push(sql);
         if (sql.includes("prepare_base_record_save"))
           return [
             {
@@ -558,6 +590,10 @@ describe("base Record save service", () => {
       );
 
       expect(settingsReads).toBe(1);
+      expect(roles.slice(-2)).toEqual([
+        "set local role vortex_request",
+        "set local role vortex_runtime",
+      ]);
       if (scenario === "missing-explicit") {
         expect(result).toMatchObject({ kind: "available", value: { outcome: "saved" } });
         expect(terminalCalls).toBe(1);

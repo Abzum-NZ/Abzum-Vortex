@@ -52,6 +52,15 @@ const activityReplayId = id(30);
 const activityConflictId = id(31);
 const activityRevokedReplayId = id(32);
 const activityRevokedWriteId = id(33);
+const commandFreshId = id(34);
+const activityFreshId = id(35);
+const activityFreshReplayId = id(36);
+const occurrenceFreshId = id(37);
+const commandMissingSettingsId = id(38);
+const activityMissingSettingsId = id(39);
+const commandExplicitMoneyId = id(40);
+const activityExplicitMoneyId = id(41);
+const occurrenceExplicitMoneyId = id(42);
 const publishedAt = "2026-09-13T00:00:00.000Z";
 
 const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse({
@@ -90,6 +99,21 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
             public_display: "refused",
             settings: { max_length: 120 },
           },
+          {
+            id: "field_amount",
+            key: "amount",
+            type: "money",
+            label: "Amount",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { currency_mode: "organisation_default", minimum: "0" },
+            default: "12.34",
+          },
         ],
         relationships: [],
       },
@@ -104,7 +128,10 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         action_kind: "create",
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: ["title"], changeable_fields: ["title"] },
+        field_policy: {
+          readable_fields: ["title", "amount"],
+          changeable_fields: ["title", "amount"],
+        },
       },
       {
         id: "permission_read",
@@ -115,7 +142,7 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         action_kind: "read",
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: ["title"], changeable_fields: [] },
+        field_policy: { readable_fields: ["title", "amount"], changeable_fields: [] },
       },
       {
         id: "permission_update",
@@ -126,7 +153,10 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         action_kind: "update",
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: ["title"], changeable_fields: ["title"] },
+        field_policy: {
+          readable_fields: ["title", "amount"],
+          changeable_fields: ["title", "amount"],
+        },
       },
       {
         id: "permission_note",
@@ -138,7 +168,7 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         named_action: "note",
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: ["title"], changeable_fields: [] },
+        field_policy: { readable_fields: ["title", "amount"], changeable_fields: [] },
       },
     ],
     actions: [
@@ -315,6 +345,7 @@ const componentId = (kind: string, owner: string): string => {
 const recordTypeId = componentId("record_type", "record_item");
 const storageContractId = componentId("storage_contract", "storage_item");
 const fieldId = componentId("field", "field_title");
+const amountFieldId = componentId("field", "field_amount");
 const applicationRoleId = componentId("role", "role_user");
 const homePageId = componentId("page", "page_home");
 
@@ -789,10 +820,19 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityUpdateId,
         activityReplayId,
         activityConflictId,
+        activityFreshId,
+        activityFreshReplayId,
+        activityMissingSettingsId,
+        activityExplicitMoneyId,
         activityRevokedReplayId,
         activityRevokedWriteId,
       ];
-      const occurrenceIds = [occurrenceCreateId, occurrenceUpdateId];
+      const occurrenceIds = [
+        occurrenceCreateId,
+        occurrenceUpdateId,
+        occurrenceFreshId,
+        occurrenceExplicitMoneyId,
+      ];
       const service = createRecordSaveService({
         identityAuthorityId,
         clock: () => operationAt,
@@ -829,6 +869,12 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       if (created.kind !== "available" || created.value.outcome !== "saved")
         throw new Error("Real service create did not return its Record");
       const recordId = created.value.recordId;
+
+      // #430 owns the protected settings update path. This direct fixture
+      // change lets this save proof demonstrate the reader's fresh-read rule.
+      await admin`update vortex_identity.organization_runtime_settings
+        set currency = 'AUD', changed_at = pg_catalog.statement_timestamp(), revision = revision + 1
+        where organization_id = ${organizationId}::uuid`;
 
       const updateCommand = {
         contractVersion: "2.0.0",
@@ -867,11 +913,113 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         value: { outcome: "refused", error: { code: "conflict" } },
       });
 
+      const fresh = await service.save(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: commandFreshId,
+        operation: "create",
+        recordTypeId,
+        submittedValues: { [fieldId]: "Fresh settings" },
+      });
+      expect(fresh).toMatchObject({
+        kind: "available",
+        value: {
+          outcome: "saved",
+          concurrencyNumber: 1,
+          readableValues: {
+            [fieldId]: "Fresh settings",
+            [amountFieldId]: { amount: "12.34", currency: "AUD" },
+          },
+        },
+      });
+      if (fresh.kind !== "available" || fresh.value.outcome !== "saved")
+        throw new Error("Fresh settings save did not return its Record");
+      const freshRecordId = fresh.value.recordId;
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandFreshId,
+          operation: "create",
+          recordTypeId,
+          submittedValues: { [fieldId]: "Fresh settings" },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: {
+          outcome: "saved",
+          recordId: freshRecordId,
+          concurrencyNumber: 1,
+          readableValues: {
+            [amountFieldId]: { amount: "12.34", currency: "AUD" },
+          },
+        },
+      });
+
       const storageTable = `record_data.rt_${storageContractId.replaceAll("-", "")}`;
       const fieldColumn = `f_${fieldId.replaceAll("-", "")}`;
+      const amountColumn = `f_${amountFieldId.replaceAll("-", "")}`;
+      const countTerminalEffects = async () => {
+        const [counts] = await admin.unsafe<
+          {
+            receipt_count: string;
+            activity_count: string;
+            outbox_count: string;
+            queue_count: string;
+          }[]
+        >(
+          `select
+            (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
+             where organization_id = $1) as receipt_count,
+            (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
+             where organization_id = $1) as activity_count,
+            (select pg_catalog.count(*)::text from vortex_event.event_outbox
+             where organization_id = $1) as outbox_count,
+            (select pg_catalog.count(*)::text from pgmq.q_vortex_event_occurrences as queued
+             join vortex_event.event_outbox as event
+               on queued.message ->> 'occurrenceId' = event.occurrence_id::text
+             where event.organization_id = $1) as queue_count`,
+          [organizationId],
+        );
+        if (counts === undefined) throw new Error("Record save effects are missing");
+        return counts;
+      };
+      const beforeMissingSettings = await countTerminalEffects();
+      await admin`delete from vortex_identity.organization_runtime_settings
+        where organization_id = ${organizationId}::uuid`;
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandMissingSettingsId,
+          operation: "create",
+          recordTypeId,
+          submittedValues: { [fieldId]: "Missing settings" },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "operation_refused" } },
+      });
+      expect(await countTerminalEffects()).toEqual(beforeMissingSettings);
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandExplicitMoneyId,
+          operation: "create",
+          recordTypeId,
+          submittedValues: {
+            [fieldId]: "Explicit money without settings",
+            [amountFieldId]: { amount: "5.00", currency: "USD" },
+          },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: {
+          outcome: "saved",
+          readableValues: { [amountFieldId]: { amount: "5", currency: "USD" } },
+        },
+      });
       const [evidence] = await admin.unsafe<
         {
           title: string;
+          amount: unknown;
           concurrency_number: string;
           receipt_count: string;
           activity_count: string;
@@ -879,7 +1027,8 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           queue_count: string;
         }[]
       >(
-        `select record.${fieldColumn} as title, record.concurrency_number::text,
+        `select record.${fieldColumn} as title, record.${amountColumn} as amount,
+          record.concurrency_number::text,
           (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
            where organization_id = $1) as receipt_count,
           (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
@@ -896,12 +1045,20 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       );
       expect(evidence).toEqual({
         title: "Updated once",
+        amount: { amount: "12.34", currency: "NZD" },
         concurrency_number: "2",
-        receipt_count: "2",
+        receipt_count: "4",
         activity_count: "2",
-        outbox_count: "2",
-        queue_count: "2",
+        outbox_count: "4",
+        queue_count: "4",
       });
+      await expect(
+        admin.unsafe(
+          `select ${amountColumn} as amount from ${storageTable}
+           where organisation_id = $1 and record_id = $2`,
+          [organizationId, freshRecordId],
+        ),
+      ).resolves.toEqual([{ amount: { amount: "12.34", currency: "AUD" } }]);
       expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(1);
       expect(moduleRelease.content.events).toHaveLength(1);
 
@@ -909,13 +1066,15 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         const [state] = await admin.unsafe<
           {
             title: string;
+            amount: unknown;
             concurrency_number: string;
             receipt_count: string;
             outbox_count: string;
             queue_count: string;
           }[]
         >(
-          `select record.${fieldColumn} as title, record.concurrency_number::text,
+          `select record.${fieldColumn} as title, record.${amountColumn} as amount,
+            record.concurrency_number::text,
             (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
              where organization_id = $1) as receipt_count,
             (select pg_catalog.count(*)::text from vortex_event.event_outbox
