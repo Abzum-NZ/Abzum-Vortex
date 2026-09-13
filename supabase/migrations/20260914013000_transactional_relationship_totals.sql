@@ -763,6 +763,19 @@ declare
   preparation_value jsonb;
   reduced_final_values jsonb;
   context_value jsonb;
+  catalogue jsonb;
+  closure_value jsonb;
+  root_type jsonb;
+  root_snapshot jsonb;
+  relationship_value jsonb;
+  target_type jsonb;
+  total_field jsonb;
+  dependency_contract jsonb;
+  dependency_field_id text;
+  relationship_field_id text;
+  old_relationship_target jsonb;
+  proposed_relationship_target jsonb;
+  contributes_to_total boolean := false;
   expected_parents jsonb;
   supplied_parents jsonb;
 begin
@@ -791,6 +804,104 @@ begin
     );
     if preparation_value ->> 'outcome' in ('restart', 'conflict', 'refused', 'refused_recorded') then
       return preparation_value;
+    end if;
+    if preparation_value ->> 'outcome' = 'defer' and exists (
+      select 1 from vortex_record.save_command_receipts receipt
+      where receipt.organization_id = (context_value ->> 'organizationId')::uuid
+        and receipt.application_root_id = (context_value ->> 'applicationRootId')::uuid
+        and receipt.actor_organization_account_id =
+          (context_value ->> 'organizationAccountId')::uuid
+        and receipt.command_id = p_command_id
+    ) then
+      preparation_value := null;
+    elsif preparation_value ->> 'outcome' = 'defer' then
+      catalogue := vortex_record.relationship_total_catalogue_internal();
+      if coalesce((catalogue ->> 'hasInstalledRules')::boolean, false) then
+        closure_value := vortex_record.discover_relationship_total_closure_internal(
+          catalogue, p_operation, p_record_type_id, p_record_id, p_submitted_values
+        );
+        select item.value into root_type
+        from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+        where pg_catalog.lower(item.value ->> 'recordTypeId') =
+          pg_catalog.lower(p_record_type_id::text);
+        select item.value into root_snapshot
+        from pg_catalog.jsonb_array_elements(closure_value -> 'records') item(value)
+        where item.value ->> 'recordKey' = 'root';
+        if root_type is null or root_snapshot is null then
+          return pg_catalog.jsonb_build_object(
+            'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+          );
+        end if;
+        for relationship_value in
+          select item.value
+          from pg_catalog.jsonb_array_elements(root_type -> 'relationships') item(value)
+          where item.value ? 'toRecordType'
+            and item.value ->> 'cardinality' in ('one_to_one', 'many_to_one')
+        loop
+          select item.value into target_type
+          from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+          where pg_catalog.lower(item.value ->> 'recordTypeId') =
+            pg_catalog.lower(relationship_value #>> '{toRecordType,recordTypeId}');
+          relationship_field_id := pg_catalog.lower(relationship_value ->> 'fromFieldId');
+          old_relationship_target := root_snapshot -> 'existingValues' -> relationship_field_id;
+          proposed_relationship_target := old_relationship_target;
+          if p_submitted_values ? relationship_field_id then
+            proposed_relationship_target := p_submitted_values -> relationship_field_id;
+          end if;
+          if not (
+            (pg_catalog.jsonb_typeof(old_relationship_target) = 'object' and
+              pg_catalog.lower(old_relationship_target ->> 'recordTypeId') =
+                pg_catalog.lower(target_type ->> 'recordTypeId'))
+            or
+            (pg_catalog.jsonb_typeof(proposed_relationship_target) = 'object' and
+              pg_catalog.lower(proposed_relationship_target ->> 'recordTypeId') =
+                pg_catalog.lower(target_type ->> 'recordTypeId'))
+          ) then
+            continue;
+          end if;
+          for total_field in
+            select field.value
+            from pg_catalog.jsonb_array_elements(target_type -> 'fields') field(value)
+            where field.value ->> 'type' = 'total'
+              and pg_catalog.lower(field.value #>> '{settings,relationshipId}') =
+                pg_catalog.lower(relationship_value ->> 'relationshipId')
+          loop
+            if p_submitted_values ? relationship_field_id and
+              p_submitted_values -> relationship_field_id is distinct from
+                coalesce(root_snapshot -> 'existingValues' -> relationship_field_id, 'null'::jsonb) then
+              contributes_to_total := true;
+              exit;
+            end if;
+            dependency_contract := vortex_record.total_dependency_contract_internal(
+              catalogue -> 'recordTypes',
+              pg_catalog.jsonb_build_array(relationship_value || pg_catalog.jsonb_build_object(
+                'toRecordTypeId', relationship_value #> '{toRecordType,recordTypeId}'
+              )),
+              (target_type ->> 'recordTypeId')::uuid, total_field
+            );
+            for dependency_field_id in
+              select item.value
+              from pg_catalog.jsonb_array_elements_text(
+                dependency_contract -> 'sourceFieldIds'
+              ) item(value)
+            loop
+              if p_submitted_values ? dependency_field_id and
+                p_submitted_values -> dependency_field_id is distinct from
+                  coalesce(root_snapshot -> 'existingValues' -> dependency_field_id, 'null'::jsonb) then
+                contributes_to_total := true;
+                exit;
+              end if;
+            end loop;
+            exit when contributes_to_total;
+          end loop;
+          exit when contributes_to_total;
+        end loop;
+        if contributes_to_total then
+          return pg_catalog.jsonb_build_object(
+            'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+          );
+        end if;
+      end if;
     end if;
     if preparation_value ->> 'outcome' <> 'prepared' then
       if pg_catalog.jsonb_array_length(p_parent_mutations) = 0 then

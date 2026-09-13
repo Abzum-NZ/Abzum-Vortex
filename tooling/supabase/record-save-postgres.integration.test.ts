@@ -131,6 +131,9 @@ const occurrenceChangedClosureId = id(110);
 const commandChangedClosureSetupId = id(111);
 const activityChangedClosureSetupId = id(112);
 const occurrenceChangedClosureSetupId = id(113);
+const commandRuleDeferredTotalId = id(114);
+const activityRuleDeferredTotalId = id(115);
+const occurrenceRuleDeferredTotalId = id(116);
 const publishedAt = "2026-09-13T00:00:00.000Z";
 
 const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse({
@@ -1402,6 +1405,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityMixedCurrencyId,
         activityChangedClosureSetupId,
         activityChangedClosureId,
+        activityRuleDeferredTotalId,
         activityRevokedReplayId,
         activityRevokedWriteId,
       ];
@@ -1428,6 +1432,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         occurrenceMoneySourceId,
         occurrenceChangedClosureSetupId,
         occurrenceChangedClosureId,
+        occurrenceRuleDeferredTotalId,
       ];
       const service = createRecordSaveService({
         identityAuthorityId,
@@ -2459,6 +2464,41 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           [organizationId],
         ),
       ).resolves.toEqual([{ count: "0" }]);
+      const readRuleDeferredTotalState = async () => ({
+        effects: await countTerminalEffects(),
+        child: await admin.unsafe(
+          `select concurrency_number::text as revision,
+             f_${totalChildAmountFieldId.replaceAll("-", "")}::text as amount
+           from record_data.rt_${totalChildStorageId.replaceAll("-", "")}
+           where organisation_id = $1 and record_id = $2`,
+          [organizationId, childId],
+        ),
+        parents: await admin.unsafe(
+          `select record_id::text as record_id, concurrency_number::text as revision,
+             ${totalColumn}::text as total, ${displayColumn}::text as display,
+             ${totalMoneyColumn} as money
+           from ${totalParentTable}
+           where organisation_id = $1 and record_id in ($2, $3)
+           order by record_id`,
+          [organizationId, parentOneId, parentTwoId],
+        ),
+      });
+      const beforeRuleDeferredTotal = await readRuleDeferredTotalState();
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandRuleDeferredTotalId,
+          operation: "update",
+          recordTypeId: totalChildRecordTypeId,
+          recordId: childId,
+          expectedConcurrencyNumber: 10,
+          submittedValues: { [totalChildAmountFieldId]: "22" },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "operation_refused" } },
+      });
+      expect(await readRuleDeferredTotalState()).toEqual(beforeRuleDeferredTotal);
       await admin.begin(async (transaction) => {
         await transaction`set local session_replication_role = replica`;
         await transaction`update vortex_definition.releases
