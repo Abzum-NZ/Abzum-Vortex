@@ -3649,11 +3649,17 @@ select is(
 \ir helpers/definition-release-writer.psql
 
 insert into vortex_definition.roots (root_id, organization_id, kind, key, created_at, created_by)
-values (
-  '34300000-0000-4000-8000-000000000395', '24300000-0000-4000-8000-000000000001',
-  'application', 'example.binding_order', pg_catalog.clock_timestamp() - interval '1 minute',
-  '94300000-0000-4000-8000-000000000001'
-);
+values
+  (
+    '34300000-0000-4000-8000-000000000394', '24300000-0000-4000-8000-000000000001',
+    'module', 'example.binding_order.fields', pg_catalog.clock_timestamp() - interval '1 minute',
+    '94300000-0000-4000-8000-000000000001'
+  ),
+  (
+    '34300000-0000-4000-8000-000000000395', '24300000-0000-4000-8000-000000000001',
+    'application', 'example.binding_order', pg_catalog.clock_timestamp() - interval '1 minute',
+    '94300000-0000-4000-8000-000000000001'
+  );
 
 create function pg_temp.binding_order_scope()
 returns jsonb
@@ -3685,6 +3691,7 @@ set search_path = ''
 as $function$
 declare
   fixture_organization_id constant uuid := '24300000-0000-4000-8000-000000000001';
+  fixture_module_root_id constant uuid := '34300000-0000-4000-8000-000000000394';
   fixture_application_root_id constant uuid := '34300000-0000-4000-8000-000000000395';
   fixture_role_id constant uuid := '64300000-0000-4000-8000-000000000395';
   actor_id constant uuid := '94300000-0000-4000-8000-000000000001';
@@ -3695,6 +3702,10 @@ declare
     'description', 'Byte-ordered saved-condition bindings fixture.',
     'recordTypeId', 'd4300000-0000-4000-8000-000000000395',
     'recordScope', pg_temp.binding_order_scope(),
+    'fieldPolicy', pg_catalog.jsonb_build_object(
+      'readableFieldIds', '[]'::jsonb,
+      'changeableFieldIds', '[]'::jsonb
+    ),
     'actionKind', 'read',
     'administrative', false
   );
@@ -3706,7 +3717,18 @@ declare
   role_revision bigint;
 begin
   perform pg_temp.append_writer_release(
-    fixture_application_root_id, '1.0.0', '[]'::jsonb,
+    fixture_module_root_id, '1.0.0', '[]'::jsonb,
+    pg_catalog.jsonb_build_object(
+      'recordTypes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4300000-0000-4000-8000-000000000395',
+        'fields', '[]'::jsonb
+      )),
+      'permissions', '[]'::jsonb
+    )
+  );
+  perform pg_temp.append_writer_release(
+    fixture_application_root_id, '1.0.0',
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_array(fixture_module_root_id, 1)),
     pg_catalog.jsonb_build_object('permissions', pg_catalog.jsonb_build_array(permission))
   );
   select release.* into strict release_row
