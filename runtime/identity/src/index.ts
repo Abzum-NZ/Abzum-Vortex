@@ -20,7 +20,9 @@ export {
   createConfiguredTenantAdministrationService,
   provisionTenant,
   reactivateClusterIdentity,
+  reactivateTenant,
   suspendClusterIdentity,
+  suspendTenant,
   type ConfiguredTenantAdministrationDependencies,
 } from "./configured-tenant-administration";
 export {

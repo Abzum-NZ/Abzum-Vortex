@@ -180,6 +180,11 @@
       "migration": "supabase/migrations/20260914160000_cluster_identity_lifecycle.sql",
       "proof": "supabase/tests/cluster-identity-lifecycle-concurrency.test.sh",
       "label": "Cluster identity lifecycle"
+    },
+    {
+      "migration": "supabase/migrations/20260914180000_configured_tenant_lifecycle.sql",
+      "proof": "supabase/tests/configured-tenant-lifecycle-concurrency.test.sh",
+      "label": "Configured tenant lifecycle"
     }
   ],
   "lintSchemas": [

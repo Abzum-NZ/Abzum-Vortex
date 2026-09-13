@@ -99,6 +99,21 @@ export const reactivateClusterIdentityCommandSchema = clusterIdentityLifecycleCo
 export const closeClusterIdentityCommandSchema =
   clusterIdentityLifecycleCommand("close_cluster_identity");
 
+const tenantLifecycleCommand = <Operation extends "suspend_tenant" | "reactivate_tenant">(
+  operation: Operation,
+) =>
+  z
+    .object({
+      operation: z.literal(operation),
+      duplicateKey: administrationDuplicateKeySchema,
+      tenantId: tenantIdSchema,
+      expectedRevision: revisionSchema,
+    })
+    .strict();
+
+export const suspendTenantCommandSchema = tenantLifecycleCommand("suspend_tenant");
+export const reactivateTenantCommandSchema = tenantLifecycleCommand("reactivate_tenant");
+
 export const configuredTenantAdministrationRefusalCodeSchema = z.enum([
   "invalid_command",
   "operator_not_configured",
@@ -218,6 +233,30 @@ export const reactivateClusterIdentityResultSchema = clusterIdentityLifecycleRes
 export const closeClusterIdentityResultSchema =
   clusterIdentityLifecycleResult("close_cluster_identity");
 
+const tenantLifecycleResult = <Operation extends "suspend_tenant" | "reactivate_tenant">(
+  operation: Operation,
+) =>
+  z.discriminatedUnion("outcome", [
+    z
+      .object({
+        ...acceptedCommon,
+        operation: z.literal(operation),
+        tenantId: tenantIdSchema,
+        revision: revisionSchema,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("refused"),
+        operation: z.literal(operation),
+        code: configuredIdentityLifecycleRefusalCodeSchema,
+      })
+      .strict(),
+  ]);
+
+export const suspendTenantResultSchema = tenantLifecycleResult("suspend_tenant");
+export const reactivateTenantResultSchema = tenantLifecycleResult("reactivate_tenant");
+
 export type ConfiguredTenantAdministrationOperatorContext = z.infer<
   typeof configuredTenantAdministrationOperatorContextSchema
 >;
@@ -235,6 +274,10 @@ export type ReactivateClusterIdentityCommand = z.infer<
 export type ReactivateClusterIdentityResult = z.infer<typeof reactivateClusterIdentityResultSchema>;
 export type CloseClusterIdentityCommand = z.infer<typeof closeClusterIdentityCommandSchema>;
 export type CloseClusterIdentityResult = z.infer<typeof closeClusterIdentityResultSchema>;
+export type SuspendTenantCommand = z.infer<typeof suspendTenantCommandSchema>;
+export type SuspendTenantResult = z.infer<typeof suspendTenantResultSchema>;
+export type ReactivateTenantCommand = z.infer<typeof reactivateTenantCommandSchema>;
+export type ReactivateTenantResult = z.infer<typeof reactivateTenantResultSchema>;
 export type ConfiguredTenantAdministrationRefusalCode = z.infer<
   typeof configuredTenantAdministrationRefusalCodeSchema
 >;

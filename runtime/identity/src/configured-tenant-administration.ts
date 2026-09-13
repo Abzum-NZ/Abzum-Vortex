@@ -13,8 +13,12 @@ import {
   provisionTenantResultSchema,
   reactivateClusterIdentityCommandSchema,
   reactivateClusterIdentityResultSchema,
+  reactivateTenantCommandSchema,
+  reactivateTenantResultSchema,
   suspendClusterIdentityCommandSchema,
   suspendClusterIdentityResultSchema,
+  suspendTenantCommandSchema,
+  suspendTenantResultSchema,
   type AdoptOrganizationCommand,
   type AdoptOrganizationResult,
   type AdoptTenantCommand,
@@ -26,8 +30,12 @@ import {
   type ProvisionTenantResult,
   type ReactivateClusterIdentityCommand,
   type ReactivateClusterIdentityResult,
+  type ReactivateTenantCommand,
+  type ReactivateTenantResult,
   type SuspendClusterIdentityCommand,
   type SuspendClusterIdentityResult,
+  type SuspendTenantCommand,
+  type SuspendTenantResult,
 } from "@vortex/contracts";
 import {
   withRuntimeTransaction,
@@ -80,6 +88,14 @@ type ClusterIdentityLifecycleRow = DatabaseRow & {
   outcome: unknown;
   operation: unknown;
   identity_id: unknown;
+  revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+};
+type TenantLifecycleRow = DatabaseRow & {
+  outcome: unknown;
+  operation: unknown;
+  tenant_id: unknown;
   revision: unknown;
   correlation_id: unknown;
   accepted_at: unknown;
@@ -147,6 +163,15 @@ export const createConfiguredTenantAdministrationService = (
       outcome: row.outcome,
       operation: row.operation,
       identityId: row.identity_id,
+      revision: revision(row.revision),
+      correlationId: row.correlation_id,
+      acceptedAt: timestamp(row.accepted_at),
+    };
+  const tenantLifecycleResult = (row: TenantLifecycleRow | undefined) =>
+    row && {
+      outcome: row.outcome,
+      operation: row.operation,
+      tenantId: row.tenant_id,
       revision: revision(row.revision),
       correlationId: row.correlation_id,
       acceptedAt: timestamp(row.accepted_at),
@@ -396,6 +421,58 @@ export const createConfiguredTenantAdministrationService = (
         };
       }
     },
+
+    async suspendTenant(candidate: SuspendTenantCommand): Promise<SuspendTenantResult> {
+      const command = suspendTenantCommandSchema.safeParse(candidate);
+      if (!command.success)
+        return { outcome: "refused", operation: "suspend_tenant", code: "invalid_command" };
+      if (!operator)
+        return {
+          outcome: "refused",
+          operation: "suspend_tenant",
+          code: "operator_not_configured",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (transaction) =>
+            transaction.query<TenantLifecycleRow>`select * from vortex_identity.suspend_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
+        return suspendTenantResultSchema.parse(tenantLifecycleResult(one(rows)));
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "suspend_tenant",
+          code: lifecycleRefusalCode(error),
+        };
+      }
+    },
+
+    async reactivateTenant(candidate: ReactivateTenantCommand): Promise<ReactivateTenantResult> {
+      const command = reactivateTenantCommandSchema.safeParse(candidate);
+      if (!command.success)
+        return { outcome: "refused", operation: "reactivate_tenant", code: "invalid_command" };
+      if (!operator)
+        return {
+          outcome: "refused",
+          operation: "reactivate_tenant",
+          code: "operator_not_configured",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (transaction) =>
+            transaction.query<TenantLifecycleRow>`select * from vortex_identity.reactivate_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
+        return reactivateTenantResultSchema.parse(tenantLifecycleResult(one(rows)));
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "reactivate_tenant",
+          code: lifecycleRefusalCode(error),
+        };
+      }
+    },
   });
 };
 
@@ -406,3 +483,5 @@ export const adoptOrganization = defaultService.adoptOrganization;
 export const suspendClusterIdentity = defaultService.suspendClusterIdentity;
 export const reactivateClusterIdentity = defaultService.reactivateClusterIdentity;
 export const closeClusterIdentity = defaultService.closeClusterIdentity;
+export const suspendTenant = defaultService.suspendTenant;
+export const reactivateTenant = defaultService.reactivateTenant;

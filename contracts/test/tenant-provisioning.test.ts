@@ -6,7 +6,10 @@ import {
   provisionTenantCommandSchema,
   provisionTenantResultSchema,
   reactivateClusterIdentityCommandSchema,
+  reactivateTenantCommandSchema,
+  reactivateTenantResultSchema,
   suspendClusterIdentityCommandSchema,
+  suspendTenantCommandSchema,
 } from "../src";
 import { describe, expect, it } from "vitest";
 
@@ -135,6 +138,36 @@ describe("configured tenant provisioning contracts", () => {
         outcome: "refused",
         operation: "close_cluster_identity",
         code: "stale_revision",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("defines strict configured-system tenant lifecycle commands and results", () => {
+    const command = {
+      operation: "suspend_tenant" as const,
+      duplicateKey: id(40),
+      tenantId: id(41),
+      expectedRevision: 7,
+    };
+    expect(suspendTenantCommandSchema.safeParse(command).success).toBe(true);
+    expect(
+      suspendTenantCommandSchema.safeParse({ ...command, systemActorId: id(42) }).success,
+    ).toBe(false);
+    expect(
+      reactivateTenantCommandSchema.safeParse({
+        ...command,
+        operation: "reactivate_tenant",
+        expectedRevision: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      reactivateTenantResultSchema.safeParse({
+        outcome: "accepted",
+        operation: "reactivate_tenant",
+        tenantId: id(41),
+        revision: 8,
+        correlationId: id(43),
+        acceptedAt: "2026-09-14T12:00:00.000Z",
       }).success,
     ).toBe(true);
   });
