@@ -2933,14 +2933,34 @@ select is(
 );
 
 select is((
-  select pg_catalog.concat_ws('|', mapping.on_parent_delete, pg_catalog.count(edge.*)::text)
+  select pg_catalog.concat_ws(
+    '|',
+    mapping.on_parent_delete,
+    pg_catalog.array_to_string(
+      pg_catalog.array_agg(distinct edge.from_record_id::text order by edge.from_record_id::text),
+      ','
+    )
+  )
   from vortex_record.relationship_storage_mappings as mapping
   left join vortex_record.relationship_edges as edge
     on edge.relationship_id = mapping.relationship_id
     and edge.to_record_id = 'd5750000-0000-4000-8000-000000000001'
   where mapping.relationship_id = :'relationship_required'
   group by mapping.on_parent_delete
-), 'refuse|3', 'the refuse-policy fixture has three real current incoming edges');
+), (
+  select pg_catalog.concat_ws(
+    '|',
+    'refuse',
+    pg_catalog.string_agg(source.record_id::text, ',' order by source.record_id::text)
+  )
+  from (
+    select (result ->> 'recordId')::uuid as record_id
+    from lifecycle_create_result
+    union all
+    select (result ->> 'recordId')::uuid as record_id
+    from lifecycle_second_create_result
+  ) as source
+), 'the refuse-policy fixture has exactly its two real current incoming edge sources');
 set local role vortex_record_adapter;
 create temporary table lifecycle_refuse_parent_delete on commit drop as
 select vortex_record.soft_delete_record_internal(
@@ -3453,7 +3473,7 @@ insert into record_data.rt_b4750000000040008000000000000001 (
   f_f4750000000040008000000000000001
 ) values (
   :'org_one', :'module_one', :'type_s', :'storage_s',
-  'd5750000-0000-4000-8000-000000000005', null, 1,
+  'd5750000-0000-4000-8000-000000000006', null, 1,
   '84750000-0000-4000-8000-000000000003', 'active', 1,
   pg_catalog.statement_timestamp(), '64750000-0000-4000-8000-0000000000a1',
   pg_catalog.statement_timestamp(), '64750000-0000-4000-8000-0000000000a1',
@@ -3499,14 +3519,14 @@ select vortex_record.save_base_record(
   pg_catalog.jsonb_build_object(
     :'f_inherited_owner', pg_catalog.jsonb_build_object(
       'recordTypeId', :'type_s',
-      'recordId', 'd5750000-0000-4000-8000-000000000005'
+      'recordId', 'd5750000-0000-4000-8000-000000000006'
     )
   ),
   pg_catalog.jsonb_build_object(
     :'f_inherited_title', 'Fresh inherited child',
     :'f_inherited_owner', pg_catalog.jsonb_build_object(
       'recordTypeId', :'type_s',
-      'recordId', 'd5750000-0000-4000-8000-000000000005'
+      'recordId', 'd5750000-0000-4000-8000-000000000006'
     )
   ), null,
   'a4750000-0000-4000-8000-000000000162'::uuid,
@@ -3521,14 +3541,14 @@ select vortex_record.save_base_record(
     :'f_inherited_title', 'Must not persist',
     :'f_inherited_owner', pg_catalog.jsonb_build_object(
       'recordTypeId', :'type_s',
-      'recordId', 'd5750000-0000-4000-8000-000000000005'
+      'recordId', 'd5750000-0000-4000-8000-000000000006'
     )
   ),
   pg_catalog.jsonb_build_object(
     :'f_inherited_title', 'Must not persist',
     :'f_inherited_owner', pg_catalog.jsonb_build_object(
       'recordTypeId', :'type_s',
-      'recordId', 'd5750000-0000-4000-8000-000000000005'
+      'recordId', 'd5750000-0000-4000-8000-000000000006'
     )
   ), null,
   'a4750000-0000-4000-8000-000000000172'::uuid,
