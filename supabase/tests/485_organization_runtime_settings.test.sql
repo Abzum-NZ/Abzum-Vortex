@@ -95,10 +95,7 @@ select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'correlationId', 'a4850000-0000-4000-8000-000000000004'
 ));
 set local role vortex_request;
-select is_empty(
-  $$select * from vortex_access.read_current_organization_runtime_settings_for_application()$$,
-  'an authorised current-settings reader returns no row until explicit setup exists'
-);
+select ok(not exists (select 1 from vortex_access.read_current_organization_runtime_settings_for_application()), 'an authorised current-settings reader returns no row until explicit setup exists');
 reset role;
 
 set local role vortex_runtime;
