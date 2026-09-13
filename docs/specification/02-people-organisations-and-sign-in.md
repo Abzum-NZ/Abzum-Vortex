@@ -88,6 +88,17 @@ creator/audit attribution.
 5. Leaving, suspending, or closing an organisation account affects only that organisation. Suspending or closing the cluster-local identity projection prevents entry to every account in that cluster. Environment-wide identity disablement and session revocation are protected Identity Authority operations delivered by [operational readiness](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not a meaning assigned to a cluster row.
 6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the Access service's one live version for that organisation. Account activation, reactivation, suspension and closure change Identity state and that version together or change neither.
 
+A configured system operator may suspend, reactivate, or close one local identity
+projection through a protected cluster command. The change is local to that cluster:
+it does not alter the provider identity, authentication sessions, another cluster,
+organisation account state, organisation lifecycle, roles, assignments, or Access
+versions. Before a projection becomes unavailable, the command verifies the current
+minimum stewardship of every affected organisation and tenant. If scope membership
+changes while the command is acquiring its stable locks, it safely refuses rather
+than applying a partial change. Reactivation restores only the projection; it never
+revives a previously revoked or expired account, role, assignment or delegation.
+The protected implementation belongs to [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30).
+
 ## Identity across clusters
 
 Each environment has one **Vortex Identity Authority** shared by all Vortex clusters in that environment. It is implemented with [Supabase Auth](https://supabase.com/docs/guides/auth) and issues short-lived identity tokens using the managed P-256 `ES256` [asymmetric signing key and published key set](https://supabase.com/docs/guides/auth/signing-keys). A cluster verifies a token through the authority's standard JWKS endpoint, ensures or loads its minimal cluster-local identity projection, and then loads only active organisation accounts stored in that cluster. Testing proves this boundary with two independently configured verifier instances; it does not pretend that a second physical Testing cluster exists.
