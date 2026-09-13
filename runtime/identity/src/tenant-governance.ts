@@ -7,6 +7,10 @@ import {
   grantTenantAdministratorCommandSchema,
   grantTenantAdministratorResultSchema,
   identitySessionSchema,
+  renameTenantOrganizationCommandSchema,
+  renameTenantOrganizationResultSchema,
+  reparentTenantOrganizationCommandSchema,
+  reparentTenantOrganizationResultSchema,
   revokeTenantAdministratorCommandSchema,
   revokeTenantAdministratorResultSchema,
   tenantAssignmentPageSchema,
@@ -22,6 +26,10 @@ import {
   type GrantTenantAdministratorCommand,
   type GrantTenantAdministratorResult,
   type IdentitySession,
+  type RenameTenantOrganizationCommand,
+  type RenameTenantOrganizationResult,
+  type ReparentTenantOrganizationCommand,
+  type ReparentTenantOrganizationResult,
   type RevokeTenantAdministratorCommand,
   type RevokeTenantAdministratorResult,
   type TenantAssignmentQuery,
@@ -48,6 +56,14 @@ type MutationRow = DatabaseRow & {
   outcome: unknown;
   operation: unknown;
   assignment_id: unknown;
+  revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+};
+type OrganizationMutationRow = DatabaseRow & {
+  outcome: unknown;
+  operation: unknown;
+  organization_id: unknown;
   revision: unknown;
   correlation_id: unknown;
   accepted_at: unknown;
@@ -86,6 +102,10 @@ const mutationCode = (error: unknown) => {
       return "operation_unavailable" as const;
   }
 };
+const organizationMutationCode = (error: unknown) => {
+  const code = mutationCode(error);
+  return code === "last_manager" ? ("unavailable" as const) : code;
+};
 const readRefusal = (invalid: boolean) => ({
   outcome: "refused" as const,
   code: invalid ? ("invalid_request" as const) : ("unavailable" as const),
@@ -116,6 +136,15 @@ const mutationResult = (row: MutationRow | undefined) =>
     outcome: row.outcome,
     operation: row.operation,
     assignmentId: row.assignment_id,
+    revision: revision(row.revision),
+    correlationId: row.correlation_id,
+    acceptedAt: timestamp(row.accepted_at),
+  };
+const organizationMutationResult = (row: OrganizationMutationRow | undefined) =>
+  row && {
+    outcome: row.outcome,
+    operation: row.operation,
+    organizationId: row.organization_id,
     revision: revision(row.revision),
     correlationId: row.correlation_id,
     acceptedAt: timestamp(row.accepted_at),
@@ -302,6 +331,64 @@ export const createTenantGovernanceService = (
         };
       }
     },
+    async renameOrganization(
+      session: IdentitySession,
+      candidate: RenameTenantOrganizationCommand,
+    ): Promise<RenameTenantOrganizationResult> {
+      const verified = sessionIdentity(session);
+      const command = renameTenantOrganizationCommandSchema.safeParse(candidate);
+      if (!verified.success || !command.success)
+        return {
+          outcome: "refused",
+          operation: "rename_tenant_organization",
+          code: "invalid_command",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (tx) =>
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.rename_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.displayName}::text)`,
+        );
+        return renameTenantOrganizationResultSchema.parse(
+          organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
+        );
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "rename_tenant_organization",
+          code: organizationMutationCode(error),
+        };
+      }
+    },
+    async reparentOrganization(
+      session: IdentitySession,
+      candidate: ReparentTenantOrganizationCommand,
+    ): Promise<ReparentTenantOrganizationResult> {
+      const verified = sessionIdentity(session);
+      const command = reparentTenantOrganizationCommandSchema.safeParse(candidate);
+      if (!verified.success || !command.success)
+        return {
+          outcome: "refused",
+          operation: "reparent_tenant_organization",
+          code: "invalid_command",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (tx) =>
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.reparent_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.parentOrganizationId}::uuid)`,
+        );
+        return reparentTenantOrganizationResultSchema.parse(
+          organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
+        );
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "reparent_tenant_organization",
+          code: organizationMutationCode(error),
+        };
+      }
+    },
   });
 };
 
@@ -313,3 +400,5 @@ export const listTenantAdministratorAssignments = defaultService.listAssignments
 export const grantTenantAdministrator = defaultService.grant;
 export const changeTenantAdministrator = defaultService.change;
 export const revokeTenantAdministrator = defaultService.revoke;
+export const renameTenantOrganization = defaultService.renameOrganization;
+export const reparentTenantOrganization = defaultService.reparentOrganization;

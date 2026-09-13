@@ -129,6 +129,27 @@ export const revokeTenantAdministratorCommandSchema = z
   })
   .strict();
 
+export const renameTenantOrganizationCommandSchema = z
+  .object({
+    operation: z.literal("rename_tenant_organization"),
+    duplicateKey: administrationDuplicateKeySchema,
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema,
+    expectedRevision: revisionSchema,
+    displayName: z.string().trim().min(1).max(120),
+  })
+  .strict();
+export const reparentTenantOrganizationCommandSchema = z
+  .object({
+    operation: z.literal("reparent_tenant_organization"),
+    duplicateKey: administrationDuplicateKeySchema,
+    tenantId: tenantIdSchema,
+    organizationId: organizationIdSchema,
+    expectedRevision: revisionSchema,
+    parentOrganizationId: organizationIdSchema.nullable(),
+  })
+  .strict();
+
 export const tenantAdministratorMutationRefusalCodeSchema = z.enum([
   "invalid_command",
   "duplicate_conflict",
@@ -164,6 +185,42 @@ export const grantTenantAdministratorResultSchema = mutationResult("grant_tenant
 export const changeTenantAdministratorResultSchema = mutationResult("change_tenant_administrator");
 export const revokeTenantAdministratorResultSchema = mutationResult("revoke_tenant_administrator");
 
+export const tenantOrganizationMutationRefusalCodeSchema = z.enum([
+  "invalid_command",
+  "duplicate_conflict",
+  "stale_revision",
+  "unavailable",
+  "operation_unavailable",
+]);
+const acceptedOrganizationMutation = {
+  outcome: z.enum(["accepted", "replayed"]),
+  organizationId: organizationIdSchema,
+  revision: revisionSchema,
+  correlationId: correlationIdSchema,
+  acceptedAt: timestampSchema,
+};
+const organizationMutationResult = <
+  Operation extends "rename_tenant_organization" | "reparent_tenant_organization",
+>(
+  operation: Operation,
+) =>
+  z.discriminatedUnion("outcome", [
+    z.object({ ...acceptedOrganizationMutation, operation: z.literal(operation) }).strict(),
+    z
+      .object({
+        outcome: z.literal("refused"),
+        operation: z.literal(operation),
+        code: tenantOrganizationMutationRefusalCodeSchema,
+      })
+      .strict(),
+  ]);
+export const renameTenantOrganizationResultSchema = organizationMutationResult(
+  "rename_tenant_organization",
+);
+export const reparentTenantOrganizationResultSchema = organizationMutationResult(
+  "reparent_tenant_organization",
+);
+
 export type TenantLauncherQuery = z.infer<typeof tenantLauncherQuerySchema>;
 export type TenantLauncherResult = z.infer<typeof tenantLauncherResultSchema>;
 export type TenantHierarchyQuery = z.infer<typeof tenantHierarchyQuerySchema>;
@@ -179,7 +236,15 @@ export type ChangeTenantAdministratorCommand = z.infer<
 export type RevokeTenantAdministratorCommand = z.infer<
   typeof revokeTenantAdministratorCommandSchema
 >;
+export type RenameTenantOrganizationCommand = z.infer<typeof renameTenantOrganizationCommandSchema>;
+export type ReparentTenantOrganizationCommand = z.infer<
+  typeof reparentTenantOrganizationCommandSchema
+>;
 export type GrantTenantAdministratorResult = z.infer<typeof grantTenantAdministratorResultSchema>;
 export type ChangeTenantAdministratorResult = z.infer<typeof changeTenantAdministratorResultSchema>;
 export type RevokeTenantAdministratorResult = z.infer<typeof revokeTenantAdministratorResultSchema>;
+export type RenameTenantOrganizationResult = z.infer<typeof renameTenantOrganizationResultSchema>;
+export type ReparentTenantOrganizationResult = z.infer<
+  typeof reparentTenantOrganizationResultSchema
+>;
 export type TenantStructuralCapability = z.infer<typeof tenantStructuralCapabilitySchema>;
