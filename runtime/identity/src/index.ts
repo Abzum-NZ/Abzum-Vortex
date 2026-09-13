@@ -50,6 +50,7 @@ export {
   type OrganizationRuntimeSettingsStoreDependencies,
 } from "./organization-runtime-settings";
 export {
+  archiveTenantOrganization,
   changeTenantAdministrator,
   createTenantGovernanceService,
   grantTenantAdministrator,
@@ -57,8 +58,10 @@ export {
   listTenantHierarchy,
   listTenantLauncher,
   readTenantOrganization,
+  reactivateTenantOrganization,
   renameTenantOrganization,
   reparentTenantOrganization,
+  suspendTenantOrganization,
   revokeTenantAdministrator,
   type TenantGovernanceServiceDependencies,
 } from "./tenant-governance";

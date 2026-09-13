@@ -2,15 +2,21 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  archiveTenantOrganizationCommandSchema,
+  archiveTenantOrganizationResultSchema,
   changeTenantAdministratorCommandSchema,
   changeTenantAdministratorResultSchema,
   grantTenantAdministratorCommandSchema,
   grantTenantAdministratorResultSchema,
   identitySessionSchema,
+  reactivateTenantOrganizationCommandSchema,
+  reactivateTenantOrganizationResultSchema,
   renameTenantOrganizationCommandSchema,
   renameTenantOrganizationResultSchema,
   reparentTenantOrganizationCommandSchema,
   reparentTenantOrganizationResultSchema,
+  suspendTenantOrganizationCommandSchema,
+  suspendTenantOrganizationResultSchema,
   revokeTenantAdministratorCommandSchema,
   revokeTenantAdministratorResultSchema,
   tenantAssignmentPageSchema,
@@ -21,15 +27,21 @@ import {
   tenantLauncherPageSchema,
   tenantLauncherQuerySchema,
   tenantOrganizationQuerySchema,
+  type ArchiveTenantOrganizationCommand,
+  type ArchiveTenantOrganizationResult,
   type ChangeTenantAdministratorCommand,
   type ChangeTenantAdministratorResult,
   type GrantTenantAdministratorCommand,
   type GrantTenantAdministratorResult,
   type IdentitySession,
+  type ReactivateTenantOrganizationCommand,
+  type ReactivateTenantOrganizationResult,
   type RenameTenantOrganizationCommand,
   type RenameTenantOrganizationResult,
   type ReparentTenantOrganizationCommand,
   type ReparentTenantOrganizationResult,
+  type SuspendTenantOrganizationCommand,
+  type SuspendTenantOrganizationResult,
   type RevokeTenantAdministratorCommand,
   type RevokeTenantAdministratorResult,
   type TenantAssignmentQuery,
@@ -389,6 +401,93 @@ export const createTenantGovernanceService = (
         };
       }
     },
+    async suspendOrganization(
+      session: IdentitySession,
+      candidate: SuspendTenantOrganizationCommand,
+    ): Promise<SuspendTenantOrganizationResult> {
+      const verified = sessionIdentity(session);
+      const command = suspendTenantOrganizationCommandSchema.safeParse(candidate);
+      if (!verified.success || !command.success)
+        return {
+          outcome: "refused",
+          operation: "suspend_tenant_organization",
+          code: "invalid_command",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (tx) =>
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.suspend_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
+        return suspendTenantOrganizationResultSchema.parse(
+          organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
+        );
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "suspend_tenant_organization",
+          code: organizationMutationCode(error),
+        };
+      }
+    },
+    async reactivateOrganization(
+      session: IdentitySession,
+      candidate: ReactivateTenantOrganizationCommand,
+    ): Promise<ReactivateTenantOrganizationResult> {
+      const verified = sessionIdentity(session);
+      const command = reactivateTenantOrganizationCommandSchema.safeParse(candidate);
+      if (!verified.success || !command.success)
+        return {
+          outcome: "refused",
+          operation: "reactivate_tenant_organization",
+          code: "invalid_command",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (tx) =>
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.reactivate_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
+        return reactivateTenantOrganizationResultSchema.parse(
+          organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
+        );
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "reactivate_tenant_organization",
+          code: organizationMutationCode(error),
+        };
+      }
+    },
+    async archiveOrganization(
+      session: IdentitySession,
+      candidate: ArchiveTenantOrganizationCommand,
+    ): Promise<ArchiveTenantOrganizationResult> {
+      const verified = sessionIdentity(session);
+      const command = archiveTenantOrganizationCommandSchema.safeParse(candidate);
+      if (!verified.success || !command.success)
+        return {
+          outcome: "refused",
+          operation: "archive_tenant_organization",
+          code: "invalid_command",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (tx) =>
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.archive_tenant_organization(${verified.data.identityId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+        );
+        return archiveTenantOrganizationResultSchema.parse(
+          organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
+        );
+      } catch (error) {
+        return {
+          outcome: "refused",
+          operation: "archive_tenant_organization",
+          code: organizationMutationCode(error),
+        };
+      }
+    },
   });
 };
 
@@ -402,3 +501,6 @@ export const changeTenantAdministrator = defaultService.change;
 export const revokeTenantAdministrator = defaultService.revoke;
 export const renameTenantOrganization = defaultService.renameOrganization;
 export const reparentTenantOrganization = defaultService.reparentOrganization;
+export const suspendTenantOrganization = defaultService.suspendOrganization;
+export const reactivateTenantOrganization = defaultService.reactivateOrganization;
+export const archiveTenantOrganization = defaultService.archiveOrganization;

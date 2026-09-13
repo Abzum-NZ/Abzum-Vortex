@@ -1,8 +1,11 @@
 import {
+  archiveTenantOrganizationCommandSchema,
   changeTenantAdministratorCommandSchema,
   grantTenantAdministratorCommandSchema,
+  reactivateTenantOrganizationCommandSchema,
   renameTenantOrganizationCommandSchema,
   reparentTenantOrganizationCommandSchema,
+  suspendTenantOrganizationCommandSchema,
   tenantAssignmentQuerySchema,
   tenantHierarchyQuerySchema,
   tenantLauncherQuerySchema,
@@ -69,7 +72,7 @@ describe("tenant governance contracts", () => {
     ).toBe(false);
   });
 
-  it("accepts only the two narrow organization hierarchy mutations", () => {
+  it("accepts the narrow organization hierarchy and lifecycle mutations", () => {
     expect(
       renameTenantOrganizationCommandSchema.safeParse({
         operation: "rename_tenant_organization",
@@ -90,6 +93,21 @@ describe("tenant governance contracts", () => {
         parentOrganizationId: null,
       }).success,
     ).toBe(true);
+    for (const [schema, operation] of [
+      [suspendTenantOrganizationCommandSchema, "suspend_tenant_organization"],
+      [reactivateTenantOrganizationCommandSchema, "reactivate_tenant_organization"],
+      [archiveTenantOrganizationCommandSchema, "archive_tenant_organization"],
+    ] as const) {
+      expect(
+        schema.safeParse({
+          operation,
+          duplicateKey: id(7),
+          tenantId: id(2),
+          organizationId: id(4),
+          expectedRevision: 3,
+        }).success,
+      ).toBe(true);
+    }
   });
 
   it("rejects implicit or expanded organization changes", () => {
@@ -121,6 +139,36 @@ describe("tenant governance contracts", () => {
         expectedRevision: 3,
         parentOrganizationId: id(7),
         state: "suspended",
+      }).success,
+    ).toBe(false);
+    expect(
+      suspendTenantOrganizationCommandSchema.safeParse({
+        operation: "suspend_tenant_organization",
+        duplicateKey: id(7),
+        tenantId: id(2),
+        organizationId: id(4),
+        expectedRevision: 3,
+        cascade: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      reactivateTenantOrganizationCommandSchema.safeParse({
+        operation: "reactivate_tenant_organization",
+        duplicateKey: id(8),
+        tenantId: id(2),
+        organizationId: id(4),
+        expectedRevision: 3,
+        stewardIdentityId: id(9),
+      }).success,
+    ).toBe(false);
+    expect(
+      archiveTenantOrganizationCommandSchema.safeParse({
+        operation: "archive_tenant_organization",
+        duplicateKey: id(9),
+        tenantId: id(2),
+        organizationId: id(4),
+        expectedRevision: 3,
+        archiveChildren: true,
       }).success,
     ).toBe(false);
   });

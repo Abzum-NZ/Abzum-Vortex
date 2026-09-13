@@ -210,4 +210,86 @@ describe("tenant governance service", () => {
     });
     expect(runtimeTransaction).toHaveBeenCalledOnce();
   });
+
+  it("passes only verified identity and exact lifecycle command facts", async () => {
+    const cases = [
+      {
+        method: "suspendOrganization",
+        operation: "suspend_tenant_organization",
+        functionName: "suspend_tenant_organization",
+      },
+      {
+        method: "reactivateOrganization",
+        operation: "reactivate_tenant_organization",
+        functionName: "reactivate_tenant_organization",
+      },
+      {
+        method: "archiveOrganization",
+        operation: "archive_tenant_organization",
+        functionName: "archive_tenant_organization",
+      },
+    ] as const;
+
+    for (const lifecycle of cases) {
+      const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+      const service = createTenantGovernanceService({
+        runtimeTransaction: runner(
+          [
+            {
+              outcome: "accepted",
+              operation: lifecycle.operation,
+              organization_id: id(11),
+              revision: "4",
+              correlation_id: id(7),
+              accepted_at: new Date("2026-09-14T00:01:00Z"),
+              access_version: 99,
+            },
+          ],
+          calls,
+        ),
+      });
+
+      await expect(
+        service[lifecycle.method](session(), {
+          operation: lifecycle.operation,
+          duplicateKey: id(3),
+          tenantId: id(4),
+          organizationId: id(11),
+          expectedRevision: 3,
+        }),
+      ).resolves.toEqual({
+        outcome: "accepted",
+        operation: lifecycle.operation,
+        organizationId: id(11),
+        revision: 4,
+        correlationId: id(7),
+        acceptedAt: "2026-09-14T00:01:00.000Z",
+      });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.text).toContain(`vortex_identity.${lifecycle.functionName}`);
+      expect(calls[0]?.values.slice(0, 3)).toHaveLength(3);
+      expect(calls[0]?.values.slice(3)).toEqual([id(4), id(11), 3]);
+      expect(calls[0]?.values).not.toContain(99);
+    }
+  });
+
+  it("rejects lifecycle expansion before opening a transaction", async () => {
+    const runtimeTransaction = vi.fn();
+    const service = createTenantGovernanceService({ runtimeTransaction });
+    await expect(
+      service.suspendOrganization(session(), {
+        operation: "suspend_tenant_organization",
+        duplicateKey: id(3),
+        tenantId: id(4),
+        organizationId: id(11),
+        expectedRevision: 3,
+        cascade: true,
+      } as never),
+    ).resolves.toEqual({
+      outcome: "refused",
+      operation: "suspend_tenant_organization",
+      code: "invalid_command",
+    });
+    expect(runtimeTransaction).not.toHaveBeenCalled();
+  });
 });
