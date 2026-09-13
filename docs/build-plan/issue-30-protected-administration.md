@@ -9,7 +9,9 @@ Governing requirements: [people and organisations](../specification/02-people-or
 
 ## Status, delivered slices and dependency boundary
 
-Implementation is unblocked: the exact hosted delivery for the
+Slice 5 is delivered. Slice 6 is the next deliverable and is temporarily blocked
+solely by [#455](https://github.com/Abzum-NZ/Abzum-Vortex/issues/455). Completed
+prerequisite history is retained for context only. The hosted delivery of the
 [central Access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
 is [complete](../evidence/issue-34-access-decision.md#delivery-boundary). The other native prerequisites — [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23),
 [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24),
@@ -53,12 +55,14 @@ Delivered on `testing`:
   ([PR #450](https://github.com/Abzum-NZ/Abzum-Vortex/pull/450)).
 - **Slice 4B** — configured-system tenant lifecycle
   ([PR #451](https://github.com/Abzum-NZ/Abzum-Vortex/pull/451)).
+- **Slice 5** — organisation-local administrative reads
+  ([PR #453](https://github.com/Abzum-NZ/Abzum-Vortex/pull/453)).
 
-Slices 1, 2, 3A, 3B, 3C, 3D, 4A and 4B are merged to Testing; their exact hosted
-verification remains a delivery gate. The next implementation assignment is
-**Slice 5 only: organisation-local administrative reads**. It remains separate
-because reads must reuse the delivered organisation request and permission paths
-without extending account, invitation, or runtime-settings mutation behaviour.
+Slices 1, 2, 3A, 3B, 3C, 3D, 4A, 4B and 5 are delivered to Testing. Slice 6 —
+organisation-local account lifecycle and invitation mutations — is the next
+implementation assignment. Its only current native blocker is
+[#455](https://github.com/Abzum-NZ/Abzum-Vortex/issues/455); the delivered reads
+remain context and are not Slice 6 scope.
 
 ## Outcome
 
@@ -517,7 +521,7 @@ provider/Auth/session, other-cluster, tenant archive/removal, account offboardin
 child transition, automatic grant repair, generic lifecycle framework, UI, MCP
 transport or AI behaviour belongs here.
 
-## Slice 5 — organisation-local administrative reads
+## Slice 5 — delivered organisation-local administrative reads
 
 This slice provides five server-only operations through the existing resolved
 organisation request: `listOrganizationAccounts`, `readOrganizationAccount`,
@@ -574,9 +578,10 @@ Account or invitation mutation, offboarding, ownership transfer, Groups, PIM,
 general query/filter engines, UI, application definitions, MCP/AI, provider
 operations and Production deployment remain outside this slice.
 
-## Slice 6 — planned organisation-local account lifecycle and invitations
+## Slice 6 — next organisation-local account lifecycle and invitations
 
-After Slice 5's exact delivery verification, this slice will add five
+This next slice is temporarily blocked solely by
+[#455](https://github.com/Abzum-NZ/Abzum-Vortex/issues/455) and will add five
 server-only commands: `suspendOrganizationAccount`,
 `reactivateOrganizationAccount`, `closeOrganizationAccount`,
 `createOrganizationInvitation`, and `revokeOrganizationInvitation`. Account
