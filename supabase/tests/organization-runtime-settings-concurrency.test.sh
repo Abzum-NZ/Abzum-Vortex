@@ -866,7 +866,7 @@ wait_for_database_blocker "$revocation_first_update_backend" "$revocation_first_
 touch "$proof_root/revocation-first-release"
 wait_owned_worker "$revocation_first_pid"
 wait_owned_worker "$revocation_first_update_pid"
-grep -Fq 'changed|revoke|2|2' "$proof_root/revocation-first.log" || {
+grep -Fq 'changed|revoke|2|3' "$proof_root/revocation-first.log" || {
   echo 'revocation-first did not commit the real terminal assignment state and Access version' >&2
   exit 1
 }
@@ -874,7 +874,7 @@ grep -Fq '42501' "$proof_root/revocation-first-update.log" || {
   echo 'a settings update staged before revocation did not refuse after its Access wait' >&2
   exit 1
 }
-[ "$(run_sql "select pg_catalog.concat_ws('|', version.current_version, assignment.revision, assignment.state) from vortex_access.organization_access_versions as version join vortex_access.organization_role_assignments as assignment on assignment.organization_id = version.organization_id where version.organization_id = '$organization_id' and assignment.role_assignment_id = '$assignment_id';")" = '2|2|revoked' ] || {
+[ "$(run_sql "select pg_catalog.concat_ws('|', version.current_version, assignment.revision, assignment.state) from vortex_access.organization_access_versions as version join vortex_access.organization_role_assignments as assignment on assignment.organization_id = version.organization_id where version.organization_id = '$organization_id' and assignment.role_assignment_id = '$assignment_id';")" = '3|2|revoked' ] || {
   echo 'revocation-first left unexpected assignment or Access state' >&2
   exit 1
 }
@@ -956,11 +956,11 @@ wait_owned_worker "$update_first_revocation_pid"
   echo 'update-first did not commit its one protected settings revision' >&2
   exit 1
 }
-grep -Fq 'changed|revoke|2|3' "$proof_root/update-first-revocation.log" || {
+grep -Fq 'changed|revoke|2|4' "$proof_root/update-first-revocation.log" || {
   echo 'the real revocation after the settings update did not commit exact state' >&2
   exit 1
 }
-[ "$(run_sql "select pg_catalog.concat_ws('|', version.current_version, assignment.revision, assignment.state) from vortex_access.organization_access_versions as version join vortex_access.organization_role_assignments as assignment on assignment.organization_id = version.organization_id where version.organization_id = '$organization_id' and assignment.role_assignment_id = '$revocation_target_assignment_id';")" = '3|2|revoked' ] || {
+[ "$(run_sql "select pg_catalog.concat_ws('|', version.current_version, assignment.revision, assignment.state) from vortex_access.organization_access_versions as version join vortex_access.organization_role_assignments as assignment on assignment.organization_id = version.organization_id where version.organization_id = '$organization_id' and assignment.role_assignment_id = '$revocation_target_assignment_id';")" = '4|2|revoked' ] || {
   echo 'update-first/revocation ordering left unexpected assignment or Access state' >&2
   exit 1
 }
