@@ -221,7 +221,7 @@ select ok(
 );
 select is(
   (
-    select count(*)::integer
+    select pg_catalog.array_agg(function.proname::text order by function.proname)
     from pg_catalog.pg_proc as function
     where function.pronamespace = 'vortex_identity'::regnamespace
       and function.proname in (
@@ -229,10 +229,26 @@ select is(
         'refuse_organization_cycle', 'lock_organization_tenant',
         'validate_tenant_lifecycle', 'validate_organization_lifecycle'
       )
-      and function.prosecdef
+      and not function.prosecdef
   ),
-  0,
-  'every invariant trigger function is security invoker'
+  array[
+    'lock_organization_tenant', 'protect_organization_identity',
+    'protect_tenant_identity', 'refuse_organization_cycle',
+    'validate_organization_lifecycle'
+  ],
+  'the five named invariant trigger functions remain security invoker'
+);
+select is(
+  (
+    select owner.rolname || '|' || function.prosecdef::text || '|' ||
+      pg_catalog.array_to_string(function.proconfig, ',')
+    from pg_catalog.pg_proc as function
+    join pg_catalog.pg_roles as owner on owner.oid = function.proowner
+    where function.oid =
+      'vortex_identity.validate_tenant_lifecycle()'::regprocedure
+  ),
+  'postgres|true|search_path=""',
+  'tenant lifecycle validation is the exact hardened definer exception'
 );
 select is(
   (
@@ -264,6 +280,32 @@ select ok(
     'EXECUTE'
   ),
   'request role cannot execute lifecycle functions directly'
+);
+select ok(
+  not pg_catalog.has_function_privilege(
+    candidate.role_name,
+    'vortex_identity.validate_tenant_lifecycle()',
+    'EXECUTE'
+  ),
+  candidate.role_name || ' cannot execute tenant lifecycle validation directly'
+)
+from (values
+  ('public'::name), ('anon'::name), ('authenticated'::name),
+  ('service_role'::name), ('vortex_runtime'::name), ('vortex_request'::name),
+  ('vortex_record_owner'::name), ('vortex_record_adapter'::name),
+  ('vortex_module_owner'::name)
+) as candidate(role_name);
+select is(
+  (
+    select trigger.tgdeferrable::text || '|' || trigger.tginitdeferred::text ||
+      '|' || trigger.tgfoid::regprocedure::text
+    from pg_catalog.pg_trigger as trigger
+    where trigger.tgrelid = 'vortex_identity.tenants'::regclass
+      and trigger.tgname = 'tenants_validate_lifecycle'
+      and not trigger.tgisinternal
+  ),
+  'true|true|vortex_identity.validate_tenant_lifecycle()',
+  'tenant lifecycle validation remains attached and initially deferred'
 );
 
 insert into vortex_identity.tenants (

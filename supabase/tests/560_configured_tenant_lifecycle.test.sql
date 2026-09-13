@@ -1,9 +1,183 @@
 \ir helpers/private-schema-assertions.psql
 \ir helpers/management-application-fixture.psql
 
+set search_path = pg_catalog, extensions, public;
+select no_plan();
+
+select ok(
+  not pg_catalog.has_table_privilege(
+    candidate.role_name, 'vortex_identity.tenants', 'SELECT'
+  ) and not pg_catalog.has_table_privilege(
+    candidate.role_name, 'vortex_identity.tenants', 'UPDATE'
+  ),
+  candidate.role_name || ' retains no direct tenant-table access'
+)
+from (values
+  ('public'::name), ('anon'::name), ('authenticated'::name),
+  ('service_role'::name), ('vortex_runtime'::name), ('vortex_request'::name),
+  ('vortex_record_owner'::name), ('vortex_record_adapter'::name),
+  ('vortex_module_owner'::name)
+) as candidate(role_name);
+select ok(
+  not pg_catalog.has_function_privilege(
+    candidate.role_name,
+    'vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint)',
+    'EXECUTE'
+  ),
+  candidate.role_name || ' cannot invoke the private tenant lifecycle helper'
+)
+from (values
+  ('public'::name), ('anon'::name), ('authenticated'::name),
+  ('service_role'::name), ('vortex_runtime'::name), ('vortex_request'::name),
+  ('vortex_record_owner'::name), ('vortex_record_adapter'::name),
+  ('vortex_module_owner'::name)
+) as candidate(role_name);
+
+insert into vortex_identity.tenants (
+  tenant_id, short_name, display_name, state, created_at, created_by,
+  state_changed_at, revision
+) values (
+  '15600000-0000-4000-8000-000000000050', 'runtime_commit_lifecycle',
+  'Runtime commit lifecycle', 'active', pg_catalog.clock_timestamp(),
+  '95600000-0000-4000-8000-000000000050', pg_catalog.clock_timestamp(), 1
+);
+
+begin;
+set local role vortex_runtime;
+select outcome from vortex_identity.suspend_tenant(
+  'c5600000-0000-4000-8000-000000000050',
+  '95600000-0000-4000-8000-000000000050',
+  'd5600000-0000-4000-8000-000000000050',
+  'sha256:' || pg_catalog.repeat('8', 64),
+  '15600000-0000-4000-8000-000000000050', 1
+) \g /dev/null
+commit;
+select is(
+  (
+    select tenant.state || '|' || tenant.revision::text || '|' ||
+      receipt.operation_key || '|' || receipt.subject_revisions[1]::text
+    from vortex_identity.tenants as tenant
+    join vortex_identity.accepted_administration_receipts as receipt
+      on receipt.cluster_id =
+        'c5600000-0000-4000-8000-000000000050'::uuid
+      and receipt.actor_id =
+        '95600000-0000-4000-8000-000000000050'::uuid
+      and receipt.subject_ids @> array[tenant.tenant_id]
+      and receipt.operation_key = 'suspend_tenant'
+      and receipt.duplicate_key =
+        'd5600000-0000-4000-8000-000000000050'::uuid
+    where tenant.tenant_id =
+      '15600000-0000-4000-8000-000000000050'::uuid
+  ),
+  'suspended|2|suspend_tenant|2',
+  'runtime suspension commits tenant state, revision and receipt atomically'
+);
+
+begin;
+set local role vortex_runtime;
+select outcome from vortex_identity.suspend_tenant(
+  'c5600000-0000-4000-8000-000000000050',
+  '95600000-0000-4000-8000-000000000050',
+  'd5600000-0000-4000-8000-000000000050',
+  'sha256:' || pg_catalog.repeat('8', 64),
+  '15600000-0000-4000-8000-000000000050', 1
+) \g /dev/null
+commit;
+select is(
+  (
+    select tenant.state || '|' || tenant.revision::text || '|' ||
+      pg_catalog.count(receipt.receipt_id)::text
+    from vortex_identity.tenants as tenant
+    join vortex_identity.accepted_administration_receipts as receipt
+      on receipt.cluster_id =
+        'c5600000-0000-4000-8000-000000000050'::uuid
+      and receipt.actor_id =
+        '95600000-0000-4000-8000-000000000050'::uuid
+      and receipt.subject_ids @> array[tenant.tenant_id]
+      and receipt.operation_key = 'suspend_tenant'
+    where tenant.tenant_id =
+      '15600000-0000-4000-8000-000000000050'::uuid
+    group by tenant.state, tenant.revision
+  ),
+  'suspended|2|1',
+  'runtime exact replay commits without another state change or receipt'
+);
+
+set role vortex_runtime;
+do $runtime_stale$
+begin
+  perform 1 from vortex_identity.reactivate_tenant(
+    'c5600000-0000-4000-8000-000000000050',
+    '95600000-0000-4000-8000-000000000050',
+    'd5600000-0000-4000-8000-000000000051',
+    'sha256:9999999999999999999999999999999999999999999999999999999999999999',
+    '15600000-0000-4000-8000-000000000050', 1
+  );
+  raise exception 'runtime stale lifecycle unexpectedly succeeded';
+exception when sqlstate 'V3102' then
+  null;
+end
+$runtime_stale$;
+reset role;
+select is(
+  (
+    select tenant.state || '|' || tenant.revision::text || '|' ||
+      pg_catalog.count(receipt.receipt_id)::text
+    from vortex_identity.tenants as tenant
+    join vortex_identity.accepted_administration_receipts as receipt
+      on receipt.cluster_id =
+        'c5600000-0000-4000-8000-000000000050'::uuid
+      and receipt.actor_id =
+        '95600000-0000-4000-8000-000000000050'::uuid
+      and receipt.subject_ids @> array[tenant.tenant_id]
+    where tenant.tenant_id =
+      '15600000-0000-4000-8000-000000000050'::uuid
+    group by tenant.state, tenant.revision
+  ),
+  'suspended|2|1',
+  'fresh privileged observation finds stale refusal fully rolled back'
+);
+
+begin;
+set local role vortex_runtime;
+select outcome from vortex_identity.reactivate_tenant(
+  'c5600000-0000-4000-8000-000000000050',
+  '95600000-0000-4000-8000-000000000050',
+  'd5600000-0000-4000-8000-000000000052',
+  'sha256:' || pg_catalog.repeat('a', 64),
+  '15600000-0000-4000-8000-000000000050', 2
+) \g /dev/null
+commit;
+select is(
+  (
+    select tenant.state || '|' || tenant.revision::text || '|' ||
+      pg_catalog.count(receipt.receipt_id)::text
+    from vortex_identity.tenants as tenant
+    join vortex_identity.accepted_administration_receipts as receipt
+      on receipt.cluster_id =
+        'c5600000-0000-4000-8000-000000000050'::uuid
+      and receipt.actor_id =
+        '95600000-0000-4000-8000-000000000050'::uuid
+      and receipt.subject_ids @> array[tenant.tenant_id]
+    where tenant.tenant_id =
+      '15600000-0000-4000-8000-000000000050'::uuid
+    group by tenant.state, tenant.revision
+  ),
+  'active|3|2',
+  'runtime reactivation commits through the same deferred trigger boundary'
+);
+
+delete from vortex_identity.accepted_administration_receipts
+where cluster_id = 'c5600000-0000-4000-8000-000000000050'::uuid
+  and actor_id = '95600000-0000-4000-8000-000000000050'::uuid
+  and subject_ids @> array[
+    '15600000-0000-4000-8000-000000000050'::uuid
+  ];
+delete from vortex_identity.tenants
+where tenant_id = '15600000-0000-4000-8000-000000000050'::uuid;
+
 begin;
 set local search_path = pg_catalog, extensions, public;
-select no_plan();
 
 select ok(
   pg_catalog.has_function_privilege(
