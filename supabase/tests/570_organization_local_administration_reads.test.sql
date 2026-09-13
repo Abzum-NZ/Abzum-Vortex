@@ -82,43 +82,6 @@ from (values
   ('vortex_identity.organization_runtime_settings')
 ) as private_table(table_name);
 
-select ok(
-  pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_accounts_administration_scope()'::regprocedure
-  ) like '%platform.organization.accounts.read%'
-  and pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_accounts_administration_scope()'::regprocedure
-  ) like '%02c772e5-2921-4300-ad90-4f5772a7fa46%'
-  and pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_accounts_administration_scope()'::regprocedure
-  ) not like '%630a980c-0ff5-40b1-a329-7326a2122395%',
-  'account reads declare only the fixed accounts.read permission'
-);
-select ok(
-  pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_invitations_administration_scope()'::regprocedure
-  ) like '%platform.organization.invitations.read%'
-  and pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_invitations_administration_scope()'::regprocedure
-  ) like '%9300e501-6d56-41b1-b203-3361dbace9bc%'
-  and pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_invitations_administration_scope()'::regprocedure
-  ) not like '%c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb%',
-  'invitation reads declare only the fixed invitations.read permission'
-);
-select ok(
-  pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_runtime_settings_administration_read_scope()'::regprocedure
-  ) like '%platform.organization.runtime_settings.read%'
-  and pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_runtime_settings_administration_read_scope()'::regprocedure
-  ) like '%6dffcb0b-ded8-4cd5-acc8-c50f7d4269a5%'
-  and pg_catalog.pg_get_functiondef(
-    'vortex_access.organization_runtime_settings_administration_read_scope()'::regprocedure
-  ) not like '%c658c254-2884-414a-9012-512c0cfe4b34%',
-  'settings reads declare only the fixed runtime_settings.read permission'
-);
-
 insert into vortex_identity.tenants (
   tenant_id, short_name, display_name, state, created_at, created_by,
   state_changed_at, revision
@@ -157,7 +120,11 @@ from (values
   ('45700000-0000-4000-8000-000000000002'::uuid, 'a5700000-0000-4000-8000-000000000002'::uuid),
   ('45700000-0000-4000-8000-000000000003'::uuid, 'a5700000-0000-4000-8000-000000000003'::uuid),
   ('45700000-0000-4000-8000-000000000004'::uuid, 'a5700000-0000-4000-8000-000000000004'::uuid),
-  ('45700000-0000-4000-8000-000000000005'::uuid, 'a5700000-0000-4000-8000-000000000005'::uuid)
+  ('45700000-0000-4000-8000-000000000005'::uuid, 'a5700000-0000-4000-8000-000000000005'::uuid),
+  ('45700000-0000-4000-8000-000000000006'::uuid, 'a5700000-0000-4000-8000-000000000006'::uuid),
+  ('45700000-0000-4000-8000-000000000007'::uuid, 'a5700000-0000-4000-8000-000000000007'::uuid),
+  ('45700000-0000-4000-8000-000000000008'::uuid, 'a5700000-0000-4000-8000-000000000008'::uuid),
+  ('45700000-0000-4000-8000-000000000009'::uuid, 'a5700000-0000-4000-8000-000000000009'::uuid)
 ) as fixture(identity_id, correlation_id);
 
 insert into vortex_identity.organization_accounts (
@@ -210,6 +177,42 @@ insert into vortex_identity.organization_accounts (
     pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
     '95700000-0000-4000-8000-000000000001',
     'a5700000-0000-4000-8000-000000000015', 1
+  ),
+  (
+    '55700000-0000-4000-8000-000000000006',
+    '25700000-0000-4000-8000-000000000001',
+    '45700000-0000-4000-8000-000000000006', 'Accounts read only', 'active',
+    null, null, pg_catalog.clock_timestamp(), null, null,
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '95700000-0000-4000-8000-000000000001',
+    'a5700000-0000-4000-8000-000000000016', 1
+  ),
+  (
+    '55700000-0000-4000-8000-000000000007',
+    '25700000-0000-4000-8000-000000000001',
+    '45700000-0000-4000-8000-000000000007', 'Invitations read only', 'active',
+    null, null, pg_catalog.clock_timestamp(), null, null,
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '95700000-0000-4000-8000-000000000001',
+    'a5700000-0000-4000-8000-000000000017', 1
+  ),
+  (
+    '55700000-0000-4000-8000-000000000008',
+    '25700000-0000-4000-8000-000000000001',
+    '45700000-0000-4000-8000-000000000008', 'Settings read only', 'active',
+    null, null, pg_catalog.clock_timestamp(), null, null,
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '95700000-0000-4000-8000-000000000001',
+    'a5700000-0000-4000-8000-000000000018', 1
+  ),
+  (
+    '55700000-0000-4000-8000-000000000009',
+    '25700000-0000-4000-8000-000000000001',
+    '45700000-0000-4000-8000-000000000009', 'Manage only', 'active',
+    null, null, pg_catalog.clock_timestamp(), null, null,
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '95700000-0000-4000-8000-000000000001',
+    'a5700000-0000-4000-8000-000000000019', 1
   );
 
 select * from vortex_access.initialize_organization_access_version(
@@ -232,6 +235,151 @@ select * from vortex_access.coordinate_organization_stewardship_adoption(
   '85700000-0000-4000-8000-000000000001',
   '95700000-0000-4000-8000-000000000001',
   'a5700000-0000-4000-8000-000000000023'
+);
+
+create function pg_temp.seed_local_administration_role(
+  p_role_id uuid,
+  p_role_key text,
+  p_organization_account_id uuid,
+  p_role_assignment_id uuid,
+  p_permission_ids uuid[]
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.clock_timestamp();
+  inserted_permission_count integer;
+begin
+  insert into vortex_access.organization_roles (
+    organization_id, role_id, role_kind, role_key, live_revision,
+    created_by, created_at
+  ) values (
+    '25700000-0000-4000-8000-000000000001', p_role_id, 'custom',
+    p_role_key, 1, '95700000-0000-4000-8000-000000000001', operation_at
+  );
+
+  insert into vortex_access.organization_role_permission_entries (
+    organization_id, role_id, role_revision, entry_ordinal, role_kind,
+    role_application_root_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id,
+    accepted_registration_revision, catalogue_fingerprint,
+    continuity_revision, meaning_fingerprint
+  )
+  select entry.organization_id, p_role_id, 1,
+    pg_catalog.row_number() over (order by entry.permission_id), 'custom', null,
+    entry.application_root_id, entry.owner_kind, entry.owner_id,
+    entry.permission_id, entry.registration_kind,
+    entry.registration_owner_id, entry.registration_revision,
+    registration.permission_catalogue_fingerprint,
+    continuity.continuity_revision, entry.meaning_fingerprint
+  from vortex_access.permission_catalogue_entries as entry
+  join vortex_access.permission_registration_revisions as registration
+    on registration.organization_id = entry.organization_id
+    and registration.registration_kind = entry.registration_kind
+    and registration.registration_owner_id is not distinct from
+      entry.registration_owner_id
+    and registration.revision = entry.registration_revision
+  join vortex_access.permission_continuities as continuity
+    on continuity.organization_id = entry.organization_id
+    and continuity.application_root_id is not distinct from
+      entry.application_root_id
+    and continuity.owner_kind = entry.owner_kind
+    and continuity.owner_id = entry.owner_id
+    and continuity.permission_id = entry.permission_id
+  where entry.organization_id = '25700000-0000-4000-8000-000000000001'
+    and entry.permission_id = any(p_permission_ids);
+
+  get diagnostics inserted_permission_count = row_count;
+  if inserted_permission_count <> pg_catalog.cardinality(p_permission_ids) then
+    raise exception 'local administration permission fixture was incomplete';
+  end if;
+
+  insert into vortex_access.organization_role_revisions (
+    organization_id, role_id, revision, role_kind, lifecycle,
+    privilege_classification, assignment_policy,
+    policy_continuity_revision, authority_continuity_revision,
+    activation_policy_id, activation_policy_revision,
+    activation_policy_fingerprint, role_key, label, description,
+    changed_by, changed_at, change_correlation_id
+  ) values (
+    '25700000-0000-4000-8000-000000000001', p_role_id, 1, 'custom',
+    'active', 'privileged', 'standing', 1, 1, null, null, null,
+    p_role_key, 'Slice 5 permission proof',
+    'Exact permission wrapper execution fixture.',
+    '95700000-0000-4000-8000-000000000001', operation_at, p_role_id
+  );
+
+  insert into vortex_access.organization_role_assignments (
+    organization_id, role_assignment_id, role_id, assignee_kind,
+    organization_account_id, group_id, assignment_kind, revision,
+    starts_at, expires_at, state, granted_by, granted_at,
+    grant_correlation_id, changed_by, changed_at, change_correlation_id
+  ) values (
+    '25700000-0000-4000-8000-000000000001', p_role_assignment_id,
+    p_role_id, 'organization_account', p_organization_account_id, null,
+    'standing', 1, operation_at - interval '1 minute', null, 'live',
+    '95700000-0000-4000-8000-000000000001', operation_at,
+    p_role_assignment_id,
+    '95700000-0000-4000-8000-000000000001', operation_at,
+    p_role_assignment_id
+  );
+end
+$function$;
+
+select pg_temp.seed_local_administration_role(
+  '65700000-0000-4000-8000-000000000006', 'accounts_read_only',
+  '55700000-0000-4000-8000-000000000006',
+  '75700000-0000-4000-8000-000000000006',
+  array['02c772e5-2921-4300-ad90-4f5772a7fa46'::uuid]
+);
+select pg_temp.seed_local_administration_role(
+  '65700000-0000-4000-8000-000000000007', 'invitations_read_only',
+  '55700000-0000-4000-8000-000000000007',
+  '75700000-0000-4000-8000-000000000007',
+  array['9300e501-6d56-41b1-b203-3361dbace9bc'::uuid]
+);
+select pg_temp.seed_local_administration_role(
+  '65700000-0000-4000-8000-000000000008', 'settings_read_only',
+  '55700000-0000-4000-8000-000000000008',
+  '75700000-0000-4000-8000-000000000008',
+  array['6dffcb0b-ded8-4cd5-acc8-c50f7d4269a5'::uuid]
+);
+select pg_temp.seed_local_administration_role(
+  '65700000-0000-4000-8000-000000000009', 'manage_only',
+  '55700000-0000-4000-8000-000000000009',
+  '75700000-0000-4000-8000-000000000009',
+  array[
+    '630a980c-0ff5-40b1-a329-7326a2122395'::uuid,
+    'c2e03f58-debe-478e-b1e0-a4a8b8f1b9cb'::uuid,
+    'c658c254-2884-414a-9012-512c0cfe4b34'::uuid
+  ]
+);
+
+insert into vortex_identity.tenant_administrator_assignments (
+  assignment_id, tenant_id, identity_id, capability_keys, starts_at, expires_at,
+  revision, granted_at, granted_by_actor_id, grant_correlation_id, changed_at,
+  changed_by_actor_id, change_correlation_id
+) values (
+  'b5700000-0000-4000-8000-000000000004',
+  '15700000-0000-4000-8000-000000000001',
+  '45700000-0000-4000-8000-000000000004',
+  array[
+    'platform.tenant.administrators.manage',
+    'platform.tenant.administrators.read',
+    'platform.tenant.hierarchy.read',
+    'platform.tenant.organizations.create',
+    'platform.tenant.organizations.lifecycle',
+    'platform.tenant.organizations.rename',
+    'platform.tenant.organizations.reparent'
+  ],
+  pg_catalog.clock_timestamp() - interval '1 minute', null, 1,
+  pg_catalog.clock_timestamp(), '95700000-0000-4000-8000-000000000001',
+  'a5700000-0000-4000-8000-000000000024', pg_catalog.clock_timestamp(),
+  '95700000-0000-4000-8000-000000000001',
+  'a5700000-0000-4000-8000-000000000024'
 );
 
 insert into vortex_identity.organization_invitations (
@@ -283,6 +431,16 @@ insert into vortex_identity.organization_invitations (
     pg_catalog.clock_timestamp() - interval '1 hour',
     pg_catalog.clock_timestamp() + interval '1 day', null, null, null, null,
     pg_catalog.clock_timestamp() - interval '1 hour', 1
+  ),
+  (
+    '35700000-0000-4000-8000-000000000005',
+    '25700000-0000-4000-8000-000000000001', 'expired@example.test',
+    'sha256:' || pg_catalog.repeat('5', 64),
+    '55700000-0000-4000-8000-000000000001',
+    pg_catalog.clock_timestamp() - interval '2 hours',
+    pg_catalog.clock_timestamp() - interval '2 hours',
+    pg_catalog.clock_timestamp() - interval '1 hour', null, null, null, null,
+    pg_catalog.clock_timestamp() - interval '2 hours', 1
   );
 
 create function pg_temp.install_local_administration_context(
@@ -320,12 +478,199 @@ begin
 end
 $function$;
 
+create function pg_temp.local_administration_state()
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'tenantFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.tenant_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_identity.tenants
+        where tenant_id = '15700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'organizationFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.organization_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_identity.organizations
+        where tenant_id = '15700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'identityFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.identity_id),
+        '[]'::jsonb
+      )
+      from (
+        select projection.* from vortex_identity.identity_projections as projection
+        where exists (
+          select 1 from vortex_identity.organization_accounts as account
+          join vortex_identity.organizations as organization
+            on organization.organization_id = account.organization_id
+          where organization.tenant_id = '15700000-0000-4000-8000-000000000001'
+            and account.identity_id = projection.identity_id
+        )
+      ) as fact
+    ),
+    'accountFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.organization_account_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_identity.organization_accounts
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'invitationFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.invitation_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_identity.organization_invitations
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'settingsFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.organization_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_identity.organization_runtime_settings
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'tenantAdministratorFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.assignment_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_identity.tenant_administrator_assignments
+        where tenant_id = '15700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'roleFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.role_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_access.organization_roles
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'roleRevisionFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(
+          pg_catalog.to_jsonb(fact) order by fact.role_id, fact.revision
+        ), '[]'::jsonb
+      )
+      from (
+        select * from vortex_access.organization_role_revisions
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'rolePermissionFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(
+          pg_catalog.to_jsonb(fact)
+          order by fact.role_id, fact.role_revision, fact.entry_ordinal
+        ), '[]'::jsonb
+      )
+      from (
+        select * from vortex_access.organization_role_permission_entries
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'roleAssignmentFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(
+          pg_catalog.to_jsonb(fact) order by fact.role_assignment_id
+        ), '[]'::jsonb
+      )
+      from (
+        select * from vortex_access.organization_role_assignments
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'accessVersionFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.organization_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_access.organization_access_versions
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'administrationReceipts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.receipt_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_identity.accepted_administration_receipts
+        where tenant_id = '15700000-0000-4000-8000-000000000001'
+      ) as fact
+    ),
+    'activityFacts', (
+      select coalesce(
+        pg_catalog.jsonb_agg(pg_catalog.to_jsonb(fact) order by fact.activity_id),
+        '[]'::jsonb
+      )
+      from (
+        select * from vortex_activity.organization_activity_entries
+        where organization_id = '25700000-0000-4000-8000-000000000001'
+      ) as fact
+    )
+  )
+$function$;
+
+create temporary table absent_settings_read_before on commit drop as
+select pg_temp.local_administration_state() as state;
+
 select pg_temp.install_local_administration_context(
-  '45700000-0000-4000-8000-000000000001',
-  '55700000-0000-4000-8000-000000000001'
+  '45700000-0000-4000-8000-000000000008',
+  '55700000-0000-4000-8000-000000000008'
 );
 set local role vortex_request;
+select results_eq(
+  $$select outcome from vortex_access.read_organization_runtime_settings_for_administration()$$,
+  $$values ('unavailable'::text)$$,
+  'runtime_settings.read alone allows the settings wrapper and reports explicit absence'
+);
+reset role;
+select is(
+  pg_temp.local_administration_state()::text,
+  (select state::text from absent_settings_read_before),
+  'an authorized absent settings read changes no scoped fact, receipt, Activity or Access version'
+);
 
+select * from vortex_identity.initialize_organization_runtime_settings(
+  '25700000-0000-4000-8000-000000000001',
+  'en-NZ', 'Pacific/Auckland', 'NZD', 'medium', 'auto'
+);
+
+create temporary table successful_reads_before on commit drop as
+select pg_temp.local_administration_state() as state;
+
+select pg_temp.install_local_administration_context(
+  '45700000-0000-4000-8000-000000000006',
+  '55700000-0000-4000-8000-000000000006'
+);
+set local role vortex_request;
 select is(
   (
     select pg_catalog.jsonb_build_object(
@@ -353,23 +698,49 @@ select is(
     'states', pg_catalog.jsonb_build_array('active', 'suspended', 'closed'),
     'safeKeys', true
   )::text,
-  'account list returns all lifecycle variants with exact safe fields and a local cursor'
+  'accounts.read alone allows the account list wrapper with exact safe fields'
 );
-
-select is(
-  (
-    select accounts
+select results_eq(
+  $$select outcome || '|' || (account_summary ->> 'organizationAccountId')
+    from vortex_access.read_organization_account_for_administration(
+      '55700000-0000-4000-8000-000000000002'
+    )$$,
+  $$values ('available|55700000-0000-4000-8000-000000000002'::text)$$,
+  'accounts.read alone allows the account detail wrapper'
+);
+select results_eq(
+  $$select item ->> 'organizationAccountId'
     from vortex_access.list_organization_accounts_for_administration(
-      '55700000-0000-4000-8000-000000000003', 10
-    )
-  )::text,
-  pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-    'organizationAccountId', '55700000-0000-4000-8000-000000000004'::uuid,
-    'displayName', 'No authority', 'state', 'active', 'revision', 1
-  ))::text,
-  'the next account page continues strictly after its permanent local ID'
+      '55700000-0000-4000-8000-000000000005', 100
+    ) as page
+    cross join lateral pg_catalog.jsonb_array_elements(page.accounts) as item
+    order by item ->> 'organizationAccountId'$$,
+  $$values
+    ('55700000-0000-4000-8000-000000000006'::text),
+    ('55700000-0000-4000-8000-000000000007'::text),
+    ('55700000-0000-4000-8000-000000000008'::text),
+    ('55700000-0000-4000-8000-000000000009'::text)$$,
+  'a foreign account cursor remains an opaque ordering boundary without widening scope'
 );
+select results_eq(
+  $$select outcome from vortex_access.read_organization_account_for_administration(
+      '55700000-0000-4000-8000-000000000005'
+    )$$,
+  $$values ('unavailable'::text)$$,
+  'a foreign account detail has the same unavailable outcome as absence'
+);
+select throws_ok(
+  $$select * from vortex_access.list_organization_accounts_for_administration(null, 0)$$,
+  '22023'::char(5), 'Organization account administration page input is invalid',
+  'account page size zero is rejected inside the protected SQL path'
+);
+reset role;
 
+select pg_temp.install_local_administration_context(
+  '45700000-0000-4000-8000-000000000007',
+  '55700000-0000-4000-8000-000000000007'
+);
+set local role vortex_request;
 select is(
   (
     select pg_catalog.jsonb_build_object(
@@ -391,16 +762,25 @@ select is(
     'next', '35700000-0000-4000-8000-000000000002'::uuid,
     'safeKeys', true
   )::text,
-  'invitation list is bounded and never returns private secret or intent fields'
+  'invitations.read alone allows the bounded invitation list wrapper'
 );
-
+select results_eq(
+  $$select outcome || '|' || (invitation ->> 'invitationId')
+    from vortex_access.read_organization_invitation_for_administration(
+      '35700000-0000-4000-8000-000000000001'
+    )$$,
+  $$values ('available|35700000-0000-4000-8000-000000000001'::text)$$,
+  'invitations.read alone allows the invitation detail wrapper'
+);
 select is(
   (
     select pg_catalog.jsonb_agg(
       pg_catalog.jsonb_build_object(
         'id', item ->> 'invitationId',
         'revoked', item ? 'revokedAt',
-        'accepted', item ? 'acceptedAt'
+        'accepted', item ? 'acceptedAt',
+        'expired', not item ? 'revokedAt' and not item ? 'acceptedAt'
+          and (item ->> 'expiresAt')::timestamptz <= pg_catalog.statement_timestamp()
       ) order by item ->> 'invitationId'
     )
     from vortex_access.list_organization_invitations_for_administration(null, 100) as page
@@ -409,59 +789,38 @@ select is(
   pg_catalog.jsonb_build_array(
     pg_catalog.jsonb_build_object(
       'id', '35700000-0000-4000-8000-000000000001',
-      'revoked', false, 'accepted', false
+      'revoked', false, 'accepted', false, 'expired', false
     ),
     pg_catalog.jsonb_build_object(
       'id', '35700000-0000-4000-8000-000000000002',
-      'revoked', true, 'accepted', false
+      'revoked', true, 'accepted', false, 'expired', false
     ),
     pg_catalog.jsonb_build_object(
       'id', '35700000-0000-4000-8000-000000000003',
-      'revoked', false, 'accepted', true
+      'revoked', false, 'accepted', true, 'expired', false
+    ),
+    pg_catalog.jsonb_build_object(
+      'id', '35700000-0000-4000-8000-000000000005',
+      'revoked', false, 'accepted', false, 'expired', true
     )
   )::text,
-  'invitation list retains pending, revoked and accepted lifecycle facts'
-);
-
-select results_eq(
-  $$select outcome from vortex_access.read_organization_account_for_administration(
-      '55700000-0000-4000-8000-000000000005'
-    )$$,
-  $$values ('unavailable'::text)$$,
-  'a foreign account ID has the same unavailable detail outcome as absence'
+  'invitation list retains pending, revoked, accepted and expired lifecycle facts'
 );
 select results_eq(
-  $$select outcome from vortex_access.read_organization_account_for_administration(
-      '55700000-0000-4000-8000-000000000099'
-    )$$,
-  $$values ('unavailable'::text)$$,
-  'a missing account ID has the safe unavailable outcome'
+  $$select item ->> 'invitationId'
+    from vortex_access.list_organization_invitations_for_administration(
+      '35700000-0000-4000-8000-000000000004', 100
+    ) as page
+    cross join lateral pg_catalog.jsonb_array_elements(page.invitations) as item$$,
+  $$values ('35700000-0000-4000-8000-000000000005'::text)$$,
+  'a foreign invitation cursor remains an opaque ordering boundary without widening scope'
 );
 select results_eq(
   $$select outcome from vortex_access.read_organization_invitation_for_administration(
       '35700000-0000-4000-8000-000000000004'
     )$$,
   $$values ('unavailable'::text)$$,
-  'a foreign invitation ID has the same unavailable detail outcome as absence'
-);
-select results_eq(
-  $$select outcome from vortex_access.read_organization_invitation_for_administration(
-      '35700000-0000-4000-8000-000000000099'
-    )$$,
-  $$values ('unavailable'::text)$$,
-  'a missing invitation ID has the safe unavailable outcome'
-);
-
-select results_eq(
-  $$select outcome from vortex_access.read_organization_runtime_settings_for_administration()$$,
-  $$values ('unavailable'::text)$$,
-  'administrative settings read reports explicit absence before setup'
-);
-
-select throws_ok(
-  $$select * from vortex_access.list_organization_accounts_for_administration(null, 0)$$,
-  '22023'::char(5), 'Organization account administration page input is invalid',
-  'account page size zero is rejected inside the protected SQL path'
+  'a foreign invitation detail has the same unavailable outcome as absence'
 );
 select throws_ok(
   $$select * from vortex_access.list_organization_invitations_for_administration(
@@ -470,18 +829,11 @@ select throws_ok(
   '22023'::char(5), 'Organization invitation administration page input is invalid',
   'nil invitation cursors are rejected inside the protected SQL path'
 );
-select throws_ok(
-  $$select * from vortex_access.read_organization_account_for_administration(
-      '00000000-0000-0000-0000-000000000000'
-    )$$,
-  '22023'::char(5), 'Organization account administration detail input is invalid',
-  'nil account detail IDs are rejected inside the protected SQL path'
-);
 reset role;
 
-select * from vortex_identity.initialize_organization_runtime_settings(
-  '25700000-0000-4000-8000-000000000001',
-  'en-NZ', 'Pacific/Auckland', 'NZD', 'medium', 'auto'
+select pg_temp.install_local_administration_context(
+  '45700000-0000-4000-8000-000000000008',
+  '55700000-0000-4000-8000-000000000008'
 );
 set local role vortex_request;
 select is(
@@ -494,49 +846,90 @@ select is(
     'language', 'en-NZ', 'timeZone', 'Pacific/Auckland', 'currency', 'NZD',
     'dateFormat', 'medium', 'numberFormat', 'auto', 'revision', 1
   )::text,
-  'settings administration reuses the existing Identity-owned whole-row reader'
+  'runtime_settings.read alone allows the settings wrapper'
 );
 reset role;
 
-create temporary table read_side_effects_before on commit drop as
-select
-  (select current_version from vortex_access.organization_access_versions
-    where organization_id = '25700000-0000-4000-8000-000000000001') as access_version,
-  (select pg_catalog.count(*) from vortex_identity.organization_accounts
-    where organization_id = '25700000-0000-4000-8000-000000000001') as accounts,
-  (select pg_catalog.count(*) from vortex_identity.organization_invitations
-    where organization_id = '25700000-0000-4000-8000-000000000001') as invitations,
-  (select revision from vortex_identity.organization_runtime_settings
-    where organization_id = '25700000-0000-4000-8000-000000000001') as settings_revision,
-  (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
-    where organization_id = '25700000-0000-4000-8000-000000000001') as activities;
-
-select is(
-  (
-    select pg_catalog.jsonb_build_object(
-      'accessVersion', version.current_version,
-      'accounts', (select pg_catalog.count(*) from vortex_identity.organization_accounts
-        where organization_id = version.organization_id),
-      'invitations', (select pg_catalog.count(*) from vortex_identity.organization_invitations
-        where organization_id = version.organization_id),
-      'settingsRevision', (select revision from vortex_identity.organization_runtime_settings
-        where organization_id = version.organization_id),
-      'activities', (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
-        where organization_id = version.organization_id)
-    )
-    from vortex_access.organization_access_versions as version
-    where version.organization_id = '25700000-0000-4000-8000-000000000001'
-  )::text,
-  (
-    select pg_catalog.jsonb_build_object(
-      'accessVersion', access_version, 'accounts', accounts,
-      'invitations', invitations, 'settingsRevision', settings_revision,
-      'activities', activities
-    )
-    from read_side_effects_before
-  )::text,
-  'administrative reads create no mutation, Activity entry or Access increment'
+select pg_temp.install_local_administration_context(
+  '45700000-0000-4000-8000-000000000009',
+  '55700000-0000-4000-8000-000000000009'
 );
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.list_organization_accounts_for_administration(null, 10)$$,
+  '42501'::char(5), 'Organization account administration is unavailable',
+  'accounts.manage does not substitute for accounts.read on the list wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.read_organization_account_for_administration(
+      '55700000-0000-4000-8000-000000000001'
+    )$$,
+  '42501'::char(5), 'Organization account administration is unavailable',
+  'accounts.manage does not substitute for accounts.read on the detail wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.list_organization_invitations_for_administration(null, 10)$$,
+  '42501'::char(5), 'Organization invitation administration is unavailable',
+  'invitations.manage does not substitute for invitations.read on the list wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.read_organization_invitation_for_administration(
+      '35700000-0000-4000-8000-000000000001'
+    )$$,
+  '42501'::char(5), 'Organization invitation administration is unavailable',
+  'invitations.manage does not substitute for invitations.read on the detail wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.read_organization_runtime_settings_for_administration()$$,
+  '42501'::char(5),
+  'Organization runtime settings administration read is unavailable',
+  'runtime_settings.manage does not substitute for runtime_settings.read'
+);
+reset role;
+
+select pg_temp.install_local_administration_context(
+  '45700000-0000-4000-8000-000000000007',
+  '55700000-0000-4000-8000-000000000007'
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.list_organization_accounts_for_administration(null, 10)$$,
+  '42501'::char(5), 'Organization account administration is unavailable',
+  'invitations.read does not substitute for accounts.read on the list wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.read_organization_account_for_administration(
+      '55700000-0000-4000-8000-000000000001'
+    )$$,
+  '42501'::char(5), 'Organization account administration is unavailable',
+  'invitations.read does not substitute for accounts.read on the detail wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.read_organization_runtime_settings_for_administration()$$,
+  '42501'::char(5),
+  'Organization runtime settings administration read is unavailable',
+  'invitations.read does not substitute for runtime_settings.read'
+);
+reset role;
+
+select pg_temp.install_local_administration_context(
+  '45700000-0000-4000-8000-000000000006',
+  '55700000-0000-4000-8000-000000000006'
+);
+set local role vortex_request;
+select throws_ok(
+  $$select * from vortex_access.list_organization_invitations_for_administration(null, 10)$$,
+  '42501'::char(5), 'Organization invitation administration is unavailable',
+  'accounts.read does not substitute for invitations.read on the list wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.read_organization_invitation_for_administration(
+      '35700000-0000-4000-8000-000000000001'
+    )$$,
+  '42501'::char(5), 'Organization invitation administration is unavailable',
+  'accounts.read does not substitute for invitations.read on the detail wrapper'
+);
+reset role;
 
 select pg_temp.install_local_administration_context(
   '45700000-0000-4000-8000-000000000004',
@@ -546,20 +939,40 @@ set local role vortex_request;
 select throws_ok(
   $$select * from vortex_access.list_organization_accounts_for_administration(null, 10)$$,
   '42501'::char(5), 'Organization account administration is unavailable',
-  'membership without the exact account-read permission does not authorize the read'
+  'tenant authority does not substitute for accounts.read on the list wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.read_organization_account_for_administration(
+      '55700000-0000-4000-8000-000000000001'
+    )$$,
+  '42501'::char(5), 'Organization account administration is unavailable',
+  'tenant authority does not substitute for accounts.read on the detail wrapper'
 );
 select throws_ok(
   $$select * from vortex_access.list_organization_invitations_for_administration(null, 10)$$,
   '42501'::char(5), 'Organization invitation administration is unavailable',
-  'membership without the exact invitation-read permission does not authorize the read'
+  'tenant authority does not substitute for invitations.read on the list wrapper'
+);
+select throws_ok(
+  $$select * from vortex_access.read_organization_invitation_for_administration(
+      '35700000-0000-4000-8000-000000000001'
+    )$$,
+  '42501'::char(5), 'Organization invitation administration is unavailable',
+  'tenant authority does not substitute for invitations.read on the detail wrapper'
 );
 select throws_ok(
   $$select * from vortex_access.read_organization_runtime_settings_for_administration()$$,
   '42501'::char(5),
   'Organization runtime settings administration read is unavailable',
-  'membership without the exact settings-read permission does not authorize the read'
+  'tenant authority does not substitute for runtime_settings.read'
 );
 reset role;
+
+select is(
+  pg_temp.local_administration_state()::text,
+  (select state::text from successful_reads_before),
+  'all five authorized reads and refusal paths change no scoped fact, receipt, Activity or Access version'
+);
 
 select * from finish();
 rollback;
