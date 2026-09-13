@@ -339,6 +339,21 @@ run_sql "
   select vortex_access.initialize_platform_permission_catalogue(
     '$organization_id', '$account_id', '$correlation_catalogue'
   );
+  insert into vortex_access.permission_continuities (
+    organization_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id, state,
+    continuity_revision, meaning_fingerprint,
+    last_processed_registration_revision, changed_at
+  )
+  select entry.organization_id, null, entry.owner_kind, entry.owner_id,
+    entry.permission_id, 'platform', entry.registration_owner_id,
+    'available', 1, entry.meaning_fingerprint, entry.registration_revision,
+    pg_catalog.clock_timestamp()
+  from vortex_access.permission_catalogue_entries as entry
+  where entry.organization_id = '$organization_id'
+    and entry.permission_id = 'c658c254-2884-414a-9012-512c0cfe4b34'
+    and entry.registration_kind = 'platform'
+    and entry.registration_revision = 1;
   insert into vortex_access.organization_roles (
     organization_id, role_id, role_kind, role_key, live_revision, created_by, created_at
   ) values (
