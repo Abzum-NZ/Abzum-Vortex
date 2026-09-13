@@ -215,12 +215,21 @@ const calculateAndFinalize = (
       ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
     });
 
-  // Most calculation forms do not use the organisation clock. Only a
-  // deadline comparison needs the organisation-local date; requiring runtime
-  // settings for every calculation would refuse otherwise deterministic saves.
-  const needsOrganizationLocalDate = prepared.recordType.fields.some(
-    (field) => field.type === "calculation" && field.settings.expression.kind === "deadline_passed",
-  );
+  // Most calculation forms do not use the organisation clock. Only a date
+  // deadline comparison needs the organisation-local date; date-time
+  // deadlines compare exact instants and remain deterministic without it.
+  const needsOrganizationLocalDate = prepared.recordType.fields.some((field) => {
+    if (field.type !== "calculation") return false;
+    const expression = field.settings.expression;
+    if (expression.kind !== "deadline_passed") return false;
+    const dueField = prepared.recordType.fields.find(
+      (candidate) => candidate.fieldId === expression.dueFieldId,
+    );
+    return (
+      dueField?.type === "date" ||
+      (dueField?.type === "calculation" && dueField.settings.resultType === "date")
+    );
+  });
   const organizationLocalDate = needsOrganizationLocalDate
     ? timeZone === undefined
       ? undefined
