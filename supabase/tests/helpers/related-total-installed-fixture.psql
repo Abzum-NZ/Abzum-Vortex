@@ -12,6 +12,9 @@
 \set admin_account '64870000-0000-4000-8000-000000000001'
 \set module '44870000-0000-4000-8000-000000000001'
 \set app '34870000-0000-4000-8000-000000000001'
+\set other_app '34870000-0000-4000-8000-000000000002'
+\set foreign_org '24870000-0000-4000-8000-000000000099'
+\set foreign_account '64870000-0000-4000-8000-000000000099'
 \set parent_type 'd4870000-0000-4000-8000-000000000001'
 \set child_type 'd4870000-0000-4000-8000-000000000002'
 \set parent_storage 'b4870000-0000-4000-8000-000000000001'
@@ -20,6 +23,8 @@
 \set child_self_relationship 'a4870000-0000-4000-8000-000000000002'
 \set parent_record 'e4870000-0000-4000-8000-000000000001'
 \set child_record 'e4870000-0000-4000-8000-000000000002'
+\set foreign_org_child_record 'e4870000-0000-4000-8000-000000000003'
+\set other_app_child_record 'e4870000-0000-4000-8000-000000000004'
 \set f_parent_title 'f4870000-0000-4000-8000-000000000001'
 \set f_parent_total 'f4870000-0000-4000-8000-000000000002'
 \set f_parent_display 'f4870000-0000-4000-8000-000000000003'
@@ -255,12 +260,16 @@ $function$;
 insert into vortex_identity.tenants (tenant_id,short_name,display_name,state,created_at,created_by,state_changed_at,revision)
 values (:'tenant'::uuid,'related_totals','Related totals','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1);
 insert into vortex_identity.organizations (organization_id,tenant_id,short_name,display_name,state,created_at,created_by,state_changed_at,revision)
-values (:'org'::uuid,:'tenant'::uuid,'related_totals','Related totals','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1);
+values
+  (:'org'::uuid,:'tenant'::uuid,'related_totals','Related totals','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1),
+  (:'foreign_org'::uuid,:'tenant'::uuid,'related_totals_foreign','Related totals foreign','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1);
 select * from vortex_access.initialize_organization_access_version(:'org'::uuid,:'actor'::uuid,'c4870000-0000-4000-8000-000000000001');
 select * from vortex_access.initialize_platform_permission_catalogue(:'org'::uuid,:'actor'::uuid,'c4870000-0000-4000-8000-000000000002');
 select * from vortex_identity.ensure_identity_projection(:'admin_identity'::uuid,'c4870000-0000-4000-8000-000000000003');
 insert into vortex_identity.organization_accounts (organization_account_id,organization_id,identity_id,display_name,state,activated_at,changed_at,state_changed_at,state_changed_by,state_change_correlation_id,revision)
-values (:'admin_account'::uuid,:'org'::uuid,:'admin_identity'::uuid,'Fixture administrator','active',pg_catalog.clock_timestamp()-interval '1 minute',pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),:'actor'::uuid,'c4870000-0000-4000-8000-000000000004',1);
+values
+  (:'admin_account'::uuid,:'org'::uuid,:'admin_identity'::uuid,'Fixture administrator','active',pg_catalog.clock_timestamp()-interval '1 minute',pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),:'actor'::uuid,'c4870000-0000-4000-8000-000000000004',1),
+  (:'foreign_account'::uuid,:'foreign_org'::uuid,:'admin_identity'::uuid,'Foreign fixture administrator','active',pg_catalog.clock_timestamp()-interval '1 minute',pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),:'actor'::uuid,'c4870000-0000-4000-8000-000000000004',1);
 select * from vortex_access.revise_platform_permission_catalogue_metadata(:'org'::uuid,1,'1.0.0','1.0.1',:'actor'::uuid,'c4870000-0000-4000-8000-000000000005');
 select * from vortex_access.coordinate_organization_stewardship_adoption(
   :'org'::uuid,:'admin_account'::uuid,'74750000-0000-4000-8000-000000000101','related_steward','Related steward','Fixture stewardship.',
@@ -271,7 +280,8 @@ select * from vortex_access.adopt_shipped_platform_permission_catalogue(:'org'::
 -- the normal definition writer below.
 insert into vortex_definition.roots(root_id,organization_id,kind,key,created_at,created_by) values
   (:'module'::uuid,:'org'::uuid,'module','vortex.related_total.module',pg_catalog.clock_timestamp()-interval '1 minute',:'actor'::uuid),
-  (:'app'::uuid,:'org'::uuid,'application','vortex.related_total.app',pg_catalog.clock_timestamp()-interval '1 minute',:'actor'::uuid);
+  (:'app'::uuid,:'org'::uuid,'application','vortex.related_total.app',pg_catalog.clock_timestamp()-interval '1 minute',:'actor'::uuid),
+  (:'other_app'::uuid,:'org'::uuid,'application','vortex.related_total.other_app',pg_catalog.clock_timestamp()-interval '1 minute',:'actor'::uuid);
 select pg_temp.append_writer_release(:'module'::uuid,'2.0.0','[]'::jsonb,pg_temp.related_module_content(),'2.0.0');
 select pg_temp.append_writer_release(:'app'::uuid,'1.0.0',pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_array(:'module'::uuid,1)),
   pg_catalog.jsonb_build_object('permissions','[]'::jsonb),'1.0.0');
@@ -348,7 +358,30 @@ insert into record_data.rt_b4870000000040008000000000000002(
   pg_catalog.jsonb_build_object('recordTypeId',:'child_type'::uuid,'recordId',:'child_record'::uuid)
 );
 reset role;
+
+-- These two source rows are reachable only through deliberately malformed
+-- adversarial edges added by 487.  The actual reader must never reach either
+-- row under this installation's organisation/application context.  Disable
+-- row security only for this fixture seed; the enclosing test rolls the table
+-- setting and rows back before any later test can observe them.
 set local role vortex_record_owner;
+alter table record_data.rt_b4870000000040008000000000000002 disable row level security;
+insert into record_data.rt_b4870000000040008000000000000002(
+  organisation_id,module_root_id,record_type_id,storage_contract_id,record_id,application_root_id,definition_revision,
+  owner_organisation_account_id,lifecycle_state,concurrency_number,created_at,created_by,updated_at,updated_by,
+  f_f4870000000040008000000000000011,f_f4870000000040008000000000000012,f_f4870000000040008000000000000013,
+  f_f4870000000040008000000000000014,f_f4870000000040008000000000000015,f_f4870000000040008000000000000016
+) values
+  (:'foreign_org'::uuid,:'module'::uuid,:'child_type'::uuid,:'child_storage'::uuid,:'foreign_org_child_record'::uuid,:'app'::uuid,1,
+    :'foreign_account'::uuid,'active',1,pg_catalog.statement_timestamp(),:'actor'::uuid,pg_catalog.statement_timestamp(),:'actor'::uuid,
+    99.00,true,pg_catalog.jsonb_build_object('recordTypeId',:'parent_type'::uuid,'recordId',:'parent_record'::uuid),99.00,99.00,
+    pg_catalog.jsonb_build_object('recordTypeId',:'child_type'::uuid,'recordId',:'foreign_org_child_record'::uuid)),
+  (:'org'::uuid,:'module'::uuid,:'child_type'::uuid,:'child_storage'::uuid,:'other_app_child_record'::uuid,:'other_app'::uuid,1,
+    :'admin_account'::uuid,'active',1,pg_catalog.statement_timestamp(),:'actor'::uuid,pg_catalog.statement_timestamp(),:'actor'::uuid,
+    88.00,true,pg_catalog.jsonb_build_object('recordTypeId',:'parent_type'::uuid,'recordId',:'parent_record'::uuid),88.00,88.00,
+    pg_catalog.jsonb_build_object('recordTypeId',:'child_type'::uuid,'recordId',:'other_app_child_record'::uuid));
+alter table record_data.rt_b4870000000040008000000000000002 enable row level security;
+alter table record_data.rt_b4870000000040008000000000000002 force row level security;
 insert into vortex_record.relationship_edges(relationship_id,from_organisation_id,to_organisation_id,from_application_root_id,to_application_root_id,from_storage_contract_id,from_record_id,to_storage_contract_id,to_record_id) values
   (:'child_parent_relationship'::uuid,:'org'::uuid,:'org'::uuid,:'app'::uuid,:'app'::uuid,:'child_storage'::uuid,:'child_record'::uuid,:'parent_storage'::uuid,:'parent_record'::uuid),
   (:'child_self_relationship'::uuid,:'org'::uuid,:'org'::uuid,:'app'::uuid,:'app'::uuid,:'child_storage'::uuid,:'child_record'::uuid,:'child_storage'::uuid,:'child_record'::uuid);

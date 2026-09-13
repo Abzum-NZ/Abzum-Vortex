@@ -1,7 +1,7 @@
 \ir helpers/definition-release-writer.psql
 
 begin;
-select plan(12);
+select plan(13);
 set local search_path = extensions, public, pg_catalog;
 
 -- A real published, provisioned and lifecycle-activated application: no fake
@@ -62,18 +62,37 @@ select is((select f_f4870000000040008000000000000002::text from record_data.rt_b
 select is((select f_f4870000000040008000000000000004 from record_data.rt_b4870000000040008000000000000001 where record_id=:'parent_record'::uuid),
   'Unrelated survives','read projection does not alter unrelated stored value'::text);
 
--- A foreign organisation's edge is out of scope even if its record identifiers
--- resemble those in this installation.
-insert into vortex_identity.organizations(organization_id,tenant_id,short_name,display_name,state,created_at,created_by,state_changed_at,revision)
-values ('24870000-0000-4000-8000-000000000099',:'tenant'::uuid,'foreign','Foreign','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1);
+-- The normal edge constraint correctly prevents an edge whose source and
+-- target organisations differ.  Drop it only inside this rolled-back pgTAP
+-- transaction to prove that the reader's own target-organisation predicate is
+-- meaningful: if it were removed, this foreign source would fail its actual
+-- current-context read and suppress the displayed total.
 set local role vortex_record_owner;
+alter table vortex_record.relationship_edges drop constraint relationship_edges_check;
 insert into vortex_record.relationship_edges(relationship_id,from_organisation_id,to_organisation_id,from_application_root_id,to_application_root_id,from_storage_contract_id,from_record_id,to_storage_contract_id,to_record_id)
-values(:'child_parent_relationship'::uuid,'24870000-0000-4000-8000-000000000099','24870000-0000-4000-8000-000000000099',:'app'::uuid,:'app'::uuid,:'child_storage'::uuid,:'child_record'::uuid,:'parent_storage'::uuid,:'parent_record'::uuid);
+values(:'child_parent_relationship'::uuid,:'org'::uuid,:'foreign_org'::uuid,:'app'::uuid,:'app'::uuid,:'child_storage'::uuid,:'foreign_org_child_record'::uuid,:'parent_storage'::uuid,:'parent_record'::uuid);
 reset role;
 select pg_temp.related_context(:'app'::uuid, :'full_account'::uuid);
 set local role vortex_request;
 select ok(vortex_record.read_record(:'parent_type'::uuid, :'parent_record'::uuid)->'values' ? :'f_parent_total',
-  'cross-organisation edge cannot become a current-installation contributor');
+  'foreign-organisation edge cannot become a current-installation contributor');
+reset role;
+
+-- The edge writer correctly rejects two application-contained endpoints with
+-- different applications.  Disable that one writer trigger only long enough
+-- to create an adversarial row; the runtime read remains fully real.  If its
+-- source-application predicate were removed, the source record would fail the
+-- current-application RLS lookup and suppress the displayed total.
+set local role vortex_record_owner;
+alter table vortex_record.relationship_edges disable trigger relationship_edges_scope;
+insert into vortex_record.relationship_edges(relationship_id,from_organisation_id,to_organisation_id,from_application_root_id,to_application_root_id,from_storage_contract_id,from_record_id,to_storage_contract_id,to_record_id)
+values(:'child_parent_relationship'::uuid,:'org'::uuid,:'org'::uuid,:'other_app'::uuid,:'app'::uuid,:'child_storage'::uuid,:'other_app_child_record'::uuid,:'parent_storage'::uuid,:'parent_record'::uuid);
+alter table vortex_record.relationship_edges enable trigger relationship_edges_scope;
+reset role;
+select pg_temp.related_context(:'app'::uuid, :'full_account'::uuid);
+set local role vortex_request;
+select ok(vortex_record.read_record(:'parent_type'::uuid, :'parent_record'::uuid)->'values' ? :'f_parent_total',
+  'foreign-application edge cannot become a current-installation contributor');
 select ok(not has_function_privilege('vortex_request','vortex_record.total_inputs_readable_internal(jsonb,uuid,uuid,jsonb,jsonb)'::regprocedure,'EXECUTE'),
   'request role cannot invoke private related-total source reader');
 select ok(not has_table_privilege('vortex_request','vortex_record.relationship_edges','SELECT'),
