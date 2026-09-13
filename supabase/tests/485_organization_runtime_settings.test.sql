@@ -3,6 +3,7 @@
 begin;
 
 set local search_path = pg_catalog, extensions, public;
+grant usage on schema extensions to vortex_runtime, vortex_request;
 
 select no_plan();
 
