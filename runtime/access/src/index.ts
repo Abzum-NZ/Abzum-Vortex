@@ -32,6 +32,7 @@ export {
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   type UpdateOrganizationRuntimeSettingsCommand,
 } from "./organization-runtime-settings-administration";
+export { createOrganizationLocalAdministrationService } from "./organization-local-administration";
 export {
   runOrganizationAccessOperation,
   type OrganizationAccessOperationResult,
