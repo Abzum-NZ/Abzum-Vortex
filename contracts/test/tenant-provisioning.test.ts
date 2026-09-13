@@ -1,8 +1,12 @@
 import {
   adoptOrganizationCommandSchema,
+  closeClusterIdentityCommandSchema,
+  closeClusterIdentityResultSchema,
   configuredTenantAdministrationOperatorContextSchema,
   provisionTenantCommandSchema,
   provisionTenantResultSchema,
+  reactivateClusterIdentityCommandSchema,
+  suspendClusterIdentityCommandSchema,
 } from "../src";
 import { describe, expect, it } from "vitest";
 
@@ -87,5 +91,51 @@ describe("configured tenant provisioning contracts", () => {
         correlationId: id(25),
       }).success,
     ).toBe(false);
+  });
+
+  it("defines strict configured-system projection lifecycle commands", () => {
+    const command = {
+      operation: "suspend_cluster_identity" as const,
+      duplicateKey: id(30),
+      identityId: id(31),
+      expectedRevision: 4,
+    };
+    expect(suspendClusterIdentityCommandSchema.safeParse(command).success).toBe(true);
+    expect(
+      suspendClusterIdentityCommandSchema.safeParse({ ...command, tenantId: id(32) }).success,
+    ).toBe(false);
+    expect(
+      reactivateClusterIdentityCommandSchema.safeParse({
+        ...command,
+        operation: "reactivate_cluster_identity",
+      }).success,
+    ).toBe(true);
+    expect(
+      closeClusterIdentityCommandSchema.safeParse({
+        ...command,
+        operation: "close_cluster_identity",
+        expectedRevision: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("binds lifecycle results to the target projection revision", () => {
+    expect(
+      closeClusterIdentityResultSchema.safeParse({
+        outcome: "accepted",
+        operation: "close_cluster_identity",
+        identityId: id(31),
+        revision: 5,
+        correlationId: id(33),
+        acceptedAt: "2026-09-14T10:00:00.000Z",
+      }).success,
+    ).toBe(true);
+    expect(
+      closeClusterIdentityResultSchema.safeParse({
+        outcome: "refused",
+        operation: "close_cluster_identity",
+        code: "stale_revision",
+      }).success,
+    ).toBe(true);
   });
 });

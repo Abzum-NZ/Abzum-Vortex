@@ -175,6 +175,11 @@
       "migration": "supabase/migrations/20260914140000_tenant_organization_creation.sql",
       "proof": "supabase/tests/tenant-organization-creation-concurrency.test.sh",
       "label": "Tenant organization creation"
+    },
+    {
+      "migration": "supabase/migrations/20260914160000_cluster_identity_lifecycle.sql",
+      "proof": "supabase/tests/cluster-identity-lifecycle-concurrency.test.sh",
+      "label": "Cluster identity lifecycle"
     }
   ],
   "lintSchemas": [

@@ -43,12 +43,15 @@ Delivered on `testing`:
   ([PR #446](https://github.com/Abzum-NZ/Abzum-Vortex/pull/446)).
 - **Slice 3C** — protected organisation lifecycle: suspend, reactivate and
   administrative archive ([PR #448](https://github.com/Abzum-NZ/Abzum-Vortex/pull/448)).
+- **Slice 3D** — tenant-authorised organisation creation with explicit existing
+  stewardship ([PR #449](https://github.com/Abzum-NZ/Abzum-Vortex/pull/449)).
 
-Slices 1, 2, 3A, 3B and 3C are merged to Testing; their exact hosted verification
-remains a delivery gate. The next implementation assignment is **Slice 3D only:
-tenant-authorised organisation creation**. It is intentionally separate from
-lifecycle so the first human-created organisation, explicit steward composition,
-and parent/authority races can be reviewed on their own.
+Slices 1, 2, 3A, 3B, 3C and 3D are merged to Testing; their exact hosted
+verification remains a delivery gate. The next implementation assignment is
+**Slice 4A only: configured-system cluster-local identity-projection lifecycle**.
+It is intentionally separate from tenant lifecycle because projection changes can
+span several organisations and tenants, making its discovery and locking races
+independently reviewable.
 
 ## Outcome
 
@@ -239,20 +242,30 @@ a foreign or inactive target exists.
   their existing links make them move with the subtree.
 - **Delivered 3C:** suspend, reactivate and administratively archive an existing
   organisation under the lifecycle capability and established structural rules.
-- **Current 3D:** tenant-authorised creation of one organisation with an explicit
+- **Delivered 3D:** tenant-authorised creation of one organisation with an explicit
   existing active steward nominee and explicit runtime settings, using delivered
   provisioning composition.
-- **Later, separately picked up:** tenant lifecycle.
+- **Current 4A:** configured-system suspension, reactivation and closure of one
+  cluster-local identity projection, preserving every affected scope's current
+  stewardship requirements.
+- **Later, separately picked up:** configured-system tenant lifecycle (4B).
 
 ### 4. System-only cluster lifecycle
 
-- Suspend, reactivate and close a cluster-local identity projection through the
-  configured system operator with exact revision and deterministic replay.
-- Check the current tenant and organisation stewardship conditions for every
-  affected scope under sorted organisation governance locks.
-- Add the bounded tenant suspend/reactivate path required by cluster operations.
-  Do not mutate provider/Auth identity or sessions, another cluster, descendant
-  organisation states or organisation Access versions.
+- **Current 4A:** suspend, reactivate and close one cluster-local identity
+  projection through the configured system operator with exact revision and
+  deterministic replay using the existing configured actor + configured cluster
+  + operation + duplicate-key receipt serialization. It discovers its affected
+  organisations and tenants, locks existing governance rows `FOR UPDATE`, then
+  tenant rows `FOR UPDATE`, then the target projection `FOR UPDATE`, each in
+  stable identifier order, rechecks membership, and fails stale rather than
+  expanding a lock set or retrying automatically.
+- **Later 4B:** suspend/reactivate one tenant through the configured system
+  operator. It will preserve current organisation/tenant stewardship while
+  leaving child organisation state, accounts, assignments and Access versions
+  unchanged.
+- Neither slice mutates provider/Auth identity or sessions, another cluster,
+  descendant organisation states or organisation Access versions.
 
 ## Slice 3B — protected rename and reparent
 
@@ -403,6 +416,54 @@ resolution and supported governance operations without a lock-order deadlock; an
 exact replay after later account/stewardship mutation without restoring historical
 grants. Do not add a generic dispatcher, retry framework, history, counter,
 policy engine, UI, MCP transport or AI behaviour.
+
+## Slice 4A — configured-system projection lifecycle
+
+This slice has three server-only configured-system commands:
+`suspend_cluster_identity` (`active` to `suspended`),
+`reactivate_cluster_identity` (`suspended` to `active`), and
+`close_cluster_identity` (`active` or `suspended` to terminal `closed`). Each
+strict input has a duplicate key, target identity and expected projection
+revision. The existing validated configured-system boundary supplies the cluster
+and non-nil system actor; a supplied caller, selected tenant, human assignment or
+organisation permission never substitutes.
+
+Each first accepted command changes only the named existing projection's state,
+revision and existing audit actor/time/correlation facts, then writes one accepted
+receipt atomically. It creates no projection, account, assignment or stewardship
+adoption, and changes no organisation Access version. Exact replay returns its
+original result before current target state/revision checks; a changed fingerprint
+conflicts. Same-state, terminal, missing, stale or exhausted-revision commands
+refuse without an accepted receipt. Audit time retains the greatest locked audit
+time where the existing trigger requires it; fresh database time remains the only
+temporal-authority time.
+
+Before changing a projection, discover organisations containing its accounts and
+tenants containing those organisations or its tenant-administrator assignments.
+History identifies affected scope only; expired or revoked assignments never
+qualify. Lock existing organisation governance rows `FOR UPDATE` ordered by
+organisation ID, then tenant rows `FOR UPDATE` ordered by tenant ID, then the
+target projection `FOR UPDATE`. Re-read the
+scope after locking. If creation, invitation acceptance or tenant assignment added
+an affected scope, refuse stale and roll back; do not append locks or introduce a
+retry loop. Evaluate stewardship against the proposed post-transition projection
+state in the same transaction, rather than counting the still-active target. Reuse the delivered tenant-manager predicate and organisation
+stewardship owner for current qualifying facts, including suspended adopted scopes
+and a stored management-application requirement. An unrelated legacy scope with
+no stewardship requirement does not require new adoption.
+
+Proof must cover all valid/terminal transitions; malformed/unconfigured operator,
+missing target, injected authority, stale/exhausted revision and receipt cases;
+multi-organisation/multi-tenant rollback when any affected scope loses its final
+required steward; qualifying replacements; scheduled, expired and revoked
+or time-limited replacement managers; no revival of revoked/expired grants; unchanged accounts,
+assignments, roles, organisation lifecycle and Access versions; and separate
+sessions for competing transitions, replacement mutations, mutually dependent
+identities, Slice 3D creation, invitation acceptance, tenant assignment, request
+resolution and organisation lifecycle. A forced discovery race must serialize or
+refuse stale, never succeed with an unguarded new scope. No provider/Auth/session
+mutation, other-cluster operation, tenant lifecycle, account offboarding, generic
+lifecycle framework, UI, MCP transport or AI behaviour belongs here.
 
 ### 5. Organisation-local reads
 

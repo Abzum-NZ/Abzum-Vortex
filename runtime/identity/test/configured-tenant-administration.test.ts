@@ -191,4 +191,81 @@ describe("configured tenant administration service", () => {
     expect(calls[0]?.values[0]).toBe(environment.VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID);
     expect(calls[0]?.values).not.toContain(environment.VORTEX_CLUSTER_ID);
   });
+
+  it("uses the configured cluster and actor for projection lifecycle commands", async () => {
+    const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
+    const service = createConfiguredTenantAdministrationService({
+      environment,
+      runtimeTransaction: runner(
+        [
+          {
+            outcome: "accepted",
+            operation: "suspend_cluster_identity",
+            identity_id: id(40),
+            revision: 2n,
+            correlation_id: id(41),
+            accepted_at: new Date("2026-09-14T10:00:00.000Z"),
+          },
+        ],
+        calls,
+      ),
+    });
+
+    await expect(
+      service.suspendClusterIdentity({
+        operation: "suspend_cluster_identity",
+        duplicateKey: id(42),
+        identityId: id(40),
+        expectedRevision: 1,
+      }),
+    ).resolves.toMatchObject({
+      outcome: "accepted",
+      operation: "suspend_cluster_identity",
+      identityId: id(40),
+      revision: 2,
+    });
+    expect(calls[0]?.text).toContain("vortex_identity.suspend_cluster_identity");
+    expect(calls[0]?.values.slice(0, 3)).toEqual([
+      environment.VORTEX_CLUSTER_ID,
+      environment.VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID,
+      id(42),
+    ]);
+  });
+
+  it("refuses injected authority and maps stale lifecycle revisions", async () => {
+    const runtimeTransaction = vi.fn();
+    const service = createConfiguredTenantAdministrationService({
+      environment,
+      runtimeTransaction,
+    });
+    await expect(
+      service.closeClusterIdentity({
+        operation: "close_cluster_identity",
+        duplicateKey: id(50),
+        identityId: id(51),
+        expectedRevision: 1,
+        systemActorId: id(52),
+      } as never),
+    ).resolves.toEqual({
+      outcome: "refused",
+      operation: "close_cluster_identity",
+      code: "invalid_command",
+    });
+    expect(runtimeTransaction).not.toHaveBeenCalled();
+
+    const stale = createConfiguredTenantAdministrationService({
+      environment,
+      runtimeTransaction: async () => {
+        throw { code: "V3102" };
+      },
+    });
+    await expect(
+      stale.reactivateClusterIdentity({
+        operation: "reactivate_cluster_identity",
+        duplicateKey: id(53),
+        identityId: id(51),
+        expectedRevision: 1,
+      }),
+    ).resolves.toMatchObject({ outcome: "refused", code: "stale_revision" });
+  });
 });

@@ -16,8 +16,11 @@ export { createIdentityVerifier, type IdentityVerifier } from "./identity-verifi
 export {
   adoptOrganization,
   adoptTenant,
+  closeClusterIdentity,
   createConfiguredTenantAdministrationService,
   provisionTenant,
+  reactivateClusterIdentity,
+  suspendClusterIdentity,
   type ConfiguredTenantAdministrationDependencies,
 } from "./configured-tenant-administration";
 export {

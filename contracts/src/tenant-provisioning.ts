@@ -75,12 +75,46 @@ export const adoptOrganizationCommandSchema = z
   })
   .strict();
 
+const clusterIdentityLifecycleCommand = <
+  Operation extends
+    "suspend_cluster_identity" | "reactivate_cluster_identity" | "close_cluster_identity",
+>(
+  operation: Operation,
+) =>
+  z
+    .object({
+      operation: z.literal(operation),
+      duplicateKey: administrationDuplicateKeySchema,
+      identityId: identityIdSchema,
+      expectedRevision: revisionSchema,
+    })
+    .strict();
+
+export const suspendClusterIdentityCommandSchema = clusterIdentityLifecycleCommand(
+  "suspend_cluster_identity",
+);
+export const reactivateClusterIdentityCommandSchema = clusterIdentityLifecycleCommand(
+  "reactivate_cluster_identity",
+);
+export const closeClusterIdentityCommandSchema =
+  clusterIdentityLifecycleCommand("close_cluster_identity");
+
 export const configuredTenantAdministrationRefusalCodeSchema = z.enum([
   "invalid_command",
   "operator_not_configured",
   "duplicate_conflict",
   "scope_unavailable",
   "steward_unavailable",
+  "operation_unavailable",
+]);
+
+export const configuredIdentityLifecycleRefusalCodeSchema = z.enum([
+  "invalid_command",
+  "operator_not_configured",
+  "duplicate_conflict",
+  "stale_revision",
+  "steward_unavailable",
+  "scope_unavailable",
   "operation_unavailable",
 ]);
 
@@ -151,6 +185,39 @@ export const adoptOrganizationResultSchema = z.discriminatedUnion("outcome", [
   adoptOrganizationRefusalSchema,
 ]);
 
+const clusterIdentityLifecycleResult = <
+  Operation extends
+    "suspend_cluster_identity" | "reactivate_cluster_identity" | "close_cluster_identity",
+>(
+  operation: Operation,
+) =>
+  z.discriminatedUnion("outcome", [
+    z
+      .object({
+        ...acceptedCommon,
+        operation: z.literal(operation),
+        identityId: identityIdSchema,
+        revision: revisionSchema,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("refused"),
+        operation: z.literal(operation),
+        code: configuredIdentityLifecycleRefusalCodeSchema,
+      })
+      .strict(),
+  ]);
+
+export const suspendClusterIdentityResultSchema = clusterIdentityLifecycleResult(
+  "suspend_cluster_identity",
+);
+export const reactivateClusterIdentityResultSchema = clusterIdentityLifecycleResult(
+  "reactivate_cluster_identity",
+);
+export const closeClusterIdentityResultSchema =
+  clusterIdentityLifecycleResult("close_cluster_identity");
+
 export type ConfiguredTenantAdministrationOperatorContext = z.infer<
   typeof configuredTenantAdministrationOperatorContextSchema
 >;
@@ -160,6 +227,14 @@ export type AdoptTenantCommand = z.infer<typeof adoptTenantCommandSchema>;
 export type AdoptTenantResult = z.infer<typeof adoptTenantResultSchema>;
 export type AdoptOrganizationCommand = z.infer<typeof adoptOrganizationCommandSchema>;
 export type AdoptOrganizationResult = z.infer<typeof adoptOrganizationResultSchema>;
+export type SuspendClusterIdentityCommand = z.infer<typeof suspendClusterIdentityCommandSchema>;
+export type SuspendClusterIdentityResult = z.infer<typeof suspendClusterIdentityResultSchema>;
+export type ReactivateClusterIdentityCommand = z.infer<
+  typeof reactivateClusterIdentityCommandSchema
+>;
+export type ReactivateClusterIdentityResult = z.infer<typeof reactivateClusterIdentityResultSchema>;
+export type CloseClusterIdentityCommand = z.infer<typeof closeClusterIdentityCommandSchema>;
+export type CloseClusterIdentityResult = z.infer<typeof closeClusterIdentityResultSchema>;
 export type ConfiguredTenantAdministrationRefusalCode = z.infer<
   typeof configuredTenantAdministrationRefusalCodeSchema
 >;
