@@ -174,9 +174,8 @@ export const createConfiguredTenantAdministrationService = (
               acceptedAt: timestamp(row.accepted_at),
             },
           );
-          return parsed.success
-            ? parsed.data
-            : { outcome: "refused", operation: "provision_tenant", code: "operation_unavailable" };
+          if (!parsed.success) throw new Error("Configured provisioning result contract mismatch");
+          return parsed.data;
         });
       } catch (error) {
         return { outcome: "refused", operation: "provision_tenant", code: refusalCode(error) };
@@ -219,9 +218,9 @@ export const createConfiguredTenantAdministrationService = (
               acceptedAt: timestamp(row.accepted_at),
             },
           );
-          return parsed.success
-            ? parsed.data
-            : { outcome: "refused", operation: "adopt_tenant", code: "operation_unavailable" };
+          if (!parsed.success)
+            throw new Error("Configured tenant adoption result contract mismatch");
+          return parsed.data;
         });
       } catch (error) {
         return { outcome: "refused", operation: "adopt_tenant", code: refusalCode(error) };
@@ -265,13 +264,9 @@ export const createConfiguredTenantAdministrationService = (
               acceptedAt: timestamp(row.accepted_at),
             },
           );
-          return parsed.success
-            ? parsed.data
-            : {
-                outcome: "refused",
-                operation: "adopt_organization",
-                code: "operation_unavailable",
-              };
+          if (!parsed.success)
+            throw new Error("Configured organization adoption result contract mismatch");
+          return parsed.data;
         });
       } catch (error) {
         return { outcome: "refused", operation: "adopt_organization", code: refusalCode(error) };

@@ -130,6 +130,34 @@ describe("configured tenant administration service", () => {
     });
   });
 
+  it("rejects a malformed storage result inside the outer transaction", async () => {
+    let committed = false;
+    let rolledBack = false;
+    const service = createConfiguredTenantAdministrationService({
+      environment,
+      runtimeTransaction: async (operation) => {
+        try {
+          const result = await operation({
+            query: async () => [{ outcome: "accepted" }],
+          });
+          committed = true;
+          return result;
+        } catch (error) {
+          rolledBack = true;
+          throw error;
+        }
+      },
+    });
+
+    await expect(service.provisionTenant(command())).resolves.toEqual({
+      outcome: "refused",
+      operation: "provision_tenant",
+      code: "operation_unavailable",
+    });
+    expect(committed).toBe(false);
+    expect(rolledBack).toBe(true);
+  });
+
   it("binds adoption results to their fixed operation-specific SQL surfaces", async () => {
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
     const service = createConfiguredTenantAdministrationService({
