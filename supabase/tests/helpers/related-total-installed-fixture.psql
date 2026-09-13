@@ -1,0 +1,355 @@
+-- Included only by 487_related_total_disclosure.test.sql.  It creates the
+-- smallest real installed application required to exercise the record adapter:
+-- one organisation, one application, one module and its parent/child types.
+-- Definition publishing, permission registration, role assignment, storage
+-- provisioning and activation all use their owning writers.  Only fixture
+-- identifiers and maintained derived values are inserted directly.
+
+\set tenant '14870000-0000-4000-8000-000000000001'
+\set org '24870000-0000-4000-8000-000000000001'
+\set actor '94870000-0000-4000-8000-000000000001'
+\set admin_identity '54870000-0000-4000-8000-000000000001'
+\set admin_account '64870000-0000-4000-8000-000000000001'
+\set module '44870000-0000-4000-8000-000000000001'
+\set app '34870000-0000-4000-8000-000000000001'
+\set parent_type 'd4870000-0000-4000-8000-000000000001'
+\set child_type 'd4870000-0000-4000-8000-000000000002'
+\set parent_storage 'b4870000-0000-4000-8000-000000000001'
+\set child_storage 'b4870000-0000-4000-8000-000000000002'
+\set child_parent_relationship 'a4870000-0000-4000-8000-000000000001'
+\set child_self_relationship 'a4870000-0000-4000-8000-000000000002'
+\set parent_record 'e4870000-0000-4000-8000-000000000001'
+\set child_record 'e4870000-0000-4000-8000-000000000002'
+\set f_parent_title 'f4870000-0000-4000-8000-000000000001'
+\set f_parent_total 'f4870000-0000-4000-8000-000000000002'
+\set f_parent_display 'f4870000-0000-4000-8000-000000000003'
+\set f_parent_unrelated 'f4870000-0000-4000-8000-000000000004'
+\set f_child_amount 'f4870000-0000-4000-8000-000000000011'
+\set f_child_flag 'f4870000-0000-4000-8000-000000000012'
+\set f_child_parent 'f4870000-0000-4000-8000-000000000013'
+\set f_child_self_total 'f4870000-0000-4000-8000-000000000014'
+\set f_child_cycle_total 'f4870000-0000-4000-8000-000000000015'
+\set f_child_self_link 'f4870000-0000-4000-8000-000000000016'
+\set p_parent_read 'c4870000-0000-4000-8000-000000000001'
+\set p_child_full 'c4870000-0000-4000-8000-000000000002'
+\set p_child_without_amount 'c4870000-0000-4000-8000-000000000003'
+\set p_child_without_flag 'c4870000-0000-4000-8000-000000000004'
+
+create function pg_temp.related_sha(p_value text)
+returns text language sql immutable set search_path = '' as $function$
+  select 'sha256:' || pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p_value, 'UTF8')), 'hex')
+$function$;
+
+create function pg_temp.related_field(p_field_id uuid, p_type text, p_settings jsonb default '{}'::jsonb)
+returns jsonb language sql immutable set search_path = '' as $function$
+  select pg_catalog.jsonb_build_object('fieldId', p_field_id, 'key', 'f_' || pg_catalog.replace(p_field_id::text, '-', ''),
+    'type', p_type, 'required', false, 'unique', false, 'filterable', false, 'sortable', false, 'settings', p_settings)
+$function$;
+
+create function pg_temp.related_permission(p_permission_id uuid, p_key text, p_record_type_id uuid, p_fields uuid[])
+returns jsonb language sql immutable set search_path = '' as $function$
+  select pg_catalog.jsonb_build_object('permissionId', p_permission_id, 'key', p_key, 'label', p_key,
+    'description', 'Installed related-total fixture permission.', 'recordTypeId', p_record_type_id,
+    'recordScope', pg_catalog.jsonb_build_object('routes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('kind', 'all_records'))),
+    'fieldPolicy', pg_catalog.jsonb_build_object('readableFieldIds', pg_catalog.to_jsonb(p_fields), 'changeableFieldIds', '[]'::jsonb),
+    'actionKind', 'read', 'administrative', false)
+$function$;
+
+-- The definitions intentionally include a normal self aggregate (amount) and
+-- an actual derived self cycle.  Derived values are test data only: this test
+-- proves projection confidentiality, not total calculation or save behaviour.
+create function pg_temp.related_module_content()
+returns jsonb language sql stable set search_path = '' as $function$
+  select pg_catalog.jsonb_build_object(
+    'name', 'Related total projection fixture', 'description', 'Installed parent and child records.', 'dependencies', '[]'::jsonb,
+    'recordTypes', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4870000-0000-4000-8000-000000000001'::uuid, 'key', 'parent', 'singularLabel', 'Parent', 'pluralLabel', 'Parents',
+        'titleFieldId', 'f4870000-0000-4000-8000-000000000001'::uuid, 'storageContractId', 'b4870000-0000-4000-8000-000000000001'::uuid, 'storageScope', 'application_contained',
+        'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000001'::uuid, 'text', '{"maxLength":200}'::jsonb),
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000002'::uuid, 'total', pg_catalog.jsonb_build_object(
+            'relationshipId', 'a4870000-0000-4000-8000-000000000001'::uuid, 'operation', 'sum', 'resultType', 'decimal_number',
+            'fieldId', 'f4870000-0000-4000-8000-000000000011'::uuid, 'filter', pg_catalog.jsonb_build_object('kind','comparison','left',pg_catalog.jsonb_build_object('source','field','fieldId','f4870000-0000-4000-8000-000000000012'::uuid),'operator','equals','right',pg_catalog.jsonb_build_object('source','literal','value',true)))),
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000003'::uuid, 'calculation', pg_catalog.jsonb_build_object('resultType','decimal_number','dependencyFieldIds',pg_catalog.jsonb_build_array('f4870000-0000-4000-8000-000000000002'::uuid))),
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000004'::uuid, 'text', '{"maxLength":200}'::jsonb)
+        ), 'relationships', '[]'::jsonb, 'standardActions', pg_catalog.jsonb_build_array('read'), 'customActionIds', '[]'::jsonb
+      ),
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4870000-0000-4000-8000-000000000002'::uuid, 'key', 'child', 'singularLabel', 'Child', 'pluralLabel', 'Children',
+        'titleFieldId', 'f4870000-0000-4000-8000-000000000011'::uuid, 'storageContractId', 'b4870000-0000-4000-8000-000000000002'::uuid, 'storageScope', 'application_contained',
+        'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000011'::uuid, 'decimal_number', '{"digitsBeforeDecimal":10,"decimalPlaces":2}'::jsonb),
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000012'::uuid, 'yes_no'),
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000013'::uuid, 'link', pg_catalog.jsonb_build_object('target',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','44870000-0000-4000-8000-000000000001'::uuid,'recordTypeId','d4870000-0000-4000-8000-000000000001'::uuid),'onParentDelete','empty_optional')),
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000014'::uuid, 'total', pg_catalog.jsonb_build_object('relationshipId','a4870000-0000-4000-8000-000000000002'::uuid,'operation','sum','resultType','decimal_number','fieldId','f4870000-0000-4000-8000-000000000011'::uuid)),
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000015'::uuid, 'total', pg_catalog.jsonb_build_object('relationshipId','a4870000-0000-4000-8000-000000000002'::uuid,'operation','sum','resultType','decimal_number','fieldId','f4870000-0000-4000-8000-000000000015'::uuid)),
+          pg_temp.related_field('f4870000-0000-4000-8000-000000000016'::uuid, 'link', pg_catalog.jsonb_build_object('target',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','44870000-0000-4000-8000-000000000001'::uuid,'recordTypeId','d4870000-0000-4000-8000-000000000002'::uuid),'onParentDelete','empty_optional'))
+        ),
+        'relationships', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object('relationshipId','a4870000-0000-4000-8000-000000000001'::uuid,'key','child_parent','fromRecordTypeId','d4870000-0000-4000-8000-000000000002'::uuid,'fromFieldId','f4870000-0000-4000-8000-000000000013'::uuid,'toRecordType',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','44870000-0000-4000-8000-000000000001'::uuid,'recordTypeId','d4870000-0000-4000-8000-000000000001'::uuid),'cardinality','many_to_one','onParentDelete','empty_optional'),
+          pg_catalog.jsonb_build_object('relationshipId','a4870000-0000-4000-8000-000000000002'::uuid,'key','child_self','fromRecordTypeId','d4870000-0000-4000-8000-000000000002'::uuid,'fromFieldId','f4870000-0000-4000-8000-000000000016'::uuid,'toRecordType',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','44870000-0000-4000-8000-000000000001'::uuid,'recordTypeId','d4870000-0000-4000-8000-000000000002'::uuid),'cardinality','many_to_one','onParentDelete','empty_optional')
+        ), 'standardActions', pg_catalog.jsonb_build_array('read'), 'customActionIds', '[]'::jsonb
+      )
+    ),
+    'permissions', pg_catalog.jsonb_build_array(
+      pg_temp.related_permission('c4870000-0000-4000-8000-000000000001'::uuid,'related.parent.read','d4870000-0000-4000-8000-000000000001'::uuid,array['f4870000-0000-4000-8000-000000000001'::uuid,'f4870000-0000-4000-8000-000000000002'::uuid,'f4870000-0000-4000-8000-000000000003'::uuid,'f4870000-0000-4000-8000-000000000004'::uuid]),
+      pg_temp.related_permission('c4870000-0000-4000-8000-000000000002'::uuid,'related.child.full','d4870000-0000-4000-8000-000000000002'::uuid,array['f4870000-0000-4000-8000-000000000011'::uuid,'f4870000-0000-4000-8000-000000000012'::uuid,'f4870000-0000-4000-8000-000000000013'::uuid,'f4870000-0000-4000-8000-000000000014'::uuid,'f4870000-0000-4000-8000-000000000015'::uuid,'f4870000-0000-4000-8000-000000000016'::uuid]),
+      pg_temp.related_permission('c4870000-0000-4000-8000-000000000003'::uuid,'related.child.no_amount','d4870000-0000-4000-8000-000000000002'::uuid,array['f4870000-0000-4000-8000-000000000012'::uuid,'f4870000-0000-4000-8000-000000000013'::uuid,'f4870000-0000-4000-8000-000000000014'::uuid,'f4870000-0000-4000-8000-000000000015'::uuid,'f4870000-0000-4000-8000-000000000016'::uuid]),
+      pg_temp.related_permission('c4870000-0000-4000-8000-000000000004'::uuid,'related.child.no_flag','d4870000-0000-4000-8000-000000000002'::uuid,array['f4870000-0000-4000-8000-000000000011'::uuid,'f4870000-0000-4000-8000-000000000013'::uuid,'f4870000-0000-4000-8000-000000000014'::uuid,'f4870000-0000-4000-8000-000000000015'::uuid,'f4870000-0000-4000-8000-000000000016'::uuid])
+    ), 'actions','[]'::jsonb,'events','[]'::jsonb,'rules','[]'::jsonb,'sharingConditions','[]'::jsonb,'extensionPoints','[]'::jsonb
+  )
+$function$;
+
+create function pg_temp.related_context(p_application_root_id uuid, p_account_id uuid)
+returns void language plpgsql volatile set search_path = '' as $function$
+declare value jsonb;
+begin
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+  select pg_catalog.jsonb_build_object(
+    'callerKind','human','identityAuthorityId','c4870000-0000-4000-8000-0000000000f1',
+    'tenantId', organization.tenant_id,'organizationId',organization.organization_id,
+    'organizationAccountId',account.organization_account_id,'identityId',account.identity_id,
+    'sessionId','c4870000-0000-4000-8000-0000000000f2','authenticationStrength','single_factor',
+    'issuedAt',pg_catalog.statement_timestamp(),'expiresAt',pg_catalog.statement_timestamp()+interval '2 hours',
+    'accessVersion',version.current_version,'correlationId',pg_catalog.gen_random_uuid(),
+    'accessTokenIssuedAt',pg_catalog.statement_timestamp(),'primaryAuthenticatedAt',pg_catalog.statement_timestamp()
+  ) || case when p_application_root_id is null then '{}'::jsonb else pg_catalog.jsonb_build_object('applicationRootId',p_application_root_id) end
+  into strict value
+  from vortex_identity.organizations organization
+  join vortex_identity.organization_accounts account on account.organization_id=organization.organization_id and account.organization_account_id=p_account_id
+  join vortex_access.organization_access_versions version on version.organization_id=organization.organization_id
+  where organization.organization_id = '24870000-0000-4000-8000-000000000001'::uuid;
+  perform vortex_context.initialize(value);
+end
+$function$;
+
+create function pg_temp.related_account(p_identity_id uuid, p_display_name text)
+returns uuid language plpgsql volatile set search_path = '' as $function$
+declare accepted record; token text := pg_temp.related_sha('invite:' || p_identity_id::text);
+begin
+  perform 1 from vortex_identity.ensure_identity_projection(p_identity_id, pg_catalog.gen_random_uuid());
+  perform pg_temp.related_context(null, '64870000-0000-4000-8000-000000000001'::uuid);
+  perform 1 from vortex_identity.create_organization_invitation(
+    'related-' || p_identity_id::text || '@example.test', token, pg_catalog.clock_timestamp()+interval '1 day');
+  delete from vortex_context.request_contexts where backend_pid=pg_catalog.pg_backend_pid();
+  select result.* into strict accepted from vortex_access.accept_organization_invitation(
+    token,p_identity_id,'related-' || p_identity_id::text || '@example.test',p_display_name,pg_catalog.gen_random_uuid()) result;
+  if accepted.outcome <> 'accepted' then raise exception 'related fixture account was not accepted'; end if;
+  return accepted.organization_account_id;
+end
+$function$;
+
+create function pg_temp.related_registration_candidate()
+returns jsonb language sql stable set search_path = '' as $function$
+  with entries as (
+    select pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId','34870000-0000-4000-8000-000000000001'::uuid,
+        'ownerKind','module','ownerId','44870000-0000-4000-8000-000000000001'::uuid,
+        'permission',permission.value,
+        'sourceRelease',pg_catalog.jsonb_build_object(
+          'kind','module','definitionKey',root.key,'rootId',root.root_id,
+          'releaseRevision',release.release_revision,'releaseVersion',release.release_version,
+          'validationContractVersion',release.validation_contract_version,
+          'contentFingerprint',release.content_fingerprint,'resolutionFingerprint',release.resolution_fingerprint),
+        'meaningFingerprint',pg_temp.related_sha('meaning:' || (permission.value->>'permissionId'))
+      ) order by (permission.value->>'key'), (permission.value->>'permissionId')
+    ) as value
+    from vortex_definition.roots root
+    join vortex_definition.releases release on release.root_id=root.root_id
+    cross join lateral pg_catalog.jsonb_array_elements(release.compilation_output#>'{canonical,content,permissions}') permission(value)
+    where root.root_id='44870000-0000-4000-8000-000000000001'::uuid and release.release_revision=1
+  )
+  select pg_catalog.jsonb_build_object(
+    'contractVersion','1.0.0','organizationId','24870000-0000-4000-8000-000000000001'::uuid,
+    'applicationRootId','34870000-0000-4000-8000-000000000001'::uuid,
+    'applicationRelease',(select pg_catalog.jsonb_build_object(
+      'kind','application','definitionKey',root.key,'rootId',root.root_id,
+      'releaseRevision',release.release_revision,'releaseVersion',release.release_version,
+      'validationContractVersion',release.validation_contract_version,
+      'contentFingerprint',release.content_fingerprint,'resolutionFingerprint',release.resolution_fingerprint)
+      from vortex_definition.roots root join vortex_definition.releases release on release.root_id=root.root_id
+      where root.root_id='34870000-0000-4000-8000-000000000001'::uuid and release.release_revision=1),
+    'applicationCatalogueFingerprint',pg_temp.related_sha('catalogue'),'applicationPermissionIds','[]'::jsonb,
+    'entries',entries.value,'candidateFingerprint',pg_temp.related_sha('candidate')
+  ) from entries
+$function$;
+
+create function pg_temp.related_register_application()
+returns void language plpgsql volatile set search_path = '' as $function$
+declare
+  candidate jsonb := pg_temp.related_registration_candidate();
+  outcome record;
+begin
+  select result.* into strict outcome
+  from vortex_access.coordinate_application_access_change(
+    'register', null,
+    pg_catalog.jsonb_build_object(
+      'contractVersion','1.0.0',
+      'preparationBasis',pg_catalog.jsonb_build_object('kind','registration_candidate'),
+      'permissionRegistration',candidate,
+      'templates',pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'template',pg_catalog.jsonb_build_object(
+            'roleId',pg_catalog.gen_random_uuid(),'key','related_template',
+            'name','Related template','homePageId',pg_catalog.gen_random_uuid(),
+            'permissionKeys',(
+              select pg_catalog.jsonb_agg(item.value#>'{permission,key}' order by item.ordinality)
+              from pg_catalog.jsonb_array_elements(candidate->'entries') with ordinality as item(value,ordinality)
+            ),
+            'permissionSelection',pg_catalog.jsonb_build_object('kind','exact')
+          ),
+          'sourceTemplateFingerprint',pg_temp.related_sha('template'),
+          'sourcePermissions',candidate->'entries','livePermissions',candidate->'entries'
+        )
+      ),
+      'candidateFingerprint',pg_temp.related_sha('preparation')
+    ),
+    '24870000-0000-4000-8000-000000000001'::uuid,
+    '34870000-0000-4000-8000-000000000001'::uuid,
+    '94870000-0000-4000-8000-000000000001'::uuid,
+    pg_catalog.gen_random_uuid()
+  ) as result;
+  if outcome.outcome <> 'changed' then
+    raise exception 'related fixture registration failed';
+  end if;
+end
+$function$;
+
+create function pg_temp.related_role(p_role_id uuid,p_key text,p_permission_ids uuid[])
+returns void language plpgsql volatile set search_path = '' as $function$
+declare refs jsonb;
+begin
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('kind','exact','applicationRootId',entry.application_root_id,
+    'ownerKind',entry.owner_kind,'ownerId',entry.owner_id,'permissionId',entry.permission_id,
+    'acceptedRegistrationRevision',registration.revision,'catalogueFingerprint',registration.permission_catalogue_fingerprint,
+    'continuityRevision',continuity.continuity_revision,'meaningFingerprint',entry.meaning_fingerprint)
+    order by entry.application_root_id,entry.owner_kind collate "C",entry.owner_id,entry.permission_id) into refs
+  from vortex_access.permission_registrations registration
+  join vortex_access.permission_catalogue_entries entry on entry.organization_id=registration.organization_id and entry.registration_kind=registration.registration_kind and entry.registration_owner_id=registration.registration_owner_id and entry.registration_revision=registration.revision
+  join vortex_access.permission_continuities continuity on continuity.organization_id=entry.organization_id and continuity.application_root_id is not distinct from entry.application_root_id and continuity.owner_kind=entry.owner_kind and continuity.owner_id=entry.owner_id and continuity.permission_id=entry.permission_id
+  where registration.organization_id='24870000-0000-4000-8000-000000000001'::uuid and registration.registration_kind='application' and registration.registration_owner_id='34870000-0000-4000-8000-000000000001'::uuid and registration.state='active' and entry.permission_id=any(p_permission_ids);
+  if pg_catalog.jsonb_array_length(coalesce(refs,'[]'::jsonb)) <> pg_catalog.cardinality(p_permission_ids) then raise exception 'related fixture permission refs missing'; end if;
+  perform 1 from vortex_access.coordinate_organization_role_change(pg_catalog.jsonb_build_object('contractVersion','1.0.0',
+    'candidate',pg_catalog.jsonb_build_object('operation','create_custom','organizationId','24870000-0000-4000-8000-000000000001'::uuid,'roleId',p_role_id,'key',p_key,'label',p_key,
+    'description','Related total fixture role.','privilegeClassification','standard','assignmentPolicy',pg_catalog.jsonb_build_object('kind','standing'),'permissions',refs),
+    'roleCandidateFingerprint',pg_temp.related_sha('role:'||p_role_id::text)),'94870000-0000-4000-8000-000000000001'::uuid,pg_catalog.gen_random_uuid());
+end
+$function$;
+
+create function pg_temp.related_assign(p_assignment_id uuid,p_role_id uuid,p_account_id uuid)
+returns void language plpgsql volatile set search_path = '' as $function$
+declare revision bigint;
+begin
+  select live_revision into strict revision from vortex_access.organization_roles where organization_id='24870000-0000-4000-8000-000000000001'::uuid and role_id=p_role_id;
+  perform 1 from vortex_access.coordinate_organization_role_assignment_change('grant','24870000-0000-4000-8000-000000000001'::uuid,p_assignment_id,null,p_role_id,revision,
+    'organization_account',p_account_id,null,'standing',pg_catalog.clock_timestamp()-interval '1 minute',null,'94870000-0000-4000-8000-000000000001'::uuid,pg_catalog.gen_random_uuid());
+end
+$function$;
+
+-- Bootstrap facts which do not have a provisioning writer yet, followed by the
+-- Access writers that establish the first administrator's platform authority.
+insert into vortex_identity.tenants (tenant_id,short_name,display_name,state,created_at,created_by,state_changed_at,revision)
+values (:'tenant'::uuid,'related_totals','Related totals','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1);
+insert into vortex_identity.organizations (organization_id,tenant_id,short_name,display_name,state,created_at,created_by,state_changed_at,revision)
+values (:'org'::uuid,:'tenant'::uuid,'related_totals','Related totals','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1);
+select * from vortex_access.initialize_organization_access_version(:'org'::uuid,:'actor'::uuid,'c4870000-0000-4000-8000-000000000001');
+select * from vortex_access.initialize_platform_permission_catalogue(:'org'::uuid,:'actor'::uuid,'c4870000-0000-4000-8000-000000000002');
+select * from vortex_identity.ensure_identity_projection(:'admin_identity'::uuid,'c4870000-0000-4000-8000-000000000003');
+insert into vortex_identity.organization_accounts (organization_account_id,organization_id,identity_id,display_name,state,activated_at,changed_at,state_changed_at,state_changed_by,state_change_correlation_id,revision)
+values (:'admin_account'::uuid,:'org'::uuid,:'admin_identity'::uuid,'Fixture administrator','active',pg_catalog.clock_timestamp()-interval '1 minute',pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),:'actor'::uuid,'c4870000-0000-4000-8000-000000000004',1);
+select * from vortex_access.revise_platform_permission_catalogue_metadata(:'org'::uuid,1,'1.0.0','1.0.1',:'actor'::uuid,'c4870000-0000-4000-8000-000000000005');
+select * from vortex_access.coordinate_organization_stewardship_adoption(
+  :'org'::uuid,:'admin_account'::uuid,'74750000-0000-4000-8000-000000000101','related_steward','Related steward','Fixture stewardship.',
+  '74750000-0000-4000-8000-000000000102','74750000-0000-4000-8000-000000000103',:'admin_identity'::uuid,'c4870000-0000-4000-8000-000000000006');
+select * from vortex_access.adopt_shipped_platform_permission_catalogue(:'org'::uuid,2,'1.1.0','sha256:cb42d4b24ebead7fe9e4ba6358115ceb3ae752d3a0b4cbedc458dcb218013778',:'actor'::uuid,'c4870000-0000-4000-8000-000000000007');
+
+-- Fixed root IDs are fixture identities.  Releases themselves are published by
+-- the normal definition writer below.
+insert into vortex_definition.roots(root_id,organization_id,kind,key,created_at,created_by) values
+  (:'module'::uuid,:'org'::uuid,'module','vortex.related_total.module',pg_catalog.clock_timestamp()-interval '1 minute',:'actor'::uuid),
+  (:'app'::uuid,:'org'::uuid,'application','vortex.related_total.app',pg_catalog.clock_timestamp()-interval '1 minute',:'actor'::uuid);
+select pg_temp.append_writer_release(:'module'::uuid,'2.0.0','[]'::jsonb,pg_temp.related_module_content(),'2.0.0');
+select pg_temp.append_writer_release(:'app'::uuid,'1.0.0',pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_array(:'module'::uuid,1)),
+  pg_catalog.jsonb_build_object('permissions','[]'::jsonb),'1.0.0');
+select pg_temp.related_register_application();
+
+-- Accounts, app roles and assignments all use their owning Access writers.
+select pg_temp.related_account('54870000-0000-4000-8000-000000000011','Full reader') as full_account \gset
+select pg_temp.related_account('54870000-0000-4000-8000-000000000012','No child reader') as no_child_account \gset
+select pg_temp.related_account('54870000-0000-4000-8000-000000000013','No amount reader') as no_amount_account \gset
+select pg_temp.related_account('54870000-0000-4000-8000-000000000014','No filter reader') as no_filter_account \gset
+select pg_temp.related_role('74750000-0000-4000-8000-000000000111','related_parent_reader',array[:'p_parent_read'::uuid]);
+select pg_temp.related_role('74750000-0000-4000-8000-000000000112','related_child_full',array[:'p_child_full'::uuid]);
+select pg_temp.related_role('74750000-0000-4000-8000-000000000113','related_child_no_amount',array[:'p_child_without_amount'::uuid]);
+select pg_temp.related_role('74750000-0000-4000-8000-000000000114','related_child_no_filter',array[:'p_child_without_flag'::uuid]);
+select pg_temp.related_assign('74750000-0000-4000-8000-000000000121','74750000-0000-4000-8000-000000000111',:'full_account'::uuid);
+select pg_temp.related_assign('74750000-0000-4000-8000-000000000122','74750000-0000-4000-8000-000000000111',:'no_child_account'::uuid);
+select pg_temp.related_assign('74750000-0000-4000-8000-000000000123','74750000-0000-4000-8000-000000000111',:'no_amount_account'::uuid);
+select pg_temp.related_assign('74750000-0000-4000-8000-000000000124','74750000-0000-4000-8000-000000000111',:'no_filter_account'::uuid);
+select pg_temp.related_assign('74750000-0000-4000-8000-000000000125','74750000-0000-4000-8000-000000000112',:'full_account'::uuid);
+select pg_temp.related_assign('74750000-0000-4000-8000-000000000126','74750000-0000-4000-8000-000000000113',:'no_amount_account'::uuid);
+select pg_temp.related_assign('74750000-0000-4000-8000-000000000127','74750000-0000-4000-8000-000000000114',:'no_filter_account'::uuid);
+
+-- The platform's installation permission is not application-owned, so the
+-- fixture binds the shipped catalogue entry exactly as the provisioning tests
+-- do. It is needed only for the real provision/activate calls below.
+insert into vortex_access.organization_roles(organization_id,role_id,role_kind,role_key,live_revision,created_by,created_at)
+values(:'org'::uuid,'74750000-0000-4000-8000-000000000131','custom','related_installer',1,:'actor'::uuid,pg_catalog.statement_timestamp());
+insert into vortex_access.organization_role_permission_entries(organization_id,role_id,role_revision,entry_ordinal,role_kind,role_application_root_id,application_root_id,owner_kind,owner_id,permission_id,registration_kind,registration_owner_id,accepted_registration_revision,catalogue_fingerprint,continuity_revision,meaning_fingerprint)
+select entry.organization_id,'74750000-0000-4000-8000-000000000131'::uuid,1,1,'custom',null,entry.application_root_id,entry.owner_kind,entry.owner_id,entry.permission_id,entry.registration_kind,entry.registration_owner_id,entry.registration_revision,registration.permission_catalogue_fingerprint,continuity.continuity_revision,entry.meaning_fingerprint
+from vortex_access.permission_catalogue_entries entry
+join vortex_access.permission_registration_revisions registration on registration.organization_id=entry.organization_id and registration.registration_kind=entry.registration_kind and registration.registration_owner_id=entry.registration_owner_id and registration.revision=entry.registration_revision
+join vortex_access.permission_continuities continuity on continuity.organization_id=entry.organization_id and continuity.application_root_id is not distinct from entry.application_root_id and continuity.owner_kind=entry.owner_kind and continuity.owner_id=entry.owner_id and continuity.permission_id=entry.permission_id
+where entry.organization_id=:'org'::uuid and entry.registration_kind='platform' and entry.registration_revision=3 and entry.permission_id='7ecd3304-f16c-47d4-94db-0964980091ba';
+insert into vortex_access.organization_role_revisions(organization_id,role_id,revision,role_kind,lifecycle,privilege_classification,assignment_policy,policy_continuity_revision,authority_continuity_revision,role_key,label,description,changed_by,changed_at,change_correlation_id)
+values(:'org'::uuid,'74750000-0000-4000-8000-000000000131',1,'custom','active','privileged','standing',1,1,'related_installer','Related installer','Fixture install authority.',:'actor'::uuid,pg_catalog.statement_timestamp(),'c4870000-0000-4000-8000-000000000008');
+insert into vortex_access.organization_role_assignments(organization_id,role_assignment_id,role_id,assignee_kind,organization_account_id,assignment_kind,revision,starts_at,state,granted_by,granted_at,grant_correlation_id,changed_by,changed_at,change_correlation_id)
+values(:'org'::uuid,'74750000-0000-4000-8000-000000000132','74750000-0000-4000-8000-000000000131','organization_account',:'admin_account'::uuid,'standing',1,pg_catalog.statement_timestamp()-interval '1 minute','live',:'actor'::uuid,pg_catalog.statement_timestamp(),'c4870000-0000-4000-8000-000000000009',:'actor'::uuid,pg_catalog.statement_timestamp(),'c4870000-0000-4000-8000-000000000009');
+
+-- Storage is provisioned and the installation is then activated by the
+-- lifecycle writer, with the binding revision returned by provisioning (1).
+select pg_temp.related_context(null,:'admin_account'::uuid);
+set local role vortex_request;
+select * from vortex_module.provision_module_installation_storage(:'app'::uuid,1,:'module'::uuid,1,null);
+reset role;
+select pg_temp.related_context(:'app'::uuid,:'admin_account'::uuid);
+set local role vortex_request;
+select vortex_module.activate_application_installation(:'app'::uuid,1,
+  pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('moduleRootId',:'module'::uuid,'bindingRevision',1)));
+reset role;
+
+-- Maintained values are deliberately inserted for the read-projection proof.
+-- They are never asserted as a calculation result and are left unchanged by
+-- every read below.
+select pg_temp.related_context(:'app'::uuid,:'admin_account'::uuid);
+set local role vortex_record_adapter;
+insert into record_data.rt_b4870000000040008000000000000001(
+  organisation_id,module_root_id,record_type_id,storage_contract_id,record_id,application_root_id,definition_revision,
+  owner_organisation_account_id,lifecycle_state,concurrency_number,created_at,created_by,updated_at,updated_by,
+  f_f4870000000040008000000000000001,f_f4870000000040008000000000000002,f_f4870000000040008000000000000003,f_f4870000000040008000000000000004
+) values (
+  :'org'::uuid,:'module'::uuid,:'parent_type'::uuid,:'parent_storage'::uuid,:'parent_record'::uuid,:'app'::uuid,1,
+  :'admin_account'::uuid,'active',1,pg_catalog.statement_timestamp(),:'admin_account'::uuid,pg_catalog.statement_timestamp(),:'admin_account'::uuid,
+  'Parent',12.50,12.50,'Unrelated survives'
+);
+insert into record_data.rt_b4870000000040008000000000000002(
+  organisation_id,module_root_id,record_type_id,storage_contract_id,record_id,application_root_id,definition_revision,
+  owner_organisation_account_id,lifecycle_state,concurrency_number,created_at,created_by,updated_at,updated_by,
+  f_f4870000000040008000000000000011,f_f4870000000040008000000000000012,f_f4870000000040008000000000000013,
+  f_f4870000000040008000000000000014,f_f4870000000040008000000000000015,f_f4870000000040008000000000000016
+) values (
+  :'org'::uuid,:'module'::uuid,:'child_type'::uuid,:'child_storage'::uuid,:'child_record'::uuid,:'app'::uuid,1,
+  :'admin_account'::uuid,'active',1,pg_catalog.statement_timestamp(),:'admin_account'::uuid,pg_catalog.statement_timestamp(),:'admin_account'::uuid,
+  12.50,true,pg_catalog.jsonb_build_object('recordTypeId',:'parent_type'::uuid,'recordId',:'parent_record'::uuid),12.50,12.50,
+  pg_catalog.jsonb_build_object('recordTypeId',:'child_type'::uuid,'recordId',:'child_record'::uuid)
+);
+reset role;
+set local role vortex_record_owner;
+insert into vortex_record.relationship_edges(relationship_id,from_organisation_id,to_organisation_id,from_application_root_id,to_application_root_id,from_storage_contract_id,from_record_id,to_storage_contract_id,to_record_id) values
+  (:'child_parent_relationship'::uuid,:'org'::uuid,:'org'::uuid,:'app'::uuid,:'app'::uuid,:'child_storage'::uuid,:'child_record'::uuid,:'parent_storage'::uuid,:'parent_record'::uuid),
+  (:'child_self_relationship'::uuid,:'org'::uuid,:'org'::uuid,:'app'::uuid,:'app'::uuid,:'child_storage'::uuid,:'child_record'::uuid,:'child_storage'::uuid,:'child_record'::uuid);
+reset role;
