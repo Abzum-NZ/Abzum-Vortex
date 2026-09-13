@@ -114,6 +114,23 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
             settings: { currency_mode: "organisation_default", minimum: "0" },
             default: "12.34",
           },
+          {
+            id: "field_title_copy",
+            key: "title_copy",
+            type: "calculation",
+            label: "Title copy",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              result_type: "text",
+              expression: { operation: "join_text", fields: ["title"], separator: "" },
+            },
+          },
         ],
         relationships: [],
       },
@@ -129,7 +146,7 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: {
-          readable_fields: ["title", "amount"],
+          readable_fields: ["title", "amount", "title_copy"],
           changeable_fields: ["title", "amount"],
         },
       },
@@ -142,7 +159,7 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         action_kind: "read",
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: ["title", "amount"], changeable_fields: [] },
+        field_policy: { readable_fields: ["title", "amount", "title_copy"], changeable_fields: [] },
       },
       {
         id: "permission_update",
@@ -154,7 +171,7 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: {
-          readable_fields: ["title", "amount"],
+          readable_fields: ["title", "amount", "title_copy"],
           changeable_fields: ["title", "amount"],
         },
       },
@@ -346,6 +363,7 @@ const recordTypeId = componentId("record_type", "record_item");
 const storageContractId = componentId("storage_contract", "storage_item");
 const fieldId = componentId("field", "field_title");
 const amountFieldId = componentId("field", "field_amount");
+const calculatedFieldId = componentId("field", "field_title_copy");
 const applicationRoleId = componentId("role", "role_user");
 const homePageId = componentId("page", "page_home");
 
@@ -863,7 +881,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         value: {
           outcome: "saved",
           concurrencyNumber: 1,
-          readableValues: { [fieldId]: "Created once" },
+          readableValues: {
+            [fieldId]: "Created once",
+            [calculatedFieldId]: "Created once",
+          },
         },
       });
       if (created.kind !== "available" || created.value.outcome !== "saved")
@@ -891,7 +912,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           outcome: "saved",
           recordId,
           concurrencyNumber: 2,
-          readableValues: { [fieldId]: "Updated once" },
+          readableValues: {
+            [fieldId]: "Updated once",
+            [calculatedFieldId]: "Updated once",
+          },
         },
       });
       await expect(service.save(session, selection, updateCommand)).resolves.toMatchObject({
@@ -957,6 +981,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       const storageTable = `record_data.rt_${storageContractId.replaceAll("-", "")}`;
       const fieldColumn = `f_${fieldId.replaceAll("-", "")}`;
       const amountColumn = `f_${amountFieldId.replaceAll("-", "")}`;
+      const calculatedFieldColumn = `f_${calculatedFieldId.replaceAll("-", "")}`;
       const countTerminalEffects = async () => {
         const [counts] = await admin.unsafe<
           {
@@ -1020,6 +1045,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         {
           title: string;
           amount: unknown;
+          title_copy: string;
           concurrency_number: string;
           receipt_count: string;
           activity_count: string;
@@ -1028,6 +1054,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         }[]
       >(
         `select record.${fieldColumn} as title, record.${amountColumn} as amount,
+          record.${calculatedFieldColumn} as title_copy,
           record.concurrency_number::text,
           (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
            where organization_id = $1) as receipt_count,
@@ -1046,6 +1073,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       expect(evidence).toEqual({
         title: "Updated once",
         amount: { amount: "12.34", currency: "NZD" },
+        title_copy: "Updated once",
         concurrency_number: "2",
         receipt_count: "4",
         activity_count: "2",

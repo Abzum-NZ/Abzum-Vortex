@@ -4,12 +4,12 @@
 [Save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) ·
 [Field specification](../specification/05-modules-fields-and-relationships.md#calculations-and-totals)
 
-## First delivery
+## Delivered pure calculation evaluator
 
-Implement the existing six closed calculation forms in Record, independently of
-the App Designer. Reuse the existing exact-decimal representation, persisted-field
-validation and typed Rule condition evaluator. There is no script language,
-custom-expression registry or second condition evaluator.
+The existing six closed calculation forms are delivered in Record, independently
+of the App Designer. They reuse the existing exact-decimal representation,
+persisted-field validation and typed Rule condition evaluator. There is no script
+language, custom-expression registry or second condition evaluator.
 
 The first executable slice targets Module V2 values. Historical V1 source and
 published representations remain unchanged; do not reinterpret number-only money
@@ -108,10 +108,12 @@ refuse the save merely to enforce presentation access.
    time, exact large values, non-terminating division, half-even ties, currency
    handling and the existing application fixtures. Independent review checks the
    implementation against this plan.
-4. Co-deliver actual totals, authoritative dependency reads, final revalidation
-   and concurrent saves with [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)
-   on [protected storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
-   A pure calculation result is not proof of this integrated path.
+4. [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) owns actual
+   calculation/total integration, authoritative dependency reads, final
+   revalidation and concurrent-save proof. It builds on the fixed save command
+   from [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and protected
+   storage from [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). A pure
+   calculation result is not proof of this integrated path.
 
 Empty count is zero. Empty minimum, maximum and average are absent. An empty money
 sum is absent unless the definition supplies its currency unambiguously. Query
@@ -119,12 +121,12 @@ aggregates filtered for a viewer remain viewer-specific and are not persisted as
 universal totals. The existing mixed-currency and access/concurrency acceptance
 remains required before the whole task closes.
 
-## Next delivery: relationship totals
+## Delivered pure relationship-total evaluator
 
-Implement one pure Record evaluator over the existing exact total definition,
-source relationship and source record type, and selected related record values.
-These values are ordinary inputs, not proof of access or authoritative selection.
-The protected save owns that selection using the exact installed definition and
+The existing pure Record evaluator applies the exact total definition, source
+relationship and source record type to selected related record values. Those
+values are ordinary inputs, not proof of access or authoritative selection. The
+protected save owns that selection using the exact installed definition and
 current transaction. There is no new query service, callback registry or
 caller-supplied `verified` flag.
 
@@ -151,12 +153,13 @@ caller-supplied `verified` flag.
   caller-filtered subset. Disclosure requires readable aggregate/filter inputs
   and related source records as well as the total field itself.
 
-First deliver the evaluator, the minimal derived-money publication correction and
-focused tests using the existing arithmetic and value-validation helpers. No
-database or contract-shape change is needed for this pure slice. Integration in
-#47 must prove actual related-record selection, updates to affected old/new
-parents, derived recalculation, current revisions and atomic Activity/Event
-effects. Supplied related-record fixtures are not evidence of that integration.
+The evaluator, minimal derived-money publication correction and focused tests are
+delivered using the existing arithmetic and value-validation helpers. No database
+or contract-shape change was needed for that pure slice. The remaining #48
+integration must prove actual related-record selection, updates to affected
+old/new parents, derived recalculation, current revisions and atomic
+Activity/Event effects. Supplied related-record fixtures are not evidence of
+that integration.
 
 ### Integrated totals: dependency and transaction rules
 
@@ -201,8 +204,8 @@ flowchart TD
 
 Actual save proofs must cover valid self-type hierarchies, an actual refused
 record-level cycle, a relationship move updating both parents, concurrent child
-changes and rollback without partial totals or events. These are #47 integration
-requirements; this pure evaluator does not implement them.
+changes and rollback without partial totals or events. These are #48 integration
+requirements; the pure evaluator does not implement them.
 
 ## Approved deadline refresh — 12 September 2026
 

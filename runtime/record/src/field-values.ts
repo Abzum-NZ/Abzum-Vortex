@@ -124,6 +124,12 @@ export type FinalizeRecordFieldCandidateV2Input = Readonly<{
   initialCandidate: InitialRecordFieldCandidateV2;
   candidateValues: ValueMap;
   requirements?: readonly RecordFieldValueRequirementV2[];
+  /**
+   * The generated fields that the invoking Record operation has produced.
+   * Omitting this option preserves the public finalizer's full generated-field
+   * requirement; a bounded engine can require only the generated kinds it owns.
+   */
+  requiredGeneratedFieldIds?: readonly string[];
   organizationCurrency?: string;
 }>;
 
@@ -827,7 +833,7 @@ export const prepareInitialRecordFieldCandidateV2 = (
  */
 const finalizeRecordFieldCandidateV2Internal = (
   input: FinalizeRecordFieldCandidateV2Input,
-  requireGeneratedFields: boolean,
+  requiredGeneratedFieldIds: ReadonlySet<string>,
 ): PrepareRecordFieldValuesV2Result => {
   const trustedRecordType = recordTypeDefinitionV2Schema.parse(input.recordType);
   const context = preparationContext(input.organizationCurrency);
@@ -844,6 +850,12 @@ const finalizeRecordFieldCandidateV2Internal = (
   const fieldsById = new Map<string, ModuleFieldV2>(
     trustedRecordType.fields.map((field) => [field.fieldId, field]),
   );
+  for (const fieldId of requiredGeneratedFieldIds) {
+    const field = fieldsById.get(fieldId);
+    if (field === undefined || !generatedFieldTypes.has(field.type))
+      issue(context, "invalid_input", ["requiredGeneratedFieldIds", fieldId], fieldId);
+  }
+  if (context.issues.length > 0) return { success: false, issues: context.issues };
   const submittedFieldIds = new Set(input.initialCandidate.submittedFieldIds);
   const normalizedCandidate: Record<string, JsonValue> = {};
   const changedFieldIds = new Set<string>();
@@ -893,7 +905,7 @@ const finalizeRecordFieldCandidateV2Internal = (
       issue(context, "required_field_clear", ["submittedValues", field.fieldId], field.fieldId);
     if (
       field.required &&
-      (requireGeneratedFields || !generatedFieldTypes.has(field.type)) &&
+      (requiredGeneratedFieldIds.has(field.fieldId) || !generatedFieldTypes.has(field.type)) &&
       !present
     )
       issue(
@@ -944,7 +956,14 @@ const finalizeRecordFieldCandidateV2Internal = (
 
 export const finalizeRecordFieldCandidateV2 = (
   input: FinalizeRecordFieldCandidateV2Input,
-): PrepareRecordFieldValuesV2Result => finalizeRecordFieldCandidateV2Internal(input, true);
+): PrepareRecordFieldValuesV2Result => {
+  const requiredGeneratedFieldIds =
+    input.requiredGeneratedFieldIds ??
+    input.recordType.fields
+      .filter((field) => generatedFieldTypes.has(field.type))
+      .map((field) => field.fieldId);
+  return finalizeRecordFieldCandidateV2Internal(input, new Set(requiredGeneratedFieldIds));
+};
 
 export const prepareRecordFieldValuesV2 = (
   input: PrepareRecordFieldValuesV2Input,
@@ -960,6 +979,6 @@ export const prepareRecordFieldValuesV2 = (
         ? {}
         : { organizationCurrency: input.organizationCurrency }),
     },
-    false,
+    new Set(),
   );
 };

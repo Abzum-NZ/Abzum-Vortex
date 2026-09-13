@@ -36,6 +36,8 @@ const ids = {
   moneyField: id(17),
   secondCommand: id(18),
   thirdCommand: id(19),
+  calculatedField: id(20),
+  fourthCommand: id(21),
 } as const;
 
 const session: IdentitySession = {
@@ -111,6 +113,45 @@ const moneyRecordType = (defaultValue?: string): RecordTypeDefinitionV2 =>
         type: "money" as const,
         settings: { currencyMode: "organization_default" as const, minimum: "0" },
         ...(defaultValue === undefined ? {} : { default: defaultValue }),
+      },
+    ],
+    relationships: [],
+    standardActions: ["create", "read", "update"],
+    customActionIds: [],
+  });
+
+const calculatedRecordType = (): RecordTypeDefinitionV2 =>
+  recordTypeDefinitionV2Schema.parse({
+    recordTypeId: ids.recordType,
+    key: "calculated_record",
+    singularLabel: "Calculated record",
+    pluralLabel: "Calculated records",
+    titleFieldId: ids.visibleField,
+    storageContractId: ids.storage,
+    storageScope: "application_contained",
+    ownershipMode: "none",
+    fields: [
+      textField(ids.visibleField, "title", true),
+      {
+        fieldId: ids.calculatedField,
+        key: "derived_title",
+        label: "derived title",
+        required: true,
+        unique: false,
+        filterable: true,
+        sortable: true,
+        personalData: "none" as const,
+        publicDisplay: "refused" as const,
+        type: "calculation" as const,
+        settings: {
+          resultType: "text" as const,
+          expression: {
+            kind: "join_text" as const,
+            fieldIds: [ids.visibleField],
+            separator: "",
+          },
+          dependencyFieldIds: [ids.visibleField],
+        },
       },
     ],
     relationships: [],
@@ -616,5 +657,112 @@ describe("base Record save service", () => {
         expect(terminalCalls).toBe(0);
       }
     }
+  });
+
+  it("calculates generated values in the protected create and update candidate", async () => {
+    const persistedValues: unknown[] = [];
+    let preparations = 0;
+    let writes = 0;
+    const requestQuery: RequestQuery = async <Row extends DatabaseRow>(strings, ...values) => {
+      const sql = strings.join("$value");
+      if (sql.includes("prepare_base_record_save")) {
+        preparations += 1;
+        return [
+          {
+            preparation: {
+              outcome: "prepared",
+              recordType: calculatedRecordType(),
+              existingValues:
+                preparations === 1
+                  ? {}
+                  : {
+                      [ids.visibleField]: "Created",
+                      [ids.calculatedField]: "Created",
+                    },
+              readableFieldIds: [ids.visibleField, ids.calculatedField],
+              correlationId: ids.correlation,
+            },
+          },
+        ] as unknown as readonly Row[];
+      }
+      if (sql.includes("read_current_organization_runtime_settings_for_application"))
+        return [runtimeSettingsRow("NZD")] as unknown as readonly Row[];
+      if (sql.includes("save_base_record")) {
+        writes += 1;
+        persistedValues.push(JSON.parse(String(values[6])));
+        return [
+          {
+            result: {
+              outcome: "saved",
+              recordId: ids.record,
+              concurrencyNumber: writes,
+              values: JSON.parse(String(values[6])),
+              correlationId: ids.correlation,
+              backgroundDelivery: "none",
+            },
+          },
+        ] as unknown as readonly Row[];
+      }
+      return [] as unknown as readonly Row[];
+    };
+    const service = createRecordSaveService({
+      identityAuthorityId: ids.authority,
+      clock: () => new Date("2026-09-08T01:00:00.000Z"),
+      correlationId: () => ids.correlation,
+      activityId: () => ids.activity,
+      occurrenceId: () => ids.occurrence,
+      resolvedRequestTransaction: transactionRunner(requestQuery),
+    });
+
+    await expect(
+      service.save(
+        session,
+        selection,
+        createCommand(ids.fourthCommand, { [ids.visibleField]: "Created" }),
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        outcome: "saved",
+        readableValues: {
+          [ids.visibleField]: "Created",
+          [ids.calculatedField]: "Created",
+        },
+      },
+    });
+    await expect(
+      service.save(session, selection, {
+        ...updateCommand("Updated"),
+        commandId: ids.thirdCommand,
+      }),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        outcome: "saved",
+        readableValues: {
+          [ids.visibleField]: "Updated",
+          [ids.calculatedField]: "Updated",
+        },
+      },
+    });
+    await expect(
+      service.save(
+        session,
+        selection,
+        createCommand(ids.secondCommand, {
+          [ids.visibleField]: "Rejected",
+          [ids.calculatedField]: "Caller-supplied",
+        }),
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { outcome: "correction_required" },
+    });
+
+    expect(persistedValues).toEqual([
+      { [ids.visibleField]: "Created", [ids.calculatedField]: "Created" },
+      { [ids.visibleField]: "Updated", [ids.calculatedField]: "Updated" },
+    ]);
+    expect(writes).toBe(2);
   });
 });
