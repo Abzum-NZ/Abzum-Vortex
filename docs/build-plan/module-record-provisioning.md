@@ -9,8 +9,10 @@
 An exact published module release becomes usable in the intended organisation
 and application without copying its definition or creating per-organisation
 tables. Module owns binding activation and detachment; Record owns the protected
-storage catalogue, physical mappings and record adapters. The application-level
-installation operation remains with
+storage catalogue, physical mappings and record adapters. The fixed lower-level
+Application-wide activation/detach operations are delivered by
+[#43](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43); the installation,
+upgrade and runtime assembly orchestration remains with
 [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64).
 
 Reuse the existing Definition publication/readback, permission registry, request
@@ -28,20 +30,23 @@ request connection database-owner permissions.
    for arbitrary app installation. There is no per-customer migration, caller SQL
    or runtime DDL credential. Follow the [record-table allocation rule](../specification/17-runtime-storage-and-caching.md#record-table-allocation)
    and [provisioning boundary](../specification/17-runtime-storage-and-caching.md#record-storage-provisioning).
-3. Prepare actual permission and event registrations. The event-registration slice
-   of [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) can be co-delivered here;
-   its system-field and protected-action completion still needs real record storage.
-   This does not require a new event queue or a successful mock registration.
-   The [event availability plan](issue-50-system-fields-actions-events.md) uses
-   exact immutable definitions and real binding state, not a copied catalogue
-   or a boolean claiming registration succeeded.
-4. Activate the exact organisation/application binding only when its required
-   mappings, registrations and protected operations are ready. A retry reuses the
-   existing compatible storage and registration identities.
+3. Register the Application's exact permission snapshot through Access. Published
+   event declarations remain in the immutable definitions and are consumed from
+   there; installation does not copy them into another catalogue or create a mock
+   readiness flag.
+4. Activate all direct and transitively required Module bindings together only
+   when every exact binding is provisioned and the exact permission snapshot is
+   current. The command supplies the complete canonical pin set with each current
+   binding revision. Omitted, inserted, mixed or substituted evidence refuses the
+   whole operation. Activation also rechecks each binding through Record's narrow
+   protected exact-release provision read, including its complete storage-contract
+   set; Module receives that result without reading Record's private tables. An exact
+   retry uses the existing binding revisions.
 5. Exercise real protected create/read through
    [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), including the field
-   preparation supplied by [#44](issue-44-record-field-values.md). Detachment keeps
-   data and refuses removal that breaks another active binding's dependencies.
+   preparation supplied by [#44](issue-44-record-field-values.md). Detachment changes
+   only that Application's complete pin set and keeps its storage and records;
+   another Application using the same Module keeps its own active bindings.
 
 ## Dependencies and failure behavior
 
@@ -70,11 +75,13 @@ Groups, including `owner_group_id` in the illustrative fixture and its validator
 
 First create/compatible provisioning locks the binding and storage identities and
 commits objects plus mappings as inactive. Activation is a separate transaction
-after real registrations and protected adapters exist. Later populated changes
+after exact permission registration and protected adapters exist. Published event
+declarations are read from the pinned definitions rather than copied during
+activation. Later populated changes
 may use Kestra over the same bounded operations; no new worker/queue is needed
 for initial creation. Test the generic operation with fixture definitions as
-inputs, not hardcoded business-schema migrations. This decision was independently
-reviewed before implementation; the actual implementation still requires review.
+inputs, not hardcoded business-schema migrations. The implementation remains
+subject to independent patch review.
 
 The first provisioning proof must distinguish locally owned Application roots
 from shared Module dependencies, support response-lost retries of the original
@@ -104,19 +111,22 @@ acceptance. Inactive structural provisioning and catalogue development may proce
 independently before those checks complete; no active installation or protected
 data path is claimed early.
 
-The next read-only slice supplies [exact active installation evidence](issue-43-active-installation-read.md),
+The delivered reader supplies [exact active installation evidence](issue-43-active-installation-read.md),
 including locally owned Applications with exact shared external Modules. It does
-not activate bindings or require installation-management permission for ordinary
-runtime discovery. Protected operations still check their own current authority.
+not require installation-management permission for ordinary runtime discovery
+and refuses a detached target. Protected operations still check their own current
+authority.
 
-The delivered first provisioner currently accepts only direct Application-to-Module
-dependencies. Before claiming complete installation, extend its fixed Module
-coordinator to accept an exact Module reachable through the Application's pinned
-Module dependency graph, preserving the same Access and release checks. Use a
-forward migration, not an edit to the delivered migration or a requirement that
-administrators duplicate indirect dependencies on the Application. Prove actual
-provisioning of Application-to-A-to-shared-B and refusal of an unrelated B. The
-reader's manually activated fixtures do not satisfy this installation acceptance.
+Transitive Module dependencies are delivered. One resolver,
+`vortex_definition.reachable_module_dependency_edges`, owns the rule that an
+Application's dependency closure pins each Module root at exactly one revision,
+the publication writer refuses a closure that breaks it, and the coordinator,
+both readers and the permission registry all read their Module set from it. An
+exact Module reachable only through another Module is provisioned and registered;
+an unrelated or substituted Module release is refused. The provisioner also
+accepts the compiled ownership value `team`, which is what the compiler actually
+emits for a Group-owned record type; the superseded runtime term `group` is
+refused rather than carried as a second spelling.
 
 Treat #43, #45 and #50's registration slice as coordinated work, not a sequence
 requiring a fake completed install before its storage exists. Likewise, #44's
@@ -153,10 +163,20 @@ existing request transaction rather than introducing another transaction framewo
 Deliver the missing pieces in this order:
 
 1. Complete the fixed protected storage adapters and their row/field checks in
-   [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
+   [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). Read and change are
+   delivered as one fixed parameterised pair over provisioned storage, with the
+   complete record decision inside the adapter and the changeable-field bound
+   enforced beside the write. The private storage slice is implemented in
+   [#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402) and covers trusted-human
+   create and initial ownership, per-scope locked reference allocation,
+   single-target relationship edge changes, and revision-checked recoverable
+   delete/restore. It remains ungranted to request/runtime roles and supplies
+   primitives to the complete save orchestration rather than a second endpoint.
 2. Define the protected save command/result and its existing specified retry
    receipt, including refusal of a reused command identity with different inputs.
-3. Add the private outbox and logged queue append required by
+3. Add the private outbox and Basic logged queue append in
+   [#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400), which is the
+   transactional prerequisite for
    [#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60). Use the existing
    per-record event sequence contract: one save can announce several occurrences,
    so its record concurrency number alone cannot uniquely order those occurrences.
@@ -178,6 +198,27 @@ co-delivered with [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), not
 deferred until after a supposedly complete save engine. These are delivery
 boundaries, not claims that the missing integrations already exist.
 
+For #402 specifically, test real published and provisioned definitions. Account
+ownership is derived; Group ownership accepts only a selected current membership.
+An omitted reference start is one and an explicit non-one start is exact. Digit
+width is a minimum and never truncates a wider allocated integer. The
+counter scope uses a null-safe database key, and concurrent creates serialize on
+that counter. Link values and canonical edges remain atomic. A concurrent link
+change and parent deletion serialize on the affected source row; after the lock,
+deletion rechecks that the current link still names that parent before applying
+the declared action. Optional clearing requires child update authority and exact
+inherited-dependent deletion requires child delete authority. Create, delete and
+restore load the fact closure for their actual action. Restore uses the retained
+row but rechecks current access and definition, current required non-link
+presence/canonical storage shape, and exact fixed-target required relationship
+value/edge/target consistency after locking the target. Full final-value
+settings and live-reference validation remains in
+[#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47). Link-add versus target
+delete and restore versus required-target delete must have two-session proofs.
+Do not add System/specified-account execution, public save commands, Activity,
+Events, receipts, lifecycle scheduling, transfer, polymorphic links or an
+implicit many-to-many edge engine to this slice.
+
 #### Event append authority
 
 Independent review rejected a request-callable Event batch append: describing
@@ -187,13 +228,18 @@ operation may call the private Event helper. Browser, request and runtime roles
 receive no direct append, outbox or queue capability. This is the intentional
 database composition boundary; it creates no reverse TypeScript package import.
 
-The helper checks the actual binding/release and derives scope, actor, time and
-sequence from database-controlled operation facts. It accepts no caller-selected
-queue, sequence or `saveSucceeded` claim. The existing Record row lock serializes
-sequence allocation from the prior outbox maximum; the uniqueness key follows
-the actual record identity, without adding Application scope to an
-organisation-shared record. Each real occurrence receives its own identifier.
-An exact command-receipt retry returns the stored outcome without appending again.
+The helper takes the shared form of the Module lifecycle lock and only then
+rereads the exact active binding, installation and release. Activation, detach or
+replacement takes the exclusive form of the same lock, so an append cannot carry
+stale installation evidence past a lifecycle change. The helper derives scope,
+actor, time and sequence from database-controlled operation facts and accepts no
+caller-selected queue, sequence or `saveSucceeded` claim. It explicitly confirms
+that the actual generated Record row was returned and locks that row before
+allocating from the prior outbox maximum. Different records in the same
+Application and Module remain independent; the uniqueness key follows the actual
+record identity without adding Application scope to an organisation-shared
+record. Each real occurrence receives its own identifier. An exact command-receipt
+retry returns the stored outcome without appending again.
 
 Use one [Basic logged Supabase Queue](https://supabase.com/docs/guides/queues/quickstart#queue-types)
 and a private immutable outbox. The minimal V2 queue message carries contract
@@ -251,10 +297,15 @@ The [existing transaction runner](../../db/src/request-transaction.ts) connects 
 `vortex_runtime` and temporarily selects `vortex_request`.
 [PostgreSQL permits resetting that role](https://www.postgresql.org/docs/current/sql-set-role.html),
 so arbitrary SQL executing with the runtime connection could regain its runtime
-capabilities. No user-facing adapter may accept SQL, caller-selected helper names
-or a final mutation plan. Parameterized fixed operations, server-only connection
-ownership and closed commands are part of the boundary; role switching alone is
-not evidence of protection from a compromised backend or stolen credential.
+capabilities. Since #386 that path cannot replace the established request context:
+it lives in an owner-only row the runtime login cannot write, and the initializer
+refuses a second establishment in the same transaction. Regaining the runtime role
+yields only the pre-request surface (scope resolvers, launcher, identity projection
+read/ensure, invitation acceptance). No user-facing adapter may accept SQL,
+caller-selected helper names or a final mutation plan. Parameterized fixed
+operations, server-only connection ownership and closed commands are part of the
+boundary; role switching alone is not evidence of protection from a compromised
+backend or stolen credential.
 
 Verify both cases honestly: a genuinely restricted database session cannot call
 the terminal writer/private helpers/raw tables; the real runtime connection can
@@ -263,11 +314,13 @@ Event-helper access. Also prove an untrusted save command cannot inject generate
 values or bypass validation. A restricted `current_user` test must not be described
 as proof that the underlying runtime `session_user` cannot reset its role.
 
-Concrete missing integrations are the Module active-binding reader/activation,
-protected Record writer and 30-day command receipt, the private Event queue/outbox
-migration, and Application composition. Co-deliver these required parts; a new
-reviewed migration is ordinary implementation work, not a user approval gate.
-Dispatcher, webhook, consumer and Kestra work are outside this first append slice.
+Concrete missing integrations are the protected Record writer and command receipt,
+plus Application composition. [#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400)
+owns the first private Event queue/outbox migration and append helper; it does not
+set a receipt-retention default. Co-deliver the remaining save parts without
+turning a reviewed migration into a user approval gate. Dispatcher, webhook,
+consumer and Kestra work are outside this first append slice and remain
+[event delivery #60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60).
 
 Prove direct request-role event fabrication fails, a committed save creates its
 matching effects, a forced append failure rolls all of them back, exact retries
@@ -275,13 +328,13 @@ create no duplicates, and concurrent saves maintain per-record sequence. A mocke
 participant is not evidence of database atomicity.
 
 Co-deliver the protected [save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)
-with the transactional enqueue slice of [event delivery #60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60)
-on the real [record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
-Neither task requires the other whole task to be marked Done first. Requiring
-all of Phase 4 before #60 would prevent Phase 4 from proving its own atomic
-record/event acceptance. #60 therefore depends on the concrete storage boundary,
-not the whole phase epic. Its ordered dispatch, duplicate-safe consumers and
-recovery acceptance remain required before closing #60.
+with the private transactional append delivered by
+[#400](https://github.com/Abzum-NZ/Abzum-Vortex/issues/400) on the real
+[record storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45).
+[#60](https://github.com/Abzum-NZ/Abzum-Vortex/issues/60) consumes that committed
+outbox and queue afterward; it does not own the initial append. Its ordered
+dispatch, duplicate-safe consumers and recovery acceptance remain required
+before closing #60.
 
 The save owns one short transaction: current authority, inputs and revisions are
 checked; record changes, success activity, declared event/start intent and logged
@@ -312,6 +365,9 @@ Use the real restricted request role for allow/refuse checks. Generated storage
 must set grants and row policies explicitly; do not rely on Supabase's changing
 [default table exposure](https://supabase.com/docs/guides/database/postgres/row-level-security#grants-and-policies).
 Raw content access must not bypass the field projection/change bounds already
-required by [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). Run the existing
+required by [#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45). The fixed
+read and change adapters enforce those bounds on real provisioned tables, and
+the request role holds no privilege on any `record_data` table, so the adapters
+are its only route to a record. Run the existing
 database tests and advisors for the actual generated objects and obtain independent
 actual-work review. No new test framework or infrastructure service is required.

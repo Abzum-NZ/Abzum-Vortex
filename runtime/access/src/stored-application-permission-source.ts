@@ -10,11 +10,11 @@ import {
 } from "@vortex/contracts";
 import { withResolvedRequestTransaction } from "@vortex/db";
 import {
-  createDatabaseDefinitionConsumerReadService,
+  createDatabaseSystemApplicationBoundReleaseSetService,
   type ImmutableDefinitionPublicationCatalogueDefinition,
 } from "@vortex/definition";
 import type { HumanOrganizationRequestDependencies } from "./human-organization-request";
-import { createPermissionRegistryDefinitionAdapter } from "./permission-registry-definition-adapter";
+import { prepareApplicationPermissionRegistrationFromReleaseSet } from "./permission-registry-definition-adapter";
 
 type ApplicationRelease = Extract<DefinitionConsumerReadResult, { kind: "application" }>;
 
@@ -56,23 +56,20 @@ export const createStoredApplicationPermissionSource = (
       runResolved(
         async () => ({ context: systemContext, scope: undefined }),
         async (transaction) => {
-          const reader = createDatabaseDefinitionConsumerReadService(
+          const reader = createDatabaseSystemApplicationBoundReleaseSetService(
             dependencies.definitionCatalogue,
             transaction,
           );
-          const definitionAdapter = createPermissionRegistryDefinitionAdapter(reader);
-          const permissionRegistration = await definitionAdapter.prepareApplicationRegistration(
-            systemContext,
-            {
-              applicationRootId,
-              releaseRevision,
-            },
-          );
-          const applicationRelease = await reader.read(systemContext, {
-            kind: "application",
-            rootId: applicationRootId,
-            selector: { selection: "revision", releaseRevision },
+          const releaseSet = await reader.read(systemContext, {
+            applicationRootId,
+            applicationReleaseRevision: releaseRevision,
           });
+          const applicationRelease = releaseSet.application;
+          const permissionRegistration = prepareApplicationPermissionRegistrationFromReleaseSet(
+            systemContext,
+            { applicationRootId, releaseRevision },
+            releaseSet,
+          );
           if (
             applicationRelease.kind !== "application" ||
             !sameUuid(applicationRelease.organizationId, systemContext.organizationId) ||

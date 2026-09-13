@@ -1,7 +1,7 @@
 # Agent coordination
 
-Approved by the user on 9 September 2026. This governs engineering coordination,
-not product behaviour. It replaces earlier requirements for an additional Sol
+Approved by the user on 9 September 2026; routing updated on 12 September 2026.
+This governs engineering coordination, not product behaviour. It replaces earlier requirements for an additional Sol
 review on newly assigned work; historical review receipts remain accurate.
 
 ## Responsibilities
@@ -9,16 +9,18 @@ review on newly assigned work; historical review receipts remain accurate.
 | Owner             | Work                                                                                                                                                                                                                                    |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Codex coordinator | Select dependency-ready tasks, commission reviews, dispatch Astra-corrected handoffs, monitor drift/blockers and usage, maintain progress, and coordinate delivery after normal checks. |
-| GPT-6 Astra | Act as BA and Tester. Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. Independently verify actual implementation and record remaining findings. |
+| GPT-6 Astra (Medium) | Act as BA and Tester. Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. Independently verify actual implementation and record remaining findings. |
 | Claude Fable 5.1  | Own every full-system review across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Choose the simplest sufficient design. Do not use for routine work or implement unless explicitly reassigned. |
+| GPT-5.6 Terra / Sol | Current user-authorized implementation: execute bounded Astra-reviewed plans, test behavior and return reviewable changes; coordinator owns merges. |
 | Claude Opus 5     | Implement the assigned plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction.                                   |
 | Claude Sonnet 5   | Handle bounded intermediate implementation, focused analysis and well-specified follow-up work. Escalate architectural ambiguity instead of expanding scope.                                                                             |
 | User              | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate.                                                                                                                              |
 
-After the current compatibility task, Fable 5.1 reviews the full codebase,
-specification and GitHub issues. Astra assesses findings and directly corrects
+Fable 5.1 handles explicitly assigned full-system architecture reviews.
+Astra at Medium assesses findings and directly corrects
 agreed specifications, plans, tasks and dependencies before the coordinator
-dispatches bounded implementation to Opus 5 (senior) and Sonnet 5 (intermediate).
+dispatches bounded implementation to GPT-5.6 Terra or Sol under the user's current
+instruction. Historical Claude review receipts remain valid.
 Astra independently verifies their work. This does not authorize simultaneous
 conflicting edits or duplicate reviews.
 

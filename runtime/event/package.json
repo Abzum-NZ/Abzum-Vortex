@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "@vortex/db": "workspace:*",
     "@vortex/definition": "workspace:*",
+    "@vortex/module": "workspace:*",
     "@vortex/record": "workspace:*",
     "server-only": "0.0.1"
   },

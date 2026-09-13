@@ -1,3 +1,5 @@
+\ir helpers/definition-release-writer.psql
+
 begin;
 select plan(18);
 
@@ -14,7 +16,7 @@ declare
   operation_at timestamptz := pg_catalog.statement_timestamp();
   request_context jsonb;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   request_context := pg_catalog.jsonb_build_object(
     'callerKind', 'human',
     'identityAuthorityId', '94600000-0000-4000-8000-000000000001',
@@ -87,19 +89,12 @@ insert into vortex_identity.tenants (
 insert into vortex_identity.organizations (
   organization_id, tenant_id, parent_organization_id, short_name, display_name,
   state, created_at, created_by, state_changed_at, revision
-) values
-  (
-    '24600000-0000-4000-8000-000000000001',
-    '14600000-0000-4000-8000-000000000001', null, 'bound_reader_local',
-    'Bound reader local', 'active', pg_catalog.statement_timestamp(),
-    '94600000-0000-4000-8000-000000000001', pg_catalog.statement_timestamp(), 1
-  ),
-  (
-    '24600000-0000-4000-8000-000000000002',
-    '14600000-0000-4000-8000-000000000001', null, 'bound_reader_foreign',
-    'Bound reader foreign', 'active', pg_catalog.statement_timestamp(),
-    '94600000-0000-4000-8000-000000000001', pg_catalog.statement_timestamp(), 1
-  );
+) values (
+  '24600000-0000-4000-8000-000000000001',
+  '14600000-0000-4000-8000-000000000001', null, 'bound_reader_local',
+  'Bound reader local', 'active', pg_catalog.statement_timestamp(),
+  '94600000-0000-4000-8000-000000000001', pg_catalog.statement_timestamp(), 1
+);
 insert into vortex_identity.identity_projections (
   identity_id, state, created_at, state_changed_at, state_changed_by,
   state_change_correlation_id, revision
@@ -138,109 +133,46 @@ insert into vortex_definition.roots (
   ),
   (
     '44600000-0000-4000-8000-000000000010',
-    '24600000-0000-4000-8000-000000000002', 'module',
-    'vortex.bound_reader.foreign_module', pg_catalog.statement_timestamp(),
+    '24600000-0000-4000-8000-000000000001', 'module',
+    'vortex.bound_reader.direct_module', pg_catalog.statement_timestamp(),
     '94600000-0000-4000-8000-000000000001'
   ),
   (
     '44600000-0000-4000-8000-000000000011',
-    '24600000-0000-4000-8000-000000000002', 'module',
+    '24600000-0000-4000-8000-000000000001', 'module',
     'vortex.bound_reader.transitive_module', pg_catalog.statement_timestamp(),
     '94600000-0000-4000-8000-000000000001'
   ),
   (
     '44600000-0000-4000-8000-000000000012',
-    '24600000-0000-4000-8000-000000000002', 'module',
+    '24600000-0000-4000-8000-000000000001', 'module',
     'vortex.bound_reader.unrelated_module', pg_catalog.statement_timestamp(),
     '94600000-0000-4000-8000-000000000001'
   );
 
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-) values
-  (
-    '34600000-0000-4000-8000-000000000001', 1, '1.0.0',
-    '{"source_contract_version":"1.0.0","kind":"application","key":"vortex.bound_reader.application"}',
-    'sha256:' || pg_catalog.repeat('1', 64), '1.0.0',
-    '{"kind":"application","canonical":{"content":{},"envelope":{"rootId":"34600000-0000-4000-8000-000000000001"}}}',
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('2', 64)),
-    'sha256:' || pg_catalog.repeat('3', 64), 'sha256:' || pg_catalog.repeat('2', 64),
-    '1.0.0', 'sha256:' || pg_catalog.repeat('4', 64), '[]',
-    'Bound reader Application release one.', pg_catalog.statement_timestamp(),
-    '94600000-0000-4000-8000-000000000001'
-  ),
-  (
-    '34600000-0000-4000-8000-000000000001', 2, '1.1.0',
-    '{"source_contract_version":"1.0.0","kind":"application","key":"vortex.bound_reader.application"}',
-    'sha256:' || pg_catalog.repeat('5', 64), '1.0.0',
-    '{"kind":"application","canonical":{"content":{},"envelope":{"rootId":"34600000-0000-4000-8000-000000000001"}}}',
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('6', 64)),
-    'sha256:' || pg_catalog.repeat('7', 64), 'sha256:' || pg_catalog.repeat('6', 64),
-    '1.0.0', 'sha256:' || pg_catalog.repeat('8', 64), '[]',
-    'Bound reader Application release two.', pg_catalog.statement_timestamp(),
-    '94600000-0000-4000-8000-000000000001'
-  ),
-  (
-    '44600000-0000-4000-8000-000000000010', 4, '2.0.0',
-    '{"source_contract_version":"2.0.0","kind":"module","key":"vortex.bound_reader.foreign_module"}',
-    'sha256:' || pg_catalog.repeat('9', 64), '2.0.0',
-    '{"kind":"module","canonical":{"content":{},"envelope":{"rootId":"44600000-0000-4000-8000-000000000010"}}}',
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('a', 64)),
-    'sha256:' || pg_catalog.repeat('b', 64), 'sha256:' || pg_catalog.repeat('a', 64),
-    '2.0.0', 'sha256:' || pg_catalog.repeat('c', 64), '[]',
-    'Foreign exact Module release.', pg_catalog.statement_timestamp(),
-    '94600000-0000-4000-8000-000000000001'
-  ),
-  (
-    '44600000-0000-4000-8000-000000000011', 5, '2.1.0',
-    '{"source_contract_version":"2.0.0","kind":"module","key":"vortex.bound_reader.transitive_module"}',
-    'sha256:' || pg_catalog.repeat('d', 64), '2.0.0',
-    '{"kind":"module","canonical":{"content":{},"envelope":{"rootId":"44600000-0000-4000-8000-000000000011"}}}',
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('e', 64)),
-    'sha256:' || pg_catalog.repeat('f', 64), 'sha256:' || pg_catalog.repeat('e', 64),
-    '2.0.0', 'sha256:' || pg_catalog.repeat('0', 64), '[]',
-    'Transitive exact Module release.', pg_catalog.statement_timestamp(),
-    '94600000-0000-4000-8000-000000000001'
-  ),
-  (
-    '44600000-0000-4000-8000-000000000012', 6, '2.2.0',
-    '{"source_contract_version":"2.0.0","kind":"module","key":"vortex.bound_reader.unrelated_module"}',
-    'sha256:' || pg_catalog.repeat('1', 64), '2.0.0',
-    '{"kind":"module","canonical":{"content":{},"envelope":{"rootId":"44600000-0000-4000-8000-000000000012"}}}',
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('2', 64)),
-    'sha256:' || pg_catalog.repeat('3', 64), 'sha256:' || pg_catalog.repeat('2', 64),
-    '2.0.0', 'sha256:' || pg_catalog.repeat('4', 64), '[]',
-    'Unrelated exact Module release.', pg_catalog.statement_timestamp(),
-    '94600000-0000-4000-8000-000000000001'
-  );
-
-insert into vortex_definition.release_dependencies (
-  root_id, release_revision, dependency_kind, dependency_reference,
-  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
-  target_root_id, target_release_revision, catalogue_item_id
-) values
-  (
-    '34600000-0000-4000-8000-000000000001', 1, 'module',
-    'vortex.bound_reader.foreign_module', '2.0.0',
-    'sha256:' || pg_catalog.repeat('b', 64), 'sha256:' || pg_catalog.repeat('a', 64),
-    '44600000-0000-4000-8000-000000000010', 4, null
-  ),
-  (
-    '34600000-0000-4000-8000-000000000001', 2, 'module',
-    'vortex.bound_reader.transitive_module', '2.1.0',
-    'sha256:' || pg_catalog.repeat('f', 64), 'sha256:' || pg_catalog.repeat('e', 64),
-    '44600000-0000-4000-8000-000000000011', 5, null
-  ),
-  (
-    '44600000-0000-4000-8000-000000000010', 4, 'module',
-    'vortex.bound_reader.transitive_module', '2.1.0',
-    'sha256:' || pg_catalog.repeat('f', 64), 'sha256:' || pg_catalog.repeat('e', 64),
-    '44600000-0000-4000-8000-000000000011', 5, null
-  );
+-- Every release is published through the writer, in the Application's own
+-- organisation. Application@1 declares only the direct Module, which declares
+-- the transitive Module, so the transitive Module is reached only through
+-- another Module. Application@2 declares the transitive Module; it is the
+-- other Application revision the mixed-revision case below needs.
+select pg_temp.append_writer_release(
+  '44600000-0000-4000-8000-000000000011', '2.1.0', '[]', '{}', '2.0.0'
+);
+select pg_temp.append_writer_release(
+  '44600000-0000-4000-8000-000000000010', '2.0.0',
+  '[["44600000-0000-4000-8000-000000000011", 1]]', '{}', '2.0.0'
+);
+select pg_temp.append_writer_release(
+  '44600000-0000-4000-8000-000000000012', '2.2.0', '[]', '{}', '2.0.0'
+);
+select pg_temp.append_writer_release(
+  '34600000-0000-4000-8000-000000000001', '1.0.0',
+  '[["44600000-0000-4000-8000-000000000010", 1]]'
+);
+select pg_temp.append_writer_release(
+  '34600000-0000-4000-8000-000000000001', '1.1.0',
+  '[["44600000-0000-4000-8000-000000000011", 1]]'
+);
 
 set local role vortex_module_owner;
 insert into vortex_module.installation_bindings (
@@ -248,28 +180,30 @@ insert into vortex_module.installation_bindings (
   application_release_revision, module_release_revision, state,
   content_fingerprint, resolution_fingerprint, generator_contract_version,
   storage_contract_ids
-) values
+)
+select '24600000-0000-4000-8000-000000000001', '34600000-0000-4000-8000-000000000001',
+  release.root_id, fixture.binding_revision, fixture.application_release_revision,
+  release.release_revision, fixture.state, release.content_fingerprint,
+  release.resolution_fingerprint, '1.0.0', array[fixture.storage_contract_id]
+from (values
   (
-    '24600000-0000-4000-8000-000000000001',
-    '34600000-0000-4000-8000-000000000001',
-    '44600000-0000-4000-8000-000000000010', 3, 1, 4, 'active',
-    'sha256:' || pg_catalog.repeat('b', 64), 'sha256:' || pg_catalog.repeat('a', 64),
-    '1.0.0', array['64600000-0000-4000-8000-000000000010'::uuid]
+    '44600000-0000-4000-8000-000000000010'::uuid, 3::bigint, 1::bigint, 'active',
+    '64600000-0000-4000-8000-000000000010'::uuid
   ),
   (
-    '24600000-0000-4000-8000-000000000001',
-    '34600000-0000-4000-8000-000000000001',
-    '44600000-0000-4000-8000-000000000011', 2, 1, 5, 'active',
-    'sha256:' || pg_catalog.repeat('f', 64), 'sha256:' || pg_catalog.repeat('e', 64),
-    '1.0.0', array['64600000-0000-4000-8000-000000000011'::uuid]
+    '44600000-0000-4000-8000-000000000011'::uuid, 2::bigint, 1::bigint, 'active',
+    '64600000-0000-4000-8000-000000000011'::uuid
   ),
   (
-    '24600000-0000-4000-8000-000000000001',
-    '34600000-0000-4000-8000-000000000001',
-    '44600000-0000-4000-8000-000000000012', 1, 2, 6, 'detached',
-    'sha256:' || pg_catalog.repeat('3', 64), 'sha256:' || pg_catalog.repeat('2', 64),
-    '1.0.0', array['64600000-0000-4000-8000-000000000012'::uuid]
-  );
+    '44600000-0000-4000-8000-000000000012'::uuid, 1::bigint, 2::bigint, 'detached',
+    '64600000-0000-4000-8000-000000000012'::uuid
+  )
+) as fixture(
+  module_root_id, binding_revision, application_release_revision, state, storage_contract_id
+)
+join vortex_definition.releases as release
+  on release.root_id = fixture.module_root_id
+  and release.release_revision = 1;
 reset role;
 
 select pg_temp.initialize_reader_context();
@@ -294,19 +228,19 @@ select is(
   vortex_definition.read_application_bound_release_set(1)
     #>> '{modules,0,rootId}',
   '44600000-0000-4000-8000-000000000010',
-  'an exact foreign-owned Module is readable only through the local Application dependency'
+  'the exact Module the Application release declares is included'
 );
 select is(
   vortex_definition.read_application_bound_release_set(1)
     #>> '{modules,1,rootId}',
   '44600000-0000-4000-8000-000000000011',
-  'the exact foreign-owned transitive Module dependency is included'
+  'the exact Module reached only through another Module is included'
 );
 select ok(
   not (
     vortex_definition.read_application_bound_release_set(1) -> 'modules'
   ) @> '[{"rootId":"44600000-0000-4000-8000-000000000012"}]'::jsonb,
-  'an unrelated foreign Module root is not included'
+  'an unrelated Module root is not included'
 );
 select ok(
   not (

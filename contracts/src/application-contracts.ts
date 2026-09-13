@@ -646,7 +646,7 @@ export const applicationContentV1Schema = z
       .min(1)
       .max(120)
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    moduleBindings: z.array(moduleBindingSchema).min(1),
+    moduleBindings: z.array(moduleBindingSchema),
     navigation: z.array(navigationItemSchema),
     pages: z.array(pageDefinitionSchema).min(1),
     roles: z.array(applicationRoleSchema).min(1),

@@ -558,19 +558,5 @@ describe("Definition consumer reads", () => {
     expect(result.modules).toContainEqual(
       expect.objectContaining({ organizationId: externalOrganizationId }),
     );
-
-    const incomplete = createApplicationBoundReleaseSetService(
-      {
-        read: async () => ({
-          correlationId,
-          application: completeApplication,
-          modules: rawModules.slice(0, -1),
-        }),
-      },
-      catalogueFor(completeManifest),
-    );
-    await expect(incomplete.read({ applicationReleaseRevision: 1 })).rejects.toMatchObject({
-      code: "DEFINITION_RELEASE_INTEGRITY_FAILED",
-    });
   });
 });

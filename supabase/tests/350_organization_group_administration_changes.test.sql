@@ -9,7 +9,8 @@ select no_plan();
 create function pg_temp.install_group_change_context(
   p_identity_id uuid,
   p_organization_account_id uuid,
-  p_correlation_id uuid
+  p_correlation_id uuid,
+  p_delegated boolean default false
 )
 returns void
 language plpgsql
@@ -19,13 +20,14 @@ as $function$
 declare
   operation_at timestamptz := pg_catalog.clock_timestamp();
   current_access_version bigint;
+  candidate jsonb;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   select version.current_version into strict current_access_version
   from vortex_access.organization_access_versions as version
   where version.organization_id = '23500000-0000-4000-8000-000000000001';
 
-  perform vortex_context.initialize(pg_catalog.jsonb_build_object(
+  candidate := pg_catalog.jsonb_build_object(
     'callerKind', 'human',
     'identityAuthorityId', '83500000-0000-4000-8000-000000000001',
     'tenantId', '13500000-0000-4000-8000-000000000001',
@@ -38,7 +40,18 @@ begin
     'expiresAt', operation_at + interval '1 hour',
     'accessVersion', current_access_version,
     'correlationId', p_correlation_id
-  ));
+  );
+  if p_delegated then
+    candidate := candidate || pg_catalog.jsonb_build_object(
+      'delegatedContext', pg_catalog.jsonb_build_object(
+        'delegatedByOrganizationAccountId',
+          '53500000-0000-4000-8000-000000000001',
+        'reason', 'Neutral Group-administration exclusion fixture.',
+        'expiresAt', operation_at + interval '10 minutes'
+      )
+    );
+  end if;
+  perform vortex_context.initialize(candidate);
 end
 $function$;
 
@@ -337,7 +350,7 @@ select pg_temp.install_group_change_context(
 set local role vortex_request;
 select results_eq(
   $$
-    select organization_id, group_summary, access_version
+    select outcome, organization_id, group_summary, access_version
     from vortex_access.create_organization_group_for_administration(
       '63500000-0000-4000-8000-000000000010',
       'review_group', 'Review group',
@@ -345,6 +358,7 @@ select results_eq(
     )
   $$,
   $$values (
+    'completed'::text,
     '23500000-0000-4000-8000-000000000001'::uuid,
     '{"key": "review_group", "label": "Review group", "state": "active", "groupId": "63500000-0000-4000-8000-000000000010", "revision": 1}'::jsonb,
     4::bigint
@@ -410,7 +424,7 @@ select pg_temp.install_group_change_context(
 set local role vortex_request;
 select results_eq(
   $$
-    select group_summary, access_version
+    select outcome, group_summary, access_version
     from vortex_access.rename_organization_group_for_administration(
       '63500000-0000-4000-8000-000000000010', 1,
       'Review group renamed',
@@ -418,6 +432,7 @@ select results_eq(
     )
   $$,
   $$values (
+    'completed'::text,
     '{"key": "review_group", "label": "Review group renamed", "state": "active", "groupId": "63500000-0000-4000-8000-000000000010", "revision": 2}'::jsonb,
     5::bigint
   )$$,
@@ -450,19 +465,85 @@ select pg_temp.install_group_change_context(
   'a3500000-0000-4000-8000-000000000012'
 );
 set local role vortex_request;
-select throws_ok(
+select results_eq(
   $$
-    select * from vortex_access.create_organization_group_for_administration(
+    select outcome, organization_id, group_summary, access_version
+    from vortex_access.create_organization_group_for_administration(
       '63500000-0000-4000-8000-000000000012',
       'unauthorized_group', 'Unauthorized group',
       'b3500000-0000-4000-8000-000000000012'
     )
   $$,
-  '42501'::char(5),
-  'Organization Group creation is unavailable',
-  'an active account without teams-manage authority cannot create a Group'
+  $$values (
+    'refused'::text,
+    '23500000-0000-4000-8000-000000000001'::uuid,
+    null::jsonb,
+    5::bigint
+  )$$,
+  'an active account without teams-manage authority receives one clean creation refusal'
+);
+select results_eq(
+  $$
+    select outcome, organization_id, group_summary, access_version
+    from vortex_access.rename_organization_group_for_administration(
+      '63500000-0000-4000-8000-000000000010', 2,
+      'Refused rename',
+      'b3500000-0000-4000-8000-000000000016'
+    )
+  $$,
+  $$values (
+    'refused'::text,
+    '23500000-0000-4000-8000-000000000001'::uuid,
+    null::jsonb,
+    5::bigint
+  )$$,
+  'an active account without teams-manage authority receives one clean rename refusal'
 );
 reset role;
+
+select is(
+  (
+    select pg_catalog.string_agg(
+      activity.activity_id::text || '|' || activity.action || '|' ||
+      activity.actor_kind || '|' || activity.actor_id::text || '|' ||
+      activity.subject_ids::text || '|' || activity.changed_field_ids::text || '|' ||
+      activity.source || '|' || activity.correlation_id::text || '|' ||
+      activity.outcome || '|' ||
+      (activity.occurred_at not in (
+        '-infinity'::timestamptz, 'infinity'::timestamptz
+      ))::text,
+      ',' order by activity.activity_id
+    )
+    from vortex_activity.organization_activity_entries as activity
+    where activity.organization_id = '23500000-0000-4000-8000-000000000001'
+      and activity.activity_id in (
+        'b3500000-0000-4000-8000-000000000012',
+        'b3500000-0000-4000-8000-000000000016'
+      )
+  ),
+  'b3500000-0000-4000-8000-000000000012|create_group|organization_account|53500000-0000-4000-8000-000000000002|{23500000-0000-4000-8000-000000000001}|{}|web|a3500000-0000-4000-8000-000000000012|refused|true,' ||
+  'b3500000-0000-4000-8000-000000000016|revise_group_label|organization_account|53500000-0000-4000-8000-000000000002|{23500000-0000-4000-8000-000000000001}|{}|web|a3500000-0000-4000-8000-000000000012|refused|true',
+  'clean Group refusals commit one fixed content-free entry for local organization scope'
+);
+
+select is(
+  (
+    select version.current_version::text || '|' ||
+      pg_catalog.count(unauthorized_group.group_id)::text || '|' ||
+      reviewed_group.revision::text || '|' || reviewed_group.label
+    from vortex_access.organization_access_versions as version
+    left join vortex_access.organization_groups as unauthorized_group
+      on unauthorized_group.organization_id = version.organization_id
+      and unauthorized_group.group_id = '63500000-0000-4000-8000-000000000012'
+    join vortex_access.organization_groups as reviewed_group
+      on reviewed_group.organization_id = version.organization_id
+      and reviewed_group.group_id = '63500000-0000-4000-8000-000000000010'
+    where version.organization_id = '23500000-0000-4000-8000-000000000001'
+    group by version.current_version, reviewed_group.revision, reviewed_group.label
+  ),
+  '5|0|2|Review group renamed',
+  'refused Group changes leave business state and Access version unchanged'
+);
 
 select pg_temp.install_group_change_context(
   '43500000-0000-4000-8000-000000000001',
@@ -519,7 +600,7 @@ select is(
     group by version.current_version, organization_group.revision,
       organization_group.label
   ),
-  '5|2|Review group renamed|2',
+  '5|2|Review group renamed|4',
   'permission, stale, foreign and unchanged refusals leave Group, Access and Activity exact'
 );
 
@@ -568,6 +649,94 @@ select is(
   ),
   '5|0|1',
   'the failed Activity composition leaves only its pre-existing fixture row'
+);
+
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000001',
+  '53500000-0000-4000-8000-000000000001',
+  'a3500000-0000-4000-8000-000000000031',
+  true
+);
+set local role vortex_request;
+select throws_ok(
+  $$
+    select * from vortex_access.create_organization_group_for_administration(
+      '63500000-0000-4000-8000-000000000031',
+      'delegated_group', 'Delegated group',
+      'b3500000-0000-4000-8000-000000000031'
+    )
+  $$,
+  '42501'::char(5),
+  'Organization Group creation is unavailable',
+  'an excluded delegated context keeps target-policy refusal outside Activity'
+);
+reset role;
+
+select is(
+  (
+    select version.current_version::text || '|' ||
+      pg_catalog.count(organization_group.group_id)::text || '|' ||
+      pg_catalog.count(activity.activity_id)::text
+    from vortex_access.organization_access_versions as version
+    left join vortex_access.organization_groups as organization_group
+      on organization_group.organization_id = version.organization_id
+      and organization_group.group_id = '63500000-0000-4000-8000-000000000031'
+    left join vortex_activity.organization_activity_entries as activity
+      on activity.organization_id = version.organization_id
+      and activity.activity_id = 'b3500000-0000-4000-8000-000000000031'
+    where version.organization_id = '23500000-0000-4000-8000-000000000001'
+    group by version.current_version
+  ),
+  '5|0|0',
+  'target-policy refusal leaves Group, Access version and Activity unchanged'
+);
+
+select vortex_activity.append_organization_activity_entry(
+  '23500000-0000-4000-8000-000000000001',
+  'b3500000-0000-4000-8000-000000000032',
+  pg_catalog.clock_timestamp(), 'organization_account',
+  '53500000-0000-4000-8000-000000000002', 'conflicting_activity',
+  array['23500000-0000-4000-8000-000000000001'::uuid], array[]::uuid[],
+  'web', 'a3500000-0000-4000-8000-000000000032', 'completed'
+);
+select pg_temp.install_group_change_context(
+  '43500000-0000-4000-8000-000000000002',
+  '53500000-0000-4000-8000-000000000002',
+  'a3500000-0000-4000-8000-000000000032'
+);
+set local role vortex_request;
+select throws_ok(
+  $$
+    select * from vortex_access.create_organization_group_for_administration(
+      '63500000-0000-4000-8000-000000000032',
+      'refusal_conflict_group', 'Refusal conflict group',
+      'b3500000-0000-4000-8000-000000000032'
+    )
+  $$,
+  '22023'::char(5),
+  'Activity identity already records different evidence',
+  'a conflicting refusal Activity aborts the refused Group request'
+);
+reset role;
+
+select is(
+  (
+    select version.current_version::text || '|' ||
+      pg_catalog.count(organization_group.group_id)::text || '|' ||
+      pg_catalog.count(activity.activity_id)::text || '|' ||
+      pg_catalog.min(activity.action)
+    from vortex_access.organization_access_versions as version
+    left join vortex_access.organization_groups as organization_group
+      on organization_group.organization_id = version.organization_id
+      and organization_group.group_id = '63500000-0000-4000-8000-000000000032'
+    left join vortex_activity.organization_activity_entries as activity
+      on activity.organization_id = version.organization_id
+      and activity.activity_id = 'b3500000-0000-4000-8000-000000000032'
+    where version.organization_id = '23500000-0000-4000-8000-000000000001'
+    group by version.current_version
+  ),
+  '5|0|1|conflicting_activity',
+  'refusal Activity conflict leaves no Group or Access mutation and preserves its fixture'
 );
 
 set local role vortex_request;
@@ -638,12 +807,15 @@ select pg_temp.install_group_change_context(
   'a3500000-0000-4000-8000-000000000042'
 );
 set local role vortex_request;
-select throws_ok(
+select results_eq(
   $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
     '73500000-0000-4000-8000-000000000001', 1,
     'b3500000-0000-4000-8000-000000000042')$$,
-  '42501'::char(5), 'Organization role-assignment revocation is unavailable',
-  'an account without assignment management authority cannot revoke'
+  $$values (
+    'refused'::text, '23500000-0000-4000-8000-000000000001'::uuid,
+    null::jsonb, 7::bigint
+  )$$,
+  'an account without assignment management authority records and returns one clean refusal'
 );
 select throws_ok(
   $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
@@ -752,14 +924,42 @@ select pg_temp.install_group_change_context(
   'a3500000-0000-4000-8000-000000000047'
 );
 set local role vortex_request;
-select throws_ok(
+select results_eq(
   $$select * from vortex_access.revoke_organization_role_assignment_for_administration(
     '73500000-0000-4000-8000-000000000020', 1,
     'b3500000-0000-4000-8000-000000000047')$$,
-  '42501'::char(5), 'Organization role-assignment revocation is unavailable',
-  'a partial bounded delegation cannot revoke a wider accepted role scope'
+  $$values (
+    'refused'::text, '23500000-0000-4000-8000-000000000001'::uuid,
+    null::jsonb, 9::bigint
+  )$$,
+  'a partial bounded delegation records and returns one clean refusal'
 );
 reset role;
+
+select is(
+  (
+    select pg_catalog.string_agg(
+      activity.activity_id::text || '|' || activity.action || '|' ||
+      activity.actor_id::text || '|' || activity.subject_ids::text || '|' ||
+      activity.changed_field_ids::text || '|' || activity.source || '|' ||
+      activity.correlation_id::text || '|' || activity.outcome,
+      ',' order by activity.activity_id
+    )
+    from vortex_activity.organization_activity_entries as activity
+    where activity.organization_id = '23500000-0000-4000-8000-000000000001'
+      and activity.activity_id in (
+        'b3500000-0000-4000-8000-000000000042',
+        'b3500000-0000-4000-8000-000000000047'
+      )
+  ),
+  'b3500000-0000-4000-8000-000000000042|revoke_role_assignment|' ||
+    '53500000-0000-4000-8000-000000000002|{23500000-0000-4000-8000-000000000001}|{}|' ||
+    'web|a3500000-0000-4000-8000-000000000042|refused,' ||
+  'b3500000-0000-4000-8000-000000000047|revoke_role_assignment|' ||
+    '53500000-0000-4000-8000-000000000002|{23500000-0000-4000-8000-000000000001}|{}|' ||
+    'web|a3500000-0000-4000-8000-000000000047|refused',
+  'assignment refusals keep only fixed organization-scoped content-free Activity evidence'
+);
 
 set constraints all deferred;
 insert into vortex_access.organization_roles (

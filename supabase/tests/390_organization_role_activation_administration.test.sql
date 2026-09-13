@@ -202,7 +202,7 @@ declare
   operation_at timestamptz := pg_catalog.clock_timestamp();
   current_access_version bigint;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   select version.current_version into strict current_access_version
   from vortex_access.organization_access_versions as version
   where version.organization_id = p_organization_id;
@@ -821,14 +821,29 @@ select pg_temp.install_activation_read_context(
   '53900000-0000-4000-8000-000000000002'
 );
 set local role vortex_request;
-select throws_ok(
-  $$ select * from vortex_access.deactivate_organization_role_activation_for_administration(
+select results_eq(
+  $$ select outcome, activation_summary is null
+     from vortex_access.deactivate_organization_role_activation_for_administration(
     '63900000-0000-4000-8000-000000000096', 1,
     'a3900000-0000-4000-8000-000000000104') $$,
-  '42501'::char(5), null,
-  'partial coverage of the immutable historical activation scope is refused'
+  $$ values ('refused'::text, true) $$,
+  'partial coverage records and returns one clean refusal of the immutable historical activation scope'
 );
 reset role;
+select is(
+  (
+    select activity.action || '|' || activity.actor_id::text || '|' ||
+      activity.subject_ids::text || '|' || activity.changed_field_ids::text || '|' ||
+      activity.source || '|' || activity.correlation_id::text || '|' || activity.outcome
+    from vortex_activity.organization_activity_entries as activity
+    where activity.organization_id = '23900000-0000-4000-8000-000000000001'
+      and activity.activity_id = 'a3900000-0000-4000-8000-000000000104'
+  ),
+  'revoke_role_activation|53900000-0000-4000-8000-000000000002|' ||
+    '{23900000-0000-4000-8000-000000000001}|{}|web|' ||
+    'a3900000-0000-4000-8000-000000000099|refused',
+  'activation refusal keeps only fixed organization-scoped content-free Activity evidence'
+);
 select is(
   (select state || '|' || revision::text
    from vortex_access.organization_role_activations

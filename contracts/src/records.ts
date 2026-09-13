@@ -6,6 +6,7 @@ import {
   fieldIdSchema,
   moduleRootIdSchema,
   organizationIdSchema,
+  groupIdSchema,
   platformIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
@@ -51,7 +52,13 @@ const saveRecordCommandFields = {
 };
 
 export const saveRecordCommandV2Schema = z.discriminatedUnion("operation", [
-  z.object({ ...saveRecordCommandFields, operation: z.literal("create") }).strict(),
+  z
+    .object({
+      ...saveRecordCommandFields,
+      operation: z.literal("create"),
+      selectedOwnerGroupId: groupIdSchema.optional(),
+    })
+    .strict(),
   z
     .object({
       ...saveRecordCommandFields,

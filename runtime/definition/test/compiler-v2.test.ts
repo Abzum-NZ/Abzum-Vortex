@@ -1450,7 +1450,7 @@ const v2StoreRunner = (rows: readonly DatabaseRow[]) => {
 const fixtureJson = (relativePath: string): unknown =>
   JSON.parse(fs.readFileSync(path.join(fixtureRoot, relativePath), "utf8"));
 
-const dependencyModuleReleases = (): ResolvableModuleRelease[] => {
+const buildDependencyModuleReleases = (): ResolvableModuleRelease[] => {
   const sources = fs
     .readdirSync(path.join(fixtureRoot, "modules"))
     .filter((name) => name.endsWith(".json"))
@@ -1507,6 +1507,9 @@ const dependencyModuleReleases = (): ResolvableModuleRelease[] => {
     };
   });
 };
+
+// A pure function of the fixtures: compiled once for the file instead of once per test.
+const dependencyModuleReleases = buildDependencyModuleReleases();
 
 const publicationCatalogueV2 = async () => {
   const seed = createCatalogueSnapshot();
@@ -1725,7 +1728,7 @@ describe("native Application V2 draft storage", () => {
       ),
       history: { kind: "application", definitionKey: source.key, history: [] },
     };
-    const repository = new V2PublicationRepository(candidate, dependencyModuleReleases());
+    const repository = new V2PublicationRepository(candidate, dependencyModuleReleases);
     const context = sessionContextSchema.parse({
       callerKind: "system",
       tenantId: id(1201),
@@ -1974,7 +1977,7 @@ describe("native Application V2 draft storage", () => {
 
   it("publishes symmetric representation transitions as major and a native V2 follow-up natively", async () => {
     const { source: sourceV2, catalogue } = await publicationCatalogueV2();
-    const modules = dependencyModuleReleases();
+    const modules = dependencyModuleReleases;
     const context = sessionContextSchema.parse({
       callerKind: "system",
       tenantId: id(1201),

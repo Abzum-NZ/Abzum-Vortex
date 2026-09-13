@@ -130,6 +130,26 @@
       "migration": "supabase/migrations/20260908122641_record_storage_provisioning.sql",
       "proof": "supabase/tests/module-storage-provisioning-concurrency.test.sh",
       "label": "Module storage provisioning"
+    },
+    {
+      "migration": "supabase/migrations/20260910114716_coordinate_protected_record_share.sql",
+      "proof": "supabase/tests/protected-record-share-authority-concurrency.test.sh",
+      "label": "Protected record-share authority"
+    },
+    {
+      "migration": "supabase/migrations/20260912011556_fixed_record_adapters.sql",
+      "proof": "supabase/tests/record-change-concurrency.test.sh",
+      "label": "Record change"
+    },
+    {
+      "migration": "supabase/migrations/20260913060000_first_private_transactional_event_append.sql",
+      "proof": "supabase/tests/event-append-concurrency.test.sh",
+      "label": "Event append"
+    },
+    {
+      "migration": "supabase/migrations/20260913110000_organization_runtime_settings.sql",
+      "proof": "supabase/tests/organization-runtime-settings-concurrency.test.sh",
+      "label": "Organization runtime settings"
     }
   ],
   "lintSchemas": [
@@ -141,6 +161,7 @@
     "vortex_activity",
     "vortex_module",
     "vortex_record",
+    "vortex_event",
     "record_data"
   ]
 }

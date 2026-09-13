@@ -540,57 +540,48 @@ select throws_ok(
   '22023', 'Record ownership evidence is invalid',
   'malformed direct-owner evidence refuses before all-record routing'
 );
-select throws_ok(
-  $$select * from pg_temp.ownership_result(
+-- The six shape-refusal cases formerly asserted here (an all_records route
+-- plus another route, an unrecognised route kind, a relationship route with
+-- a null identity, duplicate routes, noncanonical route order, and a
+-- relationship route with a non-platform UUID identity) exercised this
+-- function's own re-validation of `p_permission_record_scope`. That
+-- re-validation is now the store's job
+-- (vortex_access.permission_record_scope_is_valid,
+-- permission_catalogue_entries_record_scope_value,
+-- 20260911101613_constrain_permission_record_scope_shape.sql): none of
+-- those shapes can reach this function through any real caller any more,
+-- because inserting a catalogue row with one of them is refused first (see
+-- 340_permission_registry_record_scope.test.sql for the store refusals and
+-- 470_permission_record_scope_parity.test.sql for the full shared corpus).
+-- Calling this owner-only function directly with such a shape -- which no
+-- real caller does -- no longer raises; it now reads only the two route
+-- kinds this function's row-dependent logic consumes and falls through to
+-- an ordinary admitted/not-admitted verdict, demonstrated below.
+select is(
+  (select admitted from pg_temp.ownership_result(
     '{"routes":[{"kind":"all_records"},{"kind":"ownership"}]}'::jsonb,
     'none', pg_temp.record_identity('e3800000-0000-4000-8000-000000000022')
-  )$$,
-  '22023', 'The all-record route must be the sole base route',
-  'invalid all-record route composition refuses'
+  )),
+  true,
+  'a shape the store now refuses no longer reaches a re-validation here; an all-record route still admits unconditionally'
 );
-select throws_ok(
-  $$select * from pg_temp.ownership_result(
+select is(
+  (select admitted from pg_temp.ownership_result(
     '{"routes":[{"kind":"future_route"}]}'::jsonb,
     'none', pg_temp.record_identity('e3800000-0000-4000-8000-000000000023')
-  )$$,
-  '22023', 'Permission record scope route is invalid',
-  'an arbitrary route language refuses'
+  )),
+  false,
+  'an unrecognised route kind no longer raises; it simply contributes no admission flag'
 );
-select throws_ok(
-  $$select * from pg_temp.ownership_result(
-    '{"routes":[{"kind":"relationship","relationshipId":null,"sourcePermissionId":"63800000-0000-4000-8000-000000000101"}]}'::jsonb,
-    'none', pg_temp.record_identity('e3800000-0000-4000-8000-000000000024')
-  )$$,
-  '22023', 'Permission record scope route is invalid',
-  'a relationship route with null identity refuses'
-);
-select throws_ok(
-  $$select * from pg_temp.ownership_result(
+select is(
+  (select admitted from pg_temp.ownership_result(
     '{"routes":[{"kind":"ownership"},{"kind":"direct_share"},{"kind":"direct_share"}]}'::jsonb,
     'organization_account',
     pg_temp.record_identity('e3800000-0000-4000-8000-000000000029'),
     '73800000-0000-4000-8000-000000000001'
-  )$$,
-  '22023', 'Permission record scope routes are invalid',
-  'duplicate route identity refuses instead of being ignored by a supported route'
-);
-select throws_ok(
-  $$select * from pg_temp.ownership_result(
-    '{"routes":[{"kind":"direct_share"},{"kind":"ownership"}]}'::jsonb,
-    'organization_account',
-    pg_temp.record_identity('e3800000-0000-4000-8000-000000000030'),
-    '73800000-0000-4000-8000-000000000001'
-  )$$,
-  '22023', 'Permission record scope routes are invalid',
-  'noncanonical route order refuses'
-);
-select throws_ok(
-  $$select * from pg_temp.ownership_result(
-    '{"routes":[{"kind":"relationship","relationshipId":"123e4567-e89b-02d3-a456-426614174000","sourcePermissionId":"63800000-0000-4000-8000-000000000101"}]}'::jsonb,
-    'none', pg_temp.record_identity('e3800000-0000-4000-8000-000000000031')
-  )$$,
-  '22023', 'Permission record scope route is invalid',
-  'a relationship route with a non-platform UUID identity refuses'
+  )),
+  true,
+  'duplicate and noncanonically ordered routes no longer raise; a present ownership route still admits the matching current account'
 );
 select throws_ok(
   $$select * from pg_temp.ownership_result(
@@ -942,7 +933,7 @@ begin
     and vortex_access.evaluate_permission_saved_condition(
       permission_scope,
       '{"conditionId":"c3800000-0000-4000-8000-000000000001","sourceRecordTypeId":"53800000-0000-4000-8000-000000000001","publishedRevision":1,"contractFingerprint":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","parameters":[{"key":"actor","type":"text"}],"condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3800000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"actor"}},"declaredFieldIds":["f3800000-0000-4000-8000-000000000001"]}'::jsonb,
-      '{"recordTypeId":"53800000-0000-4000-8000-000000000001","fields":[{"fieldId":"f3800000-0000-4000-8000-000000000001","type":"text"}]}'::jsonb,
+      '{"recordTypeId":"53800000-0000-4000-8000-000000000001","validationContractVersion":"1.0.0","fields":[{"fieldId":"f3800000-0000-4000-8000-000000000001","type":"text"}]}'::jsonb,
       candidate.field_values,
       decision.organization_account_id
     )

@@ -19,6 +19,12 @@ Every record stores or exposes through one joined system record:
 
 Exact columns are defined in the [data contracts](appendices/data-contracts.md#record-storage-contract).
 
+Initial account ownership is the creator; initial Group ownership requires a
+selected current membership Group. Protected ownership transfer, account
+offboarding, per-record-type lifecycle limits and automatic deadline calculations
+follow [record ownership and lifecycle policies](appendices/record-ownership-and-lifecycle.md).
+These are required engine behaviours, not ordinary editable system fields.
+
 The record's physical table follows its storage contract, not the name of the organisation, application, module, or record type. Consequently, two organisations can each own an application named CRM without colliding, and CRM and Service Desk can use one organisation-owned Company record without copying it. The complete allocation rule is in [runtime storage](17-runtime-storage-and-caching.md#record-table-allocation).
 
 ## Save sequence
@@ -70,7 +76,7 @@ not saved. A Require-field node accumulates a check until the final candidate
 exists, including any generated value. Explicit Refuse still stops immediately.
 See the [save integration plan](../build-plan/issue-47-save-command.md#candidate-preparation-and-final-validation).
 
-This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). In the target runtime, a configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. The actual protected Record execution and receipt boundary remains owned by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47); this flow description does not claim it is delivered.
+This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). A configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) now has a local base ordinary-human create/update implementation over active installed definitions; it remains under review and pending hosted verification. Immediate Rules, calculations/totals, named-action execution and broader relationships retain the later owners in the [save plan](../build-plan/issue-47-save-command.md#supported-now-and-later-owners).
 
 ## Concurrent changes
 
@@ -80,7 +86,16 @@ Clients may present a comparison and allow the person to reapply their changes. 
 
 ## Reference numbers
 
-Reference numbers are issued inside the save transaction from an organisation-and-record-type sequence. A rolled-back transaction may leave a gap. Numbers are unique but are not promised to be continuous.
+Reference numbers are issued inside the owning record transaction from one
+locked counter per organisation, storage contract, field, and application root
+when the storage is application-contained. Organisation-shared storage uses a
+real application-less scope; it does not substitute a sentinel application.
+An omitted published `startingNumber` means `1`, while an explicit positive
+integer overrides it. `digits` is a minimum zero-padding width and never
+truncates a larger value; published prefix and suffix text are preserved.
+Rolled-back allocation rolls back with the record, while a committed transaction
+may leave a gap after later permanent removal. Numbers are unique but are not
+promised to be continuous.
 
 ## Uniqueness
 
@@ -107,9 +122,16 @@ stateDiagram-v2
 
 - Soft-deleted records are excluded from ordinary reads, search, totals, choices, and relationship navigation.
 - A deleted record and its directly owned files remain recoverable for the configured recovery period.
-- Relationship deletion behaviour from [modules, fields and relationships](05-modules-fields-and-relationships.md) is applied in a deterministic order.
-- Restore revalidates required relationships, access, and the current published record definition. Its unique values remain reserved throughout recovery, so restoration cannot conflict with a value accepted during the recovery window.
+- Relationship deletion behaviour from [modules, fields and relationships](05-modules-fields-and-relationships.md) is applied in a deterministic order. Refuse needs no child mutation permission; emptying an optional child link requires current update access to that child, and soft-deleting an exact inherited-owner dependent requires current delete access to that child. Parent delete authority is still required.
+- Restore revalidates current restore access and the current published record definition. Before reactivation, every currently required non-link value must still be present, non-null and canonical for its storage type, and every currently required fixed-target link must agree with exactly one retained edge to a locked, active target the person may read. Complete settings and live-reference validation of the final record remains part of the [protected save command](../build-plan/issue-47-save-command.md), not this private lifecycle primitive. Its unique values remain reserved throughout recovery, so restoration cannot conflict with a value accepted during the recovery window.
 - Permanent removal follows [privacy and retention](14-activity-privacy-and-retention.md) and records an irreversible-removal receipt without retaining the removed business content.
+
+The private create/delete/restore primitives delivered before the full save
+pipeline retain the row and recovery facts but do not decide whether a recovery
+window is still open. That policy belongs to the organisation and record-type
+lifecycle integration in [#408](https://github.com/Abzum-NZ/Abzum-Vortex/issues/408)
+and [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117); their absence is
+not treated as an unlimited-retention default.
 
 ## Bulk changes
 

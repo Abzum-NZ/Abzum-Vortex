@@ -2,6 +2,7 @@ import {
   applicationDefinitionConsumerReadResultV1Schema,
   moduleDefinitionConsumerReadResultV1Schema,
   moduleDefinitionConsumerReadResultV2Schema,
+  moduleDefinitionConsumerReadResultV3Schema,
   type EventOccurrenceEnvelopeV2,
   type InstalledEventDescriptor,
 } from "@vortex/contracts";
@@ -98,8 +99,14 @@ const moduleV1 = moduleDefinitionConsumerReadResultV1Schema.parse({
   releaseVersion: "1.0.0",
   validationContractVersion: "1.0.0",
 });
+const moduleV3 = moduleDefinitionConsumerReadResultV3Schema.parse({
+  ...moduleV2,
+  releaseRevision: 5,
+  releaseVersion: "3.0.0",
+  validationContractVersion: "3.0.0",
+});
 
-type ModuleRead = typeof moduleV1 | typeof moduleV2;
+type ModuleRead = typeof moduleV1 | typeof moduleV2 | typeof moduleV3;
 
 const applicationFor = (module: ModuleRead) => {
   const content = {
@@ -224,19 +231,23 @@ const applicationFor = (module: ModuleRead) => {
 const inputFor = (module: ModuleRead) => {
   const application = applicationFor(module);
   return {
-    application,
-    modules: [module],
-    bindings: [
-      {
-        organizationId,
-        applicationRootId,
-        moduleRootId,
-        bindingRevision: 7,
-        applicationReleaseRevision: application.releaseRevision,
-        moduleReleaseRevision: module.releaseRevision,
-        state: "active" as const,
-      },
-    ],
+    definitions: { application, modules: [module] },
+    installation: {
+      organizationId,
+      applicationRootId,
+      applicationReleaseRevision: application.releaseRevision,
+      moduleBindings: [
+        {
+          organizationId,
+          applicationRootId,
+          moduleRootId,
+          bindingRevision: 7,
+          applicationReleaseRevision: application.releaseRevision,
+          moduleReleaseRevision: module.releaseRevision,
+          state: "active" as const,
+        },
+      ],
+    },
   };
 };
 
@@ -335,6 +346,22 @@ describe("installed event occurrence validation", () => {
           ),
         "INSTALLED_EVENT_OCCURRENCE_PAYLOAD_INVALID",
       );
+  });
+
+  it("uses Module V3 field semantics through the same Record checker", () => {
+    const descriptor = descriptorFor(
+      moduleV3,
+      (candidate) => candidate.kind === "declared" && candidate.declarationId === moduleEventId,
+    );
+    expect(
+      validateInstalledEventOccurrence(
+        inputFor(moduleV3),
+        occurrenceFor(moduleV3, descriptor, {
+          kind: "declared",
+          carriedValues: { [safeFieldId]: "yes" },
+        }),
+      ).payload,
+    ).toEqual({ kind: "declared", carriedValues: { [safeFieldId]: "yes" } });
   });
 
   it("uses historical V1 field settings through the same Record checker", () => {

@@ -13,14 +13,38 @@ workspace package and not an application data model.
 
 ## Local database gate
 
-A Docker-compatible container runtime must be running. From the repository
-root:
+A Docker-compatible container runtime must be running. From the repository root:
 
 ```text
-pnpm db:start
 pnpm db:verify
-pnpm db:stop
 ```
+
+`db:test`, `db:concurrency`, `db:lint` and `db:verify` each verify against their own fresh,
+database-only Postgres cluster: a disposable `vortex-verify-<id>` container and Docker network,
+started from the pinned Supabase Postgres image (the same image the Local stack and hosted
+Testing/Production use), migrated and seeded from the current working tree, and removed once the
+run finishes. The container and the network both carry a `vortex.verify.worktree=<absolute path>`
+label naming the exact worktree that started them, plus a `vortex.verify.run=<id>` label, and the
+cluster's name is printed as soon as it exists — `verification cluster: vortex-verify-<id> (network
+vortex-verify-<id>-net)` — so its owner never has to guess it from timing. `db:verify` runs pgTAP,
+the concurrency proofs and lint against that one cluster and no longer begins with `pnpm db:reset`.
+None of the four touch the Local stack (`supabase_db_*`) or any other worktree's cluster, so
+independent worktrees — and independent agents — can run any of them at the same time without
+sequencing. A cluster is kept, unremoved, only when its run fails, so its container can be inspected
+for diagnosis; the failure output names the kept cluster and its owner label. Run `pnpm db:clean`
+from the same worktree to remove every cluster it left behind: it selects strictly by that
+worktree's own `vortex.verify.worktree` label, never by container or network name, so it can never
+remove another worktree's — or another agent's — cluster; it prints each container and network it
+removes, and says plainly when there is nothing to remove.
+Because each run starts from a fresh cluster, `db:verify` proves tenant hierarchy, invitation
+acceptance, Access-version increments, organisation-context suspension/version races, lifecycle and
+Definition publication races through two real database connections on a database only this run has
+touched, and fails on a database lint error. It is separate from `pnpm verify`: Vercel previews and
+ordinary pull-request checks remain database-free.
+
+The Local stack (`pnpm db:start` / `pnpm db:stop` / `pnpm db:reset`) is unrelated to `db:verify` and
+still exists for interactive local development and the local auth proof below; it is never reset or
+otherwise touched by verification.
 
 `pnpm db:start` first generates a Local-only P-256 `ES256` signing key through the pinned Supabase
 CLI. The private key stays under the ignored `supabase/.temp` directory; a clean checkout creates its
@@ -37,17 +61,13 @@ may call the existing idempotent ensure operation once; ordinary protected resol
 read operation so a missing projection is never recreated as a side effect of checking liveness.
 Supabase Auth remains the durable session store and Vortex adds no database session relation.
 
-`db:verify` rebuilds the local database from committed migrations and seed
-data, runs every pgTAP test, proves tenant hierarchy, invitation acceptance, Access-version increments,
-organisation-context suspension/version races, lifecycle and Definition publication races through two real database connections, and fails database lint on errors. It is separate
-from `pnpm verify`: Vercel previews and ordinary pull-request checks remain
-database-free.
-
-Lint is restricted to Vortex-owned schemas. The database baseline covers
-`public`, `vortex_context`, and the private `vortex_identity`, `vortex_definition` and `vortex_access` schemas. Each
-issue that introduces another private service schema must add it to the local and operated lint
-commands in the same change. Supabase-managed extension functions are deliberately excluded because
-their diagnostics are owned by the installed platform image, not this repository.
+Lint is restricted to Vortex-owned schemas. The database baseline covers `public`, and the private
+`vortex_context`, `vortex_identity`, `vortex_definition`, `vortex_access`, `vortex_activity`,
+`vortex_module` and `vortex_record` schemas, plus the generated `record_data` schema. Each issue
+that introduces another private service schema must add it to
+`workflows/kestra/database-verification.json`, which both the local and operated lint commands read
+their schema list from. Supabase-managed extension functions are deliberately excluded because their
+diagnostics are owned by the installed platform image, not this repository.
 
 ## Roles and request context
 
@@ -75,12 +95,17 @@ The Supabase project owner is an operational credential used by Kestra for
 migrations and controlled database verification. Vercel never receives it.
 The server runtime instead connects as the restricted `vortex_runtime` login.
 Inside one explicit transaction, that role establishes one complete
-transaction-local context through its private initializer and then enters the
-non-login `vortex_request` role with `SET LOCAL ROLE` before protected work.
+transaction-local context through its private initializer, which stores the
+validated context in the owner-only `vortex_context.request_contexts` row for the
+current backend and transaction and refuses re-establishment; a value written
+into any session setting is ignored, and neither login role can read or write the
+table. It then enters the non-login `vortex_request` role with `SET LOCAL ROLE`
+before protected work.
 Only `vortex_runtime` may execute the initializer; only `vortex_request` may
 execute the read-only context accessors used by policies and service SQL.
-Commit or rollback clears the role and context before a pooled connection can
-be reused.
+Commit or rollback ends the transaction-local role. The context row outlives the
+transaction but is bound to its identifier, so no later transaction on a pooled
+connection can read it; each must establish its own.
 
 For a human organisation request, the browser supplies only one untrusted
 organisation identifier. The Identity service resolves the exact active identity,
@@ -95,6 +120,9 @@ standalone Access-version reads are not runtime grants.
 Local and pgTAP checks may connect as the local owner and switch to the request
 role to prove its restrictions. An owner-control assertion may prove that a
 refused row exists, but it never represents an application success path.
+A suite that switches account mid-transaction clears the owner row
+(`delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();`)
+before initialising again.
 
 Before the Access service is available, the private Definition entry points accept only a validated
 system context. They derive tenant, organisation, actor, and time from trusted context/database state,

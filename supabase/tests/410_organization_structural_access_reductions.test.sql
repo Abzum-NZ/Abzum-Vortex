@@ -20,7 +20,7 @@ declare
   operation_at timestamptz := pg_catalog.clock_timestamp();
   current_access_version bigint;
 begin
-  perform pg_catalog.set_config('vortex.request_context', '', true);
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   select version.current_version into strict current_access_version
   from vortex_access.organization_access_versions as version
   where version.organization_id = '24100000-0000-4000-8000-000000000001';
@@ -103,7 +103,7 @@ select has_function(
 );
 select has_function(
   'vortex_access', 'prepare_organization_role_metadata_change_for_administration',
-  array['uuid', 'bigint'],
+  array['uuid', 'bigint', 'uuid'],
   'Access exposes one authority-checked private role metadata preparation'
 );
 select has_function(
@@ -125,7 +125,7 @@ select is(
     join pg_catalog.pg_roles as owner_role
       on owner_role.oid = procedure_row.proowner
     where procedure_row.oid in (
-      'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint)'::regprocedure,
+      'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint,uuid)'::regprocedure,
       'vortex_access.retire_organization_group_for_administration(uuid,bigint,uuid)'::regprocedure,
       'vortex_access.remove_organization_group_membership_for_administration(uuid,bigint,uuid)'::regprocedure,
       'vortex_access.revise_organization_role_metadata_for_administration(uuid,bigint,text,text,jsonb,uuid)'::regprocedure,
@@ -165,7 +165,7 @@ select is(
 select ok(
   pg_catalog.has_function_privilege(
     'vortex_request',
-    'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint)',
+    'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint,uuid)',
     'EXECUTE'
   ) and pg_catalog.has_function_privilege(
     'vortex_request',
@@ -190,7 +190,7 @@ select ok(
 select ok(
   not pg_catalog.has_function_privilege(
     caller.role_name,
-    'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint)',
+    'vortex_access.prepare_organization_role_metadata_change_for_administration(uuid,bigint,uuid)',
     'EXECUTE'
   ) and not pg_catalog.has_function_privilege(
     caller.role_name,
@@ -278,6 +278,12 @@ insert into vortex_identity.identity_projections (
     pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
     '94100000-0000-4000-8000-000000000001',
     'a4100000-0000-4000-8000-000000000002', 1
+  ),
+  (
+    '44100000-0000-4000-8000-000000000003', 'active',
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '94100000-0000-4000-8000-000000000001',
+    'a4100000-0000-4000-8000-000000000035', 1
   );
 
 insert into vortex_identity.organization_accounts (
@@ -300,6 +306,14 @@ insert into vortex_identity.organization_accounts (
     pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
     pg_catalog.clock_timestamp(), '94100000-0000-4000-8000-000000000001',
     'a4100000-0000-4000-8000-000000000004', 1
+  ),
+  (
+    '54100000-0000-4000-8000-000000000003',
+    '24100000-0000-4000-8000-000000000001',
+    '44100000-0000-4000-8000-000000000003', 'Unprivileged account', 'active',
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    pg_catalog.clock_timestamp(), '94100000-0000-4000-8000-000000000001',
+    'a4100000-0000-4000-8000-000000000036', 1
   );
 
 select * from vortex_access.initialize_organization_access_version(
@@ -487,12 +501,16 @@ select pg_temp.install_structural_reduction_context(
   'a4100000-0000-4000-8000-000000000020'
 );
 set local role vortex_request;
-select throws_ok(
-  $$select * from vortex_access.retire_organization_group_for_administration(
+select results_eq(
+  $$select outcome, group_summary is null, organization_id, access_version
+    from vortex_access.retire_organization_group_for_administration(
     '64100000-0000-4000-8000-000000000020', 1,
     'b4100000-0000-4000-8000-000000000020')$$,
-  '42501'::char(5), 'Organization Group retirement is unavailable',
-  'fixed Group management without the complete retained authority cannot retire a Group'
+  $$select 'refused'::text, true,
+      '24100000-0000-4000-8000-000000000001'::uuid, checkpoint.access_version
+    from structural_reduction_versions as checkpoint
+    where checkpoint.step = 'group_retirement'$$,
+  'fixed Group management without complete retained authority records one clean refusal'
 );
 reset role;
 
@@ -584,6 +602,25 @@ from vortex_access.organization_access_versions as version
 where version.organization_id = '24100000-0000-4000-8000-000000000001';
 
 select pg_temp.install_structural_reduction_context(
+  '44100000-0000-4000-8000-000000000003',
+  '54100000-0000-4000-8000-000000000003',
+  'a4100000-0000-4000-8000-000000000032'
+);
+set local role vortex_request;
+select results_eq(
+  $$select outcome, membership_summary is null, organization_id, access_version
+    from vortex_access.remove_organization_group_membership_for_administration(
+      '74100000-0000-4000-8000-000000000020', 1,
+      'b4100000-0000-4000-8000-000000000032')$$,
+  $$select 'refused'::text, true,
+      '24100000-0000-4000-8000-000000000001'::uuid, checkpoint.access_version
+    from structural_reduction_versions as checkpoint
+    where checkpoint.step = 'membership_removal'$$,
+  'incomplete retained Group authority records one clean membership-removal refusal'
+);
+reset role;
+
+select pg_temp.install_structural_reduction_context(
   '44100000-0000-4000-8000-000000000001',
   '54100000-0000-4000-8000-000000000001',
   'a4100000-0000-4000-8000-000000000022'
@@ -652,16 +689,28 @@ select pg_temp.install_structural_reduction_context(
   'a4100000-0000-4000-8000-000000000023'
 );
 set local role vortex_request;
-select throws_ok(
-  $$select *
+select results_eq(
+  $$select outcome, candidate_basis is null, organization_id, access_version
     from vortex_access.prepare_organization_role_metadata_change_for_administration(
-      '64100000-0000-4000-8000-000000000011', 1
+      '64100000-0000-4000-8000-000000000011', 1,
+      'b4100000-0000-4000-8000-000000000023'
     )$$,
-  '42501'::char(5), 'Organization role metadata preparation is unavailable',
-  'metadata preparation does not disclose private policy evidence without complete authority'
+  $$select 'refused'::text, true,
+      '24100000-0000-4000-8000-000000000001'::uuid, checkpoint.access_version
+    from structural_reduction_versions as checkpoint
+    where checkpoint.step = 'metadata_revision'$$,
+  'metadata preparation records a clean refusal without disclosing private policy evidence'
 );
-select throws_ok(
-  $$select * from vortex_access.revise_organization_role_metadata_for_administration(
+reset role;
+select pg_temp.install_structural_reduction_context(
+  '44100000-0000-4000-8000-000000000002',
+  '54100000-0000-4000-8000-000000000002',
+  'a4100000-0000-4000-8000-000000000033'
+);
+set local role vortex_request;
+select results_eq(
+  $$select outcome, role_summary is null, organization_id, access_version
+    from vortex_access.revise_organization_role_metadata_for_administration(
     '64100000-0000-4000-8000-000000000011', 1,
     'Reviewed role renamed', 'Revised metadata with unchanged authority.',
     jsonb_build_object(
@@ -678,9 +727,12 @@ select throws_ok(
       ),
       'roleCandidateFingerprint',
         'sha256:fed12065425113be3d4deb76876c7b71cdbc5150c7aa99c3bc5ecadc023ec0c8'
-    ), 'b4100000-0000-4000-8000-000000000023')$$,
-  '42501'::char(5), 'Organization role metadata revision is unavailable',
-  'role management without complete current accepted scope cannot revise metadata'
+    ), 'b4100000-0000-4000-8000-000000000033')$$,
+  $$select 'refused'::text, true,
+      '24100000-0000-4000-8000-000000000001'::uuid, checkpoint.access_version
+    from structural_reduction_versions as checkpoint
+    where checkpoint.step = 'metadata_revision'$$,
+  'role management without complete current accepted scope records one clean metadata refusal'
 );
 reset role;
 
@@ -698,7 +750,8 @@ select results_eq(
       candidate_basis #>> '{assignmentPolicy,kind}',
       organization_id, access_version
     from vortex_access.prepare_organization_role_metadata_change_for_administration(
-      '64100000-0000-4000-8000-000000000011', 1
+      '64100000-0000-4000-8000-000000000011', 1,
+      'b4100000-0000-4000-8000-000000000024'
     )$$,
   $$select 'revise_metadata_policy'::text,
       '24100000-0000-4000-8000-000000000001'::text,
@@ -846,6 +899,34 @@ from vortex_access.organization_access_versions as version
 where version.organization_id = '24100000-0000-4000-8000-000000000001';
 
 select pg_temp.install_structural_reduction_context(
+  '44100000-0000-4000-8000-000000000002',
+  '54100000-0000-4000-8000-000000000002',
+  'a4100000-0000-4000-8000-000000000034'
+);
+set local role vortex_request;
+select results_eq(
+  $$select outcome, role_summary is null, organization_id, access_version
+    from vortex_access.retire_organization_role_for_administration(
+      '64100000-0000-4000-8000-000000000011', 2,
+      jsonb_build_object(
+        'contractVersion', '1.0.0',
+        'candidate', jsonb_build_object(
+          'operation', 'retire_role',
+          'organizationId', '24100000-0000-4000-8000-000000000001',
+          'roleId', '64100000-0000-4000-8000-000000000011',
+          'expectedRoleRevision', 2
+        ),
+        'roleCandidateFingerprint', 'sha256:' || pg_catalog.repeat('0', 64)
+      ), 'b4100000-0000-4000-8000-000000000034')$$,
+  $$select 'refused'::text, true,
+      '24100000-0000-4000-8000-000000000001'::uuid, checkpoint.access_version
+    from structural_reduction_versions as checkpoint
+    where checkpoint.step = 'role_retirement'$$,
+  'incomplete accepted role authority records one clean role-retirement refusal'
+);
+reset role;
+
+select pg_temp.install_structural_reduction_context(
   '44100000-0000-4000-8000-000000000001',
   '54100000-0000-4000-8000-000000000001',
   'a4100000-0000-4000-8000-000000000026'
@@ -973,6 +1054,43 @@ select throws_ok(
   'malformed membership removal refuses before authority evaluation'
 );
 reset role;
+
+select is(
+  (
+    select pg_catalog.string_agg(
+      activity.activity_id::text || '|' || activity.action || '|' ||
+      activity.actor_id::text || '|' || activity.subject_ids::text || '|' ||
+      activity.changed_field_ids::text || '|' || activity.source || '|' ||
+      activity.correlation_id::text || '|' || activity.outcome,
+      ',' order by activity.activity_id
+    )
+    from vortex_activity.organization_activity_entries as activity
+    where activity.organization_id = '24100000-0000-4000-8000-000000000001'
+      and activity.activity_id in (
+        'b4100000-0000-4000-8000-000000000020',
+        'b4100000-0000-4000-8000-000000000023',
+        'b4100000-0000-4000-8000-000000000032',
+        'b4100000-0000-4000-8000-000000000033',
+        'b4100000-0000-4000-8000-000000000034'
+      )
+  ),
+  'b4100000-0000-4000-8000-000000000020|retire_group|' ||
+    '54100000-0000-4000-8000-000000000002|{24100000-0000-4000-8000-000000000001}|{}|' ||
+    'web|a4100000-0000-4000-8000-000000000020|refused,' ||
+  'b4100000-0000-4000-8000-000000000023|revise_role_metadata|' ||
+    '54100000-0000-4000-8000-000000000002|{24100000-0000-4000-8000-000000000001}|{}|' ||
+    'web|a4100000-0000-4000-8000-000000000023|refused,' ||
+  'b4100000-0000-4000-8000-000000000032|remove_group_membership|' ||
+    '54100000-0000-4000-8000-000000000003|{24100000-0000-4000-8000-000000000001}|{}|' ||
+    'web|a4100000-0000-4000-8000-000000000032|refused,' ||
+  'b4100000-0000-4000-8000-000000000033|revise_role_metadata|' ||
+    '54100000-0000-4000-8000-000000000002|{24100000-0000-4000-8000-000000000001}|{}|' ||
+    'web|a4100000-0000-4000-8000-000000000033|refused,' ||
+  'b4100000-0000-4000-8000-000000000034|retire_role|' ||
+    '54100000-0000-4000-8000-000000000002|{24100000-0000-4000-8000-000000000001}|{}|' ||
+    'web|a4100000-0000-4000-8000-000000000034|refused',
+  'structural refusal Activity contains only fixed organization-scoped evidence'
+);
 
 select * from finish();
 

@@ -2,7 +2,9 @@
 
 [Specification index](../README.md) · [Data contracts](data-contracts.md) · [Build plan](../../build-plan/README.md)
 
-There are no open user decisions. The selected [Frontend Rule Designer](frontend-rule-designer.md) now includes shared conditions, flow variables, extensible nodes, configurable read/write component flows, per-node Current user/Specified user/System execution, managed-flow controls and reusable forms. Collect-first atomic submission is optional; sequential protected commits have explicit partial outcomes. Implementation gaps are tracked in its [delivery plan](../../build-plan/frontend-rule-designer.md), not held for another product approval.
+## Open choices — reviewed 12 September 2026
+
+None. The owner approved creator/current-membership Group ownership and automatic deadline refresh. Permanent requirements, including account transfer and record lifecycle limits, are in [record ownership and lifecycle](record-ownership-and-lifecycle.md). Delivery gaps remain on the GitHub tasks, not here.
 
 Resolved choices have been incorporated into the permanent requirements, contracts, examples, acceptance tests, build phases, and linked GitHub work. They are intentionally absent here so implementation cannot mistake a resolved option for an open question.
 
@@ -14,7 +16,7 @@ The 5 September Roles and Groups clarification and optional per-role PIM model a
 
 ## Adding an open decision
 
-Add an entry only when different reasonable answers would materially change product behaviour, data ownership, security, protected data handling, entitlements, delivery, or build order. Each entry must state:
+Add an entry only when a genuinely unresolved business/product choice needs the owner's decision. Engineering, security, database, implementation and dependency decisions belong to the responsible task and its engineering review, even when their impact is material. Hold only the affected work, and continue independent work. Each business-decision entry must state:
 
 - The plain-language question.
 - The viable options and their consequences.

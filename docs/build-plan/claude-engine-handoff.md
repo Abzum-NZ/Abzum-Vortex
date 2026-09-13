@@ -1,4 +1,8 @@
-# Current Claude engine handoff
+# Historical Claude engine handoff — 10 September 2026
+
+This is a completed assignment snapshot, not current task sequencing or authority
+to restart its workers. Consult the [live board](https://github.com/orgs/Abzum-NZ/projects/2/views/3)
+and [engine-first plan](engine-first-application-delivery.md) before assigning work.
 
 ## Assignment
 

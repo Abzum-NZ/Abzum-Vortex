@@ -274,7 +274,15 @@ const bindings = [moduleOne, moduleTwo].map((module, index) => ({
   state: "active" as const,
 }));
 
-const input = () => ({ application, modules: [moduleOne, moduleTwo], bindings });
+const input = () => ({
+  definitions: { application, modules: [moduleOne, moduleTwo] },
+  installation: {
+    organizationId,
+    applicationRootId,
+    applicationReleaseRevision: application.releaseRevision,
+    moduleBindings: bindings,
+  },
+});
 
 const expectCode = (operation: () => unknown, code: string) => {
   try {
@@ -290,9 +298,11 @@ describe("installed event Definition projector", () => {
   it("projects stable standard, Module and Application descriptors for App V1 with Module V2", () => {
     const projected = projectInstalledEventCatalogue(input());
     const reordered = projectInstalledEventCatalogue({
-      application,
-      modules: [moduleTwo, moduleOne],
-      bindings: [...bindings].reverse(),
+      definitions: { application, modules: [moduleTwo, moduleOne] },
+      installation: {
+        ...input().installation,
+        moduleBindings: [...bindings].reverse(),
+      },
     });
     expect(projected).toEqual(reordered);
     expect(projected.descriptors).toHaveLength(16);
@@ -340,9 +350,11 @@ describe("installed event Definition projector", () => {
     );
     expect(
       projectInstalledEventCatalogue({
-        application: applicationWithSharedKey,
-        modules: input().modules,
-        bindings: input().bindings,
+        definitions: {
+          application: applicationWithSharedKey,
+          modules: input().definitions.modules,
+        },
+        installation: input().installation,
       }).descriptors.filter(
         (descriptor) =>
           descriptor.kind === "declared" &&
@@ -352,29 +364,91 @@ describe("installed event Definition projector", () => {
     ).toHaveLength(2);
   });
 
-  it("refuses inactive evidence and exact dependency evidence that does not match the target read", () => {
+  it("refuses inactive evidence and installation evidence that does not match Definition", () => {
     for (const state of ["provisioned", "detached"] as const)
       expectCode(
         () =>
           projectInstalledEventCatalogue({
-            ...input(),
-            bindings: bindings.map((binding, index) =>
-              index === 0 ? { ...binding, state } : binding,
-            ),
+            definitions: input().definitions,
+            installation: {
+              ...input().installation,
+              moduleBindings: bindings.map((binding, index) =>
+                index === 0 ? { ...binding, state } : binding,
+              ),
+            },
           }),
         "INSTALLED_EVENT_BINDING_INACTIVE",
       );
     expectCode(
       () =>
         projectInstalledEventCatalogue({
-          ...input(),
-          application: {
-            ...application,
-            dependencyManifest: application.dependencyManifest.map((dependency, index) =>
-              index === 0
-                ? { ...dependency, resolutionFingerprint: application.resolutionFingerprint }
-                : dependency,
-            ),
+          definitions: input().definitions,
+          installation: {
+            ...input().installation,
+            applicationReleaseRevision: application.releaseRevision + 1,
+          },
+        }),
+      "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
+    );
+  });
+
+  it("refuses an active binding absent from Definition's owner-produced set", () => {
+    const unreachedContent = {
+      ...moduleTwoContent,
+      name: "Unreached",
+      description: "Exact Module consumer result that no installed dependency reaches.",
+      recordTypes: [recordType(id(13), "unreached", id(22), [field(id(14), "title", "none")])],
+    };
+    const unreached = moduleDefinitionConsumerReadResultV2Schema.parse({
+      ...moduleTwo,
+      definitionKey: "example.module_three",
+      rootId: id(15),
+      releaseRevision: 23,
+      releaseVersion: "2.3.0",
+      contentFingerprint: fingerprintCanonicalValue(unreachedContent),
+      resolutionFingerprint: fingerprint("3"),
+      content: unreachedContent,
+    });
+    expectCode(
+      () =>
+        projectInstalledEventCatalogue({
+          definitions: input().definitions,
+          installation: {
+            ...input().installation,
+            moduleBindings: [
+              ...bindings,
+              {
+                ...bindings[1]!,
+                moduleRootId: unreached.rootId,
+                bindingRevision: 9,
+                moduleReleaseRevision: unreached.releaseRevision,
+              },
+            ],
+          },
+        }),
+      "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
+    );
+  });
+
+  it("refuses missing and duplicate active bindings for the exact Definition set", () => {
+    expectCode(
+      () =>
+        projectInstalledEventCatalogue({
+          definitions: input().definitions,
+          installation: {
+            ...input().installation,
+            moduleBindings: [bindings[0]!],
+          },
+        }),
+      "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
+    );
+    expectCode(
+      () =>
+        projectInstalledEventCatalogue({
+          definitions: input().definitions,
+          installation: {
+            ...input().installation,
+            moduleBindings: [bindings[0]!, bindings[0]!],
           },
         }),
       "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
@@ -385,16 +459,19 @@ describe("installed event Definition projector", () => {
     const foreignModule = { ...moduleOne, organizationId: id(90) };
     expect(
       projectInstalledEventCatalogue({
-        ...input(),
-        modules: [foreignModule, moduleTwo],
+        definitions: { application, modules: [foreignModule, moduleTwo] },
+        installation: input().installation,
       }).moduleBindings,
     ).toHaveLength(2);
 
     expectCode(
       () =>
         projectInstalledEventCatalogue({
-          ...input(),
-          modules: [{ ...foreignModule, releaseRevision: 23 }, moduleTwo],
+          definitions: {
+            application,
+            modules: [{ ...foreignModule, releaseRevision: 23 }, moduleTwo],
+          },
+          installation: input().installation,
         }),
       "INSTALLED_EVENT_DEPENDENCY_MISMATCH",
     );

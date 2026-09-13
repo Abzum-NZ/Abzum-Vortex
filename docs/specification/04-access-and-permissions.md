@@ -272,8 +272,9 @@ Each record operation uses a trusted adapter that fixes its declared action and
 storage binding and loads the actual record and relationship facts. A client
 cannot supply its own permission declaration, owner, allowed result or record
 graph. The runtime keeps its restricted database role; it does not acquire owner
-credentials to call the private evaluator. Phase 3 proves this with fixed neutral
-adapters; generated storage later creates the permanent equivalents. The
+credentials to call the private evaluator. Phase 3 proved this with fixed neutral
+adapters; the permanent fixed adapters over provisioned storage now own record
+read and change, and create, delete and restore follow them. The
 [adapter handoff](../build-plan/issue-35-row-policy-composition.md#trusted-record-adapters--8-september-2026)
 keeps these responsibilities separate without another permission system.
 
@@ -301,9 +302,11 @@ share revision without requiring the historical grantor's old field ceiling.
 Row restrictions alone do not hide columns. Protected record projection and change
 operations enforce field bounds before returning data or changing it; the request
 role must not have a raw content-table route that bypasses these operations.
-Fixed neutral adapters prove this in [#37](../build-plan/issue-37-field-access.md),
-and [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45)
-creates the permanent equivalents. The underlying private field helpers are not
+Fixed neutral adapters proved this in [#37](../build-plan/issue-37-field-access.md);
+the permanent fixed adapters over provisioned storage in
+[#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) now enforce the same
+bounds for record read and change, resolving each field policy through the same
+private resolver. The underlying private field helpers are not
 client-selectable endpoints.
 
 A role's exact record permissions declare the fields that permission allows a person to read and change. Each immutable `fieldPolicy` contains explicit `readableFieldIds` and `changeableFieldIds`; changeable fields must also be readable. An omitted field is refused by that permission, not a global veto on other independently complete permissions. This follows the existing permission-union model: first prove each permission's own current eligibility and complete record scope, narrow any direct-share contribution by that share's field lists, then combine the surviving contributions. A permission or share that fails its own checks contributes nothing. Do not combine eligibility from one permission with the field policy or record scope of another.

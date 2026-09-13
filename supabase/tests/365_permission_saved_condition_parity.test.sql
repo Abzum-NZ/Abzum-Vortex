@@ -81,6 +81,7 @@ order by caller.role_name collate "C";
 create temporary table typed_condition_corpus on commit drop as
 select $typed_condition_vectors$
 {
+  "sourceContractVersion": "1.0.0",
   "fields": [
     {"fieldId":"f3650000-0000-4000-8000-000000000001","type":"text"},
     {"fieldId":"f3650000-0000-4000-8000-000000000002","type":"decimal_number"},
@@ -274,6 +275,11 @@ select $typed_condition_vectors$
       "declaredFieldIds":[],"fieldValues":{},"parameters":[],"bindings":[{"key":"extra","source":"literal","value":1}],"expected":"error:22023"
     },
     {
+      "name":"bindings_in_byte_order_not_icu_order",
+      "condition":{"kind":"all","conditions":[{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"a1"}},{"kind":"comparison","operator":"not_equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"a_b"}}]},
+      "declaredFieldIds":["f3650000-0000-4000-8000-000000000001"],"fieldValues":{"f3650000-0000-4000-8000-000000000001":"north"},"parameters":[{"key":"a1","type":"text"},{"key":"a_b","type":"text"}],"bindings":[{"key":"a1","source":"literal","value":"north"},{"key":"a_b","source":"literal","value":"south"}],"expected":"true"
+    },
+    {
       "name":"missing_field_value_refuses",
       "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000001"},"right":{"source":"value","value":"alpha"}},
       "declaredFieldIds":["f3650000-0000-4000-8000-000000000001"],"fieldValues":{},"parameters":[],"bindings":[],"expected":"error:22023"
@@ -307,28 +313,165 @@ select $typed_condition_vectors$
       "name":"opaque_collection_membership_refuses",
       "condition":{"kind":"comparison","operator":"in","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000007"},"right":{"source":"value","value":[]}},
       "declaredFieldIds":["f3650000-0000-4000-8000-000000000007"],"fieldValues":{"f3650000-0000-4000-8000-000000000007":[]},"parameters":[],"bindings":[],"expected":"error:22023"
+    },
+    {
+      "name":"v1_explicit_decimal_parameter_refuses",
+      "condition":{"kind":"comparison","operator":"equals","left":{"source":"parameter","key":"amount"},"right":{"source":"value","value":"12.5"}},
+      "declaredFieldIds":[],"fieldValues":{},"parameters":[{"key":"amount","type":"decimal_number"}],"bindings":[{"key":"amount","source":"literal","value":"12.5"}],"expected":"error:22023"
+    },
+    {
+      "name":"v1_explicit_money_parameter_refuses",
+      "condition":{"kind":"comparison","operator":"equals","left":{"source":"parameter","key":"amount"},"right":{"source":"value","value":{"amount":"12.5","currency":"NZD"}}},
+      "declaredFieldIds":[],"fieldValues":{},"parameters":[{"key":"amount","type":"money"}],"bindings":[{"key":"amount","source":"literal","value":{"amount":"12.5","currency":"NZD"}}],"expected":"error:22023"
     }
-  ]
+  ],
+  "v2": {
+    "sourceContractVersion": "2.0.0",
+    "fields": [
+      {"fieldId":"f3650000-0000-4000-8000-000000000011","type":"whole_number"},
+      {"fieldId":"f3650000-0000-4000-8000-000000000012","type":"decimal_number"},
+      {"fieldId":"f3650000-0000-4000-8000-000000000013","type":"money"},
+      {"fieldId":"f3650000-0000-4000-8000-000000000014","type":"calculation","settings":{"resultType":"decimal_number"}},
+      {"fieldId":"f3650000-0000-4000-8000-000000000015","type":"total","settings":{"resultType":"money"}}
+    ],
+    "vectors": [
+      {
+        "name":"v2_decimal_above_double_precision_matches_exactly",
+        "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000012"},"right":{"source":"value","value":"90071992547409931234567890.12"}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000012"],"fieldValues":{"f3650000-0000-4000-8000-000000000012":"90071992547409931234567890.12"},"parameters":[],"bindings":[],"expected":"true"
+      },
+      {
+        "name":"v2_decimal_orders_negative_exact_values",
+        "condition":{"kind":"comparison","operator":"less_than","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000012"},"right":{"source":"value","value":"-90071992547409931234567890.12"}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000012"],"fieldValues":{"f3650000-0000-4000-8000-000000000012":"-90071992547409931234567890.121"},"parameters":[],"bindings":[],"expected":"true"
+      },
+      {
+        "name":"v2_decimal_membership_is_exact",
+        "condition":{"kind":"comparison","operator":"in","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000012"},"right":{"source":"value","value":["1","90071992547409931234567890.12"]}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000012"],"fieldValues":{"f3650000-0000-4000-8000-000000000012":"90071992547409931234567890.12"},"parameters":[],"bindings":[],"expected":"true"
+      },
+      {
+        "name":"v2_decimal_null_collection_member_is_nonmatching",
+        "condition":{"kind":"comparison","operator":"in","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000012"},"right":{"source":"value","value":[null,"2"]}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000012"],"fieldValues":{"f3650000-0000-4000-8000-000000000012":"1"},"parameters":[],"bindings":[],"expected":"false"
+      },
+      {
+        "name":"v2_decimal_accepts_integer_number_parameter_exactly",
+        "condition":{"kind":"comparison","operator":"greater_than","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000012"},"right":{"source":"parameter","key":"threshold"}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000012"],"fieldValues":{"f3650000-0000-4000-8000-000000000012":"2.5"},"parameters":[{"key":"threshold","type":"number"}],"bindings":[{"key":"threshold","source":"literal","value":2}],"expected":"true"
+      },
+      {
+        "name":"v2_decimal_refuses_fractional_number_parameter",
+        "condition":{"kind":"comparison","operator":"greater_than","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000012"},"right":{"source":"parameter","key":"threshold"}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000012"],"fieldValues":{"f3650000-0000-4000-8000-000000000012":"2.5"},"parameters":[{"key":"threshold","type":"number"}],"bindings":[{"key":"threshold","source":"literal","value":1.5}],"expected":"error:22023"
+      },
+      {
+        "name":"v2_explicit_decimal_parameter_matches_exactly",
+        "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000012"},"right":{"source":"parameter","key":"threshold"}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000012"],"fieldValues":{"f3650000-0000-4000-8000-000000000012":"90071992547409931234567890.12"},"parameters":[{"key":"threshold","type":"decimal_number"}],"bindings":[{"key":"threshold","source":"literal","value":"90071992547409931234567890.12"}],"expected":"true"
+      },
+      {
+        "name":"v2_money_same_currency_matches_exactly",
+        "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"value","value":{"amount":"90071992547409931234567890.12","currency":"NZD"}}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"90071992547409931234567890.12","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"true"
+      },
+      {
+        "name":"v2_money_different_currency_is_not_equal",
+        "condition":{"kind":"comparison","operator":"not_equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"value","value":{"amount":"12.5","currency":"AUD"}}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"12.5","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"true"
+      },
+      {
+        "name":"v2_money_different_currency_equality_is_false",
+        "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"value","value":{"amount":"12.5","currency":"AUD"}}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"12.5","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"false"
+      },
+      {
+        "name":"v2_money_cross_currency_order_refuses",
+        "condition":{"kind":"comparison","operator":"greater_than","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"value","value":{"amount":"1","currency":"AUD"}}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"12.5","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"error:22023"
+      },
+      {
+        "name":"v2_money_cross_currency_order_under_not_refuses",
+        "condition":{"kind":"not","condition":{"kind":"comparison","operator":"greater_than","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"value","value":{"amount":"1","currency":"AUD"}}}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"12.5","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"error:22023"
+      },
+      {
+        "name":"v2_money_membership_uses_amount_and_currency",
+        "condition":{"kind":"comparison","operator":"in","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"value","value":[{"amount":"12.5","currency":"AUD"},{"amount":"12.5","currency":"NZD"}]}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"12.5","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"true"
+      },
+      {
+        "name":"v2_money_null_collection_member_is_nonmatching",
+        "condition":{"kind":"comparison","operator":"in","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"value","value":[null,{"amount":"12.5","currency":"AUD"}]}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"12.5","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"false"
+      },
+      {
+        "name":"v2_explicit_money_parameter_matches_exactly",
+        "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"parameter","key":"budget"}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"12.5","currency":"NZD"}},"parameters":[{"key":"budget","type":"money"}],"bindings":[{"key":"budget","source":"literal","value":{"amount":"12.5","currency":"NZD"}}],"expected":"true"
+      },
+      {
+        "name":"v2_noncanonical_decimal_refuses",
+        "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000012"},"right":{"source":"value","value":"1"}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000012"],"fieldValues":{"f3650000-0000-4000-8000-000000000012":"1.00"},"parameters":[],"bindings":[],"expected":"error:22023"
+      },
+      {
+        "name":"v2_malformed_money_amount_refuses",
+        "condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000013"},"right":{"source":"value","value":{"amount":"1","currency":"NZD"}}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000013"],"fieldValues":{"f3650000-0000-4000-8000-000000000013":{"amount":"1.00","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"error:22023"
+      },
+      {
+        "name":"v2_calculation_decimal_result_is_exact",
+        "condition":{"kind":"comparison","operator":"greater_than","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000014"},"right":{"source":"value","value":"90071992547409931234567890.119"}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000014"],"fieldValues":{"f3650000-0000-4000-8000-000000000014":"90071992547409931234567890.12"},"parameters":[],"bindings":[],"expected":"true"
+      },
+      {
+        "name":"v2_total_money_result_is_exact",
+        "condition":{"kind":"comparison","operator":"less_than_or_equal","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000015"},"right":{"source":"value","value":{"amount":"10","currency":"NZD"}}},
+        "declaredFieldIds":["f3650000-0000-4000-8000-000000000015"],"fieldValues":{"f3650000-0000-4000-8000-000000000015":{"amount":"9.99","currency":"NZD"}},"parameters":[],"bindings":[],"expected":"true"
+      }
+    ]
+  }
 }
 $typed_condition_vectors$::jsonb as payload;
 
 select is(
   (select pg_catalog.jsonb_array_length(payload -> 'vectors') from typed_condition_corpus),
-  43,
-  'the shared parity corpus contains the intended bounded vector set'
+  46,
+  'the shared V1 parity corpus contains the intended bounded vector set'
 );
 
-create function pg_temp.evaluate_typed_condition_vector(p_vector jsonb)
+select is(
+  (select payload ->> 'sourceContractVersion' from typed_condition_corpus),
+  '1.0.0',
+  'the historical shared vectors explicitly select Module V1 semantics'
+);
+
+select is(
+  (select pg_catalog.jsonb_array_length(payload #> '{v2,vectors}') from typed_condition_corpus),
+  19,
+  'the shared V2 parity corpus contains the intended bounded exact-value vector set'
+);
+
+select is(
+  (select payload #>> '{v2,sourceContractVersion}' from typed_condition_corpus),
+  '2.0.0',
+  'the exact-value shared vectors explicitly select Module V2 semantics'
+);
+
+create function pg_temp.evaluate_typed_condition_vector(
+  p_contract_version text,
+  p_fields jsonb,
+  p_vector jsonb
+)
 returns text
 language plpgsql
 volatile
 set search_path = ''
 as $function$
 declare
-  corpus jsonb;
   result boolean;
 begin
-  select payload into strict corpus from pg_temp.typed_condition_corpus;
   result := vortex_access.evaluate_permission_saved_condition(
     pg_catalog.jsonb_build_object(
       'routes', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('kind', 'all_records')),
@@ -348,10 +491,11 @@ begin
       'condition', p_vector -> 'condition',
       'declaredFieldIds', p_vector -> 'declaredFieldIds'
     ),
-    pg_catalog.jsonb_build_object(
+    pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
       'recordTypeId', 'd3650000-0000-4000-8000-000000000001',
-      'fields', corpus -> 'fields'
-    ),
+      'validationContractVersion', p_contract_version,
+      'fields', p_fields
+    )),
     p_vector -> 'fieldValues',
     coalesce((p_vector ->> 'actorId')::uuid, '53650000-0000-4000-8000-000000000001'::uuid)
   );
@@ -362,13 +506,120 @@ end
 $function$;
 
 select is(
-  pg_temp.evaluate_typed_condition_vector(vector.value),
+  pg_temp.evaluate_typed_condition_vector(
+    corpus.payload ->> 'sourceContractVersion', corpus.payload -> 'fields', vector.value
+  ),
   vector.value ->> 'expected',
-  'PostgreSQL matches shared Rule vector ' || (vector.value ->> 'name')
+  'PostgreSQL matches shared V1 Rule vector ' || (vector.value ->> 'name')
 )
 from typed_condition_corpus as corpus
 cross join lateral pg_catalog.jsonb_array_elements(corpus.payload -> 'vectors') as vector(value)
 order by vector.value ->> 'name' collate "C";
+
+select is(
+  pg_temp.evaluate_typed_condition_vector(
+    corpus.payload #>> '{v2,sourceContractVersion}', corpus.payload #> '{v2,fields}', vector.value
+  ),
+  vector.value ->> 'expected',
+  'PostgreSQL matches shared V2 Rule vector ' || (vector.value ->> 'name')
+)
+from typed_condition_corpus as corpus
+cross join lateral pg_catalog.jsonb_array_elements(corpus.payload #> '{v2,vectors}') as vector(value)
+order by vector.value ->> 'name' collate "C";
+
+-- The refusal vectors already refused on the pre-fix evaluator because it did
+-- not understand V2 shapes at all. Mutating only the guarded value into its
+-- valid counterpart proves each post-fix refusal is discriminating.
+select is(
+  pg_temp.evaluate_typed_condition_vector(
+    corpus.payload #>> '{v2,sourceContractVersion}', corpus.payload #> '{v2,fields}',
+    pg_catalog.jsonb_set(
+      vector.value,
+      '{fieldValues,f3650000-0000-4000-8000-000000000012}',
+      '"1"'::jsonb
+    )
+  ),
+  'true',
+  'canonicalizing only the malformed decimal turns its refusal vector into a match'
+)
+from typed_condition_corpus as corpus
+cross join lateral (
+  select value from pg_catalog.jsonb_array_elements(corpus.payload #> '{v2,vectors}') as item(value)
+  where value ->> 'name' = 'v2_noncanonical_decimal_refuses'
+) as vector;
+
+select is(
+  pg_temp.evaluate_typed_condition_vector(
+    corpus.payload #>> '{v2,sourceContractVersion}', corpus.payload #> '{v2,fields}',
+    pg_catalog.jsonb_set(
+      vector.value,
+      '{fieldValues,f3650000-0000-4000-8000-000000000013}',
+      '{"amount":"1","currency":"NZD"}'::jsonb
+    )
+  ),
+  'true',
+  'canonicalizing only the malformed money amount turns its refusal vector into a match'
+)
+from typed_condition_corpus as corpus
+cross join lateral (
+  select value from pg_catalog.jsonb_array_elements(corpus.payload #> '{v2,vectors}') as item(value)
+  where value ->> 'name' = 'v2_malformed_money_amount_refuses'
+) as vector;
+
+select is(
+  pg_temp.evaluate_typed_condition_vector(
+    corpus.payload #>> '{v2,sourceContractVersion}', corpus.payload #> '{v2,fields}',
+    pg_catalog.jsonb_set(vector.value, '{condition,right,value,currency}', '"NZD"'::jsonb)
+  ),
+  'true',
+  'aligning only the currency turns the cross-currency ordering refusal into a valid comparison'
+)
+from typed_condition_corpus as corpus
+cross join lateral (
+  select value from pg_catalog.jsonb_array_elements(corpus.payload #> '{v2,vectors}') as item(value)
+  where value ->> 'name' = 'v2_money_cross_currency_order_refuses'
+) as vector;
+
+select is(
+  pg_temp.evaluate_typed_condition_vector(
+    '3.0.0', corpus.payload #> '{v2,fields}', corpus.payload #> '{v2,vectors,0}'
+  ),
+  'true',
+  'trusted Module V3 selects the same V2 exact field-value semantics'
+)
+from typed_condition_corpus as corpus;
+
+select is(
+  pg_temp.evaluate_typed_condition_vector(
+    candidate.version, corpus.payload #> '{v2,fields}', corpus.payload #> '{v2,vectors,0}'
+  ),
+  'error:22023',
+  candidate.name || ' refuses instead of selecting exact semantics from the JSON shape'
+)
+from typed_condition_corpus as corpus
+cross join (values
+  ('missing trusted contract version', null::text),
+  ('unsupported trusted contract version', '9.0.0')
+) as candidate(name, version)
+order by candidate.name collate "C";
+
+select is(
+  pg_temp.evaluate_typed_condition_vector(
+    null, corpus.payload -> 'fields', corpus.payload -> 'vectors' -> 0
+  ),
+  'error:22023',
+  'an absent trusted contract version refuses a V1-compatible condition instead of silently selecting V1'
+)
+from typed_condition_corpus as corpus;
+
+select is(
+  pg_temp.evaluate_typed_condition_vector(
+    '1.0.0', corpus.payload #> '{v2,fields}', corpus.payload #> '{v2,vectors,0}'
+  ),
+  'error:22023',
+  'trusted Module V1 retains historical numeric semantics despite an exact-looking JSON value'
+)
+from typed_condition_corpus as corpus;
 
 create function pg_temp.saved_condition_binding_outcome(p_mismatch text)
 returns text
@@ -418,6 +669,7 @@ begin
     ),
     pg_catalog.jsonb_build_object(
       'recordTypeId', source_record_type_id,
+      'validationContractVersion', '1.0.0',
       'fields', corpus -> 'fields'
     ),
     '{}'::jsonb,
@@ -521,7 +773,7 @@ begin
   where vortex_access.evaluate_permission_saved_condition(
     '{"routes":[{"kind":"all_records"}],"savedCondition":{"conditionId":"c3650000-0000-4000-8000-000000000001","publishedRevision":1,"contractFingerprint":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","parameterBindings":[{"key":"actor","source":"current_organization_account_id"}]}}'::jsonb,
     '{"conditionId":"c3650000-0000-4000-8000-000000000001","sourceRecordTypeId":"d3650000-0000-4000-8000-000000000001","publishedRevision":1,"contractFingerprint":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","parameters":[{"key":"actor","type":"text"}],"condition":{"kind":"comparison","operator":"equals","left":{"source":"field","fieldId":"f3650000-0000-4000-8000-000000000001"},"right":{"source":"parameter","key":"actor"}},"declaredFieldIds":["f3650000-0000-4000-8000-000000000001"]}'::jsonb,
-    '{"recordTypeId":"d3650000-0000-4000-8000-000000000001","fields":[{"fieldId":"f3650000-0000-4000-8000-000000000001","type":"text"}]}'::jsonb,
+    '{"recordTypeId":"d3650000-0000-4000-8000-000000000001","validationContractVersion":"1.0.0","fields":[{"fieldId":"f3650000-0000-4000-8000-000000000001","type":"text"}]}'::jsonb,
     candidate.field_values,
     (checked ->> 'organizationAccountId')::uuid
   )
