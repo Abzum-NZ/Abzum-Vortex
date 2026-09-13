@@ -215,12 +215,17 @@ const calculateAndFinalize = (
       ...(organizationCurrency === undefined ? {} : { organizationCurrency }),
     });
 
-  if (timeZone === undefined)
-    return {
-      success: false,
-      issues: [{ code: "invalid_input", path: ["organizationRuntimeSettings"] }],
-    };
-  const organizationLocalDate = localDate(issuedAt, timeZone);
+  // Most calculation forms do not use the organisation clock. Only a
+  // deadline comparison needs the organisation-local date; requiring runtime
+  // settings for every calculation would refuse otherwise deterministic saves.
+  const needsOrganizationLocalDate = prepared.recordType.fields.some(
+    (field) => field.type === "calculation" && field.settings.expression.kind === "deadline_passed",
+  );
+  const organizationLocalDate = needsOrganizationLocalDate
+    ? timeZone === undefined
+      ? undefined
+      : localDate(issuedAt, timeZone)
+    : issuedAt.slice(0, 10);
   if (organizationLocalDate === undefined)
     return {
       success: false,

@@ -38,6 +38,8 @@ const ids = {
   thirdCommand: id(19),
   calculatedField: id(20),
   fourthCommand: id(21),
+  dueDateField: id(22),
+  deadlineField: id(23),
 } as const;
 
 const session: IdentitySession = {
@@ -151,6 +153,58 @@ const calculatedRecordType = (): RecordTypeDefinitionV2 =>
             separator: "",
           },
           dependencyFieldIds: [ids.visibleField],
+        },
+      },
+    ],
+    relationships: [],
+    standardActions: ["create", "read", "update"],
+    customActionIds: [],
+  });
+
+const deadlineRecordType = (): RecordTypeDefinitionV2 =>
+  recordTypeDefinitionV2Schema.parse({
+    recordTypeId: ids.recordType,
+    key: "deadline_record",
+    singularLabel: "Deadline record",
+    pluralLabel: "Deadline records",
+    titleFieldId: ids.visibleField,
+    storageContractId: ids.storage,
+    storageScope: "application_contained",
+    ownershipMode: "none",
+    fields: [
+      textField(ids.visibleField, "title", true),
+      {
+        fieldId: ids.dueDateField,
+        key: "due_date",
+        label: "due date",
+        required: true,
+        unique: false,
+        filterable: true,
+        sortable: true,
+        personalData: "none" as const,
+        publicDisplay: "refused" as const,
+        type: "date" as const,
+        settings: {},
+      },
+      {
+        fieldId: ids.deadlineField,
+        key: "deadline_passed",
+        label: "deadline passed",
+        required: true,
+        unique: false,
+        filterable: true,
+        sortable: true,
+        personalData: "none" as const,
+        publicDisplay: "refused" as const,
+        type: "calculation" as const,
+        settings: {
+          resultType: "yes_no" as const,
+          expression: {
+            kind: "deadline_passed" as const,
+            dueFieldId: ids.dueDateField,
+            terminalStatusValues: [],
+          },
+          dependencyFieldIds: [ids.dueDateField],
         },
       },
     ],
@@ -713,7 +767,6 @@ describe("base Record save service", () => {
       occurrenceId: () => ids.occurrence,
       resolvedRequestTransaction: transactionRunner(requestQuery),
     });
-
     await expect(
       service.save(
         session,
@@ -764,5 +817,140 @@ describe("base Record save service", () => {
       { [ids.visibleField]: "Updated", [ids.calculatedField]: "Updated" },
     ]);
     expect(writes).toBe(2);
+  });
+
+  it("calculates a non-time value when organisation runtime settings are absent", async () => {
+    let writes = 0;
+    const requestQuery: RequestQuery = async <Row extends DatabaseRow>(strings, ...values) => {
+      const sql = strings.join("$value");
+      if (sql.includes("prepare_base_record_save"))
+        return [
+          {
+            preparation: {
+              outcome: "prepared",
+              recordType: calculatedRecordType(),
+              existingValues: {},
+              readableFieldIds: [ids.visibleField, ids.calculatedField],
+              correlationId: ids.correlation,
+            },
+          },
+        ] as unknown as readonly Row[];
+      if (sql.includes("read_current_organization_runtime_settings_for_application"))
+        return [] as unknown as readonly Row[];
+      if (sql.includes("save_base_record")) {
+        writes += 1;
+        const savedValues = JSON.parse(String(values[6]));
+        return [
+          {
+            result: {
+              outcome: "saved",
+              recordId: ids.record,
+              concurrencyNumber: 1,
+              values: savedValues,
+              correlationId: ids.correlation,
+              backgroundDelivery: "none",
+            },
+          },
+        ] as unknown as readonly Row[];
+      }
+      return [] as unknown as readonly Row[];
+    };
+    const service = createRecordSaveService({
+      identityAuthorityId: ids.authority,
+      clock: () => new Date("2026-09-08T01:00:00.000Z"),
+      correlationId: () => ids.correlation,
+      activityId: () => ids.activity,
+      occurrenceId: () => ids.occurrence,
+      resolvedRequestTransaction: transactionRunner(requestQuery),
+    });
+
+    await expect(
+      service.save(
+        session,
+        selection,
+        createCommand(ids.fourthCommand, { [ids.visibleField]: "No settings needed" }),
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: {
+        outcome: "saved",
+        readableValues: { [ids.calculatedField]: "No settings needed" },
+      },
+    });
+    expect(writes).toBe(1);
+  });
+
+  it("uses the request-issued instant and organisation-local date for a deadline", async () => {
+    expect(() => deadlineRecordType()).not.toThrow();
+    const clock = vi.fn(() => new Date("2026-09-08T12:30:00.000Z"));
+    const persistedValues: unknown[] = [];
+    const requestQuery: RequestQuery = async <Row extends DatabaseRow>(strings, ...values) => {
+      const sql = strings.join("$value");
+      if (sql.includes("prepare_base_record_save"))
+        return [
+          {
+            preparation: {
+              outcome: "prepared",
+              recordType: deadlineRecordType(),
+              existingValues: {},
+              readableFieldIds: [ids.visibleField, ids.dueDateField, ids.deadlineField],
+              correlationId: ids.correlation,
+            },
+          },
+        ] as unknown as readonly Row[];
+      if (sql.includes("read_current_organization_runtime_settings_for_application"))
+        return [runtimeSettingsRow("NZD")] as unknown as readonly Row[];
+      if (sql.includes("save_base_record")) {
+        const savedValues = JSON.parse(String(values[6]));
+        persistedValues.push(savedValues);
+        return [
+          {
+            result: {
+              outcome: "saved",
+              recordId: ids.record,
+              concurrencyNumber: 1,
+              values: savedValues,
+              correlationId: ids.correlation,
+              backgroundDelivery: "none",
+            },
+          },
+        ] as unknown as readonly Row[];
+      }
+      return [] as unknown as readonly Row[];
+    };
+    const service = createRecordSaveService({
+      identityAuthorityId: ids.authority,
+      clock,
+      correlationId: () => ids.correlation,
+      activityId: () => ids.activity,
+      occurrenceId: () => ids.occurrence,
+      resolvedRequestTransaction: transactionRunner(requestQuery),
+    });
+    const deadlineSession = {
+      ...session,
+      accessTokenExpiresAt: "2026-09-09T12:00:00.000Z",
+    };
+
+    await expect(
+      service.save(
+        deadlineSession,
+        selection,
+        createCommand(ids.thirdCommand, {
+          [ids.visibleField]: "Boundary",
+          [ids.dueDateField]: "2026-09-08",
+        }),
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { outcome: "saved", readableValues: { [ids.deadlineField]: true } },
+    });
+    expect(persistedValues).toEqual([
+      {
+        [ids.visibleField]: "Boundary",
+        [ids.dueDateField]: "2026-09-08",
+        [ids.deadlineField]: true,
+      },
+    ]);
+    expect(clock).toHaveBeenCalledTimes(1);
   });
 });

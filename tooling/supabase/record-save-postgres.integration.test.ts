@@ -61,6 +61,8 @@ const activityMissingSettingsId = id(39);
 const commandExplicitMoneyId = id(40);
 const activityExplicitMoneyId = id(41);
 const occurrenceExplicitMoneyId = id(42);
+const commandGeneratedInputId = id(43);
+const activityGeneratedInputId = id(44);
 const publishedAt = "2026-09-13T00:00:00.000Z";
 
 const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse({
@@ -131,6 +133,55 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
               expression: { operation: "join_text", fields: ["title"], separator: "" },
             },
           },
+          {
+            id: "field_private_source",
+            key: "private_source",
+            type: "text",
+            label: "Private source",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { max_length: 120 },
+            default: "private generated source",
+          },
+          {
+            id: "field_private_direct",
+            key: "private_direct",
+            type: "calculation",
+            label: "Private direct",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              result_type: "text",
+              expression: { operation: "join_text", fields: ["private_source"], separator: "" },
+            },
+          },
+          {
+            id: "field_private_transitive",
+            key: "private_transitive",
+            type: "calculation",
+            label: "Private transitive",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              result_type: "text",
+              expression: { operation: "join_text", fields: ["private_direct"], separator: "" },
+            },
+          },
         ],
         relationships: [],
       },
@@ -146,7 +197,13 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: {
-          readable_fields: ["title", "amount", "title_copy"],
+          readable_fields: [
+            "title",
+            "amount",
+            "title_copy",
+            "private_direct",
+            "private_transitive",
+          ],
           changeable_fields: ["title", "amount"],
         },
       },
@@ -159,7 +216,16 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         action_kind: "read",
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
-        field_policy: { readable_fields: ["title", "amount", "title_copy"], changeable_fields: [] },
+        field_policy: {
+          readable_fields: [
+            "title",
+            "amount",
+            "title_copy",
+            "private_direct",
+            "private_transitive",
+          ],
+          changeable_fields: [],
+        },
       },
       {
         id: "permission_update",
@@ -171,7 +237,13 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         administrative: false,
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: {
-          readable_fields: ["title", "amount", "title_copy"],
+          readable_fields: [
+            "title",
+            "amount",
+            "title_copy",
+            "private_direct",
+            "private_transitive",
+          ],
           changeable_fields: ["title", "amount"],
         },
       },
@@ -364,6 +436,9 @@ const storageContractId = componentId("storage_contract", "storage_item");
 const fieldId = componentId("field", "field_title");
 const amountFieldId = componentId("field", "field_amount");
 const calculatedFieldId = componentId("field", "field_title_copy");
+const privateSourceFieldId = componentId("field", "field_private_source");
+const privateDirectFieldId = componentId("field", "field_private_direct");
+const privateTransitiveFieldId = componentId("field", "field_private_transitive");
 const applicationRoleId = componentId("role", "role_user");
 const homePageId = componentId("page", "page_home");
 
@@ -835,6 +910,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       });
       const activityIds = [
         activityCreateId,
+        activityGeneratedInputId,
         activityUpdateId,
         activityReplayId,
         activityConflictId,
@@ -890,6 +966,28 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       if (created.kind !== "available" || created.value.outcome !== "saved")
         throw new Error("Real service create did not return its Record");
       const recordId = created.value.recordId;
+      expect(created.value.readableValues).not.toHaveProperty(privateDirectFieldId);
+      expect(created.value.readableValues).not.toHaveProperty(privateTransitiveFieldId);
+
+      const generatedInput = await service.save(session, selection, {
+        commandId: commandGeneratedInputId,
+        contractVersion: "2.0.0",
+        operation: "update",
+        recordTypeId,
+        recordId,
+        expectedConcurrencyNumber: 1,
+        submittedValues: {
+          [fieldId]: "Visible input remains safe",
+          [privateDirectFieldId]: "caller value",
+        },
+      });
+      expect(generatedInput).toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "operation_refused" } },
+      });
+      expect(JSON.stringify(generatedInput)).not.toContain(privateDirectFieldId);
+      expect(JSON.stringify(generatedInput)).not.toContain("private_direct");
+      expect(JSON.stringify(generatedInput)).not.toContain("caller value");
 
       // #430 owns the protected settings update path. This direct fixture
       // change lets this save proof demonstrate the reader's fresh-read rule.
@@ -906,7 +1004,8 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         expectedConcurrencyNumber: 1,
         submittedValues: { [fieldId]: "Updated once" },
       };
-      await expect(service.save(session, selection, updateCommand)).resolves.toMatchObject({
+      const updated = await service.save(session, selection, updateCommand);
+      expect(updated).toMatchObject({
         kind: "available",
         value: {
           outcome: "saved",
@@ -918,7 +1017,13 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           },
         },
       });
-      await expect(service.save(session, selection, updateCommand)).resolves.toMatchObject({
+      if (updated.kind !== "available" || updated.value.outcome !== "saved")
+        throw new Error("Real service update did not return its Record");
+      expect(updated.value.readableValues).not.toHaveProperty(privateDirectFieldId);
+      expect(updated.value.readableValues).not.toHaveProperty(privateTransitiveFieldId);
+
+      const replayedUpdate = await service.save(session, selection, updateCommand);
+      expect(replayedUpdate).toMatchObject({
         kind: "available",
         value: {
           outcome: "saved",
@@ -927,6 +1032,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           readableValues: { [fieldId]: "Updated once" },
         },
       });
+      if (replayedUpdate.kind !== "available" || replayedUpdate.value.outcome !== "saved")
+        throw new Error("Real service replay did not return its Record");
+      expect(replayedUpdate.value.readableValues).not.toHaveProperty(privateDirectFieldId);
+      expect(replayedUpdate.value.readableValues).not.toHaveProperty(privateTransitiveFieldId);
       await expect(
         service.save(session, selection, {
           ...updateCommand,
@@ -982,6 +1091,9 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       const fieldColumn = `f_${fieldId.replaceAll("-", "")}`;
       const amountColumn = `f_${amountFieldId.replaceAll("-", "")}`;
       const calculatedFieldColumn = `f_${calculatedFieldId.replaceAll("-", "")}`;
+      const privateSourceFieldColumn = `f_${privateSourceFieldId.replaceAll("-", "")}`;
+      const privateDirectFieldColumn = `f_${privateDirectFieldId.replaceAll("-", "")}`;
+      const privateTransitiveFieldColumn = `f_${privateTransitiveFieldId.replaceAll("-", "")}`;
       const countTerminalEffects = async () => {
         const [counts] = await admin.unsafe<
           {
@@ -1046,6 +1158,9 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           title: string;
           amount: unknown;
           title_copy: string;
+          private_source: string;
+          private_direct: string;
+          private_transitive: string;
           concurrency_number: string;
           receipt_count: string;
           activity_count: string;
@@ -1055,6 +1170,9 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       >(
         `select record.${fieldColumn} as title, record.${amountColumn} as amount,
           record.${calculatedFieldColumn} as title_copy,
+          record.${privateSourceFieldColumn} as private_source,
+          record.${privateDirectFieldColumn} as private_direct,
+          record.${privateTransitiveFieldColumn} as private_transitive,
           record.concurrency_number::text,
           (select pg_catalog.count(*)::text from vortex_record.save_command_receipts
            where organization_id = $1) as receipt_count,
@@ -1074,6 +1192,9 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         title: "Updated once",
         amount: { amount: "12.34", currency: "NZD" },
         title_copy: "Updated once",
+        private_source: "private generated source",
+        private_direct: "private generated source",
+        private_transitive: "private generated source",
         concurrency_number: "2",
         receipt_count: "4",
         activity_count: "2",

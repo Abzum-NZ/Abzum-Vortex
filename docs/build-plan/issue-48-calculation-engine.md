@@ -4,7 +4,7 @@
 [Save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) ·
 [Field specification](../specification/05-modules-fields-and-relationships.md#calculations-and-totals)
 
-## Delivered pure calculation evaluator
+## First delivery
 
 The existing six closed calculation forms are delivered in Record, independently
 of the App Designer. They reuse the existing exact-decimal representation,
@@ -121,7 +121,7 @@ aggregates filtered for a viewer remain viewer-specific and are not persisted as
 universal totals. The existing mixed-currency and access/concurrency acceptance
 remains required before the whole task closes.
 
-## Delivered pure relationship-total evaluator
+## Next delivery: relationship totals
 
 The existing pure Record evaluator applies the exact total definition, source
 relationship and source record type to selected related record values. Those
