@@ -339,6 +339,21 @@ run_sql "
   select vortex_access.initialize_platform_permission_catalogue(
     '$organization_id', '$account_id', '$correlation_catalogue'
   );
+  insert into vortex_access.permission_continuities (
+    organization_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id, state,
+    continuity_revision, meaning_fingerprint,
+    last_processed_registration_revision, changed_at
+  )
+  select entry.organization_id, null, entry.owner_kind, entry.owner_id,
+    entry.permission_id, 'platform', entry.registration_owner_id,
+    'available', 1, entry.meaning_fingerprint, entry.registration_revision,
+    pg_catalog.clock_timestamp()
+  from vortex_access.permission_catalogue_entries as entry
+  where entry.organization_id = '$organization_id'
+    and entry.permission_id = 'c658c254-2884-414a-9012-512c0cfe4b34'
+    and entry.registration_kind = 'platform'
+    and entry.registration_revision = 1;
   insert into vortex_access.organization_roles (
     organization_id, role_id, role_kind, role_key, live_revision, created_by, created_at
   ) values (
@@ -851,7 +866,7 @@ wait_for_database_blocker "$revocation_first_update_backend" "$revocation_first_
 touch "$proof_root/revocation-first-release"
 wait_owned_worker "$revocation_first_pid"
 wait_owned_worker "$revocation_first_update_pid"
-grep -Fq 'changed|revoke|2|2' "$proof_root/revocation-first.log" || {
+grep -Fq 'changed|revoke|2|3' "$proof_root/revocation-first.log" || {
   echo 'revocation-first did not commit the real terminal assignment state and Access version' >&2
   exit 1
 }
@@ -859,7 +874,7 @@ grep -Fq '42501' "$proof_root/revocation-first-update.log" || {
   echo 'a settings update staged before revocation did not refuse after its Access wait' >&2
   exit 1
 }
-[ "$(run_sql "select pg_catalog.concat_ws('|', version.current_version, assignment.revision, assignment.state) from vortex_access.organization_access_versions as version join vortex_access.organization_role_assignments as assignment on assignment.organization_id = version.organization_id where version.organization_id = '$organization_id' and assignment.role_assignment_id = '$assignment_id';")" = '2|2|revoked' ] || {
+[ "$(run_sql "select pg_catalog.concat_ws('|', version.current_version, assignment.revision, assignment.state) from vortex_access.organization_access_versions as version join vortex_access.organization_role_assignments as assignment on assignment.organization_id = version.organization_id where version.organization_id = '$organization_id' and assignment.role_assignment_id = '$assignment_id';")" = '3|2|revoked' ] || {
   echo 'revocation-first left unexpected assignment or Access state' >&2
   exit 1
 }
@@ -941,11 +956,11 @@ wait_owned_worker "$update_first_revocation_pid"
   echo 'update-first did not commit its one protected settings revision' >&2
   exit 1
 }
-grep -Fq 'changed|revoke|2|3' "$proof_root/update-first-revocation.log" || {
+grep -Fq 'changed|revoke|2|4' "$proof_root/update-first-revocation.log" || {
   echo 'the real revocation after the settings update did not commit exact state' >&2
   exit 1
 }
-[ "$(run_sql "select pg_catalog.concat_ws('|', version.current_version, assignment.revision, assignment.state) from vortex_access.organization_access_versions as version join vortex_access.organization_role_assignments as assignment on assignment.organization_id = version.organization_id where version.organization_id = '$organization_id' and assignment.role_assignment_id = '$revocation_target_assignment_id';")" = '3|2|revoked' ] || {
+[ "$(run_sql "select pg_catalog.concat_ws('|', version.current_version, assignment.revision, assignment.state) from vortex_access.organization_access_versions as version join vortex_access.organization_role_assignments as assignment on assignment.organization_id = version.organization_id where version.organization_id = '$organization_id' and assignment.role_assignment_id = '$revocation_target_assignment_id';")" = '4|2|revoked' ] || {
   echo 'update-first/revocation ordering left unexpected assignment or Access state' >&2
   exit 1
 }
