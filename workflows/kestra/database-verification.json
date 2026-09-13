@@ -155,6 +155,11 @@
       "migration": "supabase/migrations/20260913130000_configured_tenant_provisioning.sql",
       "proof": "supabase/tests/configured-tenant-provisioning-concurrency.test.sh",
       "label": "Configured tenant provisioning"
+    },
+    {
+      "migration": "supabase/migrations/20260913143000_tenant_governance.sql",
+      "proof": "supabase/tests/tenant-governance-concurrency.test.sh",
+      "label": "Tenant governance"
     }
   ],
   "lintSchemas": [
