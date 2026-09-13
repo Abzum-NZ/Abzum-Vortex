@@ -203,7 +203,9 @@ select throws_ok(
 select is(
   (select pg_catalog.count(*) from vortex_identity.accepted_administration_receipts
     where cluster_id = 'c5600000-0000-4000-8000-000000000001'
-      and operation_key in ('suspend_tenant', 'reactivate_tenant')),
+      and actor_id = '95600000-0000-4000-8000-000000000001'
+      and operation_key in ('suspend_tenant', 'reactivate_tenant')
+      and subject_ids @> array[(select tenant_id from lifecycle_tenant)]),
   2::bigint,
   'only the two first successful tenant transitions write receipts'
 );
@@ -337,7 +339,12 @@ select is(
 select is(
   (select pg_catalog.count(*) from vortex_identity.accepted_administration_receipts
     where cluster_id = 'c5600000-0000-4000-8000-000000000001'
-      and duplicate_key = 'd5600000-0000-4000-8000-000000000031'),
+      and actor_id = '95600000-0000-4000-8000-000000000001'
+      and operation_key = 'reactivate_tenant'
+      and duplicate_key = 'd5600000-0000-4000-8000-000000000031'
+      and subject_ids @> array[
+        '15600000-0000-4000-8000-000000000030'::uuid
+      ]),
   0::bigint,
   'failed readiness writes no accepted lifecycle receipt'
 );
@@ -362,6 +369,7 @@ select * from vortex_identity.provision_tenant(
 delete from vortex_identity.accepted_administration_receipts as receipt
 using legacy_adopted_tenant as fixture
 where receipt.cluster_id = 'c5600000-0000-4000-8000-000000000001'
+  and receipt.actor_id = '95600000-0000-4000-8000-000000000001'
   and receipt.operation_key = 'provision_tenant'
   and receipt.subject_ids @> array[fixture.tenant_id];
 
@@ -427,9 +435,16 @@ where assignment.organization_id = fixture.root_organization_id
 select is(
   (select pg_catalog.count(*)
     from vortex_identity.accepted_administration_receipts as receipt
-    join legacy_adopted_tenant as fixture
-      on receipt.tenant_id = fixture.tenant_id
-    where receipt.operation_key in ('adopt_tenant', 'provision_tenant')),
+    cross join legacy_adopted_tenant as fixture
+    where (
+      receipt.operation_key = 'adopt_tenant'
+      and receipt.tenant_id = fixture.tenant_id
+    ) or (
+      receipt.cluster_id = 'c5600000-0000-4000-8000-000000000001'
+      and receipt.actor_id = '95600000-0000-4000-8000-000000000001'
+      and receipt.operation_key = 'provision_tenant'
+      and receipt.subject_ids @> array[fixture.tenant_id]
+    )),
   0::bigint,
   'the fixture has no tenant adoption or provisioning evidence'
 );
@@ -464,11 +479,13 @@ select is(
 select is(
   (select pg_catalog.count(*)
     from vortex_identity.accepted_administration_receipts as receipt
-    join legacy_adopted_tenant as fixture
-      on receipt.tenant_id = fixture.tenant_id
-    where receipt.operation_key = 'reactivate_tenant'
+    cross join legacy_adopted_tenant as fixture
+    where receipt.cluster_id = 'c5600000-0000-4000-8000-000000000001'
+      and receipt.actor_id = '95600000-0000-4000-8000-000000000001'
+      and receipt.operation_key = 'reactivate_tenant'
       and receipt.duplicate_key =
-        'd5600000-0000-4000-8000-000000000042'),
+        'd5600000-0000-4000-8000-000000000042'
+      and receipt.subject_ids @> array[fixture.tenant_id]),
   0::bigint,
   'the stewardship refusal writes no accepted reactivation receipt'
 );

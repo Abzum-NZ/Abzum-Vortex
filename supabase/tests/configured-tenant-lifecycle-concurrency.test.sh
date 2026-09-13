@@ -384,7 +384,7 @@ grep -Fq 'Organisation selection is unavailable' <<<"$request_after_suspend" || 
 # committing. Reactivation then refuses without changing tenant state or
 # recording acceptance.
 [ "$(run_sql "select outcome||'|'||revision from vortex_identity.suspend_tenant('$cluster_id','$operator_id','$duplicate_final_suspend','sha256:5656565656565656565656565656565656565656565656565656565656565656','$tenant_id',13);")" = 'accepted|14' ] || { echo 'final suspension failed' >&2; exit 1; }
-receipt_count_before="$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where tenant_id='$tenant_id' and operation_key='reactivate_tenant' and duplicate_key='$duplicate_steward_refusal';")"
+receipt_count_before="$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where cluster_id='$cluster_id' and actor_id='$operator_id' and operation_key='reactivate_tenant' and duplicate_key='$duplicate_steward_refusal' and subject_ids @> array['$tenant_id'::uuid];")"
 readonly receipt_count_before
 "${psql_command[@]}" >"$proof_root/steward-refusal.log" 2>&1 <<SQL &
 begin; set local lock_timeout='25s'; set local statement_timeout='35s';
@@ -422,12 +422,12 @@ grep -qx 'V3002' "$proof_root/steward-refusal-lifecycle.log" || { echo 'reactiva
   echo 'refused reactivation changed the tenant' >&2
   exit 1
 }
-[ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where tenant_id='$tenant_id' and operation_key='reactivate_tenant' and duplicate_key='$duplicate_steward_refusal';")" = "$receipt_count_before" ] || {
+[ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where cluster_id='$cluster_id' and actor_id='$operator_id' and operation_key='reactivate_tenant' and duplicate_key='$duplicate_steward_refusal' and subject_ids @> array['$tenant_id'::uuid];")" = "$receipt_count_before" ] || {
   echo 'refused reactivation wrote an accepted receipt' >&2
   exit 1
 }
 
-[ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where cluster_id='$cluster_id' and operation_key in ('suspend_tenant','reactivate_tenant') and duplicate_key in ('$duplicate_compete_two','$duplicate_create_lifecycle','$duplicate_steward_refusal');")" = 0 ] || {
+[ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where cluster_id='$cluster_id' and actor_id='$operator_id' and operation_key in ('suspend_tenant','reactivate_tenant') and duplicate_key in ('$duplicate_compete_two','$duplicate_create_lifecycle','$duplicate_steward_refusal') and subject_ids @> array['$tenant_id'::uuid];")" = 0 ] || {
   echo 'a stale concurrency path wrote a tenant lifecycle receipt' >&2
   exit 1
 }
