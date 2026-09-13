@@ -15,6 +15,7 @@
     "@vortex/contracts": "workspace:*",
     "@vortex/db": "workspace:*",
     "@vortex/definition": "workspace:*",
+    "@vortex/identity": "workspace:*",
     "server-only": "0.0.1"
   },
   "vortex": {

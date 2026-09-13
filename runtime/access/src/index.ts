@@ -28,6 +28,11 @@ export {
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";
 export {
+  createOrganizationRuntimeSettingsAdministrationService,
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  type UpdateOrganizationRuntimeSettingsCommand,
+} from "./organization-runtime-settings-administration";
+export {
   runOrganizationAccessOperation,
   type OrganizationAccessOperationResult,
 } from "./organization-access-decision";

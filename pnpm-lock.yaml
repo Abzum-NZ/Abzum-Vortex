@@ -203,6 +203,9 @@ importers:
       '@vortex/definition':
         specifier: workspace:*
         version: link:../definition
+      '@vortex/identity':
+        specifier: workspace:*
+        version: link:../identity
       server-only:
         specifier: 0.0.1
         version: 0.0.1

@@ -72,6 +72,88 @@ describe("human organisation request", () => {
     expect(calls.join("\n")).not.toContain("resolve_human_organization_scope(");
   });
 
+  it("resolves scope, prepares on the runtime transaction, then enters the request callback", async () => {
+    const calls: string[] = [];
+    const runtimeTransaction: RuntimeDatabaseTransaction = {
+      query: async () => {
+        calls.push("resolve");
+        return [
+          {
+            tenant_id: id(4),
+            organization_id: id(5),
+            organization_account_id: id(6),
+            access_version: "7",
+          },
+        ] as never;
+      },
+    };
+    const requestTransaction: RequestDatabaseTransaction = { query: async () => [] };
+    const service = createHumanOrganizationRequestService({
+      identityAuthorityId: authorityId,
+      clock: () => new Date("2026-09-05T01:00:00.000Z"),
+      correlationId: () => id(9),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve(runtimeTransaction);
+        return operation(requestTransaction, resolved.scope);
+      },
+    });
+
+    await expect(
+      service.runChangePrepared(
+        session(),
+        { organizationId: id(5) },
+        async (transaction, scope) => {
+          expect(transaction).toBe(runtimeTransaction);
+          expect(scope.organizationId).toBe(id(5));
+          calls.push("prepare");
+        },
+        async (transaction, scope) => {
+          expect(transaction).toBe(requestTransaction);
+          expect(scope.organizationId).toBe(id(5));
+          calls.push("request");
+          return "changed";
+        },
+      ),
+    ).resolves.toEqual({ kind: "available", value: "changed" });
+
+    expect(calls).toEqual(["resolve", "prepare", "request"]);
+  });
+
+  it("does not enter the request callback when preparation rejects", async () => {
+    const request = vi.fn(async () => "must not run");
+    const service = createHumanOrganizationRequestService({
+      identityAuthorityId: authorityId,
+      clock: () => new Date("2026-09-05T01:00:00.000Z"),
+      correlationId: () => id(9),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve({
+          query: async () =>
+            [
+              {
+                tenant_id: id(4),
+                organization_id: id(5),
+                organization_account_id: id(6),
+                access_version: "7",
+              },
+            ] as never,
+        });
+        return operation({ query: async () => [] }, resolved.scope);
+      },
+    });
+
+    await expect(
+      service.runChangePrepared(
+        session(),
+        { organizationId: id(5) },
+        async () => {
+          throw new Error("preparation failed");
+        },
+        request,
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("derives the closed context inside the protected transaction", async () => {
     let captured: SessionContext | undefined;
     const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
