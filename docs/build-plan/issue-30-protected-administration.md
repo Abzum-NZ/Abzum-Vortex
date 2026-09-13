@@ -7,7 +7,7 @@ Governing requirements: [people and organisations](../specification/02-people-or
 [data contracts](../specification/appendices/data-contracts.md) and
 [platform-only core](../specification/appendices/core-contract-boundary.md).
 
-## Status and dependency boundary
+## Status, delivered slices and dependency boundary
 
 Implementation is unblocked: the exact hosted delivery for the
 [central Access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
@@ -29,6 +29,23 @@ code or authority boundary.
 This work unlocks [the isolation suite #29](https://github.com/Abzum-NZ/Abzum-Vortex/issues/29),
 [administration applications #72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72)
 and [guided IAM setup #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
+
+Delivered on `testing`:
+
+- **Slice 1** — tenant-administration facts and protected receipt boundary
+  ([PR #441](https://github.com/Abzum-NZ/Abzum-Vortex/pull/441)).
+- **Slice 2** — trusted configured-system provisioning and explicit adoption
+  ([PR #444](https://github.com/Abzum-NZ/Abzum-Vortex/pull/444)).
+- **Slice 3A** — human tenant authority, bounded tenant reads, and
+  tenant-administrator grant, change and revoke
+  ([PR #445](https://github.com/Abzum-NZ/Abzum-Vortex/pull/445)).
+
+The active implementation assignment is **Slice 3B only: rename and reparent
+an existing organisation**. It is intentionally separate from organisation
+creation and lifecycle transitions so its hierarchy behaviour, authority and
+concurrency proof can be reviewed on their own. Delivery to Testing remains a
+closure gate for the exact revision; it does not prevent this independently
+unblocked slice from being built and reviewed.
 
 ## Outcome
 
@@ -207,19 +224,21 @@ a foreign or inactive target exists.
 
 ### 3. Tenant governance and structure
 
-- Add the tenant launcher and bounded deterministic hierarchy and administrator
-  reads, protected by exact tenant capabilities.
-- Grant, change and revoke tenant assignments with revision and duplicate
-  protection. A human grantor needs `platform.tenant.administrators.manage` and may
-  grant only capabilities in their current effective set. Preserve at least one
-  active-projection, already-started, non-expiring assignment that contains that
-  management capability.
-- Create, rename, reparent, suspend, reactivate and administratively archive an
-  organisation while preserving [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23)
-  tenant, parent, cycle, locking and lifecycle invariants.
-- Suspension or archive affects only the named organisation. Parent suspension
-  neither rewrites nor blocks an independently active child; tenant suspension
-  blocks every selected organisation in that tenant. Archive is terminal here.
+- **Delivered 3A:** tenant launcher and bounded deterministic hierarchy and
+  administrator reads; grant, change and revoke tenant assignments with exact
+  capability, revision, duplicate and final-manager protection.
+- **Current 3B:** rename an existing organisation's display name, or reparent an
+  existing organisation to a same-tenant parent or to the tenant root. Both use
+  the exact `organizations.rename` or `organizations.reparent` capability,
+  expected organisation revision, existing tenant serialization, existing
+  receipt semantics and a post-wait authority recheck. Reparenting reuses #23's
+  same-tenant, self-parent and cycle constraints. It does not alter descendants:
+  their existing links make them move with the subtree.
+- **Later, separately picked up:** tenant-authorised organisation creation with
+  explicit steward composition; suspend, reactivate and administrative archive;
+  tenant lifecycle. Lifecycle keeps the existing non-cascading rule: parent
+  suspension neither rewrites nor blocks an independently active child; archive
+  is terminal when that later slice delivers it.
 
 ### 4. System-only cluster lifecycle
 
@@ -230,6 +249,42 @@ a foreign or inactive target exists.
 - Add the bounded tenant suspend/reactivate path required by cluster operations.
   Do not mutate provider/Auth identity or sessions, another cluster, descendant
   organisation states or organisation Access versions.
+
+## Slice 3B — protected rename and reparent
+
+This slice has exactly two commands. A rename changes only an organisation's
+display name. A reparent changes only its parent organisation reference, either
+to another organisation in the same tenant or to `null` for a root organisation.
+Neither command creates an organisation, changes its permanent identifier,
+short name, tenant, lifecycle, accounts, local roles, record ownership or Access
+version.
+
+Both commands derive the caller from the verified session and selected active
+tenant. They require the corresponding exact current structural capability; an
+organisation account is neither required nor treated as a fallback. They use the
+existing protected tenant-governance transaction and receipt pattern: an exact
+accepted retry returns the recorded result, a changed-input duplicate conflicts,
+and a refusal or rollback creates no accepted receipt.
+
+Reparenting must continue to enforce #23's tenant, self-parent and cycle rules.
+It must also safely refuse a foreign or missing target, a prohibited lifecycle
+state identified by the existing structural rules, and a stale expected revision.
+An active child beneath a suspended parent remains valid when #23 permits that
+existing shape; this slice must not introduce a new parent-active requirement.
+
+The proof must establish: authorised operation without target-organisation
+membership; root moves and subtree preservation; exact capability separation;
+foreign/missing/self/descendant refusal; replay and changed-payload conflict;
+no mutation or receipt on refusal; and two concurrency cases. First, competing
+moves cannot create a cycle. Second, an authority that was effective while queued
+on the tenant lock but expires before it obtains the lock must be refused without
+changing structure or creating a receipt. Reuse the deterministic database-clock
+approach from Slice 3A rather than adding a timer or a second authority model.
+
+Do not add a generic command dispatcher, a hierarchy representation, a policy
+engine, a counter, a history table or another receipt mechanism. The existing
+parent links, governance locks, capability catalogue and accepted receipts are
+the complete implementation basis.
 
 ### 5. Organisation-local reads
 
