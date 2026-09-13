@@ -191,6 +191,7 @@ lifecycle_call() {
 same_call="$(lifecycle_call suspend_tenant "$duplicate_same" "$(printf '2%.0s' {1..64})" 1)"
 "${psql_command[@]}" >"$proof_root/same-one.log" 2>&1 <<SQL &
 begin; set local lock_timeout='25s'; set local statement_timeout='35s';
+set local role vortex_runtime;
 select pg_catalog.pg_backend_pid() \g '$proof_root/same-one.pid'
 $same_call \g '$proof_root/same-one.result'
 \! touch '$proof_root/same-one.ready'
@@ -200,6 +201,7 @@ SQL
 w=$!; workers+=("$w"); wait_file "$proof_root/same-one.ready"; same_one_pid="$(read_pid "$proof_root/same-one.pid")"
 "${psql_command[@]}" >"$proof_root/same-two.log" 2>&1 <<SQL &
 begin; set local lock_timeout='25s'; set local statement_timeout='35s';
+set local role vortex_runtime;
 select pg_catalog.pg_backend_pid() \g '$proof_root/same-two.pid'
 $same_call \g '$proof_root/same-two.result'
 commit;
@@ -209,7 +211,7 @@ wait_blocked "$same_two_pid" "$same_one_pid" 'same-key retry queued on receipt s
 touch "$proof_root/release-same"; wait_worker "${workers[0]}" "$proof_root/same-one.log" 'first same-key transition'; wait_worker "${workers[1]}" "$proof_root/same-two.log" 'same-key replay'
 [ "$(tr -d '[:space:]' <"$proof_root/same-one.result")" = 'accepted|2' ] || { echo 'first same-key transition was not accepted' >&2; exit 1; }
 [ "$(tr -d '[:space:]' <"$proof_root/same-two.result")" = 'replayed|2' ] || { echo 'same-key retry did not replay' >&2; exit 1; }
-[ "$(run_sql "select outcome||'|'||revision from vortex_identity.reactivate_tenant('$cluster_id','$operator_id','$duplicate_reactivate_one','sha256:3333333333333333333333333333333333333333333333333333333333333333','$tenant_id',2);")" = 'accepted|3' ] || { echo 'first reactivation failed' >&2; exit 1; }
+[ "$(run_sql "begin; set local role vortex_runtime; select outcome||'|'||revision from vortex_identity.reactivate_tenant('$cluster_id','$operator_id','$duplicate_reactivate_one','sha256:3333333333333333333333333333333333333333333333333333333333333333','$tenant_id',2); commit;")" = 'accepted|3' ] || { echo 'runtime reactivation did not commit' >&2; exit 1; }
 
 # Competing transitions serialize; only the first revision can commit.
 first_compete="$(lifecycle_call suspend_tenant "$duplicate_compete_one" "$(printf '4%.0s' {1..64})" 3)"
