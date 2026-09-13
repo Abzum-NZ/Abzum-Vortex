@@ -37,7 +37,7 @@ private Identity and Access storage:
 
 - trusted initial provisioning, explicit adoption and system-only cluster lifecycle;
 - tenant-authorised hierarchy, lifecycle and tenant-administrator operations;
-- organisation-authorised account, invitation and runtime-setting operations; and
+- organisation-authorised account and invitation operations; and
 - bounded safe administrative reads and deterministic replay evidence.
 
 Tenant authority is structural only. It never grants organisation membership,
@@ -105,8 +105,12 @@ flowchart LR
 ## Reuse delivered stewardship and Identity work
 
 Provisioning creates or confirms the tenant, organisation, cluster-local identity
-projection, active organisation account, strict runtime settings and Access-version
-baseline. It then invokes the delivered [#33 stewardship adoption](../evidence/issue-33-stewardship/README.md)
+projection, active organisation account and Access-version baseline. Inside that
+same outer transaction, it calls the Identity-owned initializer from
+[#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430) with the explicit
+runtime-settings values. #430 owns the settings shape, validation, storage,
+persistence and internal runtime reader; #30 does not duplicate any of them. It
+then invokes the delivered [#33 stewardship adoption](../evidence/issue-33-stewardship/README.md)
 inside the same outer transaction. That composition already creates the exact
 organisation-owned steward role, direct permanent assignment, organisation-wide
 delegation, current stewardship requirement and one Access-version change. Do not
@@ -152,19 +156,22 @@ identifier requirement; generic Activity remains with
 [#252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) and
 [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115).
 
-Add private forced-RLS storage for tenant assignments, organisation runtime
-settings and accepted administration receipts. Give public, browser, Data API,
-runtime and request roles no direct table or raw-helper access. Actors, clocks,
+Add two #30-private forced-RLS fact tables: tenant assignments and accepted
+administration receipts. [#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430)
+owns the separate runtime-settings table. Give public, browser, Data API, runtime
+and request roles no direct table or raw-helper access. Actors, clocks,
 correlations, resolved scopes and permission evidence are trusted server facts,
 not editable command fields.
 
-Use one minimal accepted-receipt pattern across successful commands. Scope its
+Use one minimal accepted-receipt pattern across successful #30 commands. Scope its
 uniqueness by trusted actor, tenant or cluster scope, operation and duplicate key;
 bind a canonical input fingerprint and resulting identifiers/revisions. An exact
 retry returns the accepted result without another mutation or Access increment;
 a changed payload conflicts. Store no raw input document, invitation secret,
 credentials, email/profile data, permission snapshot, business value or second
-Activity payload. A refused or failed transaction writes no success receipt.
+Activity payload. A refused or failed transaction writes no success receipt. This
+pattern does not wrap or replace #430's settings initializer or revision-checked
+update behaviour.
 
 Creates require duplicate protection but no prior revision. Updates and revocations
 also require the exact current revision. Successful results return only the typed
@@ -177,14 +184,10 @@ a foreign or inactive target exists.
 ### 1. Contracts and storage foundation
 
 - Correct the tenant-assignment contract and add strict commands, results, safe
-  refusals, operator context, tenant launcher/read models, runtime settings and
-  receipt contracts.
-- Validate language as canonical BCP 47/ECMA-402, time zone as a canonical named
-  IANA zone, currency through a versioned current ISO 4217 alpha-3 allowlist, date
-  format as `short|medium|long|full`, and number format through one closed
-  documented ECMA-402 grouping profile. Reuse these validators for account
-  preferences.
-- Add the three private fact tables, their exact owner-only reads and storage
+  refusals, operator context, tenant launcher/read models and receipt contracts.
+- Reuse #430's canonical language and time-zone validators for organisation-account
+  preferences; do not duplicate those validators.
+- Add the two #30-private fact tables, their exact owner-only reads and storage
   invariants. Do not add an organisation role table, Access counter, permission
   cache, assignment history or generic policy engine.
 
@@ -192,8 +195,9 @@ a foreign or inactive target exists.
 
 - Add one server-only configured operator boundary with a non-nil system actor.
 - Provision a tenant and root organisation with explicitly nominated tenant and
-  organisation stewards, strict settings, Access baseline and active projection
-  and account; invoke delivered stewardship adoption and commit one receipt.
+  organisation stewards, explicit #430 runtime settings, Access baseline and
+  active projection and account; invoke delivered stewardship adoption and commit
+  one #30 receipt.
 - Create a later organisation through the same structural core after tenant
   authorization, always with an explicitly nominated organisation steward. The
   creating tenant administrator receives no organisation role unless separately
@@ -229,8 +233,11 @@ a foreign or inactive target exists.
 
 ### 5. Organisation-local reads
 
-- Return bounded, deterministic safe views of the current organisation's accounts,
-  invitations and runtime settings.
+- Return bounded, deterministic safe views of the current organisation's accounts
+  and invitations. The administrative runtime-settings view first makes the exact
+  `platform.organization.runtime_settings.read` decision through #34, then invokes
+  #430's internal reader for the resolved organisation in that same transaction;
+  it does not recreate settings storage or a runtime reader.
 - Require the exact registered `.read` permission through the completed
   [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) context and
   [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) decision. Membership
@@ -246,8 +253,6 @@ a foreign or inactive target exists.
 - Invoke the [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) no-intent
   invitation create/revoke composition. Return the raw secret only for the first
   committed creation; an exact replay returns metadata without a secret.
-- Update strict runtime settings with expected revision and duplicate protection.
-  Settings have their own revision and do not create another Access counter.
 
 ### 7. Integrated evidence and delivery
 
@@ -285,8 +290,10 @@ delivery. Production remains separately gated.
       [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24) invariants and exact
       replay never returns the raw secret. This task creates no invitation access
       intent.
-- [ ] Runtime settings use the same canonical standards in TypeScript and
-      persistence and update without another Access counter.
+- [ ] Provisioning initializes explicit runtime settings through #430's
+      Identity-owned initializer in its existing outer transaction. Administrative
+      settings reads use the exact `.read` permission and #430 reader; #30 does
+      not own settings validation, storage, updates or retry semantics.
 - [ ] Receipts provide deterministic same-input replay and changed-input conflict
       without storing secrets, profiles, business values or duplicate authority.
 - [ ] Safe reads are bounded, deterministic and scope-filtered and expose no foreign

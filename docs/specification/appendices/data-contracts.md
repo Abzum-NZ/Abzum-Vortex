@@ -218,7 +218,7 @@ An **organisation selection candidate** contains one `organizationId` and an opt
 
 ### Organisation runtime settings
 
-The Identity boundary owns only the language, time zone, default currency, date format, number format and revision required to render arbitrary application data before an administration application loads. Legal/trading names, registration details, contact details, brand assets, financial-year choices and business-calendar entries are ordinary records owned by administration applications under the [core contract boundary](core-contract-boundary.md).
+The Identity boundary owns only the language, time zone, default currency, date format, number format and revision required to render arbitrary application data before an administration application loads. [#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430) owns this one settings shape, its strict validation, private persistence, revision-checked update and internal runtime reader. [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) supplies explicit values only when provisioning and calls that initializer in its existing transaction; an administrative view first requires its exact `.read` permission, then uses the #430 reader. Legal/trading names, registration details, contact details, brand assets, financial-year choices and business-calendar entries are ordinary records owned by administration applications under the [core contract boundary](core-contract-boundary.md).
 
 ## Permission and role contracts
 
