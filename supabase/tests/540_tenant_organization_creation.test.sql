@@ -546,6 +546,32 @@ select is(
   'revoked|2',
   'creation replay does not restore the replaced original stewardship assignment'
 );
+select throws_ok(
+  $$ select * from vortex_identity.create_tenant_organization(
+    '45400000-0000-4000-8000-000000000001',
+    'd5400000-0000-4000-8000-000000000099',
+    'sha256:' || pg_catalog.repeat('c', 64),
+    (select tenant_id from creation_tenant),
+    (select root_organization_id from creation_tenant),
+    'inactive_nominee', 'Inactive nominee',
+    '45400000-0000-4000-8000-000000000003',
+    'Inactive nominee', 'en-NZ', 'Pacific/Auckland',
+    'en-NZ', 'Pacific/Auckland', 'NZD', 'short', 'auto'
+  ) $$,
+  'V3101'::char(5), null,
+  'a first-time creation refuses an existing inactive nominee'
+);
+select is(
+  (select pg_catalog.count(*)::text || '|' ||
+          (select pg_catalog.count(*)::text
+           from vortex_identity.accepted_administration_receipts
+           where duplicate_key = 'd5400000-0000-4000-8000-000000000099')
+   from vortex_identity.organizations
+   where tenant_id = (select tenant_id from creation_tenant)
+     and short_name = 'inactive_nominee'),
+  '0|0',
+  'inactive nominee refusal leaves no organisation or accepted receipt'
+);
 select is(
   (select pg_catalog.count(*) from vortex_identity.accepted_administration_receipts
     where tenant_id = (select tenant_id from creation_tenant)
