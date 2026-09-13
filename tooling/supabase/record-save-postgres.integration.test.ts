@@ -100,6 +100,34 @@ const activityStaleTotalParentId = id(78);
 const commandParentActivityFailureId = id(79);
 const activityParentActivityFailureId = id(80);
 const occurrenceParentActivityFailureId = id(81);
+const commandRuledRelationshipId = id(82);
+const activityRuledRelationshipId = id(83);
+const commandOverlappingReplayId = id(85);
+const activityOverlappingReplayOneId = id(86);
+const activityOverlappingReplayTwoId = id(87);
+const occurrenceOverlappingReplayId = id(88);
+const commandUnjoinedWriterId = id(89);
+const activityUnjoinedWriterId = id(90);
+const occurrenceUnjoinedWriterId = id(91);
+const commandRecursiveGrandId = id(92);
+const activityRecursiveGrandId = id(93);
+const occurrenceRecursiveGrandId = id(94);
+const commandRecursiveParentId = id(95);
+const activityRecursiveParentId = id(96);
+const occurrenceRecursiveParentId = id(97);
+const commandRecursiveLeafId = id(98);
+const activityRecursiveLeafId = id(99);
+const occurrenceRecursiveLeafId = id(100);
+const commandRecursiveCycleId = id(101);
+const activityRecursiveCycleId = id(102);
+const commandMoneySourceId = id(103);
+const activityMoneySourceId = id(104);
+const occurrenceMoneySourceId = id(105);
+const commandMixedCurrencyId = id(106);
+const activityMixedCurrencyId = id(107);
+const commandChangedClosureId = id(108);
+const activityChangedClosureId = id(109);
+const occurrenceChangedClosureId = id(110);
 const publishedAt = "2026-09-13T00:00:00.000Z";
 
 const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse({
@@ -293,6 +321,25 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
               },
             },
           },
+          {
+            id: "field_total_parent_money",
+            key: "money_total",
+            type: "total",
+            label: "Money total",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              relationship: "example.record_save_proof:total_child.parent",
+              operation: "sum",
+              result_type: "money",
+              field: "money_amount",
+            },
+          },
         ],
         relationships: [],
       },
@@ -350,6 +397,20 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
             settings: {},
           },
           {
+            id: "field_total_child_money",
+            key: "money_amount",
+            type: "money",
+            label: "Money amount",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { currency_mode: "organisation_default", minimum: "0" },
+          },
+          {
             id: "field_total_child_parent",
             key: "parent",
             type: "link",
@@ -373,6 +434,135 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
             key: "parent",
             from_field: "parent",
             to_record_type: "example.record_save_proof:total_parent",
+            cardinality: "many_to_one",
+            on_parent_delete: "empty_optional",
+          },
+        ],
+      },
+      {
+        id: "record_ruled_child",
+        storage_contract_id: "storage_ruled_child",
+        key: "ruled_child",
+        name: "Ruled child",
+        plural_name: "Ruled children",
+        storage_scope: "application_contained",
+        ownership_mode: "none",
+        title_field: "title",
+        standard_actions: ["create", "read", "update"],
+        custom_actions: [],
+        fields: [
+          {
+            id: "field_ruled_child_title",
+            key: "title",
+            type: "text",
+            label: "Title",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { max_length: 120 },
+          },
+          {
+            id: "field_ruled_child_parent",
+            key: "parent",
+            type: "link",
+            label: "Unrelated parent",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              target: "example.record_save_proof:total_parent",
+              reverse_key: "ruled_children",
+              on_parent_delete: "empty_optional",
+            },
+          },
+        ],
+        relationships: [
+          {
+            id: "relationship_ruled_parent",
+            key: "parent",
+            from_field: "parent",
+            to_record_type: "example.record_save_proof:total_parent",
+            cardinality: "many_to_one",
+            on_parent_delete: "empty_optional",
+          },
+        ],
+      },
+      {
+        id: "record_recursive_total",
+        storage_contract_id: "storage_recursive_total",
+        key: "recursive_total",
+        name: "Recursive total",
+        plural_name: "Recursive totals",
+        storage_scope: "application_contained",
+        ownership_mode: "none",
+        title_field: "title",
+        standard_actions: ["create", "read", "update"],
+        custom_actions: [],
+        fields: [
+          {
+            id: "field_recursive_title",
+            key: "title",
+            type: "text",
+            label: "Title",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { max_length: 120 },
+          },
+          {
+            id: "field_recursive_children_total",
+            key: "children_total",
+            type: "total",
+            label: "Children total",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              relationship: "example.record_save_proof:recursive_total.parent",
+              operation: "sum",
+              result_type: "decimal_number",
+              field: "children_total",
+            },
+          },
+          {
+            id: "field_recursive_parent",
+            key: "parent",
+            type: "link",
+            label: "Parent",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              target: "example.record_save_proof:recursive_total",
+              reverse_key: "children",
+              on_parent_delete: "empty_optional",
+            },
+          },
+        ],
+        relationships: [
+          {
+            id: "relationship_recursive_parent",
+            key: "parent",
+            from_field: "parent",
+            to_record_type: "example.record_save_proof:recursive_total",
             cardinality: "many_to_one",
             on_parent_delete: "empty_optional",
           },
@@ -452,29 +642,38 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: { readable_fields: ["title", "amount"], changeable_fields: [] },
       },
-      ...(["total_parent", "total_child"] as const).flatMap((recordType) =>
-        (["create", "read", "update"] as const).map((action) => ({
-          id: `permission_${recordType}_${action}`,
-          key: `example.record_save_proof.${recordType}.${action}`,
-          label: `${action} ${recordType}`,
-          description: `${action} the transactional total proof ${recordType}.`,
-          record_type: recordType,
-          action_kind: action,
-          administrative: false,
-          record_scope: { routes: [{ kind: "all_records" as const }] },
-          field_policy: {
-            readable_fields:
-              recordType === "total_parent"
-                ? ["title", "included_total", "display_total"]
-                : ["title", "amount", "included", "parent"],
-            changeable_fields:
-              action === "read"
-                ? []
-                : recordType === "total_parent"
-                  ? ["title"]
-                  : ["title", "amount", "included", "parent"],
-          },
-        })),
+      ...(["total_parent", "total_child", "ruled_child", "recursive_total"] as const).flatMap(
+        (recordType) =>
+          (["create", "read", "update"] as const).map((action) => ({
+            id: `permission_${recordType}_${action}`,
+            key: `example.record_save_proof.${recordType}.${action}`,
+            label: `${action} ${recordType}`,
+            description: `${action} the transactional total proof ${recordType}.`,
+            record_type: recordType,
+            action_kind: action,
+            administrative: false,
+            record_scope: { routes: [{ kind: "all_records" as const }] },
+            field_policy: {
+              readable_fields:
+                recordType === "total_parent"
+                  ? ["title", "included_total", "display_total", "money_total"]
+                  : recordType === "total_child"
+                    ? ["title", "amount", "included", "money_amount", "parent"]
+                    : recordType === "ruled_child"
+                      ? ["title", "parent"]
+                      : ["title", "children_total", "parent"],
+              changeable_fields:
+                action === "read"
+                  ? []
+                  : recordType === "total_parent"
+                    ? ["title"]
+                    : recordType === "total_child"
+                      ? ["title", "amount", "included", "money_amount", "parent"]
+                      : recordType === "ruled_child"
+                        ? ["title", "parent"]
+                        : ["title", "parent"],
+            },
+          })),
       ),
     ],
     actions: [
@@ -661,12 +860,24 @@ const totalParentStorageId = componentId("storage_contract", "storage_total_pare
 const totalParentTitleFieldId = componentId("field", "field_total_parent_title");
 const totalParentSumFieldId = componentId("field", "field_total_parent_sum");
 const totalParentDisplayFieldId = componentId("field", "field_total_parent_display");
+const totalParentMoneyFieldId = componentId("field", "field_total_parent_money");
 const totalChildRecordTypeId = componentId("record_type", "record_total_child");
 const totalChildStorageId = componentId("storage_contract", "storage_total_child");
 const totalChildTitleFieldId = componentId("field", "field_total_child_title");
 const totalChildAmountFieldId = componentId("field", "field_total_child_amount");
 const totalChildIncludedFieldId = componentId("field", "field_total_child_included");
+const totalChildMoneyFieldId = componentId("field", "field_total_child_money");
 const totalChildParentFieldId = componentId("field", "field_total_child_parent");
+const totalRelationshipId = componentId("relationship", "relationship_total_parent");
+const ruledChildRecordTypeId = componentId("record_type", "record_ruled_child");
+const ruledChildStorageId = componentId("storage_contract", "storage_ruled_child");
+const ruledChildTitleFieldId = componentId("field", "field_ruled_child_title");
+const ruledChildParentFieldId = componentId("field", "field_ruled_child_parent");
+const recursiveRecordTypeId = componentId("record_type", "record_recursive_total");
+const recursiveStorageId = componentId("storage_contract", "storage_recursive_total");
+const recursiveTitleFieldId = componentId("field", "field_recursive_title");
+const recursiveChildrenTotalFieldId = componentId("field", "field_recursive_children_total");
+const recursiveParentFieldId = componentId("field", "field_recursive_parent");
 const applicationRoleId = componentId("role", "role_user");
 const homePageId = componentId("page", "page_home");
 
@@ -790,9 +1001,13 @@ const resolvedRequestRunner = (transaction: TransactionSql): ResolvedRequestTran
 // removed after the organisation still names the proof's tenant and creator and
 // both roots are present. An absent fixture is a no-op so this can run before
 // setup; a partial or foreign fixture fails loudly instead of being deleted.
-const fixtureStorageTables = [storageContractId, totalParentStorageId, totalChildStorageId].map(
-  (storageId) => `record_data.rt_${storageId.replaceAll("-", "")}`,
-);
+const fixtureStorageTables = [
+  storageContractId,
+  totalParentStorageId,
+  totalChildStorageId,
+  ruledChildStorageId,
+  recursiveStorageId,
+].map((storageId) => `record_data.rt_${storageId.replaceAll("-", "")}`);
 
 const cleanRecordSaveFixture = async (admin: Sql): Promise<void> => {
   const [state] = await admin.unsafe<
@@ -827,14 +1042,14 @@ const cleanRecordSaveFixture = async (admin: Sql): Promise<void> => {
     delete from vortex_record.record_data_versions
       where organization_id = '${organizationId}';
     delete from vortex_record.relationship_edges
-      where from_storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}')
-         or to_storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}');
+      where from_storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}', '${ruledChildStorageId}', '${recursiveStorageId}')
+         or to_storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}', '${ruledChildStorageId}', '${recursiveStorageId}');
     delete from vortex_record.relationship_storage_mappings
       where module_root_id = '${moduleRootId}';
     delete from vortex_record.field_storage_mappings
-      where storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}');
+      where storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}', '${ruledChildStorageId}', '${recursiveStorageId}');
     delete from vortex_record.storage_catalogue
-      where storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}');
+      where storage_contract_id in ('${storageContractId}', '${totalParentStorageId}', '${totalChildStorageId}', '${ruledChildStorageId}', '${recursiveStorageId}');
     delete from vortex_record.release_provisions
       where module_root_id = '${moduleRootId}';
     reset role;
@@ -891,6 +1106,7 @@ const cleanRecordSaveFixture = async (admin: Sql): Promise<void> => {
 describeDatabase("compiled public Record save service PostgreSQL proof", () => {
   it("saves once, replays safely and applies current permission withdrawal", async () => {
     const admin = postgres(databaseUrl!, { max: 1, prepare: false });
+    const raceAdmin = postgres(databaseUrl!, { max: 1, prepare: false });
     const runtimeUrl = new URL(databaseUrl!);
     runtimeUrl.username = "vortex_runtime";
     runtimeUrl.password = "vortex-runtime-local-only";
@@ -1018,7 +1234,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           definitionCatalogue: { connectionTypeReleases: [], platformThemeReleases: [] },
           resolvedRequestTransaction: resolvedRequestRunner(transaction),
         }).readExact();
-        expect(registration.permissionRegistration.entries).toHaveLength(11);
+        expect(registration.permissionRegistration.entries).toHaveLength(17);
         const registeredPermissionKeys = registration.permissionRegistration.entries.map(
           (entry) => entry.permission.key,
         );
@@ -1125,7 +1341,9 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           '1.0.0', array[
             ${storageContractId}::uuid,
             ${totalParentStorageId}::uuid,
-            ${totalChildStorageId}::uuid
+            ${totalChildStorageId}::uuid,
+            ${ruledChildStorageId}::uuid,
+            ${recursiveStorageId}::uuid
           ]
         )`;
         await transaction`reset role`;
@@ -1167,7 +1385,16 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityFirstChildConcurrentId,
         activitySecondChildConcurrentId,
         activityStaleTotalParentId,
+        activityOverlappingReplayOneId,
+        activityOverlappingReplayTwoId,
         activityParentActivityFailureId,
+        activityRecursiveGrandId,
+        activityRecursiveParentId,
+        activityRecursiveLeafId,
+        activityRecursiveCycleId,
+        activityMoneySourceId,
+        activityMixedCurrencyId,
+        activityChangedClosureId,
         activityRevokedReplayId,
         activityRevokedWriteId,
       ];
@@ -1186,7 +1413,13 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         occurrenceSecondChildCreateId,
         occurrenceFirstChildConcurrentId,
         occurrenceSecondChildConcurrentId,
+        occurrenceOverlappingReplayId,
         occurrenceParentActivityFailureId,
+        occurrenceRecursiveGrandId,
+        occurrenceRecursiveParentId,
+        occurrenceRecursiveLeafId,
+        occurrenceMoneySourceId,
+        occurrenceChangedClosureId,
       ];
       const service = createRecordSaveService({
         identityAuthorityId,
@@ -1666,6 +1899,111 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         value: { outcome: "refused", error: { code: "conflict" } },
       });
 
+      await admin.unsafe(`
+        set role vortex_record_adapter;
+        create or replace function pg_temp.delay_exact_total_receipt()
+        returns trigger language plpgsql as $function$
+        begin
+          if new.command_id = '${commandOverlappingReplayId}'::uuid
+            and old.state = 'pending' and new.state = 'completed' then
+            perform pg_catalog.pg_sleep(0.25);
+          end if;
+          return new;
+        end
+        $function$;
+        create trigger delay_exact_total_receipt
+          before update on vortex_record.save_command_receipts
+          for each row execute function pg_temp.delay_exact_total_receipt();
+        reset role;
+      `);
+      const overlappingCommand = {
+        contractVersion: "2.0.0" as const,
+        commandId: commandOverlappingReplayId,
+        operation: "update" as const,
+        recordTypeId: totalChildRecordTypeId,
+        recordId: childId,
+        expectedConcurrencyNumber: 6,
+        submittedValues: { [totalChildAmountFieldId]: "21" },
+      };
+      const beforeOverlappingReplay = await countTerminalEffects();
+      const overlappingResults = await Promise.all([
+        service.save(session, selection, overlappingCommand),
+        service.save(session, selection, overlappingCommand),
+      ]);
+      expect(overlappingResults).toEqual([
+        expect.objectContaining({
+          kind: "available",
+          value: expect.objectContaining({ outcome: "saved", concurrencyNumber: 7 }),
+        }),
+        expect.objectContaining({
+          kind: "available",
+          value: expect.objectContaining({ outcome: "saved", concurrencyNumber: 7 }),
+        }),
+      ]);
+      await admin.unsafe(`
+        set role vortex_record_adapter;
+        drop trigger delay_exact_total_receipt on vortex_record.save_command_receipts;
+        drop function pg_temp.delay_exact_total_receipt();
+        reset role;
+      `);
+      const afterOverlappingReplay = await countTerminalEffects();
+      expect({
+        receipts:
+          Number(afterOverlappingReplay.receipt_count) -
+          Number(beforeOverlappingReplay.receipt_count),
+        activities:
+          Number(afterOverlappingReplay.activity_count) -
+          Number(beforeOverlappingReplay.activity_count),
+        outbox:
+          Number(afterOverlappingReplay.outbox_count) -
+          Number(beforeOverlappingReplay.outbox_count),
+        queue:
+          Number(afterOverlappingReplay.queue_count) - Number(beforeOverlappingReplay.queue_count),
+      }).toEqual({ receipts: 1, activities: 2, outbox: 2, queue: 2 });
+
+      const beforeUnjoinedWriter = await countTerminalEffects();
+      const unjoinedWriterResult = await runtime.begin(async (transaction) => {
+        const [scope] = await transaction<
+          { tenant_id: string; organization_account_id: string; access_version: string }[]
+        >`select * from vortex_access.resolve_human_application_change_scope(
+          ${identityId}::uuid, ${organizationId}::uuid, ${applicationRootId}::uuid
+        )`;
+        if (scope === undefined) throw new Error("Unjoined writer scope is unavailable");
+        await transaction`select vortex_context.initialize(${JSON.stringify({
+          callerKind: "human",
+          identityAuthorityId,
+          tenantId: scope.tenant_id,
+          organizationId,
+          organizationAccountId: scope.organization_account_id,
+          applicationRootId,
+          identityId,
+          sessionId: session.sessionId,
+          authenticationStrength: session.authenticationStrength,
+          accessTokenIssuedAt: session.accessTokenIssuedAt,
+          primaryAuthenticatedAt: session.primaryAuthenticatedAt,
+          issuedAt: operationAt.toISOString(),
+          expiresAt: session.accessTokenExpiresAt,
+          accessVersion: Number(scope.access_version),
+          correlationId: id(27),
+        })}::text::jsonb)`;
+        await transaction`set local role vortex_runtime`;
+        const [row] = await transaction<{ result: unknown }[]>`
+          select vortex_record.save_base_record_with_relationship_totals(
+            ${commandUnjoinedWriterId}::uuid, 'update',
+            ${totalChildRecordTypeId}::uuid, ${childId}::uuid, 7,
+            ${JSON.stringify({ [totalChildAmountFieldId]: "22" })}::text::jsonb,
+            ${JSON.stringify({ [totalChildAmountFieldId]: "22" })}::text::jsonb,
+            null::uuid, ${activityUnjoinedWriterId}::uuid,
+            ${occurrenceUnjoinedWriterId}::uuid, '[]'::jsonb
+          ) as result`;
+        return row?.result;
+      });
+      expect(unjoinedWriterResult).toEqual({
+        outcome: "refused",
+        reasonCode: "unsupported_relationship_total_save",
+      });
+      expect(await countTerminalEffects()).toEqual(beforeUnjoinedWriter);
+
       const beforeParentActivityFailure = await countTerminalEffects();
       await admin.unsafe(`
         create or replace function pg_temp.fail_total_parent_activity()
@@ -1688,7 +2026,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           operation: "update",
           recordTypeId: totalChildRecordTypeId,
           recordId: childId,
-          expectedConcurrencyNumber: 6,
+          expectedConcurrencyNumber: 7,
           submittedValues: { [totalChildAmountFieldId]: "99" },
         }),
       ).resolves.toEqual({ kind: "temporarily_unavailable" });
@@ -1705,7 +2043,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
            where organisation_id = $1 and record_id = $2`,
           [organizationId, parentTwoId],
         ),
-      ).resolves.toEqual([{ total: "23", display: "24", revision: "5" }]);
+      ).resolves.toEqual([{ total: "24", display: "25", revision: "6" }]);
       await expect(
         admin.unsafe(
           `select concurrency_number::text as revision,
@@ -1714,7 +2052,337 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
            where organisation_id = $1 and record_id = $2`,
           [organizationId, childId],
         ),
-      ).resolves.toEqual([{ revision: "6", amount: "20" }]);
+      ).resolves.toEqual([{ revision: "7", amount: "21" }]);
+
+      const createRecursiveRecord = async (commandId: string, title: string, parentId?: string) => {
+        const saved = await service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId,
+          operation: "create",
+          recordTypeId: recursiveRecordTypeId,
+          submittedValues: {
+            [recursiveTitleFieldId]: title,
+            ...(parentId === undefined
+              ? {}
+              : {
+                  [recursiveParentFieldId]: {
+                    recordTypeId: recursiveRecordTypeId,
+                    recordId: parentId,
+                  },
+                }),
+          },
+        });
+        expect(saved).toMatchObject({
+          kind: "available",
+          value: { outcome: "saved", concurrencyNumber: 1 },
+        });
+        if (saved.kind !== "available" || saved.value.outcome !== "saved")
+          throw new Error("Recursive total Record was not created");
+        return saved.value.recordId;
+      };
+      const recursiveGrandId = await createRecursiveRecord(
+        commandRecursiveGrandId,
+        "Recursive grand",
+      );
+      const recursiveParentId = await createRecursiveRecord(
+        commandRecursiveParentId,
+        "Recursive parent",
+        recursiveGrandId,
+      );
+      const recursiveLeafId = await createRecursiveRecord(
+        commandRecursiveLeafId,
+        "Recursive leaf",
+        recursiveParentId,
+      );
+      const recursiveTable = `record_data.rt_${recursiveStorageId.replaceAll("-", "")}`;
+      const recursiveTotalColumn = `f_${recursiveChildrenTotalFieldId.replaceAll("-", "")}`;
+      await expect(
+        admin.unsafe(
+          `select record_id::text as record_id, concurrency_number::text as revision,
+             ${recursiveTotalColumn}::text as children_total
+           from ${recursiveTable}
+           where organisation_id = $1 and record_id in ($2, $3, $4)
+           order by record_id`,
+          [organizationId, recursiveGrandId, recursiveParentId, recursiveLeafId],
+        ),
+      ).resolves.toEqual(
+        [
+          { record_id: recursiveGrandId, revision: "1", children_total: "0" },
+          { record_id: recursiveParentId, revision: "1", children_total: "0" },
+          { record_id: recursiveLeafId, revision: "1", children_total: "0" },
+        ].sort((left, right) => left.record_id.localeCompare(right.record_id)),
+      );
+      const beforeRecursiveCycle = await countTerminalEffects();
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandRecursiveCycleId,
+          operation: "update",
+          recordTypeId: recursiveRecordTypeId,
+          recordId: recursiveGrandId,
+          expectedConcurrencyNumber: 1,
+          submittedValues: {
+            [recursiveParentFieldId]: {
+              recordTypeId: recursiveRecordTypeId,
+              recordId: recursiveLeafId,
+            },
+          },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "operation_refused" } },
+      });
+      expect(await countTerminalEffects()).toEqual(beforeRecursiveCycle);
+      await expect(
+        admin.unsafe(
+          `select concurrency_number::text as revision,
+             f_${recursiveParentFieldId.replaceAll("-", "")} as parent
+           from ${recursiveTable}
+           where organisation_id = $1 and record_id = $2`,
+          [organizationId, recursiveGrandId],
+        ),
+      ).resolves.toEqual([{ revision: "1", parent: null }]);
+
+      await updateTotalChild(commandMoneySourceId, 7, {
+        [totalChildMoneyFieldId]: { amount: "5.25", currency: "NZD" },
+      });
+      const totalMoneyColumn = `f_${totalParentMoneyFieldId.replaceAll("-", "")}`;
+      const childMoneyColumn = `f_${totalChildMoneyFieldId.replaceAll("-", "")}`;
+      await expect(
+        admin.unsafe(
+          `select ${totalMoneyColumn} as money_total
+           from ${totalParentTable}
+           where organisation_id = $1 and record_id = $2`,
+          [organizationId, parentTwoId],
+        ),
+      ).resolves.toEqual([{ money_total: { amount: "5.25", currency: "NZD" } }]);
+      await admin.unsafe(
+        `update record_data.rt_${totalChildStorageId.replaceAll("-", "")}
+         set ${childMoneyColumn} = $3::jsonb
+         where organisation_id = $1 and record_id = $2`,
+        [
+          organizationId,
+          secondChildCreated.value.recordId,
+          JSON.stringify({ amount: "1", currency: "AUD" }),
+        ],
+      );
+      const beforeMixedCurrency = await countTerminalEffects();
+      await expect(
+        service.save(session, selection, {
+          contractVersion: "2.0.0",
+          commandId: commandMixedCurrencyId,
+          operation: "update",
+          recordTypeId: totalChildRecordTypeId,
+          recordId: childId,
+          expectedConcurrencyNumber: 8,
+          submittedValues: { [totalChildAmountFieldId]: "22" },
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "operation_refused" } },
+      });
+      expect(await countTerminalEffects()).toEqual(beforeMixedCurrency);
+      await expect(
+        admin.unsafe(
+          `select concurrency_number::text as revision,
+             f_${totalChildAmountFieldId.replaceAll("-", "")}::text as amount
+           from record_data.rt_${totalChildStorageId.replaceAll("-", "")}
+           where organisation_id = $1 and record_id = $2`,
+          [organizationId, childId],
+        ),
+      ).resolves.toEqual([{ revision: "8", amount: "21" }]);
+      await admin.unsafe(
+        `update record_data.rt_${totalChildStorageId.replaceAll("-", "")}
+         set ${childMoneyColumn} = null
+         where organisation_id = $1 and record_id = $2`,
+        [organizationId, secondChildCreated.value.recordId],
+      );
+
+      expect(totalParentStorageId.localeCompare(totalChildStorageId)).toBeLessThan(0);
+      const closureLockParentId = [parentOneId, parentTwoId].sort()[0]!;
+      let releaseClosureLock!: () => void;
+      let reportClosureLock!: () => void;
+      const closureLockReleased = new Promise<void>((resolve) => {
+        releaseClosureLock = resolve;
+      });
+      const closureLockAcquired = new Promise<void>((resolve) => {
+        reportClosureLock = resolve;
+      });
+      const beforeChangedClosure = await countTerminalEffects();
+      const closureBlocker = admin.begin(async (transaction) => {
+        await transaction.unsafe(
+          `select 1 from ${totalParentTable}
+           where organisation_id = $1 and record_id = $2 for update`,
+          [organizationId, closureLockParentId],
+        );
+        reportClosureLock();
+        await closureLockReleased;
+      });
+      await closureLockAcquired;
+      const changedClosureSave = service.save(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: commandChangedClosureId,
+        operation: "update",
+        recordTypeId: totalChildRecordTypeId,
+        recordId: childId,
+        expectedConcurrencyNumber: 8,
+        submittedValues: {
+          [totalChildParentFieldId]: {
+            recordTypeId: totalParentRecordTypeId,
+            recordId: parentOneId,
+          },
+        },
+      });
+      let observedClosureWait = false;
+      for (let attempt = 0; attempt < 50 && !observedClosureWait; attempt += 1) {
+        const [state] = await raceAdmin<{ waiting: boolean }[]>`
+          select exists (
+            select 1 from pg_catalog.pg_stat_activity
+            where state = 'active' and wait_event is not null
+              and query like '%prepare_relationship_total_save%'
+          ) as waiting`;
+        observedClosureWait = state?.waiting ?? false;
+        if (!observedClosureWait) await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(observedClosureWait).toBe(true);
+      await raceAdmin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction.unsafe(
+          `update record_data.rt_${totalChildStorageId.replaceAll("-", "")}
+           set f_${totalChildParentFieldId.replaceAll("-", "")} = $3::jsonb
+           where organisation_id = $1 and record_id = $2`,
+          [
+            organizationId,
+            childId,
+            JSON.stringify({ recordTypeId: totalParentRecordTypeId, recordId: parentOneId }),
+          ],
+        );
+        await transaction`set local role vortex_record_owner`;
+        await transaction`update vortex_record.relationship_edges
+          set to_record_id = ${parentOneId}::uuid
+          where relationship_id = ${totalRelationshipId}::uuid
+            and from_organisation_id = ${organizationId}::uuid
+            and from_record_id = ${childId}::uuid`;
+        await transaction`reset role`;
+      });
+      releaseClosureLock();
+      await closureBlocker;
+      await expect(changedClosureSave).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "saved", concurrencyNumber: 9 },
+      });
+      const afterChangedClosure = await countTerminalEffects();
+      expect(
+        Number(afterChangedClosure.receipt_count) - Number(beforeChangedClosure.receipt_count),
+      ).toBe(1);
+      await raceAdmin.unsafe(
+        `update ${totalParentTable}
+         set ${totalColumn} = 3, ${displayColumn} = 4, ${totalMoneyColumn} = null
+         where organisation_id = $1 and record_id = $2`,
+        [organizationId, parentTwoId],
+      );
+      await expect(
+        admin.unsafe(
+          `select record_id::text as record_id, ${totalColumn}::text as total
+           from ${totalParentTable}
+           where organisation_id = $1 and record_id in ($2, $3)
+           order by record_id`,
+          [organizationId, parentOneId, parentTwoId],
+        ),
+      ).resolves.toEqual(
+        [
+          { record_id: parentOneId, total: "21" },
+          { record_id: parentTwoId, total: "3" },
+        ].sort((left, right) => left.record_id.localeCompare(right.record_id)),
+      );
+
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction`update vortex_definition.releases
+          set compilation_output = pg_catalog.jsonb_set(
+            compilation_output,
+            '{canonical,content,rules}',
+            ${JSON.stringify([
+              {
+                ruleId: id(84),
+                key: "installed_rule_proof",
+                subjectRecordTypeId: ruledChildRecordTypeId,
+                trigger: "change",
+                priority: 100,
+                condition: {
+                  kind: "comparison",
+                  left: { source: "field", fieldId: ruledChildTitleFieldId },
+                  operator: "is_not_empty",
+                },
+                effect: {
+                  kind: "set_value",
+                  fieldId: ruledChildTitleFieldId,
+                  value: "Rule-owned value",
+                },
+              },
+            ])}::text::jsonb
+          )
+          where root_id = ${moduleRootId}::uuid and release_revision = 1`;
+      });
+      const beforeRuledRelationship = await countTerminalEffects();
+      const ruledPreparation = await runtime.begin(async (transaction) => {
+        const [scope] = await transaction<
+          { tenant_id: string; organization_account_id: string; access_version: string }[]
+        >`select * from vortex_access.resolve_human_application_change_scope(
+          ${identityId}::uuid, ${organizationId}::uuid, ${applicationRootId}::uuid
+        )`;
+        if (scope === undefined) throw new Error("Rule proof scope is unavailable");
+        await transaction`select vortex_context.initialize(${JSON.stringify({
+          callerKind: "human",
+          identityAuthorityId,
+          tenantId: scope.tenant_id,
+          organizationId,
+          organizationAccountId: scope.organization_account_id,
+          applicationRootId,
+          identityId,
+          sessionId: session.sessionId,
+          authenticationStrength: session.authenticationStrength,
+          accessTokenIssuedAt: session.accessTokenIssuedAt,
+          primaryAuthenticatedAt: session.primaryAuthenticatedAt,
+          issuedAt: operationAt.toISOString(),
+          expiresAt: session.accessTokenExpiresAt,
+          accessVersion: Number(scope.access_version),
+          correlationId: id(27),
+        })}::text::jsonb)`;
+        await transaction`set local role vortex_runtime`;
+        const [row] = await transaction<{ preparation: unknown }[]>`
+          select vortex_record.prepare_relationship_total_save(
+            ${commandRuledRelationshipId}::uuid, 'create',
+            ${ruledChildRecordTypeId}::uuid, null::uuid, null::bigint,
+            ${JSON.stringify({
+              [ruledChildTitleFieldId]: "Must remain Rule-owned",
+              [ruledChildParentFieldId]: {
+                recordTypeId: totalParentRecordTypeId,
+                recordId: parentOneId,
+              },
+            })}::text::jsonb,
+            null::uuid, ${activityRuledRelationshipId}::uuid
+          ) as preparation`;
+        return row?.preparation;
+      });
+      expect(ruledPreparation).toEqual({ outcome: "defer" });
+      expect(await countTerminalEffects()).toEqual(beforeRuledRelationship);
+      await expect(
+        admin.unsafe(
+          `select pg_catalog.count(*)::text as count
+           from record_data.rt_${ruledChildStorageId.replaceAll("-", "")}
+           where organisation_id = $1`,
+          [organizationId],
+        ),
+      ).resolves.toEqual([{ count: "0" }]);
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction`update vortex_definition.releases
+          set compilation_output = pg_catalog.jsonb_set(
+            compilation_output, '{canonical,content,rules}', '[]'::jsonb
+          )
+          where root_id = ${moduleRootId}::uuid and release_revision = 1`;
+      });
 
       const readPersistedState = async () => {
         const [state] = await admin.unsafe<
@@ -1782,6 +2450,11 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
     } finally {
       try {
         await runtime.end({ timeout: 1 });
+      } catch (error) {
+        if (failure === undefined) failure = error;
+      }
+      try {
+        await raceAdmin.end({ timeout: 1 });
       } catch (error) {
         if (failure === undefined) failure = error;
       }

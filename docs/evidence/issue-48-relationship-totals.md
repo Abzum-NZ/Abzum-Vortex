@@ -24,24 +24,45 @@ The real PostgreSQL integration publishes, provisions and installs V2 definition
 then proves empty required totals and an upstream calculation, child create, value
 change, filter exclusion/re-inclusion, old/new-parent movement, concurrent children
 sharing a parent, stale revision, effect-free replay and changed-input duplicate.
-An injected parent Activity failure proves rollback of the already-written source
-and all other terminal effects. Existing base-save pgTAP injection coverage remains
-the receipt/Event/queue boundary proof. Focused pure coverage proves finite recursive
-record hierarchies, concrete record/field-cycle refusal and safe mixed-currency
-refusal. The ACL contract proves only `vortex_runtime` can enter the two closed
-operations and cannot call the general snapshot implementation or enumerate edges.
+It now also proves a finite recursive installed hierarchy, an actual concrete
+record/field cycle refusal, mixed-currency refusal with no partial effects, and a
+forced lock wait whose changed relationship closure restarts and completes once.
+A second forced wait overlaps two exact retries: both replay the same saved revision
+while only one receipt and one source/parent effect pair commit. An injected parent
+Activity failure still proves rollback of the already-written source and all other
+terminal effects.
+
+The correction preserves the existing installation-wide Rule eligibility boundary:
+when an installed Module or Application contains a Rule, the relationship preflight
+delegates to the existing base preparation instead of bypassing its refusal. The
+database proof injects a canonical Rule into the already published/provisioned/
+installed test release under replication-disabled fault setup, calls the protected
+runtime preflight, and observes only `defer` with no effects. The obsolete unjoined
+base writer is no longer executable by `vortex_runtime`; the composed writer also
+refuses a contributing update whose supplied parent closure is empty or mismatched.
+The ACL contract proves the closed operation surface and the real runtime proof
+confirms this refusal is effect-free.
 
 Verification completed on a fresh disposable database:
 
 - Record focused tests: **4 files / 27 tests passed**.
 - Real published/provisioned/installed PostgreSQL save: **1 file / 1 test passed**.
-- Transactional-total ACL pgTAP: **12/12 passed**.
+- Transactional-total ACL pgTAP: **13/13 passed**.
 - Record typecheck, scoped lint, all **23 package boundaries**, database migration
   reset and database lint passed. Database lint reported only pre-existing warnings.
-- Fresh disposable PostgreSQL pgTAP suite: **85 files / 4,035 tests passed**.
+- Fresh disposable PostgreSQL pgTAP suite: **85 files / 4,036 tests passed**.
 - Repository unit suite: **155 files passed, 6 skipped; 1,916 tests passed,
   7 skipped**. All **23/23** package typechecks and builds passed; formatting,
   repository lint and the **18/18** current fixture checks passed.
+
+The post-review correction reran the focused **4 files / 27 tests**, the real
+PostgreSQL integration (**1/1**), all **23/23** package typechecks, repository
+lint/formatting/boundaries, database lint, and the fresh **85 files / 4,036**
+pgTAP suite successfully. The separate repository-wide concurrency runner was
+also attempted: its Record-independent Access-administration fixture failed to
+reach its barrier after reporting a stale organisation-account revision. That
+runner is not claimed green; the two Stage 2B real lock-wait cases above both
+passed deterministically in the focused PostgreSQL integration.
 
 ## Delivered scope under review
 

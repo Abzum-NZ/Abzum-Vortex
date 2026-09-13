@@ -333,13 +333,12 @@ export const calculateLockedRelationshipTotalSave = (
     const result = finalized.get(record.recordKey)!;
     const finalValues: Record<string, JsonValue | null> = { ...result.setValues };
     for (const fieldId of result.clearFieldIds) finalValues[fieldId] = null;
-    if (Object.keys(finalValues).length > 0)
-      parentMutations.push({
-        recordTypeId: record.recordType.recordTypeId,
-        recordId: record.recordId,
-        expectedConcurrencyNumber: record.concurrencyNumber,
-        finalValues,
-      });
+    parentMutations.push({
+      recordTypeId: record.recordType.recordTypeId,
+      recordId: record.recordId,
+      expectedConcurrencyNumber: record.concurrencyNumber,
+      finalValues,
+    });
   }
   return {
     success: true,

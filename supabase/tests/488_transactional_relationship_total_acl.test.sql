@@ -1,5 +1,5 @@
 begin;
-select plan(12);
+select plan(13);
 set local search_path = extensions, public, pg_catalog;
 
 select ok(
@@ -17,6 +17,14 @@ select ok(
     'EXECUTE'
   ),
   'runtime may invoke the composed atomic writer'
+);
+select ok(
+  not has_function_privilege(
+    'vortex_runtime',
+    'vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)'::regprocedure,
+    'EXECUTE'
+  ),
+  'runtime cannot invoke the obsolete unjoined base writer'
 );
 select ok(
   not has_function_privilege(

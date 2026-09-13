@@ -3349,12 +3349,12 @@ select ok(
   'only the trusted server role receives the private save preparation read'
 );
 select ok(
-  pg_catalog.has_function_privilege(
+  not pg_catalog.has_function_privilege(
     'vortex_runtime',
     'vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)',
     'EXECUTE'
   ),
-  'the trusted server role can invoke the one terminal save writer'
+  'the trusted server role cannot invoke the obsolete unjoined terminal writer'
 );
 select ok(
   not pg_catalog.has_function_privilege(
@@ -3387,6 +3387,15 @@ select ok(
 from (values
   ('vortex_runtime'), ('vortex_request'), ('anon'), ('authenticated'), ('service_role')
 ) as candidate(role_name);
+
+-- Keep the historical base-writer behavior checks below intact without
+-- restoring a production bypass. The surrounding pgTAP transaction rolls
+-- this compatibility grant back after this file.
+set local role vortex_record_adapter;
+grant execute on function vortex_record.save_base_record(
+  uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid
+) to vortex_runtime;
+reset role;
 
 select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
 set local role vortex_runtime;
