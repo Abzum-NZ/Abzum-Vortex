@@ -47,12 +47,14 @@ Delivered on `testing`:
   stewardship ([PR #449](https://github.com/Abzum-NZ/Abzum-Vortex/pull/449)).
 - **Slice 4A** — configured-system cluster-local identity-projection lifecycle
   ([PR #450](https://github.com/Abzum-NZ/Abzum-Vortex/pull/450)).
+- **Slice 4B** — configured-system tenant lifecycle
+  ([PR #451](https://github.com/Abzum-NZ/Abzum-Vortex/pull/451)).
 
-Slices 1, 2, 3A, 3B, 3C, 3D and 4A are merged to Testing; their exact hosted
+Slices 1, 2, 3A, 3B, 3C, 3D, 4A and 4B are merged to Testing; their exact hosted
 verification remains a delivery gate. The next implementation assignment is
-**Slice 4B only: configured-system tenant suspend/reactivate**. It remains
-separate because the tenant's organisation-set discovery and existing readiness
-facts can be reviewed without re-opening projection lifecycle.
+**Slice 5 only: organisation-local administrative reads**. It remains separate
+because reads must reuse the delivered organisation request and permission paths
+without extending account, invitation, or runtime-settings mutation behaviour.
 
 ## Outcome
 
@@ -249,7 +251,7 @@ a foreign or inactive target exists.
 - **Delivered 4A:** configured-system suspension, reactivation and closure of one
   cluster-local identity projection, preserving every affected scope's current
   stewardship requirements.
-- **Current 4B:** configured-system suspension or reactivation of one tenant,
+- **Delivered 4B:** configured-system suspension or reactivation of one tenant,
   preserving its existing readiness facts without rewriting any child scope.
 
 ### 4. System-only cluster lifecycle
@@ -262,7 +264,7 @@ a foreign or inactive target exists.
   tenant rows `FOR UPDATE`, then the target projection `FOR UPDATE`, each in
   stable identifier order, rechecks membership, and fails stale rather than
   expanding a lock set or retrying automatically.
-- **Current 4B:** suspend/reactivate one tenant through the configured system
+- **Delivered 4B:** suspend/reactivate one tenant through the configured system
   operator. It preserves existing organisation/tenant stewardship while leaving
   child organisation state, accounts, assignments and Access versions unchanged.
 - Neither slice mutates provider/Auth identity or sessions, another cluster,
@@ -511,17 +513,62 @@ provider/Auth/session, other-cluster, tenant archive/removal, account offboardin
 child transition, automatic grant repair, generic lifecycle framework, UI, MCP
 transport or AI behaviour belongs here.
 
-### 5. Organisation-local reads
+## Slice 5 — organisation-local administrative reads
 
-- Return bounded, deterministic safe views of the current organisation's accounts
-  and invitations. The administrative runtime-settings view first makes the exact
-  `platform.organization.runtime_settings.read` decision through #34, then invokes
-  #430's internal reader for the resolved organisation in that same transaction;
-  it does not recreate settings storage or a runtime reader.
-- Require the exact registered `.read` permission through the completed
-  [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) context and
-  [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) decision. Membership
-  and tenant assignment are never fallbacks.
+This slice provides five server-only operations through the existing resolved
+organisation request: `listOrganizationAccounts`, `readOrganizationAccount`,
+`listOrganizationInvitations`, `readOrganizationInvitation`, and
+`readOrganizationRuntimeSettings`. The list inputs accept only page size from 1
+to 100 and an optional non-nil account or invitation ID used only as an ordering
+cursor. Detail inputs accept exactly one
+non-nil organisation-local ID. Callers never provide a tenant, selected account,
+Access version, authority declaration, clock, or correlation.
+
+Each operation resolves the active account, organisation and tenant through
+[#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27), then makes one fixed
+[#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) decision in the same
+transaction: `platform.organization.accounts.read` for account operations,
+`platform.organization.invitations.read` for invitation operations, or
+`platform.organization.runtime_settings.read` for settings. Membership, a tenant
+assignment, a different `.read` permission, or a `.manage` permission never
+substitutes. No extra approval or MFA condition is introduced.
+
+Identity owns private, scope-filtered projections; Access owns the fixed protected
+database wrappers that invoke them only after allowance. Account summaries expose
+only local account ID, optional local display name, stored account state, optional
+language/time-zone preferences, and positive revision. They include active,
+suspended and closed accounts, but never global identity IDs, provider profiles,
+email, other memberships, roles, permissions, invitation provenance or audit
+evidence. Invitation reads reuse the established safe invitation contract; they
+include its local administrative recipient, lifecycle facts and revision, but no
+secret, fingerprint, private access intent or provider profile. Settings reads call
+[#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430)'s existing internal
+reader for the resolved organisation and return its result or explicit absence;
+this slice does not recreate settings validation, storage, updates, or runtime
+semantics.
+
+Lists sort by permanent local ID ascending, filter their scope and cursor in SQL,
+and use `LIMIT pageSize + 1`. They return at most the requested size and a next
+cursor only when another row exists. Foreign and missing detail IDs both receive
+the existing unavailable result; a foreign cursor is only an ordering value and
+reveals nothing. There is no total count, offset, search, filter, configurable
+sort, unbounded fetch, cross-page snapshot, receipt, Activity write, Access
+increment, target lock, automatic retry, generic read engine, or public table
+access.
+
+Reads retain the established organisation-governance-before-Identity resolver
+order, use fresh database time after resolver waits, and perform their bounded
+projection in that transaction. A concurrent governance change must result in the
+current refusal or current allowed result, never protected rows based on stale
+authority. A settings read may see the previous or next whole revision, never a
+mixed value. The proof covers strict contracts, restricted request-role SQL paths,
+all account and invitation lifecycle variants, pagination and scope isolation,
+missing settings, no mutation side effects, no direct table/helper access, and
+representative read-versus-governance and read-versus-settings concurrency.
+
+Account or invitation mutation, offboarding, ownership transfer, Groups, PIM,
+general query/filter engines, UI, application definitions, MCP/AI, provider
+operations and Production deployment remain outside this slice.
 
 ### 6. Organisation-local changes
 
