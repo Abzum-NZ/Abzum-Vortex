@@ -3,6 +3,46 @@
 [Calculated values and totals #48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) ·
 [Implementation plan](../build-plan/issue-48-calculation-engine.md#next-delivery-relationship-totals)
 
+## Stage 2B transactional save integration — 14 September 2026
+
+The existing protected create/update save transaction now privately discovers the
+old and proposed concrete total closure before row locks, locks the source and
+affected parents in canonical physical-record order, and re-reads revisions,
+relationships and closure after any wait. A changed closure restarts the owning
+request transaction at most three times using the same command, expected revision,
+Activity identity and lazily allocated Event identity.
+
+The Record service evaluates only server-read installed definitions and declared
+aggregate/filter inputs. It applies the existing total, calculation and final field
+validators, then composes the existing base save with revision-checked parent total
+and dependent-calculation updates. Source and parent Records, revisions, Activity,
+standard Events/queue messages and the existing save receipt commit or roll back as
+one unit. No public related-row reader, receipt, table or generic save/evaluator
+framework was added.
+
+The real PostgreSQL integration publishes, provisions and installs V2 definitions,
+then proves empty required totals and an upstream calculation, child create, value
+change, filter exclusion/re-inclusion, old/new-parent movement, concurrent children
+sharing a parent, stale revision, effect-free replay and changed-input duplicate.
+An injected parent Activity failure proves rollback of the already-written source
+and all other terminal effects. Existing base-save pgTAP injection coverage remains
+the receipt/Event/queue boundary proof. Focused pure coverage proves finite recursive
+record hierarchies, concrete record/field-cycle refusal and safe mixed-currency
+refusal. The ACL contract proves only `vortex_runtime` can enter the two closed
+operations and cannot call the general snapshot implementation or enumerate edges.
+
+Verification completed on a fresh disposable database:
+
+- Record focused tests: **4 files / 27 tests passed**.
+- Real published/provisioned/installed PostgreSQL save: **1 file / 1 test passed**.
+- Transactional-total ACL pgTAP: **12/12 passed**.
+- Record typecheck, scoped lint, all **23 package boundaries**, database migration
+  reset and database lint passed. Database lint reported only pre-existing warnings.
+- Fresh disposable PostgreSQL pgTAP suite: **85 files / 4,035 tests passed**.
+- Repository unit suite: **155 files passed, 6 skipped; 1,916 tests passed,
+  7 skipped**. All **23/23** package typechecks and builds passed; formatting,
+  repository lint and the **18/18** current fixture checks passed.
+
 ## Delivered scope under review
 
 One pure Record evaluator calculates count, sum, minimum, maximum and average
@@ -65,12 +105,11 @@ row order no longer changes the chosen persisted representation. The focused
 suite passed again after this correction; the 416-test broader receipt above
 preceded this narrow change.
 
-The [protected save #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) still
-must select actual related records, enforce disclosure of totals, update both
-old/new parents, handle concrete dependency cycles and concurrent changes, and
-commit records, revisions, Activity and events atomically. This pure evaluator
-does not implement or prove those database integrations. No static cross-record
-type-cycle prohibition is introduced. The whole #48 remains open.
+The historical pure-evaluator receipt above predates the Stage 2B integration.
+Deletion/restore, broader relationship behaviors, deadline scheduling/refresh and
+Query remain owned by #50, #49, #62 and #54 respectively. No static cross-record
+type-cycle prohibition is introduced; only an actual concrete record/field cycle
+is refused.
 
 There is no new screen in this headless slice and no hosted or Production
 verification claim in this evidence.

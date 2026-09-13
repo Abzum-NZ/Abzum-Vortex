@@ -276,10 +276,99 @@ const transactionRunner =
     const resolved = await resolve({
       query: async <Row extends DatabaseRow>() => scopeRows as unknown as readonly Row[],
     } satisfies RuntimeDatabaseTransaction);
-    return operation({ query: requestQuery } satisfies RequestDatabaseTransaction, resolved.scope);
+    return operation(
+      {
+        query: async <Row extends DatabaseRow>(
+          strings: TemplateStringsArray,
+          ...values: readonly unknown[]
+        ) => {
+          const rows = await requestQuery<Row>(strings, ...values);
+          return strings.join("$value").includes("prepare_relationship_total_save") &&
+            rows.length === 0
+            ? ([{ preparation: { outcome: "not_required" } }] as unknown as readonly Row[])
+            : rows;
+        },
+      } satisfies RequestDatabaseTransaction,
+      resolved.scope,
+    );
   };
 
 describe("base Record save service", () => {
+  it("restarts the owning transaction when the locked relationship closure changes", async () => {
+    let transactionAttempts = 0;
+    let totalPreparations = 0;
+    let basePreparations = 0;
+    let terminalCalls = 0;
+    const activityId = vi.fn(() => ids.activity);
+    const occurrenceId = vi.fn(() => ids.occurrence);
+    const requestQuery: RequestQuery = async <Row extends DatabaseRow>(strings) => {
+      const sql = strings.join("$value");
+      if (sql.includes("prepare_relationship_total_save")) {
+        totalPreparations += 1;
+        return [
+          { preparation: { outcome: totalPreparations === 1 ? "restart" : "not_required" } },
+        ] as unknown as readonly Row[];
+      }
+      if (sql.includes("prepare_base_record_save")) {
+        basePreparations += 1;
+        return [
+          {
+            preparation: {
+              outcome: "prepared",
+              recordType: recordType(),
+              existingValues: { [ids.visibleField]: "Before" },
+              readableFieldIds: [ids.visibleField],
+              correlationId: ids.correlation,
+            },
+          },
+        ] as unknown as readonly Row[];
+      }
+      if (sql.includes("read_current_organization_runtime_settings_for_application"))
+        return [runtimeSettingsRow("NZD")] as unknown as readonly Row[];
+      if (sql.includes("save_base_record_with_relationship_totals")) {
+        terminalCalls += 1;
+        return [
+          {
+            result: {
+              outcome: "saved",
+              recordId: ids.record,
+              concurrencyNumber: 3,
+              values: { [ids.visibleField]: "Changed" },
+              correlationId: ids.correlation,
+              backgroundDelivery: "pending",
+            },
+          },
+        ] as unknown as readonly Row[];
+      }
+      return [] as unknown as readonly Row[];
+    };
+    const run = transactionRunner(requestQuery);
+    const service = createRecordSaveService({
+      identityAuthorityId: ids.authority,
+      clock: () => new Date("2026-09-08T01:00:00.000Z"),
+      correlationId: () => ids.correlation,
+      activityId,
+      occurrenceId,
+      resolvedRequestTransaction: async (...args) => {
+        transactionAttempts += 1;
+        return run(...args);
+      },
+    });
+
+    await expect(service.save(session, selection, updateCommand("Changed"))).resolves.toMatchObject(
+      {
+        kind: "available",
+        value: { outcome: "saved", concurrencyNumber: 3 },
+      },
+    );
+    expect(transactionAttempts).toBe(2);
+    expect(totalPreparations).toBe(2);
+    expect(basePreparations).toBe(1);
+    expect(terminalCalls).toBe(1);
+    expect(activityId).toHaveBeenCalledTimes(1);
+    expect(occurrenceId).toHaveBeenCalledTimes(1);
+  });
+
   it("resolves a response-lost retry in preparation and never repeats the terminal write", async () => {
     let preparationCalls = 0;
     let terminalCalls = 0;
@@ -401,13 +490,16 @@ describe("base Record save service", () => {
       ),
     ).toEqual([
       "set local role vortex_runtime",
+      "set local role vortex_runtime",
       expect.stringContaining("prepare_base_record_save"),
       "set local role vortex_request",
       expect.stringContaining("read_current_organization_runtime_settings_for_application"),
       "set local role vortex_runtime",
       expect.stringContaining("save_base_record"),
       "set local role vortex_runtime",
+      "set local role vortex_runtime",
       expect.stringContaining("prepare_base_record_save"),
+      "set local role vortex_runtime",
       "set local role vortex_runtime",
       expect.stringContaining("prepare_base_record_save"),
     ]);

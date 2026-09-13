@@ -27,6 +27,11 @@ import {
   prepareInitialRecordFieldCandidateV2,
   type PrepareRecordFieldValuesV2Result,
 } from "./field-values";
+import {
+  calculateLockedRelationshipTotalSave,
+  type LockedRelationshipTotalPreparation,
+  type RelationshipTotalParentMutation,
+} from "./relationship-total-save";
 
 type PreparationRow = DatabaseRow & { readonly preparation: unknown };
 type SaveRow = DatabaseRow & { readonly result: unknown };
@@ -45,6 +50,13 @@ type PreparationOutcome =
   | Readonly<{ outcome: "refused_recorded" }>
   | Readonly<{ outcome: "conflict"; correlationId?: string }>
   | Readonly<{ outcome: "unavailable"; correlationId?: string }>;
+
+type RelationshipTotalPreparationOutcome =
+  | LockedRelationshipTotalPreparation
+  | Readonly<{
+      outcome: "restart" | "conflict" | "refused" | "refused_recorded" | "defer" | "not_required";
+      correlationId?: string;
+    }>;
 
 type StoredResult =
   | Readonly<{
@@ -70,6 +82,7 @@ type StoredResult =
     }>;
 
 const recordedRefusal = Symbol("recordedRecordSaveRefusal");
+const restartRelationshipTotalSave = Symbol("restartRelationshipTotalSave");
 
 const revision = (candidate: unknown): number | undefined => {
   if (typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate > 0)
@@ -262,6 +275,35 @@ const calculateAndFinalize = (
   });
 };
 
+const operationClock = (
+  recordTypes: readonly ReturnType<typeof recordTypeDefinitionV2Schema.parse>[],
+  issuedAt: string,
+  timeZone: string | undefined,
+): Readonly<{ instant: string; organizationLocalDate: string }> | undefined => {
+  const needsOrganizationLocalDate = recordTypes.some((recordType) =>
+    recordType.fields.some((field) => {
+      if (field.type !== "calculation") return false;
+      const expression = field.settings.expression;
+      if (expression.kind !== "deadline_passed") return false;
+      const dueField = recordType.fields.find(
+        (candidate) => candidate.fieldId === expression.dueFieldId,
+      );
+      return (
+        dueField?.type === "date" ||
+        (dueField?.type === "calculation" && dueField.settings.resultType === "date")
+      );
+    }),
+  );
+  const organizationLocalDate = needsOrganizationLocalDate
+    ? timeZone === undefined
+      ? undefined
+      : localDate(issuedAt, timeZone)
+    : issuedAt.slice(0, 10);
+  return organizationLocalDate === undefined
+    ? undefined
+    : { instant: issuedAt, organizationLocalDate };
+};
+
 const correctionsFor = (
   issues: readonly Readonly<{
     code: string;
@@ -325,15 +367,133 @@ const prepare = async (
   return parsePreparation(one(rows).preparation);
 };
 
+const parseRelationshipTotalPreparation = (
+  candidate: unknown,
+): RelationshipTotalPreparationOutcome => {
+  if (typeof candidate !== "object" || candidate === null) return { outcome: "refused" };
+  const value = candidate as Record<string, unknown>;
+  if (
+    ["restart", "conflict", "refused", "refused_recorded", "defer", "not_required"].includes(
+      String(value.outcome),
+    )
+  )
+    return {
+      outcome: value.outcome as
+        "restart" | "conflict" | "refused" | "refused_recorded" | "defer" | "not_required",
+      ...(typeof value.correlationId === "string" ? { correlationId: value.correlationId } : {}),
+    };
+  if (
+    value.outcome !== "prepared" ||
+    typeof value.correlationId !== "string" ||
+    !Array.isArray(value.readableFieldIds) ||
+    value.readableFieldIds.some((fieldId) => !fieldIdSchema.safeParse(fieldId).success) ||
+    !Array.isArray(value.records)
+  )
+    return { outcome: "refused" };
+  const records = [];
+  for (const candidateRecord of value.records) {
+    if (typeof candidateRecord !== "object" || candidateRecord === null)
+      return { outcome: "refused" };
+    const record = candidateRecord as Record<string, unknown>;
+    const recordType = recordTypeDefinitionV2Schema.safeParse(record.recordType);
+    const concurrencyNumber =
+      record.concurrencyNumber === undefined ? undefined : revision(record.concurrencyNumber);
+    if (
+      !recordType.success ||
+      typeof record.recordKey !== "string" ||
+      typeof record.existingValues !== "object" ||
+      record.existingValues === null ||
+      Array.isArray(record.existingValues) ||
+      !Array.isArray(record.relationshipSources) ||
+      (record.recordId !== undefined && typeof record.recordId !== "string") ||
+      (record.recordId !== undefined && concurrencyNumber === undefined)
+    )
+      return { outcome: "refused" };
+    const relationshipSources = [];
+    for (const candidateSource of record.relationshipSources) {
+      if (typeof candidateSource !== "object" || candidateSource === null)
+        return { outcome: "refused" };
+      const source = candidateSource as Record<string, unknown>;
+      const sourceRecordType = recordTypeDefinitionV2Schema.safeParse(source.sourceRecordType);
+      if (
+        !sourceRecordType.success ||
+        typeof source.relationshipId !== "string" ||
+        !Array.isArray(source.records)
+      )
+        return { outcome: "refused" };
+      const relatedRecords = [];
+      for (const candidateRelated of source.records) {
+        if (typeof candidateRelated !== "object" || candidateRelated === null)
+          return { outcome: "refused" };
+        const related = candidateRelated as Record<string, unknown>;
+        if (
+          typeof related.fieldValues !== "object" ||
+          related.fieldValues === null ||
+          Array.isArray(related.fieldValues) ||
+          (related.recordKey !== undefined && typeof related.recordKey !== "string")
+        )
+          return { outcome: "refused" };
+        relatedRecords.push({
+          ...(related.recordKey === undefined ? {} : { recordKey: related.recordKey }),
+          fieldValues: related.fieldValues as Readonly<Record<string, unknown>>,
+        });
+      }
+      relationshipSources.push({
+        relationshipId: source.relationshipId,
+        sourceRecordType: sourceRecordType.data,
+        records: relatedRecords,
+      });
+    }
+    records.push({
+      recordKey: record.recordKey,
+      ...(record.recordId === undefined ? {} : { recordId: record.recordId }),
+      recordType: recordType.data,
+      ...(concurrencyNumber === undefined ? {} : { concurrencyNumber }),
+      existingValues: record.existingValues as Readonly<Record<string, unknown>>,
+      relationshipSources,
+    });
+  }
+  return records.filter((record) => record.recordKey === "root").length === 1
+    ? {
+        outcome: "prepared",
+        correlationId: value.correlationId,
+        readableFieldIds: value.readableFieldIds as string[],
+        records,
+      }
+    : { outcome: "refused" };
+};
+
+const prepareRelationshipTotals = async (
+  transaction: RequestDatabaseTransaction,
+  command: SaveRecordCommandV2,
+  activityId: string,
+): Promise<RelationshipTotalPreparationOutcome> => {
+  await transaction.query`set local role vortex_runtime`;
+  const rows = await transaction.query<PreparationRow>`
+    select vortex_record.prepare_relationship_total_save(
+      ${command.commandId}::uuid,
+      ${command.operation}::text,
+      ${command.recordTypeId}::uuid,
+      ${command.operation === "update" ? command.recordId : null}::uuid,
+      ${command.operation === "update" ? command.expectedConcurrencyNumber : null}::bigint,
+      ${JSON.stringify(command.submittedValues)}::text::jsonb,
+      ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
+      ${activityId}::uuid
+    ) as preparation
+  `;
+  return parseRelationshipTotalPreparation(one(rows).preparation);
+};
+
 const persist = async (
   transaction: RequestDatabaseTransaction,
   command: SaveRecordCommandV2,
   finalValues: Readonly<Record<string, unknown>>,
   activityId: string,
   occurrenceId: string,
+  parentMutations: readonly RelationshipTotalParentMutation[] = [],
 ): Promise<StoredResult> => {
   const rows = await transaction.query<SaveRow>`
-    select vortex_record.save_base_record(
+    select vortex_record.save_base_record_with_relationship_totals(
       ${command.commandId}::uuid,
       ${command.operation}::text,
       ${command.recordTypeId}::uuid,
@@ -343,7 +503,8 @@ const persist = async (
       ${JSON.stringify(finalValues)}::text::jsonb,
       ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
       ${activityId}::uuid,
-      ${occurrenceId}::uuid
+      ${occurrenceId}::uuid,
+      ${JSON.stringify(parentMutations)}::text::jsonb
     ) as result
   `;
   const candidate = one(rows).result;
@@ -392,98 +553,174 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       if (!command.success || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
 
-      const result = await requests.runChange(
-        session,
-        selection,
-        async (transaction, _scope, issuedAt) => {
-          const activityId = activityIdSchema.parse(newActivityId());
-          const prepared = await prepare(transaction, command.data, activityId);
-          if (prepared.outcome === "replayed") return prepared.result;
-          if (prepared.outcome === "refused_recorded") return recordedRefusal;
-          if (prepared.outcome === "conflict")
-            return prepared.correlationId === undefined
-              ? recordedRefusal
-              : safeRefusal(prepared.correlationId, "conflict");
-          if (prepared.outcome === "unavailable")
-            return prepared.correlationId === undefined
-              ? recordedRefusal
-              : safeRefusal(prepared.correlationId, "operation_refused");
+      let activityId: string;
+      let occurrenceId: string | undefined;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch {
+        return { kind: "temporarily_unavailable" };
+      }
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const result = await requests.runChange(
+          session,
+          selection,
+          async (transaction, _scope, issuedAt) => {
+            const totalPreparation = await prepareRelationshipTotals(
+              transaction,
+              command.data,
+              activityId,
+            );
+            if (totalPreparation.outcome === "restart") return restartRelationshipTotalSave;
+            if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
+            if (totalPreparation.outcome === "conflict")
+              return totalPreparation.correlationId === undefined
+                ? recordedRefusal
+                : safeRefusal(totalPreparation.correlationId, "conflict");
+            if (totalPreparation.outcome === "refused")
+              return totalPreparation.correlationId === undefined
+                ? recordedRefusal
+                : safeRefusal(totalPreparation.correlationId, "operation_refused");
+            const prepared: PreparationOutcome =
+              totalPreparation.outcome === "prepared"
+                ? {
+                    outcome: "prepared",
+                    recordType: totalPreparation.records.find(
+                      (record) => record.recordKey === "root",
+                    )!.recordType,
+                    existingValues: totalPreparation.records.find(
+                      (record) => record.recordKey === "root",
+                    )!.existingValues,
+                    readableFieldIds: new Set(totalPreparation.readableFieldIds),
+                    correlationId: totalPreparation.correlationId,
+                  }
+                : await prepare(transaction, command.data, activityId);
+            if (prepared.outcome === "replayed") return prepared.result;
+            if (prepared.outcome === "refused_recorded") return recordedRefusal;
+            if (prepared.outcome === "conflict")
+              return prepared.correlationId === undefined
+                ? recordedRefusal
+                : safeRefusal(prepared.correlationId, "conflict");
+            if (prepared.outcome === "unavailable")
+              return prepared.correlationId === undefined
+                ? recordedRefusal
+                : safeRefusal(prepared.correlationId, "operation_refused");
 
-          const settings = await readOrganizationRuntimeSettings(transaction);
-          const values = calculateAndFinalize(
-            prepared,
-            command.data,
-            issuedAt,
-            settings?.currency,
-            settings?.timeZone,
-          );
-          if (!values.success) {
-            if (values.issues.some((issue) => issue.code === "organization_currency_required"))
-              return safeRefusal(prepared.correlationId, "operation_refused");
-            const corrections = correctionsFor(values.issues, prepared.readableFieldIds);
-            return corrections === undefined || corrections.length === 0
-              ? safeRefusal(prepared.correlationId, "operation_refused")
-              : saveRecordResultV2Schema.parse({
-                  contractVersion: "2.0.0",
-                  outcome: "correction_required",
-                  correlationId: prepared.correlationId,
-                  corrections,
-                });
-          }
+            const settings = await readOrganizationRuntimeSettings(transaction);
+            const totalClock =
+              totalPreparation.outcome === "prepared"
+                ? operationClock(
+                    totalPreparation.records.map((record) => record.recordType),
+                    issuedAt,
+                    settings?.timeZone,
+                  )
+                : undefined;
+            const values =
+              totalPreparation.outcome === "prepared" && totalClock !== undefined
+                ? calculateLockedRelationshipTotalSave({
+                    command: command.data,
+                    preparation: totalPreparation,
+                    ...(settings?.currency === undefined
+                      ? {}
+                      : { organizationCurrency: settings.currency }),
+                    clock: totalClock,
+                  })
+                : totalPreparation.outcome === "prepared"
+                  ? {
+                      success: false as const,
+                      issues: [{ code: "invalid_input", recordKey: "root", path: ["clock"] }],
+                    }
+                  : calculateAndFinalize(
+                      prepared,
+                      command.data,
+                      issuedAt,
+                      settings?.currency,
+                      settings?.timeZone,
+                    );
+            if (!values.success) {
+              if (values.issues.some((issue) => issue.code === "organization_currency_required"))
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              const corrections = correctionsFor(
+                values.issues
+                  .filter((issue) => !("recordKey" in issue) || issue.recordKey === "root")
+                  .map((issue) => ({
+                    code: issue.code,
+                    ...(issue.fieldId === undefined ? {} : { fieldId: issue.fieldId }),
+                    path: issue.path,
+                  })),
+                prepared.readableFieldIds,
+              );
+              return corrections === undefined || corrections.length === 0
+                ? safeRefusal(prepared.correlationId, "operation_refused")
+                : saveRecordResultV2Schema.parse({
+                    contractVersion: "2.0.0",
+                    outcome: "correction_required",
+                    correlationId: prepared.correlationId,
+                    corrections,
+                  });
+            }
 
-          const unsupportedChecks = values.pendingChecks.filter(
-            (check) => check.kind !== "record_reference",
-          );
-          if (unsupportedChecks.length > 0) {
-            if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))
-              return safeRefusal(prepared.correlationId, "operation_refused");
-            const corrections = unsupportedChecks.map((check) => ({
-              code: "field_refused" as const,
-              fieldId: check.fieldId,
-            }));
+            const unsupportedChecks = values.pendingChecks.filter(
+              (check) => check.kind !== "record_reference",
+            );
+            if (unsupportedChecks.length > 0) {
+              if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              const corrections = unsupportedChecks.map((check) => ({
+                code: "field_refused" as const,
+                fieldId: check.fieldId,
+              }));
+              return saveRecordResultV2Schema.parse({
+                contractVersion: "2.0.0",
+                outcome: "correction_required",
+                correlationId: prepared.correlationId,
+                corrections,
+              });
+            }
+
+            const finalValues: Record<string, unknown> =
+              "sourceFinalValues" in values
+                ? { ...values.sourceFinalValues }
+                : { ...values.setValues };
+            if ("clearFieldIds" in values)
+              for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
+            occurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
+            const stored = await persist(
+              transaction,
+              command.data,
+              finalValues,
+              activityId,
+              occurrenceId,
+              "parentMutations" in values ? values.parentMutations : [],
+            );
+            if (stored.outcome === "refused_recorded") return recordedRefusal;
+            if (stored.outcome === "conflict")
+              return safeRefusal(prepared.correlationId, "conflict");
+            if (stored.outcome === "refused")
+              return safeRefusal(
+                prepared.correlationId,
+                stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
+              );
+            const concurrencyNumber = revision(stored.concurrencyNumber);
+            if (concurrencyNumber === undefined) throw new Error("RECORD_SAVE_RESULT_INVALID");
             return saveRecordResultV2Schema.parse({
               contractVersion: "2.0.0",
-              outcome: "correction_required",
-              correlationId: prepared.correlationId,
-              corrections,
+              outcome: "saved",
+              recordId: stored.recordId,
+              concurrencyNumber,
+              readableValues: stored.values,
+              correlationId: stored.correlationId,
+              backgroundDelivery: stored.backgroundDelivery,
             });
-          }
+          },
+        );
 
-          const finalValues: Record<string, unknown> = { ...values.setValues };
-          for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
-          const occurrenceId = eventOccurrenceIdSchema.parse(newOccurrenceId());
-          const stored = await persist(
-            transaction,
-            command.data,
-            finalValues,
-            activityId,
-            occurrenceId,
-          );
-          if (stored.outcome === "refused_recorded") return recordedRefusal;
-          if (stored.outcome === "conflict") return safeRefusal(prepared.correlationId, "conflict");
-          if (stored.outcome === "refused")
-            return safeRefusal(
-              prepared.correlationId,
-              stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
-            );
-          const concurrencyNumber = revision(stored.concurrencyNumber);
-          if (concurrencyNumber === undefined) throw new Error("RECORD_SAVE_RESULT_INVALID");
-          return saveRecordResultV2Schema.parse({
-            contractVersion: "2.0.0",
-            outcome: "saved",
-            recordId: stored.recordId,
-            concurrencyNumber,
-            readableValues: stored.values,
-            correlationId: stored.correlationId,
-            backgroundDelivery: stored.backgroundDelivery,
-          });
-        },
-      );
-
-      if (result.kind !== "available") return result;
-      return result.value === recordedRefusal
-        ? { kind: "unavailable" }
-        : { kind: "available", value: result.value as SaveRecordResultV2 };
+        if (result.kind !== "available") return result;
+        if (result.value === restartRelationshipTotalSave) continue;
+        return result.value === recordedRefusal
+          ? { kind: "unavailable" }
+          : { kind: "available", value: result.value as SaveRecordResultV2 };
+      }
+      return { kind: "temporarily_unavailable" };
     },
   });
 };
