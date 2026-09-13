@@ -74,12 +74,18 @@ select no_plan();
 \set type_c 'd4750000-0000-4000-8000-000000000002'
 \set type_i 'd4750000-0000-4000-8000-000000000003'
 \set type_aux 'd4750000-0000-4000-8000-000000000009'
+\set type_hierarchy 'd4750000-0000-4000-8000-00000000000a'
+\set type_join 'd4750000-0000-4000-8000-00000000000b'
+\set type_inherited_account 'd4750000-0000-4000-8000-00000000000c'
 \set type_s_two 'd4750000-0000-4000-8000-000000000011'
 \set type_c_two 'd4750000-0000-4000-8000-000000000012'
 \set storage_s 'b4750000-0000-4000-8000-000000000001'
 \set storage_c 'b4750000-0000-4000-8000-000000000002'
 \set storage_i 'b4750000-0000-4000-8000-000000000003'
 \set storage_aux 'b4750000-0000-4000-8000-000000000009'
+\set storage_hierarchy 'b4750000-0000-4000-8000-00000000000a'
+\set storage_join 'b4750000-0000-4000-8000-00000000000b'
+\set storage_inherited_account 'b4750000-0000-4000-8000-00000000000c'
 \set storage_s_two 'b4750000-0000-4000-8000-000000000011'
 \set storage_c_two 'b4750000-0000-4000-8000-000000000012'
 
@@ -110,8 +116,22 @@ select no_plan();
 \set relationship_inherited 'a4750000-0000-4000-8000-000000000005'
 \set f_inherited_title 'f4750000-0000-4000-8000-000000000031'
 \set f_inherited_owner 'f4750000-0000-4000-8000-000000000032'
+\set f_cross_title 'f4750000-0000-4000-8000-000000000041'
+\set f_cross_target 'f4750000-0000-4000-8000-000000000042'
+\set f_hierarchy_title 'f4750000-0000-4000-8000-000000000051'
+\set f_hierarchy_parent 'f4750000-0000-4000-8000-000000000052'
+\set f_join_title 'f4750000-0000-4000-8000-000000000061'
+\set f_join_left 'f4750000-0000-4000-8000-000000000062'
+\set f_join_right 'f4750000-0000-4000-8000-000000000063'
+\set f_inherited_account_title 'f4750000-0000-4000-8000-000000000071'
+\set f_inherited_account_parent 'f4750000-0000-4000-8000-000000000072'
 \set condition_one 'a4750000-0000-4000-8000-000000000002'
 \set condition_two 'a4750000-0000-4000-8000-000000000003'
+\set relationship_cross 'a4750000-0000-4000-8000-000000000006'
+\set relationship_hierarchy 'a4750000-0000-4000-8000-000000000007'
+\set relationship_join_left 'a4750000-0000-4000-8000-000000000008'
+\set relationship_join_right 'a4750000-0000-4000-8000-000000000009'
+\set relationship_inherited_account 'a4750000-0000-4000-8000-00000000000a'
 
 -- ============================================================================
 -- Session-local fixture builders.
@@ -680,8 +700,14 @@ declare
 begin
   with owners as (
     select 'application'::text as owner_kind, p_application_root_id as owner_id
-    union all
-    select 'module', p_module_root_id
+    union
+    select 'module', dependency.target_root_id
+    from vortex_definition.reachable_module_dependency_edges(
+      p_application_root_id,
+      (select current_release_revision
+        from vortex_definition.roots
+        where root_id = p_application_root_id)
+    ) as dependency
   ), declared as (
     select owners.owner_kind, owners.owner_id, permission.value as permission_value,
       pg_catalog.jsonb_build_object(
@@ -928,6 +954,216 @@ $function$;
 -- keeps an Application's dependency closure inside its own organisation, and a
 -- relationship identity is a primary key in the storage mappings, so a copy of
 -- Module M1's relationship could never be provisioned beside it.
+create function pg_temp.adapter_auxiliary_relationship_module_content(
+  p_type_cross uuid,
+  p_type_hierarchy uuid,
+  p_type_join uuid,
+  p_type_inherited_account uuid,
+  p_storage_cross uuid,
+  p_storage_hierarchy uuid,
+  p_storage_join uuid,
+  p_storage_inherited_account uuid,
+  p_module_root_id uuid,
+  p_target_module_root_id uuid,
+  p_target_shared_type_id uuid,
+  p_target_contained_type_id uuid,
+  p_permissions jsonb
+)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'name', 'Record adapter relationship fixture',
+    'description', 'Cross-module, hierarchy, joining-record and inherited-account fixtures.',
+    'dependencies', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'dependencyKey', 'core_records',
+      'moduleRootId', p_target_module_root_id,
+      'moduleKey', 'vortex.record_adapters.module_one',
+      'version', '2.0.0',
+      'resolvedVersion', '2.0.0'
+    )),
+    'recordTypes', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', p_type_cross,
+        'key', 'cross_module_link',
+        'singularLabel', 'Cross-module link',
+        'pluralLabel', 'Cross-module links',
+        'titleFieldId', 'f4750000-0000-4000-8000-000000000041',
+        'storageContractId', p_storage_cross,
+        'storageScope', 'application_contained',
+        'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000041', 'text',
+            pg_catalog.jsonb_build_object('maxLength', 200), true),
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000042', 'link',
+            pg_catalog.jsonb_build_object(
+              'target', pg_catalog.jsonb_build_object(
+                'state', 'resolved', 'moduleRootId', p_target_module_root_id,
+                'recordTypeId', p_target_shared_type_id
+              ),
+              'onParentDelete', 'refuse'
+            ), true)
+        ),
+        'relationships', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'relationshipId', 'a4750000-0000-4000-8000-000000000006',
+          'key', 'cross_module_to_shared',
+          'fromRecordTypeId', p_type_cross,
+          'fromFieldId', 'f4750000-0000-4000-8000-000000000042',
+          'toRecordType', pg_catalog.jsonb_build_object(
+            'state', 'resolved', 'moduleRootId', p_target_module_root_id,
+            'recordTypeId', p_target_shared_type_id
+          ),
+          'cardinality', 'many_to_one',
+          'onParentDelete', 'refuse'
+        )),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update'),
+        'customActionIds', '[]'::jsonb
+      ),
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', p_type_hierarchy,
+        'key', 'hierarchy_node',
+        'singularLabel', 'Hierarchy node',
+        'pluralLabel', 'Hierarchy nodes',
+        'titleFieldId', 'f4750000-0000-4000-8000-000000000051',
+        'storageContractId', p_storage_hierarchy,
+        'storageScope', 'application_contained',
+        'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000051', 'text',
+            pg_catalog.jsonb_build_object('maxLength', 200), true),
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000052', 'link',
+            pg_catalog.jsonb_build_object(
+              'target', pg_catalog.jsonb_build_object(
+                'state', 'resolved', 'moduleRootId', p_module_root_id,
+                'recordTypeId', p_type_hierarchy
+              ),
+              'onParentDelete', 'empty_optional'
+            ))
+        ),
+        'relationships', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'relationshipId', 'a4750000-0000-4000-8000-000000000007',
+          'key', 'hierarchy_parent',
+          'fromRecordTypeId', p_type_hierarchy,
+          'fromFieldId', 'f4750000-0000-4000-8000-000000000052',
+          'toRecordType', pg_catalog.jsonb_build_object(
+            'state', 'resolved', 'moduleRootId', p_module_root_id,
+            'recordTypeId', p_type_hierarchy
+          ),
+          'cardinality', 'many_to_one',
+          'onParentDelete', 'empty_optional'
+        )),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update'),
+        'customActionIds', '[]'::jsonb
+      ),
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', p_type_join,
+        'key', 'explicit_join',
+        'singularLabel', 'Explicit join',
+        'pluralLabel', 'Explicit joins',
+        'titleFieldId', 'f4750000-0000-4000-8000-000000000061',
+        'storageContractId', p_storage_join,
+        'storageScope', 'application_contained',
+        'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000061', 'text',
+            pg_catalog.jsonb_build_object('maxLength', 200), true),
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000062', 'link',
+            pg_catalog.jsonb_build_object(
+              'target', pg_catalog.jsonb_build_object(
+                'state', 'resolved', 'moduleRootId', p_module_root_id,
+                'recordTypeId', p_type_cross
+              ),
+              'onParentDelete', 'refuse'
+            ), true),
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000063', 'link',
+            pg_catalog.jsonb_build_object(
+              'target', pg_catalog.jsonb_build_object(
+                'state', 'resolved', 'moduleRootId', p_module_root_id,
+                'recordTypeId', p_type_hierarchy
+              ),
+              'onParentDelete', 'refuse'
+            ), true)
+        ),
+        'relationships', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'relationshipId', 'a4750000-0000-4000-8000-000000000008',
+            'key', 'join_left',
+            'fromRecordTypeId', p_type_join,
+            'fromFieldId', 'f4750000-0000-4000-8000-000000000062',
+            'toRecordType', pg_catalog.jsonb_build_object(
+              'state', 'resolved', 'moduleRootId', p_module_root_id,
+              'recordTypeId', p_type_cross
+            ),
+            'cardinality', 'many_to_one',
+            'onParentDelete', 'refuse'
+          ),
+          pg_catalog.jsonb_build_object(
+            'relationshipId', 'a4750000-0000-4000-8000-000000000009',
+            'key', 'join_right',
+            'fromRecordTypeId', p_type_join,
+            'fromFieldId', 'f4750000-0000-4000-8000-000000000063',
+            'toRecordType', pg_catalog.jsonb_build_object(
+              'state', 'resolved', 'moduleRootId', p_module_root_id,
+              'recordTypeId', p_type_hierarchy
+            ),
+            'cardinality', 'many_to_one',
+            'onParentDelete', 'refuse'
+          )
+        ),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read'),
+        'customActionIds', '[]'::jsonb
+      ),
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', p_type_inherited_account,
+        'key', 'inherited_account_child',
+        'singularLabel', 'Inherited account child',
+        'pluralLabel', 'Inherited account children',
+        'titleFieldId', 'f4750000-0000-4000-8000-000000000071',
+        'storageContractId', p_storage_inherited_account,
+        'storageScope', 'application_contained',
+        'ownershipMode', 'inherited',
+        'ownershipRelationshipId', 'a4750000-0000-4000-8000-00000000000a',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000071', 'text',
+            pg_catalog.jsonb_build_object('maxLength', 200), true),
+          pg_temp.adapter_field('f4750000-0000-4000-8000-000000000072', 'link',
+            pg_catalog.jsonb_build_object(
+              'target', pg_catalog.jsonb_build_object(
+                'state', 'resolved', 'moduleRootId', p_target_module_root_id,
+                'recordTypeId', p_target_contained_type_id
+              ),
+              'onParentDelete', 'soft_delete_dependent'
+            ), true)
+        ),
+        'relationships', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'relationshipId', 'a4750000-0000-4000-8000-00000000000a',
+          'key', 'inherited_account_parent',
+          'fromRecordTypeId', p_type_inherited_account,
+          'fromFieldId', 'f4750000-0000-4000-8000-000000000072',
+          'toRecordType', pg_catalog.jsonb_build_object(
+            'state', 'resolved', 'moduleRootId', p_target_module_root_id,
+            'recordTypeId', p_target_contained_type_id
+          ),
+          'cardinality', 'many_to_one',
+          'onParentDelete', 'soft_delete_dependent'
+        )),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update'),
+        'customActionIds', '[]'::jsonb
+      )
+    ),
+    'permissions', p_permissions,
+    'actions', '[]'::jsonb,
+    'events', '[]'::jsonb,
+    'rules', '[]'::jsonb,
+    'sharingConditions', '[]'::jsonb,
+    'extensionPoints', '[]'::jsonb
+  )
+$function$;
+
+-- Organisation two keeps a separate same-shaped record type solely to prove
+-- the organisation boundary. It deliberately has no relationship dependency.
 create function pg_temp.adapter_minimal_module_content(
   p_type_id uuid,
   p_storage_id uuid,
@@ -1147,12 +1383,64 @@ select pg_temp.append_writer_release(
 -- A later binding with a different record type proves action resolution keeps
 -- the type found in the first Module instead of returning the final loop value.
 select pg_temp.append_writer_release(
-  :'module_aux', '2.0.0', '[]'::jsonb,
-  pg_catalog.jsonb_set(
-    pg_temp.adapter_minimal_module_content(
-      :'type_aux', :'storage_aux', 'e4750000-0000-4000-8000-000000000109'
-    ),
-    '{permissions}', '[]'::jsonb
+  :'module_aux', '2.0.0',
+  pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_array(:'module_one', 1)),
+  pg_temp.adapter_auxiliary_relationship_module_content(
+    :'type_aux', :'type_hierarchy', :'type_join', :'type_inherited_account',
+    :'storage_aux', :'storage_hierarchy', :'storage_join', :'storage_inherited_account',
+    :'module_aux', :'module_one', :'type_s', :'type_c',
+    pg_catalog.jsonb_build_array(
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000021',
+        'record_adapters.cross.create_all', :'type_aux', 'create',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_cross_title', :'f_cross_target']::uuid[],
+        array[:'f_cross_title', :'f_cross_target']::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000022',
+        'record_adapters.cross.read_all', :'type_aux', 'read',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_cross_title', :'f_cross_target']::uuid[], array[]::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000023',
+        'record_adapters.cross.update_all', :'type_aux', 'update',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_cross_title', :'f_cross_target']::uuid[],
+        array[:'f_cross_title', :'f_cross_target']::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000024',
+        'record_adapters.hierarchy.create_all', :'type_hierarchy', 'create',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_hierarchy_title', :'f_hierarchy_parent']::uuid[],
+        array[:'f_hierarchy_title', :'f_hierarchy_parent']::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000025',
+        'record_adapters.hierarchy.read_all', :'type_hierarchy', 'read',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_hierarchy_title', :'f_hierarchy_parent']::uuid[], array[]::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000026',
+        'record_adapters.join.create_all', :'type_join', 'create',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_join_title', :'f_join_left', :'f_join_right']::uuid[],
+        array[:'f_join_title', :'f_join_left', :'f_join_right']::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000027',
+        'record_adapters.join.read_all', :'type_join', 'read',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_join_title', :'f_join_left', :'f_join_right']::uuid[], array[]::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000028',
+        'record_adapters.inherited_account.create_all', :'type_inherited_account', 'create',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_inherited_account_title', :'f_inherited_account_parent']::uuid[],
+        array[:'f_inherited_account_title', :'f_inherited_account_parent']::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-000000000029',
+        'record_adapters.inherited_account.read_all', :'type_inherited_account', 'read',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_inherited_account_title', :'f_inherited_account_parent']::uuid[], array[]::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-00000000002a',
+        'record_adapters.inherited_account.update_all', :'type_inherited_account', 'update',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_inherited_account_title', :'f_inherited_account_parent']::uuid[],
+        array[:'f_inherited_account_title', :'f_inherited_account_parent']::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-00000000002b',
+        'record_adapters.inherited_account.read_own', :'type_inherited_account', 'read',
+        '{"routes":[{"kind":"ownership"}]}'::jsonb,
+        array[:'f_inherited_account_title', :'f_inherited_account_parent']::uuid[], array[]::uuid[])
+    )
   ),
   '2.0.0'
 );
@@ -1208,6 +1496,8 @@ select pg_temp.adapter_register_application(:'org_two', :'app_three', :'module_t
 select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1',
   '54750000-0000-4000-8000-000000000001', 'Group member') as member_account \gset
 select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1',
+  '54750000-0000-4000-8000-00000000000a', 'Reparent recipient') as reparent_account \gset
+select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1',
   '54750000-0000-4000-8000-000000000002', 'Contained owner') as owner_account \gset
 select pg_temp.adapter_account(:'org_one', '64750000-0000-4000-8000-0000000000a1',
   '54750000-0000-4000-8000-000000000003', 'Share recipient') as share_account \gset
@@ -1253,11 +1543,13 @@ select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000
     'e4750000-0000-4000-8000-000000000013',
     'e4750000-0000-4000-8000-000000000015',
     'e4750000-0000-4000-8000-000000000019',
-    'e4750000-0000-4000-8000-00000000001a']::uuid[]);
+    'e4750000-0000-4000-8000-00000000001a',
+    'e4750000-0000-4000-8000-00000000002b']::uuid[]);
 select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000000000022',
   'adapter_contained_owner',
   array['e4750000-0000-4000-8000-00000000000a',
-    'e4750000-0000-4000-8000-00000000000b']::uuid[]);
+    'e4750000-0000-4000-8000-00000000000b',
+    'e4750000-0000-4000-8000-00000000002b']::uuid[]);
 select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000000000023',
   'adapter_share_route',
   array['e4750000-0000-4000-8000-000000000005',
@@ -1288,7 +1580,17 @@ select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000
     'e4750000-0000-4000-8000-000000000014',
     'e4750000-0000-4000-8000-000000000016',
     'e4750000-0000-4000-8000-000000000017',
-    'e4750000-0000-4000-8000-000000000018']::uuid[]);
+    'e4750000-0000-4000-8000-000000000018',
+    'e4750000-0000-4000-8000-000000000021',
+    'e4750000-0000-4000-8000-000000000022',
+    'e4750000-0000-4000-8000-000000000023',
+    'e4750000-0000-4000-8000-000000000024',
+    'e4750000-0000-4000-8000-000000000025',
+    'e4750000-0000-4000-8000-000000000026',
+    'e4750000-0000-4000-8000-000000000027',
+    'e4750000-0000-4000-8000-000000000028',
+    'e4750000-0000-4000-8000-000000000029',
+    'e4750000-0000-4000-8000-00000000002a']::uuid[]);
 select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000000000028',
   'adapter_exact_money_route',
   array['e4750000-0000-4000-8000-00000000000e']::uuid[]);
@@ -1298,6 +1600,8 @@ select pg_temp.adapter_role(:'org_two', :'app_three', '74750000-0000-4000-8000-0
 
 select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-000000000041',
   '74750000-0000-4000-8000-000000000021', :'member_account');
+select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-000000000050',
+  '74750000-0000-4000-8000-000000000021', :'reparent_account');
 select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-000000000042',
   '74750000-0000-4000-8000-000000000022', :'owner_account');
 select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-000000000043',
@@ -1567,7 +1871,7 @@ insert into record_data.rt_b4750000000040008000000000000002 (
   ),
   'Contained note two',
   pg_catalog.jsonb_build_object(
-    'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000002'
+    'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000006'
   )
 );
 reset role;
@@ -3858,6 +4162,497 @@ select is((
   where stored.record_id = 'd5750000-0000-4000-8000-000000000011'
 ), '2|Contained one changed|d5750000-0000-4000-8000-000000000005|0|1|1',
   'the final source values and replacement edge win without restoring the removed edge');
+
+-- ============================================================================
+-- #49 slice 1: installed relationship integration. These checks extend the
+-- active Application above; they do not substitute a synthetic edge reader or
+-- a second ownership evaluator for the shipped create/change/read boundaries.
+-- ============================================================================
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_record_adapter;
+create temporary table relationship_cross_create on commit drop as
+select vortex_record.create_record_internal(
+  :'type_aux'::uuid,
+  pg_catalog.jsonb_build_object(
+    :'f_cross_title', 'Cross-module source',
+    :'f_cross_target', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )
+  ),
+  array[:'f_cross_title', :'f_cross_target']::uuid[], null
+) as result;
+reset role;
+select result ->> 'recordId' as relationship_cross_record_id
+from relationship_cross_create \gset
+select is(
+  (select result ->> 'outcome' from relationship_cross_create),
+  'completed',
+  'protected create accepts a fixed cross-module target from the active exact dependency'
+);
+select is(
+  (
+    select pg_catalog.concat_ws('|', mapping.module_root_id::text,
+      source.record_type_id::text, target.module_root_id::text,
+      target.record_type_id::text)
+    from vortex_record.relationship_storage_mappings as mapping
+    join vortex_record.storage_catalogue as source
+      on source.storage_contract_id = mapping.source_storage_contract_id
+    join vortex_record.storage_catalogue as target
+      on target.record_type_id = mapping.target_record_type_ids[1]
+      and target.module_root_id = :'module_one'::uuid
+      and target.state = 'active'
+    where mapping.relationship_id = :'relationship_cross'::uuid
+  ),
+  :'module_aux' || '|' || :'type_aux' || '|' || :'module_one' || '|' || :'type_s',
+  'the provisioned cross-module mapping retains both exact module and record-type identities'
+);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_request;
+create temporary table relationship_cross_read on commit drop as
+select vortex_record.read_record(:'type_aux'::uuid, :'relationship_cross_record_id'::uuid)
+  as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_cross_read),
+  'allowed',
+  'the request read boundary projects the created cross-module record'
+);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'member_account');
+set local role vortex_record_adapter;
+create temporary table relationship_cross_target_create on commit drop as
+select vortex_record.create_record_internal(
+  :'type_s'::uuid,
+  pg_catalog.jsonb_build_object(:'f_text', 'Cross-module replacement target'),
+  array[:'f_text']::uuid[], '84750000-0000-4000-8000-000000000001'::uuid
+) as result;
+reset role;
+select result ->> 'recordId' as relationship_cross_target_id
+from relationship_cross_target_create \gset
+select is(
+  (select result ->> 'outcome' from relationship_cross_target_create),
+  'completed',
+  'protected create supplies an active eligible replacement target'
+);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_request;
+create temporary table relationship_cross_local_wrong_type_exists on commit drop as
+select vortex_record.read_record(
+  :'type_c'::uuid, 'd5750000-0000-4000-8000-000000000011'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_cross_local_wrong_type_exists),
+  'allowed',
+  'the local wrong-type target exists and is readable through the request boundary'
+);
+
+select pg_temp.adapter_context(:'org_two', :'app_three', :'other_account');
+set local role vortex_request;
+create temporary table relationship_cross_foreign_target_exists on commit drop as
+select vortex_record.read_record(
+  :'type_s_two'::uuid, 'd5750000-0000-4000-8000-000000000021'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_cross_foreign_target_exists),
+  'allowed',
+  'the foreign target exists and is readable only through its own organisation context'
+);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_record_adapter;
+create temporary table relationship_cross_change on commit drop as
+select vortex_record.change_record_relationship_internal(
+  :'type_aux'::uuid, :'relationship_cross_record_id'::uuid, 1,
+  :'relationship_cross'::uuid,
+  pg_catalog.jsonb_build_object(
+    'recordTypeId', :'type_s', 'recordId', :'relationship_cross_target_id'
+  )
+) as result;
+create temporary table relationship_cross_wrong_type on commit drop as
+select vortex_record.change_record_relationship_internal(
+  :'type_aux'::uuid, :'relationship_cross_record_id'::uuid, 2,
+  :'relationship_cross'::uuid,
+  pg_catalog.jsonb_build_object(
+    'recordTypeId', :'type_c', 'recordId', 'd5750000-0000-4000-8000-000000000011'
+  )
+) as result;
+reset role;
+select is(
+  (select result ->> 'concurrencyNumber' from relationship_cross_change),
+  '2',
+  'the protected relationship boundary atomically replaces a fixed cross-module target'
+);
+select is(
+  (select result ->> 'reasonCode' from relationship_cross_wrong_type),
+  'relationship_unavailable',
+  'an existing local record of an undeclared target type refuses without target detail'
+);
+select is(
+  (
+    select pg_catalog.concat_ws('|', stored.concurrency_number::text,
+      stored.f_f4750000000040008000000000000042 ->> 'recordId',
+      (select pg_catalog.count(*)::text from vortex_record.relationship_edges as edge
+        where edge.relationship_id = :'relationship_cross'::uuid
+          and edge.from_record_id = :'relationship_cross_record_id'::uuid
+          and edge.to_record_id = :'relationship_cross_target_id'::uuid)
+    )
+    from record_data.rt_b4750000000040008000000000000009 as stored
+    where stored.record_id = :'relationship_cross_record_id'::uuid
+  ),
+  '2|' || :'relationship_cross_target_id' || '|1',
+  'the local wrong-type refusal retains the exact source revision, value and edge'
+);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_record_adapter;
+create temporary table relationship_cross_wrong_organization on commit drop as
+select vortex_record.change_record_relationship_internal(
+  :'type_aux'::uuid, :'relationship_cross_record_id'::uuid, 2,
+  :'relationship_cross'::uuid,
+  pg_catalog.jsonb_build_object(
+    'recordTypeId', :'type_s_two', 'recordId', 'd5750000-0000-4000-8000-000000000021'
+  )
+) as result;
+reset role;
+select is(
+  (select result ->> 'reasonCode' from relationship_cross_wrong_organization),
+  'relationship_unavailable',
+  'an existing foreign-organisation target refuses through the same protected boundary'
+);
+select is(
+  (
+    select pg_catalog.concat_ws('|', stored.concurrency_number::text,
+      stored.f_f4750000000040008000000000000042 ->> 'recordId',
+      (select pg_catalog.count(*)::text from vortex_record.relationship_edges as edge
+        where edge.relationship_id = :'relationship_cross'::uuid
+          and edge.from_record_id = :'relationship_cross_record_id'::uuid
+          and edge.to_record_id = :'relationship_cross_target_id'::uuid)
+    )
+    from record_data.rt_b4750000000040008000000000000009 as stored
+    where stored.record_id = :'relationship_cross_record_id'::uuid
+  ),
+  '2|' || :'relationship_cross_target_id' || '|1',
+  'the foreign-organisation refusal retains the exact source revision, value and edge'
+);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_record_adapter;
+create temporary table relationship_hierarchy_parent on commit drop as
+select vortex_record.create_record_internal(
+  :'type_hierarchy'::uuid,
+  pg_catalog.jsonb_build_object(:'f_hierarchy_title', 'Hierarchy root'),
+  array[:'f_hierarchy_title']::uuid[], null
+) as result;
+reset role;
+select result ->> 'recordId' as relationship_hierarchy_parent_id
+from relationship_hierarchy_parent \gset
+set local role vortex_record_adapter;
+create temporary table relationship_hierarchy_child on commit drop as
+select vortex_record.create_record_internal(
+  :'type_hierarchy'::uuid,
+  pg_catalog.jsonb_build_object(
+    :'f_hierarchy_title', 'Hierarchy child',
+    :'f_hierarchy_parent', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_hierarchy', 'recordId', :'relationship_hierarchy_parent_id'
+    )
+  ),
+  array[:'f_hierarchy_title', :'f_hierarchy_parent']::uuid[], null
+) as result;
+reset role;
+select result ->> 'recordId' as relationship_hierarchy_child_id
+from relationship_hierarchy_child \gset
+select is(
+  (select result ->> 'outcome' from relationship_hierarchy_child),
+  'completed',
+  'protected create accepts an allowed same-type hierarchy edge'
+);
+select is(
+  (
+    select pg_catalog.count(*)
+    from vortex_record.relationship_edges as edge
+    where edge.relationship_id = :'relationship_hierarchy'::uuid
+      and edge.from_storage_contract_id = :'storage_hierarchy'::uuid
+      and edge.to_storage_contract_id = :'storage_hierarchy'::uuid
+      and edge.from_record_id = :'relationship_hierarchy_child_id'::uuid
+      and edge.to_record_id = :'relationship_hierarchy_parent_id'::uuid
+  ),
+  1::bigint,
+  'the same-type hierarchy has one exact self-type edge rather than an inferred hierarchy table'
+);
+
+set local role vortex_record_adapter;
+create temporary table relationship_join_create on commit drop as
+select vortex_record.create_record_internal(
+  :'type_join'::uuid,
+  pg_catalog.jsonb_build_object(
+    :'f_join_title', 'Explicit join',
+    :'f_join_left', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_aux', 'recordId', :'relationship_cross_record_id'
+    ),
+    :'f_join_right', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_hierarchy', 'recordId', :'relationship_hierarchy_child_id'
+    )
+  ),
+  array[:'f_join_title', :'f_join_left', :'f_join_right']::uuid[], null
+) as result;
+reset role;
+select result ->> 'recordId' as relationship_join_record_id
+from relationship_join_create \gset
+select is(
+  (select result ->> 'outcome' from relationship_join_create),
+  'completed',
+  'protected create writes an ordinary explicit joining record'
+);
+select is(
+  (
+    select pg_catalog.count(*)
+    from vortex_record.relationship_edges as edge
+    where edge.from_record_id = :'relationship_join_record_id'::uuid
+      and edge.relationship_id in (:'relationship_join_left'::uuid, :'relationship_join_right'::uuid)
+  ),
+  2::bigint,
+  'the joining record owns two declared edges instead of an implicit many-to-many relation'
+);
+
+-- The distinct Group and account parents are introduced only after every
+-- earlier #401/#402 assertion, so this integration fixture cannot change a
+-- pre-existing incoming-edge count or lifecycle scenario.
+select pg_temp.adapter_clear_context();
+select * from vortex_access.coordinate_organization_group_change(
+  'create_group', :'org_one', '84750000-0000-4000-8000-000000000004', null,
+  'adapter_group_reparent_target', 'Adapter reparent target group', :'actor',
+  'c4750000-0000-4000-8000-000000000055'
+);
+select * from vortex_access.coordinate_organization_group_membership_change(
+  'add_membership', :'org_one', '84750000-0000-4000-8000-000000000013', null,
+  '84750000-0000-4000-8000-000000000004', :'reparent_account',
+  pg_catalog.clock_timestamp() - interval '1 minute', null, null,
+  :'actor', 'c4750000-0000-4000-8000-000000000056'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_record_adapter;
+insert into record_data.rt_b4750000000040008000000000000001 (
+  organisation_id, module_root_id, record_type_id, storage_contract_id, record_id,
+  application_root_id, definition_revision, owner_group_id, lifecycle_state,
+  concurrency_number, created_at, created_by, updated_at, updated_by,
+  f_f4750000000040008000000000000001, f_f4750000000040008000000000000002,
+  f_f4750000000040008000000000000003, f_f4750000000040008000000000000004,
+  f_f4750000000040008000000000000005, f_f4750000000040008000000000000006,
+  f_f4750000000040008000000000000007, f_f4750000000040008000000000000008,
+  f_f4750000000040008000000000000009, f_f475000000004000800000000000000a,
+  f_f475000000004000800000000000000b, f_f475000000004000800000000000000c,
+  f_f475000000004000800000000000000d
+) values (
+  :'org_one', :'module_one', :'type_s', :'storage_s',
+  'd5750000-0000-4000-8000-000000000007', null, 1,
+  '84750000-0000-4000-8000-000000000004', 'active', 1,
+  pg_catalog.statement_timestamp(), :'actor', pg_catalog.statement_timestamp(), :'actor',
+  'Shared reparent target', true, 14, 6.25,
+  '{"amount":"6.25","currency":"NZD"}'::jsonb, '2026-03-09',
+  '2026-03-09T10:10:11Z', '[]'::jsonb, null,
+  '{"blocks":[]}'::jsonb, '[]'::jsonb, '[]'::jsonb, 'Never readable six'
+);
+-- The current create operation correctly gives an account-owned record to its
+-- caller. Two different starting account owners therefore require controlled
+-- parent rows; the child itself is created through the protected boundary.
+insert into record_data.rt_b4750000000040008000000000000002 (
+  organisation_id, module_root_id, record_type_id, storage_contract_id, record_id,
+  application_root_id, definition_revision, owner_organisation_account_id,
+  lifecycle_state, concurrency_number, created_at, created_by, updated_at,
+  updated_by, f_f4750000000040008000000000000021,
+  f_f4750000000040008000000000000022, f_f4750000000040008000000000000023,
+  f_f4750000000040008000000000000026
+) values
+  (:'org_one', :'module_one', :'type_c', :'storage_c',
+    'd5750000-0000-4000-8000-000000000013', :'app_one', 1, :'owner_account',
+    'active', 1, pg_catalog.statement_timestamp(), :'actor', pg_catalog.statement_timestamp(),
+    :'actor', 'Account owner parent', null, 'Relationship fixture parent',
+    pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000001'
+    )),
+  (:'org_one', :'module_one', :'type_c', :'storage_c',
+    'd5750000-0000-4000-8000-000000000014', :'app_one', 1, :'reparent_account',
+    'active', 1, pg_catalog.statement_timestamp(), :'actor', pg_catalog.statement_timestamp(),
+    :'actor', 'All-account parent', null, 'Relationship fixture target',
+    pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000001'
+    ));
+reset role;
+set local role vortex_record_owner;
+insert into vortex_record.relationship_edges (
+  relationship_id, from_organisation_id, to_organisation_id,
+  from_application_root_id, to_application_root_id, from_storage_contract_id,
+  from_record_id, to_storage_contract_id, to_record_id
+) values
+  (:'relationship_required', :'org_one', :'org_one', :'app_one', null,
+    :'storage_c', 'd5750000-0000-4000-8000-000000000013',
+    :'storage_s', 'd5750000-0000-4000-8000-000000000001'),
+  (:'relationship_required', :'org_one', :'org_one', :'app_one', null,
+    :'storage_c', 'd5750000-0000-4000-8000-000000000014',
+    :'storage_s', 'd5750000-0000-4000-8000-000000000001');
+reset role;
+
+-- A fresh Group-owned inherited child is a controlled fixture row because the
+-- current Module intentionally exposes no inherited-type create permission.
+-- Reparenting and every visibility assertion below still use the protected
+-- relationship and request-read boundaries.
+set local role vortex_record_adapter;
+insert into record_data.rt_b4750000000040008000000000000003 (
+  organisation_id, module_root_id, record_type_id, storage_contract_id, record_id,
+  application_root_id, definition_revision, lifecycle_state, concurrency_number,
+  created_at, created_by, updated_at, updated_by,
+  f_f4750000000040008000000000000031, f_f4750000000040008000000000000032
+) values (
+  :'org_one', :'module_one', :'type_i', :'storage_i',
+  'd5750000-0000-4000-8000-000000000032', :'app_one', 1, 'active', 1,
+  pg_catalog.statement_timestamp(), :'actor', pg_catalog.statement_timestamp(), :'actor',
+  'Group inherited child', pg_catalog.jsonb_build_object(
+    'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000001'
+  )
+);
+reset role;
+set local role vortex_record_owner;
+insert into vortex_record.relationship_edges (
+  relationship_id, from_organisation_id, to_organisation_id,
+  from_application_root_id, to_application_root_id, from_storage_contract_id,
+  from_record_id, to_storage_contract_id, to_record_id
+) values (
+  :'relationship_inherited', :'org_one', :'org_one', :'app_one', null,
+  :'storage_i', 'd5750000-0000-4000-8000-000000000032',
+  :'storage_s', 'd5750000-0000-4000-8000-000000000001'
+);
+reset role;
+select pg_temp.adapter_context(:'org_one', :'app_one', :'member_account');
+set local role vortex_request;
+create temporary table relationship_group_before on commit drop as
+select vortex_record.read_record(
+  :'type_i'::uuid, 'd5750000-0000-4000-8000-000000000032'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_group_before),
+  'allowed',
+  'Group membership reaches inherited ownership through the declared current parent'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_record_adapter;
+create temporary table relationship_group_reparent on commit drop as
+select vortex_record.change_record_relationship_internal(
+  :'type_i'::uuid, 'd5750000-0000-4000-8000-000000000032'::uuid, 1,
+  :'relationship_inherited'::uuid,
+  pg_catalog.jsonb_build_object(
+    'recordTypeId', :'type_s', 'recordId', 'd5750000-0000-4000-8000-000000000007'
+  )
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_group_reparent),
+  'completed',
+  'a permitted change atomically reparents inherited Group ownership'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'member_account');
+set local role vortex_request;
+create temporary table relationship_group_after on commit drop as
+select vortex_record.read_record(
+  :'type_i'::uuid, 'd5750000-0000-4000-8000-000000000032'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_group_after),
+  'refused',
+  'reparenting removes the former Group member''s inherited access without copying owners'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'reparent_account');
+set local role vortex_request;
+create temporary table relationship_group_recipient on commit drop as
+select vortex_record.read_record(
+  :'type_i'::uuid, 'd5750000-0000-4000-8000-000000000032'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_group_recipient),
+  'allowed',
+  'the current Group member gains inherited access after reparenting'
+);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_record_adapter;
+create temporary table relationship_inherited_account_create on commit drop as
+select vortex_record.create_record_internal(
+  :'type_inherited_account'::uuid,
+  pg_catalog.jsonb_build_object(
+    :'f_inherited_account_title', 'Account inherited child',
+    :'f_inherited_account_parent', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'type_c', 'recordId', 'd5750000-0000-4000-8000-000000000013'
+    )
+  ),
+  array[:'f_inherited_account_title', :'f_inherited_account_parent']::uuid[], null
+) as result;
+reset role;
+select result ->> 'recordId' as relationship_inherited_account_record_id
+from relationship_inherited_account_create \gset
+select is(
+  (select result ->> 'outcome' from relationship_inherited_account_create),
+  'completed',
+  'protected create writes an inherited child without a copied account owner'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'owner_account');
+set local role vortex_request;
+create temporary table relationship_account_before on commit drop as
+select vortex_record.read_record(
+  :'type_inherited_account'::uuid, :'relationship_inherited_account_record_id'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_account_before),
+  'allowed',
+  'the current account owner reads an inherited child through its declared parent'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+set local role vortex_record_adapter;
+create temporary table relationship_account_reparent on commit drop as
+select vortex_record.change_record_relationship_internal(
+  :'type_inherited_account'::uuid, :'relationship_inherited_account_record_id'::uuid,
+  1, :'relationship_inherited_account'::uuid,
+  pg_catalog.jsonb_build_object(
+    'recordTypeId', :'type_c', 'recordId', 'd5750000-0000-4000-8000-000000000014'
+  )
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_account_reparent),
+  'completed',
+  'a permitted change atomically reparents inherited account ownership'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'owner_account');
+set local role vortex_request;
+create temporary table relationship_account_after on commit drop as
+select vortex_record.read_record(
+  :'type_inherited_account'::uuid, :'relationship_inherited_account_record_id'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_account_after),
+  'refused',
+  'reparenting removes the former account owner''s inherited access without owner copying'
+);
+select pg_temp.adapter_context(:'org_one', :'app_one', :'reparent_account');
+set local role vortex_request;
+create temporary table relationship_account_recipient on commit drop as
+select vortex_record.read_record(
+  :'type_inherited_account'::uuid, :'relationship_inherited_account_record_id'::uuid
+) as result;
+reset role;
+select is(
+  (select result ->> 'outcome' from relationship_account_recipient),
+  'allowed',
+  'the current account owner gains inherited access after reparenting'
+);
 
 -- Current Group eligibility is checked at the terminal mutation. Removing the
 -- membership cannot be bypassed by a previously prepared Group selection.
