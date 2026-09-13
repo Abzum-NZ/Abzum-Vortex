@@ -504,9 +504,11 @@ begin;
 select 'VORTEX_RUNTIME_SETTINGS_PROOF_BACKEND|committed-request|'
   || pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
+reset role;
 select current_version as resolved_access_version
 from vortex_access.organization_access_versions
 where organization_id = '$organization_id' \gset
+set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human', 'identityAuthorityId', '$identity_authority_id',
   'tenantId', '$tenant_id', 'organizationId', '$organization_id',
@@ -557,9 +559,11 @@ begin;
 select 'VORTEX_RUNTIME_SETTINGS_PROOF_BACKEND|rolled-back-request|'
   || pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
+reset role;
 select current_version as resolved_access_version
 from vortex_access.organization_access_versions
 where organization_id = '$organization_id' \gset
+set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human', 'identityAuthorityId', '$identity_authority_id',
   'tenantId', '$tenant_id', 'organizationId', '$organization_id',
@@ -607,9 +611,11 @@ select vortex_identity.stage_organization_runtime_settings_update(
     'numberFormat', 'always', 'revision', 1
   )
 );
+reset role;
 select current_version as resolved_access_version
 from vortex_access.organization_access_versions
 where organization_id = '$organization_id' \gset
+set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human', 'identityAuthorityId', '$identity_authority_id',
   'tenantId', '$tenant_id', 'organizationId', '$organization_id',
@@ -635,9 +641,11 @@ select vortex_identity.stage_organization_runtime_settings_update(
     'numberFormat', 'never', 'revision', 1
   )
 );
+reset role;
 select current_version as resolved_access_version
 from vortex_access.organization_access_versions
 where organization_id = '$organization_id' \gset
+set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human', 'identityAuthorityId', '$identity_authority_id',
   'tenantId', '$tenant_id', 'organizationId', '$organization_id',
@@ -690,9 +698,11 @@ select vortex_identity.stage_organization_runtime_settings_update(
     'numberFormat', 'never', 'revision', 2
   )
 );
+reset role;
 select current_version as resolved_access_version
 from vortex_access.organization_access_versions
 where organization_id = '$organization_id' \gset
+set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human', 'identityAuthorityId', '$identity_authority_id',
   'tenantId', '$tenant_id', 'organizationId', '$organization_id',
@@ -730,9 +740,11 @@ select vortex_identity.stage_organization_runtime_settings_update(
     'numberFormat', 'auto', 'revision', 2
   )
 );
+reset role;
 select current_version as resolved_access_version
 from vortex_access.organization_access_versions
 where organization_id = '$organization_id' \gset
+set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human', 'identityAuthorityId', '$identity_authority_id',
   'tenantId', '$tenant_id', 'organizationId', '$organization_id',
@@ -811,9 +823,11 @@ select vortex_identity.stage_organization_runtime_settings_update(
     'numberFormat', 'auto', 'revision', 3
   )
 );
+reset role;
 select current_version as resolved_access_version
 from vortex_access.organization_access_versions
 where organization_id = '$organization_id' \gset
+set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human', 'identityAuthorityId', '$identity_authority_id',
   'tenantId', '$tenant_id', 'organizationId', '$organization_id',
@@ -872,9 +886,11 @@ select vortex_identity.stage_organization_runtime_settings_update(
     'numberFormat', 'min2', 'revision', 3
   )
 );
+reset role;
 select current_version as resolved_access_version
 from vortex_access.organization_access_versions
 where organization_id = '$organization_id' \gset
+set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human', 'identityAuthorityId', '$identity_authority_id',
   'tenantId', '$tenant_id', 'organizationId', '$organization_id',

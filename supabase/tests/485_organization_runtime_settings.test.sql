@@ -76,6 +76,9 @@ select ok(
 -- An application request may start before its organisation has completed
 -- explicit setup. The authorised reader reports that absence; it does not
 -- invent a default or expose another organisation's row.
+select current_version as initial_access_version
+from vortex_access.organization_access_versions
+where organization_id = '24850000-0000-4000-8000-000000000001' \gset
 set local role vortex_runtime;
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'callerKind', 'human',
@@ -88,11 +91,7 @@ select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'authenticationStrength', 'single_factor',
   'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
   'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
-  'accessVersion', (
-    select current_version
-    from vortex_access.organization_access_versions
-    where organization_id = '24850000-0000-4000-8000-000000000001'
-  ),
+  'accessVersion', :initial_access_version,
   'correlationId', 'a4850000-0000-4000-8000-000000000004'
 ));
 set local role vortex_request;
@@ -127,6 +126,7 @@ select throws_ok(
   '40001'::char(5), 'Organization runtime settings are already initialized differently',
   'conflicting trusted setup is refused rather than changing existing settings'
 );
+reset role;
 select results_eq(
   $$select language, currency, revision
     from vortex_identity.organization_runtime_settings
@@ -134,6 +134,7 @@ select results_eq(
   $$values ('en-NZ'::text, 'NZD'::text, 1::bigint)$$,
   'a conflicting trusted setup leaves the existing settings row unchanged'
 );
+set local role vortex_runtime;
 select throws_ok(
   $$select * from vortex_identity.initialize_organization_runtime_settings(
     '24850000-0000-4000-8000-000000000001', 'en-NZ', 'Pacific/Auckland',
