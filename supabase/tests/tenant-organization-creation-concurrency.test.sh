@@ -60,6 +60,13 @@ cleanup() {
     "$proof_root/release-expiry" "$proof_root/release-request" \
     "$proof_root/release-change" "$proof_root/continue-request"
   for worker in "${workers[@]}"; do wait "$worker" >/dev/null 2>&1 || true; done
+  if [ "$status" -ne 0 ]; then
+    for log in "$proof_root"/*.log; do
+      [ -f "$log" ] || continue
+      printf '\nWorker log: %s\n' "${log##*/}" >&2
+      cat "$log" >&2
+    done
+  fi
   if [ "$fixture_created" = 1 ]; then
     run_sql "
       begin;
@@ -143,7 +150,8 @@ run_sql "
   ) values
     ('$secondary_assignment_id','$tenant_id','$secondary_actor_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',null,1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id'),
     ('$changed_assignment_id','$tenant_id','$changed_actor_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',null,1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id'),
-    ('$request_actor_assignment_id','$tenant_id','$root_steward_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',null,1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id');" >/dev/null
+    ('$request_actor_assignment_id','$tenant_id','$root_steward_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',null,1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id'),
+    ('$expiring_assignment_id','$tenant_id','$expiring_actor_id',array['platform.tenant.organizations.create'],clock_timestamp()-interval '1 hour',clock_timestamp()+interval '1 day',1,clock_timestamp()-interval '1 hour','$operator_id','$correlation_id',clock_timestamp()-interval '1 hour','$operator_id','$correlation_id');" >/dev/null
 
 create_call() {
   local actor="$1" duplicate="$2" fingerprint="$3" parent="$4" short_name="$5"
@@ -285,16 +293,8 @@ touch "$proof_root/release-revoke"; wait "${workers[8]}"; wait "${workers[9]}"
 grep -qx 'V3101' "$proof_root/revoked-create.log" || { echo 'revoked queued authority was not refused' >&2; cat "$proof_root/revoked-create.log" >&2; exit 1; }
 
 # Authority effective while queued expires before the tenant lock is released.
-run_sql "
-  insert into vortex_identity.tenant_administrator_assignments(
-    assignment_id,tenant_id,identity_id,capability_keys,starts_at,expires_at,revision,
-    granted_at,granted_by_actor_id,grant_correlation_id,changed_at,changed_by_actor_id,change_correlation_id
-  ) values (
-    '$expiring_assignment_id','$tenant_id','$expiring_actor_id',
-    array['platform.tenant.organizations.create'],clock_timestamp()-interval '1 hour',
-    clock_timestamp()+interval '5 seconds',1,clock_timestamp()-interval '1 hour',
-    '$operator_id','$correlation_id',clock_timestamp()-interval '1 hour',
-    '$operator_id','$correlation_id');" >/dev/null
+# Deliberately exceed the old fixture expiry window before acquiring any locks.
+sleep 6
 "${psql_command[@]}" >"$proof_root/expiry-holder.log" 2>&1 <<SQL &
 begin;
 select pg_catalog.pg_backend_pid() \g '$proof_root/expiry-holder.pid'
@@ -317,13 +317,26 @@ rollback;
 SQL
 w=$!; workers+=("$w"); expiring_create_pid="$(read_pid "$proof_root/expiring-create.pid")"
 wait_blocked "$expiring_create_pid" "$expiry_holder_pid" 'expiring creation queued on tenant serialization'
+effective="$(run_sql "select case when starts_at<=clock_timestamp() and expires_at>clock_timestamp() and revoked_at is null then 'yes' else '' end from vortex_identity.tenant_administrator_assignments where assignment_id='$expiring_assignment_id';")"
+[ "$effective" = yes ] || { echo 'expiring creation authority was not effective while blocked on tenant serialization' >&2; exit 1; }
+run_sql "update vortex_identity.tenant_administrator_assignments set expires_at=clock_timestamp()+interval '5 seconds' where assignment_id='$expiring_assignment_id';" >/dev/null
 deadline=$((SECONDS+20)); expired=''
 while ((SECONDS<deadline)); do
   expired="$(run_sql "select case when clock_timestamp()>=expires_at then 'yes' else '' end from vortex_identity.tenant_administrator_assignments where assignment_id='$expiring_assignment_id';")"
   [ "$expired" = yes ] && break
   sleep 0.1
 done
-[ "$expired" = yes ] || { echo 'database time did not pass queued creation authority expiry' >&2; exit 1; }
+[ "$expired" = yes ] || {
+  echo 'database time did not pass queued creation authority expiry' >&2
+  run_sql "select 'contender=$expiring_create_pid blockers='||coalesce(array_to_string(pg_catalog.pg_blocking_pids($expiring_create_pid), ','), 'none');" >&2
+  exit 1
+}
+still_blocked="$(run_sql "select case when pg_catalog.cardinality(pg_catalog.pg_blocking_pids($expiring_create_pid))>0 then 'yes' else '' end;")"
+[ "$still_blocked" = yes ] || {
+  echo 'expiring creation authority was no longer blocked after database time passed expiry' >&2
+  run_sql "select 'holder=$expiry_holder_pid contender=$expiring_create_pid blockers='||coalesce(array_to_string(pg_catalog.pg_blocking_pids($expiring_create_pid), ','), 'none');" >&2
+  exit 1
+}
 touch "$proof_root/release-expiry"; wait "${workers[10]}"; wait "${workers[11]}"
 grep -qx 'V3101' "$proof_root/expiring-create.log" || { echo 'expired queued creation was not refused' >&2; cat "$proof_root/expiring-create.log" >&2; exit 1; }
 

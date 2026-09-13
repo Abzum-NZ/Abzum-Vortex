@@ -23,6 +23,13 @@ cleanup() {
   [ -z "$worker_one" ] || wait "$worker_one" >/dev/null 2>&1
   [ -z "$worker_two" ] || wait "$worker_two" >/dev/null 2>&1
   [ -z "$worker_three" ] || wait "$worker_three" >/dev/null 2>&1
+  if [ "$status" -ne 0 ]; then
+    for log in "$proof_root"/*.log; do
+      [ -f "$log" ] || continue
+      printf '\nWorker log: %s\n' "${log##*/}" >&2
+      cat "$log" >&2
+    done
+  fi
   if [ "$fixture_created" = 1 ]; then run_sql "begin; set local session_replication_role=replica; delete from vortex_identity.accepted_administration_receipts where tenant_id='$tenant_id'; delete from vortex_identity.tenant_administrator_assignments where tenant_id='$tenant_id'; delete from vortex_identity.tenants where tenant_id='$tenant_id'; delete from vortex_identity.identity_projections where identity_id in ('$actor_id','$subject_id','$read_only_id','$scheduled_id','$expired_id','$revoked_id','$inactive_id','$expiring_id','$second_manager_id'); commit;" >/dev/null; fi
   case "$proof_root" in /tmp/vortex-tenant-governance.*) rm -rf -- "$proof_root";; *) echo 'refusing unexpected cleanup path' >&2;; esac
   exit "$status"
@@ -79,6 +86,8 @@ run_sql "update vortex_identity.tenants set state='active',state_changed_at=cloc
 pre_race_assignment_count="$(run_sql "select count(*) from vortex_identity.tenant_administrator_assignments where tenant_id='$tenant_id';")"
 pre_race_receipt_count="$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where tenant_id='$tenant_id';")"
 
+# Deliberately exceed the old fixture expiry window before acquiring any locks.
+sleep 6
 call_one="select outcome||'|'||revision from vortex_identity.change_tenant_administrator('$actor_id','$duplicate_one','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','$tenant_id','$target_assignment_id',1,'[\"platform.tenant.administrators.read\"]',now()-interval '30 minutes',null)"
 call_two="select outcome||'|'||revision from vortex_identity.change_tenant_administrator('$actor_id','$duplicate_two','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','$tenant_id','$target_assignment_id',1,'[\"platform.tenant.administrators.read\"]',now()-interval '30 minutes',null)"
 
@@ -101,7 +110,6 @@ $call_two;
 rollback;
 SQL
 worker_two=$!; wait_file "$proof_root/two.pid"
-run_sql "update vortex_identity.tenant_administrator_assignments set expires_at=clock_timestamp()+interval '5 seconds' where assignment_id='$expiring_assignment_id';" >/dev/null
 "${psql_command[@]}" >"$proof_root/three.log" 2>&1 <<SQL &
 begin; set local lock_timeout='20s'; set local statement_timeout='30s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/three.pid'
@@ -119,14 +127,29 @@ deadline=$((SECONDS+20)); observed=''; expiring_observed=''; while ((SECONDS<dea
   [ "$observed" = yes ] && [ "$expiring_observed" = yes ] && break; sleep 0.1
 done
 [ "$observed" = yes ] || { echo 'competing tenant mutation did not block on tenant serialization' >&2; exit 1; }
-[ "$expiring_observed" = yes ] || { echo 'expiring authority did not block on tenant serialization' >&2; exit 1; }
+[ "$expiring_observed" = yes ] || {
+  echo 'expiring authority did not block on tenant serialization' >&2
+  run_sql "select 'holder=$blocker_pid contender=$expiring_pid blockers='||coalesce(array_to_string(pg_catalog.pg_blocking_pids($expiring_pid), ','), 'none');" >&2
+  exit 1
+}
 assignment_effective="$(run_sql "select case when starts_at<=clock_timestamp() and expires_at>clock_timestamp() and revoked_at is null then 'yes' else '' end from vortex_identity.tenant_administrator_assignments where assignment_id='$expiring_assignment_id';")"
 [ "$assignment_effective" = yes ] || { echo 'expiring authority was not effective while blocked on tenant serialization' >&2; exit 1; }
+run_sql "update vortex_identity.tenant_administrator_assignments set expires_at=clock_timestamp()+interval '5 seconds' where assignment_id='$expiring_assignment_id';" >/dev/null
 deadline=$((SECONDS+20)); authority_expired=''; while ((SECONDS<deadline)); do
   authority_expired="$(run_sql "select case when clock_timestamp()>=expires_at then 'yes' else '' end from vortex_identity.tenant_administrator_assignments where assignment_id='$expiring_assignment_id';")"
   [ "$authority_expired" = yes ] && break; sleep 0.05
 done
-[ "$authority_expired" = yes ] || { echo 'database clock did not pass the blocked authority expiry' >&2; exit 1; }
+[ "$authority_expired" = yes ] || {
+  echo 'database clock did not pass the blocked authority expiry' >&2
+  run_sql "select 'contender=$expiring_pid blockers='||coalesce(array_to_string(pg_catalog.pg_blocking_pids($expiring_pid), ','), 'none');" >&2
+  exit 1
+}
+still_blocked="$(run_sql "select case when pg_catalog.cardinality(pg_catalog.pg_blocking_pids($expiring_pid))>0 then 'yes' else '' end;")"
+[ "$still_blocked" = yes ] || {
+  echo 'expiring authority was no longer blocked after database time passed expiry' >&2
+  run_sql "select 'holder=$blocker_pid contender=$expiring_pid blockers='||coalesce(array_to_string(pg_catalog.pg_blocking_pids($expiring_pid), ','), 'none');" >&2
+  exit 1
+}
 touch "$proof_root/release"; wait "$worker_one"; worker_one=''; wait "$worker_two"; worker_two=''; wait "$worker_three"; worker_three=''
 first_result="$(tr -d '[:space:]' <"$proof_root/one.result")"
 [ "$first_result" = 'accepted|2' ] || { echo "first mutation did not win at revision 2: ${first_result:-<empty>}" >&2; cat "$proof_root/one.log" >&2; exit 1; }
