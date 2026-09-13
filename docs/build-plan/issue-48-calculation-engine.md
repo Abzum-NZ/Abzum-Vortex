@@ -4,7 +4,27 @@
 [Save pipeline #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) ·
 [Field specification](../specification/05-modules-fields-and-relationships.md#calculations-and-totals)
 
-## First delivery
+## Delivery status and current assignment
+
+- The pure calculation and total evaluators are delivered. They define the exact
+  arithmetic, money, filter and dependency meanings but do not by themselves
+  write records.
+- **Stage 1** integrated same-record calculations and disclosure through the
+  protected save.
+- **Stage 2A** delivered the installed-fixture proof of related-total disclosure
+  ([PR #439](https://github.com/Abzum-NZ/Abzum-Vortex/pull/439)); it added no
+  totals writer, database operation or scheduled behaviour.
+- **Current assignment: Stage 2B — transactional relationship totals.** Extend
+  the existing protected create/update save so a child change writes every
+  affected stored parent total and dependent calculation atomically. This is the
+  only active #48 implementation slice. Deadline refresh is Stage 3 and remains
+  unstarted.
+
+Stage 2B builds on [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)'s
+reviewed save base already merged to Testing. Its hosted verification remains a
+closure requirement, not a reason to defer this independently testable slice.
+
+## Delivered evaluator behavior
 
 The existing six closed calculation forms are delivered in Record, independently
 of the App Designer. They reuse the existing exact-decimal representation,
@@ -121,7 +141,7 @@ aggregates filtered for a viewer remain viewer-specific and are not persisted as
 universal totals. The existing mixed-currency and access/concurrency acceptance
 remains required before the whole task closes.
 
-## Next delivery: relationship totals
+## Stage 2B: transactional relationship totals
 
 The existing pure Record evaluator applies the exact total definition, source
 relationship and source record type to selected related record values. Those
