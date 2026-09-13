@@ -15,6 +15,7 @@ readonly nominee_id="46${run_uuid:2}" secondary_actor_id="47${run_uuid:2}"
 readonly expiring_actor_id="48${run_uuid:2}"
 readonly secondary_assignment_id="34${run_uuid:2}" expiring_assignment_id="35${run_uuid:2}"
 readonly changed_actor_id="49${run_uuid:2}" changed_assignment_id="36${run_uuid:2}"
+readonly request_actor_assignment_id="37${run_uuid:2}"
 readonly correlation_id="a4${run_uuid:2}"
 readonly duplicate_same="b4${run_uuid:2}" duplicate_short_one="b5${run_uuid:2}"
 readonly duplicate_short_two="b6${run_uuid:2}" duplicate_parent_child="b7${run_uuid:2}"
@@ -57,7 +58,7 @@ cleanup() {
   touch "$proof_root/release-same" "$proof_root/release-short" \
     "$proof_root/release-parent" "$proof_root/release-revoke" \
     "$proof_root/release-expiry" "$proof_root/release-request" \
-    "$proof_root/release-change"
+    "$proof_root/release-change" "$proof_root/continue-request"
   for worker in "${workers[@]}"; do wait "$worker" >/dev/null 2>&1 || true; done
   if [ "$fixture_created" = 1 ]; then
     run_sql "
@@ -141,13 +142,14 @@ run_sql "
     granted_at,granted_by_actor_id,grant_correlation_id,changed_at,changed_by_actor_id,change_correlation_id
   ) values
     ('$secondary_assignment_id','$tenant_id','$secondary_actor_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',null,1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id'),
-    ('$expiring_assignment_id','$tenant_id','$expiring_actor_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',clock_timestamp()+interval '7 seconds',1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id'),
-    ('$changed_assignment_id','$tenant_id','$changed_actor_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',null,1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id');" >/dev/null
+    ('$changed_assignment_id','$tenant_id','$changed_actor_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',null,1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id'),
+    ('$request_actor_assignment_id','$tenant_id','$root_steward_id',array['platform.tenant.organizations.create'],now()-interval '1 hour',null,1,now()-interval '1 hour','$operator_id','$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id');" >/dev/null
 
 create_call() {
   local actor="$1" duplicate="$2" fingerprint="$3" parent="$4" short_name="$5"
+  local nominee="${6:-$nominee_id}"
   printf "select outcome||'|'||organization_id::text||'|'||organization_account_id::text from vortex_identity.create_tenant_organization('%s','%s','sha256:%s','%s',%s,'%s','Created organisation','%s','Explicit steward','en-NZ','Pacific/Auckland','en-NZ','Pacific/Auckland','NZD','medium','auto')" \
-    "$actor" "$duplicate" "$fingerprint" "$tenant_id" "$parent" "$short_name" "$nominee_id"
+    "$actor" "$duplicate" "$fingerprint" "$tenant_id" "$parent" "$short_name" "$nominee"
 }
 
 # Same duplicate key: exactly one complete creation and one replay.
@@ -283,6 +285,16 @@ touch "$proof_root/release-revoke"; wait "${workers[8]}"; wait "${workers[9]}"
 grep -qx 'V3101' "$proof_root/revoked-create.log" || { echo 'revoked queued authority was not refused' >&2; cat "$proof_root/revoked-create.log" >&2; exit 1; }
 
 # Authority effective while queued expires before the tenant lock is released.
+run_sql "
+  insert into vortex_identity.tenant_administrator_assignments(
+    assignment_id,tenant_id,identity_id,capability_keys,starts_at,expires_at,revision,
+    granted_at,granted_by_actor_id,grant_correlation_id,changed_at,changed_by_actor_id,change_correlation_id
+  ) values (
+    '$expiring_assignment_id','$tenant_id','$expiring_actor_id',
+    array['platform.tenant.organizations.create'],clock_timestamp()-interval '1 hour',
+    clock_timestamp()+interval '5 seconds',1,clock_timestamp()-interval '1 hour',
+    '$operator_id','$correlation_id',clock_timestamp()-interval '1 hour',
+    '$operator_id','$correlation_id');" >/dev/null
 "${psql_command[@]}" >"$proof_root/expiry-holder.log" 2>&1 <<SQL &
 begin;
 select pg_catalog.pg_backend_pid() \g '$proof_root/expiry-holder.pid'
@@ -292,6 +304,8 @@ select 1 from vortex_identity.tenants where tenant_id='$tenant_id' for update;
 commit;
 SQL
 w=$!; workers+=("$w"); wait_file "$proof_root/expiry-holder.ready"; expiry_holder_pid="$(read_pid "$proof_root/expiry-holder.pid")"
+effective="$(run_sql "select case when starts_at<=clock_timestamp() and expires_at>clock_timestamp() and revoked_at is null then 'yes' else '' end from vortex_identity.tenant_administrator_assignments where assignment_id='$expiring_assignment_id';")"
+[ "$effective" = yes ] || { echo 'expiring creation authority was not effective immediately before queuing' >&2; exit 1; }
 expiring_call="$(create_call "$expiring_actor_id" "$duplicate_expiring" "$(printf '9%.0s' {1..64})" null "expired_${run_token:0:18}")"
 "${psql_command[@]}" >"$proof_root/expiring-create.log" 2>&1 <<SQL &
 begin; set local lock_timeout='25s'; set local statement_timeout='35s';
@@ -313,27 +327,36 @@ done
 touch "$proof_root/release-expiry"; wait "${workers[10]}"; wait "${workers[11]}"
 grep -qx 'V3101' "$proof_root/expiring-create.log" || { echo 'expired queued creation was not refused' >&2; cat "$proof_root/expiring-create.log" >&2; exit 1; }
 
-# Existing request resolution may finish before creation; neither path deadlocks.
+# Reproduce the prior lock cycle exactly: the request holds the same actor's
+# projection and pauses before tenant resolution while creation holds the tenant.
+# The shared projection lock lets creation finish; the request then waits only
+# for the tenant, so both operations complete without a deadlock.
 "${psql_command[@]}" >"$proof_root/request.log" 2>&1 <<SQL &
 begin; set local lock_timeout='25s'; set local statement_timeout='35s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/request.pid'
+select 1 from vortex_identity.identity_projections where identity_id='$root_steward_id' for share;
+\! touch '$proof_root/request-projection-ready'
+\! while [ ! -f '$proof_root/continue-request' ]; do sleep 0.05; done
 select organization_id from vortex_access.resolve_human_organization_scope('$root_steward_id','$root_id') \g '$proof_root/request.result'
-\! touch '$proof_root/request.ready'
-\! while [ ! -f '$proof_root/release-request' ]; do sleep 0.05; done
 commit;
 SQL
-w=$!; workers+=("$w"); wait_file "$proof_root/request.ready"; request_pid="$(read_pid "$proof_root/request.pid")"
-request_call="$(create_call "$actor_id" "$duplicate_request_create" "$(printf 'a%.0s' {1..64})" null "request_${run_token:0:18}")"
+w=$!; workers+=("$w"); wait_file "$proof_root/request-projection-ready"; request_pid="$(read_pid "$proof_root/request.pid")"
+request_call="$(create_call "$root_steward_id" "$duplicate_request_create" "$(printf 'a%.0s' {1..64})" null "request_${run_token:0:18}" "$root_steward_id")"
 "${psql_command[@]}" >"$proof_root/request-create.log" 2>&1 <<SQL &
 begin; set local lock_timeout='25s'; set local statement_timeout='35s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/request-create.pid'
 $request_call \g '$proof_root/request-create.result'
+\! touch '$proof_root/request-create-ready'
+\! while [ ! -f '$proof_root/release-request' ]; do sleep 0.05; done
 commit;
 SQL
 w=$!; workers+=("$w"); request_create_pid="$(read_pid "$proof_root/request-create.pid")"
-wait_blocked "$request_create_pid" "$request_pid" 'creation queued behind request resolution tenant lock'
+wait_file "$proof_root/request-create-ready"
+touch "$proof_root/continue-request"
+wait_blocked "$request_pid" "$request_create_pid" 'same-actor request queued behind creation at tenant serialization'
 touch "$proof_root/release-request"; wait "${workers[12]}"; wait "${workers[13]}"
 grep -q '^accepted|' "$proof_root/request-create.result" || { echo 'creation did not complete after request resolution' >&2; cat "$proof_root/request-create.log" >&2; exit 1; }
+[ "$(tr -d '[:space:]' <"$proof_root/request.result")" = "$root_id" ] || { echo 'same-actor request did not complete after creation' >&2; cat "$proof_root/request.log" >&2; exit 1; }
 
 [ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where tenant_id='$tenant_id' and operation_key='create_tenant_organization' and duplicate_key in ('$duplicate_short_two','$duplicate_changed_create','$duplicate_revoked_create','$duplicate_expiring');")" = 0 ] || { echo 'a refused concurrency path wrote an accepted creation receipt' >&2; exit 1; }
 

@@ -241,6 +241,87 @@ select throws_ok(
   'hierarchy read does not substitute for the exact creation capability'
 );
 
+insert into vortex_identity.identity_projections (
+  identity_id, state, created_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+) values
+  ('45400000-0000-4000-8000-000000000005', 'suspended',
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '95400000-0000-4000-8000-000000000001',
+    'a5400000-0000-4000-8000-000000000050', 1),
+  ('45400000-0000-4000-8000-000000000006', 'active',
+    pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    '95400000-0000-4000-8000-000000000001',
+    'a5400000-0000-4000-8000-000000000060', 1);
+insert into vortex_identity.tenant_administrator_assignments (
+  assignment_id, tenant_id, identity_id, capability_keys, starts_at,
+  expires_at, revision, granted_at, granted_by_actor_id,
+  grant_correlation_id, changed_at, changed_by_actor_id, change_correlation_id
+) values
+  ('65400000-0000-4000-8000-000000000005',
+    (select tenant_id from creation_tenant),
+    '45400000-0000-4000-8000-000000000005',
+    array['platform.tenant.organizations.create'], pg_catalog.clock_timestamp(), null, 1,
+    pg_catalog.clock_timestamp(), '95400000-0000-4000-8000-000000000001',
+    'a5400000-0000-4000-8000-000000000051', pg_catalog.clock_timestamp(),
+    '95400000-0000-4000-8000-000000000001',
+    'a5400000-0000-4000-8000-000000000051'),
+  ('65400000-0000-4000-8000-000000000006',
+    (select tenant_id from creation_tenant),
+    '45400000-0000-4000-8000-000000000006',
+    array['platform.tenant.organizations.create'], pg_catalog.clock_timestamp() + interval '1 hour',
+    null, 1, pg_catalog.clock_timestamp(),
+    '95400000-0000-4000-8000-000000000001',
+    'a5400000-0000-4000-8000-000000000061', pg_catalog.clock_timestamp(),
+    '95400000-0000-4000-8000-000000000001',
+    'a5400000-0000-4000-8000-000000000061');
+
+select throws_ok(
+  pg_catalog.format(
+    'select * from vortex_identity.create_tenant_organization(%L,%L,%L,%L,null,%L,%L,%L,%L,%L,%L,%L,%L,%L,%L,%L)',
+    '45400000-0000-4000-8000-000000000005',
+    'd5400000-0000-4000-8000-000000000027',
+    'sha256:' || pg_catalog.repeat('7', 64),
+    (select tenant_id from creation_tenant),
+    'inactive_caller', 'Inactive caller',
+    '45400000-0000-4000-8000-000000000003',
+    'Different steward', 'en-NZ', 'Pacific/Auckland',
+    'en-NZ', 'Pacific/Auckland', 'NZD', 'medium', 'auto'
+  ),
+  'V3101'::char(5), null::text,
+  'an inactive caller projection refuses despite an exact assignment'
+);
+select throws_ok(
+  pg_catalog.format(
+    'select * from vortex_identity.create_tenant_organization(%L,%L,%L,%L,null,%L,%L,%L,%L,%L,%L,%L,%L,%L,%L,%L)',
+    '45400000-0000-4000-8000-000000000006',
+    'd5400000-0000-4000-8000-000000000028',
+    'sha256:' || pg_catalog.repeat('8', 64),
+    (select tenant_id from creation_tenant),
+    'scheduled_caller', 'Scheduled caller',
+    '45400000-0000-4000-8000-000000000003',
+    'Different steward', 'en-NZ', 'Pacific/Auckland',
+    'en-NZ', 'Pacific/Auckland', 'NZD', 'medium', 'auto'
+  ),
+  'V3101'::char(5), null::text,
+  'scheduled creation authority is not effective early'
+);
+select throws_ok(
+  pg_catalog.format(
+    'select * from vortex_identity.create_tenant_organization(%L,%L,%L,%L,null,%L,%L,%L,%L,%L,%L,%L,%L,%L,%L,%L)',
+    '45400000-0000-4000-8000-000000000001',
+    'd5400000-0000-4000-8000-000000000029',
+    'sha256:' || pg_catalog.repeat('9', 64),
+    (select tenant_id from creation_tenant),
+    'invalid_settings', 'Invalid settings',
+    '45400000-0000-4000-8000-000000000003',
+    'Different steward', 'en-NZ', 'Pacific/Auckland',
+    'en-NZ', 'Pacific/Auckland', 'nzd', 'medium', 'auto'
+  ),
+  '22023'::char(5), null::text,
+  'invalid runtime settings refuse before any creation facts are written'
+);
+
 create temporary table foreign_tenant on commit drop as
 select * from vortex_identity.provision_tenant(
   'c5400000-0000-4000-8000-000000000002',
@@ -268,6 +349,25 @@ select throws_ok(
   ),
   'V3101'::char(5), null::text,
   'a foreign parent is refused without revealing its existence'
+);
+
+update vortex_identity.tenants
+set state = 'suspended', state_changed_at = pg_catalog.clock_timestamp(), revision = revision + 1
+where tenant_id = (select tenant_id from foreign_tenant);
+select throws_ok(
+  pg_catalog.format(
+    'select * from vortex_identity.create_tenant_organization(%L,%L,%L,%L,null,%L,%L,%L,%L,%L,%L,%L,%L,%L,%L,%L)',
+    '45400000-0000-4000-8000-000000000001',
+    'd5400000-0000-4000-8000-000000000030',
+    'sha256:' || pg_catalog.repeat('a', 64),
+    (select tenant_id from foreign_tenant),
+    'inactive_tenant', 'Inactive tenant',
+    '45400000-0000-4000-8000-000000000003',
+    'Different steward', 'en-NZ', 'Pacific/Auckland',
+    'en-NZ', 'Pacific/Auckland', 'NZD', 'medium', 'auto'
+  ),
+  'V3101'::char(5), null::text,
+  'an inactive selected tenant refuses even with a current creation assignment'
 );
 
 select throws_ok(
@@ -346,6 +446,105 @@ select is(
     where organization_id not in (select organization_id from vortex_identity.organizations)),
   0::bigint,
   'a short-name conflict leaves no orphan account facts'
+);
+
+-- Exercise the delivered assignment owner rather than mutating stewardship
+-- rows directly: add a qualifying replacement, revoke the original assignment,
+-- then make the original nominee ineligible before replaying creation.
+insert into vortex_identity.organization_accounts (
+  organization_account_id, organization_id, identity_id, display_name, state,
+  language, time_zone, activated_at, changed_at, state_changed_at,
+  state_changed_by, state_change_correlation_id, revision
+) values (
+  '55400000-0000-4000-8000-000000000040',
+  (select organization_id from created_child),
+  '45400000-0000-4000-8000-000000000004', 'Replacement steward', 'active',
+  'en-NZ', 'Pacific/Auckland', pg_catalog.clock_timestamp(),
+  pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+  '45400000-0000-4000-8000-000000000001',
+  'a5400000-0000-4000-8000-000000000070', 1
+);
+create temporary table replacement_steward_grant on commit drop as
+select * from vortex_access.coordinate_organization_role_assignment_change(
+  'grant',
+  (select organization_id from created_child),
+  '75400000-0000-4000-8000-000000000040', null,
+  (select original_role_id
+    from vortex_access.organization_stewardship_requirements
+    where organization_id = (select organization_id from created_child)),
+  (select role.live_revision
+    from vortex_access.organization_roles as role
+    join vortex_access.organization_stewardship_requirements as requirement
+      on requirement.organization_id = role.organization_id
+      and requirement.original_role_id = role.role_id
+    where role.organization_id = (select organization_id from created_child)),
+  'organization_account', '55400000-0000-4000-8000-000000000040', null,
+  'standing', pg_catalog.clock_timestamp(), null,
+  '45400000-0000-4000-8000-000000000001',
+  'a5400000-0000-4000-8000-000000000071'
+);
+create temporary table replacement_steward_delegation on commit drop as
+select * from vortex_access.coordinate_organization_delegation_authority_change(
+  'grant_delegation',
+  (select organization_id from created_child),
+  '85400000-0000-4000-8000-000000000040', null,
+  'organization_account', '55400000-0000-4000-8000-000000000040', null,
+  'organization_catalogue', null, null,
+  pg_catalog.statement_timestamp(), null,
+  '45400000-0000-4000-8000-000000000001',
+  'a5400000-0000-4000-8000-000000000073'
+);
+create temporary table original_steward_revoke on commit drop as
+select * from vortex_access.coordinate_organization_role_assignment_change(
+  'revoke',
+  (select organization_id from created_child),
+  (select original_role_assignment_id
+    from vortex_access.organization_stewardship_requirements
+    where organization_id = (select organization_id from created_child)),
+  1, null, null, null, null, null, null, null, null,
+  '45400000-0000-4000-8000-000000000001',
+  'a5400000-0000-4000-8000-000000000072'
+);
+select is((select outcome || '|' || state from original_steward_revoke),
+  'changed|revoked',
+  'the delivered assignment owner permits replacing the original steward assignment');
+select ok(
+  vortex_access.organization_has_permanent_steward(
+    (select organization_id from created_child), pg_catalog.clock_timestamp()
+  ),
+  'the replacement assignment keeps current permanent stewardship valid'
+);
+update vortex_identity.identity_projections
+set state = 'suspended', state_changed_at = pg_catalog.clock_timestamp(), revision = revision + 1
+where identity_id = '45400000-0000-4000-8000-000000000003';
+create temporary table replay_after_steward_change on commit drop as
+select * from vortex_identity.create_tenant_organization(
+  '45400000-0000-4000-8000-000000000001',
+  'd5400000-0000-4000-8000-000000000011',
+  'sha256:' || pg_catalog.repeat('b', 64),
+  (select tenant_id from creation_tenant),
+  (select root_organization_id from creation_tenant),
+  'created_child', 'Created child',
+  '45400000-0000-4000-8000-000000000003',
+  'Different steward', 'en-AU', 'Australia/Sydney',
+  'en-AU', 'Australia/Sydney', 'AUD', 'short', 'auto'
+);
+select is((select outcome || '|' || organization_account_revision
+    from replay_after_steward_change),
+  'replayed|1',
+  'exact replay precedes nominee eligibility and returns original evidence'
+);
+select is(
+  (select state || '|' || revision
+    from vortex_access.organization_role_assignments
+    where organization_id = (select organization_id from created_child)
+      and role_assignment_id = (
+        select original_role_assignment_id
+        from vortex_access.organization_stewardship_requirements
+        where organization_id = (select organization_id from created_child)
+      )),
+  'revoked|2',
+  'creation replay does not restore the replaced original stewardship assignment'
 );
 select is(
   (select pg_catalog.count(*) from vortex_identity.accepted_administration_receipts

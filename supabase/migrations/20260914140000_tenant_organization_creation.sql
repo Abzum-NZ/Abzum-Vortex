@@ -105,7 +105,7 @@ begin
     p_actor_identity_id, p_organization_steward_identity_id
   ])
   order by projection.identity_id
-  for update;
+  for share;
 
   perform 1
   from vortex_identity.tenant_administrator_assignments as assignment
