@@ -49,6 +49,17 @@ export {
   type OrganizationRuntimeSettingsErrorCode,
   type OrganizationRuntimeSettingsStoreDependencies,
 } from "./organization-runtime-settings";
+export {
+  changeTenantAdministrator,
+  createTenantGovernanceService,
+  grantTenantAdministrator,
+  listTenantAdministratorAssignments,
+  listTenantHierarchy,
+  listTenantLauncher,
+  readTenantOrganization,
+  revokeTenantAdministrator,
+  type TenantGovernanceServiceDependencies,
+} from "./tenant-governance";
 
 export const IdentityService = Object.freeze({
   key: "identity",
