@@ -74,6 +74,14 @@ select ok(
   'request role can call only the Access-owned exact-context reader'
 );
 
+-- Catalogue initialization advances Access version, so it precedes the
+-- version captured for this request context.
+select * from vortex_access.initialize_platform_permission_catalogue(
+  '24850000-0000-4000-8000-000000000001',
+  '54850000-0000-4000-8000-000000000001',
+  'a4850000-0000-4000-8000-000000000005'
+);
+
 -- An application request may start before its organisation has completed
 -- explicit setup. The authorised reader reports that absence; it does not
 -- invent a default or expose another organisation's row.
@@ -161,15 +169,6 @@ select throws_ok(
   'trusted setup refuses a nonexistent organisation'
 );
 reset role;
-
--- The protected request operation uses the established platform permission,
--- not a test-only shortcut.  This mirrors the smallest custom standing-role
--- fixture used by the organisation permission eligibility proofs.
-select * from vortex_access.initialize_platform_permission_catalogue(
-  '24850000-0000-4000-8000-000000000001',
-  '54850000-0000-4000-8000-000000000001',
-  'a4850000-0000-4000-8000-000000000005'
-);
 
 create function pg_temp.seed_runtime_settings_manage_role()
 returns void
