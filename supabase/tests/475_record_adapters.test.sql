@@ -1434,7 +1434,11 @@ select pg_temp.append_writer_release(
         'record_adapters.inherited.create_all', :'type_i', 'create',
         '{"routes":[{"kind":"all_records"}]}'::jsonb,
         array[:'f_inherited_title', :'f_inherited_owner']::uuid[],
-        array[:'f_inherited_title', :'f_inherited_owner']::uuid[])
+        array[:'f_inherited_title', :'f_inherited_owner']::uuid[]),
+      pg_temp.adapter_permission('e4750000-0000-4000-8000-00000000001c',
+        'record_adapters.shared.transfer_all', :'type_s', 'transfer',
+        '{"routes":[{"kind":"all_records"}]}'::jsonb,
+        array[:'f_text']::uuid[], array[]::uuid[])
     )
   ),
   '2.0.0'
@@ -1651,6 +1655,7 @@ select pg_temp.adapter_role(:'org_one', :'app_one', '74750000-0000-4000-8000-000
     'e4750000-0000-4000-8000-000000000017',
     'e4750000-0000-4000-8000-000000000018',
     'e4750000-0000-4000-8000-00000000001b',
+    'e4750000-0000-4000-8000-00000000001c',
     'e4750000-0000-4000-8000-000000000021',
     'e4750000-0000-4000-8000-000000000022',
     'e4750000-0000-4000-8000-000000000023',
@@ -5245,6 +5250,121 @@ select is((
       where occurrence_id = 'a4750000-0000-4000-8000-000000000224'))
 ), '0|0|0|0',
   'the unavailable Group selection writes no Record, receipt, Activity or Event');
+
+-- ============================================================================
+-- #475: one fixed ownership transfer.  The permission is separate from update;
+-- the terminal writer alone can touch owner columns and it commits its own
+-- Activity, reassigned Event/queue and receipt.
+-- ============================================================================
+
+select ok(
+  pg_catalog.has_function_privilege(
+    'vortex_runtime',
+    'vortex_record.transfer_record_ownership(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid)',
+    'EXECUTE'
+  ) and not pg_catalog.has_function_privilege(
+    'vortex_request',
+    'vortex_record.transfer_record_ownership(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'only the trusted server role can invoke the fixed ownership transfer writer'
+);
+select ok(
+  not pg_catalog.has_function_privilege(
+    'vortex_runtime',
+    'vortex_record.append_ownership_transfer_activity_internal(uuid,uuid,text)', 'EXECUTE'
+  ) and not pg_catalog.has_function_privilege(
+    'vortex_request',
+    'vortex_access.lock_active_record_ownership_target_internal(text,uuid)', 'EXECUTE'
+  ),
+  'runtime and request roles cannot forge the transfer Activity or owner-target facts'
+);
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
+select concurrency_number as ownership_transfer_concurrency_number
+from record_data.rt_b4750000000040008000000000000001
+where record_id = 'd5750000-0000-4000-8000-000000000007' \gset
+create temporary table ownership_transfer_before on commit drop as
+select concurrency_number, created_by, updated_by
+from record_data.rt_b4750000000040008000000000000001
+where record_id = 'd5750000-0000-4000-8000-000000000007';
+set local role vortex_runtime;
+create temporary table ownership_transfer_result on commit drop as
+select vortex_record.transfer_record_ownership(
+  'a4750000-0000-4000-8000-000000000471'::uuid,
+  :'type_s'::uuid, 'd5750000-0000-4000-8000-000000000007'::uuid,
+  :'ownership_transfer_concurrency_number'::bigint,
+  'group', '84750000-0000-4000-8000-000000000003'::uuid,
+  'a4750000-0000-4000-8000-000000000472'::uuid,
+  'a4750000-0000-4000-8000-000000000473'::uuid
+) as result;
+reset role;
+select is((select result ->> 'outcome' from ownership_transfer_result), 'transferred',
+  'the dedicated current transfer permission can transfer one compatible Group-owned record');
+select is((
+  select pg_catalog.concat_ws('|', owner_organisation_account_id, owner_group_id,
+    concurrency_number::text, created_by::text, updated_by::text)
+  from record_data.rt_b4750000000040008000000000000001
+  where record_id = 'd5750000-0000-4000-8000-000000000007'
+), (
+  select pg_catalog.concat_ws('|', null::uuid, '84750000-0000-4000-8000-000000000003'::uuid,
+    (concurrency_number + 1)::text, created_by::text, :'all_account')
+  from ownership_transfer_before
+), 'transfer changes only owner, revision and current changer; creator remains historical');
+select is((
+  select pg_catalog.concat_ws('|', receipt.state, activity.outcome, activity.action,
+    event.envelope #>> '{descriptor,eventKind}',
+    (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences as queued
+      where queued.message ->> 'occurrenceId' = event.occurrence_id::text)::text)
+  from vortex_record.save_command_receipts as receipt
+  join vortex_activity.organization_activity_entries as activity
+    on activity.organization_id = receipt.organization_id
+    and activity.activity_id = 'a4750000-0000-4000-8000-000000000472'::uuid
+  join vortex_event.event_outbox as event
+    on event.organization_id = receipt.organization_id
+    and event.occurrence_id = 'a4750000-0000-4000-8000-000000000473'::uuid
+  where receipt.command_id = 'a4750000-0000-4000-8000-000000000471'::uuid
+), 'completed|completed|transfer_record_ownership|reassigned|1',
+  'owner change, content-free Activity, reassigned Event, queue and receipt commit together');
+
+set local role vortex_runtime;
+create temporary table ownership_transfer_replay on commit drop as
+select vortex_record.transfer_record_ownership(
+  'a4750000-0000-4000-8000-000000000471'::uuid,
+  :'type_s'::uuid, 'd5750000-0000-4000-8000-000000000007'::uuid,
+  :'ownership_transfer_concurrency_number'::bigint,
+  'group', '84750000-0000-4000-8000-000000000003'::uuid,
+  'a4750000-0000-4000-8000-000000000474'::uuid,
+  'a4750000-0000-4000-8000-000000000475'::uuid
+) as result;
+reset role;
+select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed')
+  from ownership_transfer_replay), 'transferred|true',
+  'an exact response-lost retry is replayed without exposing ownership metadata');
+select is((
+  select pg_catalog.concat_ws('|',
+    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+      where activity_id in ('a4750000-0000-4000-8000-000000000472'::uuid,
+        'a4750000-0000-4000-8000-000000000474'::uuid)),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id in ('a4750000-0000-4000-8000-000000000473'::uuid,
+        'a4750000-0000-4000-8000-000000000475'::uuid))
+  )
+), '1|1', 'an exact transfer retry adds no Activity or Event effect');
+
+set local role vortex_runtime;
+create temporary table ownership_transfer_conflicting_retry on commit drop as
+select vortex_record.transfer_record_ownership(
+  'a4750000-0000-4000-8000-000000000471'::uuid,
+  :'type_s'::uuid, 'd5750000-0000-4000-8000-000000000007'::uuid,
+  :'ownership_transfer_concurrency_number'::bigint,
+  'group', '84750000-0000-4000-8000-000000000002'::uuid,
+  'a4750000-0000-4000-8000-000000000476'::uuid,
+  'a4750000-0000-4000-8000-000000000477'::uuid
+) as result;
+reset role;
+select is((select result ->> 'reasonCode' from ownership_transfer_conflicting_retry),
+  'command_identity_conflict', 'conflicting command-id reuse safely refuses');
 
 select * from finish();
 rollback;
