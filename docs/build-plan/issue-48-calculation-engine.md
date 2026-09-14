@@ -278,16 +278,24 @@ before a deadline caller is introduced.
 
 ### P4.6b bounded follow-on
 
-P4.6b may factor only the already-private Record recalculation seams above and
-add focused ACL/RLS regression proof for their existing contract: trusted scope
-is constructed once from the human request, the request-role settings read is
-restored to the runtime role, and forged/foreign/stale settings or context cannot
-select or mutate another scope. It may cover the ordinary human save and its
-locked parent recalculation only. It must not change `SaveRecordCommandV2` or
-other public contracts, introduce a System context/attribution path, add a
-counter/token, scheduler, Kestra, MCP, UI, or new framework, or create a deadline
-caller. No deadline caller is assigned by this plan; deadline refresh remains
-the separately bounded work above.
+#### Delivered human-only boundary proof
+
+[#466](https://github.com/Abzum-NZ/Abzum-Vortex/issues/466) retained the
+already-private Record recalculation seams because their owners and algorithms
+already satisfy this scope; it did not extract another abstraction. Its focused
+ACL/RLS regression proof preserves trusted scope constructed once from the
+human request and request-role settings restoration to `vortex_runtime`.
+It also proves that a stale Access version is refused by the composed
+relationship-total writer before it can enter the locked save route, leaving
+Record, Activity, Event, queue and receipt effects unchanged. Existing coverage
+continues to reject forged or foreign scope and settings from selecting or
+mutating another organisation or Application.
+
+This delivery covers the ordinary human save and locked parent recalculation
+only. It changes neither `SaveRecordCommandV2` nor another public contract, and
+introduces no System context/attribution path, counter/token, scheduler, Kestra,
+MCP, UI, framework or deadline caller. Deadline refresh remains separately
+bounded work.
 
 Its executable regression scope is deliberately named and limited to
 [`supabase/tests/010_request_scope.test.sql`](../../supabase/tests/010_request_scope.test.sql),
@@ -297,6 +305,10 @@ and [`tooling/supabase/record-save-postgres.integration.test.ts`](../../tooling/
 Those tests use controlled rollback fixtures; they must prove private ACL/RLS
 boundaries without creating persistent records or a second runtime path.
 
+The local focused proof passed before review. The independently reviewed exact
+Testing revision still requires its normal hosted verification receipt before
+this delivery is closed.
+
 **#48 prerequisite:** Deadline delivery in #48 requires the independently
-reviewed P4.6b factoring implementation and explicit Record/Event attribution
-resolution before its caller is implemented.
+reviewed P4.6b boundary proof and explicit Record/Event attribution resolution
+before its caller is implemented.

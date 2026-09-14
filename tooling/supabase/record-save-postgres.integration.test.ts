@@ -145,6 +145,9 @@ const activityRuleStableOperandId = id(124);
 const occurrenceRuleStableOperandId = id(125);
 const activityRuleStableOperandReplayId = id(126);
 const activityRuleStableOperandConflictId = id(127);
+const commandStaleAccessScopeId = id(128);
+const activityStaleAccessScopeId = id(129);
+const occurrenceStaleAccessScopeId = id(130);
 const publishedAt = "2026-09-13T00:00:00.000Z";
 
 const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse({
@@ -2095,6 +2098,53 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         queue:
           Number(afterOverlappingReplay.queue_count) - Number(beforeOverlappingReplay.queue_count),
       }).toEqual({ receipts: 1, activities: 2, outbox: 2, queue: 2 });
+
+      // A context is only accepted while its Access version is current. This
+      // reaches the composed total writer with an otherwise valid child update
+      // and confirms stale authority cannot acquire its locked save path.
+      const beforeStaleAccessScope = await countTerminalEffects();
+      await expect(
+        runtime.begin(async (transaction) => {
+          const [scope] = await transaction<
+            { tenant_id: string; organization_account_id: string; access_version: string }[]
+          >`select * from vortex_access.resolve_human_application_change_scope(
+            ${identityId}::uuid, ${organizationId}::uuid, ${applicationRootId}::uuid
+          )`;
+          if (scope === undefined || Number(scope.access_version) <= 1)
+            throw new Error("Stale access-scope proof is unavailable");
+          await transaction`select vortex_context.initialize(${JSON.stringify({
+            callerKind: "human",
+            identityAuthorityId,
+            tenantId: scope.tenant_id,
+            organizationId,
+            organizationAccountId: scope.organization_account_id,
+            applicationRootId,
+            identityId,
+            sessionId: session.sessionId,
+            authenticationStrength: session.authenticationStrength,
+            accessTokenIssuedAt: session.accessTokenIssuedAt,
+            primaryAuthenticatedAt: session.primaryAuthenticatedAt,
+            issuedAt: operationAt.toISOString(),
+            expiresAt: session.accessTokenExpiresAt,
+            accessVersion: Number(scope.access_version) - 1,
+            correlationId: id(27),
+          })}::text::jsonb)`;
+          await transaction`set local role vortex_runtime`;
+          await transaction`
+            select vortex_record.save_base_record_with_relationship_totals(
+              ${commandStaleAccessScopeId}::uuid, 'update',
+              ${totalChildRecordTypeId}::uuid, ${childId}::uuid, 7,
+              ${JSON.stringify({ [totalChildAmountFieldId]: "22" })}::text::jsonb,
+              ${JSON.stringify({ [totalChildAmountFieldId]: "22" })}::text::jsonb,
+              null::uuid, ${activityStaleAccessScopeId}::uuid,
+              ${occurrenceStaleAccessScopeId}::uuid, '[]'::jsonb
+            )`;
+        }),
+      ).rejects.toMatchObject({
+        code: "42501",
+        message: "Request access version is stale or unavailable",
+      });
+      expect(await countTerminalEffects()).toEqual(beforeStaleAccessScope);
 
       const beforeUnjoinedWriter = await countTerminalEffects();
       const unjoinedWriterResult = await runtime.begin(async (transaction) => {
