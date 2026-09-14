@@ -152,6 +152,8 @@ describe("named action service", () => {
       }
       if (sql.includes("prepare_named_action_relationship_totals"))
         return [{ value: { outcome: "not_required" } }] as unknown as readonly Row[];
+      if (sql.includes("validate_named_action_reference_inputs"))
+        return [{ value: true }] as unknown as readonly Row[];
       if (sql.includes("read_current_organization_runtime_settings_for_application"))
         return [
           {
@@ -226,5 +228,60 @@ describe("named action service", () => {
     expect(queries.some((sql) => sql.includes("save_base_record_with_relationship_totals"))).toBe(
       false,
     );
+  });
+
+  it("turns a preview denial into exactly one locked owning refusal", async () => {
+    let preparationCalls = 0;
+    const queries: string[] = [];
+    const query: RequestQuery = async <Row extends DatabaseRow>(strings) => {
+      const sql = strings.join("$value");
+      queries.push(sql);
+      if (sql.includes("preview_named_action_set_announce")) {
+        preparationCalls += 1;
+        return [
+          { value: { outcome: "permission_refused", correlationId: ids.correlation } },
+        ] as unknown as readonly Row[];
+      }
+      if (sql.includes("prepare_named_action_set_announce(")) {
+        preparationCalls += 1;
+        return [
+          { value: { outcome: "refused_recorded", correlationId: ids.correlation } },
+        ] as unknown as readonly Row[];
+      }
+      return [] as unknown as readonly Row[];
+    };
+    const service = createNamedActionService({
+      identityAuthorityId: ids.authority,
+      clock: () => new Date("2026-09-15T01:00:00.000Z"),
+      correlationId: () => ids.correlation,
+      activityId: () => ids.activity,
+      occurrenceId: () => ids.occurrence,
+      resolvedRequestTransaction: transactionRunner(query),
+    });
+    await expect(
+      service.execute(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: ids.command,
+        action: {
+          ownerKind: "module",
+          ownerId: ids.module,
+          releaseRevision: 1,
+          actionId: ids.action,
+        },
+        recordTypeId: ids.recordType,
+        recordId: ids.record,
+        expectedConcurrencyNumber: 2,
+        inputs: { title: "After" },
+      }),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(preparationCalls).toBe(2);
+    expect(queries.some((sql) => sql.includes("prepare_named_action_relationship_totals"))).toBe(
+      false,
+    );
+    expect(
+      queries.some((sql) =>
+        sql.includes("save_named_action_set_announce_with_relationship_totals"),
+      ),
+    ).toBe(false);
   });
 });

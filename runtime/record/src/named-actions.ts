@@ -48,7 +48,7 @@ type ActionPreparation =
   | PreparedAction
   | Readonly<{ outcome: "completed"; result: ExecuteNamedActionResultV2 }>
   | Readonly<{
-      outcome: "conflict" | "refused" | "refused_recorded" | "unsupported";
+      outcome: "conflict" | "permission_refused" | "refused" | "refused_recorded" | "unsupported";
       correlationId?: string;
     }>;
 
@@ -97,6 +97,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
   }
   if (
     value.outcome === "conflict" ||
+    value.outcome === "permission_refused" ||
     value.outcome === "refused" ||
     value.outcome === "refused_recorded" ||
     value.outcome === "unsupported"
@@ -140,6 +141,22 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     eventDescriptorCount: value.eventDescriptors.length,
     correlationId,
   };
+};
+
+const validateReferenceInputs = async (
+  transaction: RequestDatabaseTransaction,
+  command: ExecuteNamedActionCommandV2,
+  normalizedInputs: Readonly<Record<string, unknown>>,
+): Promise<boolean> => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.validate_named_action_reference_inputs(
+      ${command.action.ownerKind}::text, ${command.action.ownerId}::uuid,
+      ${command.action.releaseRevision}::bigint, ${command.action.actionId}::uuid,
+      ${command.recordTypeId}::uuid,
+      ${JSON.stringify(normalizedInputs)}::text::jsonb
+    ) as value
+  `;
+  return one(rows).value === true;
 };
 
 const prepare = async (
@@ -279,6 +296,14 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               return preview.correlationId
                 ? safeRefusal(preview.correlationId, "conflict")
                 : recordedRefusal;
+            if (preview.outcome === "permission_refused") {
+              const denied = await prepare(transaction, command.data, activityId, false);
+              return denied.outcome === "refused_recorded"
+                ? recordedRefusal
+                : "correlationId" in denied && denied.correlationId
+                  ? safeRefusal(denied.correlationId, "operation_refused")
+                  : recordedRefusal;
+            }
             if (preview.outcome !== "previewed")
               return preview.correlationId
                 ? safeRefusal(preview.correlationId, "operation_refused")
@@ -286,6 +311,14 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
             const previewComposition = composeNamedAction(preview, command.data.inputs, issuedAt);
             if (previewComposition === undefined)
               return safeRefusal(preview.correlationId, "invalid_request");
+            if (
+              !(await validateReferenceInputs(
+                transaction,
+                command.data,
+                previewComposition.normalizedInputs,
+              ))
+            )
+              return safeRefusal(preview.correlationId, "operation_refused");
 
             const totalPreparation = await prepareTotals(
               transaction,

@@ -2,6 +2,7 @@ import {
   actionDefinitionSchema,
   actionDefinitionV2Schema,
   currencyCodeV2Schema,
+  dateValueV2Schema,
   exactDecimalWithinBoundsV2,
   inspectRecordRichTextV2,
   jsonValueSchema,
@@ -142,10 +143,11 @@ const inputValue = (
   }
   if (input.type === "boolean") return typeof candidate === "boolean" ? candidate : undefined;
   if (input.type === "date") {
-    if (typeof candidate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return undefined;
-    return (input.validation?.earliest === undefined || candidate >= input.validation.earliest) &&
-      (input.validation?.latest === undefined || candidate <= input.validation.latest)
-      ? candidate
+    const parsed = dateValueV2Schema.safeParse(candidate);
+    if (!parsed.success) return undefined;
+    return (input.validation?.earliest === undefined || parsed.data >= input.validation.earliest) &&
+      (input.validation?.latest === undefined || parsed.data <= input.validation.latest)
+      ? parsed.data
       : undefined;
   }
   if (input.type === "date_time") {

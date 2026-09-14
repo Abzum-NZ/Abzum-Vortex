@@ -171,4 +171,21 @@ describe("named action composition", () => {
       )?.preconditionSatisfied,
     ).toBe(false);
   });
+
+  it("uses strict calendar dates rather than accepting impossible ISO-shaped dates", () => {
+    const datePrepared = {
+      ...prepared([{ kind: "announce_event", eventKey: "example.record.approved" }]),
+      action: actionDefinitionV2Schema.parse({
+        ...prepared([{ kind: "announce_event", eventKey: "example.record.approved" }]).action,
+        inputs: [{ key: "on", label: "On", required: true, type: "date" }],
+        effects: [{ kind: "announce_event", eventKey: "example.record.approved" }],
+      }),
+    };
+    expect(
+      composeNamedAction(datePrepared, { on: "2026-02-29" }, "2026-09-14T12:00:00.000Z"),
+    ).toBeUndefined();
+    expect(
+      composeNamedAction(datePrepared, { on: "2028-02-29" }, "2026-09-14T12:00:00.000Z"),
+    ).toMatchObject({ normalizedInputs: { on: "2028-02-29" } });
+  });
 });
