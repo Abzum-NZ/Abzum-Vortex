@@ -474,16 +474,7 @@
       }
     ],
     "rules": [],
-    "extension_points": [
-      {
-        "id": "ext_activity_types",
-        "key": "activity_types",
-        "record_type": "activity",
-        "accepts": [
-          "choice_option"
-        ]
-      }
-    ],
+    "extension_points": [],
     "sharing_conditions": []
   }
 }

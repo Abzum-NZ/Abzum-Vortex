@@ -515,9 +515,43 @@ describe("current Module V2 fixture runtime", () => {
         throw new Error(`Current Module V2 consumer result required for ${key}`);
       return result;
     };
-    const company = moduleRead("vortex.crm.organisations").content.recordTypes.find(
-      (recordType) => recordType.key === "company",
-    )!;
+    const dependentRelease = currentReleases.find(
+      (release) => release.key === "vortex.crm.people",
+    );
+    const dependencyEvidence = repository.releaseEvidence.get(dependentRelease?.rootId ?? "") as {
+      dependencyManifest: Array<{
+        kind: string;
+        rootId: string;
+        releaseRevision?: number;
+        releaseVersion: string;
+      }>;
+    };
+    const ownerDependency = dependencyEvidence.dependencyManifest.find(
+      (dependency) => dependency.kind === "module" && dependency.rootId === moduleRead("vortex.crm.organisations").rootId,
+    );
+    if (!ownerDependency || ownerDependency.releaseRevision === undefined)
+      throw new Error("Exact owner dependency evidence required");
+    const exactOwner = await consumer.read(context(), {
+      kind: "module",
+      rootId: ownerDependency.rootId,
+      selector: { selection: "revision", releaseRevision: ownerDependency.releaseRevision },
+    });
+    if (exactOwner.kind !== "module") throw new Error("Exact owner module read required");
+    const company = exactOwner.content.recordTypes.find((recordType) => recordType.key === "company")!;
+    expect(exactOwner.content.extensionPoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "company_fields",
+          recordTypeId: company.recordTypeId,
+          accepts: ["field"],
+        }),
+        expect.objectContaining({
+          key: "company_actions",
+          recordTypeId: company.recordTypeId,
+          accepts: ["action"],
+        }),
+      ]),
+    );
     const contact = moduleRead("vortex.crm.people").content.recordTypes.find(
       (recordType) => recordType.key === "contact",
     )!;

@@ -66,6 +66,7 @@ export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.module_dependency_acyclic",
   "vortex.definition.module_dependency_resolved",
   "vortex.definition.module_event_references",
+  "vortex.definition.module_extension_capabilities",
   "vortex.definition.module_extension_references",
   "vortex.definition.module_field_references",
   "vortex.definition.module_record_references",

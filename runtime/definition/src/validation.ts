@@ -269,6 +269,7 @@ const sourceCollectionLocationKind = {
   actions: "action",
   rules: "rule",
   events: "event",
+  extension_points: "extension_point",
   pages: "page",
   blocks: "block",
   block_registrations: "block",
@@ -2724,11 +2725,32 @@ function moduleReferenceRule(context: PreparedValidationContext): DefinitionRule
           failure(output, "vortex.definition.module_event_references", "broken_reference"),
         );
     }
-    for (const point of array(content.extensionPoints))
+    for (const point of array(content.extensionPoints)) {
+      const location = { kind: "extension_point" as const, key: String(point.key) };
       if (!moduleRecords.has(String(point.recordTypeId)))
         failures.push(
-          failure(output, "vortex.definition.module_extension_references", "broken_reference"),
+          failure(
+            output,
+            "vortex.definition.module_extension_references",
+            "broken_reference",
+            location,
+          ),
         );
+      // V1 releases remain readable through their historical contract. New authoring uses V2/V3
+      // publication, where the module specification permits only additive fields and actions.
+      if (
+        "validationContractVersion" in output &&
+        (point.accepts as string[]).some((kind) => kind !== "field" && kind !== "action")
+      )
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.module_extension_capabilities",
+            "unsupported_choice",
+            location,
+          ),
+        );
+    }
     for (const condition of array(content.sharingConditions)) {
       const record = moduleRecords.get(String(condition.sourceRecordTypeId));
       const fieldMap = new Map(
@@ -5201,6 +5223,7 @@ const moduleRuleCodes = [
   "vortex.definition.module_action_references",
   "vortex.definition.module_rule_references",
   "vortex.definition.module_event_references",
+  "vortex.definition.module_extension_capabilities",
   "vortex.definition.module_extension_references",
   "vortex.definition.module_sharing_condition",
 ] as const;

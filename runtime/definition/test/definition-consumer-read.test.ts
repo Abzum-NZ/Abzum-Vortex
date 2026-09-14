@@ -242,6 +242,34 @@ describe("Definition consumer reads", () => {
     expect(result).not.toHaveProperty("publishedAt");
   });
 
+  it("keeps historical extension capabilities readable from an exact release", async () => {
+    for (const capability of ["choice_option", "link_target"] as const) {
+      const historicalOutput = structuredClone(moduleOutput);
+      historicalOutput.canonical.content.extensionPoints = [
+        {
+          ...historicalOutput.canonical.content.extensionPoints[0]!,
+          accepts: [capability],
+        },
+      ];
+      historicalOutput.artifact.contentFingerprint = fingerprintCanonicalValue(
+        historicalOutput.canonical.content,
+      );
+      const historicalEvidence = releaseEvidence(historicalOutput, []);
+      const result = await createDefinitionConsumerReadService(
+        repositoryFor(historicalEvidence),
+        catalogueFor(),
+      ).read(context(), {
+        kind: "module",
+        rootId: historicalEvidence.rootId,
+        selector: { selection: "revision", releaseRevision: 1 },
+      });
+      expect(result).toMatchObject({
+        validationContractVersion: "1.0.0",
+        content: { extensionPoints: [expect.objectContaining({ accepts: [capability] })] },
+      });
+    }
+  });
+
   it("returns an Application only when every exact Module and catalogue entry agrees", async () => {
     const service = createDefinitionConsumerReadService(
       repositoryFor(applicationEvidence),
