@@ -1,6 +1,6 @@
 import {
-  actionDefinitionSchema,
-  actionDefinitionV2Schema,
+  type actionDefinitionSchema,
+  type actionDefinitionV2Schema,
   currencyCodeV2Schema,
   dateValueV2Schema,
   exactDecimalWithinBoundsV2,
@@ -11,12 +11,11 @@ import {
   organizationAccountIdSchema,
   parseExactDecimal,
   recordLinkValueV2Schema,
-  recordTypeDefinitionV2Schema,
+  type recordTypeDefinitionV2Schema,
   recordRichTextDocumentV2Schema,
   timestampSchema,
   type ConditionNode,
   type JsonValue,
-  type ModuleFieldV2,
 } from "@vortex/contracts";
 import { evaluateTypedCondition, evaluateTypedConditionV2 } from "@vortex/rule";
 
