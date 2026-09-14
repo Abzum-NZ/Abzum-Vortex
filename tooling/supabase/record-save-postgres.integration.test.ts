@@ -148,6 +148,29 @@ const activityRuleStableOperandConflictId = id(127);
 const commandStaleAccessScopeId = id(128);
 const activityStaleAccessScopeId = id(129);
 const occurrenceStaleAccessScopeId = id(130);
+const commandNamedEventId = id(131);
+const commandNamedSetId = id(132);
+const commandNamedMixedId = id(133);
+const commandNamedRefusalId = id(134);
+const commandNamedRollbackId = id(135);
+const activityNamedEventId = id(136);
+const activityNamedSetId = id(137);
+const activityNamedMixedId = id(138);
+const activityNamedRefusalId = id(139);
+const activityNamedRollbackId = id(140);
+const occurrenceNamedSetId = id(141);
+const occurrenceNamedMixedStandardId = id(142);
+const occurrenceNamedEventId = id(143);
+const occurrenceNamedMixedDeclaredId = id(144);
+const commandNamedRecordCreateId = id(150);
+const activityNamedRecordCreateId = id(151);
+const occurrenceNamedRecordCreateId = id(152);
+const commandNamedRaceOneId = id(153);
+const commandNamedRaceTwoId = id(154);
+const activityNamedRaceOneId = id(155);
+const activityNamedRaceTwoId = id(156);
+const occurrenceNamedRaceOneId = id(157);
+const occurrenceNamedRaceTwoId = id(158);
 const publishedAt = "2026-09-13T00:00:00.000Z";
 
 const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse({
@@ -170,7 +193,7 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         ownership_mode: "none",
         title_field: "title",
         standard_actions: ["create", "read", "update"],
-        custom_actions: ["action_note"],
+        custom_actions: ["action_note", "action_set_title", "action_set_title_and_note"],
         fields: [
           {
             id: "field_title",
@@ -746,6 +769,30 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: { readable_fields: ["title", "amount"], changeable_fields: [] },
       },
+      {
+        id: "permission_set_title",
+        key: "example.record_save_proof.item.set_title",
+        label: "Set item title",
+        description: "Run the named title update proof action.",
+        record_type: "item",
+        action_kind: "named",
+        named_action: "set_title",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: { readable_fields: ["title", "title_copy"], changeable_fields: ["title"] },
+      },
+      {
+        id: "permission_set_title_and_note",
+        key: "example.record_save_proof.item.set_title_and_note",
+        label: "Set and note item",
+        description: "Run the mixed named action proof.",
+        record_type: "item",
+        action_kind: "named",
+        named_action: "set_title_and_note",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: { readable_fields: ["title", "title_copy"], changeable_fields: ["title"] },
+      },
       ...(["total_parent", "total_child", "ruled_child", "recursive_total"] as const).flatMap(
         (recordType) =>
           (["create", "read", "update"] as const).map((action) => ({
@@ -804,6 +851,31 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
             kind: "announce_event",
             event: "example.record_save_proof.item.noted",
           },
+        ],
+      },
+      {
+        id: "action_set_title",
+        key: "example.record_save_proof.item.set_title",
+        label: "Set item title",
+        record_type: "item",
+        permission: "example.record_save_proof.item.set_title",
+        shareable: false,
+        inputs: [{ key: "title", label: "Title", required: true, type: "text" }],
+        effects: [
+          { kind: "set_field", field: "title", value: { source: "input", input: "title" } },
+        ],
+      },
+      {
+        id: "action_set_title_and_note",
+        key: "example.record_save_proof.item.set_title_and_note",
+        label: "Set and note item",
+        record_type: "item",
+        permission: "example.record_save_proof.item.set_title_and_note",
+        shareable: false,
+        inputs: [{ key: "title", label: "Title", required: true, type: "text" }],
+        effects: [
+          { kind: "set_field", field: "title", value: { source: "input", input: "title" } },
+          { kind: "announce_event", event: "example.record_save_proof.item.noted" },
         ],
       },
     ],
@@ -1001,6 +1073,9 @@ const recursiveChildrenTotalFieldId = componentId("field", "field_recursive_chil
 const recursiveParentFieldId = componentId("field", "field_recursive_parent");
 const applicationRoleId = componentId("role", "role_user");
 const homePageId = componentId("page", "page_home");
+const noteActionId = componentId("action", "action_note");
+const setTitleActionId = componentId("action", "action_set_title");
+const setTitleAndNoteActionId = componentId("action", "action_set_title_and_note");
 
 const resolutionDefinitions = [
   { kind: "module" as const, key: moduleSource.key, rootId: moduleRootId, exactVersion: "2.0.0" },
@@ -1176,6 +1251,8 @@ const cleanRecordSaveFixture = async (admin: Sql): Promise<void> => {
     reset role;
     set local role vortex_record_adapter;
     delete from vortex_record.save_command_receipts
+      where organization_id = '${organizationId}';
+    delete from vortex_record.named_action_command_receipts
       where organization_id = '${organizationId}';
     reset role;
     delete from pgmq.q_vortex_event_occurrences queued
@@ -1355,7 +1432,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           definitionCatalogue: { connectionTypeReleases: [], platformThemeReleases: [] },
           resolvedRequestTransaction: resolvedRequestRunner(transaction),
         }).readExact();
-        expect(registration.permissionRegistration.entries).toHaveLength(17);
+        expect(registration.permissionRegistration.entries).toHaveLength(19);
         const registeredPermissionKeys = registration.permissionRegistration.entries.map(
           (entry) => entry.permission.key,
         );
@@ -1492,6 +1569,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityUpdateId,
         activityReplayId,
         activityConflictId,
+        activityNamedRecordCreateId,
         activityFreshId,
         activityFreshReplayId,
         activityMissingSettingsId,
@@ -1532,6 +1610,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       const occurrenceIds = [
         occurrenceCreateId,
         occurrenceUpdateId,
+        occurrenceNamedRecordCreateId,
         occurrenceFreshId,
         occurrenceExplicitMoneyId,
         occurrenceParentOneId,
@@ -1674,6 +1753,278 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       ).resolves.toMatchObject({
         kind: "available",
         value: { outcome: "refused", error: { code: "conflict" } },
+      });
+
+      const namedRecord = await service.save(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: commandNamedRecordCreateId,
+        operation: "create",
+        recordTypeId,
+        submittedValues: { [fieldId]: "Named action subject" },
+      });
+      if (namedRecord.kind !== "available" || namedRecord.value.outcome !== "saved")
+        throw new Error("Named action subject was not created");
+      const namedRecordId = namedRecord.value.recordId;
+
+      const runNamedWriter = async (candidate: {
+        commandId: string;
+        actionId: string;
+        expectedConcurrencyNumber: number;
+        submittedValues: Record<string, unknown>;
+        finalValues: Record<string, unknown>;
+        inputs: Record<string, unknown>;
+        activityId: string;
+        standardOccurrenceId: string;
+        declaredOccurrenceIds: readonly string[];
+      }) =>
+        runtime.begin(async (transaction) => {
+          const [scope] = await transaction<
+            { tenant_id: string; organization_account_id: string; access_version: string }[]
+          >`select * from vortex_access.resolve_human_application_change_scope(
+            ${identityId}::uuid, ${organizationId}::uuid, ${applicationRootId}::uuid
+          )`;
+          if (scope === undefined) throw new Error("Named action scope is unavailable");
+          await transaction`select vortex_context.initialize(${JSON.stringify({
+            callerKind: "human",
+            identityAuthorityId,
+            tenantId: scope.tenant_id,
+            organizationId,
+            organizationAccountId: scope.organization_account_id,
+            applicationRootId,
+            identityId,
+            sessionId: session.sessionId,
+            authenticationStrength: session.authenticationStrength,
+            accessTokenIssuedAt: session.accessTokenIssuedAt,
+            primaryAuthenticatedAt: session.primaryAuthenticatedAt,
+            issuedAt: operationAt.toISOString(),
+            expiresAt: session.accessTokenExpiresAt,
+            accessVersion: Number(scope.access_version),
+            correlationId: id(27),
+          })}::text::jsonb)`;
+          await transaction`set local role vortex_runtime`;
+          const [row] = await transaction<{ result: Record<string, unknown> }[]>`
+            select vortex_record.save_named_action_set_announce_with_relationship_totals(
+              ${candidate.commandId}::uuid, 'update',
+              ${recordTypeId}::uuid, ${namedRecordId}::uuid,
+              ${candidate.expectedConcurrencyNumber}::bigint,
+              ${JSON.stringify(candidate.submittedValues)}::text::jsonb,
+              ${JSON.stringify(candidate.finalValues)}::text::jsonb,
+              null::uuid, ${candidate.activityId}::uuid,
+              ${candidate.standardOccurrenceId}::uuid, '[]'::jsonb,
+              ${JSON.stringify(candidate.declaredOccurrenceIds)}::text::jsonb,
+              'module', ${moduleRootId}::uuid, 1::bigint, ${candidate.actionId}::uuid,
+              ${JSON.stringify(candidate.inputs)}::text::jsonb
+            ) as result
+          `;
+          if (row === undefined) throw new Error("Named action result is unavailable");
+          return row.result;
+        });
+      const namedEffects = async () => {
+        const [value] = await admin<
+          { receipts: string; activities: string; outbox: string; queue: string }[]
+        >`
+          select
+            (select count(*)::text from vortex_record.named_action_command_receipts
+             where organization_id = ${organizationId}::uuid) receipts,
+            (select count(*)::text from vortex_activity.organization_activity_entries
+             where organization_id = ${organizationId}::uuid
+               and action = 'execute_named_action') activities,
+            (select count(*)::text from vortex_event.event_outbox
+             where organization_id = ${organizationId}::uuid
+               and envelope #>> '{descriptor,kind}' = 'declared') outbox,
+            (select count(*)::text from pgmq.q_vortex_event_occurrences queued
+             join vortex_event.event_outbox event
+               on queued.message ->> 'occurrenceId' = event.occurrence_id::text
+             where event.organization_id = ${organizationId}::uuid
+               and event.envelope #>> '{descriptor,kind}' = 'declared') queue
+        `;
+        if (value === undefined) throw new Error("Named action effects are unavailable");
+        return value;
+      };
+      expect(await namedEffects()).toEqual({
+        receipts: "0",
+        activities: "0",
+        outbox: "0",
+        queue: "0",
+      });
+
+      const eventOnly = {
+        commandId: commandNamedEventId,
+        actionId: noteActionId,
+        expectedConcurrencyNumber: 1,
+        submittedValues: {},
+        finalValues: {},
+        inputs: {},
+        activityId: activityNamedEventId,
+        standardOccurrenceId: occurrenceNamedSetId,
+        declaredOccurrenceIds: [occurrenceNamedEventId],
+      };
+      await expect(runNamedWriter(eventOnly)).resolves.toMatchObject({
+        outcome: "completed",
+        recordId: namedRecordId,
+        concurrencyNumber: 1,
+        replayed: false,
+      });
+      expect(await namedEffects()).toEqual({
+        receipts: "1",
+        activities: "1",
+        outbox: "1",
+        queue: "1",
+      });
+      await expect(runNamedWriter(eventOnly)).resolves.toMatchObject({
+        outcome: "completed",
+        recordId: namedRecordId,
+        concurrencyNumber: 1,
+      });
+      expect(await namedEffects()).toEqual({
+        receipts: "1",
+        activities: "1",
+        outbox: "1",
+        queue: "1",
+      });
+
+      await expect(
+        runNamedWriter({
+          commandId: commandNamedSetId,
+          actionId: setTitleActionId,
+          expectedConcurrencyNumber: 1,
+          submittedValues: { [fieldId]: "Named set" },
+          finalValues: { [fieldId]: "Named set", [calculatedFieldId]: "Named set" },
+          inputs: { title: "Named set" },
+          activityId: activityNamedSetId,
+          standardOccurrenceId: occurrenceNamedSetId,
+          declaredOccurrenceIds: [],
+        }),
+      ).resolves.toMatchObject({ outcome: "saved", recordId: namedRecordId, concurrencyNumber: 2 });
+      expect(await namedEffects()).toEqual({
+        receipts: "2",
+        activities: "2",
+        outbox: "1",
+        queue: "1",
+      });
+
+      await expect(
+        runNamedWriter({
+          commandId: commandNamedMixedId,
+          actionId: setTitleAndNoteActionId,
+          expectedConcurrencyNumber: 2,
+          submittedValues: { [fieldId]: "Named mixed" },
+          finalValues: { [fieldId]: "Named mixed", [calculatedFieldId]: "Named mixed" },
+          inputs: { title: "Named mixed" },
+          activityId: activityNamedMixedId,
+          standardOccurrenceId: occurrenceNamedMixedStandardId,
+          declaredOccurrenceIds: [occurrenceNamedMixedDeclaredId],
+        }),
+      ).resolves.toMatchObject({ outcome: "saved", recordId: namedRecordId, concurrencyNumber: 3 });
+      expect(await namedEffects()).toEqual({
+        receipts: "3",
+        activities: "3",
+        outbox: "2",
+        queue: "2",
+      });
+      await expect(
+        admin<{ payload: unknown; descriptor: unknown }[]>`
+          select envelope -> 'payload' as payload,
+            envelope -> 'descriptor' as descriptor from vortex_event.event_outbox
+          where occurrence_id = ${occurrenceNamedMixedDeclaredId}::uuid
+        `,
+      ).resolves.toEqual([
+        {
+          payload: { kind: "declared", carriedValues: { [fieldId]: "Named mixed" } },
+          descriptor: expect.objectContaining({
+            kind: "declared",
+            owner: { kind: "module", moduleRootId },
+          }),
+        },
+      ]);
+
+      const beforeRefusal = await namedEffects();
+      await expect(
+        runNamedWriter({
+          commandId: commandNamedRefusalId,
+          actionId: setTitleActionId,
+          expectedConcurrencyNumber: 3,
+          submittedValues: {},
+          finalValues: {},
+          inputs: { title: "Omitted effect" },
+          activityId: activityNamedRefusalId,
+          standardOccurrenceId: id(145),
+          declaredOccurrenceIds: [],
+        }),
+      ).resolves.toMatchObject({ outcome: "refused", reasonCode: "command_invalid" });
+      expect(await namedEffects()).toEqual(beforeRefusal);
+
+      await expect(
+        runNamedWriter({
+          commandId: commandNamedRollbackId,
+          actionId: setTitleAndNoteActionId,
+          expectedConcurrencyNumber: 3,
+          submittedValues: { [fieldId]: "Must roll back" },
+          finalValues: { [fieldId]: "Must roll back", [calculatedFieldId]: "Must roll back" },
+          inputs: { title: "Must roll back" },
+          activityId: activityNamedRollbackId,
+          standardOccurrenceId: id(146),
+          declaredOccurrenceIds: ["not-a-uuid"],
+        }),
+      ).rejects.toMatchObject({ code: "22023" });
+      expect(await namedEffects()).toEqual(beforeRefusal);
+      await expect(
+        runNamedWriter({
+          commandId: id(147),
+          actionId: setTitleActionId,
+          expectedConcurrencyNumber: 2,
+          submittedValues: { [fieldId]: "Stale mutation" },
+          finalValues: { [fieldId]: "Stale mutation", [calculatedFieldId]: "Stale mutation" },
+          inputs: { title: "Stale mutation" },
+          activityId: id(148),
+          standardOccurrenceId: id(149),
+          declaredOccurrenceIds: [],
+        }),
+      ).resolves.toMatchObject({ outcome: "conflict" });
+      expect(await namedEffects()).toEqual(beforeRefusal);
+
+      const competingResults = await Promise.all([
+        runNamedWriter({
+          commandId: commandNamedRaceOneId,
+          actionId: setTitleActionId,
+          expectedConcurrencyNumber: 3,
+          submittedValues: { [fieldId]: "Race one" },
+          finalValues: { [fieldId]: "Race one", [calculatedFieldId]: "Race one" },
+          inputs: { title: "Race one" },
+          activityId: activityNamedRaceOneId,
+          standardOccurrenceId: occurrenceNamedRaceOneId,
+          declaredOccurrenceIds: [],
+        }),
+        runNamedWriter({
+          commandId: commandNamedRaceTwoId,
+          actionId: setTitleActionId,
+          expectedConcurrencyNumber: 3,
+          submittedValues: { [fieldId]: "Race two" },
+          finalValues: { [fieldId]: "Race two", [calculatedFieldId]: "Race two" },
+          inputs: { title: "Race two" },
+          activityId: activityNamedRaceTwoId,
+          standardOccurrenceId: occurrenceNamedRaceTwoId,
+          declaredOccurrenceIds: [],
+        }),
+      ]);
+      expect(competingResults.filter((value) => value.outcome === "saved")).toHaveLength(1);
+      expect(competingResults.filter((value) => value.outcome === "conflict")).toHaveLength(1);
+      expect(await namedEffects()).toEqual({
+        receipts: "4",
+        activities: "4",
+        outbox: "2",
+        queue: "2",
+      });
+
+      const [namedRecordState] = await admin.unsafe<{ title: string; revision: string }[]>(
+        `select f_${fieldId.replaceAll("-", "")} as title, concurrency_number::text as revision
+         from record_data.rt_${storageContractId.replaceAll("-", "")}
+         where organisation_id = $1 and record_id = $2`,
+        [organizationId, namedRecordId],
+      );
+      expect(namedRecordState).toEqual({
+        title: expect.stringMatching(/^Race (one|two)$/),
+        revision: "4",
       });
 
       const fresh = await service.save(session, selection, {
@@ -1826,10 +2177,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         private_direct: "private generated source",
         private_transitive: "private generated source",
         concurrency_number: "2",
-        receipt_count: "4",
+        receipt_count: "5",
         activity_count: "2",
-        outbox_count: "4",
-        queue_count: "4",
+        outbox_count: "10",
+        queue_count: "10",
       });
       await expect(
         admin.unsafe(
@@ -1838,7 +2189,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           [organizationId, freshRecordId],
         ),
       ).resolves.toEqual([{ amount: { amount: "12.34", currency: "AUD" } }]);
-      expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(1);
+      expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(3);
       expect(moduleRelease.content.events).toHaveLength(1);
 
       const createTotalParent = async (commandId: string, title: string) => {
