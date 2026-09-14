@@ -41,6 +41,8 @@ tasks:
       type: io.kestra.plugin.core.runner.Process
     commands:
       - /app/vortex-operations/deliver-database.sh
+    inputFiles:
+      reusable-full-baseline-candidate.json: "{{ outputs.load_reusable_full_baseline.value | toJson }}"
     env:
       VORTEX_DELIVERY_OPERATION: apply
       VORTEX_DELIVERY_ENVIRONMENT: testing
@@ -51,7 +53,7 @@ tasks:
       VORTEX_EXECUTION_ID: "{{ execution.id }}"
       VORTEX_EVIDENCE_PATH: delivery-evidence.json
       VORTEX_REUSABLE_BASELINE_PATH: reusable-full-baseline.json
-      VORTEX_REUSE_CANDIDATE: "{{ outputs.load_reusable_full_baseline.value | toJson }}"
+      VORTEX_REUSE_CANDIDATE_PATH: reusable-full-baseline-candidate.json
       VORTEX_FORCE_FULL_VERIFICATION: "{{ inputs.force_full_verification }}"
       VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_TESTING_DOPPLER_TOKEN') }}"
       VORTEX_DOPPLER_PROJECT: abzum-vortex
@@ -69,19 +71,14 @@ tasks:
     kvType: JSON
     overwrite: true
 
-  - id: publish_immutable_full_source
-    type: io.kestra.plugin.core.flow.If
-    condition: >-
-      {{ fromJson(read(outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.mode == 'full' }}
-    then:
-      - id: store
-        type: io.kestra.plugin.core.kv.Set
-        namespace: vortex.operations
-        key: >-
-          {{ fromJson(read(outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.source.evidence_key }}
-        value: "{{ read(outputs.apply_and_verify.outputFiles['delivery-evidence.json']) }}"
-        kvType: JSON
-        overwrite: false
+  - id: publish_immutable_fresh_receipt
+    type: io.kestra.plugin.core.kv.Set
+    namespace: vortex.operations
+    key: >-
+      {{ fromJson(read(outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.receipt_key }}
+    value: "{{ read(outputs.apply_and_verify.outputFiles['delivery-evidence.json']) }}"
+    kvType: JSON
+    overwrite: false
 
   - id: publish_reusable_full_baseline
     type: io.kestra.plugin.core.kv.Set

@@ -114,9 +114,10 @@ would be a separate security decision and is refused by the current specificatio
 
 `testing_database_delivery` accepts the GitHub push webhook for `refs/heads/testing`, fetches the
 exact commit, proves that it remains reachable from that protected branch, and applies its ordered
-Supabase migrations. It then runs the remote pgTAP suite through the pinned `pg_prove` harness and
-runs every migration-paired concurrency proof and Supabase database lint across the complete set of
-operated schemas. The image-baked script is a small provenance bootstrap: it accepts only this fixed
+Supabase migrations. The committed selector compares the target with the latest authenticated
+successful ancestor. A direct edit to an existing SQL suite or concurrency proof can run only that
+check; protected, broad, new, deleted, replaced, reverted, unmapped or ambiguous input executes the
+complete remote pgTAP, concurrency-proof and schema-lint set. The image-baked script is a small provenance bootstrap: it accepts only this fixed
 repository, the environment's protected ref, the selected full commit and the fixed runner path. It
 then executes that commit's regular checked-out runner. The runner and Local database commands read
 the same strict verification manifest, which must name every concurrency proof and every schema
@@ -130,8 +131,17 @@ changed `supabase/migrations/*.sql` file forces the complete SQL, concurrency, a
 migration filenames, formatting, and inferred function ownership never narrow that coverage.
 `supabase test db` deliberately uses a Docker helper, so it remains the
 local-development command and is not used by the operated flow: Kestra does not receive the host
-Docker socket. Only a completely successful run writes credential-free evidence to the
-`vortex.operations` key-value store under the exact commit identifier.
+Docker socket. Only complete coverage writes credential-free schema-3 evidence. Its required
+inventory is the disjoint union of checks freshly executed now and checks backed by a directly
+authenticated fresh receipt; a reused check receipt can never become another source. Each source
+receipt is retained under an execution-specific immutable key, while the mutable baseline contains
+bounded copies of only the direct source receipts needed by the latest successful commit. Before
+reuse, the runner hashes a data-free catalog/security snapshot covering operated schemas, relations,
+columns, constraints, indexes, policies, functions, default privileges, Vortex roles and extensions.
+Malformed, foreign, failed, replayed or chained sources, a PostgreSQL build change, or unexplained
+snapshot drift falls back to full verification. The receipt also records current/baseline identities,
+inventory, selector and changed-input digests, reasons, the fresh/reused partition and per-check
+timings. Reused checks are absent from the current execution's completed arrays.
 
 `production_database_delivery` performs the same immutable-commit checks for `refs/heads/main` and
 prepares a credential-free migration fingerprint before pausing. The operator approves and identifies
@@ -142,9 +152,11 @@ flow, so the receipt references it rather than restating it. Production then
 loads the successful Testing evidence itself. The delivery script independently proves that the
 tested commit is an ancestor of the Production commit and that both revisions contain the same
 migration set, commit-owned runner and verification manifest before opening the Production database
-connection. Receipt schema 2 records the runner and manifest fingerprints plus the proof and schema
-sets that actually completed. Older receipts remain historical evidence, but cannot approve a
-schema-2 Production delivery.
+connection. The current Production reader remains deliberately narrower than Testing selection: it
+accepts only the existing complete schema-3 `full` or direct-full-source `reused` receipt and rejects
+selected or aggregate coverage before secret access. Supporting selected receipts in Production is
+a separate reviewed rollout, not an inference from one source check. Older receipts remain
+historical evidence, but cannot approve the current Production delivery.
 
 Testing execution `7w9iLE15hlvA9ii64ROry` predates this corrected runner boundary. It applied and
 ran the SQL suites for commit `50b6d4e2a1b7b079d57f8f15d00ee42a29284780`, but its older image-baked
@@ -185,7 +197,8 @@ docker run --rm --entrypoint bash -v <repository>:/source:ro -v <repository>/wor
 
 The contract test uses a disposable local Git remote and a credential-free Doppler stand-in. It
 proves that an older bootstrap executes a newer reachable commit's runner and expanded manifest,
-exact-commit preparation, complete receipt shape, real failed-command propagation, and refusal of an
+exact-commit preparation, full, selected and unchanged-descendant receipt shapes, direct-source and
+catalog-state fallback, real failed-command propagation, and refusal of an
 invalid repository, ref, commit, runner, manifest or Testing receipt. It retains the approval, role,
 certificate and exact credential-free `verify-full` address checks even when an unsafe address is
 present in the process environment, and refuses a remote migration history containing a file absent

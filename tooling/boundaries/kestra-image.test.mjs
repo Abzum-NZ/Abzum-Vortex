@@ -30,13 +30,20 @@ describe("Kestra deployment image", () => {
     expect(testingFlow).toContain("trigger.body.ref == 'refs/heads/testing'");
     expect(productionFlow).toContain("trigger.body.ref == 'refs/heads/main'");
     expect(testingFlow).toContain("VORTEX_EVIDENCE_PATH: delivery-evidence.json");
-    expect(testingFlow).toContain("VORTEX_REUSE_CANDIDATE:");
+    expect(testingFlow).toContain(
+      'reusable-full-baseline-candidate.json: "{{ outputs.load_reusable_full_baseline.value | toJson }}"',
+    );
+    expect(testingFlow).toContain(
+      "VORTEX_REUSE_CANDIDATE_PATH: reusable-full-baseline-candidate.json",
+    );
+    expect(testingFlow).not.toMatch(/^\s+VORTEX_REUSE_CANDIDATE:/m);
     expect(testingFlow).toContain("VORTEX_FORCE_FULL_VERIFICATION:");
     expect(testingFlow).toContain("key: database-testing-reusable-full-baseline");
-    expect(testingFlow).toContain("id: publish_immutable_full_source");
+    expect(testingFlow).toContain("id: publish_immutable_fresh_receipt");
     expect(testingFlow).toContain(
-      "fromJson(read(outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.mode == 'full'",
+      "fromJson(read(outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.receipt_key",
     );
+    expect(testingFlow).not.toContain("id: publish_immutable_full_source");
     expect(testingFlow).toContain("overwrite: false");
     expect(testingFlow.indexOf("id: invalidate_reusable_full_baseline")).toBeLessThan(
       testingFlow.indexOf("id: apply_and_verify"),
