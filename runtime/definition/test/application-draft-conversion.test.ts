@@ -17,6 +17,7 @@ import {
   convertApplicationSourceV1ToV2,
   prepareApplicationDraftV2Conversion,
 } from "../src/application-draft-conversion";
+import { verifyPublishedDefinitionHistory } from "../src/version-impact";
 
 const fixtureRoot = path.resolve(
   import.meta.dirname,
@@ -209,7 +210,11 @@ describe("application draft V1 to V2 conversion", () => {
         updatedBy: id(10),
       },
       identities: [],
-      history: { kind: "application", definitionKey: source.key, history: [] },
+      historyEvidence: verifyPublishedDefinitionHistory(
+        { kind: "application", definitionKey: source.key, history: [] },
+        selection.rootId,
+        null,
+      ),
     } as unknown as DefinitionPublicationCandidate;
     const catalogue = {
       readPlatformBlockReleaseV2: async (blockId: string) =>
@@ -221,7 +226,12 @@ describe("application draft V1 to V2 conversion", () => {
     let writes = 0;
     const transaction = {
       readCandidate: async () => candidate,
-      listModuleReleases: async () => [],
+      readModuleReleasePage: async () => ({
+        rootId: null,
+        anchorReleaseRevision: null,
+        entries: [],
+        nextAfterReleaseRevision: null,
+      }),
       readModuleRelease: async () => undefined,
       query: async <Row extends DatabaseRow>(
         strings: TemplateStringsArray,
@@ -424,7 +434,11 @@ describe("application draft V1 to V2 conversion", () => {
         updatedBy: id(10),
       },
       identities: [],
-      history: { kind: "application", definitionKey: source.key, history: [] },
+      historyEvidence: verifyPublishedDefinitionHistory(
+        { kind: "application", definitionKey: source.key, history: [] },
+        built.selection.rootId,
+        null,
+      ),
     } as unknown as DefinitionPublicationCandidate;
     const catalogue = {
       readPlatformBlockReleaseV2: async (blockId: string) =>
@@ -438,7 +452,12 @@ describe("application draft V1 to V2 conversion", () => {
     const preview = await prepareApplicationDraftV2Conversion(
       {
         readCandidate: async () => candidate,
-        listModuleReleases: async () => [],
+        readModuleReleasePage: async () => ({
+          rootId: null,
+          anchorReleaseRevision: null,
+          entries: [],
+          nextAfterReleaseRevision: null,
+        }),
         readModuleRelease: async () => undefined,
         query: async () => {
           throw new Error("prepare wrote");

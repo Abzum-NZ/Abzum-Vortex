@@ -37,6 +37,7 @@ import {
 } from "../src/definition-publication";
 import { extractStoredSourceIdentityRequirements } from "../src/source-identities";
 import { compileDefinitionSet, validateDefinitionSet } from "../src/validation";
+import { verifyPublishedDefinitionHistory } from "../src/version-impact";
 
 type JsonObject = Record<string, unknown>;
 
@@ -1153,17 +1154,33 @@ class ApplicationPublicationRepository
   }
 
   async readCandidate(rootId: string) {
-    return rootId === this.candidate.draft.rootId ? structuredClone(this.candidate) : undefined;
+    return rootId === this.candidate.draft.rootId ? this.candidate : undefined;
   }
 
   async lockCandidate(rootId: string) {
     return this.readCandidate(rootId);
   }
 
-  async listModuleReleases(candidateOrganizationId: string, key: string) {
-    return this.modules.filter(
+  async readModuleReleasePage(candidateOrganizationId: string, key: string) {
+    const releases = this.modules.filter(
       (release) => release.organizationId === candidateOrganizationId && release.key === key,
     );
+    if (releases.length === 0)
+      return {
+        rootId: null,
+        anchorReleaseRevision: null,
+        entries: [],
+        nextAfterReleaseRevision: null,
+      } as const;
+    return {
+      rootId: releases[0]!.rootId,
+      anchorReleaseRevision: releases.at(-1)!.releaseRevision,
+      entries: releases.map((release, index) => ({
+        previousReleaseRevision: index === 0 ? null : releases[index - 1]!.releaseRevision,
+        release,
+      })),
+      nextAfterReleaseRevision: null,
+    };
   }
 
   async readModuleRelease(
@@ -1219,7 +1236,11 @@ const publishAndReadApplication = async (
   const candidate: DefinitionPublicationCandidate = {
     draft,
     identities: resolution.identities.filter((identity) => identity.definitionKey === source.key),
-    history: { kind: "application", definitionKey: source.key, history: [] },
+    historyEvidence: verifyPublishedDefinitionHistory(
+      { kind: "application", definitionKey: source.key, history: [] },
+      draft.rootId,
+      null,
+    ),
   };
   const repository = new ApplicationPublicationRepository(candidate, releases.modules);
   const composition = catalogueV2();
