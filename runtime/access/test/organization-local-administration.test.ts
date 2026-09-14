@@ -301,11 +301,15 @@ describe("organisation-local administration service", () => {
         },
       ]);
       await expect(
-        service[method](verifiedSession, { organizationId: id(2) }, {
-          duplicateKey: id(30 + target),
-          organizationAccountId: id(target),
-          expectedRevision: 2,
-        }),
+        service[method](
+          verifiedSession,
+          { organizationId: id(2) },
+          {
+            duplicateKey: id(30 + target),
+            organizationAccountId: id(target),
+            expectedRevision: 2,
+          },
+        ),
       ).resolves.toMatchObject({
         kind: "available",
         value: {
