@@ -614,6 +614,8 @@ set search_path = ''
 as $function$
 declare
   actor_id constant uuid := '94470000-0000-4000-8000-000000000001';
+  fixture_module_root_id uuid := pg_catalog.gen_random_uuid();
+  record_types jsonb;
   release_row vortex_definition.releases%rowtype;
   release_value jsonb;
   entries jsonb;
@@ -621,11 +623,36 @@ declare
   outcome record;
 begin
   insert into vortex_definition.roots (root_id, organization_id, kind, key, created_at, created_by)
+  values (fixture_module_root_id, p_organization_id, 'module', p_key || '.fixture_fields',
+    pg_catalog.clock_timestamp() - interval '1 minute', actor_id);
+
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'moduleRootId', fixture_module_root_id,
+    'recordTypeId', binding.record_type_id,
+    'storageContractId', binding.storage_contract_id,
+    'storageScope', binding.storage_scope,
+    'ownershipMode', 'organization_account',
+    'fields', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object('fieldId', binding.f1_id, 'type', 'text'),
+      pg_catalog.jsonb_build_object('fieldId', binding.f2_id, 'type', 'text'),
+      pg_catalog.jsonb_build_object('fieldId', binding.f3_id, 'type', 'text')
+    )
+  ) order by binding.record_type_id)
+  into strict record_types
+  from vortex_access.test_rfa_bindings as binding;
+
+  perform pg_temp.append_writer_release(
+    fixture_module_root_id, '1.0.0', '[]'::jsonb,
+    pg_catalog.jsonb_build_object('recordTypes', record_types, 'permissions', '[]'::jsonb)
+  );
+
+  insert into vortex_definition.roots (root_id, organization_id, kind, key, created_at, created_by)
   values (p_application_root_id, p_organization_id, 'application', p_key,
     pg_catalog.clock_timestamp() - interval '1 minute', actor_id);
 
   perform pg_temp.append_writer_release(
-    p_application_root_id, '1.0.0', '[]'::jsonb,
+    p_application_root_id, '1.0.0',
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_array(fixture_module_root_id, 1)),
     pg_catalog.jsonb_build_object('permissions', p_permissions)
   );
 

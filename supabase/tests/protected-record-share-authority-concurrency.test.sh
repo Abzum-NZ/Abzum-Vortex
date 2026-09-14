@@ -93,6 +93,7 @@ readonly closed_grant_activity="a6${run_uuid:2}" closed_revoke_activity="a7${run
 readonly closed_grantor_revoke_activity="a8${run_uuid:2}"
 readonly identity_authority="cc${run_uuid:2}" session_id="b1${run_uuid:2}"
 readonly application_key="example.share_auth_${run_token:0:12}"
+readonly module_key="${application_key}.fields"
 proof_root="$(mktemp -d /tmp/vortex-protected-share.XXXXXX)"
 readonly proof_root database_url="${VORTEX_CONCURRENCY_DATABASE_URL:-}"
 
@@ -189,20 +190,21 @@ cleanup_fixture() {
           target.table_schema, target.table_name, '$organization_id');
       end loop;
       for target in
-        select column_row.table_name
+        select column_row.table_name, root.root_id
         from information_schema.columns as column_row
         join information_schema.tables as table_row
           on table_row.table_schema = column_row.table_schema
           and table_row.table_name = column_row.table_name
           and table_row.table_type = 'BASE TABLE'
+        cross join (values ('$application_root'::uuid), ('$module_root'::uuid)) as root(root_id)
         where column_row.table_schema = 'vortex_definition'
           and column_row.column_name = 'root_id'
           and column_row.table_name <> 'roots'
       loop
         execute pg_catalog.format('delete from vortex_definition.%I where root_id = %L',
-          target.table_name, '$application_root');
+          target.table_name, target.root_id);
       end loop;
-      delete from vortex_definition.roots where root_id = '$application_root';
+      delete from vortex_definition.roots where root_id in ('$application_root', '$module_root');
     end
     \$cleanup\$;
     drop function if exists vortex_access.protected_share_race_grant(uuid,uuid,text,uuid,uuid,uuid[],uuid[],timestamptz,timestamptz,text,text,uuid);
@@ -349,20 +351,56 @@ readonly permissions_sql="pg_catalog.jsonb_build_array(
 readonly content_fingerprint="$(sha "'content:$run_uuid'")"
 readonly resolution_fingerprint="$(sha "'resolution:$run_uuid'")"
 readonly source_fingerprint="$(sha "'source:$run_uuid'")"
+readonly module_content_fingerprint="$(sha "'module-content:$run_uuid'")"
+readonly module_resolution_fingerprint="$(sha "'module-resolution:$run_uuid'")"
+readonly module_source_fingerprint="$(sha "'module-source:$run_uuid'")"
 
 run_sql "
   begin;
   insert into vortex_definition.roots (root_id, organization_id, kind, key, created_at, created_by)
-  values ('$application_root','$organization_id','application','$application_key',pg_catalog.clock_timestamp()-interval '1 minute','$actor_id');
+  values
+    ('$module_root','$organization_id','module','$module_key',pg_catalog.clock_timestamp()-interval '1 minute','$actor_id'),
+    ('$application_root','$organization_id','application','$application_key',pg_catalog.clock_timestamp()-interval '1 minute','$actor_id');
   insert into vortex_definition.drafts (root_id, draft_revision, draft_source, source_contract_version, source_fingerprint, updated_at, updated_by)
-  values ('$application_root',1,pg_catalog.jsonb_build_object('source_contract_version','1.0.0','kind','application','key','$application_key'),
-    '1.0.0',$source_fingerprint,pg_catalog.statement_timestamp(),'$actor_id');
+  values
+    ('$module_root',1,pg_catalog.jsonb_build_object('source_contract_version','1.0.0','kind','module','key','$module_key'),
+      '1.0.0',$module_source_fingerprint,pg_catalog.statement_timestamp(),'$actor_id'),
+    ('$application_root',1,pg_catalog.jsonb_build_object('source_contract_version','1.0.0','kind','application','key','$application_key'),
+      '1.0.0',$source_fingerprint,pg_catalog.statement_timestamp(),'$actor_id');
   delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   select vortex_context.initialize(pg_catalog.jsonb_build_object(
     'callerKind','system','tenantId','$tenant_id','organizationId','$organization_id',
     'sessionId','$session_id','issuedAt',pg_catalog.clock_timestamp()-interval '1 minute',
     'expiresAt',pg_catalog.clock_timestamp()+interval '5 minutes','accessVersion',1,
     'correlationId','e2${run_uuid:2}','systemActorId','$actor_id','authenticationStrength','service'));
+  select * from vortex_definition.append_release('$module_root', 1, $module_source_fingerprint,
+    pg_catalog.jsonb_build_object(
+      'releaseVersion','1.0.0',
+      'compilationOutput',pg_catalog.jsonb_build_object(
+        'kind','module','validationContractVersion','1.0.0','resolutionFingerprint',$module_resolution_fingerprint,
+        'artifact',pg_catalog.jsonb_build_object('kind','module','rootId','$module_root',
+          'definitionKey','$module_key','exactVersion','1.0.0',
+          'contentFingerprint',$module_content_fingerprint,
+          'resolutionFingerprint',$module_resolution_fingerprint),
+        'canonical',pg_catalog.jsonb_build_object(
+          'envelope',pg_catalog.jsonb_build_object('kind','module','key','$module_key',
+            'rootId','$module_root','organizationId','$organization_id'),
+          'content',pg_catalog.jsonb_build_object(
+            'recordTypes',pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+              'recordTypeId','$record_type','storageContractId','$storage_contract',
+              'storageScope','application_contained','ownershipMode','organization_account',
+              'fields',pg_catalog.jsonb_build_array(
+                pg_catalog.jsonb_build_object('fieldId','$field_one','type','text'),
+                pg_catalog.jsonb_build_object('fieldId','$field_two','type','text')))),
+            'permissions','[]'::jsonb))),
+      'resolutionSnapshot',pg_catalog.jsonb_build_object('fingerprint',$module_resolution_fingerprint,
+        'definitions',pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('kind','module',
+          'key','$module_key','rootId','$module_root','exactVersion','1.0.0'))),
+      'contentFingerprint',$module_content_fingerprint,
+      'resolutionFingerprint',$module_resolution_fingerprint,
+      'validationContractVersion','1.0.0','comparisonFingerprint',$module_content_fingerprint,
+      'impactReasons','[]'::jsonb,'releaseNote','Protected share race field release.',
+      'dependencies','[]'::jsonb));
   select * from vortex_definition.append_release('$application_root', 1, $source_fingerprint,
     pg_catalog.jsonb_build_object(
       'releaseVersion','1.0.0',
@@ -380,7 +418,11 @@ run_sql "
           'key','$application_key','rootId','$application_root','exactVersion','1.0.0'))),
       'contentFingerprint',$content_fingerprint,'resolutionFingerprint',$resolution_fingerprint,
       'validationContractVersion','1.0.0','comparisonFingerprint',$content_fingerprint,
-      'impactReasons','[]'::jsonb,'releaseNote','Protected share race release.','dependencies','[]'::jsonb));
+      'impactReasons','[]'::jsonb,'releaseNote','Protected share race release.',
+      'dependencies',pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'kind','module','key','$module_key','rootId','$module_root','releaseRevision',1,
+        'releaseVersion','1.0.0','contentFingerprint',$module_content_fingerprint,
+        'resolutionFingerprint',$module_resolution_fingerprint))));
   delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   with release_value as (
     select pg_catalog.jsonb_build_object('kind','application','definitionKey','$application_key',

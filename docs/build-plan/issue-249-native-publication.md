@@ -124,6 +124,7 @@ Replace the closed kind, reference-shape and target-shape constraints to admit e
 ### Existing functions to replace additively
 
 - `vortex_definition.append_release`
+  - validates every newly published record permission's canonical field-policy shape and exact field ownership before storage: Module permissions use that Module candidate; Application permissions use only the exact Module revisions in the dependency manifest. It does not revalidate or rewrite historical releases.
   - validate the exact platform-block JSON key set;
   - reject nil/noncanonical block IDs, unstable versions and malformed fingerprints;
   - include block ID in duplicate-subject detection;
