@@ -7,6 +7,20 @@ set -euo pipefail
 
 case "$*" in
   *server_version_num*) printf '%s\n' "${VORTEX_TEST_SERVER_VERSION_NUM:-170000}" ;;
+  *database-state-snapshot.sql*)
+    snapshot_call=1
+    if [ -n "${VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER:-}" ]; then
+      if [ -f "$VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER" ]; then
+        snapshot_call="$(( $(<"$VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER") + 1 ))"
+      fi
+      printf '%s\n' "$snapshot_call" >"$VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER"
+    fi
+    if [ "$snapshot_call" -gt 1 ] && [ -n "${VORTEX_TEST_POST_DATABASE_STATE_SNAPSHOT:-}" ]; then
+      printf '%s\n' "$VORTEX_TEST_POST_DATABASE_STATE_SNAPSHOT"
+    else
+      printf '%s\n' "${VORTEX_TEST_DATABASE_STATE_SNAPSHOT:-snapshot-v1}"
+    fi
+    ;;
   *to_regclass*)
     if [ "${VORTEX_TEST_EMPTY_HISTORY:-false}" = "true" ]; then printf 'f\n'; else printf 't\n'; fi
     ;;

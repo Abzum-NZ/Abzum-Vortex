@@ -438,6 +438,16 @@ jq \
 mv \
   "$fixture_checkout/workflows/kestra/database-verification.json.next" \
   "$fixture_checkout/workflows/kestra/database-verification.json"
+jq \
+  --arg proof "$parity_proof" \
+  '.groups |= map(if .id == "record-runtime" then
+     .concurrencyPatterns += [$proof] | .lintSchemas += ["vortex_runner_parity"]
+   else . end)' \
+  "$fixture_checkout/workflows/kestra/database-verification-selection.json" \
+  >"$fixture_checkout/workflows/kestra/database-verification-selection.json.next"
+mv \
+  "$fixture_checkout/workflows/kestra/database-verification-selection.json.next" \
+  "$fixture_checkout/workflows/kestra/database-verification-selection.json"
 parity_proof_count="$((verification_proof_count + 1))"
 readonly parity_proof_count
 parity_lint_schema_count="$((verification_lint_schema_count + 1))"
@@ -448,6 +458,7 @@ git -C "$fixture_checkout" add --all -- \
   supabase/migrations \
   supabase/tests \
   workflows/kestra/database-verification.json \
+  workflows/kestra/database-verification-selection.json \
   workflows/kestra/scripts/run-database-delivery.sh
 git -C "$fixture_checkout" commit --quiet -m "Create newer protected runner fixture"
 fixture_commit="$(git -C "$fixture_checkout" rev-parse HEAD)"
@@ -740,14 +751,15 @@ while read -r proof; do
   }
 done < <(jq --raw-output '.concurrencyProofs[].proof' \
   "$fixture_checkout/workflows/kestra/database-verification.json")
-expected_lint_schemas="$(jq --raw-output '.lintSchemas | join(",")' \
-  "$fixture_checkout/workflows/kestra/database-verification.json")"
-grep --fixed-strings --quiet \
-  "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema $expected_lint_schemas --level warning --fail-on error" \
-  "$VORTEX_TEST_SUPABASE_CALL_MARKER" || {
-  echo "expected the successful full run to lint every selected schema" >&2
-  exit 1
-}
+while IFS= read -r expected_lint_schema; do
+  grep --fixed-strings --quiet \
+    "db lint --db-url $VORTEX_TEST_EXPECTED_DATABASE_URL --schema $expected_lint_schema --level warning --fail-on error" \
+    "$VORTEX_TEST_SUPABASE_CALL_MARKER" || {
+    echo "expected the successful full run to lint ${expected_lint_schema}" >&2
+    exit 1
+  }
+done < <(jq --raw-output '.lintSchemas[]' \
+  "$fixture_checkout/workflows/kestra/database-verification.json")
 if ! jq --exit-status \
   --argjson expected_proof_count "$parity_proof_count" \
   '.status == "succeeded" and
@@ -778,6 +790,12 @@ run_logged_bootstrap() {
   fi
 }
 
+set_reuse_candidate() {
+  printf '%s' "$1" >"$test_root/reuse-candidate.json"
+  export VORTEX_REUSE_CANDIDATE_PATH="$test_root/reuse-candidate.json"
+  unset VORTEX_REUSE_CANDIDATE
+}
+
 # Testing first records an actual full result. A later commit outside the complete
 # Supabase/Kestra input fingerprint reuses that direct source after environment and
 # exact migration-history validation, without claiming to have executed the suites.
@@ -794,7 +812,7 @@ unset \
 export VORTEX_GITHUB_COMMIT="$fixture_commit"
 export VORTEX_EXECUTION_ID=testing-full-baseline
 export VORTEX_REUSABLE_BASELINE_PATH=reusable-baseline.json
-export VORTEX_REUSE_CANDIDATE=null
+set_reuse_candidate null
 export VORTEX_FORCE_FULL_VERIFICATION=false
 rm -f \
   "$VORTEX_EVIDENCE_PATH" \
@@ -811,11 +829,23 @@ if ! jq --exit-status \
    .verification.source.commit == .commit and
    .verification.source.execution_id == "testing-full-baseline" and
    .verification.source.evidence_key == ("database-testing-full-" + .commit + "-testing-full-baseline") and
+   .verification.receipt_key == .verification.source.evidence_key and
+   .verification.selection.mode == "full" and
+   .verification.selection.selector_mode == "full" and
+   (.verification.selection.inventory_sha256 | test("^[0-9a-f]{64}$")) and
+   (.verification.selection.selector_sha256 | test("^[0-9a-f]{64}$")) and
+   (.verification.selection.changed_input_sha256 | test("^[0-9a-f]{64}$")) and
+   (.database_state.sha256 | test("^[0-9a-f]{64}$")) and
    .approval == null and
    .postgres_server_version_num == 170000 and
    .completed_sql_suites == .selected_sql_suites and
    .completed_concurrency_proofs == .selected_concurrency_proofs and
    .completed_lint_schemas == .selected_lint_schemas and
+   .required_checks == .executed_checks and
+   (.reused_checks | length) == 0 and
+   (.required_checks | length) == ((.selected_sql_suites + .selected_concurrency_proofs + .selected_lint_schemas) | length) and
+   . as $receipt |
+   all(.executed_checks[]; .source.evidence_key == $receipt.verification.receipt_key and (.duration_ms | type == "number")) and
    (.stage_timings_ms.sql_suites | type == "number") and
    ([.stage_timings_ms | keys[] | select(startswith("sql:"))] | length) == (.selected_sql_suites | length) and
    ([.stage_timings_ms | keys[] | select(startswith("proof:"))] | length) == (.selected_concurrency_proofs | length)' \
@@ -823,19 +853,34 @@ if ! jq --exit-status \
   echo "expected the Testing full baseline receipt to have null approval and complete coverage" >&2
   exit 1
 fi
-cmp --silent "$VORTEX_EVIDENCE_PATH" "$VORTEX_REUSABLE_BASELINE_PATH"
+if ! jq --exit-status --slurpfile receipt "$VORTEX_EVIDENCE_PATH" '
+  .schema_version == 1 and .commit == $receipt[0].commit and
+  .execution_id == $receipt[0].execution_id and
+  .receipt_key == $receipt[0].verification.receipt_key and
+  .database_state == $receipt[0].database_state and
+  .receipt == $receipt[0] and
+  (.sources | length) == 1 and
+  .sources[0].verification.receipt_key == $receipt[0].verification.receipt_key and
+  .sources[0].executed_checks == $receipt[0].executed_checks and
+  .sources[0].completed_sql_suites == $receipt[0].completed_sql_suites and
+  .sources[0].completed_concurrency_proofs == $receipt[0].completed_concurrency_proofs and
+  .sources[0].completed_lint_schemas == $receipt[0].completed_lint_schemas
+' "$VORTEX_REUSABLE_BASELINE_PATH" >/dev/null; then
+  echo "expected a direct fresh-source coverage baseline" >&2
+  exit 1
+fi
 testing_full_baseline="$(<"$VORTEX_REUSABLE_BASELINE_PATH")"
 
-mkdir -p "$fixture_checkout/docs"
-printf '%s\n' '# Reuse fixture outside database verification inputs.' \
-  >"$fixture_checkout/docs/testing-verification-reuse-fixture.md"
-git -C "$fixture_checkout" add docs/testing-verification-reuse-fixture.md
-git -C "$fixture_checkout" commit --quiet -m "Create unchanged-input reuse fixture"
+selected_sql_suite="supabase/tests/000_database_foundation.test.sql"
+printf '%s\n' '-- Direct selected verification fixture.' \
+  >>"$fixture_checkout/$selected_sql_suite"
+git -C "$fixture_checkout" add "$selected_sql_suite"
+git -C "$fixture_checkout" commit --quiet -m "Change one database verification check"
 reuse_commit="$(git -C "$fixture_checkout" rev-parse HEAD)"
 git -C "$fixture_checkout" push --quiet origin HEAD:testing
 export VORTEX_GITHUB_COMMIT="$reuse_commit"
 export VORTEX_EXECUTION_ID=testing-reused
-export VORTEX_REUSE_CANDIDATE="$testing_full_baseline"
+set_reuse_candidate "$testing_full_baseline"
 
 # A database patch-level change invalidates an otherwise identical baseline.
 # This still uses the complete path because the original proof covered a
@@ -854,36 +899,127 @@ jq --exit-status \
 grep --quiet '^db push ' "$VORTEX_TEST_SUPABASE_CALL_MARKER"
 unset VORTEX_TEST_SERVER_VERSION_NUM
 
+assert_candidate_forces_full() {
+  local name="$1"
+  local candidate_filter="$2"
+  export VORTEX_EXECUTION_ID="testing-${name}"
+  set_reuse_candidate "$(jq --compact-output "$candidate_filter" <<<"$testing_full_baseline")"
+  rm -f \
+    "$VORTEX_EVIDENCE_PATH" \
+    "$VORTEX_REUSABLE_BASELINE_PATH" \
+    "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+  run_logged_bootstrap "Testing ${name} source refusal" "$test_root/testing-${name}.log"
+  jq --exit-status '
+    .verification.mode == "full" and
+    .executed_checks == .required_checks and
+    (.reused_checks | length) == 0
+  ' "$VORTEX_EVIDENCE_PATH" >/dev/null
+  grep --quiet '^db push ' "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+}
+
+assert_candidate_identity_forces_full() {
+  local name="$1"
+  local candidate_filter="$2"
+  export VORTEX_DELIVERY_OPERATION=prepare
+  export VORTEX_EXECUTION_ID="testing-${name}"
+  set_reuse_candidate "$(jq --compact-output "$candidate_filter" <<<"$testing_full_baseline")"
+  rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_REUSABLE_BASELINE_PATH"
+  run_logged_bootstrap "Testing ${name} identity refusal" "$test_root/testing-${name}.log"
+  jq --exit-status '
+    .status == "prepared" and
+    .verification.mode == "prepared" and
+    .verification.selection.mode == "full" and
+    .verification.selection.executedChecks == .verification.selection.requiredChecks and
+    (.verification.selection.reusedChecks | length) == 0
+  ' "$VORTEX_EVIDENCE_PATH" >/dev/null
+  export VORTEX_DELIVERY_OPERATION=apply
+}
+
+assert_candidate_forces_full malformed-source 'del(.sources[0].executed_checks)'
+assert_candidate_forces_full incomplete-source '.sources[0].completed_sql_suites = []'
+assert_candidate_forces_full foreign-source '.sources[0].repository = "Other/Repository"'
+assert_candidate_forces_full replayed-source '.sources[0].execution_id = "replayed-source"'
+assert_candidate_forces_full failed-source '.sources[0].status = "failed"'
+assert_candidate_forces_full reuse-chain '.sources[0].executed_checks[0].disposition = "reused"'
+assert_candidate_forces_full altered-baseline ".commit = \"$commit\""
+assert_candidate_identity_forces_full correlated-commit-tampering \
+  ".commit = \"$commit\" | .receipt.commit = \"$commit\" | .receipt.verification.selection.target = \"$commit\""
+assert_candidate_identity_forces_full correlated-execution-tampering \
+  '.execution_id = "tampered-execution" | .receipt.execution_id = "tampered-execution"'
+assert_candidate_identity_forces_full correlated-key-tampering \
+  '.receipt_key = "database-testing-full-0000000000000000000000000000000000000001-tampered" |
+   .receipt.verification.receipt_key = .receipt_key'
+assert_candidate_identity_forces_full unsupported-baseline-mode \
+  '.receipt.verification.mode = "aggregate"'
+
+export VORTEX_EXECUTION_ID=testing-state-drift
+set_reuse_candidate "$testing_full_baseline"
+export VORTEX_TEST_DATABASE_STATE_SNAPSHOT=snapshot-drifted
+rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_REUSABLE_BASELINE_PATH" "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+run_logged_bootstrap "Testing database state drift" "$test_root/testing-state-drift.log"
+jq --exit-status '.verification.mode == "full" and .executed_checks == .required_checks' \
+  "$VORTEX_EVIDENCE_PATH" >/dev/null
+unset VORTEX_TEST_DATABASE_STATE_SNAPSHOT
+
+export VORTEX_EXECUTION_ID=testing-post-state-change
+set_reuse_candidate "$testing_full_baseline"
+export VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER="$test_root/post-state-counter"
+export VORTEX_TEST_POST_DATABASE_STATE_SNAPSHOT=snapshot-changed-during-selected-run
+rm -f \
+  "$VORTEX_EVIDENCE_PATH" \
+  "$VORTEX_REUSABLE_BASELINE_PATH" \
+  "$VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER"
+if "$older_bootstrap" >"$test_root/testing-post-state-change.log" 2>&1; then
+  echo "expected a selected run with post-verification state change to fail" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet 'database state changed during selected verification' \
+  "$test_root/testing-post-state-change.log"
+test ! -e "$VORTEX_EVIDENCE_PATH"
+test "$(<"$VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER")" = 2
+unset VORTEX_TEST_POST_DATABASE_STATE_SNAPSHOT VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER
+
 rm -f \
   "$VORTEX_EVIDENCE_PATH" \
   "$VORTEX_REUSABLE_BASELINE_PATH" \
   "$VORTEX_TEST_SUPABASE_CALL_MARKER" \
   "$VORTEX_TEST_PG_PROVE_MARKER" \
   "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-run_logged_bootstrap "Testing unchanged-input reuse" "$test_root/testing-reused.log"
+export VORTEX_EXECUTION_ID=testing-selected
+set_reuse_candidate "$testing_full_baseline"
+run_logged_bootstrap "Testing selected direct check" "$test_root/testing-reused.log"
 jq --exit-status \
   --arg source_commit "$fixture_commit" \
+  --arg selected_sql_suite "$selected_sql_suite" \
   '.schema_version == 3 and
    .status == "succeeded" and
    .commit == env.VORTEX_GITHUB_COMMIT and
-   .verification.mode == "reused" and
-   .verification.source.commit == $source_commit and
-   .verification.source.execution_id == "testing-full-baseline" and
-   .completed_sql_suites == [] and
+   .verification.mode == "selected" and
+   .verification.source == null and
+   .verification.baseline.commit == $source_commit and
+   .verification.baseline.execution_id == "testing-full-baseline" and
+   .selected_sql_suites == [$selected_sql_suite] and
+   .completed_sql_suites == [$selected_sql_suite] and
    .completed_concurrency_proofs == [] and
    .completed_lint_schemas == [] and
+   (.executed_checks | map(.id)) == ["sql:000_database_foundation"] and
+   (.reused_checks | length) > 0 and
+   ((.executed_checks + .reused_checks | sort_by(.id)) == .required_checks) and
+   all(.reused_checks[]; .source.commit == $source_commit and .source.execution_id == "testing-full-baseline") and
    .applied_migration_count == (.migrations | length)' \
   "$VORTEX_EVIDENCE_PATH" >/dev/null
 test ! -e "$VORTEX_TEST_SUPABASE_CALL_MARKER"
-test ! -e "$VORTEX_TEST_PG_PROVE_MARKER"
+test "$(<"$VORTEX_TEST_PG_PROVE_MARKER")" = "$selected_sql_suite"
 test ! -e "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-jq --sort-keys . <<<"$testing_full_baseline" >"$test_root/expected-baseline.json"
-jq --sort-keys . "$VORTEX_REUSABLE_BASELINE_PATH" >"$test_root/actual-baseline.json"
-cmp --silent "$test_root/expected-baseline.json" "$test_root/actual-baseline.json"
+jq --exit-status '
+  .schema_version == 1 and .commit == env.VORTEX_GITHUB_COMMIT and
+  (.sources | length) == 2 and
+  ([.sources[].verification.mode] | sort) == ["full", "selected"]
+' "$VORTEX_REUSABLE_BASELINE_PATH" >/dev/null
+selected_baseline="$(<"$VORTEX_REUSABLE_BASELINE_PATH")"
 
-# The Production reader follows the reused receipt directly to the actual full
-# source receipt and accepts neither a reuse chain nor empty executed coverage as
-# if it were a new full run.
+# Production deliberately rejects selected receipts until a separately reviewed
+# aggregate consumer exists; it cannot mistake one direct source for full coverage.
 testing_reused_evidence="$(<"$VORTEX_EVIDENCE_PATH")"
 
 # Re-running the original commit creates a distinct immutable full-source key;
@@ -909,7 +1045,7 @@ export VORTEX_TESTING_EVIDENCE="$(
     <<<"$testing_reused_evidence"
 )"
 export VORTEX_TESTING_FULL_SOURCE_EVIDENCE="$(
-  jq --compact-output '.database_project_ref = "abflfptnguasinoussws"' \
+  jq --compact-output '.sources[0].database_project_ref = "abflfptnguasinoussws" | .sources[0]' \
     <<<"$testing_full_baseline"
 )"
 git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$reuse_commit"
@@ -922,15 +1058,13 @@ export VORTEX_GITHUB_COMMIT="$reuse_commit"
 export VORTEX_EXECUTION_ID=production-from-reused-testing
 export VORTEX_TESTING_COMMIT="$reuse_commit"
 rm -f "$VORTEX_EVIDENCE_PATH"
-run_logged_bootstrap \
-  "Production direct reused-source consumption" \
-  "$test_root/production-reused-source.log"
-jq --exit-status \
-  '.status == "succeeded" and
-   .environment == "production" and
-   .approval.testing_commit == env.VORTEX_TESTING_COMMIT and
-   .approval.testing_execution_id == "testing-reused"' \
-  "$VORTEX_EVIDENCE_PATH" >/dev/null
+if "$older_bootstrap" >"$test_root/production-selected-refusal.log" 2>&1; then
+  echo "expected Production to reject a selected Testing receipt" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  'stored Testing evidence has an unsupported verification mode' \
+  "$test_root/production-selected-refusal.log"
 
 export VORTEX_DELIVERY_ENVIRONMENT=testing
 export VORTEX_EXPECTED_REF=refs/heads/testing
@@ -941,6 +1075,39 @@ unset \
   VORTEX_TESTING_COMMIT \
   VORTEX_TESTING_EVIDENCE \
   VORTEX_TESTING_FULL_SOURCE_EVIDENCE
+
+# A descendant with no changed paths executes nothing and still proves complete
+# coverage through the same direct fresh receipts, without creating a chain.
+git -C "$fixture_checkout" commit --quiet --allow-empty -m "Create unchanged verification descendant"
+unchanged_commit="$(git -C "$fixture_checkout" rev-parse HEAD)"
+git -C "$fixture_checkout" push --quiet origin HEAD:testing
+export VORTEX_GITHUB_COMMIT="$unchanged_commit"
+export VORTEX_EXECUTION_ID=testing-unchanged
+set_reuse_candidate "$selected_baseline"
+export VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER="$test_root/unchanged-state-counter"
+rm -f \
+  "$VORTEX_EVIDENCE_PATH" \
+  "$VORTEX_REUSABLE_BASELINE_PATH" \
+  "$VORTEX_TEST_SUPABASE_CALL_MARKER" \
+  "$VORTEX_TEST_PG_PROVE_MARKER" \
+  "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER" \
+  "$VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER"
+run_logged_bootstrap "Testing unchanged descendant" "$test_root/testing-unchanged.log"
+jq --exit-status '
+  .verification.mode == "selected" and
+  (.executed_checks | length) == 0 and
+  .required_checks == .reused_checks and
+  .selected_sql_suites == [] and .completed_sql_suites == [] and
+  .selected_concurrency_proofs == [] and .completed_concurrency_proofs == [] and
+  .selected_lint_schemas == [] and .completed_lint_schemas == []
+' "$VORTEX_EVIDENCE_PATH" >/dev/null
+test "$(<"$VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER")" = 2
+unset VORTEX_TEST_DATABASE_STATE_SNAPSHOT_COUNTER
+test ! -e "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+test ! -e "$VORTEX_TEST_PG_PROVE_MARKER"
+test ! -e "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+jq --exit-status '(.sources | length) == 2 and all(.sources[]; (.executed_checks | length) > 0)' \
+  "$VORTEX_REUSABLE_BASELINE_PATH" >/dev/null
 
 # Any change under Supabase or the Kestra operations boundary refuses reuse and
 # executes the complete path. The successful result becomes the new full source.
@@ -980,7 +1147,7 @@ force_full_commit="$(git -C "$fixture_checkout" rev-parse HEAD)"
 git -C "$fixture_checkout" push --quiet origin HEAD:testing
 export VORTEX_GITHUB_COMMIT="$force_full_commit"
 export VORTEX_EXECUTION_ID=testing-force-full
-export VORTEX_REUSE_CANDIDATE="$changed_input_baseline"
+set_reuse_candidate "$changed_input_baseline"
 export VORTEX_FORCE_FULL_VERIFICATION=true
 rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_TEST_SUPABASE_CALL_MARKER"
 run_logged_bootstrap "Testing operator-forced full path" "$test_root/testing-force-full.log"

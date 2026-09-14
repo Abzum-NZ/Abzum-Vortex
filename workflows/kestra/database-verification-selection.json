@@ -136,6 +136,7 @@
     "tooling/supabase/*",
     "workflows/kestra/database-verification.json",
     "workflows/kestra/database-verification-selection.json",
+    "workflows/kestra/database-state-snapshot.sql",
     "workflows/kestra/scripts/run-database-delivery.sh",
     "workflows/kestra/scripts/select-database-verification.sh",
     "workflows/kestra/tests/select-database-verification.test.sh"

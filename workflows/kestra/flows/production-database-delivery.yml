@@ -44,6 +44,19 @@ tasks:
     key: "database-testing-{{ outputs.await_approval.onResume.testing_commit }}"
     errorOnMissing: true
 
+  - id: validate_testing_evidence_form
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - >-
+        case "$VORTEX_TESTING_VERIFICATION_MODE" in
+          full|reused) ;;
+          *) echo "unsupported Testing verification receipt form" >&2; exit 1 ;;
+        esac
+    env:
+      VORTEX_TESTING_VERIFICATION_MODE: "{{ outputs.load_testing_evidence.value.verification.mode }}"
+
   - id: load_testing_full_source_evidence
     type: io.kestra.plugin.core.kv.Get
     namespace: vortex.operations

@@ -9,6 +9,9 @@ readonly EXPECTED_POSTGRES_MAJOR="17"
 readonly EXPECTED_TESTING_DATABASE_PROJECT_REF="abflfptnguasinoussws"
 readonly COMMIT_RUNNER_PATH="workflows/kestra/scripts/run-database-delivery.sh"
 readonly VERIFICATION_MANIFEST_PATH="workflows/kestra/database-verification.json"
+readonly VERIFICATION_SELECTION_PATH="workflows/kestra/database-verification-selection.json"
+readonly VERIFICATION_SELECTOR_PATH="workflows/kestra/scripts/select-database-verification.sh"
+readonly DATABASE_STATE_SNAPSHOT_PATH="workflows/kestra/database-state-snapshot.sql"
 readonly KESTRA_EXECUTION_BASE_URL="https://kestra.abzum.com/ui/main/executions/vortex.operations"
 
 monotonic_ms() {
@@ -228,90 +231,258 @@ execution_url() {
     "$KESTRA_EXECUTION_BASE_URL" "$environment" "$execution_id"
 }
 
-candidate_is_reusable() {
-  local source_commit
-  local source_execution_id
-  local source_input_sha256
-  local expected_source_key
-  local expected_source_url
-  local current_migrations_json
+receipt_key() {
+  local mode="$1"
+  local receipt_commit="$2"
+  local execution_id="$3"
+  printf 'database-testing-%s-%s-%s' "$mode" "$receipt_commit" "$execution_id"
+}
 
-  [ "$VORTEX_DELIVERY_ENVIRONMENT" = "testing" ] || return 1
-  [ "${VORTEX_FORCE_FULL_VERIFICATION:-false}" = "false" ] || return 1
-  jq --exit-status 'type == "object"' <<<"$reuse_candidate_json" >/dev/null 2>&1 || return 1
+database_state_snapshot() {
+  psql "$database_url" --no-psqlrc --tuples-only --no-align \
+    --file "$database_state_snapshot_file" |
+    sha256sum | cut -d' ' -f1
+}
 
-  source_commit="$(jq --raw-output '.commit // empty' <<<"$reuse_candidate_json")"
-  source_execution_id="$(jq --raw-output '.execution_id // empty' <<<"$reuse_candidate_json")"
-  is_commit "$source_commit" || return 1
-  [[ "$source_execution_id" =~ ^[A-Za-z0-9-]{1,100}$ ]] || return 1
-  [ "$source_commit" != "$commit" ] || return 1
-  git -C "$checkout" cat-file -e "${source_commit}^{commit}" 2>/dev/null || return 1
-  git -C "$checkout" merge-base --is-ancestor "$source_commit" "$commit" || return 1
-
-  source_input_sha256="$(verification_input_digest "$source_commit")" || return 1
-  [ "$source_input_sha256" = "$verification_input_sha256" ] || return 1
-  expected_source_key="database-testing-full-${source_commit}-${source_execution_id}"
-  expected_source_url="$(execution_url testing "$source_execution_id")"
-  current_migrations_json="$(
-    git -C "$checkout" ls-tree -r --name-only "$commit" -- supabase/migrations |
-      LC_ALL=C sort |
-      jq --raw-input --slurp 'split("\n") | map(select(length > 0))'
-  )"
+candidate_baseline_commit() {
+  local baseline_commit
 
   jq --exit-status \
     --arg repository "$EXPECTED_REPOSITORY" \
-    --arg commit "$source_commit" \
-    --arg execution_id "$source_execution_id" \
-    --arg execution_url "$expected_source_url" \
-    --arg evidence_key "$expected_source_key" \
-    --arg migration_set_sha256 "$migration_set_sha256" \
-    --arg runner_sha256 "$runner_sha256" \
-    --arg manifest_sha256 "$verification_manifest_sha256" \
-    --arg coverage_sha256 "$expected_coverage_sha256" \
-    --arg input_sha256 "$verification_input_sha256" \
-    --arg project_ref "$VORTEX_EXPECTED_DATABASE_PROJECT_REF" \
-    --arg supabase_version "$EXPECTED_SUPABASE_VERSION" \
-    --arg postgres_major "$EXPECTED_POSTGRES_MAJOR" \
-    --arg postgres_server_version_num "$server_version_num" \
-    --argjson migrations "$current_migrations_json" \
-    --argjson selected_sql_suites "$selected_sql_suites_json" \
-    --argjson selected_concurrency_proofs "$selected_concurrency_proofs_json" \
-    --argjson selected_lint_schemas "$selected_lint_schemas_json" \
-    '
-      .schema_version == 3 and
+    --arg project_ref "${VORTEX_EXPECTED_DATABASE_PROJECT_REF:-}" '
+      type == "object" and
+      (keys == ["commit", "database_project_ref", "database_state", "environment",
+        "execution_id", "receipt", "receipt_key", "repository", "schema_version", "sources"]) and
+      .schema_version == 1 and
       .environment == "testing" and
       .repository == $repository and
-      .ref == "refs/heads/testing" and
-      .commit == $commit and
-      .status == "succeeded" and
-      .execution_id == $execution_id and
-      .approval == null and
       .database_project_ref == $project_ref and
+      (.commit | type == "string" and test("^[0-9a-f]{40}$") and ((test("^0{40}$")) | not)) and
+      (.execution_id | type == "string" and test("^[A-Za-z0-9-]{1,100}$")) and
+      (.receipt_key | type == "string" and test("^database-testing-(full|selected)-[0-9a-f]{40}-[A-Za-z0-9-]{1,100}$")) and
+      (.database_state | type == "object" and
+        (keys == ["post_verification_sha256", "pre_verification_sha256",
+          "query_path", "query_sha256", "sha256"]) and
+        .query_path == "workflows/kestra/database-state-snapshot.sql" and
+        (.query_sha256 | test("^[0-9a-f]{64}$")) and
+        (.pre_verification_sha256 | test("^[0-9a-f]{64}$")) and
+        (.post_verification_sha256 | test("^[0-9a-f]{64}$")) and
+        .sha256 == .post_verification_sha256 and
+        (.sha256 | test("^[0-9a-f]{64}$"))) and
+      (.sources | type == "array" and length > 0 and length <= 200 and
+        all(type == "object") and
+        (map(.verification.receipt_key) | unique | length) == length) and
+      (.receipt | type == "object") and
+      (.receipt.schema_version == 3) and
+      (.receipt.environment == "testing") and
+      (.receipt.repository == $repository) and
+      (.receipt.ref == "refs/heads/testing") and
+      (.receipt.status == "succeeded") and
+      (.receipt.approval == null) and
+      (.receipt.database_project_ref == $project_ref) and
+      (.receipt.verification.mode == "full" or .receipt.verification.mode == "selected") and
+      (.receipt.commit == .commit) and
+      (.receipt.execution_id == .execution_id) and
+      (.receipt.verification.receipt_key == .receipt_key) and
+      (.receipt_key == ("database-testing-" + .receipt.verification.mode + "-" +
+        .commit + "-" + .execution_id)) and
+      (.receipt.verification.selection.target == .commit) and
+      (.receipt.database_state == .database_state) and
+      ((.receipt.executed_checks + .receipt.reused_checks | sort_by(.id)) == .receipt.required_checks) and
+      ([.receipt.required_checks[].source.evidence_key] | unique | sort) ==
+        ([.sources[].verification.receipt_key] | sort)
+    ' <<<"$reuse_candidate_json" >/dev/null 2>&1 || return 1
+
+  baseline_commit="$(jq --raw-output '.commit' <<<"$reuse_candidate_json")"
+  [ "$baseline_commit" != "$commit" ] || return 1
+  git -C "$checkout" cat-file -e "${baseline_commit}^{commit}" 2>/dev/null || return 1
+  git -C "$checkout" merge-base --is-ancestor "$baseline_commit" "$commit" || return 1
+  printf '%s\n' "$baseline_commit"
+}
+
+select_verification_coverage() {
+  local baseline_commit="${1:-}"
+  local selector_started_ms="$(monotonic_ms)"
+  local selector_args=(--repository "$checkout" --target "$commit")
+  [ -z "$baseline_commit" ] || selector_args+=(--baseline "$baseline_commit")
+
+  selection_json="$(bash "$verification_selector_file" "${selector_args[@]}")" ||
+    die "database verification selector failed"
+  jq --exit-status '
+    .schemaVersion == 1 and
+    (.selectionSha256 | test("^[0-9a-f]{64}$")) and
+    (.inventorySha256 | test("^[0-9a-f]{64}$")) and
+    (.selectorSha256 | test("^[0-9a-f]{64}$")) and
+    (.changedInputSha256 | test("^[0-9a-f]{64}$")) and
+    (.requiredChecks | type == "array" and length > 0) and
+    ((.executedChecks + .reusedChecks | sort_by(.id)) == .requiredChecks) and
+    ([.executedChecks[].id] | unique | length) == (.executedChecks | length) and
+    ([.reusedChecks[].id] | unique | length) == (.reusedChecks | length) and
+    ([.executedChecks[].id] - [.reusedChecks[].id] | length) == (.executedChecks | length)
+  ' <<<"$selection_json" >/dev/null || die "database verification selector returned an invalid contract"
+  [ "$(jq --raw-output '.target' <<<"$selection_json")" = "$commit" ] ||
+    die "database verification selector returned the wrong target"
+  selector_mode="$(jq --raw-output '.mode' <<<"$selection_json")"
+  record_stage_timing verification_selection "$selector_started_ms"
+}
+
+force_full_coverage() {
+  local reason="$1"
+  selection_json="$(jq --compact-output --arg reason "$reason" '
+    .mode = "full" |
+    .fullCoverageReasons = ((.fullCoverageReasons + [$reason]) | unique | sort) |
+    .requiredChecks = [.requiredChecks[] |
+      .disposition = "executed" |
+      .reasons = ((.reasons + [$reason]) | unique | sort)] |
+    .executedChecks = .requiredChecks |
+    .reusedChecks = []
+  ' <<<"$selection_json")"
+}
+
+set_selected_lists_from_coverage() {
+  selected_sql_suites_json="$(jq --compact-output '[.executedChecks[] | select(.kind == "sql") | .target]' <<<"$selection_json")"
+  selected_concurrency_proofs_json="$(jq --compact-output '[.executedChecks[] | select(.kind == "concurrency") | .target]' <<<"$selection_json")"
+  selected_lint_schemas_json="$(jq --compact-output '[.executedChecks[] | select(.kind == "lint") | .target]' <<<"$selection_json")"
+}
+
+source_receipt_for_check() {
+  local check_id="$1"
+  local relevant_input_sha256="$2"
+  jq --compact-output \
+    --arg id "$check_id" --arg relevant "$relevant_input_sha256" '
+      [.sources[] | select(
+        any(.executed_checks[]?;
+          .id == $id and
+          .disposition == "executed" and
+          .relevantInputSha256 == $relevant
+        )
+      )] | if length == 1 then .[0] else empty end
+    ' <<<"$reuse_candidate_json"
+}
+
+validate_direct_source_receipt() {
+  local source_json="$1"
+  local check_json="$2"
+  local check_id kind target relevant source_commit source_execution_id source_mode expected_key
+  check_id="$(jq --raw-output '.id' <<<"$check_json")"
+  kind="$(jq --raw-output '.kind' <<<"$check_json")"
+  target="$(jq --raw-output '.target' <<<"$check_json")"
+  relevant="$(jq --raw-output '.relevantInputSha256' <<<"$check_json")"
+  source_commit="$(jq --raw-output '.commit // empty' <<<"$source_json")"
+  source_execution_id="$(jq --raw-output '.execution_id // empty' <<<"$source_json")"
+  source_mode="$(jq --raw-output '.verification.mode // empty' <<<"$source_json")"
+  case "$source_mode" in full | selected) ;; *) return 1 ;; esac
+  is_commit "$source_commit" || return 1
+  [[ "$source_execution_id" =~ ^[A-Za-z0-9-]{1,100}$ ]] || return 1
+  git -C "$checkout" cat-file -e "${source_commit}^{commit}" 2>/dev/null || return 1
+  git -C "$checkout" merge-base --is-ancestor "$source_commit" "$baseline_commit" || return 1
+  expected_key="$(receipt_key "$source_mode" "$source_commit" "$source_execution_id")"
+
+  jq --exit-status \
+    --arg repository "$EXPECTED_REPOSITORY" --arg commit "$source_commit" \
+    --arg execution_id "$source_execution_id" --arg receipt_key "$expected_key" \
+    --arg execution_url "$(execution_url testing "$source_execution_id")" \
+    --arg project_ref "$VORTEX_EXPECTED_DATABASE_PROJECT_REF" \
+    --arg migration_set_sha256 "$migration_set_sha256" \
+    --arg runner_sha256 "$runner_sha256" --arg manifest_sha256 "$verification_manifest_sha256" \
+    --arg selector_sha256 "$verification_selector_sha256" \
+    --arg inventory_sha256 "$(jq --raw-output '.inventorySha256' <<<"$selection_json")" \
+    --arg state_query_sha256 "$database_state_snapshot_query_sha256" \
+    --arg state_sha256 "$database_state_sha256" \
+    --arg server_version_num "$server_version_num" \
+    --arg supabase_version "$EXPECTED_SUPABASE_VERSION" \
+    --arg postgres_major "$EXPECTED_POSTGRES_MAJOR" \
+    --arg check_id "$check_id" --arg kind "$kind" --arg target "$target" --arg relevant "$relevant" '
+      .schema_version == 3 and .environment == "testing" and
+      .repository == $repository and .ref == "refs/heads/testing" and
+      .commit == $commit and .execution_id == $execution_id and .status == "succeeded" and
+      .approval == null and .database_project_ref == $project_ref and
       .migration_set_sha256 == $migration_set_sha256 and
-      .migrations == $migrations and
-      .runner.path == "workflows/kestra/scripts/run-database-delivery.sh" and
       .runner.sha256 == $runner_sha256 and
-      .verification_manifest.path == "workflows/kestra/database-verification.json" and
       .verification_manifest.sha256 == $manifest_sha256 and
-      .verification_coverage_sha256 == $coverage_sha256 and
-      .verification.mode == "full" and
-      .verification.input_sha256 == $input_sha256 and
-      .verification.source.evidence_key == $evidence_key and
-      .verification.source.commit == $commit and
-      .verification.source.execution_id == $execution_id and
-      .verification.source.execution_url == $execution_url and
-      .selected_sql_suites == $selected_sql_suites and
-      .completed_sql_suites == $selected_sql_suites and
-      .selected_concurrency_proofs == $selected_concurrency_proofs and
-      .completed_concurrency_proofs == $selected_concurrency_proofs and
-      .selected_lint_schemas == $selected_lint_schemas and
-      .completed_lint_schemas == $selected_lint_schemas and
+      .verification.mode == (if (.verification.mode == "full") then "full" else "selected" end) and
+      .verification.receipt_key == $receipt_key and
+      .verification.execution_url == $execution_url and
+      .verification.selection.selector_sha256 == $selector_sha256 and
+      .verification.selection.inventory_sha256 == $inventory_sha256 and
+      .database_state.query_path == "workflows/kestra/database-state-snapshot.sql" and
+      .database_state.query_sha256 == $state_query_sha256 and
+      .database_state.sha256 == $state_sha256 and
       .supabase_cli_version == $supabase_version and
       (.postgres_major | tostring) == $postgres_major and
-      (.postgres_server_version_num | tostring) == $postgres_server_version_num and
-      .applied_migration_count == (.migrations | length) and
-      (.stage_timings_ms | type == "object")
-    ' <<<"$reuse_candidate_json" >/dev/null 2>&1
+      (.postgres_server_version_num | tostring) == $server_version_num and
+      ([.executed_checks[] | select(
+        .id == $check_id and .kind == $kind and .target == $target and
+        .disposition == "executed" and .relevantInputSha256 == $relevant and
+        .source.evidence_key == $receipt_key and .source.commit == $commit and
+        .source.execution_id == $execution_id and .source.execution_url == $execution_url and
+        (.duration_ms | type == "number" and . >= 0)
+      )] | length) == 1 and
+      (if $kind == "sql" then (.completed_sql_suites | index($target)) != null
+       elif $kind == "concurrency" then (.completed_concurrency_proofs | index($target)) != null
+       else (.completed_lint_schemas | index($target)) != null end)
+    ' <<<"$source_json" >/dev/null 2>&1
+}
+
+validate_reused_coverage() {
+  local check_json source_json used_source_keys='[]'
+
+  [ "$(jq --raw-output '.database_state.query_sha256' <<<"$reuse_candidate_json")" = "$database_state_snapshot_query_sha256" ] || return 1
+  [ "$(jq --raw-output '.database_state.sha256' <<<"$reuse_candidate_json")" = "$database_state_sha256" ] || return 1
+  while IFS= read -r check_json; do
+    source_json="$(source_receipt_for_check "$(jq --raw-output '.id' <<<"$check_json")" "$(jq --raw-output '.relevantInputSha256' <<<"$check_json")")"
+    [ -n "$source_json" ] || return 1
+    validate_direct_source_receipt "$source_json" "$check_json" || return 1
+    used_source_keys="$(jq --compact-output --arg key "$(jq --raw-output '.verification.receipt_key' <<<"$source_json")" '. + [$key] | unique' <<<"$used_source_keys")"
+  done < <(jq --compact-output '.reusedChecks[]' <<<"$selection_json")
+
+  jq --exit-status --argjson used "$used_source_keys" \
+    '([.sources[].verification.receipt_key] | sort) == ($used | sort)' \
+    <<<"$reuse_candidate_json" >/dev/null 2>&1
+}
+
+finalize_coverage_evidence() {
+  local check_json check_id disposition stage duration source_receipt source_json
+  local current_receipt_key current_execution_url
+  current_receipt_key="$(receipt_key "$verification_mode" "$commit" "$VORTEX_EXECUTION_ID")"
+  current_execution_url="$(execution_url testing "$VORTEX_EXECUTION_ID")"
+  required_checks_json='[]'
+  executed_checks_json='[]'
+  reused_checks_json='[]'
+
+  while IFS= read -r check_json; do
+    check_id="$(jq --raw-output '.id' <<<"$check_json")"
+    disposition="$(jq --raw-output '.disposition' <<<"$check_json")"
+    if [ "$disposition" = "executed" ]; then
+      case "$(jq --raw-output '.kind' <<<"$check_json")" in
+        sql) stage="sql:$(jq --raw-output '.target' <<<"$check_json")" ;;
+        concurrency) stage="proof:$(jq --raw-output '.target' <<<"$check_json")" ;;
+        lint) stage="lint:$(jq --raw-output '.target' <<<"$check_json")" ;;
+        *) die "required coverage has an unsupported check kind" ;;
+      esac
+      duration="$(jq --raw-output --arg stage "$stage" '.[$stage] // empty' <<<"$stage_timings_ms_json")"
+      [[ "$duration" =~ ^[0-9]+$ ]] || die "executed check ${check_id} has no timing"
+      source_json="$(jq --null-input --compact-output \
+        --arg key "$current_receipt_key" --arg commit "$commit" \
+        --arg execution_id "$VORTEX_EXECUTION_ID" --arg execution_url "$current_execution_url" \
+        '{evidence_key:$key,commit:$commit,execution_id:$execution_id,execution_url:$execution_url}')"
+      check_json="$(jq --compact-output --argjson source "$source_json" --argjson duration "$duration" \
+        '. + {source:$source,duration_ms:$duration}' <<<"$check_json")"
+      executed_checks_json="$(jq --compact-output --argjson check "$check_json" '. + [$check]' <<<"$executed_checks_json")"
+    else
+      source_receipt="$(source_receipt_for_check "$check_id" "$(jq --raw-output '.relevantInputSha256' <<<"$check_json")")"
+      [ -n "$source_receipt" ] || die "reused check ${check_id} has no direct source receipt"
+      source_json="$(jq --compact-output '{
+        evidence_key:.verification.receipt_key,
+        commit:.commit,
+        execution_id:.execution_id,
+        execution_url:.verification.execution_url
+      }' <<<"$source_receipt")"
+      check_json="$(jq --compact-output --argjson source "$source_json" '. + {source:$source}' <<<"$check_json")"
+      reused_checks_json="$(jq --compact-output --argjson check "$check_json" '. + [$check]' <<<"$reused_checks_json")"
+    fi
+    required_checks_json="$(jq --compact-output --argjson check "$check_json" '. + [$check]' <<<"$required_checks_json")"
+  done < <(jq --compact-output '.requiredChecks[]' <<<"$selection_json")
 }
 
 write_reusable_baseline() {
@@ -322,11 +493,44 @@ write_reusable_baseline() {
   [ ! -L "$VORTEX_REUSABLE_BASELINE_PATH" ] ||
     die "reusable baseline path cannot be a symbolic link"
 
-  if [ "$verification_mode" = "full" ]; then
-    cp "$VORTEX_EVIDENCE_PATH" "$VORTEX_REUSABLE_BASELINE_PATH"
-  else
-    printf '%s\n' "$reuse_candidate_json" >"$VORTEX_REUSABLE_BASELINE_PATH"
+  local sources_json='[]'
+  local check_json source_json source_key
+  while IFS= read -r check_json; do
+    source_json="$(source_receipt_for_check "$(jq --raw-output '.id' <<<"$check_json")" "$(jq --raw-output '.relevantInputSha256' <<<"$check_json")")"
+    [ -n "$source_json" ] || die "reused baseline check has no direct source receipt"
+    source_key="$(jq --raw-output '.verification.receipt_key' <<<"$source_json")"
+    if ! jq --exit-status --arg key "$source_key" \
+      'any(.[]; .verification.receipt_key == $key)' <<<"$sources_json" >/dev/null; then
+      sources_json="$(jq --compact-output --slurp '.[0] + [.[1]]' \
+        <(printf '%s\n' "$sources_json") <(printf '%s\n' "$source_json"))"
+    fi
+  done < <(jq --compact-output '.reusedChecks[]' <<<"$selection_json")
+  if [ "$(jq 'length' <<<"$executed_checks_json")" -gt 0 ]; then
+    source_json="$(jq --compact-output '{
+      schema_version,environment,repository,ref,commit,execution_id,status,approval,
+      database_project_ref,migration_set_sha256,runner,verification_manifest,
+      supabase_cli_version,postgres_major,postgres_server_version_num,
+      database_state,executed_checks,
+      completed_sql_suites,completed_concurrency_proofs,completed_lint_schemas,
+      verification:{mode:.verification.mode,receipt_key:.verification.receipt_key,
+        execution_url:.verification.execution_url,selection:.verification.selection}
+    }' "$VORTEX_EVIDENCE_PATH")"
+    sources_json="$(jq --compact-output --slurp '.[0] + [.[1]]' \
+      <(printf '%s\n' "$sources_json") <(printf '%s\n' "$source_json"))"
   fi
+
+  jq --null-input \
+    --arg schema_version "1" --arg repository "$EXPECTED_REPOSITORY" \
+    --arg project_ref "$VORTEX_EXPECTED_DATABASE_PROJECT_REF" --arg commit "$commit" \
+    --arg execution_id "$VORTEX_EXECUTION_ID" \
+    --arg receipt_key "$(receipt_key "$verification_mode" "$commit" "$VORTEX_EXECUTION_ID")" \
+    --slurpfile sources <(printf '%s\n' "$sources_json") \
+    --slurpfile receipt "$VORTEX_EVIDENCE_PATH" \
+    '{schema_version:($schema_version|tonumber),environment:"testing",repository:$repository,
+      database_project_ref:$project_ref,commit:$commit,execution_id:$execution_id,
+      receipt_key:$receipt_key,database_state:$receipt[0].database_state,
+      receipt:$receipt[0],sources:$sources[0]}' \
+    >"$VORTEX_REUSABLE_BASELINE_PATH"
 }
 
 write_evidence() {
@@ -336,6 +540,11 @@ write_evidence() {
   local database_project_ref="${VORTEX_EXPECTED_DATABASE_PROJECT_REF:-}"
   local total_elapsed_ms="$(( $(monotonic_ms) - run_started_ms ))"
   local verification_source_json='null'
+  local verification_receipt_key='null'
+  local verification_execution_url='null'
+  local verification_baseline_json='null'
+  local database_state_json='null'
+  local selection_summary_json
 
   [ ! -L "$VORTEX_EVIDENCE_PATH" ] || die "evidence path cannot be a symbolic link"
 
@@ -345,6 +554,8 @@ write_evidence() {
   } | jq --raw-input --slurp 'split("\n") | map(select(length > 0))')"
 
   if [ "$status" = "succeeded" ]; then
+    verification_receipt_key="$(jq --null-input --compact-output --arg value "$(receipt_key "$verification_mode" "$commit" "$VORTEX_EXECUTION_ID")" '$value')"
+    verification_execution_url="$(jq --null-input --compact-output --arg value "$(execution_url "$VORTEX_DELIVERY_ENVIRONMENT" "$VORTEX_EXECUTION_ID")" '$value')"
     if [ "$verification_mode" = "full" ]; then
       verification_source_json="$(
         jq --null-input --compact-output \
@@ -359,12 +570,28 @@ write_evidence() {
             execution_url: $execution_url
           }'
       )"
-    else
-      verification_source_json="$(
-        jq --compact-output '.verification.source' <<<"$reuse_candidate_json"
-      )"
     fi
+    if [ -n "$baseline_commit" ]; then
+      verification_baseline_json="$(jq --null-input --compact-output \
+        --arg commit "$baseline_commit" --arg execution_id "$baseline_execution_id" \
+        --arg receipt_key "$baseline_receipt_key" \
+        '{commit:$commit,execution_id:$execution_id,receipt_key:$receipt_key}')"
+    fi
+    database_state_json="$(jq --null-input --compact-output \
+      --arg path "$DATABASE_STATE_SNAPSHOT_PATH" --arg query "$database_state_snapshot_query_sha256" \
+      --arg pre "$pre_verification_database_state_sha256" \
+      --arg post "$database_state_sha256" \
+      '{query_path:$path,query_sha256:$query,sha256:$post,
+        pre_verification_sha256:$pre,post_verification_sha256:$post}')"
   fi
+
+  selection_summary_json="$(jq --compact-output --arg selector_mode "$selector_mode" '{
+    schema_version:.schemaVersion,baseline,target,history_status:.historyStatus,mode,
+    selector_mode:$selector_mode,
+    inventory_sha256:.inventorySha256,selector_sha256:.selectorSha256,
+    changed_input_sha256:.changedInputSha256,selection_sha256:.selectionSha256,
+    changed_paths:.changedPaths,full_coverage_reasons:.fullCoverageReasons
+  }' <<<"$selection_json")"
 
   jq --null-input \
     --arg schema_version "3" \
@@ -392,6 +619,14 @@ write_evidence() {
     --argjson applied_migration_count "$applied_count" \
     --argjson migrations "$migrations_json" \
     --argjson verification_source "$verification_source_json" \
+    --argjson verification_receipt_key "$verification_receipt_key" \
+    --argjson verification_execution_url "$verification_execution_url" \
+    --argjson verification_baseline "$verification_baseline_json" \
+    --argjson verification_selection "$selection_summary_json" \
+    --argjson database_state "$database_state_json" \
+    --slurpfile required_checks <(printf '%s\n' "$required_checks_json") \
+    --slurpfile executed_checks <(printf '%s\n' "$executed_checks_json") \
+    --slurpfile reused_checks <(printf '%s\n' "$reused_checks_json") \
     --argjson selected_sql_suites "$selected_sql_suites_json" \
     --argjson completed_sql_suites "$completed_sql_suites_json" \
     --argjson selected_concurrency_proofs "$selected_concurrency_proofs_json" \
@@ -414,8 +649,16 @@ write_evidence() {
       verification: {
         mode: $verification_mode,
         input_sha256: $verification_input_sha256,
+        receipt_key: $verification_receipt_key,
+        execution_url: $verification_execution_url,
+        baseline: $verification_baseline,
+        selection: $verification_selection,
         source: $verification_source
       },
+      database_state: $database_state,
+      required_checks: $required_checks[0],
+      executed_checks: $executed_checks[0],
+      reused_checks: $reused_checks[0],
       selected_sql_suites: $selected_sql_suites,
       completed_sql_suites: $completed_sql_suites,
       selected_concurrency_proofs: $selected_concurrency_proofs,
@@ -520,17 +763,23 @@ readonly verification_manifest_sha256
   die "checked-out database verification manifest differs from the selected commit"
 validate_verification_manifest
 
-selected_sql_suites_json="$(
-  git -C "$checkout" ls-tree -r --name-only "$commit" -- supabase/tests |
-    grep --extended-regexp '^supabase/tests/[A-Za-z0-9_.-]+[.]sql$' |
-    LC_ALL=C sort |
-    jq --compact-output --raw-input --slurp 'split("\n") | map(select(length > 0))'
-)"
-readonly selected_sql_suites_json
-selected_concurrency_proofs_json="$(jq --compact-output '[.concurrencyProofs[].proof]' "$manifest_file")"
-readonly selected_concurrency_proofs_json
-selected_lint_schemas_json="$(jq --compact-output '.lintSchemas' "$manifest_file")"
-readonly selected_lint_schemas_json
+verification_selection_file="${checkout}/${VERIFICATION_SELECTION_PATH}"
+readonly verification_selection_file
+verification_selector_file="${checkout}/${VERIFICATION_SELECTOR_PATH}"
+readonly verification_selector_file
+database_state_snapshot_file="${checkout}/${DATABASE_STATE_SNAPSHOT_PATH}"
+readonly database_state_snapshot_file
+require_commit_regular_file "$VERIFICATION_SELECTION_PATH" "database verification selection inventory"
+require_commit_regular_file "$VERIFICATION_SELECTOR_PATH" "database verification selector"
+require_commit_regular_file "$DATABASE_STATE_SNAPSHOT_PATH" "database state snapshot query"
+verification_selector_sha256="$(git -C "$checkout" show "${commit}:${VERIFICATION_SELECTOR_PATH}" | sha256sum | cut -d' ' -f1)"
+readonly verification_selector_sha256
+database_state_snapshot_query_sha256="$(git -C "$checkout" show "${commit}:${DATABASE_STATE_SNAPSHOT_PATH}" | sha256sum | cut -d' ' -f1)"
+readonly database_state_snapshot_query_sha256
+
+selected_sql_suites_json='[]'
+selected_concurrency_proofs_json='[]'
+selected_lint_schemas_json='[]'
 expected_coverage_sha256="$(
   jq --compact-output --sort-keys \
     '{concurrency_proofs: [.concurrencyProofs[].proof], lint_schemas: .lintSchemas}' \
@@ -538,6 +787,9 @@ expected_coverage_sha256="$(
     sha256sum | cut -d' ' -f1
 )"
 readonly expected_coverage_sha256
+required_checks_json='[]'
+executed_checks_json='[]'
+reused_checks_json='[]'
 completed_concurrency_proofs_json='[]'
 completed_lint_schemas_json='[]'
 completed_sql_suites_json='[]'
@@ -547,8 +799,32 @@ readonly migration_set_sha256
 verification_input_sha256="$(verification_input_digest "$commit")" ||
   die "database verification inputs are incomplete or invalid"
 readonly verification_input_sha256
-verification_mode="full"
-reuse_candidate_json="${VORTEX_REUSE_CANDIDATE:-null}"
+if [ -n "${VORTEX_REUSE_CANDIDATE_PATH:-}" ]; then
+  [ -f "$VORTEX_REUSE_CANDIDATE_PATH" ] ||
+    die "database verification reuse candidate file is missing"
+  reuse_candidate_json="$(<"$VORTEX_REUSE_CANDIDATE_PATH")"
+else
+  reuse_candidate_json="${VORTEX_REUSE_CANDIDATE:-null}"
+fi
+baseline_commit=""
+baseline_execution_id=""
+baseline_receipt_key=""
+if [ "$VORTEX_DELIVERY_ENVIRONMENT" = "testing" ] &&
+  [ "${VORTEX_FORCE_FULL_VERIFICATION:-false}" = "false" ]; then
+  baseline_commit="$(candidate_baseline_commit || true)"
+fi
+select_verification_coverage "$baseline_commit"
+if [ "$VORTEX_DELIVERY_ENVIRONMENT" != "testing" ] ||
+  [ "${VORTEX_FORCE_FULL_VERIFICATION:-false}" = "true" ]; then
+  force_full_coverage "full:runner-policy"
+fi
+if [ -n "$baseline_commit" ]; then
+  baseline_execution_id="$(jq --raw-output '.execution_id' <<<"$reuse_candidate_json")"
+  baseline_receipt_key="$(jq --raw-output '.receipt_key' <<<"$reuse_candidate_json")"
+fi
+verification_mode="$(jq --raw-output '.mode' <<<"$selection_json")"
+set_selected_lists_from_coverage
+database_state_sha256=""
 record_stage_timing commit_validation "$run_started_ms"
 say "validated ${VORTEX_DELIVERY_ENVIRONMENT} commit ${commit} with migration set ${migration_set_sha256} and verification inputs ${verification_input_sha256}"
 
@@ -838,14 +1114,26 @@ record_stage_timing environment_validation "$environment_started_ms"
 [ -z "$(LC_ALL=C comm -13 "$local_history" "$remote_history")" ] ||
   die "remote migration history does not exactly match the selected commit"
 
-if cmp --silent "$local_history" "$remote_history" && candidate_is_reusable; then
-  verification_mode="reused"
-  applied_count="$(wc -l <"$remote_history" | tr -d '[:space:]')"
-  [[ "$applied_count" =~ ^[0-9]+$ ]] || die "migration history returned an invalid count"
-  write_evidence succeeded "$applied_count"
-  write_reusable_baseline
-  say "reused the direct full verification source $(jq --raw-output '.execution_id' <<<"$reuse_candidate_json"); migration application, SQL suites, concurrency proofs, and lint did not run again"
-  exit 0
+state_snapshot_started_ms="$(monotonic_ms)"
+database_state_sha256="$(database_state_snapshot)"
+[[ "$database_state_sha256" =~ ^[0-9a-f]{64}$ ]] ||
+  die "database state snapshot returned an invalid fingerprint"
+pre_verification_database_state_sha256="$database_state_sha256"
+record_stage_timing database_state_snapshot "$state_snapshot_started_ms"
+
+if [ "$VORTEX_DELIVERY_ENVIRONMENT" = "testing" ] &&
+  [ "$(jq '.reusedChecks | length' <<<"$selection_json")" -gt 0 ]; then
+  if ! cmp --silent "$local_history" "$remote_history" || ! validate_reused_coverage; then
+    force_full_coverage "full:unusable-direct-source-or-database-state"
+    verification_mode="full"
+    set_selected_lists_from_coverage
+    say "selected reuse evidence or database state is not eligible; running full verification"
+  fi
+fi
+
+if [ "$VORTEX_DELIVERY_ENVIRONMENT" = "testing" ] &&
+  [ "$(jq '.executedChecks | length' <<<"$selection_json")" -eq 0 ]; then
+  say "reusing directly authenticated fresh check receipts; no database check will run in this execution"
 fi
 if [ "$VORTEX_DELIVERY_ENVIRONMENT" = "testing" ]; then
   if [ "${VORTEX_FORCE_FULL_VERIFICATION:-false}" = "true" ]; then
@@ -875,8 +1163,12 @@ execution_directory="$PWD"
 readonly execution_directory
 cd "$checkout"
 prepare_database_only_checkout
-run_timed_stage migration_apply \
-  supabase db push --db-url "$database_url" --skip-vault "${migration_flags[@]}" --yes
+if [ "$verification_mode" = "full" ] || ! cmp --silent "$local_history" "$remote_history"; then
+  run_timed_stage migration_apply \
+    supabase db push --db-url "$database_url" --skip-vault "${migration_flags[@]}" --yes
+else
+  say "migration history is already current; running only the selected database checks"
+fi
 run_sql_suites() {
   local sql_suite
   while IFS= read -r sql_suite; do
@@ -894,7 +1186,7 @@ run_sql_suites() {
 }
 run_timed_stage sql_suites run_sql_suites
 
-mapfile -t concurrency_proofs < <(jq --raw-output '.concurrencyProofs[].proof' "$manifest_file")
+mapfile -t concurrency_proofs < <(jq --raw-output '.[]' <<<"$selected_concurrency_proofs_json")
 run_concurrency_proofs() {
   local concurrency_proof
   for concurrency_proof in "${concurrency_proofs[@]}"; do
@@ -908,14 +1200,21 @@ run_concurrency_proofs() {
 }
 run_timed_stage concurrency_proofs run_concurrency_proofs
 
-lint_schemas="$(jq --raw-output '.lintSchemas | join(",")' "$manifest_file")"
-readonly lint_schemas
-run_timed_stage database_lint supabase db lint \
-  --db-url "$database_url" \
-  --schema "$lint_schemas" \
-  --level warning \
-  --fail-on error
-completed_lint_schemas_json="$selected_lint_schemas_json"
+run_database_lint() {
+  local lint_schema
+  while IFS= read -r lint_schema; do
+    run_timed_stage "lint:${lint_schema}" supabase db lint \
+      --db-url "$database_url" \
+      --schema "$lint_schema" \
+      --level warning \
+      --fail-on error || return $?
+    completed_lint_schemas_json="$(
+      jq --compact-output --arg schema "$lint_schema" '. + [$schema]' \
+        <<<"$completed_lint_schemas_json"
+    )"
+  done < <(jq --raw-output '.[]' <<<"$selected_lint_schemas_json")
+}
+run_timed_stage database_lint run_database_lint
 cd "$execution_directory"
 
 jq --exit-status --argjson completed "$completed_concurrency_proofs_json" \
@@ -936,8 +1235,19 @@ cmp --silent "$local_history" "$remote_history" ||
   die "remote migration history does not exactly match the selected commit"
 record_stage_timing post_verification_history "$post_history_started_ms"
 
+post_state_started_ms="$(monotonic_ms)"
+database_state_sha256="$(database_state_snapshot)"
+[[ "$database_state_sha256" =~ ^[0-9a-f]{64}$ ]] ||
+  die "post-verification database state snapshot returned an invalid fingerprint"
+record_stage_timing post_verification_state "$post_state_started_ms"
+if [ "$verification_mode" = "selected" ] &&
+  [ "$database_state_sha256" != "$pre_verification_database_state_sha256" ]; then
+  die "database state changed during selected verification"
+fi
+
 applied_count="$(wc -l <"$remote_history" | tr -d '[:space:]')"
 [[ "$applied_count" =~ ^[0-9]+$ ]] || die "migration history returned an invalid count"
+finalize_coverage_evidence
 write_evidence succeeded "$applied_count"
 write_reusable_baseline
 say "migration, database tests, and lint succeeded; evidence contains no credential"
