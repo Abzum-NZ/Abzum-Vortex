@@ -31,7 +31,7 @@ describe("Kestra deployment image", () => {
     expect(productionFlow).toContain("trigger.body.ref == 'refs/heads/main'");
     expect(testingFlow).toContain("VORTEX_EVIDENCE_PATH: delivery-evidence.json");
     expect(testingFlow).toContain(
-      'reusable-full-baseline-candidate.json: "{{ outputs.load_reusable_full_baseline.value | toJson }}"',
+      'reusable-full-baseline-candidate.json: "{{ (outputs.load_reusable_full_baseline.value ?? null) | toJson }}"',
     );
     expect(testingFlow).toContain(
       "VORTEX_REUSE_CANDIDATE_PATH: reusable-full-baseline-candidate.json",
@@ -57,5 +57,36 @@ describe("Kestra deployment image", () => {
     expect(productionFlow).toContain("VORTEX_TESTING_FULL_SOURCE_EVIDENCE:");
     expect(testingFlow).not.toContain("{{ workingDir }}");
     expect(productionFlow).not.toContain("{{ workingDir }}");
+  });
+
+  it("keeps the executable absent-baseline fixture aligned with the Testing flow", async () => {
+    const [testingFlow, rendererFixture, preparationFixture] = await Promise.all([
+      readFile(
+        resolve(workspaceRoot, "workflows/kestra/flows/testing-database-delivery.yml"),
+        "utf8",
+      ),
+      readFile(
+        resolve(workspaceRoot, "workflows/kestra/tests/fixtures/issue-494-absent-baseline.yml"),
+        "utf8",
+      ),
+      readFile(
+        resolve(workspaceRoot, "workflows/kestra/tests/prepare-absent-baseline.test.sh"),
+        "utf8",
+      ),
+    ]);
+
+    const candidateExpression =
+      'reusable-full-baseline-candidate.json: "{{ (outputs.load_reusable_full_baseline.value ?? null) | toJson }}"';
+    expect(testingFlow).toContain("errorOnMissing: false");
+    expect(testingFlow).toContain(candidateExpression);
+    expect(rendererFixture).toContain(
+      candidateExpression.replaceAll("load_reusable_full_baseline", "load_absent_baseline"),
+    );
+    expect(rendererFixture).toContain(
+      candidateExpression.replaceAll("load_reusable_full_baseline", "load_present_baseline"),
+    );
+    expect(preparationFixture).toContain('.verification.selection.mode == "full"');
+    expect(preparationFixture).toContain("(.reused_checks | length) == 0");
+    expect(preparationFixture).toContain("unset VORTEX_DOPPLER_TOKEN");
   });
 });

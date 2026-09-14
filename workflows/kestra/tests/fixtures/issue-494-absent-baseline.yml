@@ -1,0 +1,48 @@
+id: issue_494_absent_baseline
+namespace: vortex.tests
+description: Exercise optional baseline rendering with the pinned Kestra engine.
+
+tasks:
+  - id: load_absent_baseline
+    type: io.kestra.plugin.core.kv.Get
+    namespace: vortex.tests
+    key: issue-494-absent-baseline
+    errorOnMissing: false
+
+  - id: verify_absent_baseline
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    inputFiles:
+      reusable-full-baseline-candidate.json: "{{ (outputs.load_absent_baseline.value ?? null) | toJson }}"
+    commands:
+      - bash /workspace/workflows/kestra/tests/prepare-absent-baseline.test.sh reusable-full-baseline-candidate.json
+
+  - id: publish_present_baseline
+    type: io.kestra.plugin.core.kv.Set
+    namespace: vortex.tests
+    key: issue-494-present-baseline
+    value: |
+      {
+        "schema_version": 1,
+        "marker": "preserved"
+      }
+    kvType: JSON
+    overwrite: true
+
+  - id: load_present_baseline
+    type: io.kestra.plugin.core.kv.Get
+    namespace: vortex.tests
+    key: issue-494-present-baseline
+
+  - id: verify_present_baseline
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    inputFiles:
+      reusable-full-baseline-candidate.json: "{{ (outputs.load_present_baseline.value ?? null) | toJson }}"
+    commands:
+      - >-
+        jq --exit-status
+        '.schema_version == 1 and .marker == "preserved"'
+        reusable-full-baseline-candidate.json >/dev/null
