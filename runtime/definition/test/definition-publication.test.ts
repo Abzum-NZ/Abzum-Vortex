@@ -593,6 +593,7 @@ describe("Definition publication service", () => {
     expect(repository.pageReads).toBe(pageReadsAfterPrepare);
   });
 
+  // Building 106 authenticated releases can exceed Vitest's default timeout on shared CI.
   it("scans bounded pages and selects the numeric highest compatible stable Module", async () => {
     const dependencySource = sourceNamed("crm.organisations.json");
     const candidateSource = structuredClone(sourceNamed("crm.people.json"));
@@ -618,8 +619,9 @@ describe("Definition publication service", () => {
       releaseVersion: "1.0.104",
       releaseRevision: 105,
     });
-  });
+  }, 15_000);
 
+  // Exercising four 100+ release page faults can exceed the default timeout on shared CI.
   it("refuses oversized, duplicate, backward, and cross-page-corrupt Module pages", async () => {
     const dependencySource = sourceNamed("crm.organisations.json");
     const candidateSource = structuredClone(sourceNamed("crm.people.json"));
@@ -646,7 +648,7 @@ describe("Definition publication service", () => {
         }),
       ).rejects.toMatchObject({ code: "DEFINITION_DEPENDENCY_SUBSTITUTED" });
     }
-  });
+  }, 15_000);
 
   it("uses the same verified module condition evidence for application prepare and publish", async () => {
     const source = structuredClone(applicationSourceNamed("crm.json"));
