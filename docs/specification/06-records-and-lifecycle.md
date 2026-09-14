@@ -78,6 +78,70 @@ See the [save integration plan](../build-plan/issue-47-save-command.md#candidate
 
 This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). A configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) now has a local base ordinary-human create/update implementation over active installed definitions; it remains under review and pending hosted verification. Immediate Rules, calculations/totals, named-action execution and broader relationships retain the later owners in the [save plan](../build-plan/issue-47-save-command.md#supported-now-and-later-owners).
 
+### Private recalculation scope
+
+The existing human `SaveRecordCommandV2` remains the closed input for an
+ordinary create or update. It deliberately contains no actor, organisation,
+Application, installed binding, row-scope, authority declaration or generated
+parent mutation. Parsing a valid command is therefore not authority to use it:
+it cannot construct private Record scope or private recalculation authority.
+
+The trusted human request boundary resolves the session and selected
+organisation/Application into the transaction context before the private Record
+adapter runs. Private preparation derives the active installation, concrete
+record closure, current Access and RLS-visible rows from that context and locked
+database facts; it does not accept a caller-built context, selected parent set,
+or caller assertion that a recalculation is authorised. The narrow runtime-role
+to request-role setting read occurs only after that private preparation; the
+runtime role is restored in a `finally` path before persistence. Any future
+factoring must preserve that ordering and restoration.
+
+A missing, stale, foreign, mismatched, or forged context/setting must fail
+closed before a private snapshot, relationship source, parent mutation, or
+settings-derived calculation is used. In particular, a request role cannot
+install trusted context, and an untrusted setting that names another
+organisation, account, or Application must not widen RLS scope. These are
+scope-construction and ACL/RLS requirements, not an invitation to add another
+system-context mechanism.
+
+This currently describes ordinary-human attribution only. The Record save
+service does not yet invoke a private recalculation as a System or
+specified-account actor, and it must not relabel a human context as system or
+invent system attribution. A distinct trusted execution identity and its
+attribution rules must be designed before any such caller is introduced; they
+are not implicit in the current human save path.
+
+The affected private seams are kept explicit: base preparation and save are
+[`prepare_base_record_save`](../../supabase/migrations/20260913120000_enable_same_record_calculation_saves.sql#L117-L317)
+and [`save_base_record`](../../supabase/migrations/20260913115000_base_protected_record_save.sql#L376-L1008);
+the active installation is resolved by
+[`read_current_active_installation`](../../supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql#L944-L1066);
+the transaction context is stored and read through
+[`request_contexts`](../../supabase/migrations/20260911063404_request_context_transaction_store.sql#L6-L74)
+and scope accessors that read the context established once by the owner-only
+transaction store, whose initializer refuses replacement:
+[`organization_id`](../../supabase/migrations/20260903115546_database_scope_request_role.sql#L334-L342)
+and [`application_root_id`](../../supabase/migrations/20260903115546_database_scope_request_role.sql#L344-L352);
+and generated record tables enforce their policy at
+[`record_storage_provisioning`](../../supabase/migrations/20260908122641_record_storage_provisioning.sql#L638-L663).
+Relationship-total preparation, closure and application remain in
+[`20260914013000_transactional_relationship_totals.sql`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L818),
+while the private Event append retains the human-context boundary in
+[`20260913060000_first_private_transactional_event_append.sql`](../../supabase/migrations/20260913060000_first_private_transactional_event_append.sql#L232-L262).
+Activity append is
+[`append_base_save_activity_internal`](../../supabase/migrations/20260913115000_base_protected_record_save.sql#L71-L179);
+the private total catalogue, snapshot, closure and parent application are at
+[`20260914013000_transactional_relationship_totals.sql`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L738);
+and the two organization-runtime-settings readers are
+[`read_current_organization_runtime_settings_internal`](../../supabase/migrations/20260913110000_organization_runtime_settings.sql#L349-L382)
+and [`read_current_organization_runtime_settings_for_application`](../../supabase/migrations/20260913110000_organization_runtime_settings.sql#L384-L445).
+
+The present Event `organizationAccountId` UUID, Record receipts, and generated
+attribution all assume an account identity. A time-based caller therefore needs
+a deliberately defined trusted identity and compatible attribution before it
+can exist. This is a prerequisite for [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48),
+not a reason to invent a System context in an ordinary-human save.
+
 ## Concurrent changes
 
 Every update request includes the last concurrency number the person received; a create request has no existing concurrency number. If the stored number differs, the save is refused as a conflict. Current values may be returned only when current access permits disclosure. The platform never silently overwrites a later change. The exact request and response boundary is the [record save contract](appendices/data-contracts.md#record-save-command-and-result).
