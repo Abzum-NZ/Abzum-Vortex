@@ -40,9 +40,7 @@ const transfer = async (
   command: ReturnType<typeof transferRecordOwnershipCommandV2Schema.parse>,
   activityId: string,
   occurrenceId: string,
-): Promise<
-  TransferRecordOwnershipResultV2 | "recorded_refusal" | "undisclosed_refusal"
-> => {
+): Promise<TransferRecordOwnershipResultV2 | "recorded_refusal" | "undisclosed_refusal"> => {
   await transaction.query`set local role vortex_runtime`;
   const targetId =
     command.targetKind === "organization_account"
@@ -84,8 +82,7 @@ const transfer = async (
     if (correlationId === undefined) return "undisclosed_refusal";
     return safeRefusal(correlationId, "conflict");
   }
-  if (candidate.outcome !== "refused")
-    throw new Error("RECORD_OWNERSHIP_TRANSFER_RESULT_INVALID");
+  if (candidate.outcome !== "refused") throw new Error("RECORD_OWNERSHIP_TRANSFER_RESULT_INVALID");
   const correlationId =
     typeof candidate.correlationId === "string" ? candidate.correlationId : undefined;
   if (correlationId === undefined) return "undisclosed_refusal";
