@@ -380,6 +380,7 @@ expansion is scheduled; intentional publication caps remain deferred.
 Build:
 
 - Module dependency, install, upgrade and removal planning.
+- [Extension declarations #51](https://github.com/Abzum-NZ/Abzum-Vortex/issues/51) publish named, owned record-type slots for additive fields and actions through the existing exact-release Definition read. Current publication refuses choice-option and link-target declarations; historical release reads remain compatible. Applying contributions remains [#110](https://github.com/Abzum-NZ/Abzum-Vortex/issues/110).
 - Storage generation through ordered [database changes](../specification/18-delivery-and-testing.md#database-changes).
 - All 22 field types, relationships, closed calculations and typed totals through resolved module definitions.
 - Record save sequence, concurrency numbers, reference sequences, uniqueness, ownership and data versions.

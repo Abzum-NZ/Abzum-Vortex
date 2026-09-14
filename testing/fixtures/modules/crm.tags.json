@@ -597,16 +597,7 @@
       }
     ],
     "rules": [],
-    "extension_points": [
-      {
-        "id": "ext_tag_targets",
-        "key": "tag_targets",
-        "record_type": "record_tag",
-        "accepts": [
-          "link_target"
-        ]
-      }
-    ],
+    "extension_points": [],
     "sharing_conditions": []
   }
 }

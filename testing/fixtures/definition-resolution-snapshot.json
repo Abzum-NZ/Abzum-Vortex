@@ -1,6 +1,6 @@
 {
   "contractVersion": "1.0.0",
-  "fingerprint": "sha256:26d1e6c6fd9609374ca0b2d8c09839dcf9bfdbfb1c1bf828b19cbafdeed0d302",
+  "fingerprint": "sha256:6addabce5daa19f891a8d961ac4fc7a6801113195a0afdb45a46d2a3372d09fc",
   "definitions": [
     {
       "kind": "module",
@@ -436,22 +436,6 @@
       "alias": "vortex.crm.activities.activity.completed",
       "identifier": "546bc959-67ec-442b-afaf-cfc79c70410e",
       "componentOwner": "evt_activity_completed"
-    },
-    {
-      "definitionKey": "vortex.crm.activities",
-      "scope": "content",
-      "kind": "extension_point",
-      "alias": "ext_activity_types",
-      "identifier": "d8b3740c-9395-406c-a228-427e69c141b1",
-      "componentOwner": "ext_activity_types"
-    },
-    {
-      "definitionKey": "vortex.crm.activities",
-      "scope": "content",
-      "kind": "extension_point",
-      "alias": "activity_types",
-      "identifier": "d8b3740c-9395-406c-a228-427e69c141b1",
-      "componentOwner": "ext_activity_types"
     },
     {
       "definitionKey": "vortex.crm.opportunities",
@@ -2796,22 +2780,6 @@
       "alias": "vortex.crm.tags.record_tag.assigned",
       "identifier": "a4e2e560-19a8-4062-a470-97e692954270",
       "componentOwner": "evt_tag_assigned"
-    },
-    {
-      "definitionKey": "vortex.crm.tags",
-      "scope": "content",
-      "kind": "extension_point",
-      "alias": "ext_tag_targets",
-      "identifier": "27ed67ed-4867-47a5-a5fc-1721b86622a1",
-      "componentOwner": "ext_tag_targets"
-    },
-    {
-      "definitionKey": "vortex.crm.tags",
-      "scope": "content",
-      "kind": "extension_point",
-      "alias": "tag_targets",
-      "identifier": "27ed67ed-4867-47a5-a5fc-1721b86622a1",
-      "componentOwner": "ext_tag_targets"
     },
     {
       "definitionKey": "vortex.service_desk.cases",
