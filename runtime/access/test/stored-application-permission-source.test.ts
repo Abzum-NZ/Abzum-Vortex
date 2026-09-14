@@ -5,21 +5,21 @@ import { createStoredApplicationPermissionSource } from "../src/stored-applicati
 
 vi.mock("server-only", () => ({}));
 
-const { read, prepareApplicationRegistration, createReader } = vi.hoisted(() => {
+const { read, prepareFromReleaseSet, createReader } = vi.hoisted(() => {
   const read = vi.fn();
   return {
     read,
-    prepareApplicationRegistration: vi.fn(),
+    prepareFromReleaseSet: vi.fn(),
     createReader: vi.fn(() => ({ read })),
   };
 });
 
 vi.mock("@vortex/definition", () => ({
-  createDatabaseDefinitionConsumerReadService: createReader,
+  createDatabaseSystemApplicationBoundReleaseSetService: createReader,
 }));
 
 vi.mock("../src/permission-registry-definition-adapter", () => ({
-  createPermissionRegistryDefinitionAdapter: () => ({ prepareApplicationRegistration }),
+  prepareApplicationPermissionRegistrationFromReleaseSet: prepareFromReleaseSet,
 }));
 
 const id = (value: number): string => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
@@ -69,8 +69,8 @@ const permissionRegistration: PreparedApplicationPermissionRegistration = {
 
 describe("stored application permission source", () => {
   beforeEach(() => {
-    read.mockReset().mockResolvedValue(applicationRelease);
-    prepareApplicationRegistration.mockReset().mockResolvedValue(permissionRegistration);
+    read.mockReset().mockResolvedValue({ application: applicationRelease, modules: [] });
+    prepareFromReleaseSet.mockReset().mockReturnValue(permissionRegistration);
     createReader.mockClear();
   });
 
@@ -97,15 +97,15 @@ describe("stored application permission source", () => {
       { connectionTypeReleases: [], platformThemeReleases: [] },
       requestTransaction,
     );
-    expect(prepareApplicationRegistration).toHaveBeenCalledWith(systemContext, {
-      applicationRootId,
-      releaseRevision: 5,
-    });
     expect(read).toHaveBeenCalledWith(systemContext, {
-      kind: "application",
-      rootId: applicationRootId,
-      selector: { selection: "revision", releaseRevision: 5 },
+      applicationRootId,
+      applicationReleaseRevision: 5,
     });
+    expect(prepareFromReleaseSet).toHaveBeenCalledWith(
+      systemContext,
+      { applicationRootId, releaseRevision: 5 },
+      { application: applicationRelease, modules: [] },
+    );
   });
 
   it("refuses a mismatched fixed application before opening a request transaction", () => {
@@ -124,7 +124,7 @@ describe("stored application permission source", () => {
 
   it("refuses release evidence from another correlation or registered artifact", async () => {
     const run = async (release: typeof applicationRelease) => {
-      read.mockResolvedValueOnce(release);
+      read.mockResolvedValueOnce({ application: release, modules: [] });
       const source = createStoredApplicationPermissionSource({
         systemContext,
         applicationRootId,

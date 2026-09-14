@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { permissionDeclarationSchema, permissionRecordScopeSchema } from "../src";
 
@@ -76,6 +77,31 @@ describe("permission record scope", () => {
         ],
       }).success,
     ).toBe(false);
+  });
+
+  test("agrees with the shared PostgreSQL parity corpus on every record-scope vector", () => {
+    const sql = readFileSync(
+      new URL("../../supabase/tests/470_permission_record_scope_parity.test.sql", import.meta.url),
+      "utf8",
+    );
+    const matches = [
+      ...sql.matchAll(/\$record_scope_vectors\$([\s\S]*?)\$record_scope_vectors\$/g),
+    ];
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.[1]).toBeDefined();
+
+    type RecordScopeVector = Readonly<{
+      name: string;
+      scope: unknown;
+      valid: boolean;
+    }>;
+    const corpus = JSON.parse(matches[0]![1]!) as { vectors: RecordScopeVector[] };
+    expect(corpus.vectors).toHaveLength(115);
+
+    for (const vector of corpus.vectors)
+      expect(permissionRecordScopeSchema.safeParse(vector.scope).success, vector.name).toBe(
+        vector.valid,
+      );
   });
 
   test("requires exact canonical saved-condition bindings", () => {

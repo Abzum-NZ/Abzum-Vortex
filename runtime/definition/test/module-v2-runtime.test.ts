@@ -1020,9 +1020,159 @@ describe("Module V2 Definition runtime", () => {
     ).toThrow();
   });
 
+  it("refuses unsupported extension capabilities only when publishing a current Module", async () => {
+    for (const capability of ["choice_option", "link_target"] as const) {
+      const source = sourceV2();
+      source.body.extension_points[0]!.accepts = [capability];
+      const resolution = resolutionV2(source);
+      const request = {
+        sourceContractVersion: "2.0.0" as const,
+        validationContractVersion: "2.0.0" as const,
+        source,
+        resolution,
+        draftMetadata: metadata,
+        savedConditionRevisions: savedConditionRevisionsV2(source, resolution),
+      };
+      const candidateOutput = compileDefinition(request);
+      const validation = validateDefinitionSet({
+        requests: [request],
+        outputs: [candidateOutput],
+        publishedHistories: [{ kind: "module", definitionKey: source.key, history: [] }],
+      });
+      expect(validation.failures).toContainEqual(
+        expect.objectContaining({
+          ruleCode: "vortex.definition.module_extension_capabilities",
+          family: "unsupported_choice",
+          location: {
+            documentKind: "module",
+            documentKey: source.key,
+            segments: expect.arrayContaining([
+              { kind: "extension_point", key: "service_level_fields" },
+            ]),
+          },
+        }),
+      );
+      const own = resolution.definitions.find(
+        (definition) => definition.kind === "module" && definition.key === source.key,
+      );
+      if (own?.kind !== "module") throw new Error("Module resolution required");
+      const draft = storedDefinitionDraftSchema.parse({
+        kind: "module",
+        rootId: own.rootId,
+        key: source.key,
+        draftRevision: 1,
+        sourceContractVersion: "2.0.0",
+        sourceFingerprint: fingerprintCanonicalValue(source),
+        source,
+        ...metadata,
+      });
+      const service = createDefinitionPublicationService(
+        new ModuleV2PublicationRepository({
+          draft,
+          identities: resolution.identities.filter(
+            (identity) => identity.definitionKey === source.key,
+          ),
+          history: { kind: "module", definitionKey: source.key, history: [] },
+        }),
+        catalogue,
+      );
+      await expect(
+        service.prepare(context(), {
+          rootId: draft.rootId,
+          expectedDraftRevision: draft.draftRevision,
+        }),
+      ).rejects.toMatchObject({ code: "DEFINITION_COMPILATION_REFUSED" });
+    }
+  });
+
+  it("refuses an extension point that targets a dependency-owned record type", () => {
+    const currentFixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
+    const ownerSource = moduleSourceDocumentV2Schema.parse(
+      JSON.parse(
+        fs.readFileSync(path.join(currentFixtureRoot, "modules/crm.organisations.json"), "utf8"),
+      ),
+    );
+    const dependentSource = moduleSourceDocumentV2Schema.parse(
+      JSON.parse(fs.readFileSync(path.join(currentFixtureRoot, "modules/crm.people.json"), "utf8")),
+    );
+    const currentResolution = definitionResolutionSnapshotV2Schema.parse(
+      JSON.parse(
+        fs.readFileSync(
+          path.join(currentFixtureRoot, "module-v2-definition-resolution-snapshot.json"),
+          "utf8",
+        ),
+      ),
+    );
+    const ownerRequest = {
+      sourceContractVersion: "2.0.0" as const,
+      validationContractVersion: "2.0.0" as const,
+      source: ownerSource,
+      resolution: currentResolution,
+      draftMetadata: metadata,
+      savedConditionRevisions: savedConditionRevisionsV2(ownerSource, currentResolution),
+    };
+    const dependentRequest = {
+      sourceContractVersion: "2.0.0" as const,
+      validationContractVersion: "2.0.0" as const,
+      source: dependentSource,
+      resolution: currentResolution,
+      draftMetadata: metadata,
+      savedConditionRevisions: savedConditionRevisionsV2(dependentSource, currentResolution),
+    };
+    const owner = compileDefinition(ownerRequest);
+    const candidate = structuredClone(compileDefinition(dependentRequest));
+    if (owner.kind !== "module" || candidate.kind !== "module")
+      throw new Error("Module outputs required");
+    const company = owner.canonical.content.recordTypes.find((record) => record.key === "company");
+    if (!company) throw new Error("Dependency-owned record type required");
+    candidate.canonical.content.extensionPoints.push({
+      extensionPointId: "90000000-0000-4000-8000-000000000051",
+      key: "foreign_company_fields",
+      recordTypeId: company.recordTypeId,
+      accepts: ["field"],
+    });
+    const validation = validateDefinitionSet({
+      requests: [dependentRequest],
+      outputs: [candidate],
+      dependencyOutputs: [owner],
+      publishedHistories: [{ kind: "module", definitionKey: dependentSource.key, history: [] }],
+    });
+    expect(validation.failures).toContainEqual(
+      expect.objectContaining({
+        ruleCode: "vortex.definition.module_extension_references",
+        location: expect.objectContaining({
+          segments: expect.arrayContaining([
+            { kind: "extension_point", key: "foreign_company_fields" },
+          ]),
+        }),
+      }),
+    );
+  });
+
   it("publishes, reads, and restores one exact Module V2 release", async () => {
     const source = sourceV2();
+    source.body.extension_points.push({
+      id: "service_level_extra_actions",
+      key: "service_level_extra_actions",
+      record_type: "service_level",
+      accepts: ["action"],
+    });
     const resolution = resolutionV2(source);
+    expect(() =>
+      compileDefinitionSet(
+        [
+          {
+            sourceContractVersion: "2.0.0",
+            validationContractVersion: "2.0.0",
+            source,
+            resolution,
+            draftMetadata: metadata,
+            savedConditionRevisions: savedConditionRevisionsV2(source, resolution),
+          },
+        ],
+        { publishedHistories: [{ kind: "module", definitionKey: source.key, history: [] }] },
+      ),
+    ).not.toThrow();
     const own = resolution.definitions.find(
       (definition) => definition.kind === "module" && definition.key === source.key,
     );
@@ -1073,19 +1223,38 @@ describe("Module V2 Definition runtime", () => {
       dependencyManifest: appended.dependencyManifest,
       moduleDependencyTargets: [],
     };
-    await expect(
-      createDefinitionConsumerReadService({ read: async () => evidence }, catalogue).read(
-        context(),
-        {
-          kind: "module",
-          rootId: draft.rootId,
-          selector: { selection: "revision", releaseRevision: 1 },
-        },
-      ),
-    ).resolves.toMatchObject({
+    const read = await createDefinitionConsumerReadService(
+      { read: async () => evidence },
+      catalogue,
+    ).read(context(), {
+      kind: "module",
+      rootId: draft.rootId,
+      selector: { selection: "revision", releaseRevision: 1 },
+    });
+    expect(read).toMatchObject({
       validationContractVersion: "2.0.0",
       content: appended.compilationOutput.canonical.content,
     });
+    if (read.kind !== "module") throw new Error("Module read required");
+    const serviceLevelId = appended.compilationOutput.canonical.content.recordTypes.find(
+      (record) => record.key === "service_level",
+    )?.recordTypeId;
+    expect(read.content.extensionPoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "service_level_fields",
+          extensionPointId: expect.any(String),
+          recordTypeId: serviceLevelId,
+          accepts: ["field"],
+        }),
+        expect.objectContaining({
+          key: "service_level_extra_actions",
+          extensionPointId: expect.any(String),
+          recordTypeId: serviceLevelId,
+          accepts: ["action"],
+        }),
+      ]),
+    );
 
     const requirements = extractStoredSourceIdentityRequirements(source);
     const identityEvidence = requirements.flatMap((requirement) =>

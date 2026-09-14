@@ -55,7 +55,7 @@ This produces a coherent installation snapshot for discovery. A later protected
 save must still recheck the real active state and binding revision before commit;
 the earlier read is not a successful-authorisation receipt.
 
-## Verification and remaining work
+## Verification and lifecycle integration
 
 Prove an exact shared external Module works while arbitrary external reads,
 wrong context, dependency substitution and partial/mixed active sets fail. Prove
@@ -66,10 +66,16 @@ the real restricted request role and preserve the existing generic reader's
 scope. Test contract parsing, canonical ordering and projector integrity without
 adding another test framework.
 
-Activation remains application-wide and must co-deliver actual permission/event
-readiness and protected Record operations with
-[#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45),
-[#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) and
-[#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64). Upgrade, detach, governed
-non-human execution and full runtime integration retain their owning acceptance.
-Fixture-created active states prove this reader, not a delivered activation path.
+The fixed lifecycle operations now activate or detach the exact complete direct
+and transitive pin set for one Application in a single revision-checked
+transaction. They derive organisation and actor from the trusted request context,
+use Access's current authority/readiness operations, lock Module bindings in
+canonical order, then recheck both Access facts and exact binding evidence. A
+failed activation leaves the provisioned set intact; detach retains storage,
+records and another Application's independent bindings. The reader continues to
+refuse the detached target.
+
+This lower-level lifecycle does not install or upgrade an Application, execute a
+record save, register workflows, or assemble the rendered runtime. Those remain
+with [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) and their owning
+engines. See the [lifecycle evidence](issue-43-application-installation-lifecycle.md).

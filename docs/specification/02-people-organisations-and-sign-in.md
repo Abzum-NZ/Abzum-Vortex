@@ -30,7 +30,7 @@ flowchart TD
 - Tenant identifiers and short names are permanent and unique within one cluster. Organisation identifiers, owning tenants, and short names are permanent; an organisation short name is unique only inside its tenant. Display names may change and need not be unique.
 - An organisation may have one parent organisation in the same tenant. The database stores only that parent link; it does not duplicate the hierarchy in a path, closure table, depth column, or `ltree`. The hierarchy cannot contain a cycle.
 - Moving an organisation changes its parent link. Its descendants retain their links and therefore move as the same subtree. The move is refused if the destination is another tenant, it would create a cycle, or an active policy prevents it.
-- Archiving or marking a tenant or parent organisation for removal is refused while it retains an active or suspended child. A caller may complete an explicitly ordered subtree transition in one transaction; the database validates the final committed state.
+- Archiving or marking a tenant or parent organisation for removal is refused while it retains an active or suspended child. A caller may complete an explicitly ordered subtree transition in one transaction; the database validates the final committed state. Organisation administrative archive is terminal: it is a structural state transition, not record transfer, retention execution, export, purge, account offboarding or provider-identity action.
 - Suspension does not rewrite descendant lifecycle states. Suspending the selected organisation prevents entry to that organisation, but suspending its parent does not prevent entry to an independently active child. Suspending the tenant prevents entry to every organisation in that tenant. Request-context establishment checks the selected tenant, organisation and organisation account; it does not inherit a parent organisation's state. [Protected administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) preserves this distinction.
 - Records, files, connections, roles, groups, applications, search, workflow work, and activity remain owned by an organisation. A parent organisation does not inherit access to a child organisation's data.
 - The tenant owns customer-wide hierarchy, lifecycle and [entitlement](15-entitlements-and-metering.md) scope. Metering is attributed to the organisation that caused it where meaningful and can be rolled up to its tenant.
@@ -39,13 +39,30 @@ flowchart TD
 
 A tenant can have several **tenant administrators**. They may create, move, suspend, restore, and view the administrative status of organisations in that tenant and invoke explicitly granted protected tenant operations.
 
-The private tenant and organisation tables contain structural identity and lifecycle facts only. Protected provisioning, hierarchy commands, tenant-administrator assignments, runtime localisation settings, safe administrative read models, expected-revision command concurrency, duplicate protection, and activity evidence sit above those tables in the Identity service. Neither layer introduces a hardcoded administration page.
+The private tenant and organisation tables contain structural identity and lifecycle facts only. Protected provisioning, hierarchy commands, tenant-administrator assignments, safe administrative read models, expected-revision command concurrency, duplicate protection, and activity evidence sit above those tables in the Identity service. Provisioning supplies explicit values to the Identity-owned runtime-settings initializer from [#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430); that task owns the settings validation, storage, updates and internal runtime reader. Neither layer introduces a hardcoded administration page.
 
 Tenant administration does not grant record access. A tenant administrator who needs to use an organisation's applications or data must also have an active organisation account with the required organisation and application roles. This separation prevents customer-wide administration from becoming silent access to every workspace.
 
 The [IAM application](appendices/iam-application.md) manages role grants, user-linked requests, reviews and assignment views. Tenant-governance assignments and organisation assignments remain separately checked even when presented by the same application. Invitations carrying intended roles follow IAM's governed assignment path; account activation alone does not grant a role. Guided initial-steward setup uses the explicit trusted appointment boundary rather than inferring authority from sign-in order.
 
-Protected tenant-governance operations use a server-resolved verified identity and current tenant-administrator assignment; they do not require an active account inside the target organisation. Otherwise an administrator could not create the first organisation or restore a suspended organisation. The Identity service validates the selected tenant and target, the current assignment, expected revision and each lifecycle transition inside its protected transaction. This narrow tenant context cannot read organisation records or be used as an organisation request context. System-only first provisioning remains separate and idempotent. Organisation-local settings, application data and account operations still require their documented organisation authorization path. [Issue #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns this distinction; it does not weaken [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27)'s active-account entry checks.
+Protected tenant-governance operations use a server-resolved verified identity and current tenant-administrator assignment; they do not require an active account inside the target organisation. Otherwise an administrator could not create the first organisation or restore a suspended organisation. The Identity service validates the selected tenant and target, the current assignment, expected revision and each lifecycle transition inside its protected transaction. This narrow tenant context cannot read organisation records or be used as an organisation request context. System-only first provisioning remains separate and idempotent. Organisation-local application data and account operations still require their documented organisation authorization path. Administrative account, invitation, and runtime-settings reads each require the exact organisation `.read` permission, the current active [#27](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27) request context, and the [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) decision. They return only bounded safe local projections; tenant authority, membership, another read permission, and `.manage` authority cannot substitute. Runtime-settings reads use the existing [#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430) reader rather than duplicate settings behaviour. [Issue #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns this boundary; it does not weaken active-account entry checks or expose private Identity tables.
+
+A tenant administrator with the exact organisation-creation capability may create one
+organisation only with an explicit permanent short name, display name, parent choice
+and runtime-settings values and an explicitly nominated existing active identity as its organisation
+steward. The operation creates the steward's local account and invokes the existing
+stewardship adoption in one transaction. It never gives the creator a local account,
+role, or access unless the creator is the stated nominee; it neither discovers,
+creates nor revives identities. A root explicitly has no parent. A child has an
+existing same-tenant active or suspended parent; foreign, archived or pending-removal
+parents refuse. Creation changes no parent facts, and an exact retry returns its
+recorded result rather than recreating later-changed access. [Protected
+administration #30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) composes
+the existing [runtime-settings initializer #430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430)
+and [stewardship boundary #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33);
+it does not introduce a second provisioning or access evaluator.
+
+Organisation lifecycle commands are limited to `active → suspended`, `suspended → active` and `active/suspended → archived`. They require the exact current tenant lifecycle capability, an expected organisation revision and the protected duplicate-receipt rules. A reactivation also requires both an existing organisation stewardship requirement and a current qualifying permanent steward at the fresh post-lock evaluation time; it does not recreate adoption, revive historical grants or assume the original steward remains. Suspension changes only the named organisation. Archive refuses while it has an active or suspended direct child and changes no descendant, account, role, record, setting or Access-version fact.
 
 ```mermaid
 flowchart LR
@@ -56,12 +73,55 @@ flowchart LR
 
 ## Identity and organisation-account lifecycle
 
+The approved [offboarding and ownership-transfer rules](appendices/record-ownership-and-lifecycle.md#archive-a-person-and-transfer-ownership)
+use the existing inactive organisation-account state for an archived person.
+Archiving stops access without requiring immediate transfer; deleting the account
+requires complete ownership transfer first. Transfers may also be initiated for
+an active account, selected by application, through protected Record operations.
+Neither operation affects the person's other organisation accounts or rewrites
+creator/audit attribution.
+
 1. A person proves control of a supported sign-in method.
 2. The platform loads the identity's active organisation accounts and tenant-administrator assignments.
 3. If exactly one organisation account is active, the platform may open it directly. Otherwise it shows the organisation launcher.
 4. After an organisation is chosen, its permanent identifier appears in the tab's `/organizations/[organizationId]` address. That browser value is only an untrusted selection candidate. The server derives the identity, Identity Authority, tenant, organisation account, Access version, session times, and correlation identifier from live trusted state before protected work begins.
 5. Leaving, suspending, or closing an organisation account affects only that organisation. Suspending or closing the cluster-local identity projection prevents entry to every account in that cluster. Environment-wide identity disablement and session revocation are protected Identity Authority operations delivered by [operational readiness](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171), not a meaning assigned to a cluster row.
 6. Removing access takes effect on the next request. Existing requests do not gain a grace period, and cached permission results are invalidated by the Access service's one live version for that organisation. Account activation, reactivation, suspension and closure change Identity state and that version together or change neither.
+
+An organisation administrator with the exact account-management permission may
+suspend, reactivate, or close a local organisation account through a protected
+operation. Those changes affect only that account and preserve the existing
+permanent-steward safeguard. Closing is not deletion or offboarding: the same
+local account may later be reactivated under current authority. Reactivation does
+not create or restore roles, Groups, assignments, or delegations; any retained
+authority is effective only if it is still valid, while revoked or expired
+authority remains unavailable. An administrator with the separate exact
+invitation-management permission may create a no-intent invitation or revoke an
+unaccepted invitation, including an expired one. The invitation secret is
+returned only on first successful creation and cannot be recovered from a retry.
+[#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) owns these protected
+administrative commands; role and access grants remain governed by the
+[IAM application](appendices/iam-application.md).
+
+A configured system operator may suspend, reactivate, or close one local identity
+projection through a protected cluster command. The change is local to that cluster:
+it does not alter the provider identity, authentication sessions, another cluster,
+organisation account state, organisation lifecycle, roles, assignments, or Access
+versions. Before a projection becomes unavailable, the command verifies the current
+minimum stewardship of every affected organisation and tenant. If scope membership
+changes while the command is acquiring its stable locks, it safely refuses rather
+than applying a partial change. Reactivation restores only the projection; it never
+revives a previously revoked or expired account, role, assignment or delegation.
+The protected implementation belongs to [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30).
+
+A configured system operator may also suspend or reactivate one tenant. Suspension
+prevents later entry to every organisation in that tenant without changing any
+child organisation, account, projection, role, assignment, setting, or Access
+fact. Reactivation restores only tenant eligibility; each organisation and account
+continues to meet its own current entry and access rules. Both transitions preserve
+existing steward and permanent-manager requirements, use fresh database time for
+that decision, and never manufacture adoption or revive grants. [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30)
+owns this protected system operation.
 
 ## Identity across clusters
 
@@ -196,7 +256,7 @@ The organisation manages its complete role and permission catalogue, including a
 
 Tenant Administration and Organisation Administration are locked, system-installed Vortex applications. They use ordinary modules, records, pages, roles and workflows while calling narrowly protected identity, hierarchy, access, entitlement and data-handling operations. The engine does not contain special portal page logic.
 
-Their responsibilities are distinct: Tenant Administration presents tenant structure and organisation lifecycle; Organisation Administration presents organisation accounts, invitations and runtime settings; [IAM](appendices/iam-application.md) presents requests, approvals and grants for tenant-administrator assignments and organisation access. The administration applications do not add parallel role-grant surfaces. They consume the channel-neutral protected operations from [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40); their rendered journeys remain [#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
+Their responsibilities are distinct: Tenant Administration presents tenant structure and organisation lifecycle; Organisation Administration presents organisation accounts, invitations and runtime settings; [IAM](appendices/iam-application.md) presents requests, approvals and grants for tenant-administrator assignments and organisation access. The administration applications do not add parallel role-grant surfaces. They consume the channel-neutral protected operations from [#30](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30), [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) and the settings reader from [#430](https://github.com/Abzum-NZ/Abzum-Vortex/issues/430); their rendered journeys remain [#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) and [#267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267).
 
 Initial tenant and organisation stewardship requires two explicit nominations and separately scoped assignments. The same verified person may be nominated for both; holding either appointment never implicitly supplies the other. Protected service provisioning reuses the existing [organisation stewardship appointment](04-access-and-permissions.md#initial-organisation-stewardship). This service-only setup is not proof that the later IAM application and its required operating role are installed and usable.
 

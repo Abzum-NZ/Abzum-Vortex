@@ -852,7 +852,7 @@ run_sql "begin;
   commit;" >"$proof_root/unavailable-missing.log" 2>&1
 missing_status=$?
 set -e
-[ "$missing_status" -ne 0 ] && grep -q 'Organization role-assignment revocation is unavailable' "$proof_root/unavailable-missing.log" || {
+[ "$missing_status" -eq 0 ] && grep -Eq "^refused\\|$organization_id\\|\\|[0-9]+$" "$proof_root/unavailable-missing.log" || {
   echo 'unavailable cleanup without assignment management did not refuse' >&2; exit 1;
 }
 
@@ -876,7 +876,7 @@ run_sql "begin;
   commit;" >"$proof_root/unavailable-bounded.log" 2>&1
 bounded_status=$?
 set -e
-[ "$bounded_status" -ne 0 ] && grep -q 'Organization role-assignment revocation is unavailable' "$proof_root/unavailable-bounded.log" || {
+[ "$bounded_status" -eq 0 ] && grep -Eq "^refused\\|$organization_id\\|\\|[0-9]+$" "$proof_root/unavailable-bounded.log" || {
   echo 'unavailable cleanup with only bounded delegation did not refuse' >&2; exit 1;
 }
 

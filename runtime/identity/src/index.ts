@@ -14,6 +14,18 @@ export {
 } from "./auth-journeys";
 export { createIdentityVerifier, type IdentityVerifier } from "./identity-verifier";
 export {
+  adoptOrganization,
+  adoptTenant,
+  closeClusterIdentity,
+  createConfiguredTenantAdministrationService,
+  provisionTenant,
+  reactivateClusterIdentity,
+  reactivateTenant,
+  suspendClusterIdentity,
+  suspendTenant,
+  type ConfiguredTenantAdministrationDependencies,
+} from "./configured-tenant-administration";
+export {
   createDefaultIdentitySessionService,
   createIdentitySessionService,
   type IdentitySessionServiceDependencies,
@@ -33,6 +45,32 @@ export {
   listOrganizationLauncher,
   type OrganizationLauncherServiceDependencies,
 } from "./organization-launcher";
+export {
+  createOrganizationRuntimeSettingsStore,
+  initializeOrganizationRuntimeSettings,
+  stageOrganizationRuntimeSettingsUpdate,
+  OrganizationRuntimeSettingsError,
+  organizationRuntimeSettingsErrorCodes,
+  type OrganizationRuntimeSettingsErrorCode,
+  type OrganizationRuntimeSettingsStoreDependencies,
+} from "./organization-runtime-settings";
+export {
+  archiveTenantOrganization,
+  changeTenantAdministrator,
+  createTenantOrganization,
+  createTenantGovernanceService,
+  grantTenantAdministrator,
+  listTenantAdministratorAssignments,
+  listTenantHierarchy,
+  listTenantLauncher,
+  readTenantOrganization,
+  reactivateTenantOrganization,
+  renameTenantOrganization,
+  reparentTenantOrganization,
+  suspendTenantOrganization,
+  revokeTenantAdministrator,
+  type TenantGovernanceServiceDependencies,
+} from "./tenant-governance";
 
 export const IdentityService = Object.freeze({
   key: "identity",

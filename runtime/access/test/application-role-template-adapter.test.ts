@@ -7,7 +7,6 @@ import {
   moduleSourceDocumentV2Schema,
   sessionContextSchema,
   type ApplicationPermissionCatalogueSnapshot,
-  type DefinitionConsumerReadCommand,
   type DefinitionConsumerReadResult,
   type DefinitionSourceDocument,
   type ExactDefinitionDependency,
@@ -29,7 +28,7 @@ import {
   type ApplicationRoleTemplateAdapterDependencies,
   type ApplicationRoleTemplatePreparationError,
 } from "../src/application-role-template-adapter";
-import type { PermissionRegistryDefinitionReader } from "../src/permission-registry-definition-adapter";
+import type { PermissionRegistryDefinitionSetReader } from "../src/permission-registry-definition-adapter";
 
 const fixtureRoot = path.resolve(import.meta.dirname, "../../../testing/fixtures");
 const organizationId = "10000000-0000-4000-a000-000000000001";
@@ -208,12 +207,9 @@ const readerFor = (
   application: DefinitionConsumerReadResult = applicationResult,
   modules: ReadonlyMap<string, DefinitionConsumerReadResult> = moduleResults,
 ) => {
-  const read = vi.fn(async (_context: SessionContext, command: DefinitionConsumerReadCommand) => {
-    const candidate = command.kind === "application" ? application : modules.get(command.rootId);
-    if (!candidate) throw new Error("not found");
-    return candidate;
-  });
-  return { reader: { read } satisfies PermissionRegistryDefinitionReader, read };
+  if (application.kind !== "application") throw new Error("Application result required");
+  const read = vi.fn(async () => ({ application, modules: [...modules.values()] }));
+  return { reader: { read } satisfies PermissionRegistryDefinitionSetReader, read };
 };
 
 const unavailableFacts =
@@ -223,7 +219,7 @@ const unavailableFacts =
   });
 
 const prepareInitial = (
-  reader: PermissionRegistryDefinitionReader,
+  reader: PermissionRegistryDefinitionSetReader,
   selectedContext: SessionContext = context(),
 ) =>
   createApplicationRoleTemplateAdapter({
@@ -522,20 +518,10 @@ describe("application role template adapter", () => {
     );
   });
 
-  it("refuses a changed exact Definition result after #32 preparation", async () => {
+  it("uses one exact Definition result and refuses an unresolved template permission", async () => {
     const base = readerFor();
-    let applicationReads = 0;
-    const reader: PermissionRegistryDefinitionReader = {
-      read: async (selectedContext, command) => {
-        const result = await base.reader.read(selectedContext, command);
-        if (command.kind !== "application" || applicationReads++ === 0) return result;
-        return { ...result, contentFingerprint: `sha256:${"0".repeat(64)}` };
-      },
-    };
-    await expectCode(
-      prepareInitial(reader),
-      "APPLICATION_ROLE_TEMPLATE_DEFINITION_EVIDENCE_INVALID",
-    );
+    await prepareInitial(base.reader);
+    expect(base.read).toHaveBeenCalledOnce();
 
     const missing = structuredClone(applicationResult);
     missing.content.roles[0]!.permissionKeys = ["application.crm.permission_missing"];

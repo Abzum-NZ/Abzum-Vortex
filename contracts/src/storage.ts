@@ -141,6 +141,44 @@ export const moduleInstallationStorageResultSchema = z
   })
   .strict();
 
+const expectedModuleBindingRevisionSchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    bindingRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+const exactExpectedModuleBindingsSchema = z
+  .array(expectedModuleBindingRevisionSchema)
+  .min(1)
+  .max(10_000)
+  .superRefine((bindings, context) => {
+    const moduleRootIds = bindings.map((binding) => binding.moduleRootId);
+    if (new Set(moduleRootIds).size !== moduleRootIds.length)
+      context.addIssue({ code: "custom", message: "Expected Module bindings must be unique" });
+    if (moduleRootIds.some((value, index) => index > 0 && moduleRootIds[index - 1]! >= value))
+      context.addIssue({
+        code: "custom",
+        message: "Expected Module bindings must use canonical Module-root order",
+      });
+  });
+
+const applicationInstallationLifecycleCommandShape = {
+  applicationRootId: applicationRootIdSchema,
+  applicationReleaseRevision: javascriptSafeRevisionSchema,
+  expectedModuleBindings: exactExpectedModuleBindingsSchema,
+} as const;
+
+/** Exact revision-checked activation of one complete Application binding set. */
+export const applicationInstallationActivationCommandSchema = z
+  .object(applicationInstallationLifecycleCommandShape)
+  .strict();
+
+/** Exact revision-checked detach of one complete Application binding set. */
+export const applicationInstallationDetachCommandSchema = z
+  .object(applicationInstallationLifecycleCommandShape)
+  .strict();
+
 /** Exact persisted Module binding evidence; never caller-authored readiness. */
 export const moduleInstallationBindingEvidenceSchema = z
   .object({
@@ -185,6 +223,44 @@ export const activeApplicationInstallationEvidenceSchema = z
         });
   });
 
+export const applicationInstallationLifecycleResultSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: javascriptSafeRevisionSchema,
+    state: z.enum(["active", "detached"]),
+    changed: z.boolean(),
+    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const roots = value.moduleBindings.map((binding) => binding.moduleRootId);
+    if (new Set(roots).size !== roots.length)
+      context.addIssue({
+        code: "custom",
+        path: ["moduleBindings"],
+        message: "Module bindings must be unique",
+      });
+    if (roots.some((root, index) => index > 0 && roots[index - 1]! >= root))
+      context.addIssue({
+        code: "custom",
+        path: ["moduleBindings"],
+        message: "Module bindings must use canonical order",
+      });
+    for (const [index, binding] of value.moduleBindings.entries())
+      if (
+        binding.organizationId !== value.organizationId ||
+        binding.applicationRootId !== value.applicationRootId ||
+        binding.applicationReleaseRevision !== value.applicationReleaseRevision ||
+        binding.state !== value.state
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["moduleBindings", index],
+          message: "Module binding evidence must match its lifecycle result",
+        });
+  });
+
 export const moduleInstallationStorageErrorCodeSchema = z.enum([
   "INVALID_MODULE_INSTALLATION_STORAGE_COMMAND",
   "MODULE_INSTALLATION_AUTHORITY_REFUSED",
@@ -200,6 +276,15 @@ export const activeApplicationInstallationErrorCodeSchema = z.enum([
   "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE",
   "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
   "ACTIVE_APPLICATION_INSTALLATION_READ_FAILED",
+]);
+
+export const applicationInstallationLifecycleErrorCodeSchema = z.enum([
+  "INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND",
+  "APPLICATION_INSTALLATION_AUTHORITY_REFUSED",
+  "APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE",
+  "APPLICATION_INSTALLATION_BINDING_CONFLICT",
+  "APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE",
+  "APPLICATION_INSTALLATION_CHANGE_FAILED",
 ]);
 
 export const recordStorageReleaseProvisionSchema = z
@@ -220,6 +305,12 @@ export type ModuleInstallationStorageCommand = z.infer<
   typeof moduleInstallationStorageCommandSchema
 >;
 export type ModuleInstallationStorageResult = z.infer<typeof moduleInstallationStorageResultSchema>;
+export type ApplicationInstallationActivationCommand = z.infer<
+  typeof applicationInstallationActivationCommandSchema
+>;
+export type ApplicationInstallationDetachCommand = z.infer<
+  typeof applicationInstallationDetachCommandSchema
+>;
 export type ModuleInstallationBindingEvidence = z.infer<
   typeof moduleInstallationBindingEvidenceSchema
 >;
@@ -231,5 +322,11 @@ export type ModuleInstallationStorageErrorCode = z.infer<
 >;
 export type ActiveApplicationInstallationErrorCode = z.infer<
   typeof activeApplicationInstallationErrorCodeSchema
+>;
+export type ApplicationInstallationLifecycleResult = z.infer<
+  typeof applicationInstallationLifecycleResultSchema
+>;
+export type ApplicationInstallationLifecycleErrorCode = z.infer<
+  typeof applicationInstallationLifecycleErrorCodeSchema
 >;
 export type RecordStorageReleaseProvision = z.infer<typeof recordStorageReleaseProvisionSchema>;

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
   activeApplicationInstallationEvidenceSchema,
+  applicationInstallationActivationCommandSchema,
+  applicationInstallationDetachCommandSchema,
+  applicationInstallationLifecycleResultSchema,
   fieldStorageMappingSchema,
   moduleInstallationStorageCommandSchema,
   moduleInstallationBindingEvidenceSchema,
@@ -172,6 +175,60 @@ describe("record storage provisioning contracts", () => {
         applicationRootId,
         applicationReleaseRevision: 4,
         moduleBindings: [binding, binding],
+      }).success,
+    ).toBe(false);
+  });
+
+  test("requires one canonically ordered exact revision for every lifecycle binding", () => {
+    const command = {
+      applicationRootId,
+      applicationReleaseRevision: 4,
+      expectedModuleBindings: [
+        { moduleRootId, bindingRevision: 2 },
+        { moduleRootId: id("6"), bindingRevision: 1 },
+      ],
+    };
+    expect(applicationInstallationActivationCommandSchema.safeParse(command).success).toBe(true);
+    expect(applicationInstallationDetachCommandSchema.safeParse(command).success).toBe(true);
+    expect(
+      applicationInstallationActivationCommandSchema.safeParse({
+        ...command,
+        expectedModuleBindings: [...command.expectedModuleBindings].reverse(),
+      }).success,
+    ).toBe(false);
+    expect(
+      applicationInstallationActivationCommandSchema.safeParse({
+        ...command,
+        expectedModuleBindings: [command.expectedModuleBindings[0]],
+        organizationId: id("9"),
+      }).success,
+    ).toBe(false);
+  });
+
+  test("binds every lifecycle result row to its Application and resulting state", () => {
+    const result = {
+      organizationId: id("8"),
+      applicationRootId,
+      applicationReleaseRevision: 4,
+      state: "active",
+      changed: true,
+      moduleBindings: [
+        {
+          organizationId: id("8"),
+          applicationRootId,
+          moduleRootId,
+          bindingRevision: 3,
+          applicationReleaseRevision: 4,
+          moduleReleaseRevision: 2,
+          state: "active",
+        },
+      ],
+    } as const;
+    expect(applicationInstallationLifecycleResultSchema.safeParse(result).success).toBe(true);
+    expect(
+      applicationInstallationLifecycleResultSchema.safeParse({
+        ...result,
+        moduleBindings: [{ ...result.moduleBindings[0], state: "detached" }],
       }).success,
     ).toBe(false);
   });

@@ -181,8 +181,9 @@ application request.
 - The Vercel server connects as an environment-specific `vortex_runtime` login through Supabase's
   shared transaction pooler on port 6543. That login owns no object and has no direct service-table
   privilege. Inside an explicit transaction it may initialize the closed request context and enter
-  only the non-login `vortex_request` role, which has no ownership, schema or persistent-relation
-  creation, replication, superuser, or row-security-bypass capability.
+  only the non-login `vortex_request` role, which is grant hygiene rather than an injection boundary;
+  the established context row is the identity boundary. `vortex_request` has no ownership, schema or
+  persistent-relation creation, replication, superuser, or row-security-bypass capability.
 - Migrations create `vortex_runtime` without a password. Before a hosted environment may serve a
   protected request, an operator generates a different high-entropy password for that environment,
   assigns it to that exact role through the Supabase administrative path, and builds the restricted
@@ -217,10 +218,19 @@ has no Identity schema access and may execute only explicitly granted request fu
 Access's exact live human-context validator and central permission/delegation evaluator. It
 cannot call the legacy rich account list or standalone Access-version read, both of which are revoked
 from runtime use. Only `vortex_request` may execute the read-only context accessors used by row
-policies and service SQL. The database stores the whole context as one transaction-local value, not
-as independently reusable session settings. Missing, empty, malformed, incomplete, internally
+policies and service SQL. The database stores the whole context in one owner-only row bound to the
+establishing transaction (`vortex_context.request_contexts`, keyed by the server backend and stamped
+with the transaction identifier). No session setting carries it, so a value written into any
+setting is never read. The initializer establishes the row once per transaction and refuses a
+second establishment, including after the request role reverts to the runtime login with
+`SET ROLE` or `set_config('role', …)`, which PostgreSQL always permits; no runtime, request or
+record role can read or write the row. Missing, empty, malformed, incomplete, internally
 inconsistent, expired, inactive or stale context fails closed. Commit, rollback, and pooled
 connection reuse make the role and context unavailable to the next transaction.
+The database trusts the application server to name the human: a caller able to end the transaction
+and begin another as `vortex_runtime` is the application server, and the database does not verify
+the ES256 identity token itself. Protected requests run read-write on the primary; the
+establishment write and the resolver's row locks both refuse on a standby.
 
 Setting a structurally valid context is not itself an access grant. Access owns the human
 organisation composition; other services consume its resolved transaction rather than assembling
@@ -303,8 +313,10 @@ A failed table-creation transaction rolls back its own new objects and changes,
 never a table or registration already used by another installation. If provisioning
 has succeeded but activation fails, the valid inactive structure remains available
 for retry. Activation is atomic and cannot report a usable binding before its
-required mappings, registrations and protected operations are ready. Detachment
-retains the stored records. The [coordinated implementation plan](../build-plan/module-record-provisioning.md)
+required mappings, exact Application permission registration and protected
+operations are ready. Published event declarations remain part of the pinned
+immutable definitions; activation does not duplicate them in a second catalogue.
+Detachment retains the stored records. The [coordinated implementation plan](../build-plan/module-record-provisioning.md)
 keeps these responsibilities with the existing Module, Record and Application engines.
 
 ### Record storage provisioning
@@ -329,8 +341,9 @@ Runtime installation reads follow the same distinction. A context-bound read
 returns the complete exact active Application dependency set, including its
 explicitly pinned shared Modules, without a general cross-organisation definition
 lookup. Ordinary discovery does not require installation-management permission
-and grants no record access. Unrelated detached history does not invalidate a
-complete current installation. See the [active installation read plan](../build-plan/issue-43-active-installation-read.md).
+and grants no record access. It refuses a detached target. Unrelated detached
+history does not invalidate a complete current installation. See the
+[active installation read plan](../build-plan/issue-43-active-installation-read.md).
 
 The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
 is the organisation-scoped platform permission
@@ -355,21 +368,28 @@ Recheck the actor and scope from the trusted transaction context, not
 The database owns the only DDL generator. TypeScript services call that fixed
 operation and parse its result; they do not maintain a second SQL generator.
 The generated structure includes the declared fields, complete scope keys,
-Group ownership (`owner_group_id`), relationships, four row policies and fixed
-field-aware record adapters. Adapters construct trusted relationship evidence;
+Group ownership (`owner_group_id`), relationships and four row policies. Those
+policies are the scope-only isolation backstop; the complete record decision
+runs inside the adapter, once for a read and over both the old and the proposed
+row for a change. The adapters are not generated per table: one fixed
+parameterised pair, keyed by record-type identity, resolves the physical table
+and columns through the protected catalogue, so one audited path serves every
+record type. Adapters construct trusted relationship evidence;
 callers cannot supply the access graph. Raw content-table access stays denied.
 An adapter execution role receives only the required DML, does not own those
 tables and remains subject to row security.
 
 ```mermaid
 flowchart LR
-    I[Install exact application release] --> M[Module: check authority and binding revision]
-    M --> D[Read exact published modules and dependencies]
-    D --> R[Record: protected generic provisioner]
-    R --> C[Lock catalogue and create or reuse compatible storage]
-    C --> P[Commit provisioned, inactive]
-    P --> A[Check permissions, events and dependencies]
-    A --> B[Activate binding in a new transaction]
+    I[Select exact Application release] --> D[Resolve complete direct and transitive Module pins]
+    D --> R[Record: provision or reuse compatible storage]
+    R --> P[Commit every binding as provisioned]
+    P --> A[Module: check current Access authority and exact permission registration]
+    A --> L[Lock every required binding in canonical order]
+    L --> V[Recheck Access and exact revisions and release evidence]
+    V --> B[Activate the whole pin set atomically]
+    B --> X[Runtime reader accepts exact active set]
+    B --> T[Detach later: retain storage and records]
 ```
 
 Lock the installation and storage identities in a consistent order. First create
@@ -396,9 +416,22 @@ Concurrent first requests serialize on these same identities. An older pinned
 release may reuse a newer compatible storage shape containing additional nullable
 fields, without removing those mappings or downgrading the shared catalogue.
 
-Activation rechecks current authority and binding revision after the required
-registrations exist. Failure cannot expose a partial active installation and
-does not destroy valid inactive/shared structures. Populated changes use the
+Activation and detach accept the complete canonically ordered Module pin set and
+the expected revision of every binding. Completeness is derived again from the
+exact published Application release, so a caller cannot omit or insert a Module.
+Both operations check current Access authority, lock every required binding in
+Module identity order, then recheck Access and every binding's exact Application
+release, Module release, content, resolution and revision evidence. Activation
+additionally checks generator evidence and obtains the complete storage-contract
+set through a narrow Record-owned exact-provision read; Module does not read
+Record's private provision tables. Detach does not repeat the storage/generator
+read because it preserves rather than advertises usable storage.
+All bindings change together or none do. An unchanged exact retry returns the
+current result; a stale revision refuses rather than adding a receipt, fingerprint
+or lifecycle counter. Failure cannot expose a partial active installation and
+does not destroy valid inactive/shared structures. Detach changes only the target
+Application's bindings, so another Application sharing a Module remains active.
+Populated changes use the
 same owning primitives in bounded add/migrate/switch/retire steps, orchestrated
 through Kestra when durable data movement is necessary. Initial creation needs
 no new worker, queue or owner credential in Vercel.
@@ -564,3 +597,7 @@ The first release does not place cross-organisation shared-record results in the
 The [page-builder adapter](appendices/page-builder-contracts.md) remains inside the existing Page/Definition/Query/Record/Access boundaries. It introduces no per-application service or separate renderer/database. [Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252), [entitlement decisions #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) and [file-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) precede their first consuming operation; later privacy/metering work extends those same boundaries.
 
 Realtime channel admission must use credentials accepted by the destination cluster. Do not assume a token issued by a separate Identity Authority project automatically authorises that cluster's Realtime service. [#56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56) proves access-change invalidation/reauthorisation for local subscriptions; [#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156) proves the cross-cluster path. Broadcast only the minimal permitted content-free signal and reload through current access checks.
+
+## Storage HTTP identity handoff
+
+Storage requests use the [File gateway's destination-signed, exact-object and operation scoped JWT](11-files-and-attachments.md), including when Identity Authority and storage are on different clusters. This is a narrow Storage credential, not a broad service role or access to private Vortex schemas. The File gateway rechecks live Access before issuing the credential; Storage independently restricts its signed scope. Hosted proof belongs to [#92](https://github.com/Abzum-NZ/Abzum-Vortex/issues/92).

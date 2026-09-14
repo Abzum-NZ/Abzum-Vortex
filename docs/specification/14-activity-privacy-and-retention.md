@@ -28,9 +28,10 @@ Activity does not store passwords, connection secrets, full sensitive values, pr
 
 Activity is append-only through ordinary product operations. Corrections create a later entry. Privileged retention work may remove protected content while preserving a non-content receipt.
 
-Successful changes and their completed Activity commit together. A known refused
-request records one content-free refusal through its protected owner after the
-unsuccessful change has rolled back, not one entry for each affected row. Only
+Successful changes and their completed Activity commit together. A clean permission
+refusal found by a protected owner before its first business write records one
+content-free refusal and returns from the same request transaction, not one entry
+for each affected row. Only
 verified local scope and fixed operation meaning may be recorded: submitted
 foreign/missing targets, private values and exception text are not safe evidence.
 Failures before a local organisation/account scope is established cannot nominate
@@ -56,6 +57,13 @@ Every [field](05-modules-fields-and-relationships.md) is classified as:
 The classification controls search, exports, activity detail, masking in diagnostics, and erasure discovery. Public display is a separate explicit choice under [access and permissions](04-access-and-permissions.md#public-access).
 
 ## Retention policies
+
+Every installed record type has the explicit age/count and end-of-life policy in
+[record-type lifecycle policies](appendices/record-ownership-and-lifecycle.md#record-type-lifecycle-policy).
+Organisation ceilings constrain it; application setup selects it. Reuse this
+retention engine for selection, holds, bounded execution and removal evidence,
+including verified workflow archival. Do not apply a single tenant's policy to
+an entire physical table shared by multiple organisations.
 
 An organisation can choose approved retention periods within legal and platform safety bounds. A policy names the data category, optional version-pinned saved condition, active retention period, recovery period, removal schedule, and applicable legal-constraint keys. Commercial status never weakens privacy or retention correctness.
 
@@ -120,8 +128,10 @@ Privacy administrators act within one organisation. A tenant administrator may c
 
 ## Foundation before integration
 
-[Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is delivered before Access/Record operations require atomic success evidence. Failed mutations create no success activity; safe refusal evidence may be appended separately after rollback. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) adds permitted views and complete service coverage to the same boundary.
+[Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is delivered before Access/Record operations require atomic success evidence. Failed mutations create no success activity. A supported owner may record a clean pre-write permission refusal in that request transaction; other failures record nothing. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) adds permitted views and complete service coverage to the same boundary.
 
-The [foundation plan](../build-plan/issue-252-activity-foundation.md) defines one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. After rollback, an independently authorised operation-specific path may append a refusal using only verified local identifiers. Logging failure cannot convert refusal into success. This task proves the reusable composition; it does not claim that every existing service has already integrated it.
+The [foundation plan](../build-plan/issue-252-activity-foundation.md) defines one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. It may append a clean pre-write refusal in that transaction using only established local identifiers. Logging failure cannot convert refusal into success. This task proves the reusable composition; it does not claim that every existing service has already integrated it.
 
 [File-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) supplies current recovery/hold checks before automated purge. [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117) extends selection policies and all-store handling, not a duplicate deletion engine. Complete organisation archive/restore follows these policies in [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255).
+
+Completed removal/revocation evidence must survive loss of the source project. Follow the [external removal journal and restore completeness rules](19-operations-backup-and-recovery.md); a database backup alone is not evidence that later erasures stayed erased. This remains later recovery delivery, not a Kestra maintenance prerequisite for core engines.

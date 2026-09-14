@@ -329,4 +329,25 @@ describe("owner-only application access handoff contract and result binding", ()
       new ApplicationAccessRepositoryError("APPLICATION_ACCESS_STALE_OR_UNAVAILABLE"),
     );
   });
+
+  it("surfaces the refusal of a registration missing a pinned Module's permissions as stale", async () => {
+    // The SQL apply raises this when the candidate omits the declared permissions
+    // of a Module in the Application's pin set, such as a Module reached only
+    // through another Module (supabase/tests/470_module_dependency_pin_set).
+    const refused = createApplicationAccessPrivateRepository({
+      query: async () => {
+        throw { code: "40001", message: "Module permission declarations are stale or unavailable" };
+      },
+    });
+    await expect(
+      refused.change({
+        operation: "register",
+        preparedTemplates: preparedTemplates(),
+        changedBy: id(2),
+        correlationId: id(3),
+      }),
+    ).rejects.toEqual(
+      new ApplicationAccessRepositoryError("APPLICATION_ACCESS_STALE_OR_UNAVAILABLE"),
+    );
+  });
 });

@@ -1,6 +1,10 @@
 import "server-only";
 
-import { identityAuthoritySchema, type IdentityAuthority } from "@vortex/contracts";
+import {
+  identityAuthoritySchema,
+  isLoopbackHostname,
+  type IdentityAuthority,
+} from "@vortex/contracts";
 import type { IdentityJourneyConfiguration } from "@vortex/identity";
 
 const requiredEnvironmentValue = (name: string): string => {
@@ -22,7 +26,7 @@ export const getIdentityAuthorityConfiguration = (): IdentityAuthority => {
   const environment = requiredEnvironmentValue("VORTEX_ENVIRONMENT");
   const authorityUrl = new URL(journey.supabaseUrl);
   const siteUrl = new URL(journey.siteUrl);
-  const isLoopback = ["127.0.0.1", "localhost", "[::1]"].includes(siteUrl.hostname);
+  const isLoopback = isLoopbackHostname(siteUrl.hostname);
   if (
     (environment === "local" && (siteUrl.protocol !== "http:" || !isLoopback)) ||
     (environment !== "local" && siteUrl.protocol !== "https:")

@@ -157,6 +157,50 @@ describe("Next.js identity-session server boundary", () => {
     expect(cookieStore.set.mock.calls[0]?.[2]).not.toHaveProperty("domain");
   });
 
+  it("keeps a re-verified active session active when no cookie mutation is staged", async () => {
+    await expect(
+      bootstrapIdentitySession({ ok: true, accessToken, refreshToken }),
+    ).resolves.toEqual(active);
+
+    expect(cookieStore.set).not.toHaveBeenCalled();
+    expect(auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it("still invalidates a refused stage even when the outcome is active", async () => {
+    createServerClient.mockImplementationOnce((...arguments_: unknown[]) => {
+      const options = arguments_[2] as {
+        cookies: {
+          setAll: (
+            cookies: ReadonlyArray<{
+              name: string;
+              value: string;
+              options: Record<string, unknown>;
+            }>,
+          ) => void;
+        };
+      };
+      return {
+        auth: {
+          ...auth,
+          setSession: vi.fn(async () => {
+            await options.cookies.setAll([{ name: "unrelated-cookie", value: "x", options: {} }]);
+            return {
+              data: { session: { access_token: accessToken, refresh_token: refreshToken } },
+              error: null,
+            };
+          }),
+        },
+      };
+    });
+
+    await expect(
+      bootstrapIdentitySession({ ok: true, accessToken, refreshToken }),
+    ).resolves.toEqual({ kind: "invalid_session_state" });
+
+    expect(cookieStore.set).not.toHaveBeenCalled();
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
   it("does not commit a newly staged pair when cluster eligibility fails", async () => {
     sessionService.bootstrap.mockResolvedValueOnce({ kind: "cluster_identity_inactive" });
 

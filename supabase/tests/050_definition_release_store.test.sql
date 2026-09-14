@@ -284,11 +284,17 @@ select results_eq(
       'SELECT' collate "C", 'true' collate "C", null::text collate "C"),
     ('releases', 'module_installation_definition_releases_read',
       array['vortex_module_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
+    -- #401: the fixed record adapters read the pinned release content that is
+    -- their exact installed definition. The read is `releases` only: their
+    -- owner holds no policy on `release_dependencies`, and none of these
+    -- policies permits a write.
+    ('releases', 'record_adapter_definition_releases_read',
+      array['vortex_record_adapter']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('release_dependencies', 'record_storage_definition_dependencies_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text),
     ('releases', 'record_storage_definition_releases_read',
       array['vortex_record_owner']::name[], 'PERMISSIVE', 'SELECT', 'true', null::text)$$,
-  'immutable release row policies permit only the exact private Module and Record owner reads'
+  'immutable release row policies permit only the exact private Module and Record owner reads and the record adapter''s release read'
 );
 select ok(
   not pg_catalog.has_table_privilege(
@@ -380,6 +386,11 @@ insert into vortex_definition.roots (
     '90000000-0000-4000-8000-000000000050'
   );
 
+-- Direct writes are intentional in this storage-owner suite. The assertions
+-- below exercise release-table and dependency-manifest foreign keys, checks,
+-- and append-only guards themselves; publishing through append_release would
+-- make the valid manifest setup immutable before those storage guarantees can
+-- be tested. This is not a runtime fixture path.
 insert into vortex_definition.releases (
   root_id, release_revision, release_version, authored_source,
   authored_source_fingerprint, source_contract_version, compilation_output, resolution_snapshot,

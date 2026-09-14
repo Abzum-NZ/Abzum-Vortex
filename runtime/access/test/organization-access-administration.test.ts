@@ -85,6 +85,7 @@ describe("organization Access administration", () => {
   it("creates a Group with trusted identities and binds the safe result", async () => {
     const { calls, service } = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2).toUpperCase(),
         group_summary: {
           groupId: id(20).toUpperCase(),
@@ -124,6 +125,7 @@ describe("organization Access administration", () => {
   it("renames a Group with its reviewed revision and a trusted Activity identity", async () => {
     const { calls, service } = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2),
         group_summary: {
           groupId: id(8),
@@ -151,9 +153,256 @@ describe("organization Access administration", () => {
     expect(calls[0]?.values).toEqual([id(8), 2, "Renamed group", id(21)]);
   });
 
+  it("maps a well-formed Group refusal only after its transaction commits", async () => {
+    let transactionCommitted = false;
+    const service = createOrganizationAccessAdministrationService({
+      identityAuthorityId: id(6),
+      clock: () => new Date("2026-09-06T01:00:00.000Z"),
+      correlationId: () => id(7),
+      groupId: () => id(20),
+      activityId: () => id(21),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve({
+          query: async () => [selectedScope] as never,
+        } satisfies RuntimeDatabaseTransaction);
+        const result = await operation(
+          {
+            query: async () =>
+              [
+                {
+                  outcome: "refused",
+                  organization_id: id(2).toUpperCase(),
+                  group_summary: null,
+                  access_version: "7",
+                },
+              ] as never,
+          },
+          resolved.scope,
+        );
+        transactionCommitted = true;
+        return result;
+      },
+    });
+
+    await expect(
+      service.createGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { key: "review_group", label: "Review group" },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(transactionCommitted).toBe(true);
+  });
+
+  it("fails retryably for malformed refusal evidence or a failed refusal commit", async () => {
+    const malformed = serviceFor([
+      {
+        outcome: "refused",
+        organization_id: id(2),
+        group_summary: {
+          groupId: id(20),
+          key: "must_not_escape",
+          label: "Must not escape",
+          state: "active",
+          revision: 1,
+        },
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      malformed.createGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { key: "review_group", label: "Review group" },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+
+    const failedCommit = createOrganizationAccessAdministrationService({
+      identityAuthorityId: id(6),
+      clock: () => new Date("2026-09-06T01:00:00.000Z"),
+      correlationId: () => id(7),
+      activityId: () => id(21),
+      resolvedRequestTransaction: async (resolve, operation) => {
+        const resolved = await resolve({
+          query: async () => [selectedScope] as never,
+        } satisfies RuntimeDatabaseTransaction);
+        await operation(
+          {
+            query: async () =>
+              [
+                {
+                  outcome: "refused",
+                  organization_id: id(2),
+                  group_summary: null,
+                  access_version: 7,
+                },
+              ] as never,
+          },
+          resolved.scope,
+        );
+        throw new Error("commit failed");
+      },
+    });
+    await expect(
+      failedCommit.renameGroup(
+        verifiedSession,
+        { organizationId: id(2) },
+        { groupId: id(8), expectedGroupRevision: 2, label: "Renamed group" },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
+  });
+
+  it("maps every other well-formed change refusal without exposing a target summary", async () => {
+    const cases = [
+      {
+        summary: "group_summary",
+        invoke: (service: ReturnType<typeof serviceFor>["service"]) =>
+          service.retireGroup(
+            verifiedSession,
+            { organizationId: id(2) },
+            { groupId: id(8), expectedGroupRevision: 2 },
+          ),
+      },
+      {
+        summary: "membership_summary",
+        invoke: (service: ReturnType<typeof serviceFor>["service"]) =>
+          service.removeGroupMembership(
+            verifiedSession,
+            { organizationId: id(2) },
+            { membershipId: id(30), expectedMembershipRevision: 1 },
+          ),
+      },
+      {
+        summary: "role_summary",
+        invoke: (service: ReturnType<typeof serviceFor>["service"]) =>
+          service.retireRole(
+            verifiedSession,
+            { organizationId: id(2) },
+            { roleId: id(40), expectedRoleRevision: 2 },
+          ),
+      },
+      {
+        summary: "assignment_summary",
+        invoke: (service: ReturnType<typeof serviceFor>["service"]) =>
+          service.revokeRoleAssignment(
+            verifiedSession,
+            { organizationId: id(2) },
+            { roleAssignmentId: id(30), expectedAssignmentRevision: 2 },
+          ),
+      },
+      {
+        summary: "activation_summary",
+        invoke: (service: ReturnType<typeof serviceFor>["service"]) =>
+          service.deactivateRoleActivation(
+            verifiedSession,
+            { organizationId: id(2) },
+            { roleActivationId: id(90), expectedActivationRevision: 2 },
+          ),
+      },
+      {
+        summary: "delegation_summary",
+        invoke: (service: ReturnType<typeof serviceFor>["service"]) =>
+          service.revokeDelegationAuthority(
+            verifiedSession,
+            { organizationId: id(2) },
+            { delegationAuthorityId: id(80), expectedDelegationRevision: 3 },
+          ),
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const fixture = serviceFor([
+        {
+          outcome: "refused",
+          organization_id: id(2),
+          [testCase.summary]: null,
+          access_version: 7,
+        },
+      ]);
+      await expect(testCase.invoke(fixture.service)).resolves.toEqual({ kind: "unavailable" });
+      expect(fixture.calls).toHaveLength(1);
+    }
+  });
+
+  it("stops role metadata revision after preparation records a refusal", async () => {
+    const { calls, service } = serviceForSequence([
+      [
+        {
+          outcome: "refused",
+          organization_id: id(2),
+          candidate_basis: null,
+          access_version: 7,
+        },
+      ],
+    ]);
+
+    await expect(
+      service.reviseRoleMetadata(
+        verifiedSession,
+        { organizationId: id(2) },
+        {
+          roleId: id(40),
+          expectedRoleRevision: 1,
+          label: "New label",
+          description: "New description.",
+        },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.values).toEqual([id(40), 1, id(21)]);
+  });
+
+  it("maps a revision refusal reached after successful role metadata preparation", async () => {
+    const { calls, service } = serviceForSequence([
+      [
+        {
+          outcome: "completed",
+          organization_id: id(2),
+          candidate_basis: {
+            operation: "revise_metadata_policy",
+            organizationId: id(2),
+            roleId: id(40),
+            expectedRoleRevision: 1,
+            key: "reviewed_role",
+            label: "Old label",
+            description: "Old description.",
+            privilegeClassification: "privileged",
+            assignmentPolicy: { kind: "standing" },
+          },
+          access_version: 7,
+        },
+      ],
+      [
+        {
+          outcome: "refused",
+          organization_id: id(2),
+          role_summary: null,
+          access_version: 7,
+        },
+      ],
+    ]);
+
+    await expect(
+      service.reviseRoleMetadata(
+        verifiedSession,
+        { organizationId: id(2) },
+        {
+          roleId: id(40),
+          expectedRoleRevision: 1,
+          label: "New label",
+          description: "New description.",
+        },
+      ),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.values[2]).toBe(id(21));
+    expect(calls[1]?.values[5]).toBe(id(21));
+  });
+
   it("retires a Group without caller-selected affected authority", async () => {
     const { calls, service } = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2),
         group_summary: {
           groupId: id(8),
@@ -181,6 +430,7 @@ describe("organization Access administration", () => {
   it("removes one exact Group membership and binds the terminal result", async () => {
     const { calls, service } = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2),
         membership_summary: {
           membershipId: id(30),
@@ -215,6 +465,7 @@ describe("organization Access administration", () => {
     const { calls, service } = serviceForSequence([
       [
         {
+          outcome: "completed",
           organization_id: id(2).toUpperCase(),
           candidate_basis: {
             operation: "revise_metadata_policy",
@@ -242,6 +493,7 @@ describe("organization Access administration", () => {
       ],
       [
         {
+          outcome: "completed",
           organization_id: id(2),
           role_summary: {
             roleId: id(40),
@@ -285,7 +537,7 @@ describe("organization Access administration", () => {
     expect(calls[0]?.text).toContain(
       "prepare_organization_role_metadata_change_for_administration",
     );
-    expect(calls[0]?.values).toEqual([id(40), 1]);
+    expect(calls[0]?.values).toEqual([id(40), 1, id(21)]);
     expect(calls[1]?.text).toContain("revise_organization_role_metadata_for_administration");
     expect(calls[1]?.values.slice(0, 4)).toEqual([id(40), 1, "New label", "New description."]);
     const prepared = JSON.parse(String(calls[1]?.values[4]));
@@ -307,6 +559,7 @@ describe("organization Access administration", () => {
   it("retires one role using canonical evidence derived only from the exact command", async () => {
     const { calls, service } = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2),
         role_summary: {
           roleId: id(40),
@@ -397,6 +650,7 @@ describe("organization Access administration", () => {
   it("revokes one reviewed role assignment through the protected operation", async () => {
     const { calls, service } = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2).toUpperCase(),
         assignment_summary: {
           roleAssignmentId: id(30).toUpperCase(),
@@ -444,6 +698,7 @@ describe("organization Access administration", () => {
     expect(malformed.calls).toHaveLength(0);
     const mismatched = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2),
         assignment_summary: {
           roleAssignmentId: id(99),
@@ -484,6 +739,7 @@ describe("organization Access administration", () => {
 
     const mismatched = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2),
         group_summary: {
           groupId: id(99),
@@ -1271,6 +1527,7 @@ describe("organization Access administration", () => {
   it("revokes one reviewed delegation and binds the terminal result", async () => {
     const { calls, service } = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2),
         delegation_summary: {
           delegationAuthorityId: id(80),
@@ -1359,6 +1616,7 @@ describe("organization Access administration", () => {
   it("deactivates one reviewed activation and binds the terminal result", async () => {
     const { calls, service } = serviceFor([
       {
+        outcome: "completed",
         organization_id: id(2),
         activation_summary: {
           roleActivationId: id(90),

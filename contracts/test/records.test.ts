@@ -11,6 +11,7 @@ const recordTypeId = id(2);
 const recordId = id(3);
 const fieldId = id(4);
 const correlationId = id(5);
+const groupId = id(14);
 
 const createCommand = {
   contractVersion: "2.0.0",
@@ -52,6 +53,16 @@ describe("SaveRecord V2 contracts", () => {
     });
     expect(parsed).not.toHaveProperty("recordId");
     expect(parsed).not.toHaveProperty("expectedConcurrencyNumber");
+  });
+
+  it("accepts only a create-time owner Group selection", () => {
+    expect(
+      saveRecordCommandV2Schema.parse({ ...createCommand, selectedOwnerGroupId: groupId }),
+    ).toMatchObject({ selectedOwnerGroupId: groupId });
+    expect(
+      saveRecordCommandV2Schema.safeParse({ ...updateCommand, selectedOwnerGroupId: groupId })
+        .success,
+    ).toBe(false);
   });
 
   it.each([

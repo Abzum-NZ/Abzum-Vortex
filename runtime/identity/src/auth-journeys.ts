@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isLoopbackHostname } from "@vortex/contracts";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const MINIMUM_PASSWORD_LENGTH = 8;
@@ -26,10 +27,7 @@ export type VerifiedSignInResult =
 
 const validUrl = (value: string, allowLoopback: boolean): URL => {
   const url = new URL(value);
-  const isLoopback =
-    allowLoopback &&
-    url.protocol === "http:" &&
-    ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname);
+  const isLoopback = allowLoopback && url.protocol === "http:" && isLoopbackHostname(url.hostname);
 
   if (
     (!isLoopback && url.protocol !== "https:") ||

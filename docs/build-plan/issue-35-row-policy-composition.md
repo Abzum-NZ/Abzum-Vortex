@@ -62,7 +62,7 @@ Preserve the existing authored `permission` and compiled `permissionKey` shapes 
 
 Do not infer action meaning or permission ownership from a button/action key. Existing singular bindings retain their supported reference semantics, including broader management permissions. For plural bindings, resolve exact declaring owners through the existing application/module dependency lookup, refuse ambiguous permission keys, and require the same subject record type and action meaning. Named alternatives must also share the same declaring owner. Application actions may legitimately bind module permissions; no extra authored or compiled owner field is needed because the resolved permissions already carry that identity.
 
-Neither this implementation map nor passing earlier predicate tests constitutes delivered record policies. Contract/compiler work precedes the complete database decision and fixed-policy proof. The eligibility-only SQL checkpoint stays unmerged until it participates in a complete record decision and neutral policy proof. Compatible contract/compiler metadata may be reviewed separately, but no runtime or interface may execute alternative bindings before the complete-pair database enforcement is available.
+This plan's complete record decision and neutral policy proof have been delivered; [#35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) is Done. The earlier eligibility-only checkpoint is historical, not a pending implementation. Generated-storage consumers must bind the delivered complete-pair decision through their owning adapters; contract/compiler metadata alone never supplies row authority.
 
 ## Relationship-route composition
 

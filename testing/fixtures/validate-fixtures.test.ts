@@ -220,40 +220,43 @@ describe("complete fixture set", () => {
     ).toBe(true);
   });
 
+  const compileCurrentFixtures = (): ReturnType<typeof compileDefinitionSet> =>
+    compileDefinitionSet(
+      sources.map((source) => ({
+        source,
+        resolution: source.kind === "module" ? resolutionV2 : resolutionV1,
+        ...(source.kind === "module"
+          ? {
+              sourceContractVersion: "2.0.0" as const,
+              validationContractVersion: "2.0.0" as const,
+            }
+          : {}),
+        ...(source.kind === "connection_type"
+          ? {}
+          : { draftMetadata: source.kind === "module" ? currentDraftMetadata : draftMetadata }),
+        ...(source.kind === "module"
+          ? { savedConditionRevisions: savedConditionRevisions(source, resolutionV2) }
+          : {}),
+      })),
+      {
+        publishedHistories: [
+          ...historicalPublishedHistories,
+          ...sources
+            .filter((source) => source.kind === "application")
+            .map((source) => ({
+              kind: "application" as const,
+              definitionKey: source.key,
+              history: [],
+            })),
+        ],
+      },
+    );
+
   it("parses, compiles and validates all thirteen definitions through shipping code", () => {
     expect(sources).toHaveLength(13);
     let outputs: ReturnType<typeof compileDefinitionSet>;
     try {
-      outputs = compileDefinitionSet(
-        sources.map((source) => ({
-          source,
-          resolution: source.kind === "module" ? resolutionV2 : resolutionV1,
-          ...(source.kind === "module"
-            ? {
-                sourceContractVersion: "2.0.0" as const,
-                validationContractVersion: "2.0.0" as const,
-              }
-            : {}),
-          ...(source.kind === "connection_type"
-            ? {}
-            : { draftMetadata: source.kind === "module" ? currentDraftMetadata : draftMetadata }),
-          ...(source.kind === "module"
-            ? { savedConditionRevisions: savedConditionRevisions(source, resolutionV2) }
-            : {}),
-        })),
-        {
-          publishedHistories: [
-            ...historicalPublishedHistories,
-            ...sources
-              .filter((source) => source.kind === "application")
-              .map((source) => ({
-                kind: "application" as const,
-                definitionKey: source.key,
-                history: [],
-              })),
-          ],
-        },
-      );
+      outputs = compileCurrentFixtures();
     } catch (error) {
       const detail = error as { message?: string; family?: string; location?: unknown };
       throw new Error(
@@ -264,6 +267,39 @@ describe("complete fixture set", () => {
     expect(outputs.filter((output) => output.kind === "module")).toHaveLength(8);
     expect(outputs.filter((output) => output.kind === "application")).toHaveLength(2);
     expect(outputs.filter((output) => output.kind === "connection_type")).toHaveLength(3);
+  });
+
+  /**
+   * Wire parity for #401: the record-storage provisioner must accept exactly the
+   * ownership values the compiler actually emits. The compiler writes `team`
+   * for a Group-owned record type and can never write the runtime term `group`,
+   * but the provisioner accepted only `group`, so every compiled fixture Module
+   * carrying one was refused. Comparing the compiled bytes with the accepted set
+   * in the migration itself is what keeps the two sides from drifting apart
+   * again; asserting the compiled values alone would not have caught it.
+   */
+  it("compiles record ownership to exactly the values the storage provisioner accepts", () => {
+    const recordTypes = compileCurrentFixtures().flatMap((output) =>
+      output.kind === "module" ? output.canonical.content.recordTypes : [],
+    );
+    expect(recordTypes.length).toBeGreaterThan(0);
+    const emitted = new Set<string>(recordTypes.map((recordType) => recordType.ownershipMode));
+    expect(emitted.has("team")).toBe(true);
+    expect(emitted.has("group")).toBe(false);
+
+    const migration = fs.readFileSync(
+      path.resolve(
+        "supabase/migrations/20260912011550_accept_compiled_record_ownership_mode.sql",
+      ),
+      "utf8",
+    );
+    const accepted = /ownership_mode_value not in \(([^)]*)\)/.exec(migration);
+    expect(accepted, "the provisioner's accepted ownership values").not.toBeNull();
+    const acceptedValues = new Set(
+      accepted![1]!.split(",").map((value) => value.trim().replace(/^'|'$/g, "")),
+    );
+    expect(acceptedValues.has("group")).toBe(false);
+    for (const mode of emitted) expect([...acceptedValues], mode).toContain(mode);
   });
 
   it("exercises every field type and workflow-node type", () => {

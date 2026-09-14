@@ -19,6 +19,12 @@ Every record stores or exposes through one joined system record:
 
 Exact columns are defined in the [data contracts](appendices/data-contracts.md#record-storage-contract).
 
+Initial account ownership is the creator; initial Group ownership requires a
+selected current membership Group. Protected ownership transfer, account
+offboarding, per-record-type lifecycle limits and automatic deadline calculations
+follow [record ownership and lifecycle policies](appendices/record-ownership-and-lifecycle.md).
+These are required engine behaviours, not ordinary editable system fields.
+
 The record's physical table follows its storage contract, not the name of the organisation, application, module, or record type. Consequently, two organisations can each own an application named CRM without colliding, and CRM and Service Desk can use one organisation-owned Company record without copying it. The complete allocation rule is in [runtime storage](17-runtime-storage-and-caching.md#record-table-allocation).
 
 ## Save sequence
@@ -70,7 +76,79 @@ not saved. A Require-field node accumulates a check until the final candidate
 exists, including any generated value. Explicit Refuse still stops immediately.
 See the [save integration plan](../build-plan/issue-47-save-command.md#candidate-preparation-and-final-validation).
 
-This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). In the target runtime, a configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. The actual protected Record execution and receipt boundary remains owned by [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47); this flow description does not claim it is delivered.
+This sequence defines one protected Record operation, not a transaction around an entire [Frontend Flow](appendices/frontend-rule-designer.md). A configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later node failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) delivered the base ordinary-human create/update implementation over active installed definitions with [hosted Testing acceptance](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47#issuecomment-5656036501). Subsequent #48 stages integrated calculations and relationship totals into the same protected operation. Immediate Rules, deadline-driven recalculation, named-action execution and broader relationships retain their existing owners in the [save plan](../build-plan/issue-47-save-command.md#supported-now-and-later-owners).
+
+### Private recalculation scope
+
+The existing human `SaveRecordCommandV2` remains the closed input for an
+ordinary create or update. It deliberately contains no actor, organisation,
+Application, installed binding, row-scope, authority declaration or generated
+parent mutation. Parsing a valid command is therefore not authority to use it:
+it cannot construct private Record scope or private recalculation authority.
+
+The trusted human request boundary resolves the session and selected
+organisation/Application into the transaction context before the private Record
+adapter runs. Private preparation derives the active installation, concrete
+record closure, current Access and RLS-visible rows from that context and locked
+database facts; it does not accept a caller-built context, selected parent set,
+or caller assertion that a recalculation is authorised. The narrow runtime-role
+to request-role setting read occurs only after that private preparation; the
+runtime role is restored in a `finally` path before persistence. Any future
+factoring must preserve that ordering and restoration.
+
+A missing, stale, foreign, mismatched, or forged context/setting must fail
+closed before a private snapshot, relationship source, parent mutation, or
+settings-derived calculation is used. In particular, a request role cannot
+install trusted context, and an untrusted setting that names another
+organisation, account, or Application must not widen RLS scope. These are
+scope-construction and ACL/RLS requirements, not an invitation to add another
+system-context mechanism.
+
+The focused [#466](https://github.com/Abzum-NZ/Abzum-Vortex/issues/466)
+regression retains those existing private seams and proves that a stale Access
+version is refused by the composed relationship-total save before it can reach
+the locked parent route; no Record, Activity, Event, queue or receipt effect is
+created. It adds no System or specified-account execution capability or
+attribution. Its independently reviewed Testing revision remains subject to
+normal hosted verification before the delivery is closed.
+
+This currently describes ordinary-human attribution only. The Record save
+service does not yet invoke a private recalculation as a System or
+specified-account actor, and it must not relabel a human context as system or
+invent system attribution. A distinct trusted execution identity and its
+attribution rules must be designed before any such caller is introduced; they
+are not implicit in the current human save path.
+
+The affected private seams are kept explicit: base preparation and save are
+[`prepare_base_record_save`](../../supabase/migrations/20260913120000_enable_same_record_calculation_saves.sql#L117-L317)
+and [`save_base_record`](../../supabase/migrations/20260913115000_base_protected_record_save.sql#L376-L1008);
+the active installation is resolved by
+[`read_current_active_installation`](../../supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql#L944-L1066);
+the transaction context is stored and read through
+[`request_contexts`](../../supabase/migrations/20260911063404_request_context_transaction_store.sql#L6-L74)
+and scope accessors that read the context established once by the owner-only
+transaction store, whose initializer refuses replacement:
+[`organization_id`](../../supabase/migrations/20260903115546_database_scope_request_role.sql#L334-L342)
+and [`application_root_id`](../../supabase/migrations/20260903115546_database_scope_request_role.sql#L344-L352);
+and generated record tables enforce their policy at
+[`record_storage_provisioning`](../../supabase/migrations/20260908122641_record_storage_provisioning.sql#L638-L663).
+Relationship-total preparation, closure and application remain in
+[`20260914013000_transactional_relationship_totals.sql`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L818),
+while the private Event append retains the human-context boundary in
+[`20260913060000_first_private_transactional_event_append.sql`](../../supabase/migrations/20260913060000_first_private_transactional_event_append.sql#L232-L262).
+Activity append is
+[`append_base_save_activity_internal`](../../supabase/migrations/20260913115000_base_protected_record_save.sql#L71-L179);
+the private total catalogue, snapshot, closure and parent application are at
+[`20260914013000_transactional_relationship_totals.sql`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L738);
+and the two organization-runtime-settings readers are
+[`read_current_organization_runtime_settings_internal`](../../supabase/migrations/20260913110000_organization_runtime_settings.sql#L349-L382)
+and [`read_current_organization_runtime_settings_for_application`](../../supabase/migrations/20260913110000_organization_runtime_settings.sql#L384-L445).
+
+The present Event `organizationAccountId` UUID, Record receipts, and generated
+attribution all assume an account identity. A time-based caller therefore needs
+a deliberately defined trusted identity and compatible attribution before it
+can exist. This is a prerequisite for [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48),
+not a reason to invent a System context in an ordinary-human save.
 
 ## Concurrent changes
 
@@ -80,7 +158,16 @@ Clients may present a comparison and allow the person to reapply their changes. 
 
 ## Reference numbers
 
-Reference numbers are issued inside the save transaction from an organisation-and-record-type sequence. A rolled-back transaction may leave a gap. Numbers are unique but are not promised to be continuous.
+Reference numbers are issued inside the owning record transaction from one
+locked counter per organisation, storage contract, field, and application root
+when the storage is application-contained. Organisation-shared storage uses a
+real application-less scope; it does not substitute a sentinel application.
+An omitted published `startingNumber` means `1`, while an explicit positive
+integer overrides it. `digits` is a minimum zero-padding width and never
+truncates a larger value; published prefix and suffix text are preserved.
+Rolled-back allocation rolls back with the record, while a committed transaction
+may leave a gap after later permanent removal. Numbers are unique but are not
+promised to be continuous.
 
 ## Uniqueness
 
@@ -107,9 +194,16 @@ stateDiagram-v2
 
 - Soft-deleted records are excluded from ordinary reads, search, totals, choices, and relationship navigation.
 - A deleted record and its directly owned files remain recoverable for the configured recovery period.
-- Relationship deletion behaviour from [modules, fields and relationships](05-modules-fields-and-relationships.md) is applied in a deterministic order.
-- Restore revalidates required relationships, access, and the current published record definition. Its unique values remain reserved throughout recovery, so restoration cannot conflict with a value accepted during the recovery window.
+- Relationship deletion behaviour from [modules, fields and relationships](05-modules-fields-and-relationships.md) is applied in a deterministic order. Refuse needs no child mutation permission; emptying an optional child link requires current update access to that child, and soft-deleting an exact inherited-owner dependent requires current delete access to that child. Parent delete authority is still required.
+- Restore revalidates current restore access and the current published record definition. Before reactivation, every currently required non-link value must still be present, non-null and canonical for its storage type, and every currently required fixed-target link must agree with exactly one retained edge to a locked, active target the person may read. Complete settings and live-reference validation of the final record remains part of the [protected save command](../build-plan/issue-47-save-command.md), not this private lifecycle primitive. Its unique values remain reserved throughout recovery, so restoration cannot conflict with a value accepted during the recovery window.
 - Permanent removal follows [privacy and retention](14-activity-privacy-and-retention.md) and records an irreversible-removal receipt without retaining the removed business content.
+
+The private create/delete/restore primitives delivered before the full save
+pipeline retain the row and recovery facts but do not decide whether a recovery
+window is still open. That policy belongs to the organisation and record-type
+lifecycle integration in [#408](https://github.com/Abzum-NZ/Abzum-Vortex/issues/408)
+and [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117); their absence is
+not treated as an unlimited-retention default.
 
 ## Bulk changes
 

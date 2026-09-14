@@ -1520,28 +1520,33 @@ const connectionSourceTransformPatterns = [
   /^body\/(?:health_operation|revocation_operation)$/,
 ] as const;
 
-function conditionSourcePathMatches(path: string, root: string): boolean {
+function conditionSourcePathPattern(root: string): RegExp {
   const prefix = root.replaceAll("#", "\\#").replaceAll("/", "\\/");
   return new RegExp(
     `^${prefix}(?:(?:\\/(?:all|any)\\/#)|(?:\\/not))*\\/(?:field|operator|parameter|value|(?:left|right)\\/(?:source|field|parameter|value))(?:\\/.*)?$`,
-  ).test(path);
+  );
 }
 
+// Built once: these run for every source leaf of every compile. No flags, so no lastIndex state.
+const conditionSourcePathPatterns = [
+  "body/actions/#/precondition",
+  "body/rules/#/condition",
+  "body/sharing_conditions/#/condition",
+  "body/record_types/#/fields/#/settings/filter",
+  "body/record_types/#/fields/#/settings/expression/condition",
+  "body/queries/#/filter",
+  "body/pipelines/#/transitions/#/gate",
+  "body/workflows/#/nodes/#/config/decisions/#/when",
+  "body/workflows/#/trigger/condition",
+  "body/pages/#/blocks/#/visibility_condition",
+  "body/pages/#/steps/#/blocks/#/visibility_condition",
+].map(conditionSourcePathPattern);
+const workflowConditionNodePathPattern = conditionSourcePathPattern(
+  "body/workflows/#/nodes/#/config",
+);
+
 function isConditionSourcePath(path: string): boolean {
-  const roots = [
-    "body/actions/#/precondition",
-    "body/rules/#/condition",
-    "body/sharing_conditions/#/condition",
-    "body/record_types/#/fields/#/settings/filter",
-    "body/record_types/#/fields/#/settings/expression/condition",
-    "body/queries/#/filter",
-    "body/pipelines/#/transitions/#/gate",
-    "body/workflows/#/nodes/#/config/decisions/#/when",
-    "body/workflows/#/trigger/condition",
-    "body/pages/#/blocks/#/visibility_condition",
-    "body/pages/#/steps/#/blocks/#/visibility_condition",
-  ];
-  return roots.some((root) => conditionSourcePathMatches(path, root));
+  return conditionSourcePathPatterns.some((pattern) => pattern.test(path));
 }
 
 function isWorkflowConditionNodePath(
@@ -1562,10 +1567,7 @@ function isWorkflowConditionNodePath(
   const body = asObject(source.body);
   const workflow = (body.workflows as JsonObject[])[sourcePath[2]];
   const node = workflow ? (workflow.nodes as JsonObject[])[sourcePath[4]] : undefined;
-  return (
-    node?.type === "condition" &&
-    conditionSourcePathMatches(normalizedPath, "body/workflows/#/nodes/#/config")
-  );
+  return node?.type === "condition" && workflowConditionNodePathPattern.test(normalizedPath);
 }
 
 function sourceTransformationApproved(source: JsonObject, sourcePath: Path): boolean {
@@ -1798,10 +1800,29 @@ function provenanceFor(
   return entries;
 }
 
+type ResolutionSnapshot =
+  DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
+
+/**
+ * Narrowing key only. Every lookup still applies its own predicate to the entries it finds, so
+ * a separator inside an alias can widen the candidates but never change what matches.
+ */
+const identityLookupKey = (definitionKey: string, kind: string, alias: string): string =>
+  `${definitionKey}\0${kind}\0${alias}`;
+
 class Resolution {
   readonly snapshot:
     DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
   readonly sourceLocation: DefinitionValidationLocation;
+  /** Filled by the constructor passes that already visit every definition and identity. */
+  private readonly definitionsByKey = new Map<
+    string,
+    ResolutionSnapshot["definitions"][number][]
+  >();
+  private readonly identitiesByLookup = new Map<
+    string,
+    ResolutionSnapshot["identities"][number][]
+  >();
 
   constructor(
     snapshot:
@@ -1869,6 +1890,9 @@ class Resolution {
         `${definition.key}:root`,
         "vortex.definition.duplicate_resolution",
       );
+      const sameKey = this.definitionsByKey.get(definition.key);
+      if (sameKey) sameKey.push(definition);
+      else this.definitionsByKey.set(definition.key, [definition]);
     }
     const identities = new Set<string>();
     for (const identity of snapshot.identities) {
@@ -1911,6 +1935,10 @@ class Resolution {
         componentOwner,
         "vortex.definition.duplicate_identity_resolution",
       );
+      const lookupKey = identityLookupKey(identity.definitionKey, identity.kind, identity.alias);
+      const sameLookup = this.identitiesByLookup.get(lookupKey);
+      if (sameLookup) sameLookup.push(identity);
+      else this.identitiesByLookup.set(lookupKey, [identity]);
     }
     for (const group of identityOwnerGroups.values())
       if (group.identifiers.size !== 1)
@@ -1955,7 +1983,7 @@ class Resolution {
   }
 
   definition(key: string, kind?: "module" | "application" | "connection_type") {
-    const matches = this.snapshot.definitions.filter(
+    const matches = (this.definitionsByKey.get(key) ?? []).filter(
       (entry) => entry.key === key && (kind === undefined || entry.kind === kind),
     );
     const location = this.location(kind ?? "module", key);
@@ -1967,7 +1995,9 @@ class Resolution {
   }
 
   id(definitionKey: string, kind: string, alias: string, scope?: string): string {
-    const matches = this.snapshot.identities.filter(
+    const matches = (
+      this.identitiesByLookup.get(identityLookupKey(definitionKey, kind, alias)) ?? []
+    ).filter(
       (entry) =>
         entry.definitionKey === definitionKey &&
         entry.kind === kind &&
@@ -2022,13 +2052,18 @@ class Resolution {
 
   permission(key: string, allowedDefinitionKeys: readonly string[]): string {
     const allowed = new Set(allowedDefinitionKeys);
-    const matches = this.snapshot.identities.filter(
-      (entry) =>
-        allowed.has(entry.definitionKey) &&
-        entry.scope === "content" &&
-        entry.kind === "permission" &&
-        entry.alias === key,
-    );
+    const matches = [...allowed]
+      .flatMap(
+        (definitionKey) =>
+          this.identitiesByLookup.get(identityLookupKey(definitionKey, "permission", key)) ?? [],
+      )
+      .filter(
+        (entry) =>
+          allowed.has(entry.definitionKey) &&
+          entry.scope === "content" &&
+          entry.kind === "permission" &&
+          entry.alias === key,
+      );
     const unique = [...new Set(matches.map((entry) => entry.identifier))];
     if (unique.length === 0)
       fail(
@@ -2051,13 +2086,18 @@ class Resolution {
     allowedDefinitionKeys: readonly string[],
   ): string {
     const allowed = new Set(allowedDefinitionKeys);
-    const matches = this.snapshot.identities.filter(
-      (entry) =>
-        allowed.has(entry.definitionKey) &&
-        entry.scope === "content" &&
-        entry.kind === kind &&
-        entry.alias === key,
-    );
+    const matches = [...allowed]
+      .flatMap(
+        (definitionKey) =>
+          this.identitiesByLookup.get(identityLookupKey(definitionKey, kind, key)) ?? [],
+      )
+      .filter(
+        (entry) =>
+          allowed.has(entry.definitionKey) &&
+          entry.scope === "content" &&
+          entry.kind === kind &&
+          entry.alias === key,
+      );
     const unique = [...new Set(matches.map((entry) => entry.identifier))];
     if (unique.length === 0)
       fail("vortex.definition.missing_identity", "unresolved_reference", this.location(kind, key));
@@ -4741,14 +4781,35 @@ function parseDefinitionCompilationContext(
   return parsed.data.dependencyOutputs ?? [];
 }
 
+/**
+ * The limits definitionPublicationContextSchema places on dependencyOutputs, for outputs that
+ * already passed its element schema. parseDefinitionCompilationContext applied them on every
+ * compile, so a set whose dependency outputs repeat a subject it has just compiled is still
+ * refused here, with the same code and no location.
+ */
+function assertDependencyOutputLimits(
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): void {
+  const subjects = dependencyOutputs.map((output) =>
+    output.kind === "connection_type" ? output.canonical.key : output.canonical.envelope.key,
+  );
+  if (subjects.length > 10_000 || new Set(subjects).size !== subjects.length)
+    fail("vortex.definition.invalid_compilation_request", "invalid_value");
+}
+
 function compileDefinitionInternal(
   input: unknown,
   context?: DefinitionCompilationContext,
 ): DefinitionCompilationOutput {
   const parsed = definitionCompilationRequestSchema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const request = parsed.data;
-  const dependencyOutputs = parseDefinitionCompilationContext(context);
+  return compileParsedLegacyRequest(parsed.data, parseDefinitionCompilationContext(context));
+}
+
+function compileParsedLegacyRequest(
+  request: ParsedLegacyRequest,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): DefinitionCompilationOutput {
   const sourceDocument = request.source;
   const source = sourceDocument as unknown as JsonObject;
   try {
@@ -5282,10 +5343,15 @@ function compileApplicationV2Internal(
 ): ApplicationCompilationOutputV2 {
   const parsed = applicationCompilationRequestV2Schema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const request = parsed.data;
+  return compileParsedApplicationV2Request(parsed.data, parseDefinitionCompilationContext(context));
+}
+
+function compileParsedApplicationV2Request(
+  request: ParsedApplicationV2Request,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ApplicationCompilationOutputV2 {
   const source = request.source;
   const sourceObject = source as unknown as JsonObject;
-  const dependencyOutputs = parseDefinitionCompilationContext(context);
   try {
     const resolution = new Resolution(request.resolution, sourceObject);
     const valueIndex = applicationModuleValueIndex(sourceObject, resolution, dependencyOutputs);
@@ -5344,9 +5410,14 @@ function compileModuleV2Internal(
 ): ModuleCompilationOutputV2 {
   const parsed = moduleCompilationRequestV2Schema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const request = parsed.data;
+  return compileParsedModuleV2Request(parsed.data, parseDefinitionCompilationContext(context));
+}
+
+function compileParsedModuleV2Request(
+  request: ParsedModuleV2Request,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ModuleCompilationOutputV2 {
   const source = request.source as unknown as JsonObject;
-  const dependencyOutputs = parseDefinitionCompilationContext(context);
   try {
     const resolution = new Resolution(request.resolution, source);
     const canonical = moduleDraftV2Schema.parse(
@@ -5399,9 +5470,14 @@ function compileModuleV3Internal(
 ): ModuleCompilationOutputV3 {
   const parsed = moduleCompilationRequestV3Schema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const request = parsed.data;
+  return compileParsedModuleV3Request(parsed.data, parseDefinitionCompilationContext(context));
+}
+
+function compileParsedModuleV3Request(
+  request: ParsedModuleV3Request,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ModuleCompilationOutputV3 {
   const source = request.source as unknown as JsonObject;
-  const dependencyOutputs = parseDefinitionCompilationContext(context);
   try {
     const resolution = new Resolution(request.resolution, source);
     const definitionKey = request.source.key;
@@ -5522,6 +5598,59 @@ const explicitCompilationKind = (input: unknown): "module" | "application" | und
   const kind = (request.source as JsonObject).kind;
   return kind === "module" || kind === "application" ? kind : undefined;
 };
+
+/** Requests as this package's own schemas return them, carrying the ids compiling needs. */
+type ParsedLegacyRequest = ReturnType<typeof definitionCompilationRequestSchema.parse>;
+type ParsedApplicationV2Request = ReturnType<typeof applicationCompilationRequestV2Schema.parse>;
+type ParsedModuleV2Request = ReturnType<typeof moduleCompilationRequestV2Schema.parse>;
+type ParsedModuleV3Request = ReturnType<typeof moduleCompilationRequestV3Schema.parse>;
+
+/** The request shapes the compile entry points dispatch on, as they declare them. */
+type DispatchableCompilationRequest =
+  | DefinitionCompilationRequest
+  | ApplicationCompilationRequestV2
+  | ModuleCompilationRequestV2
+  | ModuleCompilationRequestV3;
+
+/**
+ * Package-internal compile entry for a request this package parsed and dependency outputs it
+ * parsed or produced, so neither is parsed a second time. index.ts and compiler-api.ts do not
+ * re-export it: callers outside this package use compileDefinition or
+ * compileDefinitionWithContext, which parse what they are given.
+ */
+export function compileParsedDefinition(
+  request: ApplicationCompilationRequestV2,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ApplicationCompilationOutputV2;
+export function compileParsedDefinition(
+  request: ModuleCompilationRequestV2,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ModuleCompilationOutputV2;
+export function compileParsedDefinition(
+  request: ModuleCompilationRequestV3,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): ModuleCompilationOutputV3;
+export function compileParsedDefinition(
+  request: DefinitionCompilationRequest,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): DefinitionCompilationOutput;
+export function compileParsedDefinition(
+  request: DispatchableCompilationRequest,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+): DefinitionCompilationOutput {
+  assertDependencyOutputLimits(dependencyOutputs);
+  const explicitKind = explicitCompilationKind(request);
+  if (explicitKind === "module")
+    return "sourceContractVersion" in request && request.sourceContractVersion === "3.0.0"
+      ? compileParsedModuleV3Request(request as ParsedModuleV3Request, dependencyOutputs)
+      : compileParsedModuleV2Request(request as ParsedModuleV2Request, dependencyOutputs);
+  if (explicitKind === "application")
+    return compileParsedApplicationV2Request(
+      request as ParsedApplicationV2Request,
+      dependencyOutputs,
+    );
+  return compileParsedLegacyRequest(request as ParsedLegacyRequest, dependencyOutputs);
+}
 
 export function compileDefinition(
   input: ApplicationCompilationRequestV2,

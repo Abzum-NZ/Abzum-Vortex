@@ -403,7 +403,7 @@ select is(
   'account closure and Access invalidation commit together'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(
   pg_catalog.jsonb_build_object(
     'callerKind', 'human',
@@ -442,7 +442,7 @@ select results_eq(
   'missing version storage leaves account state and revision unchanged'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(
   pg_catalog.jsonb_build_object(
     'callerKind', 'human',

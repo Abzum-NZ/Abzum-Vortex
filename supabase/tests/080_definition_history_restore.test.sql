@@ -224,20 +224,6 @@ insert into vortex_definition.roots (
   '98000000-0000-4000-8000-000000000080'
 );
 
-insert into vortex_definition.drafts (
-  root_id, draft_revision, draft_source, identity_requirements,
-  source_contract_version, source_fingerprint, updated_at, updated_by
-) values (
-  '38000000-0000-4000-8000-000000000080',
-  1,
-  '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"draft"}}'::jsonb,
-  '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb,
-  '1.0.0',
-  'sha256:' || pg_catalog.repeat('d', 64),
-  pg_catalog.statement_timestamp(),
-  '98000000-0000-4000-8000-000000000080'
-);
-
 insert into vortex_definition.source_identities (
   identity_id, root_id, owner_scope, kind, component_owner, created_at, created_by
 ) values (
@@ -263,104 +249,36 @@ insert into vortex_definition.source_identity_aliases (
   '98000000-0000-4000-8000-000000000080'
 );
 
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
+insert into vortex_definition.drafts (
+  root_id, draft_revision, draft_source, source_contract_version, source_fingerprint,
+  identity_requirements, updated_at, updated_by
 ) values
 (
-  '38000000-0000-4000-8000-000000000080', 1, '1.0.0',
+  '38000000-0000-4000-8000-000000000080', 1,
   '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"old"}}'::jsonb,
-  'sha256:' || pg_catalog.repeat('1', 64), '1.0.0',
-  '{"kind":"module","canonical":{"content":{"marker":"old"}}}'::jsonb,
-  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('a', 64)),
-  'sha256:' || pg_catalog.repeat('b', 64), 'sha256:' || pg_catalog.repeat('a', 64),
-  '1.0.0', 'sha256:' || pg_catalog.repeat('c', 64), '[]'::jsonb,
-  'Initial generic release', pg_catalog.statement_timestamp(),
+  '1.0.0', 'sha256:' || pg_catalog.repeat('1', 64),
+  '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb,
+  pg_catalog.statement_timestamp(),
   '98000000-0000-4000-8000-000000000080'
 ),
 (
-  '38000000-0000-4000-8000-000000000080', 2, '1.1.0',
-  '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"middle"}}'::jsonb,
-  'sha256:' || pg_catalog.repeat('2', 64), '1.0.0',
-  '{"kind":"module","canonical":{"content":{"marker":"middle"}}}'::jsonb,
-  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('e', 64)),
-  'sha256:' || pg_catalog.repeat('f', 64), 'sha256:' || pg_catalog.repeat('e', 64),
-  '1.0.0', 'sha256:' || pg_catalog.repeat('0', 64), '[]'::jsonb,
-  'Middle generic release', pg_catalog.statement_timestamp(),
-  '98000000-0000-4000-8000-000000000080'
-),
-(
-  '38000000-0000-4000-8000-000000000080', 3, '1.2.0',
-  '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"current"}}'::jsonb,
-  'sha256:' || pg_catalog.repeat('3', 64), '1.0.0',
-  '{"kind":"module","canonical":{"content":{"marker":"current"}}}'::jsonb,
-  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('4', 64)),
-  'sha256:' || pg_catalog.repeat('5', 64), 'sha256:' || pg_catalog.repeat('4', 64),
-  '1.0.0', 'sha256:' || pg_catalog.repeat('6', 64), '[]'::jsonb,
-  'Current generic release', pg_catalog.statement_timestamp(),
-  '98000000-0000-4000-8000-000000000080'
-),
-(
-  '38000000-0000-4000-8000-000000000082', 1, '1.0.0',
-  '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"foreign"}}'::jsonb,
-  'sha256:' || pg_catalog.repeat('7', 64), '1.0.0',
-  '{"kind":"module","canonical":{"content":{"marker":"foreign"}}}'::jsonb,
-  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('8', 64)),
-  'sha256:' || pg_catalog.repeat('9', 64), 'sha256:' || pg_catalog.repeat('8', 64),
-  '1.0.0', 'sha256:' || pg_catalog.repeat('a', 64), '[]'::jsonb,
-  'Foreign generic release', pg_catalog.statement_timestamp(),
-  '98000000-0000-4000-8000-000000000080'
-);
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-) values (
-  '38000000-0000-4000-8000-000000000081', 1, '1.0.0',
+  '38000000-0000-4000-8000-000000000081', 1,
   '{"source_contract_version":"2.0.0","kind":"application","key":"example.history_restore","body":{"shells":[],"pages":[]}}'::jsonb,
-  'sha256:' || pg_catalog.repeat('a', 64), '2.0.0',
-  '{"kind":"application","validationContractVersion":"2.0.0","canonical":{"content":{"shells":[],"pages":[]}}}'::jsonb,
-  pg_catalog.jsonb_build_object(
-    'contractVersion', '2.0.0',
-    'fingerprint', 'sha256:' || pg_catalog.repeat('b', 64),
-    'identities', '[]'::jsonb,
-    'definitions', '[]'::jsonb
-  ),
-  'sha256:' || pg_catalog.repeat('c', 64), 'sha256:' || pg_catalog.repeat('b', 64),
-  '2.0.0', 'sha256:' || pg_catalog.repeat('d', 64), '[]'::jsonb,
-  'Native application release', pg_catalog.statement_timestamp(),
+  '2.0.0', 'sha256:' || pg_catalog.repeat('a', 64),
+  '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb,
+  pg_catalog.statement_timestamp(),
+  '98000000-0000-4000-8000-000000000080'
+),
+(
+  '38000000-0000-4000-8000-000000000082', 1,
+  '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"foreign"}}'::jsonb,
+  '1.0.0', 'sha256:' || pg_catalog.repeat('7', 64),
+  '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb,
+  pg_catalog.statement_timestamp(),
   '98000000-0000-4000-8000-000000000080'
 );
 
-insert into vortex_definition.release_dependencies (
-  root_id, release_revision, dependency_kind, dependency_reference,
-  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
-  target_root_id, target_release_revision, catalogue_item_id
-) values (
-  '38000000-0000-4000-8000-000000000081', 1, 'platform_block',
-  '68000000-0000-4000-8000-000000000080', '3.0.0',
-  'sha256:' || pg_catalog.repeat('e', 64),
-  'sha256:' || pg_catalog.repeat('f', 64),
-  null, null, '68000000-0000-4000-8000-000000000080'
-);
-
-update vortex_definition.roots
-set current_release_revision = case root_id
-  when '38000000-0000-4000-8000-000000000080'::uuid then 3
-  when '38000000-0000-4000-8000-000000000082'::uuid then 1
-  else null
-end
-where root_id in (
-  '38000000-0000-4000-8000-000000000080'::uuid,
-  '38000000-0000-4000-8000-000000000082'::uuid
-);
-
-create function pg_temp.history_restore_context()
+create or replace function pg_temp.history_restore_context()
 returns jsonb
 language sql
 volatile
@@ -380,12 +298,307 @@ as $function$
   )
 $function$;
 
-grant execute on function pg_temp.history_restore_context() to vortex_runtime;
+create function pg_temp.history_restore_release_compilation(
+  p_root_id uuid,
+  p_organization_id uuid,
+  p_kind text,
+  p_key text,
+  p_release_version text,
+  p_validation_contract_version text,
+  p_canonical_content jsonb,
+  p_content_fingerprint text,
+  p_resolution_fingerprint text
+)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'kind', p_kind,
+    'resolutionFingerprint', p_resolution_fingerprint,
+    'artifact', pg_catalog.jsonb_build_object(
+      'kind', p_kind,
+      'rootId', p_root_id,
+      'definitionKey', p_key,
+      'exactVersion', p_release_version,
+      'contentFingerprint', p_content_fingerprint,
+      'resolutionFingerprint', p_resolution_fingerprint
+    ),
+    'canonical', pg_catalog.jsonb_build_object(
+      'envelope', pg_catalog.jsonb_build_object(
+        'kind', p_kind,
+        'key', p_key,
+        'rootId', p_root_id,
+        'organizationId', p_organization_id
+      ),
+      'content', p_canonical_content
+    ),
+    'validationContractVersion', p_validation_contract_version
+  )
+ $function$;
+
+create or replace function pg_temp.history_restore_context_org_081()
+returns jsonb
+language sql
+volatile
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'callerKind', 'system',
+    'tenantId', '18000000-0000-4000-8000-000000000080'::uuid,
+    'organizationId', '28000000-0000-4000-8000-000000000081'::uuid,
+    'sessionId', '68000000-0000-4000-8000-000000000081'::uuid,
+    'issuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
+    'expiresAt', pg_catalog.clock_timestamp() + interval '5 minutes',
+    'accessVersion', 1,
+    'correlationId', '78000000-0000-4000-8000-000000000081'::uuid,
+    'systemActorId', '98000000-0000-4000-8000-000000000080'::uuid,
+    'authenticationStrength', 'service'
+  )
+$function$;
+
+create function pg_temp.history_restore_resolution_snapshot(
+  p_root_id uuid,
+  p_kind text,
+  p_definition_key text,
+  p_release_version text,
+  p_resolution_fingerprint text
+)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'fingerprint', p_resolution_fingerprint,
+    'definitions', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'kind', p_kind,
+        'key', p_definition_key,
+        'rootId', p_root_id,
+        'exactVersion', p_release_version
+      )
+    )
+  )
+$function$;
+
+grant execute on function pg_temp.history_restore_context() to vortex_runtime, vortex_request;
+grant execute on function pg_temp.history_restore_context_org_081() to vortex_runtime, vortex_request;
+grant execute on function pg_temp.history_restore_release_compilation(uuid,uuid,text,text,text,text,jsonb,text,text) to vortex_runtime, vortex_request;
+grant execute on function pg_temp.history_restore_resolution_snapshot(uuid,text,text,text,text) to vortex_runtime, vortex_request;
 grant usage on schema extensions to vortex_runtime, vortex_request;
 
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.history_restore_context());
 set local role vortex_request;
+
+select * from vortex_definition.append_release(
+  '38000000-0000-4000-8000-000000000080'::uuid,
+  1,
+  'sha256:' || pg_catalog.repeat('1', 64),
+  pg_catalog.jsonb_build_object(
+    'releaseVersion', '1.0.0',
+    'compilationOutput', pg_temp.history_restore_release_compilation(
+      '38000000-0000-4000-8000-000000000080'::uuid,
+      '28000000-0000-4000-8000-000000000080'::uuid,
+      'module',
+      'example.history_restore',
+      '1.0.0',
+      '1.0.0',
+      pg_catalog.jsonb_build_object('marker', 'old'),
+      'sha256:' || pg_catalog.repeat('b', 64),
+      'sha256:' || pg_catalog.repeat('a', 64)
+    ),
+    'resolutionSnapshot', pg_temp.history_restore_resolution_snapshot(
+      '38000000-0000-4000-8000-000000000080'::uuid,
+      'module',
+      'example.history_restore',
+      '1.0.0',
+      'sha256:' || pg_catalog.repeat('a', 64)
+    ),
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('b', 64),
+    'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('a', 64),
+    'validationContractVersion', '1.0.0',
+    'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('c', 64),
+    'impactReasons', '[]'::jsonb,
+    'releaseNote', 'Initial generic release',
+    'dependencies', '[]'::jsonb
+  )
+);
+select * from vortex_definition.save_draft(
+  '38000000-0000-4000-8000-000000000080'::uuid,
+  1,
+  '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"middle"}}'::jsonb,
+  'sha256:' || pg_catalog.repeat('2', 64),
+  '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb
+);
+select * from vortex_definition.append_release(
+  '38000000-0000-4000-8000-000000000080'::uuid,
+  2,
+  'sha256:' || pg_catalog.repeat('2', 64),
+  pg_catalog.jsonb_build_object(
+    'releaseVersion', '1.1.0',
+    'compilationOutput', pg_temp.history_restore_release_compilation(
+      '38000000-0000-4000-8000-000000000080'::uuid,
+      '28000000-0000-4000-8000-000000000080'::uuid,
+      'module',
+      'example.history_restore',
+      '1.1.0',
+      '1.0.0',
+      pg_catalog.jsonb_build_object('marker', 'middle'),
+      'sha256:' || pg_catalog.repeat('f', 64),
+      'sha256:' || pg_catalog.repeat('e', 64)
+    ),
+    'resolutionSnapshot', pg_temp.history_restore_resolution_snapshot(
+      '38000000-0000-4000-8000-000000000080'::uuid,
+      'module',
+      'example.history_restore',
+      '1.1.0',
+      'sha256:' || pg_catalog.repeat('e', 64)
+    ),
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('f', 64),
+    'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('e', 64),
+    'validationContractVersion', '1.0.0',
+    'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('0', 64),
+    'impactReasons', '[]'::jsonb,
+    'releaseNote', 'Middle generic release',
+    'dependencies', '[]'::jsonb
+  )
+);
+select * from vortex_definition.save_draft(
+  '38000000-0000-4000-8000-000000000080'::uuid,
+  2,
+  '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"current"}}'::jsonb,
+  'sha256:' || pg_catalog.repeat('3', 64),
+  '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb
+);
+select * from vortex_definition.append_release(
+  '38000000-0000-4000-8000-000000000080'::uuid,
+  3,
+  'sha256:' || pg_catalog.repeat('3', 64),
+  pg_catalog.jsonb_build_object(
+    'releaseVersion', '1.2.0',
+    'compilationOutput', pg_temp.history_restore_release_compilation(
+      '38000000-0000-4000-8000-000000000080'::uuid,
+      '28000000-0000-4000-8000-000000000080'::uuid,
+      'module',
+      'example.history_restore',
+      '1.2.0',
+      '1.0.0',
+      pg_catalog.jsonb_build_object('marker', 'current'),
+      'sha256:' || pg_catalog.repeat('5', 64),
+      'sha256:' || pg_catalog.repeat('4', 64)
+    ),
+    'resolutionSnapshot', pg_temp.history_restore_resolution_snapshot(
+      '38000000-0000-4000-8000-000000000080'::uuid,
+      'module',
+      'example.history_restore',
+      '1.2.0',
+      'sha256:' || pg_catalog.repeat('4', 64)
+    ),
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('5', 64),
+    'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('4', 64),
+    'validationContractVersion', '1.0.0',
+    'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('6', 64),
+    'impactReasons', '[]'::jsonb,
+    'releaseNote', 'Current generic release',
+    'dependencies', '[]'::jsonb
+  )
+);
+
+reset role;
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+set local role vortex_runtime;
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.history_restore_context_org_081());
+set local role vortex_request;
+set local search_path = pg_catalog, extensions, public;
+select * from vortex_definition.append_release(
+  '38000000-0000-4000-8000-000000000082'::uuid,
+  1,
+  'sha256:' || pg_catalog.repeat('7', 64),
+  pg_catalog.jsonb_build_object(
+    'releaseVersion', '1.0.0',
+    'compilationOutput', pg_temp.history_restore_release_compilation(
+      '38000000-0000-4000-8000-000000000082'::uuid,
+      '28000000-0000-4000-8000-000000000081'::uuid,
+      'module',
+      'example.history_restore',
+      '1.0.0',
+      '1.0.0',
+      pg_catalog.jsonb_build_object('marker', 'foreign'),
+      'sha256:' || pg_catalog.repeat('9', 64),
+      'sha256:' || pg_catalog.repeat('8', 64)
+    ),
+    'resolutionSnapshot', pg_temp.history_restore_resolution_snapshot(
+      '38000000-0000-4000-8000-000000000082'::uuid,
+      'module',
+      'example.history_restore',
+      '1.0.0',
+      'sha256:' || pg_catalog.repeat('8', 64)
+    ),
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('9', 64),
+  'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('8', 64),
+    'validationContractVersion', '1.0.0',
+    'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('a', 64),
+    'impactReasons', '[]'::jsonb,
+    'releaseNote', 'Foreign generic release',
+    'dependencies', '[]'::jsonb
+  )
+);
+
+reset role;
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+set local role vortex_runtime;
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.history_restore_context());
+set local role vortex_request;
+set local search_path = pg_catalog, extensions, public;
+select * from vortex_definition.append_release(
+  '38000000-0000-4000-8000-000000000081'::uuid,
+  1,
+  'sha256:' || pg_catalog.repeat('a', 64),
+  pg_catalog.jsonb_build_object(
+    'releaseVersion', '1.0.0',
+    'compilationOutput', pg_temp.history_restore_release_compilation(
+      '38000000-0000-4000-8000-000000000081'::uuid,
+      '28000000-0000-4000-8000-000000000080'::uuid,
+      'application',
+      'example.history_restore',
+      '1.0.0',
+      '2.0.0',
+      pg_catalog.jsonb_build_object(
+        'shells', pg_catalog.jsonb_build_array(),
+        'pages', pg_catalog.jsonb_build_array()
+      ),
+      'sha256:' || pg_catalog.repeat('c', 64),
+      'sha256:' || pg_catalog.repeat('b', 64)
+    ),
+    'resolutionSnapshot', pg_temp.history_restore_resolution_snapshot(
+      '38000000-0000-4000-8000-000000000081'::uuid,
+      'application',
+      'example.history_restore',
+      '1.0.0',
+      'sha256:' || pg_catalog.repeat('b', 64)
+    ),
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('c', 64),
+    'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('b', 64),
+    'validationContractVersion', '2.0.0',
+    'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('d', 64),
+    'impactReasons', '[]'::jsonb,
+    'releaseNote', 'Native application release',
+    'dependencies', pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'kind', 'platform_block',
+        'blockId', '68000000-0000-4000-8000-000000000080'::uuid,
+        'releaseVersion', '3.0.0',
+        'contentFingerprint', 'sha256:' || pg_catalog.repeat('e', 64),
+        'catalogueFingerprint', 'sha256:' || pg_catalog.repeat('f', 64)
+      )
+    )
+  )
+);
 
 select is(
   pg_catalog.jsonb_build_array(
@@ -428,26 +641,46 @@ select pg_catalog.set_config(
 );
 savepoint history_append_proof;
 reset role;
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-) values (
-  '38000000-0000-4000-8000-000000000080', 4, '1.3.0',
+select * from vortex_definition.save_draft(
+  '38000000-0000-4000-8000-000000000080'::uuid,
+  3,
   '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"newest"}}'::jsonb,
-  'sha256:' || pg_catalog.repeat('4', 64), '1.0.0',
-  '{"kind":"module","canonical":{"content":{"marker":"newest"}}}'::jsonb,
-  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('7', 64)),
-  'sha256:' || pg_catalog.repeat('8', 64), 'sha256:' || pg_catalog.repeat('7', 64),
-  '1.0.0', 'sha256:' || pg_catalog.repeat('9', 64), '[]'::jsonb,
-  'Later generic release', pg_catalog.statement_timestamp(),
-  '98000000-0000-4000-8000-000000000080'
+  'sha256:' || pg_catalog.repeat('4', 64),
+  '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb
 );
-update vortex_definition.roots
-set current_release_revision = 4
-where root_id = '38000000-0000-4000-8000-000000000080';
+select * from vortex_definition.append_release(
+  '38000000-0000-4000-8000-000000000080'::uuid,
+  4,
+  'sha256:' || pg_catalog.repeat('4', 64),
+  pg_catalog.jsonb_build_object(
+    'releaseVersion', '1.3.0',
+    'compilationOutput', pg_temp.history_restore_release_compilation(
+      '38000000-0000-4000-8000-000000000080'::uuid,
+      '28000000-0000-4000-8000-000000000080'::uuid,
+      'module',
+      'example.history_restore',
+      '1.3.0',
+      '1.0.0',
+      pg_catalog.jsonb_build_object('marker', 'newest'),
+      'sha256:' || pg_catalog.repeat('8', 64),
+      'sha256:' || pg_catalog.repeat('7', 64)
+    ),
+    'resolutionSnapshot', pg_temp.history_restore_resolution_snapshot(
+      '38000000-0000-4000-8000-000000000080'::uuid,
+      'module',
+      'example.history_restore',
+      '1.3.0',
+      'sha256:' || pg_catalog.repeat('7', 64)
+    ),
+    'contentFingerprint', 'sha256:' || pg_catalog.repeat('8', 64),
+    'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('7', 64),
+    'validationContractVersion', '1.0.0',
+    'comparisonFingerprint', 'sha256:' || pg_catalog.repeat('9', 64),
+    'impactReasons', '[]'::jsonb,
+    'releaseNote', 'Later generic release',
+    'dependencies', '[]'::jsonb
+  )
+);
 set local role vortex_request;
 select is(
   (
@@ -553,11 +786,11 @@ select is(
     'module',
     '38000000-0000-4000-8000-000000000080',
     1,
-    1,
+    3,
     'sha256:' || pg_catalog.repeat('1', 64),
     '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb
   ) ->> 'draftRevision',
-  '2',
+  '4',
   'a verified restore increments the expected draft revision exactly once'
 );
 rollback to savepoint restore_rollback_proof;
@@ -572,7 +805,7 @@ select is(
     from vortex_definition.drafts
     where root_id = '38000000-0000-4000-8000-000000000080'
   ),
-  '{"marker":"draft","provenance":null,"revision":1}'::jsonb,
+  '{"marker":"current","provenance":null,"revision":3}'::jsonb,
   'a rolled-back restore leaves neither draft changes nor provenance behind'
 );
 set local role vortex_request;
@@ -581,11 +814,11 @@ select is(
     'module',
     '38000000-0000-4000-8000-000000000080',
     1,
-    1,
+    3,
     'sha256:' || pg_catalog.repeat('1', 64),
     '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb
   ) ->> 'draftRevision',
-  '2',
+  '4',
   'the committed verified restore advances the draft once'
 );
 reset role;
@@ -633,7 +866,7 @@ select is(
     'module',
     '38000000-0000-4000-8000-000000000080',
     1,
-    1,
+    3,
     'sha256:' || pg_catalog.repeat('1', 64),
     '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb
   ),
@@ -647,7 +880,7 @@ select is(
     from vortex_definition.drafts
     where root_id = '38000000-0000-4000-8000-000000000080'
   ),
-  2::bigint,
+  4::bigint,
   'the stale competing restore cannot increment the draft a second time'
 );
 set local role vortex_request;
@@ -656,13 +889,13 @@ select is(
     select draft_revision
     from vortex_definition.save_draft(
       '38000000-0000-4000-8000-000000000080',
-      2,
+      4,
       '{"source_contract_version":"1.0.0","kind":"module","key":"example.history_restore","body":{"marker":"ordinary-save"}}'::jsonb,
       'sha256:' || pg_catalog.repeat('f', 64),
       '[{"definitionKey":"example.history_restore","ownerScope":"document","scope":"document","kind":"root","componentOwner":"root","aliases":["example.history_restore"]}]'::jsonb
     )
   ),
-  3::bigint,
+  5::bigint,
   'an ordinary save continues to use the normal one-step optimistic draft update'
 );
 reset role;

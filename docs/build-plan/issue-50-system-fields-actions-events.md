@@ -142,7 +142,7 @@ cross-namespace UUID inequality check.
   A grant does not imply ownership changes, deletion, restoration or access to
   recipient-owned relationships.
 - Integrate the existing [request-level Activity boundary](issue-41-access-activity.md):
-  one content-free known refusal after rollback using verified local scope;
+  one content-free clean permission refusal before the first write using established local scope;
   no duplicate success activity or fabricated evidence for unexpected/pre-scope
   failures.
 

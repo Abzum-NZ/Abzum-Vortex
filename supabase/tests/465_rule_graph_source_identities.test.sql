@@ -252,7 +252,7 @@ from vortex_definition.source_identities
 where root_id = :'graph_created_root_id'::uuid
   and kind in ('rule_node', 'rule_input', 'rule_variable');
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(
   pg_temp.rule_graph_identity_context(
@@ -343,7 +343,7 @@ insert into vortex_definition.releases (
   '90000000-0000-4000-8000-000000000465'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(
   pg_temp.rule_graph_identity_context(
@@ -394,7 +394,7 @@ select is(
   'restore allocates no duplicate identity rows'
 );
 
-select pg_catalog.set_config('vortex.request_context', '', true);
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
 set local role vortex_runtime;
 select vortex_context.initialize(
   pg_temp.rule_graph_identity_context(

@@ -10,7 +10,12 @@ export * from "./semantic-version";
 export * from "./version-impact";
 export * from "./version-impact-error";
 export * from "./compilation-error";
-export * from "./compiler";
+export {
+  compileDefinition,
+  compileDefinitionWithContext,
+  workflowExecutionDefaults,
+  type DefinitionCompilationContext,
+} from "./compiler";
 export * from "./application-v2-composition";
 export * from "./application-v2-resolution";
 export * from "./application-draft-conversion";

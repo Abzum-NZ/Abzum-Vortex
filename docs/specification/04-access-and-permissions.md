@@ -272,8 +272,9 @@ Each record operation uses a trusted adapter that fixes its declared action and
 storage binding and loads the actual record and relationship facts. A client
 cannot supply its own permission declaration, owner, allowed result or record
 graph. The runtime keeps its restricted database role; it does not acquire owner
-credentials to call the private evaluator. Phase 3 proves this with fixed neutral
-adapters; generated storage later creates the permanent equivalents. The
+credentials to call the private evaluator. Phase 3 proved this with fixed neutral
+adapters; the permanent fixed adapters over provisioned storage now own record
+read and change, and create, delete and restore follow them. The
 [adapter handoff](../build-plan/issue-35-row-policy-composition.md#trusted-record-adapters--8-september-2026)
 keeps these responsibilities separate without another permission system.
 
@@ -301,14 +302,16 @@ share revision without requiring the historical grantor's old field ceiling.
 Row restrictions alone do not hide columns. Protected record projection and change
 operations enforce field bounds before returning data or changing it; the request
 role must not have a raw content-table route that bypasses these operations.
-Fixed neutral adapters prove this in [#37](../build-plan/issue-37-field-access.md),
-and [generated storage #45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45)
-creates the permanent equivalents. The underlying private field helpers are not
+Fixed neutral adapters proved this in [#37](../build-plan/issue-37-field-access.md);
+the permanent fixed adapters over provisioned storage in
+[#45](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) now enforce the same
+bounds for record read and change, resolving each field policy through the same
+private resolver. The underlying private field helpers are not
 client-selectable endpoints.
 
 A role's exact record permissions declare the fields that permission allows a person to read and change. Each immutable `fieldPolicy` contains explicit `readableFieldIds` and `changeableFieldIds`; changeable fields must also be readable. An omitted field is refused by that permission, not a global veto on other independently complete permissions. This follows the existing permission-union model: first prove each permission's own current eligibility and complete record scope, narrow any direct-share contribution by that share's field lists, then combine the surviving contributions. A permission or share that fails its own checks contributes nothing. Do not combine eligibility from one permission with the field policy or record scope of another.
 
-Newly published record permissions require an explicit policy; empty lists are valid for an operation that needs no business-field access. Historical immutable declarations without a policy remain readable and supply no field authority, but do not veto another complete contribution. There is no wildcard that silently includes future fields. Authored field references resolve against the permission's exact record type. Non-record permissions cannot declare a field policy. Policy changes participate in the existing immutable permission-meaning, release-version and acceptance rules; they do not introduce another authority store or approval mechanism. [Field access delivery #37](../build-plan/issue-37-field-access.md) owns this missing contract and compiler work as well as enforcement.
+Newly published record permissions require an explicit policy; empty lists are valid for an operation that needs no business-field access. Historical immutable declarations without a policy remain readable and supply no field authority, but do not veto another complete contribution. There is no wildcard that silently includes future fields. Authored field references resolve against the permission's exact record type. At the [Definition publication boundary](https://github.com/Abzum-NZ/Abzum-Vortex/issues/396), the database applies the same rule before storing a release: a Module-owned permission can name only fields in that exact Module release, while an Application-owned permission can name only fields in the exact Module revisions that release pins. A newer or unpinned Module release cannot lend a field. Non-record permissions cannot declare a field policy. Refusal stores no release or dependency and cannot move the current-release pointer. Historical releases are neither rewritten nor retroactively rejected. Policy changes participate in the existing immutable permission-meaning, release-version and acceptance rules; they do not introduce another authority store or approval mechanism. [Field access delivery #37](../build-plan/issue-37-field-access.md) owns the contract, compiler and runtime enforcement.
 
 Field lists only narrow an already authorised operation: a read permission cannot authorise an update merely because its policy names changeable fields. Before projection or mutation, the engine binds the result to the exact organisation, application, module, record type, storage contract, record and operation using the current request's Access evidence. It omits unreadable values and field-derived labels, choices and validation metadata rather than returning blank or CSS-hidden data. An unauthorised changed field refuses the entire attempted mutation; filtering, sorting, grouping, field aggregates, action inputs and error details cannot bypass the same bounds. Later Record, Query, Interface and MCP consumers reuse this boundary rather than calculating a different policy. [The delivery plan](../build-plan/issue-37-field-access.md) distinguishes engine proofs from those later interfaces.
 

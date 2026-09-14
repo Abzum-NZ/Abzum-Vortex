@@ -1,12 +1,16 @@
 import "server-only";
 
 import {
+  applicationCompilationRequestV2Schema,
   applicationCompositionCatalogueSnapshotV2Schema,
   definitionCompilationOutputSchema,
+  definitionCompilationRequestSchema,
   definitionPublicationConfirmationSchema,
   definitionResolutionSnapshotSchema,
   definitionResolutionSnapshotV2Schema,
   definitionResolutionSnapshotV3Schema,
+  moduleCompilationRequestV2Schema,
+  moduleCompilationRequestV3Schema,
   selectModuleContractPair,
   prepareDefinitionPublicationCommandSchema,
   prepareDefinitionPublicationResultSchema,
@@ -50,9 +54,10 @@ import {
   type SemanticVersion,
 } from "@vortex/contracts";
 import { compare, satisfies } from "semver";
+import type { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
 import { createApplicationResolutionSnapshotV2 } from "./application-v2-resolution";
-import { compileDefinition, compileDefinitionWithContext } from "./compiler";
+import { compileDefinition, compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { deriveSavedConditionRevisions } from "./saved-condition-revisions";
 import { compileDefinitionSet, validateDefinitionSet } from "./validation";
@@ -822,6 +827,24 @@ const provisionalSavedConditionRevisions = (
   });
 };
 
+/**
+ * The request parse compileDefinitionWithContext performed for the requests this service
+ * assembles. compileParsedDefinition takes a parsed request, so the parse happens here, with the
+ * schema that entry point would have selected, and refuses in the same way.
+ */
+const parsedCompilationRequest = <Schema extends z.ZodType>(
+  schema: Schema,
+  request: unknown,
+): z.output<Schema> => {
+  const parsed = schema.safeParse(request);
+  if (!parsed.success)
+    throw new DefinitionCompilationError(
+      "vortex.definition.invalid_compilation_request",
+      "invalid_value",
+    );
+  return parsed.data;
+};
+
 const compileCandidate = (
   candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
@@ -846,7 +869,10 @@ const compileCandidate = (
       catalogueSnapshot: dependencies.compositionV2,
       draftMetadata: draftMetadata(candidate.draft),
     };
-    const output = compileDefinitionWithContext(request, { dependencyOutputs });
+    const output = compileParsedDefinition(
+      parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
+      dependencyOutputs,
+    );
     if (final) {
       const validation = validateDefinitionSet({
         requests: [request],
@@ -873,12 +899,12 @@ const compileCandidate = (
       resolution,
       draftMetadata: draftMetadata(candidate.draft),
     };
-    const provisional = compileDefinitionWithContext(
-      {
+    const provisional = compileParsedDefinition(
+      parsedCompilationRequest(moduleCompilationRequestV3Schema, {
         ...common,
         savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
-      },
-      { dependencyOutputs },
+      }),
+      dependencyOutputs,
     );
     if (
       provisional.kind !== "module" ||
@@ -893,7 +919,11 @@ const compileCandidate = (
       history: candidate.history.history,
     });
     const request = { ...common, savedConditionRevisions };
-    if (!final) return compileDefinitionWithContext(request, { dependencyOutputs });
+    if (!final)
+      return compileParsedDefinition(
+        parsedCompilationRequest(moduleCompilationRequestV3Schema, request),
+        dependencyOutputs,
+      );
     const outputs = compileDefinitionSet([request], {
       dependencyOutputs,
       publishedHistories: [candidate.history],
@@ -920,12 +950,12 @@ const compileCandidate = (
       resolution,
       draftMetadata: draftMetadata(candidate.draft),
     };
-    const provisional = compileDefinitionWithContext(
-      {
+    const provisional = compileParsedDefinition(
+      parsedCompilationRequest(moduleCompilationRequestV2Schema, {
         ...common,
         savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
-      },
-      { dependencyOutputs },
+      }),
+      dependencyOutputs,
     );
     if (provisional.kind !== "module" || !("validationContractVersion" in provisional))
       return refuse("DEFINITION_COMPILATION_REFUSED");
@@ -936,7 +966,11 @@ const compileCandidate = (
       history: candidate.history.history,
     });
     const request = { ...common, savedConditionRevisions };
-    if (!final) return compileDefinitionWithContext(request, { dependencyOutputs });
+    if (!final)
+      return compileParsedDefinition(
+        parsedCompilationRequest(moduleCompilationRequestV2Schema, request),
+        dependencyOutputs,
+      );
     const outputs = compileDefinitionSet([request], {
       dependencyOutputs,
       publishedHistories: [candidate.history],
@@ -979,7 +1013,10 @@ const compileCandidate = (
     ...(savedConditionRevisions === undefined ? {} : { savedConditionRevisions }),
   };
   if (!final) {
-    const output = compileDefinitionWithContext(request, { dependencyOutputs });
+    const output = compileParsedDefinition(
+      parsedCompilationRequest(definitionCompilationRequestSchema, request),
+      dependencyOutputs,
+    );
     if (output.kind === "connection_type") refuse("DEFINITION_COMPILATION_REFUSED");
     return output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
   }

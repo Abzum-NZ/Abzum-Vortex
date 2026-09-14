@@ -2,6 +2,8 @@
 
 select no_plan();
 
+\ir helpers/definition-release-writer.psql
+
 begin;
 
 set local search_path = pg_catalog, extensions, public;
@@ -196,8 +198,6 @@ create function pg_temp.registry_candidate(
   p_definition_key text,
   p_release_revision bigint,
   p_release_version text,
-  p_content_character text,
-  p_resolution_character text,
   p_permissions jsonb,
   p_include_module boolean,
   p_catalogue_character text,
@@ -210,19 +210,27 @@ set search_path = ''
 as $function$
 declare
   application_release jsonb;
+  module_release jsonb;
   entries jsonb;
   application_permission_ids jsonb;
 begin
-  application_release := pg_catalog.jsonb_build_object(
-    'kind', 'application',
-    'definitionKey', p_definition_key,
-    'rootId', p_application_root_id,
-    'releaseRevision', p_release_revision,
-    'releaseVersion', p_release_version,
-    'validationContractVersion', '2.15.0',
-    'contentFingerprint', 'sha256:' || pg_catalog.repeat(p_content_character, 64),
-    'resolutionFingerprint', 'sha256:' || pg_catalog.repeat(p_resolution_character, 64)
-  );
+  select pg_catalog.jsonb_build_object(
+    'kind', root.kind,
+    'definitionKey', root.key,
+    'rootId', root.root_id,
+    'releaseRevision', release.release_revision,
+    'releaseVersion', release.release_version,
+    'validationContractVersion', release.validation_contract_version,
+    'contentFingerprint', release.content_fingerprint,
+    'resolutionFingerprint', release.resolution_fingerprint
+  ) into strict application_release
+  from vortex_definition.roots as root
+  join vortex_definition.releases as release on release.root_id = root.root_id
+  where root.root_id = p_application_root_id
+    and root.kind = 'application'
+    and root.key = p_definition_key
+    and release.release_revision = p_release_revision
+    and release.release_version = p_release_version;
 
   select coalesce(
     pg_catalog.jsonb_agg(
@@ -251,6 +259,21 @@ begin
   where (permission_value ->> 'administrative')::boolean = false;
 
   if p_include_module then
+    select pg_catalog.jsonb_build_object(
+      'kind', root.kind,
+      'definitionKey', root.key,
+      'rootId', root.root_id,
+      'releaseRevision', release.release_revision,
+      'releaseVersion', release.release_version,
+      'validationContractVersion', release.validation_contract_version,
+      'contentFingerprint', release.content_fingerprint,
+      'resolutionFingerprint', release.resolution_fingerprint
+    ) into strict module_release
+    from vortex_definition.roots as root
+    join vortex_definition.releases as release on release.root_id = root.root_id
+    where root.root_id = '31000000-0000-4000-8000-000000000130'::uuid
+      and release.release_revision = 1;
+
     entries := entries || pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(
         'applicationRootId', p_application_root_id,
@@ -261,16 +284,7 @@ begin
           'shared.module.read', 'View shared records',
           'View records supplied by the shared module.', 'read', false
         ),
-        'sourceRelease', pg_catalog.jsonb_build_object(
-          'kind', 'module',
-          'definitionKey', 'example.shared_module',
-          'rootId', '31000000-0000-4000-8000-000000000130'::uuid,
-          'releaseRevision', 1,
-          'releaseVersion', '1.0.0',
-          'validationContractVersion', '2.15.0',
-          'contentFingerprint', 'sha256:' || pg_catalog.repeat('1', 64),
-          'resolutionFingerprint', 'sha256:' || pg_catalog.repeat('2', 64)
-        ),
+        'sourceRelease', module_release,
         'meaningFingerprint', 'sha256:' || pg_catalog.repeat('e', 64)
       )
     );
@@ -314,169 +328,73 @@ insert into vortex_definition.roots (
     pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
   );
 
-insert into vortex_definition.releases (
-  root_id, release_revision, release_version, authored_source,
-  authored_source_fingerprint, source_contract_version, compilation_output,
-  resolution_snapshot, content_fingerprint, resolution_fingerprint,
-  validation_contract_version, comparison_fingerprint, impact_reasons,
-  release_note, published_at, published_by
-) values
-  (
-    '31000000-0000-4000-8000-000000000130', 1, '1.0.0',
-    '{"source_contract_version":"1.0.0","kind":"module","key":"example.shared_module","body":{}}'::jsonb,
-    'sha256:' || pg_catalog.repeat('0', 64), '1.0.0',
-    pg_catalog.jsonb_build_object(
-      'kind', 'module', 'canonical', pg_catalog.jsonb_build_object(
-        'content', pg_catalog.jsonb_build_object(
-          'permissions', pg_catalog.jsonb_build_array(pg_temp.registry_permission(
-            '41000000-0000-4000-8000-000000000133',
-            'shared.module.read', 'View shared records',
-            'View records supplied by the shared module.', 'read', false
-          ))
-        )
-      )
+select pg_temp.append_writer_release(
+  '31000000-0000-4000-8000-000000000130', '1.0.0', '[]',
+  pg_catalog.jsonb_build_object('permissions', pg_catalog.jsonb_build_array(
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000133', 'shared.module.read',
+      'View shared records', 'View records supplied by the shared module.', 'read', false
+    )
+  )),
+  '2.15.0'
+);
+select pg_temp.append_writer_release(
+  '31000000-0000-4000-8000-000000000131', '1.0.0',
+  '[["31000000-0000-4000-8000-000000000130", 1]]',
+  pg_catalog.jsonb_build_object('permissions', pg_catalog.jsonb_build_array(
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000131', 'shared.orders.read',
+      'View orders', 'View application orders.', 'read', false
     ),
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('2', 64)),
-    'sha256:' || pg_catalog.repeat('1', 64),
-    'sha256:' || pg_catalog.repeat('2', 64), '2.15.0',
-    'sha256:' || pg_catalog.repeat('3', 64), '[]', 'Shared module release',
-    pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
-  ),
-  (
-    '31000000-0000-4000-8000-000000000131', 1, '1.0.0',
-    '{"source_contract_version":"1.0.0","kind":"application","key":"example.application_one","body":{}}'::jsonb,
-    'sha256:' || pg_catalog.repeat('4', 64), '1.0.0',
-    pg_catalog.jsonb_build_object(
-      'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(
-        'content', pg_catalog.jsonb_build_object(
-          'permissions', pg_catalog.jsonb_build_array(
-            pg_temp.registry_permission(
-              '41000000-0000-4000-8000-000000000131',
-              'shared.orders.read', 'View orders', 'View application orders.', 'read', false
-            ),
-            pg_temp.registry_permission(
-              '41000000-0000-4000-8000-000000000132',
-              'shared.orders.manage', 'Manage orders', 'Manage application orders.', 'manage', true
-            )
-          )
-        )
-      )
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000132', 'shared.orders.manage',
+      'Manage orders', 'Manage application orders.', 'manage', true
+    )
+  )),
+  '2.15.0'
+);
+select pg_temp.append_writer_release(
+  '31000000-0000-4000-8000-000000000131', '2.0.0', '[]',
+  pg_catalog.jsonb_build_object('permissions', pg_catalog.jsonb_build_array(
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000131', 'shared.orders.read',
+      'Read orders', 'View application orders.', 'read', false
     ),
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('6', 64)),
-    'sha256:' || pg_catalog.repeat('5', 64),
-    'sha256:' || pg_catalog.repeat('6', 64), '2.15.0',
-    'sha256:' || pg_catalog.repeat('7', 64), '[]', 'Application one release',
-    pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
-  ),
-  (
-    '31000000-0000-4000-8000-000000000131', 2, '2.0.0',
-    '{"source_contract_version":"1.0.0","kind":"application","key":"example.application_one","body":{}}'::jsonb,
-    'sha256:' || pg_catalog.repeat('8', 64), '1.0.0',
-    pg_catalog.jsonb_build_object(
-      'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(
-        'content', pg_catalog.jsonb_build_object(
-          'permissions', pg_catalog.jsonb_build_array(
-            pg_temp.registry_permission(
-              '41000000-0000-4000-8000-000000000131',
-              'shared.orders.read', 'Read orders', 'View application orders.', 'read', false
-            ),
-            pg_temp.registry_permission(
-              '41000000-0000-4000-8000-000000000132',
-              'shared.orders.manage', 'Manage orders', 'Manage application orders.', 'manage', true
-            )
-          )
-        )
-      )
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000132', 'shared.orders.manage',
+      'Manage orders', 'Manage application orders.', 'manage', true
+    )
+  )),
+  '2.15.0'
+);
+select pg_temp.append_writer_release(
+  '31000000-0000-4000-8000-000000000132', '1.0.0',
+  '[["31000000-0000-4000-8000-000000000130", 1]]',
+  pg_catalog.jsonb_build_object('permissions', pg_catalog.jsonb_build_array(
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000131', 'shared.orders.read',
+      'View orders', 'View application orders.', 'read', false
     ),
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('a', 64)),
-    'sha256:' || pg_catalog.repeat('9', 64),
-    'sha256:' || pg_catalog.repeat('a', 64), '2.15.0',
-    'sha256:' || pg_catalog.repeat('b', 64), '[]', 'Application one replacement release',
-    pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
-  ),
-  (
-    '31000000-0000-4000-8000-000000000132', 1, '1.0.0',
-    '{"source_contract_version":"1.0.0","kind":"application","key":"example.application_two","body":{}}'::jsonb,
-    'sha256:' || pg_catalog.repeat('c', 64), '1.0.0',
-    pg_catalog.jsonb_build_object(
-      'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(
-        'content', pg_catalog.jsonb_build_object(
-          'permissions', pg_catalog.jsonb_build_array(
-            pg_temp.registry_permission(
-              '41000000-0000-4000-8000-000000000131',
-              'shared.orders.read', 'View orders', 'View application orders.', 'read', false
-            ),
-            pg_temp.registry_permission(
-              '41000000-0000-4000-8000-000000000134',
-              'shared.orders1.read', 'View numbered orders',
-              'View numbered application orders.', 'read', false
-            ),
-            pg_temp.registry_permission(
-              '41000000-0000-4000-8000-000000000135',
-              'shared.orders_1.read', 'View grouped orders',
-              'View grouped application orders.', 'read', false
-            )
-          )
-        )
-      )
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000134', 'shared.orders1.read',
+      'View numbered orders', 'View numbered application orders.', 'read', false
     ),
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('e', 64)),
-    'sha256:' || pg_catalog.repeat('d', 64),
-    'sha256:' || pg_catalog.repeat('e', 64), '2.15.0',
-    'sha256:' || pg_catalog.repeat('f', 64), '[]', 'Application two release',
-    pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
-  ),
-  (
-    '31000000-0000-4000-8000-000000000133', 1, '1.0.0',
-    '{"source_contract_version":"1.0.0","kind":"application","key":"example.application_one","body":{}}'::jsonb,
-    'sha256:' || pg_catalog.repeat('0', 64), '1.0.0',
-    pg_catalog.jsonb_build_object(
-      'kind', 'application', 'canonical', pg_catalog.jsonb_build_object(
-        'content', pg_catalog.jsonb_build_object(
-          'permissions', pg_catalog.jsonb_build_array(
-            pg_temp.registry_permission(
-              '41000000-0000-4000-8000-000000000131',
-              'shared.orders.read', 'View orders', 'View application orders.', 'read', false
-            )
-          )
-        )
-      )
-    ),
-    pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('1', 64)),
-    'sha256:' || pg_catalog.repeat('0', 64),
-    'sha256:' || pg_catalog.repeat('1', 64), '2.15.0',
-    'sha256:' || pg_catalog.repeat('2', 64), '[]', 'Other organisation application release',
-    pg_catalog.statement_timestamp(), '91000000-0000-4000-8000-000000000130'
-  );
-
-insert into vortex_definition.release_dependencies (
-  root_id, release_revision, dependency_kind, dependency_reference,
-  dependency_version, dependency_content_fingerprint, evidence_fingerprint,
-  target_root_id, target_release_revision, catalogue_item_id
-) values
-  (
-    '31000000-0000-4000-8000-000000000131', 1, 'module', 'example.shared_module',
-    '1.0.0', 'sha256:' || pg_catalog.repeat('1', 64),
-    'sha256:' || pg_catalog.repeat('2', 64),
-    '31000000-0000-4000-8000-000000000130', 1, null
-  ),
-  (
-    '31000000-0000-4000-8000-000000000132', 1, 'module', 'example.shared_module',
-    '1.0.0', 'sha256:' || pg_catalog.repeat('1', 64),
-    'sha256:' || pg_catalog.repeat('2', 64),
-    '31000000-0000-4000-8000-000000000130', 1, null
-  );
-
-update vortex_definition.roots
-set current_release_revision = case
-  when root_id = '31000000-0000-4000-8000-000000000131'::uuid then 2
-  else 1
-end
-where root_id in (
-  '31000000-0000-4000-8000-000000000130'::uuid,
-  '31000000-0000-4000-8000-000000000131'::uuid,
-  '31000000-0000-4000-8000-000000000132'::uuid,
-  '31000000-0000-4000-8000-000000000133'::uuid
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000135', 'shared.orders_1.read',
+      'View grouped orders', 'View grouped application orders.', 'read', false
+    )
+  )),
+  '2.15.0'
+);
+select pg_temp.append_writer_release(
+  '31000000-0000-4000-8000-000000000133', '1.0.0', '[]',
+  pg_catalog.jsonb_build_object('permissions', pg_catalog.jsonb_build_array(
+    pg_temp.registry_permission(
+      '41000000-0000-4000-8000-000000000131', 'shared.orders.read',
+      'View orders', 'View application orders.', 'read', false
+    )
+  )),
+  '2.15.0'
 );
 
 select is(
@@ -574,7 +492,7 @@ select * from vortex_access.apply_application_permission_registration_v1_interna
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000130',
     '31000000-0000-4000-8000-000000000131', 'example.application_one',
-    1, '1.0.0', '5', '6',
+    1, '1.0.0',
     pg_catalog.jsonb_build_array(
       pg_temp.registry_permission(
         '41000000-0000-4000-8000-000000000131',
@@ -645,7 +563,7 @@ select * from vortex_access.apply_application_permission_registration_v1_interna
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000130',
     '31000000-0000-4000-8000-000000000132', 'example.application_two',
-    1, '1.0.0', 'd', 'e',
+    1, '1.0.0',
     pg_catalog.jsonb_build_array(
       pg_temp.registry_permission(
         '41000000-0000-4000-8000-000000000131',
@@ -701,7 +619,7 @@ select * from vortex_access.apply_application_permission_registration_v1_interna
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000131',
     '31000000-0000-4000-8000-000000000133', 'example.application_one',
-    1, '1.0.0', '0', '1',
+    1, '1.0.0',
     pg_catalog.jsonb_build_array(pg_temp.registry_permission(
       '41000000-0000-4000-8000-000000000131',
       'shared.orders.read', 'View orders', 'View application orders.', 'read', false
@@ -782,7 +700,7 @@ select * from vortex_access.apply_application_permission_registration_v1_interna
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000130',
     '31000000-0000-4000-8000-000000000131', 'example.application_one',
-    1, '1.0.0', '5', '6',
+    1, '1.0.0',
     pg_catalog.jsonb_build_array(
       pg_temp.registry_permission(
         '41000000-0000-4000-8000-000000000131',
@@ -833,7 +751,7 @@ select throws_ok(
     pg_temp.registry_candidate(
       '21000000-0000-4000-8000-000000000130',
       '31000000-0000-4000-8000-000000000131', 'example.application_one',
-      1, '1.0.0', '5', '6',
+      1, '1.0.0',
       pg_catalog.jsonb_build_array(
         pg_temp.registry_permission(
           '41000000-0000-4000-8000-000000000131',
@@ -868,7 +786,7 @@ select * from vortex_access.apply_application_permission_registration_v1_interna
   pg_temp.registry_candidate(
     '21000000-0000-4000-8000-000000000130',
     '31000000-0000-4000-8000-000000000131', 'example.application_one',
-    2, '2.0.0', '9', 'a',
+    2, '2.0.0',
     pg_catalog.jsonb_build_array(
       pg_temp.registry_permission(
         '41000000-0000-4000-8000-000000000131',
@@ -935,7 +853,7 @@ select throws_ok(
       pg_temp.registry_candidate(
         '21000000-0000-4000-8000-000000000131',
         '31000000-0000-4000-8000-000000000132', 'example.application_two',
-        1, '1.0.0', 'd', 'e',
+        1, '1.0.0',
         pg_catalog.jsonb_build_array(pg_temp.registry_permission(
           '41000000-0000-4000-8000-000000000131',
           'shared.orders.read', 'View orders', 'View application orders.', 'read', false
@@ -960,7 +878,7 @@ select throws_ok(
       pg_temp.registry_candidate(
         '21000000-0000-4000-8000-000000000130',
         '31000000-0000-4000-8000-000000000131', 'example.application_one',
-        2, '2.0.0', '9', 'a',
+        2, '2.0.0',
         pg_catalog.jsonb_build_array(
           pg_temp.registry_permission(
             '41000000-0000-4000-8000-000000000131',

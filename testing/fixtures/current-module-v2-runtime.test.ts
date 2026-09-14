@@ -450,6 +450,102 @@ const fieldValues = (
   );
 
 describe("current Module V2 fixture runtime", () => {
+  it("keeps same-named extension identities separate and dependent reads pinned after publication", async () => {
+    const ownerSource = structuredClone(moduleByKey.get("vortex.crm.organisations")!);
+    const otherSource = structuredClone(moduleByKey.get("vortex.service_desk.sla")!);
+    const dependentSource = structuredClone(moduleByKey.get("vortex.crm.people")!);
+    const ownerPoint = ownerSource.body.extension_points[0]!;
+    const otherPoint = otherSource.body.extension_points[0]!;
+    const previousOtherKey = otherPoint.key;
+    otherPoint.key = ownerPoint.key;
+    const ownerCandidate = candidateFor(ownerSource);
+    const otherCandidate = candidateFor(otherSource);
+    otherCandidate.identities = otherCandidate.identities.map((identity) =>
+      identity.kind === "extension_point" && identity.alias === previousOtherKey
+        ? { ...identity, alias: otherPoint.key }
+        : identity,
+    );
+    const dependentCandidate = candidateFor(dependentSource);
+    const repository = new FixturePublicationRepository([
+      ownerCandidate,
+      otherCandidate,
+      dependentCandidate,
+    ]);
+    await publish(repository, ownerCandidate.draft.rootId);
+    await publish(repository, otherCandidate.draft.rootId);
+    await publish(repository, dependentCandidate.draft.rootId);
+    const originalEvidence = repository.releaseEvidence.get(ownerCandidate.draft.rootId);
+    const consumer = createDefinitionConsumerReadService(
+      {
+        read: async (_context, command) =>
+          command.rootId === ownerCandidate.draft.rootId &&
+          command.selector.selection === "revision" &&
+          command.selector.releaseRevision === 2
+            ? originalEvidence
+            : repository.releaseEvidence.get(command.rootId),
+      },
+      catalogue,
+    );
+    const readCurrent = (rootId: string) =>
+      consumer.read(context(), { kind: "module", rootId, selector: { selection: "current" } });
+    const original = await readCurrent(ownerCandidate.draft.rootId);
+    const other = await readCurrent(otherCandidate.draft.rootId);
+    const dependent = await readCurrent(dependentCandidate.draft.rootId);
+    if (original.kind !== "module" || other.kind !== "module")
+      throw new Error("Module declarations required");
+    const first = original.content.extensionPoints.find((point) => point.key === ownerPoint.key)!;
+    const second = other.content.extensionPoints.find((point) => point.key === ownerPoint.key)!;
+    expect(original.rootId).not.toBe(other.rootId);
+    expect(first.extensionPointId).not.toBe(second.extensionPointId);
+    expect(first.recordTypeId).not.toBe(second.recordTypeId);
+    expect(original.content.recordTypes.map((record) => record.recordTypeId)).toContain(
+      first.recordTypeId,
+    );
+    expect(other.content.recordTypes.map((record) => record.recordTypeId)).toContain(
+      second.recordTypeId,
+    );
+    expect(first.accepts).toEqual(["field"]);
+    expect(second.accepts).toEqual(["field"]);
+
+    const updated = structuredClone(repository.candidates.get(original.rootId)!);
+    if (updated.draft.source.kind !== "module") throw new Error("Module source required");
+    updated.draft.source.body.extension_points[0]!.key = "renamed_company_fields";
+    updated.draft.draftRevision = 3;
+    updated.draft.sourceFingerprint = fingerprintCanonicalValue(updated.draft.source);
+    updated.identities = updated.identities.map((identity) =>
+      identity.kind === "extension_point" && identity.alias === ownerPoint.key
+        ? { ...identity, alias: "renamed_company_fields" }
+        : identity,
+    );
+    repository.candidates.set(original.rootId, updated);
+    await publish(repository, original.rootId);
+    const latest = await readCurrent(original.rootId);
+    expect(latest.releaseRevision).toBe(3);
+    if (latest.kind !== "module") throw new Error("Current Module required");
+    expect(latest.content.extensionPoints).toContainEqual({
+      ...first,
+      key: "renamed_company_fields",
+    });
+
+    const pin = dependent.dependencyManifest.find(
+      (dependency) => dependency.kind === "module" && dependency.rootId === original.rootId,
+    );
+    if (pin?.kind !== "module") throw new Error("Published owner dependency required");
+    expect(pin.releaseRevision).toBe(2);
+    const exact = await consumer.read(context(), {
+      kind: "module",
+      rootId: pin.rootId,
+      selector: { selection: "revision", releaseRevision: pin.releaseRevision },
+    });
+    expect(exact).toMatchObject({
+      rootId: pin.rootId,
+      releaseRevision: pin.releaseRevision,
+      contentFingerprint: pin.contentFingerprint,
+      content: { extensionPoints: original.content.extensionPoints },
+    });
+    expect(exact.releaseRevision).not.toBe(latest.releaseRevision);
+  });
+
   it("publishes, reads and prepares records from the complete current application bundle", async () => {
     const candidates = [...currentModules, ...currentApplications].map(candidateFor);
     const repository = new FixturePublicationRepository(candidates);
@@ -515,9 +611,43 @@ describe("current Module V2 fixture runtime", () => {
         throw new Error(`Current Module V2 consumer result required for ${key}`);
       return result;
     };
-    const company = moduleRead("vortex.crm.organisations").content.recordTypes.find(
-      (recordType) => recordType.key === "company",
-    )!;
+    const dependentRelease = currentReleases.find(
+      (release) => release.key === "vortex.crm.people",
+    );
+    const dependencyEvidence = repository.releaseEvidence.get(dependentRelease?.rootId ?? "") as {
+      dependencyManifest: Array<{
+        kind: string;
+        rootId: string;
+        releaseRevision?: number;
+        releaseVersion: string;
+      }>;
+    };
+    const ownerDependency = dependencyEvidence.dependencyManifest.find(
+      (dependency) => dependency.kind === "module" && dependency.rootId === moduleRead("vortex.crm.organisations").rootId,
+    );
+    if (!ownerDependency || ownerDependency.releaseRevision === undefined)
+      throw new Error("Exact owner dependency evidence required");
+    const exactOwner = await consumer.read(context(), {
+      kind: "module",
+      rootId: ownerDependency.rootId,
+      selector: { selection: "revision", releaseRevision: ownerDependency.releaseRevision },
+    });
+    if (exactOwner.kind !== "module") throw new Error("Exact owner module read required");
+    const company = exactOwner.content.recordTypes.find((recordType) => recordType.key === "company")!;
+    expect(exactOwner.content.extensionPoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "company_fields",
+          recordTypeId: company.recordTypeId,
+          accepts: ["field"],
+        }),
+        expect.objectContaining({
+          key: "company_actions",
+          recordTypeId: company.recordTypeId,
+          accepts: ["action"],
+        }),
+      ]),
+    );
     const contact = moduleRead("vortex.crm.people").content.recordTypes.find(
       (recordType) => recordType.key === "contact",
     )!;

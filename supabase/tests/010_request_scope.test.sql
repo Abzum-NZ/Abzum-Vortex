@@ -1,6 +1,6 @@
 \ir helpers/private-schema-assertions.psql
 
-select plan(128);
+select plan(143);
 
 begin;
 
@@ -110,6 +110,70 @@ select ok(
 select ok(
   not has_function_privilege('public', 'vortex_context.initialize(jsonb)', 'EXECUTE'),
   'PUBLIC cannot execute the context initializer'
+);
+select is(
+  (select relpersistence from pg_class where oid = 'vortex_context.request_contexts'::regclass),
+  'u',
+  'the context store is unlogged'
+);
+select is(
+  (select relrowsecurity from pg_class where oid = 'vortex_context.request_contexts'::regclass),
+  true,
+  'the context store enables row security'
+);
+select is(
+  (select relforcerowsecurity from pg_class where oid = 'vortex_context.request_contexts'::regclass),
+  true,
+  'the context store forces row security'
+);
+select is(
+  (
+    select count(*)::integer
+    from pg_policies
+    where schemaname = 'vortex_context' and tablename = 'request_contexts'
+  ),
+  0,
+  'the context store has no policy'
+);
+select is_definer(
+  'vortex_context', 'initialize', array['jsonb'],
+  'the initializer runs as the context store owner'
+);
+select is_definer(
+  'vortex_context', 'current_context', array[]::text[],
+  'the context reader runs as the context store owner'
+);
+select ok(
+  not has_table_privilege('vortex_runtime', 'vortex_context.request_contexts', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+  'vortex_runtime cannot touch the context store'
+);
+select ok(
+  not has_table_privilege('vortex_request', 'vortex_context.request_contexts', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+  'vortex_request cannot touch the context store'
+);
+select ok(
+  not has_table_privilege('vortex_record_owner', 'vortex_context.request_contexts', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+  'vortex_record_owner cannot touch the context store'
+);
+select ok(
+  not has_table_privilege('vortex_record_adapter', 'vortex_context.request_contexts', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+  'vortex_record_adapter cannot touch the context store'
+);
+select ok(
+  not has_table_privilege('vortex_module_owner', 'vortex_context.request_contexts', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+  'vortex_module_owner cannot touch the context store'
+);
+select ok(
+  not has_table_privilege('anon', 'vortex_context.request_contexts', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+  'anon cannot touch the context store'
+);
+select ok(
+  not has_table_privilege('authenticated', 'vortex_context.request_contexts', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+  'authenticated cannot touch the context store'
+);
+select ok(
+  not has_table_privilege('service_role', 'vortex_context.request_contexts', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+  'service_role cannot touch the context store'
 );
 
 create temporary table organization_scope_probe (
@@ -251,34 +315,37 @@ rollback;
 
 begin;
 grant usage on schema extensions to vortex_request;
+select pg_catalog.set_config('vortex.request_context', (select value::text from context_candidate_probe), true);
+set local role vortex_request;
+set local search_path = pg_catalog, extensions, public;
+select throws_ok(
+  'select vortex_context.current_context()',
+  '55000'::char(5),
+  'Vortex request context is not established',
+  'a context written into the session setting is not established'
+);
+reset role;
+rollback;
+
+begin;
+grant usage on schema extensions to vortex_runtime, vortex_request;
+grant select on context_candidate_probe to vortex_request;
+set local role vortex_runtime;
+select vortex_context.initialize((select value from context_candidate_probe));
+set local role vortex_request;
+set local search_path = pg_catalog, extensions, public;
 select pg_catalog.set_config('vortex.request_context', 'not-json', true);
-set local role vortex_request;
-set local search_path = pg_catalog, extensions, public;
-select throws_ok(
-  'select vortex_context.current_context()',
-  '22023'::char(5),
-  'Stored Vortex request context is invalid',
-  'accessor refuses malformed stored JSON'
+select is(
+  (select vortex_context.current_context() ->> 'sessionId'),
+  '60000000-0000-4000-8000-000000000001',
+  'malformed JSON written into the setting does not disturb the established context'
 );
-reset role;
-rollback;
-
-begin;
-grant usage on schema extensions to vortex_request;
 select pg_catalog.set_config('vortex.request_context', '{}', true);
-set local role vortex_request;
-set local search_path = pg_catalog, extensions, public;
-select throws_ok(
-  'select vortex_context.current_context()',
-  '22023'::char(5),
-  'Vortex request context is incomplete',
-  'accessor refuses incomplete stored context'
+select is(
+  (select vortex_context.current_context() ->> 'sessionId'),
+  '60000000-0000-4000-8000-000000000001',
+  'an incomplete context written into the setting does not disturb the established context'
 );
-reset role;
-rollback;
-
-begin;
-grant usage on schema extensions to vortex_request;
 select pg_catalog.set_config(
   'vortex.request_context',
   (select jsonb_set(
@@ -288,13 +355,10 @@ select pg_catalog.set_config(
   )::text from context_candidate_probe),
   true
 );
-set local role vortex_request;
-set local search_path = pg_catalog, extensions, public;
-select throws_ok(
-  'select vortex_context.current_context()',
-  '22023'::char(5),
-  'Vortex request context is expired or inconsistent',
-  'accessor refuses expired stored context'
+select is(
+  (select vortex_context.current_context() ->> 'sessionId'),
+  '60000000-0000-4000-8000-000000000001',
+  'an expired context written into the setting does not disturb the established context'
 );
 reset role;
 rollback;

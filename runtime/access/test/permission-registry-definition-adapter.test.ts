@@ -7,10 +7,8 @@ import {
   definitionSourceDocumentSchema,
   moduleSourceDocumentV2Schema,
   sessionContextSchema,
-  type DefinitionConsumerReadCommand,
   type DefinitionConsumerReadResult,
   type ExactDefinitionDependency,
-  type PermissionDeclaration,
   type SessionContext,
   type ModuleSourceDocumentV2,
 } from "@vortex/contracts";
@@ -23,10 +21,8 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import {
   createPermissionRegistryDefinitionAdapter,
-  mapInDeterministicBatches,
-  permissionRegistryModuleReadConcurrency,
   verifyPreparedApplicationPermissionRegistration,
-  type PermissionRegistryDefinitionReader,
+  type PermissionRegistryDefinitionSetReader,
   type PermissionRegistryPreparationError,
 } from "../src/permission-registry-definition-adapter";
 
@@ -203,16 +199,13 @@ const readerFor = (
   application: DefinitionConsumerReadResult = applicationResult,
   modules: ReadonlyMap<string, DefinitionConsumerReadResult> = moduleResults,
 ) => {
-  const read = vi.fn(async (_context: SessionContext, command: DefinitionConsumerReadCommand) => {
-    const candidate = command.kind === "application" ? application : modules.get(command.rootId);
-    if (!candidate) throw new Error("not found");
-    return candidate;
-  });
-  return { reader: { read } satisfies PermissionRegistryDefinitionReader, read };
+  if (application.kind !== "application") throw new Error("Application result required");
+  const read = vi.fn(async () => ({ application, modules: [...modules.values()] }));
+  return { reader: { read } satisfies PermissionRegistryDefinitionSetReader, read };
 };
 
 const prepare = (
-  reader: PermissionRegistryDefinitionReader,
+  reader: PermissionRegistryDefinitionSetReader,
   selectedContext: SessionContext = context(),
 ) =>
   createPermissionRegistryDefinitionAdapter(reader).prepareApplicationRegistration(
@@ -224,139 +217,14 @@ const prepare = (
   );
 
 describe("permission registry Definition adapter", () => {
-  it("bounds an exact 10,000-item scheduling input without imposing a catalogue limit", async () => {
-    const dependencyCount = 10_000;
-    let active = 0;
-    let maxActive = 0;
-    const output = await mapInDeterministicBatches(
-      Array.from({ length: dependencyCount }, (_, index) => index),
-      permissionRegistryModuleReadConcurrency,
-      async (value) => {
-        active += 1;
-        maxActive = Math.max(maxActive, active);
-        await Promise.resolve();
-        active -= 1;
-        return value;
-      },
-    );
-
-    expect(output).toHaveLength(dependencyCount);
-    expect(output[0]).toBe(0);
-    expect(output.at(-1)).toBe(dependencyCount - 1);
-    expect(maxActive).toBe(permissionRegistryModuleReadConcurrency);
-  });
-
-  it("reports the first input-ordered failure from a concurrent batch", async () => {
-    await expect(
-      mapInDeterministicBatches(["first", "second", "third"], 3, async (value) => {
-        if (value === "first") {
-          await new Promise<void>((resolve) => setTimeout(resolve, 5));
-          throw new Error("first failure");
-        }
-        if (value === "second") throw new Error("later failure");
-        return value;
-      }),
-    ).rejects.toThrow("first failure");
-  });
-
-  it("uses the bounded reader for a complete application with more than one batch of modules", async () => {
-    const moduleCount = permissionRegistryModuleReadConcurrency * 2 + 1;
-    const scaledApplication = structuredClone(applicationResult);
-    if (scaledApplication.kind !== "application") throw new Error("Application result required");
-    const moduleTemplate = [...moduleResults.values()].find(
-      (candidate): candidate is Extract<DefinitionConsumerReadResult, { kind: "module" }> =>
-        candidate.kind === "module",
-    );
-    const bindingTemplate = scaledApplication.content.moduleBindings[0];
-    if (!moduleTemplate || !bindingTemplate) throw new Error("Module fixture required");
-
-    const scaledModules = new Map<string, DefinitionConsumerReadResult>();
-    const bindings = Array.from({ length: moduleCount }, (_, index) => {
-      const suffix = String(index + 200_000).padStart(12, "0");
-      const rootId = `31000000-0000-4000-8000-${suffix}` as typeof moduleTemplate.rootId;
-      const definitionKey =
-        `scale.module_${String(index).padStart(5, "0")}` as typeof moduleTemplate.definitionKey;
-      const permissionId =
-        `41000000-0000-4000-8000-${suffix}` as PermissionDeclaration["permissionId"];
-      const content = {
-        ...structuredClone(moduleTemplate.content),
-        permissions: [
-          {
-            permissionId,
-            key: `scale.permission_${String(index).padStart(5, "0")}.read`,
-            label: `View scaled records ${index}`,
-            description: `View records from scaled module ${index}.`,
-            actionKind: "read" as const,
-            administrative: false,
-          },
-        ],
-      };
-      const contentFingerprint = fingerprintCanonicalValue(content);
-      scaledModules.set(rootId, {
-        ...moduleTemplate,
-        rootId,
-        definitionKey,
-        content,
-        contentFingerprint,
-      });
-      return {
-        ...bindingTemplate,
-        moduleRootId: rootId,
-      };
-    });
-    scaledApplication.content.moduleBindings = bindings;
-    const nonModuleDependencies = scaledApplication.dependencyManifest.filter(
-      (dependency) => dependency.kind !== "module",
-    );
-    scaledApplication.dependencyManifest = [
-      ...nonModuleDependencies,
-      ...[...scaledModules.values()].map((module): ExactDefinitionDependency => ({
-        kind: "module",
-        key: module.definitionKey,
-        rootId: module.rootId,
-        releaseRevision: module.releaseRevision,
-        releaseVersion: bindingTemplate.resolvedVersion,
-        contentFingerprint: module.contentFingerprint,
-        resolutionFingerprint: module.resolutionFingerprint,
-      })),
-    ].sort((left, right) => {
-      const subject = (dependency: ExactDefinitionDependency) =>
-        `${dependency.kind}:${"key" in dependency ? dependency.key : dependency.catalogueThemeId}`;
-      return compareCanonicalStrings(subject(left), subject(right));
-    });
-
-    let active = 0;
-    let maxActive = 0;
-    const read = vi.fn(async (_context: SessionContext, command: DefinitionConsumerReadCommand) => {
-      if (command.kind === "application") return scaledApplication;
-      const module = scaledModules.get(command.rootId);
-      if (!module) throw new Error("not found");
-      active += 1;
-      maxActive = Math.max(maxActive, active);
-      await Promise.resolve();
-      active -= 1;
-      return module;
-    });
-    const prepared = await prepare({ read });
-    const moduleEntries = prepared.entries.filter((entry) => entry.ownerKind === "module");
-
-    expect(read).toHaveBeenCalledTimes(moduleCount + 1);
-    expect(maxActive).toBe(permissionRegistryModuleReadConcurrency);
-    expect(moduleEntries).toHaveLength(moduleCount);
-    expect(moduleEntries.map((entry) => entry.ownerId)).toEqual(
-      [...scaledModules.keys()].sort(compareCanonicalStrings),
-    );
-  });
-
-  it("builds deterministic app and bound-module evidence only from exact #22 reads", async () => {
+  it("builds deterministic app and transitive Module evidence from one exact Definition set", async () => {
     const { reader, read } = readerFor();
     const first = await prepare(reader);
     const second = await prepare(reader);
     const expectedEntryCount =
       applicationResult.content.permissions.length +
-      applicationResult.content.moduleBindings.reduce(
-        (total, binding) =>
-          total + (moduleResults.get(binding.moduleRootId)?.content.permissions.length ?? 0),
+      [...moduleResults.values()].reduce(
+        (total, module) => total + module.content.permissions.length,
         0,
       );
 
@@ -385,16 +253,93 @@ describe("permission registry Definition adapter", () => {
         ),
       ),
     ).toBe(false);
+    expect(read).toHaveBeenCalledTimes(2);
     expect(read).toHaveBeenCalledWith(
       expect.objectContaining({ callerKind: "system", organizationId }),
-      expect.objectContaining({
-        kind: "application",
-        selector: { selection: "revision", releaseRevision: 1 },
-      }),
+      { applicationRootId: applicationResult.rootId, applicationReleaseRevision: 1 },
     );
-    expect(read.mock.calls.every(([, command]) => command.selector.selection === "revision")).toBe(
-      true,
+  });
+
+  it("registers permissions from a transitive Module returned by Definition", async () => {
+    const [directCandidate, transitiveCandidate] = [...moduleResults.values()];
+    if (directCandidate?.kind !== "module" || transitiveCandidate?.kind !== "module")
+      throw new Error("Two Module releases are required");
+    const direct = structuredClone(directCandidate);
+    const transitive = structuredClone(transitiveCandidate);
+    direct.content.dependencies = [
+      {
+        dependencyKey: "transitive",
+        moduleRootId: transitive.rootId,
+        moduleKey: transitive.definitionKey,
+        version: { selection: "exact", version: transitive.releaseVersion },
+        resolvedVersion: transitive.releaseVersion,
+      },
+    ];
+    direct.contentFingerprint = fingerprintCanonicalValue(direct.content);
+    direct.dependencyManifest = [
+      {
+        kind: "module",
+        key: transitive.definitionKey,
+        rootId: transitive.rootId,
+        releaseRevision: transitive.releaseRevision,
+        releaseVersion: transitive.releaseVersion,
+        contentFingerprint: transitive.contentFingerprint,
+        resolutionFingerprint: transitive.resolutionFingerprint,
+      },
+    ];
+
+    const selectedApplication = structuredClone(applicationResult);
+    const directBinding = selectedApplication.content.moduleBindings.find(
+      (binding) => binding.moduleRootId === direct.rootId,
     );
+    if (!directBinding) throw new Error("Direct binding is required");
+    selectedApplication.content.moduleBindings = [directBinding];
+    selectedApplication.contentFingerprint = fingerprintCanonicalValue(selectedApplication.content);
+    selectedApplication.dependencyManifest = [
+      ...selectedApplication.dependencyManifest.filter((entry) => entry.kind !== "module"),
+      {
+        kind: "module",
+        key: direct.definitionKey,
+        rootId: direct.rootId,
+        releaseRevision: direct.releaseRevision,
+        releaseVersion: direct.releaseVersion,
+        contentFingerprint: direct.contentFingerprint,
+        resolutionFingerprint: direct.resolutionFingerprint,
+      },
+    ].sort((left, right) => {
+      const subject = (entry: ExactDefinitionDependency) =>
+        `${entry.kind}:${"key" in entry ? entry.key : entry.catalogueThemeId}`;
+      return compareCanonicalStrings(subject(left), subject(right));
+    });
+
+    const prepared = await prepare(
+      readerFor(
+        selectedApplication,
+        new Map([
+          [direct.rootId, direct],
+          [transitive.rootId, transitive],
+        ]),
+      ).reader,
+    );
+    const moduleOwners = new Set(
+      prepared.entries
+        .filter((entry) => entry.ownerKind === "module")
+        .map((entry) => entry.ownerId),
+    );
+    expect(moduleOwners).toEqual(new Set([direct.rootId, transitive.rootId]));
+  });
+
+  it("accepts a valid Application with no Modules", async () => {
+    const applicationOnly = structuredClone(applicationResult);
+    applicationOnly.content.moduleBindings = [];
+    applicationOnly.content.events = [];
+    applicationOnly.dependencyManifest = applicationOnly.dependencyManifest.filter(
+      (entry) => entry.kind !== "module",
+    );
+    applicationOnly.contentFingerprint = fingerprintCanonicalValue(applicationOnly.content);
+
+    const prepared = await prepare(readerFor(applicationOnly, new Map()).reader);
+    expect(prepared.entries.every((entry) => entry.ownerKind === "application")).toBe(true);
   });
 
   it("carries the exact compiled module record scope into prepared catalogue evidence", async () => {
@@ -511,7 +456,7 @@ describe("permission registry Definition adapter", () => {
     expect(updated.candidateFingerprint).not.toBe(initial.candidateFingerprint);
   });
 
-  it("detects semantic changes and exact module-evidence substitution", async () => {
+  it("detects semantic permission changes", async () => {
     const initial = await prepare(readerFor().reader);
     const changed = structuredClone(applicationResult);
     if (changed.kind !== "application") throw new Error("Application result required");
@@ -527,17 +472,6 @@ describe("permission registry Definition adapter", () => {
       initial.entries.find((entry) => entry.permission.permissionId === selected.permissionId)
         ?.meaningFingerprint,
     );
-
-    const substituted = structuredClone(applicationResult);
-    const moduleDependency = substituted.dependencyManifest.find(
-      (entry) => entry.kind === "module",
-    );
-    if (!moduleDependency || moduleDependency.kind !== "module")
-      throw new Error("Module dependency required");
-    moduleDependency.contentFingerprint = `sha256:${"0".repeat(64)}`;
-    await expect(prepare(readerFor(substituted).reader)).rejects.toMatchObject({
-      code: "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID",
-    });
   });
 
   it("revalidates a prepared candidate before a later protected transaction uses it", async () => {
@@ -601,7 +535,7 @@ describe("permission registry Definition adapter", () => {
       code: "PERMISSION_REGISTRY_PERMISSION_OWNERSHIP_AMBIGUOUS",
     });
 
-    const unavailable: PermissionRegistryDefinitionReader = {
+    const unavailable: PermissionRegistryDefinitionSetReader = {
       read: async () => {
         throw new Error("sensitive storage detail");
       },

@@ -14,7 +14,7 @@ The user approved a normal editable HR application as the example. There is no c
 
 ```mermaid
 flowchart TD
-    A[HR application draft and release] --> M[Contained editable HR data module]
+    A[HR application draft and release] -->|exact release binding| M[Independently versioned editable HR Module]
     M --> E[Employees]
     M --> D[Departments]
     M --> P[Positions]
@@ -32,7 +32,9 @@ flowchart TD
     W -->|named actions| L
 ```
 
-An application-contained editable data module means the existing application-contained definition capability presented as a coherent authoring group. It does not introduce a third publication root. Its edits release with its owning application. An independently reusable module remains a separately versioned Module with an exact application binding. Moving between those ownership models is an explicit copy/extraction and migration operation, never a label change.
+The editable HR data definition is an ordinary independently versioned Module with record types, fields and relationships. The Application binds an exact published Module release through the existing compilation, publication and installation contracts. The designer may present the bound Module as part of one authoring workspace, but saves and publishes its changes through that Module's own draft and release operations. Adopting a changed Module requires a new explicit Application binding and deliberate installation upgrade; publishing a Module alone changes no installed application.
+
+Application-contained storage is a row-scope choice on a Module's record type: records carry their exact Application root as well as organisation scope. Organisation-shared storage uses the existing organisation scope. Neither choice makes the data definition owned by its Application, changes its independent Module version, or creates a new publication root. Moving stored records between scopes remains an explicit validated storage migration under the Module/Record installation contracts.
 
 ## One canonical page document
 
@@ -201,7 +203,7 @@ For Application definitions, support only the exact source/validation version pa
 | Standalone canonical content    | Require an outer `validationContractVersion` envelope that is not part of the canonical fingerprint. Missing metadata is not permission to guess V1.                                                                                                   |
 | Publication and release storage | Persist and verify the exact pair using existing source/validation version columns; check source JSON agreement before publication. No new representation column is needed.                                                                            |
 | Published and consumer reads    | Select canonical content using existing `validationContractVersion` metadata; do not add source metadata where no authored source is returned.                                                                                                         |
-| History and restore             | Expose both stored versions in history metadata. Restore verifies both and restores the original authored content without conversion. A V1-to-V2 conversion creates a separately confirmed new draft revision.                                         |
+| History and restore             | Internal history/restore evidence retains and verifies both stored versions. Public history metadata need not expose these format versions. Restore returns the original authored content without conversion; V1-to-V2 conversion creates a separately confirmed new draft revision.                                    |
 
 Existing V1 source, canonical JSON, compilation payloads, release rows and fingerprints remain unchanged: do not add tags or default V2 properties to them. History projections and transport envelopes do not change immutable release content or fingerprint inputs.
 

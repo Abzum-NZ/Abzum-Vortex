@@ -10,7 +10,8 @@ Uses completed [Access #34](issue-34-access-decision.md),
 This integration is still needed. The existing protected administration writers
 already append completed Activity atomically; do not append a second success
 entry or rebuild their store. The missing behavior is one content-free record of
-a known refused request after its unsuccessful transaction has rolled back.
+a clean permission refusal before any business write. The refusal entry and the
+unchanged operation result commit in the request's existing transaction.
 The foundation's neutral proof is not actual owning-operation integration.
 
 ## What will be built
@@ -23,20 +24,21 @@ The foundation's neutral proof is not actual owning-operation integration.
    boundary. An arbitrary database exception or SQL permission error is not proof
    of a business refusal. Unexpected failures remain failures, without exception
    text or user-supplied values in Activity.
-3. Use the existing request wrapper and transaction model. Generate the Activity
-   and correlation identifiers on the server and retain only successfully verified
-   local organisation/account scope. After the denied mutation has fully rolled
-   back, append one refusal through a fixed private owning path in a fresh,
-   revalidated transaction. Never append inside a transaction that will roll back.
+3. Use the existing request wrapper and transaction. Generate one Activity identity
+   on the server, establish and lock the local organisation/account scope, validate
+   the exact target and revision, then decide permission before the first write.
+   A clean refusal uses the existing owner-only append and returns from that same
+   transaction. No second transaction, privileged wrapper or error classification
+   is introduced.
 4. Fix action, source and refused outcome in the owning adapter. Callers cannot
    choose Activity content or use the append path as authority. Refusal subjects
    contain only verified safe local scope: submitted missing/foreign targets,
    requested permission identifiers, labels and field values are not evidence.
    Invalid sessions or failures before any safe local scope is established create
    no organisation Activity entry; they cannot nominate an organisation to log in.
-5. Reuse the existing organisation/Activity identity for exact retry deduplication.
-   An audit append failure never turns refusal into success or claims successful
-   recording; return the existing safe unavailable outcome. Do not add a second
+5. Reuse the existing organisation/Activity identity. A duplicate or conflicting
+   append raises and rolls back; it never turns refusal into success or claims
+   recording. Do not add a second
    counter, audit store, retry queue or generic callback-based mutation framework.
 6. Apply the same request-level boundary to actual supported Access operations,
    without per-row emission. Keep later Record/Query, public, workflow, federation
@@ -50,9 +52,9 @@ The foundation's neutral proof is not actual owning-operation integration.
       its actual Activity owner and identifies remaining integration dependencies.
 - [ ] A real permitted administration change still commits exactly one completed
       entry atomically; a rolled-back change leaves no completed entry.
-- [ ] A real known refused administration request leaves business and Access
-      state unchanged and commits exactly one content-free refused entry after
-      rollback, with its original server-generated correlation.
+- [ ] A real clean permission refusal leaves business and Access state unchanged
+      and commits exactly one content-free refused entry in the request transaction,
+      with its established actor, correlation and decision time.
 - [ ] Exact retry of that evidence is duplicate-safe; conflicting evidence cannot
       replace the existing entry. Reuse the already-proved foundation behavior.
 - [ ] Foreign/missing targets and malformed input cannot place private values or
@@ -68,31 +70,20 @@ The foundation's neutral proof is not actual owning-operation integration.
       acceptance, including the 500-row scenario; no unbuilt query engine, metrics
       collector or Activity screen is claimed complete here.
 
-## First owning operation and tool restriction — 8 September 2026
+## Access writers in this slice
 
-Architect and independent Sol review selected Group rename as the first bounded
-integration. Its existing completed event remains unchanged. A classified
-permission refusal after a verified local request would append only the fixed
-`revise_group_label` / `web` / `refused` evidence, with empty subject/field lists,
-after rollback and fresh human-context validation. A missing/foreign organisation
-before scope validation cannot create Activity. A submitted foreign Group is
-never recorded; a permission denial before target lookup may still create one
-local, content-free request refusal. Missing-target, stale-revision and unexpected
-database errors are not relabelled as permission refusals.
+The protected Group create, rename and retire operations, Group membership removal,
+role-metadata preparation and revision, role retirement, role-activation revocation,
+delegation revocation and role-assignment revocation use this boundary. Preparation
+and revision share one Activity identity, and revision is not called after preparation
+refuses. These are standalone request entry points; composed SQL writers continue to
+raise and do not return a refusal row.
 
-Reuse the existing runtime transaction runner and private context-building logic;
-do not add a general privileged-runner API. The private append wrapper would be
-callable only by the trusted runtime role, not request/browser roles, and could
-not append successes, arbitrary actions, subjects or values.
-
-An earlier session's attempt to create that persistent privileged function was
-rejected by a tool security check; nothing was applied and the CLI-created empty
-migration was removed. Fresh implementation starts from current source and uses
-current applicable tool authorization and normal migration and review checks.
-The prior denial is not assumed to expire with its session. No rejected payload
-is recovered or replayed through another actor or mechanism. Any current tool
-restriction is reported as such; it creates no new product dependency and does
-not stop independent engine work.
+Only an exact, bound decision refusal with a supported permission reason records.
+Invalid input, pre-scope failure, stale Access, missing/foreign/stale targets, binding
+mismatch, unavailable target policy, permanent-steward protection and append conflict
+retain their existing error and record nothing. The submitted target is never an
+Activity subject; the subject is the established organisation.
 
 ## Later owners
 
@@ -107,12 +98,12 @@ No reverse dependency on those later screens or executors is created.
 
 ```mermaid
 flowchart LR
-    O[Fixed protected operation] --> C{Outcome}
-    C -->|Allowed| S[Change and existing completed Activity commit together]
-    C -->|Known refusal| R[Roll back change]
-    R --> A[Fresh verified local scope]
-    A --> F[One content-free refusal entry]
-    F --> U[Operation remains refused]
+    O[Validate scope, target and revision under Access lock] --> C{Exact permission decision}
+    C -->|Allowed| S[Change and completed Activity commit together]
+    C -->|Clean refusal before write| F[Append one organisation-scoped refused entry]
+    F --> R[Return refusal row and commit request transaction]
+    R --> U[Public adapter returns unavailable]
+    C -->|Other failure| X[Raise; transaction records nothing]
 ```
 
 References: [Activity specification](../specification/14-activity-privacy-and-retention.md#activity-history),

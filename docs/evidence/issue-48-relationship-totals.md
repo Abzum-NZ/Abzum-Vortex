@@ -3,6 +3,90 @@
 [Calculated values and totals #48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) ·
 [Implementation plan](../build-plan/issue-48-calculation-engine.md#next-delivery-relationship-totals)
 
+## Stage 2B transactional save integration — 14 September 2026
+
+The existing protected create/update save transaction now privately discovers the
+old and proposed concrete total closure before row locks, locks the source and
+affected parents in canonical physical-record order, and re-reads revisions,
+relationships and closure after any wait. A changed closure restarts the owning
+request transaction at most three times using the same command, expected revision,
+Activity identity and lazily allocated Event identity.
+
+The Record service evaluates only server-read installed definitions and declared
+aggregate/filter inputs. It applies the existing total, calculation and final field
+validators, then composes the existing base save with revision-checked parent total
+and dependent-calculation updates. Source and parent Records, revisions, Activity,
+standard Events/queue messages and the existing save receipt commit or roll back as
+one unit. No public related-row reader, receipt, table or generic save/evaluator
+framework was added.
+
+The real PostgreSQL integration publishes, provisions and installs V2 definitions,
+then proves empty required totals and an upstream calculation, child create, value
+change, filter exclusion/re-inclusion, old/new-parent movement, concurrent children
+sharing a parent, stale revision, effect-free replay and changed-input duplicate.
+It now also proves a finite recursive installed hierarchy, an actual concrete
+record/field cycle refusal, mixed-currency refusal with no partial effects, and a
+forced lock wait whose changed relationship closure restarts and completes once.
+A second forced wait overlaps two exact retries: both replay the same saved revision
+while only one receipt and one source/parent effect pair commit. An injected parent
+Activity failure still proves rollback of the already-written source and all other
+terminal effects.
+
+The correction preserves the existing installation-wide Rule eligibility boundary:
+when an installed Module or Application contains a Rule, the relationship preflight
+delegates to the existing base preparation instead of bypassing its refusal. The
+database proof injects a canonical Rule into the already published/provisioned/
+installed test release under replication-disabled fault setup, calls the protected
+runtime preflight, and observes only `defer` with no effects. The obsolete unjoined
+base writer is no longer executable by `vortex_runtime`; the composed writer also
+reruns the protected preflight inside its own security-definer execution and
+matches the supplied parent identities, revisions, and complete generated-field
+set to that fresh authoritative closure. No caller-set session state or preparation
+token participates. The real runtime proof supplies the correct parent identity
+and revision with `finalValues: {}` and confirms refusal leaves the source, parent,
+receipt, Activity, Event and queue unchanged.
+
+Verification completed on a fresh disposable database:
+
+- Record focused tests: **4 files / 27 tests passed**.
+- Real published/provisioned/installed PostgreSQL save: **1 file / 1 test passed**.
+- Transactional-total ACL pgTAP: **13/13 passed**.
+- Record typecheck, scoped lint, all **23 package boundaries**, database migration
+  reset and database lint passed. Database lint reported only pre-existing warnings.
+- Fresh disposable PostgreSQL pgTAP suite: **85 files / 4,036 tests passed**.
+- Repository unit suite: **155 files passed, 6 skipped; 1,916 tests passed,
+  7 skipped**. All **23/23** package typechecks and builds passed; formatting,
+  repository lint and the **18/18** current fixture checks passed.
+
+The post-review correction reran the focused **4 files / 27 tests**, the real
+PostgreSQL integration (**1/1**), all **23/23** package typechecks, repository
+lint/formatting/boundaries, database lint, and the fresh **85 files / 4,036**
+pgTAP suite successfully. The separate repository-wide concurrency runner was
+also attempted: its Record-independent Access-administration fixture failed to
+reach its barrier after reporting a stale organisation-account revision. That
+runner is not claimed green; the two Stage 2B real lock-wait cases above both
+passed deterministically in the focused PostgreSQL integration.
+
+The second review correction reran the focused **4 files / 30 tests**, the
+transactional-total ACL **13/13**, and the real installed-definition PostgreSQL
+integration **1/1** successfully after a fresh local reset. The changed-closure
+case now records exactly two real request transactions (the restarted attempt and
+successful retry), observes the row-lock wait, and asserts the old/new parent
+totals and exact terminal-effect deltas without any post-save repair. A fresh
+disposable PostgreSQL run again passed **85 files / 4,036 tests**.
+
+The final Rule-boundary correction uses only the already installed catalogue,
+root closure, and the source values already finalized by the ordinary calculation
+engine when protected total preparation defers. Membership retains its old/new
+target check; declared aggregate and filter input fields compare finalized values
+with the authoritative stored snapshot, treating absent stored values as null.
+The real installed save-service proof shows an amount flowing through two
+calculations into a parent sum and a calculated filter input both refuse atomically.
+It also shows that a title edit and an operand edit whose calculated aggregate/
+filter inputs stay unchanged save normally, exact replay is effect-free, and a
+changed-input duplicate conflicts. No calculation-specific SQL walk or new state
+was added.
+
 ## Delivered scope under review
 
 One pure Record evaluator calculates count, sum, minimum, maximum and average
@@ -65,12 +149,11 @@ row order no longer changes the chosen persisted representation. The focused
 suite passed again after this correction; the 416-test broader receipt above
 preceded this narrow change.
 
-The [protected save #47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) still
-must select actual related records, enforce disclosure of totals, update both
-old/new parents, handle concrete dependency cycles and concurrent changes, and
-commit records, revisions, Activity and events atomically. This pure evaluator
-does not implement or prove those database integrations. No static cross-record
-type-cycle prohibition is introduced. The whole #48 remains open.
+The historical pure-evaluator receipt above predates the Stage 2B integration.
+Deletion/restore, broader relationship behaviors, deadline scheduling/refresh and
+Query remain owned by #50, #49, #62 and #54 respectively. No static cross-record
+type-cycle prohibition is introduced; only an actual concrete record/field cycle
+is refused.
 
 There is no new screen in this headless slice and no hosted or Production
 verification claim in this evidence.
