@@ -104,6 +104,14 @@ organisation, account, or Application must not widen RLS scope. These are
 scope-construction and ACL/RLS requirements, not an invitation to add another
 system-context mechanism.
 
+The focused [#466](https://github.com/Abzum-NZ/Abzum-Vortex/issues/466)
+regression retains those existing private seams and proves that a stale Access
+version is refused by the composed relationship-total save before it can reach
+the locked parent route; no Record, Activity, Event, queue or receipt effect is
+created. It adds no System or specified-account execution capability or
+attribution. Its independently reviewed Testing revision remains subject to
+normal hosted verification before the delivery is closed.
+
 This currently describes ordinary-human attribution only. The Record save
 service does not yet invoke a private recalculation as a System or
 specified-account actor, and it must not relabel a human context as system or
