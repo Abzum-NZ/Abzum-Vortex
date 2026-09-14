@@ -6,7 +6,7 @@ set -euo pipefail
 [ "$1" = "$VORTEX_TEST_EXPECTED_DATABASE_URL" ]
 
 case "$*" in
-  *server_version_num*) printf '170000\n' ;;
+  *server_version_num*) printf '%s\n' "${VORTEX_TEST_SERVER_VERSION_NUM:-170000}" ;;
   *to_regclass*)
     if [ "${VORTEX_TEST_EMPTY_HISTORY:-false}" = "true" ]; then printf 'f\n'; else printf 't\n'; fi
     ;;
