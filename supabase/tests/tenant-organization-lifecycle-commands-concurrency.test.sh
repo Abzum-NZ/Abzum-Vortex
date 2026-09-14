@@ -61,6 +61,13 @@ cleanup() {
     "$proof_root/release-attach" "$proof_root/release-expiry" \
     "$proof_root/release-account" "$proof_root/release-request"
   for worker in "${workers[@]}"; do wait "$worker" >/dev/null 2>&1 || true; done
+  if [ "$status" -ne 0 ]; then
+    for log in "$proof_root"/*.log; do
+      [ -f "$log" ] || continue
+      printf '\nWorker log: %s\n' "${log##*/}" >&2
+      cat "$log" >&2
+    done
+  fi
   if [ "$fixture_created" = 1 ]; then
     run_sql "
       begin;
@@ -159,7 +166,7 @@ run_sql "
     granted_at,granted_by_actor_id,grant_correlation_id,changed_at,changed_by_actor_id,change_correlation_id
   ) values ('$expiring_assignment_id','$tenant_id','$expiring_identity_id',
     array['platform.tenant.organizations.lifecycle'],now()-interval '1 hour',
-    clock_timestamp()+interval '8 seconds',1,now()-interval '1 hour','$operator_id',
+    clock_timestamp()+interval '1 day',1,now()-interval '1 hour','$operator_id',
     '$correlation_id',now()-interval '1 hour','$operator_id','$correlation_id');
   update vortex_identity.organizations set state='suspended',state_changed_at=clock_timestamp(),revision=2
     where organization_id in ('$root_id','$child_id');
@@ -253,6 +260,8 @@ grep -qx 'V3101' "$proof_root/attach-move.log" || { echo 'attachment to archived
 [ "$(run_sql "select coalesce(parent_organization_id::text,'root')||'|'||revision from vortex_identity.organizations where organization_id='$detached_child_id';")" = 'root|1' ] || { echo 'archive/attachment race moved child' >&2; exit 1; }
 
 # Authority effective while queued at governance must be rechecked at fresh DB time.
+# Deliberately exceed the old fixture expiry window before acquiring the expiry lock.
+sleep 9
 "${psql_command[@]}" >"$proof_root/expiry-holder.log" 2>&1 <<SQL &
 begin; select pg_catalog.pg_backend_pid() \g '$proof_root/expiry-holder.pid'
 select 1 from vortex_access.organization_access_versions where organization_id='$root_id' for update;
@@ -274,10 +283,28 @@ SQL
 w=$!; workers+=("$w"); expiry_command_pid="$(read_pid "$proof_root/expiry-command.pid")"
 wait_blocked "$expiry_command_pid" "$expiry_holder_pid" 'lifecycle command queued at governance'
 [ "$(run_sql "select case when starts_at<=clock_timestamp() and expires_at>clock_timestamp() then 'yes' else 'no' end from vortex_identity.tenant_administrator_assignments where assignment_id='$expiring_assignment_id';")" = yes ] || { echo 'authority was not effective while queued' >&2; exit 1; }
-while [ "$(run_sql "select case when clock_timestamp()>=expires_at then 'yes' else 'no' end from vortex_identity.tenant_administrator_assignments where assignment_id='$expiring_assignment_id';")" != yes ]; do sleep 0.05; done
+run_sql "update vortex_identity.tenant_administrator_assignments set expires_at=clock_timestamp()+interval '5 seconds' where assignment_id='$expiring_assignment_id';" >/dev/null
+deadline=$((SECONDS+20)); authority_expired=''
+while ((SECONDS<deadline)); do
+  authority_expired="$(run_sql "select case when clock_timestamp()>=expires_at then 'yes' else '' end from vortex_identity.tenant_administrator_assignments where assignment_id='$expiring_assignment_id';")"
+  [ "$authority_expired" = yes ] && break
+  sleep 0.05
+done
+[ "$authority_expired" = yes ] || {
+  echo 'database time did not pass queued lifecycle authority expiry' >&2
+  run_sql "select 'contender=$expiry_command_pid blockers='||coalesce(array_to_string(pg_catalog.pg_blocking_pids($expiry_command_pid), ','), 'none');" >&2
+  exit 1
+}
+still_blocked="$(run_sql "select case when pg_catalog.cardinality(pg_catalog.pg_blocking_pids($expiry_command_pid))>0 then 'yes' else '' end;")"
+[ "$still_blocked" = yes ] || {
+  echo 'expiring lifecycle authority was no longer blocked after database time passed expiry' >&2
+  run_sql "select 'holder=$expiry_holder_pid contender=$expiry_command_pid blockers='||coalesce(array_to_string(pg_catalog.pg_blocking_pids($expiry_command_pid), ','), 'none');" >&2
+  exit 1
+}
 touch "$proof_root/release-expiry"; wait "${workers[6]}"; wait "${workers[7]}"
 grep -qx 'V3101' "$proof_root/expiry-command.log" || { echo 'expired queued authority was not refused' >&2; exit 1; }
 [ "$(run_sql "select count(*) from vortex_identity.accepted_administration_receipts where duplicate_key='$duplicate_expiring';")" = 0 ] || { echo 'expired authority wrote a receipt' >&2; exit 1; }
+[ "$(run_sql "select state||'|'||revision from vortex_identity.organizations where organization_id='$root_id';")" = 'active|3' ] || { echo 'expired queued authority changed root state' >&2; exit 1; }
 
 # A supported account mutation, suspension, then reactivation queue in governance order.
 child_access_version="$(run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$child_id';")"
