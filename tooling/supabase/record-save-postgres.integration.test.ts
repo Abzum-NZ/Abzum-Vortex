@@ -37,6 +37,12 @@ const actorId = id(3);
 const identityAuthorityId = id(4);
 const identityId = id(5);
 const organizationAccountId = id(6);
+const otherIdentityId = id(172);
+const otherOrganizationAccountId = id(173);
+const foreignTenantId = id(174);
+const foreignOrganizationId = id(175);
+const foreignOrganizationAccountId = id(176);
+const wrongApplicationRootId = id(177);
 const moduleRootId = id(7);
 const applicationRootId = id(8);
 const roleId = id(9);
@@ -166,6 +172,8 @@ const occurrenceNamedMixedDeclaredId = id(144);
 const commandNamedRecordCreateId = id(150);
 const activityNamedRecordCreateId = id(151);
 const occurrenceNamedRecordCreateId = id(152);
+const activityNamedReferenceCreateId = id(208);
+const occurrenceNamedReferenceCreateId = id(209);
 const commandNamedRaceOneId = id(153);
 const commandNamedRaceTwoId = id(154);
 const activityNamedRaceOneId = id(155);
@@ -194,7 +202,12 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         ownership_mode: "none",
         title_field: "title",
         standard_actions: ["create", "read", "update"],
-        custom_actions: ["action_note", "action_set_title", "action_set_title_and_note"],
+        custom_actions: [
+          "action_note",
+          "action_set_title",
+          "action_set_title_and_note",
+          "action_validate_references",
+        ],
         fields: [
           {
             id: "field_title",
@@ -795,6 +808,18 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         field_policy: { readable_fields: ["title", "title_copy"], changeable_fields: ["title"] },
       },
       {
+        id: "permission_validate_references",
+        key: "example.record_save_proof.item.validate_references",
+        label: "Validate item references",
+        description: "Run the named reference-validation proof action.",
+        record_type: "item",
+        action_kind: "named",
+        named_action: "validate_references",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: { readable_fields: ["title"], changeable_fields: [] },
+      },
+      {
         id: "permission_set_total_child_amount",
         key: "example.record_save_proof.total_child.set_amount",
         label: "Set total child amount",
@@ -903,6 +928,30 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
           { kind: "set_field", field: "title", value: { source: "input", input: "title" } },
           { kind: "announce_event", event: "example.record_save_proof.item.noted" },
         ],
+      },
+      {
+        id: "action_validate_references",
+        key: "example.record_save_proof.item.validate_references",
+        label: "Validate item references",
+        record_type: "item",
+        permission: "example.record_save_proof.item.validate_references",
+        shareable: false,
+        inputs: [
+          {
+            key: "account",
+            label: "Account",
+            required: true,
+            type: "organisation_account_reference",
+          },
+          {
+            key: "record",
+            label: "Record",
+            required: true,
+            type: "record_reference",
+            record_types: ["example.record_save_proof:item"],
+          },
+        ],
+        effects: [{ kind: "announce_event", event: "example.record_save_proof.item.noted" }],
       },
       {
         id: "action_set_total_child_amount",
@@ -1118,10 +1167,12 @@ const homePageId = componentId("page", "page_home");
 const noteActionId = componentId("action", "action_note");
 const setTitleActionId = componentId("action", "action_set_title");
 const setTitleAndNoteActionId = componentId("action", "action_set_title_and_note");
+const validateReferencesActionId = componentId("action", "action_validate_references");
 const setTotalChildAmountActionId = componentId("action", "action_set_total_child_amount");
 const notePermissionId = componentId("permission", "permission_note");
 const setTitlePermissionId = componentId("permission", "permission_set_title");
 const setTitleAndNotePermissionId = componentId("permission", "permission_set_title_and_note");
+const validateReferencesPermissionId = componentId("permission", "permission_validate_references");
 const setTotalChildAmountPermissionId = componentId(
   "permission",
   "permission_set_total_child_amount",
@@ -1344,10 +1395,14 @@ const cleanRecordSaveFixture = async (admin: Sql): Promise<void> => {
       where root_id in ('${moduleRootId}', '${applicationRootId}');
     delete from vortex_definition.roots
       where root_id in ('${moduleRootId}', '${applicationRootId}');
-    delete from vortex_identity.organization_accounts where organization_id = '${organizationId}';
-    delete from vortex_identity.identity_projections where identity_id = '${identityId}';
-    delete from vortex_identity.organizations where organization_id = '${organizationId}';
-    delete from vortex_identity.tenants where tenant_id = '${tenantId}';
+    delete from vortex_identity.organization_accounts
+      where organization_id in ('${organizationId}', '${foreignOrganizationId}');
+    delete from vortex_identity.identity_projections
+      where identity_id in ('${identityId}', '${otherIdentityId}');
+    delete from vortex_identity.organizations
+      where organization_id in ('${organizationId}', '${foreignOrganizationId}');
+    delete from vortex_identity.tenants
+      where tenant_id in ('${tenantId}', '${foreignTenantId}');
     commit;
   `);
 };
@@ -1406,6 +1461,44 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           pg_catalog.statement_timestamp() - interval '1 minute',
           pg_catalog.statement_timestamp(), pg_catalog.statement_timestamp(), ${actorId},
           ${id(20)}, 1
+        )`;
+        await transaction`select * from vortex_identity.ensure_identity_projection(
+          ${otherIdentityId}::uuid, ${id(178)}::uuid
+        )`;
+        await transaction`insert into vortex_identity.organization_accounts (
+          organization_account_id, organization_id, identity_id, display_name, state,
+          activated_at, changed_at, state_changed_at, state_changed_by,
+          state_change_correlation_id, revision
+        ) values (
+          ${otherOrganizationAccountId}, ${organizationId}, ${otherIdentityId},
+          'Other active account', 'active', pg_catalog.statement_timestamp() - interval '1 minute',
+          pg_catalog.statement_timestamp(), pg_catalog.statement_timestamp(), ${actorId},
+          ${id(179)}, 1
+        )`;
+        await transaction`insert into vortex_identity.tenants (
+          tenant_id, short_name, display_name, state, created_at, created_by,
+          state_changed_at, revision
+        ) values (
+          ${foreignTenantId}, 'record_save_foreign', 'Record save foreign', 'active',
+          pg_catalog.statement_timestamp(), ${actorId}, pg_catalog.statement_timestamp(), 1
+        )`;
+        await transaction`insert into vortex_identity.organizations (
+          organization_id, tenant_id, short_name, display_name, state, created_at,
+          created_by, state_changed_at, revision
+        ) values (
+          ${foreignOrganizationId}, ${foreignTenantId}, 'record_save_foreign',
+          'Record save foreign', 'active', pg_catalog.statement_timestamp(), ${actorId},
+          pg_catalog.statement_timestamp(), 1
+        )`;
+        await transaction`insert into vortex_identity.organization_accounts (
+          organization_account_id, organization_id, identity_id, display_name, state,
+          activated_at, changed_at, state_changed_at, state_changed_by,
+          state_change_correlation_id, revision
+        ) values (
+          ${foreignOrganizationAccountId}, ${foreignOrganizationId}, ${identityId},
+          'Foreign active account', 'active', pg_catalog.statement_timestamp() - interval '1 minute',
+          pg_catalog.statement_timestamp(), pg_catalog.statement_timestamp(), ${actorId},
+          ${id(180)}, 1
         )`;
         await transaction`select * from vortex_access.initialize_organization_access_version(
           ${organizationId}::uuid, ${actorId}::uuid, ${id(21)}::uuid
@@ -1484,7 +1577,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           definitionCatalogue: { connectionTypeReleases: [], platformThemeReleases: [] },
           resolvedRequestTransaction: resolvedRequestRunner(transaction),
         }).readExact();
-        expect(registration.permissionRegistration.entries).toHaveLength(20);
+        expect(registration.permissionRegistration.entries).toHaveLength(21);
         const registeredPermissionKeys = registration.permissionRegistration.entries.map(
           (entry) => entry.permission.key,
         );
@@ -1623,6 +1716,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityReplayId,
         activityConflictId,
         activityNamedRecordCreateId,
+        activityNamedReferenceCreateId,
         activityFreshId,
         activityFreshReplayId,
         activityMissingSettingsId,
@@ -1664,6 +1758,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         occurrenceCreateId,
         occurrenceUpdateId,
         occurrenceNamedRecordCreateId,
+        occurrenceNamedReferenceCreateId,
         occurrenceFreshId,
         occurrenceExplicitMoneyId,
         occurrenceParentOneId,
@@ -1818,6 +1913,16 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       if (namedRecord.kind !== "available" || namedRecord.value.outcome !== "saved")
         throw new Error("Named action subject was not created");
       const namedRecordId = namedRecord.value.recordId;
+      const referencedRecord = await service.save(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: id(181),
+        operation: "create",
+        recordTypeId,
+        submittedValues: { [fieldId]: "Named action reference" },
+      });
+      if (referencedRecord.kind !== "available" || referencedRecord.value.outcome !== "saved")
+        throw new Error("Named action reference was not created");
+      const referencedRecordId = referencedRecord.value.recordId;
 
       await expect(
         admin<{ application_version: string; module_version: string }[]>`
@@ -1835,6 +1940,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         notePermissionId,
         setTitlePermissionId,
         setTitleAndNotePermissionId,
+        validateReferencesPermissionId,
         openPermissionId,
       ]);
       const namedOnlyPermissions = allRolePermissions.filter((candidate) => {
@@ -1843,7 +1949,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           String((candidate as { permissionId?: unknown }).permissionId),
         );
       });
-      expect(namedOnlyPermissions).toHaveLength(4);
+      expect(namedOnlyPermissions).toHaveLength(5);
       await admin`select * from vortex_access.coordinate_organization_role_change(
         ${JSON.stringify({
           contractVersion: "1.0.0",
@@ -2210,6 +2316,158 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         ${actorId}::uuid, ${id(160)}::uuid
       )`;
 
+      // Exercise legacy V1 string references through the public named-action
+      // service while retaining the installed V2 catalogue's exact target.
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction`update vortex_definition.releases
+          set validation_contract_version = '1.0.0'
+          where root_id = ${moduleRootId}::uuid and release_revision = 1`;
+      });
+      const referenceInputs = (account: string, record: string) => ({ account, record });
+      const runReferenceAction = async (
+        commandId: string,
+        account: string,
+        record: string,
+        activityId: string,
+        occurrenceId: string,
+      ) =>
+        runNamedAction({
+          commandId,
+          actionId: validateReferencesActionId,
+          expectedConcurrencyNumber: 4,
+          inputs: referenceInputs(account, record),
+          activityId,
+          standardOccurrenceId: occurrenceId,
+          declaredOccurrenceIds: [occurrenceId],
+        });
+
+      await expect(
+        runReferenceAction(
+          id(182),
+          otherOrganizationAccountId,
+          referencedRecordId,
+          id(183),
+          id(184),
+        ),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "completed", recordId: namedRecordId, concurrencyNumber: 4 },
+      });
+      await expect(
+        runReferenceAction(id(185), organizationAccountId, referencedRecordId, id(186), id(187)),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "completed", recordId: namedRecordId, concurrencyNumber: 4 },
+      });
+
+      const expectReferenceRefusal = async (
+        commandId: string,
+        account: string,
+        record: string,
+        activityId: string,
+        occurrenceId: string,
+      ) => {
+        const before = await namedEffects();
+        await expect(
+          runReferenceAction(commandId, account, record, activityId, occurrenceId),
+        ).resolves.toMatchObject({
+          kind: "available",
+          value: { outcome: "refused", error: { code: "operation_refused" } },
+        });
+        expect(await namedEffects()).toEqual(before);
+      };
+
+      await expectReferenceRefusal(
+        id(188),
+        foreignOrganizationAccountId,
+        referencedRecordId,
+        id(189),
+        id(190),
+      );
+      await expectReferenceRefusal(id(191), id(192), referencedRecordId, id(193), id(194));
+      await expectReferenceRefusal(id(195), organizationAccountId, id(196), id(197), id(198));
+
+      const referenceTable = `record_data.rt_${storageContractId.replaceAll("-", "")}`;
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction.unsafe(
+          `update ${referenceTable} set organisation_id = $1 where record_id = $2`,
+          [foreignOrganizationId, referencedRecordId],
+        );
+      });
+      await expectReferenceRefusal(
+        id(199),
+        organizationAccountId,
+        referencedRecordId,
+        id(200),
+        id(201),
+      );
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction.unsafe(
+          `update ${referenceTable} set organisation_id = $1 where record_id = $2`,
+          [organizationId, referencedRecordId],
+        );
+      });
+
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction.unsafe(
+          `update ${referenceTable}
+             set lifecycle_state = 'soft_deleted', deleted_at = pg_catalog.statement_timestamp(),
+                 deleted_by = $1
+           where organisation_id = $2 and record_id = $3`,
+          [organizationAccountId, organizationId, referencedRecordId],
+        );
+      });
+      await expectReferenceRefusal(
+        id(202),
+        organizationAccountId,
+        referencedRecordId,
+        id(203),
+        id(204),
+      );
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction.unsafe(
+          `update ${referenceTable}
+             set lifecycle_state = 'active', deleted_at = null, deleted_by = null
+           where organisation_id = $1 and record_id = $2`,
+          [organizationId, referencedRecordId],
+        );
+      });
+
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction.unsafe(
+          `update ${referenceTable} set application_root_id = $1
+           where organisation_id = $2 and record_id = $3`,
+          [wrongApplicationRootId, organizationId, referencedRecordId],
+        );
+      });
+      await expectReferenceRefusal(
+        id(205),
+        organizationAccountId,
+        referencedRecordId,
+        id(206),
+        id(207),
+      );
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction.unsafe(
+          `update ${referenceTable} set application_root_id = $1
+           where organisation_id = $2 and record_id = $3`,
+          [applicationRootId, organizationId, referencedRecordId],
+        );
+      });
+      await admin.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction`update vortex_definition.releases
+          set validation_contract_version = '2.0.0'
+          where root_id = ${moduleRootId}::uuid and release_revision = 1`;
+      });
+
       const fresh = await service.save(session, selection, {
         contractVersion: "2.0.0",
         commandId: commandFreshId,
@@ -2360,10 +2618,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         private_direct: "private generated source",
         private_transitive: "private generated source",
         concurrency_number: "2",
-        receipt_count: "5",
+        receipt_count: "6",
         activity_count: "2",
-        outbox_count: "10",
-        queue_count: "10",
+        outbox_count: "13",
+        queue_count: "13",
       });
       await expect(
         admin.unsafe(
@@ -2372,7 +2630,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           [organizationId, freshRecordId],
         ),
       ).resolves.toEqual([{ amount: { amount: "12.34", currency: "AUD" } }]);
-      expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(3);
+      expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(4);
       expect(moduleRelease.content.events).toHaveLength(1);
 
       const createTotalParent = async (commandId: string, title: string) => {

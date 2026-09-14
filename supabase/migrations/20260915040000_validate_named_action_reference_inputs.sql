@@ -4,13 +4,49 @@
 
 begin;
 
+create function vortex_identity.is_active_organization_account_reference_internal(
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_organization_account_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select exists (
+    select 1
+    from vortex_identity.organization_accounts as account
+    join vortex_identity.identity_projections as projection
+      on projection.identity_id = account.identity_id
+    join vortex_identity.organizations as organization
+      on organization.organization_id = account.organization_id
+    join vortex_identity.tenants as tenant
+      on tenant.tenant_id = organization.tenant_id
+    where tenant.tenant_id = p_tenant_id
+      and organization.organization_id = p_organization_id
+      and account.organization_account_id = p_organization_account_id
+      and projection.state = 'active'
+      and account.state = 'active'
+      and organization.state = 'active'
+      and tenant.state = 'active'
+  )
+$function$;
+
+revoke all on function vortex_identity.is_active_organization_account_reference_internal(
+  uuid,uuid,uuid
+) from public, anon, authenticated, service_role, vortex_runtime,
+  vortex_request, vortex_record_owner, vortex_record_adapter;
+grant execute on function vortex_identity.is_active_organization_account_reference_internal(
+  uuid,uuid,uuid
+) to vortex_record_adapter;
+
 set local role vortex_record_owner;
 grant create on schema vortex_record to vortex_record_adapter;
 reset role;
 
 grant usage on schema vortex_identity to vortex_record_adapter;
-grant execute on function vortex_identity.list_organization_accounts(uuid)
-  to vortex_record_adapter;
 
 set local role vortex_record_adapter;
 
@@ -60,15 +96,10 @@ begin
     if input_definition ->> 'type' = 'organization_account_reference' then
       if pg_catalog.jsonb_typeof(input_candidate) is distinct from 'string'
         or not pg_catalog.pg_input_is_valid(input_candidate #>> '{}', 'uuid')
-        or not exists (
-          select 1
-          from vortex_identity.list_organization_accounts(
-            (context_value ->> 'identityId')::uuid
-          ) account
-          where account.organization_id =
-              (context_value ->> 'organizationId')::uuid
-            and account.organization_account_id =
-              (input_candidate #>> '{}')::uuid
+        or not vortex_identity.is_active_organization_account_reference_internal(
+          (context_value ->> 'tenantId')::uuid,
+          (context_value ->> 'organizationId')::uuid,
+          (input_candidate #>> '{}')::uuid
         ) then
         return false;
       end if;
@@ -87,7 +118,10 @@ begin
     elsif pg_catalog.jsonb_typeof(input_candidate) = 'string'
       and pg_catalog.pg_input_is_valid(input_candidate #>> '{}', 'uuid') then
       select pg_catalog.count(*),
-        pg_catalog.min((target.value ->> 'recordTypeId')::uuid)
+        (pg_catalog.array_agg(
+          (target.value ->> 'recordTypeId')::uuid
+          order by (target.value ->> 'recordTypeId')::uuid
+        ))[1]
       into resolved_target_count, reference_record_type_id
       from pg_catalog.jsonb_array_elements(input_definition -> 'recordTypes') target(value)
       where target.value ->> 'state' = 'resolved';
