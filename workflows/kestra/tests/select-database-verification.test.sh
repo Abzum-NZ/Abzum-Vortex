@@ -32,7 +32,6 @@ jq --exit-status '
   (.selectionSha256 | test("^[0-9a-f]{64}$"))
 ' <<<"$unchanged" >/dev/null
 
-definition_digest_before="$(jq -r '.requiredChecks[] | select(.id == "sql:030_definition_root_draft_store") | .relevantInputSha256' <<<"$unchanged")"
 record_digest_before="$(jq -r '.requiredChecks[] | select(.id == "sql:487_related_total_disclosure") | .relevantInputSha256' <<<"$unchanged")"
 
 printf '\n-- selector fixture: record change\n' >>"$repository/supabase/migrations/20260914013000_transactional_relationship_totals.sql"
@@ -41,13 +40,14 @@ git -C "$repository" commit --quiet -m "Change record relationship input"
 record_commit="$(git -C "$repository" rev-parse HEAD)"
 record_selection="$(run_selector "$base" "$record_commit")"
 jq --exit-status '
-  .mode == "selected" and .fullCoverageReasons == [] and
+  .mode == "full" and
+  any(.fullCoverageReasons[]; startswith("full:cross-domain-shared-function:")) and
   any(.executedChecks[]; .id == "sql:487_related_total_disclosure" and
-    any(.reasons[]; startswith("affected-group:record-runtime:"))) and
-  any(.reusedChecks[]; .id == "sql:030_definition_root_draft_store") and
+    any(.reasons[]; startswith("full:cross-domain-shared-function:"))) and
+  any(.executedChecks[]; .id == "sql:030_definition_root_draft_store") and
+  (.reusedChecks | length) == 0 and
   (([.executedChecks[].id] + [.reusedChecks[].id] | sort) == [.requiredChecks[].id])
 ' <<<"$record_selection" >/dev/null
-[ "$(jq -r '.requiredChecks[] | select(.id == "sql:030_definition_root_draft_store") | .relevantInputSha256' <<<"$record_selection")" = "$definition_digest_before" ]
 [ "$(jq -r '.requiredChecks[] | select(.id == "sql:487_related_total_disclosure") | .relevantInputSha256' <<<"$record_selection")" != "$record_digest_before" ]
 
 printf '\n-- selector fixture: definition change\n' >>"$repository/supabase/migrations/20260903215549_definition_root_draft_store.sql"
@@ -56,12 +56,60 @@ git -C "$repository" commit --quiet -m "Change definition input"
 cumulative_commit="$(git -C "$repository" rev-parse HEAD)"
 cumulative="$(run_selector "$base" "$cumulative_commit")"
 jq --exit-status '
-  .mode == "selected" and
+  .mode == "full" and
+  any(.fullCoverageReasons[]; startswith("full:cross-domain-shared-function:")) and
   any(.executedChecks[]; .id == "sql:030_definition_root_draft_store") and
   any(.executedChecks[]; .id == "sql:487_related_total_disclosure") and
   (.changedPaths | index("supabase/migrations/20260903215549_definition_root_draft_store.sql")) != null and
   (.changedPaths | index("supabase/migrations/20260914013000_transactional_relationship_totals.sql")) != null
 ' <<<"$cumulative" >/dev/null
+
+git -C "$repository" checkout --quiet -b cross-schema-fixture "$base"
+printf '\n-- selector fixture: shared module and Access dependency change\n' \
+  >>"$repository/supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql"
+git -C "$repository" add supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql
+git -C "$repository" commit --quiet -m "Change cross-schema shared functions"
+cross_schema_commit="$(git -C "$repository" rev-parse HEAD)"
+cross_schema="$(run_selector "$base" "$cross_schema_commit")"
+jq --exit-status '
+  .mode == "full" and
+  (.fullCoverageReasons | index("full:cross-domain-shared-function:supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql")) != null and
+  (.executedChecks | length) == (.requiredChecks | length) and
+  (.reusedChecks | length) == 0 and
+  any(.executedChecks[]; .id == "sql:470_module_dependency_pin_set") and
+  any(.executedChecks[]; .id == "sql:150_application_access_coordination") and
+  any(.executedChecks[]; .id == "lint:vortex_module") and
+  any(.executedChecks[]; .id == "lint:vortex_access")
+' <<<"$cross_schema" >/dev/null
+
+git -C "$repository" checkout --quiet -b alternate-sql-fixture "$base"
+printf 'begin; select plan(0); select * from finish(); rollback;\n' \
+  >"$repository/supabase/tests/regression.sql"
+jq '.sqlSuites += ["supabase/tests/regression.sql"] |
+    .groups[0].sqlPatterns += ["supabase/tests/regression.sql"]' \
+  "$repository/workflows/kestra/database-verification-selection.json" \
+  >"$test_root/alternate-sql.json"
+mv "$test_root/alternate-sql.json" "$repository/workflows/kestra/database-verification-selection.json"
+git -C "$repository" add supabase/tests/regression.sql workflows/kestra/database-verification-selection.json
+git -C "$repository" commit --quiet -m "Add alternate valid SQL suite name"
+alternate_sql_commit="$(git -C "$repository" rev-parse HEAD)"
+alternate_sql="$(run_selector "$base" "$alternate_sql_commit")"
+jq --exit-status '
+  .mode == "full" and
+  any(.requiredChecks[]; .id == "sql:regression.sql" and .target == "supabase/tests/regression.sql") and
+  any(.executedChecks[]; .id == "sql:regression.sql")
+' <<<"$alternate_sql" >/dev/null
+
+git -C "$repository" checkout --quiet -b selector-mismatch-fixture "$base"
+printf '\n# local selector mismatch fixture\n' >>"$selector"
+if run_selector "$base" "$base" >"$test_root/mismatch.out" 2>"$test_root/mismatch.err"; then
+  echo "expected a selector differing from the target commit to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "executing selector differs from the selected commit" \
+  "$test_root/mismatch.err"
+git -C "$repository" checkout --quiet -- "$selector_relative"
 
 git -C "$repository" checkout --quiet -b revert-fixture "$base"
 printf '\n-- temporary change\n' >>"$repository/supabase/migrations/20260903215549_definition_root_draft_store.sql"

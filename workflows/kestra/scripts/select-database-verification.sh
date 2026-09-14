@@ -44,13 +44,16 @@ git -C "$repository" show "${target_commit}:${VERIFICATION_PATH}" >"$verificatio
   die "selected commit has no database verification manifest"
 git -C "$repository" cat-file -e "${target_commit}:${SELECTOR_PATH}" 2>/dev/null ||
   die "selected commit has no database verification selector"
+target_selector_sha256="$(git -C "$repository" show "${target_commit}:${SELECTOR_PATH}" | sha256sum | cut -d' ' -f1)"
+[ "$(sha256_file "$0")" = "$target_selector_sha256" ] ||
+  die "executing selector differs from the selected commit"
 
 jq --exit-status '
   type == "object" and
   (keys == ["fullCoveragePatterns", "groups", "schemaVersion", "sqlSuites"]) and
   .schemaVersion == 1 and
   (.sqlSuites | type == "array" and length > 0 and
-    all(type == "string" and test("^supabase/tests/[0-9]{3}_[a-z0-9_]+[.]test[.]sql$")) and
+    all(type == "string" and test("^supabase/tests/[A-Za-z0-9_.-]+[.]sql$")) and
     (unique | length) == length) and
   (.groups | type == "array" and length > 0 and
     all(type == "object" and
@@ -83,7 +86,7 @@ actual_sql="$temporary_root/actual-sql"
 inventory_sql="$temporary_root/inventory-sql"
 actual_proofs="$temporary_root/actual-proofs"
 inventory_proofs="$temporary_root/inventory-proofs"
-sed -n '/^supabase\/tests\/[0-9][0-9][0-9]_[a-z0-9_]*\.test\.sql$/p' "$tree_paths" >"$actual_sql"
+sed -n '/^supabase\/tests\/[A-Za-z0-9_.-]*\.sql$/p' "$tree_paths" >"$actual_sql"
 jq --raw-output '.sqlSuites[]' "$selection_file" | LC_ALL=C sort >"$inventory_sql"
 cmp -s "$actual_sql" "$inventory_sql" ||
   die "selection inventory must list every SQL suite exactly once"
@@ -201,6 +204,24 @@ else
       continue
     fi
 
+    if [[ "$path" == supabase/migrations/*.sql ]]; then
+      shared_function_change=false
+      for revision in "$baseline_commit" "$target_commit"; do
+        if git -C "$repository" cat-file -e "${revision}:${path}" 2>/dev/null &&
+          git -C "$repository" show "${revision}:${path}" |
+            grep --extended-regexp --ignore-case \
+              '^[[:space:]]*(create([[:space:]]+or[[:space:]]+replace)?|alter|drop)[[:space:]]+function[[:space:]]+"?vortex_(module|access|record|identity)"?[.]' \
+              >/dev/null; then
+          shared_function_change=true
+          break
+        fi
+      done
+      if $shared_function_change; then
+        echo "full:cross-domain-shared-function:${path}" >>"$full_reasons"
+        continue
+      fi
+    fi
+
     matched=false
     while IFS= read -r pattern; do
       if matches_pattern "$path" "$pattern"; then
@@ -230,7 +251,7 @@ affected_groups="$temporary_root/affected-groups"
 LC_ALL=C sort -u -o "$affected_groups" "$affected_groups"
 changed_input_sha256="$(sha256_file "$events")"
 inventory_sha256="$( { jq -S -c . "$selection_file"; jq -S -c . "$verification_file"; } | sha256sum | cut -d' ' -f1 )"
-selector_sha256="$(git -C "$repository" show "${target_commit}:${SELECTOR_PATH}" | sha256sum | cut -d' ' -f1)"
+selector_sha256="$target_selector_sha256"
 
 global_relevant="$temporary_root/relevant-global"
 printf '%s\n' "$SELECTION_PATH" "$VERIFICATION_PATH" "$SELECTOR_PATH" >"$global_relevant"

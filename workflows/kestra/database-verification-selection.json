@@ -134,7 +134,7 @@
   "fullCoveragePatterns": [
     "supabase/config.toml",
     "supabase/seed.sql",
-    "supabase/tests/*.test.sql",
+    "supabase/tests/*.sql",
     "supabase/tests/*-concurrency.test.sh",
     "supabase/tests/helpers/*",
     "tooling/supabase/*",
