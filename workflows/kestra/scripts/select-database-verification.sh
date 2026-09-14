@@ -69,14 +69,22 @@ jq --exit-status '
 ' "$selection_file" >/dev/null || die "database verification selection inventory is invalid"
 
 jq --exit-status '
-  type == "object" and .schemaVersion == 1 and
+  type == "object" and
+  (keys == ["concurrencyProofs", "lintSchemas", "schemaVersion"]) and
+  .schemaVersion == 1 and
   (.concurrencyProofs | type == "array" and length > 0 and
-    all(.[]; type == "object" and
-      (.migration | type == "string") and (.proof | type == "string")) and
+    all(
+      type == "object" and
+      (keys == ["label", "migration", "proof"]) and
+      (.migration | type == "string" and test("^supabase/migrations/[0-9]{14}_[a-z0-9_]+[.]sql$")) and
+      (.proof | type == "string" and test("^supabase/tests/[a-z0-9-]+-concurrency[.]test[.]sh$")) and
+      (.label | type == "string" and test("^[A-Za-z0-9 .-]{1,100}$"))
+    ) and
     (map(.migration) | unique | length) == length and
     (map(.proof) | unique | length) == length) and
   (.lintSchemas | type == "array" and length > 0 and
-    all(.[]; type == "string") and (unique | length) == length)
+    all(type == "string" and test("^(public|record_data|vortex_[a-z0-9_]+)$")) and
+    (unique | length) == length)
 ' "$verification_file" >/dev/null || die "database verification manifest is invalid"
 
 git -C "$repository" ls-tree -r --format='%(path)%x09%(objectname)' "$target_commit" |
@@ -90,10 +98,40 @@ sed -En '/^supabase\/tests\/[A-Za-z0-9_.-]+[.]sql$/p' "$tree_paths" >"$actual_sq
 jq --raw-output '.sqlSuites[]' "$selection_file" | LC_ALL=C sort >"$inventory_sql"
 cmp -s "$actual_sql" "$inventory_sql" ||
   die "selection inventory must list every SQL suite exactly once"
-sed -n '/^supabase\/tests\/[a-z0-9-]*-concurrency\.test\.sh$/p' "$tree_paths" >"$actual_proofs"
+grep --extended-regexp '^supabase/tests/[a-z0-9-]+-concurrency[.]test[.]sh$' "$tree_paths" >"$actual_proofs"
 jq --raw-output '.concurrencyProofs[].proof' "$verification_file" | LC_ALL=C sort >"$inventory_proofs"
 cmp -s "$actual_proofs" "$inventory_proofs" ||
   die "database verification manifest must list every concurrency proof exactly once"
+
+while IFS=$'\t' read -r migration proof label; do
+  git -C "$repository" cat-file -e "${target_commit}:${migration}" 2>/dev/null ||
+    die "${label} concurrency proof has no migration"
+  git -C "$repository" cat-file -e "${target_commit}:${proof}" 2>/dev/null ||
+    die "${label} migration has no concurrency proof"
+  [[ "$(git -C "$repository" ls-tree "$target_commit" -- "$migration")" =~ ^100(644|755)[[:space:]]blob[[:space:]][0-9a-f]{40}[[:space:]] ]] ||
+    die "${label} migration is not a regular file in the selected commit"
+  [[ "$(git -C "$repository" ls-tree "$target_commit" -- "$proof")" =~ ^100(644|755)[[:space:]]blob[[:space:]][0-9a-f]{40}[[:space:]] ]] ||
+    die "${label} concurrency proof is not a regular file in the selected commit"
+done < <(jq --raw-output '.concurrencyProofs[] | [.migration, .proof, .label] | @tsv' "$verification_file")
+
+manifest_schemas="$(jq --raw-output '.lintSchemas[]' "$verification_file" | LC_ALL=C sort)"
+repository_schemas="$({
+  printf '%s\n' public
+  while IFS= read -r migration; do
+    git -C "$repository" show "${target_commit}:${migration}" | tr '[:space:]' ' '
+    printf '\n'
+  done < <(
+    grep --extended-regexp '^supabase/migrations/[0-9]{14}_[a-z0-9_]+[.]sql$' "$tree_paths" |
+      LC_ALL=C sort
+  ) |
+    grep -o -i -E \
+      '(^|[^[:alnum:]_])create[[:space:]]+schema[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(vortex_[a-z0-9_]+|record_data)\b' || true
+} |
+  sed --regexp-extended 's/.*(vortex_[a-z0-9_]+|record_data)$/\1/I' |
+  tr '[:upper:]' '[:lower:]' |
+  LC_ALL=C sort --unique)"
+[ "$manifest_schemas" = "$repository_schemas" ] ||
+  die "database verification manifest does not list every operated schema exactly once"
 
 matches_pattern() {
   local value="$1"
