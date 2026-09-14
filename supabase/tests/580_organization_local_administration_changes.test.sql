@@ -79,7 +79,8 @@ from (values
  ('45800000-0000-4000-8000-000000000002'::uuid,'a5800000-0000-4000-8000-000000000002'::uuid),
  ('45800000-0000-4000-8000-000000000003'::uuid,'a5800000-0000-4000-8000-000000000003'::uuid),
  ('45800000-0000-4000-8000-000000000004'::uuid,'a5800000-0000-4000-8000-000000000004'::uuid),
- ('45800000-0000-4000-8000-000000000005'::uuid,'a5800000-0000-4000-8000-000000000005'::uuid)
+ ('45800000-0000-4000-8000-000000000005'::uuid,'a5800000-0000-4000-8000-000000000005'::uuid),
+ ('45800000-0000-4000-8000-000000000006'::uuid,'a5800000-0000-4000-8000-000000000006'::uuid)
 ) fixture(identity_id,correlation_id);
 
 insert into vortex_identity.organization_accounts(organization_account_id,
@@ -104,7 +105,11 @@ insert into vortex_identity.organization_accounts(organization_account_id,
 ('55800000-0000-4000-8000-000000000005','25800000-0000-4000-8000-000000000001',
  '45800000-0000-4000-8000-000000000005','Invitations only','active',
  pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),
- '95800000-0000-4000-8000-000000000001','a5800000-0000-4000-8000-000000000015',1);
+ '95800000-0000-4000-8000-000000000001','a5800000-0000-4000-8000-000000000015',1),
+ ('55800000-0000-4000-8000-000000000006','25800000-0000-4000-8000-000000000002',
+  '45800000-0000-4000-8000-000000000006','Foreign target','active',
+  pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),
+  '95800000-0000-4000-8000-000000000001','a5800000-0000-4000-8000-000000000016',1);
 
 select * from vortex_access.initialize_organization_access_version(
   '25800000-0000-4000-8000-000000000001','95800000-0000-4000-8000-000000000001',
@@ -204,7 +209,12 @@ insert into vortex_identity.organization_invitations(invitation_id,organization_
  '55800000-0000-4000-8000-000000000001',pg_catalog.clock_timestamp()-interval '2 hour',
  pg_catalog.clock_timestamp()-interval '2 hour',pg_catalog.clock_timestamp()+interval '1 hour',
  pg_catalog.clock_timestamp()-interval '1 hour','55800000-0000-4000-8000-000000000001',
- null,null,pg_catalog.clock_timestamp()-interval '1 hour',2);
+ null,null,pg_catalog.clock_timestamp()-interval '1 hour',2),
+ ('35800000-0000-4000-8000-000000000004','25800000-0000-4000-8000-000000000002',
+  'foreign@example.test','sha256:'||pg_catalog.repeat('4',64),
+  '55800000-0000-4000-8000-000000000006',pg_catalog.clock_timestamp()-interval '2 hour',
+  pg_catalog.clock_timestamp()-interval '2 hour',pg_catalog.clock_timestamp()+interval '1 hour',
+  null,null,null,null,pg_catalog.clock_timestamp()-interval '2 hour',1);
 
 create function pg_temp.install_context(p_identity_id uuid,p_account_id uuid,p_correlation_id uuid)
 returns void language plpgsql volatile set search_path='' as $function$
@@ -382,35 +392,146 @@ select throws_ok($$select * from vortex_access.suspend_organization_account_for_
  'membership and tenant administration do not substitute for local permission');
 reset role;
 
+select pg_temp.install_context('45800000-0000-4000-8000-000000000001',
+ '55800000-0000-4000-8000-000000000001','a5800000-0000-4000-8000-000000000114');
+set local role vortex_request;
+select throws_ok($$select * from vortex_access.suspend_organization_account_for_administration(
+ 'd5800000-0000-4000-8000-000000000015','55800000-0000-4000-8000-000000000099',1)$$,
+ '40001','Account suspension is stale or unavailable',
+ 'missing account target is safely unavailable to the authorised caller');
+select throws_ok($$select * from vortex_access.suspend_organization_account_for_administration(
+ 'd5800000-0000-4000-8000-000000000016','55800000-0000-4000-8000-000000000006',1)$$,
+ '40001','Account suspension is stale or unavailable',
+ 'foreign account target is safely unavailable to the authorised caller');
+select throws_ok($$select * from vortex_access.revoke_organization_invitation_for_administration(
+ 'd5800000-0000-4000-8000-000000000017','35800000-0000-4000-8000-000000000099',1)$$,
+ '40001','Invitation is stale or unavailable',
+ 'missing invitation target is safely unavailable to the authorised caller');
+select throws_ok($$select * from vortex_access.revoke_organization_invitation_for_administration(
+ 'd5800000-0000-4000-8000-000000000018','35800000-0000-4000-8000-000000000004',1)$$,
+ '40001','Invitation is stale or unavailable',
+ 'foreign invitation target is safely unavailable to the authorised caller');
+reset role;
+select is((select state||'|'||revision from vortex_identity.organization_accounts
+ where organization_account_id='55800000-0000-4000-8000-000000000006'),
+ 'active|1','foreign account refusal leaves its target unchanged');
+select ok((select revoked_at is null and revision=1 from vortex_identity.organization_invitations
+ where invitation_id='35800000-0000-4000-8000-000000000004'),
+ 'foreign invitation refusal leaves its target unchanged');
+
+select pg_temp.install_context('45800000-0000-4000-8000-000000000004',
+ '55800000-0000-4000-8000-000000000004','a5800000-0000-4000-8000-000000000115');
+set local role vortex_request;
+select is((select outcome||'|'||revision from
+ vortex_access.suspend_organization_account_for_administration(
+ 'd5800000-0000-4000-8000-000000000019',
+ '55800000-0000-4000-8000-000000000002',5)),
+ 'accepted|6','the original accounts.manage caller receives a receipt');
+reset role;
+select pg_temp.install_context('45800000-0000-4000-8000-000000000001',
+ '55800000-0000-4000-8000-000000000001','a5800000-0000-4000-8000-000000000116');
+set local role vortex_request;
+select is((select outcome||'|'||revision from
+ vortex_access.reactivate_organization_account_for_administration(
+ 'd5800000-0000-4000-8000-000000000020',
+ '55800000-0000-4000-8000-000000000002',6)),
+ 'accepted|7','a later target change succeeds after the recorded account command');
+reset role;
+create temporary table replay_after_change_access_before on commit drop as
+select current_version from vortex_access.organization_access_versions
+where organization_id='25800000-0000-4000-8000-000000000001';
+select pg_temp.install_context('45800000-0000-4000-8000-000000000004',
+ '55800000-0000-4000-8000-000000000004','a5800000-0000-4000-8000-000000000117');
+set local role vortex_request;
+select is((select outcome||'|'||revision from
+ vortex_access.suspend_organization_account_for_administration(
+ 'd5800000-0000-4000-8000-000000000019',
+ '55800000-0000-4000-8000-000000000002',5)),
+ 'replayed|6','accepted receipt replays after a later target change');
+reset role;
+select is((select state||'|'||revision from vortex_identity.organization_accounts
+ where organization_account_id='55800000-0000-4000-8000-000000000002'),
+ 'active|7','later-state replay creates no new account effect');
+select is((select current_version from vortex_access.organization_access_versions
+ where organization_id='25800000-0000-4000-8000-000000000001'),
+ (select current_version from replay_after_change_access_before),
+ 'later-state replay creates no new Access effect');
+create temporary table accounts_authority_revocation on commit drop as
+select * from vortex_access.coordinate_organization_role_assignment_change(
+ 'revoke','25800000-0000-4000-8000-000000000001',
+ '75800000-0000-4000-8000-000000000004',1,
+ null,null,null,null,null,null,null,null,
+ '55800000-0000-4000-8000-000000000001',
+ 'a5800000-0000-4000-8000-000000000121');
+select is((select state||'|'||revision from accounts_authority_revocation),
+ 'revoked|2','the original caller loses its accounts.manage authority');
+select pg_temp.install_context('45800000-0000-4000-8000-000000000004',
+ '55800000-0000-4000-8000-000000000004','a5800000-0000-4000-8000-000000000118');
+set local role vortex_request;
+select throws_ok($$select * from vortex_access.suspend_organization_account_for_administration(
+ 'd5800000-0000-4000-8000-000000000019',
+ '55800000-0000-4000-8000-000000000002',5)$$,
+ '42501','Organization account administration change is unavailable',
+ 'a caller who lost authority cannot replay the original receipt');
+reset role;
+select is((select state||'|'||revision from vortex_identity.organization_accounts
+ where organization_account_id='55800000-0000-4000-8000-000000000002'),
+ 'active|7','authority-loss refusal creates no new account effect');
+select is((select count(*) from vortex_identity.accepted_administration_receipts
+ where duplicate_key='d5800000-0000-4000-8000-000000000019'),1::bigint,
+ 'authority-loss refusal creates no second receipt');
+
 create function pg_temp.refuse_receipt() returns trigger language plpgsql
-set search_path='' as $function$ begin
-  if new.duplicate_key='d5800000-0000-4000-8000-000000000014' then
-    raise exception 'forced receipt refusal';
-  end if; return new;
-end $function$;
+ set search_path='' as $function$ begin
+   if new.duplicate_key in ('d5800000-0000-4000-8000-000000000014',
+                            'd5800000-0000-4000-8000-000000000021') then
+     raise exception 'forced receipt refusal';
+   end if; return new;
+ end $function$;
 create trigger refuse_slice_six_receipt before insert
 on vortex_identity.accepted_administration_receipts for each row
 execute function pg_temp.refuse_receipt();
 select pg_temp.install_context('45800000-0000-4000-8000-000000000001',
- '55800000-0000-4000-8000-000000000001','a5800000-0000-4000-8000-000000000114');
+ '55800000-0000-4000-8000-000000000001','a5800000-0000-4000-8000-000000000119');
 set local role vortex_request;
 select throws_ok($$select * from vortex_access.close_organization_account_for_administration(
- 'd5800000-0000-4000-8000-000000000014','55800000-0000-4000-8000-000000000002',5)$$,
+ 'd5800000-0000-4000-8000-000000000014','55800000-0000-4000-8000-000000000002',7)$$,
  'P0001','forced receipt refusal','receipt failure rolls back the owned account mutation');
+reset role;
+create temporary table invitation_failure_access_before on commit drop as
+select current_version from vortex_access.organization_access_versions
+where organization_id='25800000-0000-4000-8000-000000000001';
+select pg_temp.install_context('45800000-0000-4000-8000-000000000001',
+ '55800000-0000-4000-8000-000000000001','a5800000-0000-4000-8000-000000000120');
+set local role vortex_request;
+select throws_ok($$select * from vortex_access.create_organization_invitation_for_administration(
+ 'd5800000-0000-4000-8000-000000000021','receipt-failure@example.test',
+ 'sha256:'||pg_catalog.repeat('b',64),pg_catalog.clock_timestamp()+interval '1 day')$$,
+ 'P0001','forced receipt refusal','receipt failure rolls back the invitation writer');
 reset role;
 drop trigger refuse_slice_six_receipt on vortex_identity.accepted_administration_receipts;
 select is((select state||'|'||revision from vortex_identity.organization_accounts
  where organization_account_id='55800000-0000-4000-8000-000000000002'),
- 'active|5','receipt rollback leaves the target unchanged');
+ 'active|7','receipt rollback leaves the target unchanged');
 select is((select count(*) from vortex_identity.accepted_administration_receipts
  where duplicate_key='d5800000-0000-4000-8000-000000000014'),0::bigint,
  'receipt rollback stores no accepted evidence');
+select is((select count(*) from vortex_identity.organization_invitations
+ where invited_email='receipt-failure@example.test'),0::bigint,
+ 'invitation receipt rollback leaves no invitation mutation');
+select is((select count(*) from vortex_identity.accepted_administration_receipts
+ where duplicate_key='d5800000-0000-4000-8000-000000000021'),0::bigint,
+ 'invitation receipt rollback stores no accepted evidence');
+select is((select current_version from vortex_access.organization_access_versions
+ where organization_id='25800000-0000-4000-8000-000000000001'),
+ (select current_version from invitation_failure_access_before),
+ 'invitation receipt rollback preserves Access');
 
 select is((select count(*) from vortex_identity.accepted_administration_receipts
  where tenant_id='15800000-0000-4000-8000-000000000001'
  and operation_key in ('suspend_organization_account','reactivate_organization_account',
  'close_organization_account','create_organization_invitation',
- 'revoke_organization_invitation')),7::bigint,
+ 'revoke_organization_invitation')),9::bigint,
  'each successful first mutation stores one receipt and replay stores none');
 
 select * from finish();

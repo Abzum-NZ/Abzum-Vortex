@@ -282,31 +282,37 @@ select pg_sleep(6); commit;
 SQL
 ) & overlap_change_worker=$!
 wait_file "$proof_root/overlap-change.pid"
+# Match listOrganizationAccounts' read-mode request setup: shared governance,
+# not the stronger change resolver. Queue each contender only after observing
+# its predecessor's real wait, so OS scheduling cannot choose a different chain.
 ( "${psql_command[@]}" >"$proof_root/overlap-read.out" 2>"$proof_root/overlap-read.log" <<SQL
 select pg_backend_pid() \g '$proof_root/overlap-read.pid'
-begin; select * from vortex_access.resolve_human_organization_change_scope('$third_identity','$organization_id');
+begin; select * from vortex_access.resolve_human_organization_scope('$third_identity','$organization_id');
 delete from vortex_context.request_contexts where backend_pid=pg_backend_pid();
 select vortex_context.initialize(jsonb_build_object('callerKind','human','identityAuthorityId','ba${run_uuid:2}','tenantId','$tenant_id','organizationId','$organization_id','organizationAccountId','$third_account','identityId','$third_identity','sessionId','d7${run_uuid:2}','authenticationStrength','single_factor','issuedAt',clock_timestamp(),'expiresAt',clock_timestamp()+interval '1 hour','accessVersion',(select current_version from vortex_access.organization_access_versions where organization_id='$organization_id'),'correlationId','c1${run_uuid:2}')); set local role vortex_request;
-select accounts::text from vortex_access.list_organization_accounts_for_administration(null,100); commit;
+select (account->>'organizationAccountId')||'|'||(account->>'state')||'|'||(account->>'revision')
+from vortex_access.list_organization_accounts_for_administration(null,100) result,
+lateral jsonb_array_elements(result.accounts) account
+where account->>'organizationAccountId'='$target_account'; commit;
 SQL
 ) & overlap_read_worker=$!
-( "${psql_command[@]}" >"$proof_root/overlap-projection.out" 2>"$proof_root/overlap-projection.log" <<SQL
-select pg_backend_pid() \g '$proof_root/overlap-projection.pid'
-begin; set local role vortex_runtime; select outcome from vortex_identity.suspend_cluster_identity('c8${run_uuid:2}','$actor_id','da${run_uuid:2}','sha256:'||repeat('8',64),'$target_identity',1); commit;
-SQL
-) & overlap_projection_worker=$!
+wait_blocked "$(pid_from "$proof_root/overlap-read.pid")" "$(pid_from "$proof_root/overlap-change.pid")" 'request read wait behind the account change'
 ( "${psql_command[@]}" >"$proof_root/overlap-tenant.out" 2>"$proof_root/overlap-tenant.log" <<SQL
 \set VERBOSITY verbose
 select pg_backend_pid() \g '$proof_root/overlap-tenant.pid'
 begin; set local role vortex_runtime; select outcome from vortex_identity.suspend_tenant('c8${run_uuid:2}','$actor_id','db${run_uuid:2}','sha256:'||repeat('9',64),'$tenant_id',1); commit;
 SQL
 ) & overlap_tenant_worker=$!
-wait_blocked "$(pid_from "$proof_root/overlap-read.pid")" "$(pid_from "$proof_root/overlap-change.pid")" 'request read wait behind the account change'
 wait_blocked "$(pid_from "$proof_root/overlap-tenant.pid")" "$(pid_from "$proof_root/overlap-read.pid")" 'tenant lifecycle wait behind the request read'
+( "${psql_command[@]}" >"$proof_root/overlap-projection.out" 2>"$proof_root/overlap-projection.log" <<SQL
+select pg_backend_pid() \g '$proof_root/overlap-projection.pid'
+begin; set local role vortex_runtime; select outcome from vortex_identity.suspend_cluster_identity('c8${run_uuid:2}','$actor_id','da${run_uuid:2}','sha256:'||repeat('8',64),'$target_identity',1); commit;
+SQL
+) & overlap_projection_worker=$!
 wait_blocked "$(pid_from "$proof_root/overlap-projection.pid")" "$(pid_from "$proof_root/overlap-tenant.pid")" 'projection lifecycle wait behind the tenant lifecycle'
 wait "$overlap_change_worker"; wait "$overlap_read_worker"; wait "$overlap_projection_worker"; wait "$overlap_tenant_worker"
 grep -q accepted "$proof_root/overlap-change.out"
-grep -q '"state": "active"' "$proof_root/overlap-read.out"
+grep -Fxq "$target_account|suspended|6" "$proof_root/overlap-read.out"
 grep -q accepted "$proof_root/overlap-projection.out"
 grep -q accepted "$proof_root/overlap-tenant.out"
 [ "$(run_sql "select state from vortex_identity.identity_projections where identity_id='$target_identity'")" = suspended ]
