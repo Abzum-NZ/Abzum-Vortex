@@ -8,9 +8,11 @@
 ## Current delivery boundary
 
 This slice provides the first protected ordinary-human create/update path over a
-real, actively installed Record definition. The local implementation is awaiting
-independent review and hosted Testing verification; this page does not claim that
-it is merged or production-ready.
+real, actively installed Record definition. #47 is closed/Done with independent
+review and [hosted Testing acceptance](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47#issuecomment-5656036501)
+at `f93c8d60d02e60fa7b8cd10a951632766f826ffc`. That revision is an ancestor
+of the reconciliation baseline, Testing `b0a630045ccadba6697f94c853b8573ecc00f76d`.
+This is base-engine evidence, not whole-application or Production readiness.
 
 Forms, imports, Frontend Flows and future MCP adapters use the same strict V2
 command. The command contains its stable command identifier, operation, Record
@@ -97,12 +99,13 @@ named action or custom Event does not block an ordinary save; invoking named
 actions and emitting their custom effects remain
 [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50).
 
-The base path safely refuses a save that actually requires an undeployed
-immediate Rule or a calculated/total value. Their integrations remain:
+The base path safely refuses unsupported behavior. Subsequent #48 stages 1–2B
+integrated calculations and protected relationship totals into this same save
+path. Do not treat every calculated field as unsupported. Remaining owners are:
 
 - immediate before-save Rule execution and final candidate integration:
   [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) with this save owner;
-- calculations and relationship totals:
+- deadline-driven recalculation, following delivered calculations and totals:
   [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48);
 - named action execution and custom action/Event effects:
   [#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50);
@@ -136,13 +139,16 @@ neutral definitions through the real restricted runtime transaction. It covers:
 - ACL proof that request, runtime and Data API roles have no raw content,
   Activity, outbox, queue or receipt access.
 
-Local checks and independent review are necessary but not sufficient. Keep #47
-open until the exact reviewed revision passes hosted Testing verification.
+Local checks and independent review were followed by the recorded successful
+hosted Testing receipt. #47 remains Done. Future changes require their own
+affected-behavior proof under the existing owner; stale plan text does not reopen
+the delivered base save.
 
 ## Later final-candidate integration
 
-The existing field preparation remains the compatibility entry point. When the
-immediate Rule and derived-value owners join the save, preserve one pipeline:
+The existing field preparation remains the shared entry point. Derived-value
+integration now uses it; when the immediate Rule owner joins the save, preserve
+one pipeline:
 
 1. decode submitted values and merge unchanged stored values/create defaults;
 2. run eligible immediate Rules in memory;
