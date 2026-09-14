@@ -20,14 +20,14 @@ live delivery queue.
 | Hosted Tester | Run the single entitled Testing execution, record its receipt and result, and never start a duplicate run while the original is live. |
 | User | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate. |
 
-Use these role names in visible board and documentation records. The role does
-not rename or replace the immutable canonical task reference. Record the
-resolved model, session identifier and canonical task reference as execution
-metadata at handoff instead.
+Use these role names with the actual model in visible assignments, following
+the naming format under Task handoff. Display names do not rename or replace
+immutable canonical task references. Also record the resolved model, session
+identifier and canonical task reference as execution metadata at handoff.
 
 The current direct user requirement assigns GPT-6 Astra (Medium) to both the
-Planner and Independent Reviewer roles. Record that model as execution metadata
-for each such handoff; do not turn it into a visible owner-name substitute.
+Planner and Independent Reviewer roles. Include that model alongside the role
+in visible assignments and record it in each handoff's execution metadata.
 
 GPT workers run through Codex's native worker mechanism. Do not substitute an
 external CLI or another provider for a GPT worker. DeepSeek, when explicitly
@@ -79,6 +79,27 @@ rules, not a live queue or a claim that a particular worker is currently
 available.
 
 ## Task handoff
+
+Every in-flight card must have an accepted owner whose current activity is
+verified from the native registry and task evidence, or the verified process and
+session evidence for the permitted DeepSeek CLI worker. Match the card's displayed
+assignment and exact task reference to that worker. A completed reviewer is not
+an active owner: hand off to an active delivery owner or return awaiting work to
+Backlog. Record `/root` in Dispatch reference when the active coordinator owns
+delivery; keep its displayed owner in the same role/model/issue format and do
+not count it as a child agent.
+
+Use `Role (Model Name) - #issue - short description` for each assigned agent's
+display name and the board's Current owner. The model must be the model actually
+running that task. Record its exact native task reference (or the permitted
+DeepSeek session reference) in Dispatch reference. Existing immutable task names
+are retained; never claim that an existing agent was renamed. Record each role
+separately when an agent serves more than one issue. Clear the active owner when
+the work finishes and no next owner has accepted.
+
+Respond to questions from the coordinating agent in the other chat before
+routine task work. Give verified answers, then resume the assigned task; a
+message requesting a correction is not evidence that the correction is done.
 
 After the Planner reviews and corrects the task handoff, the Coordinator supplies the
 issue, exact base revision, working directory,
