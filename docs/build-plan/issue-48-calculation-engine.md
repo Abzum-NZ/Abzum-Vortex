@@ -230,3 +230,73 @@ requirements; the pure evaluator does not implement them.
 ## Approved deadline refresh — 12 September 2026
 
 Implement [scheduled time-based calculations](../specification/appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations) in the existing engine: next due time, protected revision-checked refresh, cancellation/rescheduling, bounded catch-up and retry-safe effects. [#62](https://github.com/Abzum-NZ/Abzum-Vortex/issues/62) consumes this operation for scheduled delivery; [#54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) ensures overdue values cannot silently determine reads, filters, sorting or totals. Test a passed deadline with no user save, a changed deadline, deleted record, duplicate job, concurrent edit and scheduler downtime. Do not deploy a workflow per record or build another formula engine.
+
+## #463 — private recalculation factoring record
+
+[#463](https://github.com/Abzum-NZ/Abzum-Vortex/issues/463) records the current
+private boundary before any follow-on factoring. This is an anchor map, not a
+new public API or a second recalculation route.
+
+| Current responsibility | Exact current anchor |
+| --- | --- |
+| Closed ordinary-human command; no private authority or parent-mutation input | [`contracts/src/records.ts`: `saveRecordCommandV2Schema`](../../contracts/src/records.ts#L47-L70) |
+| Human request/context construction and save orchestration | [`runtime/record/src/save-record.ts`: `createRecordSaveService`](../../runtime/record/src/save-record.ts#L542-L723) |
+| Runtime-only private preflight and fixed terminal call | [`runtime/record/src/save-record.ts`: `prepareRelationshipTotals` and `persist`](../../runtime/record/src/save-record.ts#L467-L515) |
+| Request-role runtime-settings read and guaranteed runtime-role restoration | [`runtime/record/src/save-record.ts`: `readOrganizationRuntimeSettings`](../../runtime/record/src/save-record.ts#L517-L530) |
+| Pure evaluation of already locked, scoped concrete inputs | [`runtime/record/src/relationship-total-save.ts`: `calculateLockedRelationshipTotalSave`](../../runtime/record/src/relationship-total-save.ts#L155-L349) |
+| Base save context, active installation and protected write | [`20260913120000_enable_same_record_calculation_saves.sql`: `prepare_base_record_save`](../../supabase/migrations/20260913120000_enable_same_record_calculation_saves.sql#L117-L317); [`20260913115000_base_protected_record_save.sql`: `save_base_record`](../../supabase/migrations/20260913115000_base_protected_record_save.sql#L376-L1008) |
+| Private Event append under the same human context | [`20260913060000_first_private_transactional_event_append.sql`](../../supabase/migrations/20260913060000_first_private_transactional_event_append.sql#L232-L262) |
+| Active-installation resolver | [`20260911090000_resolve_reachable_module_dependencies.sql`: `read_current_active_installation`](../../supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql#L944-L1066) |
+| Owner-only transaction context and RLS scope accessors | [`20260911063404_request_context_transaction_store.sql`](../../supabase/migrations/20260911063404_request_context_transaction_store.sql#L6-L74); [`organization_id`](../../supabase/migrations/20260903115546_database_scope_request_role.sql#L334-L342) and [`application_root_id`](../../supabase/migrations/20260903115546_database_scope_request_role.sql#L344-L352) |
+| Generated record-table RLS policies | [`20260908122641_record_storage_provisioning.sql`](../../supabase/migrations/20260908122641_record_storage_provisioning.sql#L638-L663) |
+| Private catalogue, snapshot and closure discovery | [`relationship_total_catalogue_internal`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L69), [`relationship_total_record_snapshot_internal`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L71-L177), and [`discover_relationship_total_closure_internal`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L179-L319) |
+| Canonical locking/preflight and parent application | [`prepare_relationship_total_save`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L321-L618) and [`apply_relationship_total_parent_internal`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L620-L738) |
+| Transactional root save plus revision-checked parent application | [`supabase/migrations/20260914013000_transactional_relationship_totals.sql`: `save_base_record_with_relationship_totals`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L740-L1025) |
+| Activity append and organization runtime-settings readers | [`append_base_save_activity_internal`](../../supabase/migrations/20260913115000_base_protected_record_save.sql#L71-L179); [`read_current_organization_runtime_settings_internal`](../../supabase/migrations/20260913110000_organization_runtime_settings.sql#L349-L382) and [`read_current_organization_runtime_settings_for_application`](../../supabase/migrations/20260913110000_organization_runtime_settings.sql#L384-L445) |
+
+The TypeScript evaluator receives only the locked preparation; SQL remains the
+owner of trusted context, active installation, RLS-visible source selection,
+closure discovery, locks and parent-write admission. The command remains valid
+human input, but cannot create any of those private facts. The service may
+temporarily read Access-owned runtime settings as the request role only between
+private preparation and persistence, then must restore `vortex_runtime` even on
+failure. Forged or mismatched context/settings must refuse before they affect a
+snapshot, calculation, total, or write. Current System/specified-account
+recalculation and its attribution are not implemented; do not infer a system
+actor from this human path. A future trusted execution-identity and attribution
+contract must be designed before any such caller is introduced; it is not part
+of this issue or any existing ordinary-human save contract.
+
+The owner-only transaction store establishes context once; its initializer
+refuses replacement. The scope accessors read that established context and do
+not accept a caller-selected scope. Current Event append accepts an
+`organizationAccountId` UUID, while Record receipts and generated attribution
+also assume an account identity. Consequently a non-human deadline caller must
+not be improvised from this path: its execution identity and attribution are a
+specific prerequisite to resolve under [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48)
+before a deadline caller is introduced.
+
+### P4.6b bounded follow-on
+
+P4.6b may factor only the already-private Record recalculation seams above and
+add focused ACL/RLS regression proof for their existing contract: trusted scope
+is constructed once from the human request, the request-role settings read is
+restored to the runtime role, and forged/foreign/stale settings or context cannot
+select or mutate another scope. It may cover the ordinary human save and its
+locked parent recalculation only. It must not change `SaveRecordCommandV2` or
+other public contracts, introduce a System context/attribution path, add a
+counter/token, scheduler, Kestra, MCP, UI, or new framework, or create a deadline
+caller. No deadline caller is assigned by this plan; deadline refresh remains
+the separately bounded work above.
+
+Its executable regression scope is deliberately named and limited to
+[`supabase/tests/010_request_scope.test.sql`](../../supabase/tests/010_request_scope.test.sql),
+[`supabase/tests/488_transactional_relationship_total_acl.test.sql`](../../supabase/tests/488_transactional_relationship_total_acl.test.sql),
+[`supabase/tests/485_private_event_append.test.sql`](../../supabase/tests/485_private_event_append.test.sql),
+and [`tooling/supabase/record-save-postgres.integration.test.ts`](../../tooling/supabase/record-save-postgres.integration.test.ts).
+Those tests use controlled rollback fixtures; they must prove private ACL/RLS
+boundaries without creating persistent records or a second runtime path.
+
+**#48 prerequisite:** Deadline delivery in #48 requires the independently
+reviewed P4.6b factoring implementation and explicit Record/Event attribution
+resolution before its caller is implemented.
