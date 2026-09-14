@@ -111,9 +111,8 @@ type DefinitionPublicationCandidateCommon = Readonly<{
 }>;
 
 /**
- * Production repositories return streamed evidence. The bounded history-array
- * branch remains only for injected legacy/test readers and is verified into the
- * same evidence before any publication policy consumes it.
+ * Repositories return verified, incrementally folded history evidence before
+ * any publication policy consumes it.
  */
 export type DefinitionPublicationCandidate = DefinitionPublicationCandidateCommon &
   Readonly<{ historyEvidence: DefinitionPublicationHistoryEvidence }>;
