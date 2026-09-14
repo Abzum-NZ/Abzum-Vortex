@@ -78,6 +78,21 @@ record its result before assigning the next owner. These are stable operating
 rules, not a live queue or a claim that a particular worker is currently
 available.
 
+### Status meaning
+
+Use each active board status for one accountable stage. **In progress** means
+an accepted Developer, Planner, or Reviewer is changing or investigating the
+work. **In review** covers the bounded review-and-delivery gate: an Independent
+Reviewer is active until issuing a verdict; after approval, the Coordinator may
+remain the active owner while the same status waits for the normal pull-request
+check and merge. The card must say explicitly which of those two states applies;
+never imply that a completed reviewer is still active. **Testing** begins only
+after the reviewed change is merged to Testing and the Hosted Tester owns the
+one exact execution. **Done** requires the applicable receipt and closure work.
+
+This definition avoids inventing a second pre-Testing status while keeping
+reviewer and Coordinator ownership truthful.
+
 ## Task handoff
 
 Every in-flight card must have an accepted owner whose current activity is
