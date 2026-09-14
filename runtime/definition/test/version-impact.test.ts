@@ -15,8 +15,12 @@ import type {
   QueryDefinition,
 } from "@vortex/contracts";
 import {
+  completeDefinitionPublicationHistoryFold,
   confirmDefinitionVersionImpact,
   compareDefinitionVersionImpact,
+  compareDefinitionVersionImpactWithEvidence,
+  createDefinitionPublicationHistoryFold,
+  foldDefinitionPublicationHistoryRelease,
 } from "../src/version-impact";
 import {
   canonicalJson,
@@ -313,6 +317,102 @@ describe("literal/reference version regression", () => {
     expect(() =>
       compareDefinitionVersionImpact({ kind: "application", candidate: draft, history: [] }),
     ).toThrow(expect.objectContaining({ code: "unresolved_candidate" }));
+  });
+});
+
+describe("streamed publication-history evidence", () => {
+  test("matches the bounded array comparator while retaining only the latest release", () => {
+    const original = moduleDraft();
+    const first = publish(original, "1.0.0", 1);
+    const secondDraft = structuredClone(original);
+    secondDraft.content.description = "Second immutable release.";
+    const second = publish(secondDraft, "1.0.1", 7);
+    const candidate = structuredClone(secondDraft);
+    candidate.envelope.draftRevision = 9;
+    candidate.envelope.publishedRevision = 7;
+    candidate.content.description = "Candidate release.";
+    const request = { kind: "module" as const, history: [first, second], candidate };
+    const expected = compareDefinitionVersionImpact(request);
+    const fold = createDefinitionPublicationHistoryFold({
+      kind: "module",
+      definitionKey: candidate.envelope.key,
+      rootId: candidate.envelope.rootId,
+      anchorReleaseRevision: 7,
+    });
+    foldDefinitionPublicationHistoryRelease(fold, {
+      previousReleaseRevision: null,
+      release: first,
+    });
+    foldDefinitionPublicationHistoryRelease(fold, {
+      previousReleaseRevision: 1,
+      release: second,
+    });
+    const evidence = completeDefinitionPublicationHistoryFold(fold);
+
+    expect(evidence).toMatchObject({ releaseCount: 2, anchorReleaseRevision: 7 });
+    expect(evidence).not.toHaveProperty("history");
+    expect(evidence.latestRelease?.publication.revision).toBe(7);
+    expect(
+      compareDefinitionVersionImpactWithEvidence({
+        kind: "module",
+        historyEvidence: evidence,
+        candidate,
+      }),
+    ).toEqual(expected);
+  });
+
+  test("refuses omitted, backwards, corrupt and incomplete streamed evidence", () => {
+    const draft = moduleDraft();
+    const first = publish(draft, "1.0.0", 1);
+    const second = publish(draft, "1.0.1", 3);
+    const omitted = createDefinitionPublicationHistoryFold({
+      kind: "module",
+      definitionKey: draft.envelope.key,
+      rootId: draft.envelope.rootId,
+      anchorReleaseRevision: 3,
+    });
+    foldDefinitionPublicationHistoryRelease(omitted, {
+      previousReleaseRevision: null,
+      release: first,
+    });
+    expectCode(
+      () =>
+        foldDefinitionPublicationHistoryRelease(omitted, {
+          previousReleaseRevision: 2,
+          release: second,
+        }),
+      "invalid_history",
+    );
+
+    const incomplete = createDefinitionPublicationHistoryFold({
+      kind: "module",
+      definitionKey: draft.envelope.key,
+      rootId: draft.envelope.rootId,
+      anchorReleaseRevision: 3,
+    });
+    foldDefinitionPublicationHistoryRelease(incomplete, {
+      previousReleaseRevision: null,
+      release: first,
+    });
+    expectCode(() => completeDefinitionPublicationHistoryFold(incomplete), "invalid_history");
+
+    const corrupt = createDefinitionPublicationHistoryFold({
+      kind: "module",
+      definitionKey: draft.envelope.key,
+      rootId: draft.envelope.rootId,
+      anchorReleaseRevision: 1,
+    });
+    expectCode(
+      () =>
+        foldDefinitionPublicationHistoryRelease(corrupt, {
+          previousReleaseRevision: null,
+          release: {
+            ...first,
+            publication: { ...first.publication, contentFingerprint: `sha256:${"f".repeat(64)}` },
+          },
+        }),
+      "content_fingerprint_mismatch",
+    );
   });
 });
 

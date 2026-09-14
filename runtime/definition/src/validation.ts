@@ -45,6 +45,7 @@ import {
   type ConditionNode,
   type DefinitionSourceDocument,
   type DefinitionPublicationContext,
+  type DefinitionPublicationHistoryEvidence,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
   type FieldDefinition,
@@ -63,7 +64,10 @@ import { satisfies } from "semver";
 import { compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json";
-import { compareDefinitionVersionImpact } from "./version-impact";
+import {
+  compareDefinitionVersionImpact,
+  compareDefinitionVersionImpactWithEvidence,
+} from "./version-impact";
 import { createContractValueWalker } from "./contract-value-walker";
 import { validateRuleGraph, ruleGraphValidationCodes } from "./rule-graph-validation";
 
@@ -143,6 +147,7 @@ export type DefinitionSetValidationContext = Readonly<{
   rawSources?: readonly unknown[];
   dependencyOutputs?: readonly Output[];
   publishedHistories?: readonly PublishedDefinitionHistory[];
+  publishedHistoryEvidence?: readonly DefinitionPublicationHistoryEvidence[];
 }>;
 
 /**
@@ -5363,15 +5368,26 @@ function publicationCompatibilityRule(
     const history = context.publishedHistories?.find(
       (candidate) => candidate.definitionKey === key && candidate.kind === output.kind,
     );
-    if (!history) {
+    const historyEvidence = context.publishedHistoryEvidence?.find(
+      (candidate) => candidate.definitionKey === key && candidate.kind === output.kind,
+    );
+    if (!history && !historyEvidence) {
       failures.push(
         failure(output, "vortex.definition.prior_published_version_required", "required_value"),
       );
       continue;
     }
     try {
-      const result =
-        output.kind === "module" && history.kind === "module"
+      const result = historyEvidence
+        ? compareDefinitionVersionImpactWithEvidence({
+            kind: output.kind as "module" | "application",
+            ...("validationContractVersion" in output
+              ? { validationContractVersion: output.validationContractVersion }
+              : {}),
+            historyEvidence,
+            candidate: output.canonical,
+          })
+        : output.kind === "module" && history?.kind === "module"
           ? compareDefinitionVersionImpact({
               kind: "module",
               ...("validationContractVersion" in output
@@ -5380,7 +5396,7 @@ function publicationCompatibilityRule(
               history: history.history,
               candidate: output.canonical,
             })
-          : output.kind === "application" && history.kind === "application"
+          : output.kind === "application" && history?.kind === "application"
             ? compareDefinitionVersionImpact({
                 kind: "application",
                 ...("validationContractVersion" in output
@@ -5425,7 +5441,9 @@ function publicationContextRule(context: DefinitionSetValidationContext): Defini
   if (
     context.requests.length > 0 &&
     context.outputs.length > 0 &&
-    (!publishesVersionedDefinition || context.publishedHistories !== undefined)
+    (!publishesVersionedDefinition ||
+      context.publishedHistories !== undefined ||
+      context.publishedHistoryEvidence !== undefined)
   )
     return [];
   const output = context.outputs[0];
@@ -5642,7 +5660,10 @@ function hasRequiredContext(
     if (item === "source") return context.rawSources !== undefined || context.requests.length > 0;
     if (item === "resolution_snapshot") return context.requests.length > 0;
     if (item === "compiled_set") return context.outputs.length > 0;
-    if (item === "prior_published_version") return context.publishedHistories !== undefined;
+    if (item === "prior_published_version")
+      return (
+        context.publishedHistories !== undefined || context.publishedHistoryEvidence !== undefined
+      );
     return false;
   });
 }

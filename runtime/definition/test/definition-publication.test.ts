@@ -23,8 +23,10 @@ import {
   type DefinitionPublicationTransaction,
   type DefinitionReleaseAppend,
   type ResolvableConnectionTypeRelease,
+  type ModuleReleasePageCursor,
   type ResolvableModuleRelease,
 } from "../src/definition-publication";
+import { verifyPublishedDefinitionHistory } from "../src/version-impact";
 
 const fixtureRoot = path.resolve(
   import.meta.dirname,
@@ -116,7 +118,11 @@ const candidateFor = (
     identities: baseResolution.identities.filter(
       (identity) => identity.definitionKey === source.key,
     ),
-    history: { kind: "module", definitionKey: source.key, history: [] },
+    historyEvidence: verifyPublishedDefinitionHistory(
+      { kind: "module", definitionKey: source.key, history: [] },
+      own.rootId,
+      null,
+    ),
   };
 };
 
@@ -147,7 +153,11 @@ const applicationCandidateFor = (
     identities: baseResolution.identities.filter(
       (identity) => identity.definitionKey === source.key,
     ),
-    history: { kind: "application", definitionKey: source.key, history: [] },
+    historyEvidence: verifyPublishedDefinitionHistory(
+      { kind: "application", definitionKey: source.key, history: [] },
+      own.rootId,
+      null,
+    ),
   };
 };
 
@@ -238,8 +248,10 @@ class MemoryRepository
 {
   candidate: DefinitionPublicationCandidate;
   moduleReleases: ResolvableModuleRelease[];
+  private publicationHistory: PublishedDefinitionHistory;
   appends: DefinitionReleaseAppend[] = [];
   reads = 0;
+  pageReads = 0;
   transactions = 0;
   failAppend = false;
   private transactionTail: Promise<void> = Promise.resolve();
@@ -247,6 +259,11 @@ class MemoryRepository
   constructor(candidate: DefinitionPublicationCandidate, releases: ResolvableModuleRelease[] = []) {
     this.candidate = candidate;
     this.moduleReleases = releases;
+    this.publicationHistory = {
+      kind: candidate.draft.kind,
+      definitionKey: candidate.draft.key,
+      history: [],
+    } as PublishedDefinitionHistory;
   }
 
   async read<Result>(
@@ -271,15 +288,53 @@ class MemoryRepository
   }
 
   async readCandidate(): Promise<DefinitionPublicationCandidate> {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
   async lockCandidate(): Promise<DefinitionPublicationCandidate> {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
-  async listModuleReleases(_organizationId: string, key: string) {
-    return this.moduleReleases.filter((release) => release.key === key);
+  async readModuleReleasePage(
+    _organizationId: string,
+    key: string,
+    cursor?: ModuleReleasePageCursor,
+  ) {
+    this.pageReads += 1;
+    const releases = this.moduleReleases
+      .filter((release) => release.key === key)
+      .sort((left, right) => left.releaseRevision - right.releaseRevision);
+    const anchor = cursor?.anchorReleaseRevision ?? releases.at(-1)?.releaseRevision;
+    const rootId = cursor?.rootId ?? releases.at(-1)?.rootId;
+    if (anchor === undefined || rootId === undefined)
+      return {
+        rootId: null,
+        anchorReleaseRevision: null,
+        entries: [],
+        nextAfterReleaseRevision: null,
+      };
+    const anchored = releases.filter(
+      (release) => release.rootId === rootId && release.releaseRevision <= anchor,
+    );
+    const after = cursor?.afterReleaseRevision;
+    const page = anchored
+      .filter((release) => after === undefined || release.releaseRevision > after)
+      .slice(0, 100);
+    return {
+      rootId,
+      anchorReleaseRevision: anchor,
+      entries: page.map((release) => {
+        const index = anchored.findIndex(
+          (candidate) => candidate.releaseRevision === release.releaseRevision,
+        );
+        return {
+          previousReleaseRevision: anchored[index - 1]?.releaseRevision ?? null,
+          release,
+        };
+      }),
+      nextAfterReleaseRevision:
+        page.at(-1)?.releaseRevision === anchor ? null : (page.at(-1)?.releaseRevision ?? null),
+    };
   }
 
   async readModuleRelease(_organizationId: string, rootId: string, releaseRevision: number) {
@@ -320,15 +375,20 @@ class MemoryRepository
         }),
       releaseNote: release.releaseNote,
     };
-    const previous = this.candidate.history.history;
+    const previous = this.publicationHistory.history;
+    this.publicationHistory = {
+      kind: output.kind,
+      definitionKey: release.draft.key,
+      history: [...previous, historyEntry],
+    } as PublishedDefinitionHistory;
     this.candidate = {
       ...this.candidate,
       draft: { ...this.candidate.draft, publishedRevision: release.draft.draftRevision },
-      history: {
-        kind: output.kind,
-        definitionKey: release.draft.key,
-        history: [...previous, historyEntry],
-      } as PublishedDefinitionHistory,
+      historyEvidence: verifyPublishedDefinitionHistory(
+        this.publicationHistory,
+        release.draft.rootId,
+        release.draft.draftRevision,
+      ),
     };
     return {
       rootId: release.draft.rootId,
@@ -341,6 +401,58 @@ class MemoryRepository
       publishedAt,
       publishedBy: context().systemActorId,
     };
+  }
+}
+
+type ModulePageFault = "oversized" | "duplicate" | "backward" | "broken_boundary";
+
+class FaultyModulePageRepository extends MemoryRepository {
+  constructor(
+    candidate: DefinitionPublicationCandidate,
+    releases: ResolvableModuleRelease[],
+    private readonly fault: ModulePageFault,
+  ) {
+    super(candidate, releases);
+  }
+
+  override async readModuleReleasePage(
+    organizationId: string,
+    key: string,
+    cursor?: ModuleReleasePageCursor,
+  ) {
+    const page = await super.readModuleReleasePage(organizationId, key, cursor);
+    if (this.fault === "oversized" && cursor === undefined && page.entries.length === 100)
+      return { ...page, entries: [...page.entries, page.entries[0]!] };
+    if (this.fault === "duplicate" && cursor === undefined && page.entries.length >= 2) {
+      const first = page.entries[0]!;
+      return {
+        ...page,
+        entries: [
+          first,
+          { previousReleaseRevision: first.release.releaseRevision, release: first.release },
+        ],
+      };
+    }
+    if (this.fault === "backward" && cursor === undefined && page.entries.length >= 2) {
+      const first = page.entries[0]!;
+      const second = page.entries[1]!;
+      return {
+        ...page,
+        entries: [
+          { previousReleaseRevision: null, release: second.release },
+          {
+            previousReleaseRevision: second.release.releaseRevision,
+            release: first.release,
+          },
+        ],
+      };
+    }
+    if (this.fault === "broken_boundary" && cursor !== undefined && page.entries[0] !== undefined)
+      return {
+        ...page,
+        entries: [{ ...page.entries[0], previousReleaseRevision: null }, ...page.entries.slice(1)],
+      };
+    return page;
   }
 }
 
@@ -467,6 +579,7 @@ describe("Definition publication service", () => {
       releaseRevision: 2,
     });
 
+    const pageReadsAfterPrepare = repository.pageReads;
     repository.moduleReleases.push(releaseFor(dependencySource, "1.3.0", 3));
     await service.publish(context(), {
       confirmation: prepared.confirmation,
@@ -477,6 +590,62 @@ describe("Definition publication service", () => {
       releaseVersion: "1.2.0",
       releaseRevision: 2,
     });
+    expect(repository.pageReads).toBe(pageReadsAfterPrepare);
+  });
+
+  it("scans bounded pages and selects the numeric highest compatible stable Module", async () => {
+    const dependencySource = sourceNamed("crm.organisations.json");
+    const candidateSource = structuredClone(sourceNamed("crm.people.json"));
+    if (candidateSource.kind !== "module") throw new Error("Module fixture required");
+    candidateSource.body.dependencies[0]!.version = {
+      selection: "allowed_range",
+      expression: "^1.0.0",
+    };
+    const releases = [
+      ...Array.from({ length: 105 }, (_, index) =>
+        releaseFor(dependencySource, `1.0.${index}`, index + 1),
+      ),
+      releaseFor(dependencySource, "1.1.0-beta.1", 106),
+    ];
+    const repository = new MemoryRepository(candidateFor(candidateSource), releases);
+    const prepared = await createDefinitionPublicationService(repository, emptyCatalogue).prepare(
+      context(),
+      { rootId: repository.candidate.draft.rootId, expectedDraftRevision: 1 },
+    );
+
+    expect(repository.pageReads).toBe(2);
+    expect(prepared.confirmation.dependencyManifest[0]).toMatchObject({
+      releaseVersion: "1.0.104",
+      releaseRevision: 105,
+    });
+  });
+
+  it("refuses oversized, duplicate, backward, and cross-page-corrupt Module pages", async () => {
+    const dependencySource = sourceNamed("crm.organisations.json");
+    const candidateSource = structuredClone(sourceNamed("crm.people.json"));
+    if (candidateSource.kind !== "module") throw new Error("Module fixture required");
+    candidateSource.body.dependencies[0]!.version = {
+      selection: "allowed_range",
+      expression: "^1.0.0",
+    };
+    const releases = Array.from({ length: 101 }, (_, index) =>
+      releaseFor(dependencySource, `1.0.${index}`, index + 1),
+    );
+    for (const fault of ["oversized", "duplicate", "backward", "broken_boundary"] as const) {
+      const selectedReleases =
+        fault === "duplicate" || fault === "backward" ? releases.slice(0, 2) : releases;
+      const repository = new FaultyModulePageRepository(
+        candidateFor(candidateSource),
+        selectedReleases,
+        fault,
+      );
+      await expect(
+        createDefinitionPublicationService(repository, emptyCatalogue).prepare(context(), {
+          rootId: repository.candidate.draft.rootId,
+          expectedDraftRevision: 1,
+        }),
+      ).rejects.toMatchObject({ code: "DEFINITION_DEPENDENCY_SUBSTITUTED" });
+    }
   });
 
   it("uses the same verified module condition evidence for application prepare and publish", async () => {

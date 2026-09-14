@@ -1,6 +1,10 @@
 import type { PublishedModuleDefinition, SavedSharingCondition } from "@vortex/contracts";
 import { describe, expect, it } from "vitest";
-import { deriveSavedConditionRevisions } from "../src/saved-condition-revisions";
+import {
+  createSavedConditionRevisionFold,
+  deriveSavedConditionRevisions,
+  foldSavedConditionRelease,
+} from "../src/saved-condition-revisions";
 import { DefinitionVersionImpactError } from "../src/version-impact-error";
 
 const rootId = "10000000-0000-4000-a000-000000000001";
@@ -77,6 +81,23 @@ describe("saved sharing-condition revision derivation", () => {
     const history = [release(2, [prior]), release(3, []), release(4, [])];
     expect(derive([], history)).toEqual([]);
     expect(derive([{ ...prior, publishedRevision: 99 }], history)[0]?.revision).toBe(2);
+  });
+
+  it("preserves unchanged, changed, removal and reintroduction semantics across page folds", () => {
+    const fold = createSavedConditionRevisionFold(rootId);
+    const first = condition(id, 1);
+    foldSavedConditionRelease(fold, release(2, [first]));
+    foldSavedConditionRelease(fold, release(5, [condition(id, 1)]));
+    foldSavedConditionRelease(fold, release(8, []));
+
+    expect(
+      deriveSavedConditionRevisions({
+        rootId,
+        conditions: [condition(id, 99)],
+        history: [],
+        fold,
+      }),
+    ).toEqual([{ conditionId: id, revision: 2 }]);
   });
 
   it("rejects a wrong root, duplicate IDs and broken history", () => {

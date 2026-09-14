@@ -25,6 +25,7 @@ import {
   type DefinitionReleaseAppend,
 } from "../src/definition-publication";
 import { extractSourceIdentityRequirements } from "../src/source-identities";
+import { verifyPublishedDefinitionHistory } from "../src/version-impact";
 
 const organizationId = "10000000-0000-4000-a000-000000000001";
 const actorId = "10000000-0000-4000-a000-000000000002";
@@ -222,11 +223,16 @@ const publicationRepositoryFor = (draft: StoredDefinitionDraft) => {
   const candidate: DefinitionPublicationCandidate = {
     draft,
     identities: snapshot.identities,
-    history: publishedHistory,
+    historyEvidence: verifyPublishedDefinitionHistory(publishedHistory, draft.rootId, 1),
   };
   const reader: DefinitionPublicationReader = {
     readCandidate: async () => candidate,
-    listModuleReleases: async () => [],
+    readModuleReleasePage: async () => ({
+      rootId: null,
+      anchorReleaseRevision: null,
+      entries: [],
+      nextAfterReleaseRevision: null,
+    }),
     readModuleRelease: async () => undefined,
   };
   const transaction: DefinitionPublicationTransaction = {

@@ -16,7 +16,6 @@ import {
   prepareDefinitionPublicationResultSchema,
   publishDefinitionCommandSchema,
   publishDefinitionResultSchema,
-  publishedDefinitionHistorySchema,
   savedConditionRevisionAssignmentSchema,
   stableDefinitionReleaseVersionSchema,
   storedDefinitionDraftSchema,
@@ -24,6 +23,7 @@ import {
   sourceIdentityKindV2Schema,
   type DefinitionCompilationOutput,
   type DefinitionPublicationConfirmation,
+  type DefinitionPublicationHistoryEvidence,
   type DefinitionResolutionSnapshot,
   type DefinitionResolutionSnapshotV2,
   type DefinitionResolutionSnapshotV3,
@@ -34,7 +34,6 @@ import {
   type PrepareDefinitionPublicationCommand,
   type PrepareDefinitionPublicationResult,
   type PublishDefinitionCommand,
-  type PublishedDefinitionHistory,
   type PublishedModuleDefinition,
   type ModuleVersionImpactHistoryEntryV2,
   type ModuleVersionImpactHistoryEntryV3,
@@ -59,9 +58,12 @@ import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-
 import { createApplicationResolutionSnapshotV2 } from "./application-v2-resolution";
 import { compileDefinition, compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
-import { deriveSavedConditionRevisions } from "./saved-condition-revisions";
-import { compileDefinitionSet, validateDefinitionSet } from "./validation";
-import { compareDefinitionVersionImpact } from "./version-impact";
+import { validateDefinitionSet } from "./validation";
+import {
+  compareDefinitionVersionImpactWithEvidence,
+  deriveSavedConditionRevisionsFromHistoryEvidence,
+  isVerifiedDefinitionPublicationHistoryEvidence,
+} from "./version-impact";
 import { DefinitionVersionImpactError } from "./version-impact-error";
 
 type SourceIdentityAssignments = DefinitionResolutionSnapshotV3["identities"];
@@ -103,11 +105,21 @@ const refuse = (code: DefinitionPublicationFailureCode): never => {
 };
 
 /** Read model needed to compile one current draft. Implementations must tenant-scope every method. */
-export type DefinitionPublicationCandidate = Readonly<{
+type DefinitionPublicationCandidateCommon = Readonly<{
   draft: StoredDefinitionDraft;
   identities: SourceIdentityAssignments;
-  history: PublishedDefinitionHistory;
 }>;
+
+/**
+ * Production repositories return streamed evidence. The bounded history-array
+ * branch remains only for injected legacy/test readers and is verified into the
+ * same evidence before any publication policy consumes it.
+ */
+export type DefinitionPublicationCandidate = DefinitionPublicationCandidateCommon &
+  Readonly<{ historyEvidence: DefinitionPublicationHistoryEvidence }>;
+
+type ValidatedDefinitionPublicationCandidate = DefinitionPublicationCandidateCommon &
+  Readonly<{ historyEvidence: DefinitionPublicationHistoryEvidence }>;
 
 /** Immutable organization-owned module release made available to a dependency compilation. */
 export type ResolvableModuleRelease = Readonly<{
@@ -124,6 +136,22 @@ export type ResolvableModuleRelease = Readonly<{
     | ModuleVersionImpactHistoryEntryV3;
   compilationOutput: ModuleOutput;
   resolutionSnapshot: DefinitionResolution;
+}>;
+
+export type ModuleReleasePageCursor = Readonly<{
+  rootId: ModuleRootId;
+  anchorReleaseRevision: Revision;
+  afterReleaseRevision: Revision;
+}>;
+
+export type ResolvableModuleReleasePage = Readonly<{
+  rootId: ModuleRootId | null;
+  anchorReleaseRevision: Revision | null;
+  entries: readonly Readonly<{
+    previousReleaseRevision: Revision | null;
+    release: ResolvableModuleRelease;
+  }>[];
+  nextAfterReleaseRevision: Revision | null;
 }>;
 
 export type ResolvableConnectionTypeRelease = Readonly<{
@@ -144,10 +172,11 @@ export type ResolvablePlatformThemeRelease = Readonly<{
 
 export interface DefinitionPublicationReader {
   readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
-  listModuleReleases(
+  readModuleReleasePage(
     organizationId: OrganizationId,
     key: string,
-  ): Promise<readonly ResolvableModuleRelease[]>;
+    cursor?: ModuleReleasePageCursor,
+  ): Promise<ResolvableModuleReleasePage>;
   readModuleRelease(
     organizationId: OrganizationId,
     rootId: ModuleRootId,
@@ -275,6 +304,49 @@ const chooseStableRelease = <Release extends { releaseVersion: string }>(
   return highest[0]!;
 };
 
+type ModuleSelectionFold = {
+  sawRelease: boolean;
+  sawStable: boolean;
+  sawCompatible: boolean;
+  best: ResolvableModuleRelease | undefined;
+  bestMultiplicity: number;
+};
+
+const createModuleSelectionFold = (): ModuleSelectionFold => ({
+  sawRelease: false,
+  sawStable: false,
+  sawCompatible: false,
+  best: undefined,
+  bestMultiplicity: 0,
+});
+
+const foldModuleSelection = (
+  fold: ModuleSelectionFold,
+  release: ResolvableModuleRelease,
+  requirements: readonly VersionRequirement[],
+): void => {
+  fold.sawRelease = true;
+  if (!stable(release.releaseVersion)) return;
+  fold.sawStable = true;
+  if (!accepts(requirements, release.releaseVersion)) return;
+  fold.sawCompatible = true;
+  if (fold.best === undefined || compare(release.releaseVersion, fold.best.releaseVersion) > 0) {
+    fold.best = release;
+    fold.bestMultiplicity = 1;
+  } else if (release.releaseVersion === fold.best.releaseVersion) {
+    fold.bestMultiplicity += 1;
+  }
+};
+
+const completeModuleSelection = (fold: ModuleSelectionFold): ResolvableModuleRelease => {
+  if (!fold.sawRelease) return refuse("DEFINITION_DEPENDENCY_MISSING");
+  if (!fold.sawStable) return refuse("DEFINITION_DEPENDENCY_PRERELEASE_ONLY");
+  if (!fold.sawCompatible || fold.best === undefined)
+    return refuse("DEFINITION_DEPENDENCY_INCOMPATIBLE");
+  if (fold.bestMultiplicity !== 1) return refuse("DEFINITION_DEPENDENCY_AMBIGUOUS");
+  return fold.best;
+};
+
 const moduleRequirements = (draft: StoredDefinitionDraft): Requirement[] => {
   const dependencies =
     draft.source.kind === "module"
@@ -306,7 +378,7 @@ const sortedManifest = (
   );
 
 const verifyModuleRelease = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: ValidatedDefinitionPublicationCandidate,
   expectedKey: string,
   release: ResolvableModuleRelease,
 ): void => {
@@ -347,7 +419,6 @@ const verifyModuleRelease = (
   if (
     release.organizationId !== candidate.draft.organizationId ||
     release.key !== expectedKey ||
-    !stable(release.releaseVersion) ||
     !parsedOutput.success ||
     parsedOutput.data.kind !== "module" ||
     !parsedResolution.success ||
@@ -369,6 +440,103 @@ const verifyModuleRelease = (
     fingerprintCanonicalValue(release.published.content) !== release.contentFingerprint
   )
     refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+};
+
+const sameModuleReleaseLocator = (
+  left: ResolvableModuleRelease,
+  right: ResolvableModuleRelease,
+): boolean =>
+  left.organizationId === right.organizationId &&
+  left.key === right.key &&
+  left.rootId === right.rootId &&
+  left.releaseRevision === right.releaseRevision &&
+  left.releaseVersion === right.releaseVersion &&
+  left.contentFingerprint === right.contentFingerprint &&
+  left.resolutionFingerprint === right.resolutionFingerprint;
+
+const selectModuleRelease = async (
+  reader: DefinitionPublicationReader,
+  candidate: ValidatedDefinitionPublicationCandidate,
+  key: string,
+  requirements: readonly VersionRequirement[],
+): Promise<ResolvableModuleRelease> => {
+  const selection = createModuleSelectionFold();
+  let cursor: ModuleReleasePageCursor | undefined;
+  let anchoredRootId: ModuleRootId | undefined;
+  let anchoredRevision: Revision | undefined;
+  let previousReleaseRevision: Revision | null = null;
+  while (true) {
+    const page = await reader.readModuleReleasePage(candidate.draft.organizationId, key, cursor);
+    if (page.entries.length > 100) refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+    if (cursor === undefined) {
+      if (page.rootId === null || page.anchorReleaseRevision === null) {
+        if (
+          page.rootId !== null ||
+          page.anchorReleaseRevision !== null ||
+          page.entries.length !== 0 ||
+          page.nextAfterReleaseRevision !== null
+        )
+          refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+        break;
+      }
+      anchoredRootId = page.rootId;
+      anchoredRevision = page.anchorReleaseRevision;
+    } else if (
+      page.rootId !== cursor.rootId ||
+      page.anchorReleaseRevision !== cursor.anchorReleaseRevision
+    ) {
+      refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+    }
+    if (
+      anchoredRootId === undefined ||
+      anchoredRevision === undefined ||
+      page.rootId !== anchoredRootId ||
+      page.anchorReleaseRevision !== anchoredRevision ||
+      page.entries.length === 0
+    )
+      refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+    const currentRootId = anchoredRootId as ModuleRootId;
+    const currentAnchorRevision = anchoredRevision as Revision;
+    for (const entry of page.entries) {
+      const release = entry.release;
+      if (
+        entry.previousReleaseRevision !== previousReleaseRevision ||
+        release.rootId !== currentRootId ||
+        release.releaseRevision <= (previousReleaseRevision ?? 0) ||
+        release.releaseRevision > currentAnchorRevision
+      )
+        refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+      verifyModuleRelease(candidate, key, release);
+      foldModuleSelection(selection, release, requirements);
+      previousReleaseRevision = release.releaseRevision;
+    }
+    const last = previousReleaseRevision;
+    if (page.nextAfterReleaseRevision === null) {
+      if (last !== currentAnchorRevision) refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+      break;
+    }
+    if (
+      last === null ||
+      page.nextAfterReleaseRevision !== last ||
+      page.nextAfterReleaseRevision >= currentAnchorRevision
+    )
+      refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+    cursor = {
+      rootId: currentRootId,
+      anchorReleaseRevision: currentAnchorRevision,
+      afterReleaseRevision: page.nextAfterReleaseRevision,
+    };
+  }
+  const selected = completeModuleSelection(selection);
+  const exact = await reader.readModuleRelease(
+    candidate.draft.organizationId,
+    selected.rootId,
+    selected.releaseRevision,
+  );
+  if (exact === undefined || !sameModuleReleaseLocator(selected, exact))
+    return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+  verifyModuleRelease(candidate, key, exact as ResolvableModuleRelease);
+  return exact as ResolvableModuleRelease;
 };
 
 const verifyConnectionRelease = (
@@ -483,17 +651,14 @@ const resolveApplicationCompositionV2 = async (
 const resolveDependencies = async (
   reader: DefinitionPublicationReader,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionPublicationCandidate,
+  candidate: ValidatedDefinitionPublicationCandidate,
   pinned?: readonly ExactDefinitionDependency[],
 ): Promise<ResolvedDependencies> => {
   const modules: ResolvableModuleRelease[] = [];
   for (const [key, requirements] of groupRequirements(moduleRequirements(candidate.draft))) {
     let release: ResolvableModuleRelease | undefined;
     if (pinned === undefined) {
-      release = chooseStableRelease(
-        await reader.listModuleReleases(candidate.draft.organizationId, key),
-        requirements,
-      );
+      release = await selectModuleRelease(reader, candidate, key, requirements);
     } else {
       const exact = findPinned(pinned, "module", key);
       if (!accepts(requirements, exact.releaseVersion)) refuse("DEFINITION_CONFIRMATION_MISMATCH");
@@ -608,7 +773,7 @@ const resolveDependencies = async (
 
 const assertNoCycle = async (
   reader: DefinitionPublicationReader,
-  candidate: DefinitionPublicationCandidate,
+  candidate: ValidatedDefinitionPublicationCandidate,
   modules: readonly ResolvableModuleRelease[],
 ): Promise<void> => {
   const visited = new Set<string>();
@@ -699,7 +864,7 @@ const manifestFor = (dependencies: ResolvedDependencies): ExactDefinitionDepende
   ]);
 
 const buildResolution = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: ValidatedDefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   ownVersion: string,
 ): DefinitionResolution => {
@@ -807,7 +972,7 @@ const draftMetadata = (draft: StoredDefinitionDraft) => ({
 });
 
 const provisionalSavedConditionRevisions = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: ValidatedDefinitionPublicationCandidate,
 ): SavedConditionRevisionAssignment[] => {
   if (candidate.draft.kind !== "module") return [];
   const conditions = candidate.draft.source.body.sharing_conditions;
@@ -845,8 +1010,30 @@ const parsedCompilationRequest = <Schema extends z.ZodType>(
   return parsed.data;
 };
 
+const assertFinalPublicationValidation = (
+  request:
+    | z.output<typeof definitionCompilationRequestSchema>
+    | z.output<typeof applicationCompilationRequestV2Schema>
+    | z.output<typeof moduleCompilationRequestV2Schema>
+    | z.output<typeof moduleCompilationRequestV3Schema>,
+  output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
+  dependencyOutputs: readonly DefinitionCompilationOutput[],
+  historyEvidence: DefinitionPublicationHistoryEvidence,
+): void => {
+  const validation = validateDefinitionSet({
+    requests: [request],
+    outputs: [output],
+    dependencyOutputs,
+    publishedHistoryEvidence: [historyEvidence],
+  });
+  if (!validation.valid) {
+    const first = validation.failures[0]!;
+    throw new DefinitionCompilationError(first.ruleCode, first.family, first.location);
+  }
+};
+
 const compileCandidate = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: ValidatedDefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
   final: boolean,
@@ -873,18 +1060,13 @@ const compileCandidate = (
       parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
       dependencyOutputs,
     );
-    if (final) {
-      const validation = validateDefinitionSet({
-        requests: [request],
-        outputs: [output],
+    if (final)
+      assertFinalPublicationValidation(
+        parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
+        output,
         dependencyOutputs,
-        publishedHistories: [candidate.history],
-      });
-      if (!validation.valid) {
-        const first = validation.failures[0]!;
-        throw new DefinitionCompilationError(first.ruleCode, first.family, first.location);
-      }
-    }
+        candidate.historyEvidence,
+      );
     return output;
   }
   if (
@@ -912,23 +1094,20 @@ const compileCandidate = (
       provisional.validationContractVersion !== "3.0.0"
     )
       return refuse("DEFINITION_COMPILATION_REFUSED");
-    if (candidate.history.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
-    const savedConditionRevisions = deriveSavedConditionRevisions({
-      rootId: candidate.draft.rootId,
-      conditions: provisional.canonical.content.sharingConditions,
-      history: candidate.history.history,
-    });
+    if (candidate.historyEvidence.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
+    const savedConditionRevisions = deriveSavedConditionRevisionsFromHistoryEvidence(
+      candidate.historyEvidence,
+      candidate.draft.rootId,
+      provisional.canonical.content.sharingConditions,
+    );
     const request = { ...common, savedConditionRevisions };
     if (!final)
       return compileParsedDefinition(
         parsedCompilationRequest(moduleCompilationRequestV3Schema, request),
         dependencyOutputs,
       );
-    const outputs = compileDefinitionSet([request], {
-      dependencyOutputs,
-      publishedHistories: [candidate.history],
-    });
-    const output = outputs[0];
+    const parsedRequest = parsedCompilationRequest(moduleCompilationRequestV3Schema, request);
+    const output = compileParsedDefinition(parsedRequest, dependencyOutputs);
     if (
       output === undefined ||
       output.kind !== "module" ||
@@ -936,6 +1115,12 @@ const compileCandidate = (
       output.validationContractVersion !== "3.0.0"
     )
       return refuse("DEFINITION_COMPILATION_REFUSED");
+    assertFinalPublicationValidation(
+      parsedRequest,
+      output,
+      dependencyOutputs,
+      candidate.historyEvidence,
+    );
     return output;
   }
   if (
@@ -959,29 +1144,32 @@ const compileCandidate = (
     );
     if (provisional.kind !== "module" || !("validationContractVersion" in provisional))
       return refuse("DEFINITION_COMPILATION_REFUSED");
-    if (candidate.history.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
-    const savedConditionRevisions = deriveSavedConditionRevisions({
-      rootId: candidate.draft.rootId,
-      conditions: provisional.canonical.content.sharingConditions,
-      history: candidate.history.history,
-    });
+    if (candidate.historyEvidence.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
+    const savedConditionRevisions = deriveSavedConditionRevisionsFromHistoryEvidence(
+      candidate.historyEvidence,
+      candidate.draft.rootId,
+      provisional.canonical.content.sharingConditions,
+    );
     const request = { ...common, savedConditionRevisions };
     if (!final)
       return compileParsedDefinition(
         parsedCompilationRequest(moduleCompilationRequestV2Schema, request),
         dependencyOutputs,
       );
-    const outputs = compileDefinitionSet([request], {
-      dependencyOutputs,
-      publishedHistories: [candidate.history],
-    });
-    const output = outputs[0];
+    const parsedRequest = parsedCompilationRequest(moduleCompilationRequestV2Schema, request);
+    const output = compileParsedDefinition(parsedRequest, dependencyOutputs);
     if (
       output === undefined ||
       output.kind !== "module" ||
       !("validationContractVersion" in output)
     )
       return refuse("DEFINITION_COMPILATION_REFUSED");
+    assertFinalPublicationValidation(
+      parsedRequest,
+      output,
+      dependencyOutputs,
+      candidate.historyEvidence,
+    );
     return output;
   }
   if (resolution.contractVersion !== "1.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
@@ -1001,12 +1189,12 @@ const compileCandidate = (
     });
     if (provisional.kind !== "module") refuse("DEFINITION_COMPILATION_REFUSED");
     const moduleOutput = provisional as ModuleOutput;
-    if (candidate.history.kind !== "module") refuse("DEFINITION_HISTORY_INVALID");
-    savedConditionRevisions = deriveSavedConditionRevisions({
-      rootId: candidate.draft.rootId,
-      conditions: moduleOutput.canonical.content.sharingConditions,
-      history: candidate.history.kind === "module" ? candidate.history.history : [],
-    });
+    if (candidate.historyEvidence.kind !== "module") refuse("DEFINITION_HISTORY_INVALID");
+    savedConditionRevisions = deriveSavedConditionRevisionsFromHistoryEvidence(
+      candidate.historyEvidence,
+      candidate.draft.rootId,
+      moduleOutput.canonical.content.sharingConditions,
+    );
   }
   const request = {
     ...common,
@@ -1020,13 +1208,16 @@ const compileCandidate = (
     if (output.kind === "connection_type") refuse("DEFINITION_COMPILATION_REFUSED");
     return output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
   }
-  const outputs = compileDefinitionSet([request], {
-    dependencyOutputs,
-    publishedHistories: [candidate.history],
-  });
-  const output = outputs[0];
+  const parsedRequest = parsedCompilationRequest(definitionCompilationRequestSchema, request);
+  const output = compileParsedDefinition(parsedRequest, dependencyOutputs);
   if (output === undefined || output.kind === "connection_type")
-    refuse("DEFINITION_COMPILATION_REFUSED");
+    return refuse("DEFINITION_COMPILATION_REFUSED");
+  assertFinalPublicationValidation(
+    parsedRequest,
+    output,
+    dependencyOutputs,
+    candidate.historyEvidence,
+  );
   return output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
 };
 
@@ -1034,16 +1225,16 @@ const validateCandidate = (
   context: SessionContext,
   candidateInput: DefinitionPublicationCandidate | undefined,
   command: PrepareDefinitionPublicationCommand,
-): DefinitionPublicationCandidate => {
-  if (candidateInput === undefined) refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-  const supplied = candidateInput as DefinitionPublicationCandidate;
+): ValidatedDefinitionPublicationCandidate => {
+  if (candidateInput === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  const supplied = candidateInput;
   const draft = storedDefinitionDraftSchema.safeParse(supplied.draft);
-  const history = publishedDefinitionHistorySchema.safeParse(supplied.history);
-  if (!draft.success || !history.success) refuse("DEFINITION_HISTORY_INVALID");
-  const candidate: DefinitionPublicationCandidate = {
-    draft: draft.success ? draft.data : supplied.draft,
+  if (!draft.success || !isVerifiedDefinitionPublicationHistoryEvidence(supplied.historyEvidence))
+    return refuse("DEFINITION_HISTORY_INVALID");
+  const candidate: ValidatedDefinitionPublicationCandidate = {
+    draft: draft.data,
     identities: supplied.identities,
-    history: history.success ? history.data : supplied.history,
+    historyEvidence: supplied.historyEvidence,
   };
   if (candidate.draft.organizationId !== context.organizationId)
     refuse("DEFINITION_ORGANIZATION_MISMATCH");
@@ -1053,11 +1244,12 @@ const validateCandidate = (
   )
     refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   if (
-    candidate.history.kind !== candidate.draft.kind ||
-    candidate.history.definitionKey !== candidate.draft.key
+    candidate.historyEvidence.kind !== candidate.draft.kind ||
+    candidate.historyEvidence.definitionKey !== candidate.draft.key ||
+    String(candidate.historyEvidence.rootId) !== String(candidate.draft.rootId)
   )
     refuse("DEFINITION_HISTORY_INVALID");
-  const latest = candidate.history.history.at(-1);
+  const latest = candidate.historyEvidence.latestRelease;
   if (
     candidate.draft.publishedRevision !== latest?.publication.revision ||
     candidate.draft.sourceFingerprint !== fingerprintCanonicalValue(candidate.draft.source)
@@ -1082,10 +1274,10 @@ const prepareFromReader = async (
   const dependencies = await resolveDependencies(reader, catalogue, candidate, pinned);
   await assertNoCycle(reader, candidate, dependencies.modules);
   const provisionalVersion =
-    candidate.history.history.at(-1)?.publication.releaseVersion ?? "1.0.0";
+    candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
   const provisionalResolution = buildResolution(candidate, dependencies, provisionalVersion);
   const provisional = compileCandidate(candidate, dependencies, provisionalResolution, false);
-  const impact = compareDefinitionVersionImpact({
+  const impact = compareDefinitionVersionImpactWithEvidence({
     kind: candidate.draft.kind,
     ...(candidate.draft.source.kind === "module" &&
     candidate.draft.source.source_contract_version === "3.0.0"
@@ -1095,14 +1287,14 @@ const prepareFromReader = async (
           candidate.draft.source.source_contract_version === "2.0.0"
         ? { validationContractVersion: "2.0.0" as const }
         : {}),
-    history: candidate.history.history,
+    historyEvidence: candidate.historyEvidence,
     candidate: provisional.canonical,
   });
   if (impact.outcome === "no_change") refuse("DEFINITION_NO_CHANGE");
   const confirmableImpact = impact as Extract<typeof impact, { assignedVersion: string }>;
   const resolution = buildResolution(candidate, dependencies, confirmableImpact.assignedVersion);
   const compilationOutput = compileCandidate(candidate, dependencies, resolution, true);
-  const confirmedImpact = compareDefinitionVersionImpact({
+  const confirmedImpact = compareDefinitionVersionImpactWithEvidence({
     kind: candidate.draft.kind,
     ...(candidate.draft.source.kind === "module" &&
     candidate.draft.source.source_contract_version === "3.0.0"
@@ -1112,7 +1304,7 @@ const prepareFromReader = async (
           candidate.draft.source.source_contract_version === "2.0.0"
         ? { validationContractVersion: "2.0.0" as const }
         : {}),
-    history: candidate.history.history,
+    historyEvidence: candidate.historyEvidence,
     candidate: compilationOutput.canonical,
   });
   if (confirmedImpact.outcome === "no_change") refuse("DEFINITION_VERSION_REFUSED");

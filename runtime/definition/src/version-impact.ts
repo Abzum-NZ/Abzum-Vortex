@@ -3,6 +3,7 @@ import {
   applicationContentV2Schema,
   applicationVersionImpactPolicyVersionV2,
   applicationVersionImpactRequestV2Schema,
+  definitionPublicationHistoryEvidenceSchema,
   moduleContentSchema,
   moduleContentV2Schema,
   moduleContentV3Schema,
@@ -10,6 +11,7 @@ import {
   moduleVersionImpactPolicyVersionV3,
   moduleVersionImpactRequestV2Schema,
   moduleVersionImpactRequestV3Schema,
+  publishedDefinitionHistorySchema,
   unresolvedRecordTypeReferencePaths,
   definitionVersionConfirmationSchema,
   definitionVersionImpactRequestSchema,
@@ -17,6 +19,7 @@ import {
   stableDefinitionReleaseVersionSchema,
   versionImpactPolicyVersion,
   type DefinitionVersionConfirmation,
+  type DefinitionPublicationHistoryEvidence,
   type DefinitionVersionImpactRequest,
   type DefinitionVersionImpactResult,
   type DefinitionVersionSubject,
@@ -24,6 +27,8 @@ import {
   type ModuleVersionImpactRequestV2,
   type ModuleVersionImpactRequestV3,
   type PublishedApplicationDefinition,
+  type PublishedDefinitionHistory,
+  type SavedConditionRevisionAssignment,
   type VersionImpact,
 } from "@vortex/contracts";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json";
@@ -40,12 +45,36 @@ import {
 } from "./comparison-policy";
 import { assignNextDefinitionVersion, compareStableVersions } from "./semantic-version";
 import { refuseVersionImpact } from "./version-impact-error";
+import {
+  createSavedConditionRevisionFold,
+  deriveSavedConditionRevisions,
+  foldSavedConditionRelease,
+  type SavedConditionLike,
+  type SavedConditionRevisionFold,
+} from "./saved-condition-revisions";
 
 type SupportedVersionImpactRequest =
   | DefinitionVersionImpactRequest
   | ApplicationVersionImpactRequestV2
   | ModuleVersionImpactRequestV2
   | ModuleVersionImpactRequestV3;
+
+type HistoryRelease = SupportedVersionImpactRequest["history"][number];
+
+export type DefinitionPublicationHistoryFold = {
+  readonly kind: "module" | "application";
+  readonly definitionKey: string;
+  readonly rootId: string;
+  readonly anchorReleaseRevision: number | null;
+  previousRelease: HistoryRelease | undefined;
+  releaseCount: number;
+  validationContractVersions: Set<string>;
+  savedConditionFold: SavedConditionRevisionFold | undefined;
+};
+
+const activeHistoryFolds = new WeakSet<object>();
+const verifiedHistoryEvidence = new WeakSet<object>();
+const savedConditionEvidence = new WeakMap<object, SavedConditionRevisionFold>();
 
 const isApplicationV2Request = (
   request: SupportedVersionImpactRequest,
@@ -96,59 +125,60 @@ const highestImpact = (reasons: DefinitionVersionImpactResult["reasons"]): Versi
   );
 };
 
-const assertHistory = (request: SupportedVersionImpactRequest): void => {
-  const rootId = request.candidate.envelope.rootId;
-  const history = request.history;
-  for (const [index, release] of history.entries()) {
-    if (release.publication.rootId !== rootId) refuseVersionImpact("root_mismatch");
-    if (release.publication.kind !== request.kind) refuseVersionImpact("invalid_history");
-    if (!stableDefinitionReleaseVersionSchema.safeParse(release.publication.releaseVersion).success)
-      refuseVersionImpact("invalid_history");
-    if (index === 0 && release.publication.releaseVersion !== "1.0.0")
-      refuseVersionImpact("invalid_history");
-    if (release.publication.contentFingerprint !== fingerprintCanonicalValue(release.content))
-      refuseVersionImpact("content_fingerprint_mismatch");
-    if (request.kind === "module") {
-      const releaseV2 = isModuleV2Release(release);
-      const releaseV3 = isModuleV3Release(release);
-      if (
-        unresolvedRecordTypeReferencePaths(
-          releaseV3
-            ? moduleContentV3Schema
-            : releaseV2
-              ? moduleContentV2Schema
-              : moduleContentSchema,
-          release.content,
-        ).length > 0
-      )
-        refuseVersionImpact("invalid_history");
-      assertUnambiguousModuleContent(release.content);
-    } else {
-      const applicationRelease = release as PublishedApplicationDefinition;
-      const v2 = isApplicationV2Release(applicationRelease);
-      if (
-        unresolvedRecordTypeReferencePaths(
-          v2 ? applicationContentV2Schema : applicationContentSchema,
-          applicationRelease.content,
-        ).length > 0
-      )
-        refuseVersionImpact("invalid_history");
-      if (v2) assertUnambiguousApplicationContentV2(applicationRelease.content);
-      else assertUnambiguousApplicationContent(applicationRelease.content);
-    }
-    const previous = history[index - 1];
+const assertHistoryRelease = (
+  kind: "module" | "application",
+  rootId: string,
+  release: HistoryRelease,
+  index: number,
+  previous: HistoryRelease | undefined,
+): void => {
+  if (release.publication.rootId !== rootId) refuseVersionImpact("root_mismatch");
+  if (release.publication.kind !== kind) refuseVersionImpact("invalid_history");
+  if (!stableDefinitionReleaseVersionSchema.safeParse(release.publication.releaseVersion).success)
+    refuseVersionImpact("invalid_history");
+  if (index === 0 && release.publication.releaseVersion !== "1.0.0")
+    refuseVersionImpact("invalid_history");
+  if (release.publication.contentFingerprint !== fingerprintCanonicalValue(release.content))
+    refuseVersionImpact("content_fingerprint_mismatch");
+  if (kind === "module") {
+    const releaseV2 = isModuleV2Release(release);
+    const releaseV3 = isModuleV3Release(release);
     if (
-      previous &&
-      (release.publication.revision <= previous.publication.revision ||
-        compareStableVersions(
-          release.publication.releaseVersion,
-          previous.publication.releaseVersion,
-        ) <= 0)
+      unresolvedRecordTypeReferencePaths(
+        releaseV3 ? moduleContentV3Schema : releaseV2 ? moduleContentV2Schema : moduleContentSchema,
+        release.content,
+      ).length > 0
     )
       refuseVersionImpact("invalid_history");
+    assertUnambiguousModuleContent(release.content);
+  } else {
+    const applicationRelease = release as PublishedApplicationDefinition;
+    const v2 = isApplicationV2Release(applicationRelease);
+    if (
+      unresolvedRecordTypeReferencePaths(
+        v2 ? applicationContentV2Schema : applicationContentSchema,
+        applicationRelease.content,
+      ).length > 0
+    )
+      refuseVersionImpact("invalid_history");
+    if (v2) assertUnambiguousApplicationContentV2(applicationRelease.content);
+    else assertUnambiguousApplicationContent(applicationRelease.content);
   }
+  if (
+    previous &&
+    (release.publication.revision <= previous.publication.revision ||
+      compareStableVersions(
+        release.publication.releaseVersion,
+        previous.publication.releaseVersion,
+      ) <= 0)
+  )
+    refuseVersionImpact("invalid_history");
+};
 
-  const latest = history.at(-1);
+const assertCandidateHistoryBinding = (
+  request: SupportedVersionImpactRequest,
+  latest: HistoryRelease | undefined,
+): void => {
   if (latest === undefined) {
     if (request.candidate.envelope.publishedRevision !== undefined)
       refuseVersionImpact("invalid_history");
@@ -159,6 +189,144 @@ const assertHistory = (request: SupportedVersionImpactRequest): void => {
     request.candidate.envelope.draftRevision <= latest.publication.revision
   )
     refuseVersionImpact("invalid_history");
+};
+
+const assertHistory = (request: SupportedVersionImpactRequest): void => {
+  const rootId = request.candidate.envelope.rootId;
+  const history = request.history;
+  for (const [index, release] of history.entries())
+    assertHistoryRelease(request.kind, rootId, release, index, history[index - 1]);
+  assertCandidateHistoryBinding(request, history.at(-1));
+};
+
+/** Starts one bounded-memory audit over an immutable publication history. */
+export const createDefinitionPublicationHistoryFold = (
+  input: Readonly<{
+    kind: "module" | "application";
+    definitionKey: string;
+    rootId: string;
+    anchorReleaseRevision: number | null;
+  }>,
+): DefinitionPublicationHistoryFold => {
+  if (input.anchorReleaseRevision !== null && !Number.isSafeInteger(input.anchorReleaseRevision))
+    refuseVersionImpact("invalid_history");
+  const fold: DefinitionPublicationHistoryFold = {
+    ...input,
+    previousRelease: undefined,
+    releaseCount: 0,
+    validationContractVersions: new Set(),
+    savedConditionFold:
+      input.kind === "module" ? createSavedConditionRevisionFold(input.rootId) : undefined,
+  };
+  activeHistoryFolds.add(fold);
+  return fold;
+};
+
+/** Audits one release and retains only the prior ordering facts and latest release. */
+export const foldDefinitionPublicationHistoryRelease = (
+  fold: DefinitionPublicationHistoryFold,
+  entry: Readonly<{
+    previousReleaseRevision: number | null;
+    release: HistoryRelease;
+  }>,
+): void => {
+  if (!activeHistoryFolds.has(fold)) refuseVersionImpact("invalid_history");
+  const expectedPrevious = fold.previousRelease?.publication.revision ?? null;
+  if (entry.previousReleaseRevision !== expectedPrevious) refuseVersionImpact("invalid_history");
+  assertHistoryRelease(
+    fold.kind,
+    fold.rootId,
+    entry.release,
+    fold.releaseCount,
+    fold.previousRelease,
+  );
+  if (fold.savedConditionFold !== undefined) {
+    if (entry.release.publication.kind !== "module") refuseVersionImpact("invalid_history");
+    foldSavedConditionRelease(
+      fold.savedConditionFold,
+      entry.release as Parameters<typeof foldSavedConditionRelease>[1],
+    );
+  }
+  fold.validationContractVersions.add(entry.release.publication.validationContractVersion);
+  fold.previousRelease = entry.release;
+  fold.releaseCount += 1;
+};
+
+const evidenceDigests = new WeakMap<object, string>();
+
+/** Completes an audit only when its anchored count and latest pointer were fully observed. */
+export const completeDefinitionPublicationHistoryFold = (
+  fold: DefinitionPublicationHistoryFold,
+): DefinitionPublicationHistoryEvidence => {
+  if (!activeHistoryFolds.delete(fold)) refuseVersionImpact("invalid_history");
+  const latestRelease = fold.previousRelease;
+  if (
+    (latestRelease?.publication.revision ?? null) !== fold.anchorReleaseRevision ||
+    (fold.releaseCount === 0) !== (fold.anchorReleaseRevision === null)
+  )
+    refuseVersionImpact("invalid_history");
+  const parsed = definitionPublicationHistoryEvidenceSchema.safeParse({
+    kind: fold.kind,
+    definitionKey: fold.definitionKey,
+    rootId: fold.rootId,
+    releaseCount: fold.releaseCount,
+    anchorReleaseRevision: fold.anchorReleaseRevision,
+    validationContractVersions: [...fold.validationContractVersions].sort(),
+    latestRelease: latestRelease ?? null,
+  });
+  if (!parsed.success) refuseVersionImpact("invalid_history");
+  const evidence = parsed.data as DefinitionPublicationHistoryEvidence;
+  verifiedHistoryEvidence.add(evidence);
+  evidenceDigests.set(evidence, fingerprintCanonicalValue(evidence));
+  if (fold.savedConditionFold !== undefined)
+    savedConditionEvidence.set(evidence, fold.savedConditionFold);
+  return evidence;
+};
+
+export const isVerifiedDefinitionPublicationHistoryEvidence = (
+  evidence: unknown,
+): evidence is DefinitionPublicationHistoryEvidence =>
+  typeof evidence === "object" &&
+  evidence !== null &&
+  verifiedHistoryEvidence.has(evidence) &&
+  evidenceDigests.get(evidence) === fingerprintCanonicalValue(evidence);
+
+export const deriveSavedConditionRevisionsFromHistoryEvidence = (
+  evidence: DefinitionPublicationHistoryEvidence,
+  rootId: string,
+  conditions: readonly SavedConditionLike[],
+): SavedConditionRevisionAssignment[] => {
+  if (
+    !isVerifiedDefinitionPublicationHistoryEvidence(evidence) ||
+    evidence.kind !== "module" ||
+    evidence.rootId !== rootId
+  )
+    refuseVersionImpact(evidence.rootId !== rootId ? "root_mismatch" : "invalid_history");
+  const fold = savedConditionEvidence.get(evidence);
+  if (fold === undefined) refuseVersionImpact("invalid_history");
+  return deriveSavedConditionRevisions({ rootId, conditions, history: [], fold });
+};
+
+/** Converts the existing bounded public array contract into the same verified fold. */
+export const verifyPublishedDefinitionHistory = (
+  history: PublishedDefinitionHistory,
+  rootId: string,
+  anchorReleaseRevision: number | null,
+): DefinitionPublicationHistoryEvidence => {
+  const parsed = publishedDefinitionHistorySchema.safeParse(history);
+  if (!parsed.success) return refuseVersionImpact("invalid_history");
+  const fold = createDefinitionPublicationHistoryFold({
+    kind: parsed.data.kind,
+    definitionKey: parsed.data.definitionKey,
+    rootId,
+    anchorReleaseRevision,
+  });
+  let previousReleaseRevision: number | null = null;
+  for (const release of parsed.data.history) {
+    foldDefinitionPublicationHistoryRelease(fold, { previousReleaseRevision, release });
+    previousReleaseRevision = release.publication.revision;
+  }
+  return completeDefinitionPublicationHistoryFold(fold);
 };
 
 const comparisonFingerprint = (
@@ -186,11 +354,7 @@ const comparisonFingerprint = (
     result: resultWithoutFingerprint,
   });
 
-/**
- * Computes the minimum compatible release without reading state or publishing.
- * All refusals use a closed safe code through DefinitionVersionImpactError.
- */
-export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersionImpactResult => {
+const parseVersionImpactRequest = (input: unknown): SupportedVersionImpactRequest => {
   const explicitKind =
     typeof input === "object" &&
     input !== null &&
@@ -214,7 +378,30 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
       duplicateIdentity ? "ambiguous_component_identity" : "invalid_request",
     );
   }
-  const request: SupportedVersionImpactRequest = parsed.data;
+  return parsed.data;
+};
+
+const assertEvidenceContractVersions = (
+  request: SupportedVersionImpactRequest,
+  evidence: DefinitionPublicationHistoryEvidence,
+): void => {
+  const allowed =
+    request.kind === "module"
+      ? isModuleV3Request(request)
+        ? new Set(["1.0.0", "2.0.0", "3.0.0"])
+        : isModuleV2Request(request)
+          ? new Set(["1.0.0", "2.0.0"])
+          : new Set(["1.0.0"])
+      : new Set(["1.0.0", "2.0.0"]);
+  if (evidence.validationContractVersions.some((version) => !allowed.has(version)))
+    refuseVersionImpact("invalid_request");
+};
+
+const compareParsedDefinitionVersionImpact = (
+  request: SupportedVersionImpactRequest,
+  latest: HistoryRelease | undefined,
+  evidence?: DefinitionPublicationHistoryEvidence,
+): DefinitionVersionImpactResult => {
   if (
     unresolvedRecordTypeReferencePaths(
       request.kind === "module"
@@ -230,10 +417,13 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
     ).length > 0
   )
     refuseVersionImpact("unresolved_candidate");
-  assertHistory(request);
+  if (evidence === undefined) assertHistory(request);
+  else {
+    assertEvidenceContractVersions(request, evidence);
+    assertCandidateHistoryBinding(request, latest);
+  }
 
   const subject = subjectOf(request);
-  const latest = request.history.at(-1);
   const exactCandidateContentFingerprint = fingerprintCanonicalValue(request.candidate.content);
   if (request.kind === "module") assertUnambiguousModuleContent(request.candidate.content);
   else if (isApplicationV2Request(request))
@@ -277,7 +467,7 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
   let reasons: DefinitionVersionImpactResult["reasons"];
   let representationChanged = false;
   if (request.kind === "module") {
-    const latestModule = request.history.at(-1)!;
+    const latestModule = latest!;
     const candidateVersion = isModuleV3Request(request)
       ? "3.0.0"
       : isModuleV2Request(request)
@@ -307,7 +497,7 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
       reasons = compareModuleContents(comparablePrevious, comparableCandidate);
     }
   } else {
-    const latestApplication = request.history.at(-1)! as PublishedApplicationDefinition;
+    const latestApplication = latest! as PublishedApplicationDefinition;
     const candidateV2 = isApplicationV2Request(request);
     const latestV2 = isApplicationV2Release(latestApplication);
     representationChanged = candidateV2 !== latestV2;
@@ -381,6 +571,50 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
       policyVersion,
     ),
   });
+};
+
+/**
+ * Computes the minimum compatible release without reading state or publishing.
+ * The public array contract remains bounded at 10,000 entries.
+ */
+export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersionImpactResult => {
+  const request = parseVersionImpactRequest(input);
+  return compareParsedDefinitionVersionImpact(request, request.history.at(-1));
+};
+
+/** Publication-only comparator over repository-authenticated streamed evidence. */
+export const compareDefinitionVersionImpactWithEvidence = (
+  input: Readonly<{
+    kind: "module" | "application";
+    validationContractVersion?: "2.0.0" | "3.0.0";
+    historyEvidence: DefinitionPublicationHistoryEvidence;
+    candidate: unknown;
+  }>,
+): DefinitionVersionImpactResult => {
+  if (!isVerifiedDefinitionPublicationHistoryEvidence(input.historyEvidence))
+    refuseVersionImpact("invalid_history");
+  const request = parseVersionImpactRequest({
+    kind: input.kind,
+    ...(input.validationContractVersion === undefined
+      ? {}
+      : { validationContractVersion: input.validationContractVersion }),
+    history: [],
+    candidate: input.candidate,
+  });
+  const evidence = input.historyEvidence;
+  if (
+    evidence.kind !== request.kind ||
+    evidence.rootId !== request.candidate.envelope.rootId ||
+    evidence.definitionKey !== request.candidate.envelope.key
+  )
+    refuseVersionImpact(
+      evidence.rootId !== request.candidate.envelope.rootId ? "root_mismatch" : "invalid_history",
+    );
+  return compareParsedDefinitionVersionImpact(
+    request,
+    evidence.latestRelease ?? undefined,
+    evidence,
+  );
 };
 
 /** Recomputes the decision so a stale or altered confirmation cannot be used. */

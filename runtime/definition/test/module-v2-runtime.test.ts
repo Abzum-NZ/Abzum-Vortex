@@ -33,6 +33,7 @@ import {
   evaluateSavedSharingConditionV2,
   validateDefinitionSet,
 } from "../src/validation";
+import { verifyPublishedDefinitionHistory } from "../src/version-impact";
 
 const fixtureRoot = path.resolve(
   import.meta.dirname,
@@ -491,15 +492,20 @@ class ModuleV2PublicationRepository
   }
 
   async readCandidate() {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
   async lockCandidate() {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
-  async listModuleReleases() {
-    return [];
+  async readModuleReleasePage() {
+    return {
+      rootId: null,
+      anchorReleaseRevision: null,
+      entries: [],
+      nextAfterReleaseRevision: null,
+    } as const;
   }
 
   async readModuleRelease() {
@@ -1072,7 +1078,11 @@ describe("Module V2 Definition runtime", () => {
           identities: resolution.identities.filter(
             (identity) => identity.definitionKey === source.key,
           ),
-          history: { kind: "module", definitionKey: source.key, history: [] },
+          historyEvidence: verifyPublishedDefinitionHistory(
+            { kind: "module", definitionKey: source.key, history: [] },
+            draft.rootId,
+            null,
+          ),
         }),
         catalogue,
       );
@@ -1190,7 +1200,11 @@ describe("Module V2 Definition runtime", () => {
     const candidate: DefinitionPublicationCandidate = {
       draft,
       identities: resolution.identities.filter((identity) => identity.definitionKey === source.key),
-      history: { kind: "module", definitionKey: source.key, history: [] },
+      historyEvidence: verifyPublishedDefinitionHistory(
+        { kind: "module", definitionKey: source.key, history: [] },
+        draft.rootId,
+        null,
+      ),
     };
     const repository = new ModuleV2PublicationRepository(candidate);
     const service = createDefinitionPublicationService(repository, catalogue);
