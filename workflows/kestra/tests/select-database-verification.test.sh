@@ -171,10 +171,22 @@ printf '\n-- changed check\n' >>"$repository/supabase/tests/030_definition_root_
 git -C "$repository" add supabase/tests/030_definition_root_draft_store.test.sql
 git -C "$repository" commit --quiet -m "Change a verification check"
 check_commit="$(git -C "$repository" rev-parse HEAD)"
+check_selection="$(run_selector "$base" "$check_commit")"
 jq --exit-status '
-  .mode == "full" and
-  any(.fullCoverageReasons[]; startswith("full:protected-input:supabase/tests/030_"))
-' <<<"$(run_selector "$base" "$check_commit")" >/dev/null
+  .mode == "selected" and .fullCoverageReasons == [] and
+  .changedPaths == ["supabase/tests/030_definition_root_draft_store.test.sql"] and
+  [.executedChecks[].id] == ["sql:030_definition_root_draft_store"] and
+  .executedChecks[0].disposition == "executed" and
+  .executedChecks[0].reasons == ["changed-check:supabase/tests/030_definition_root_draft_store.test.sql"] and
+  (.reusedChecks | length) == ((.requiredChecks | length) - 1) and
+  all(.reusedChecks[]; .disposition == "reused" and .reasons == ["unchanged-relevant-inputs"]) and
+  (([.executedChecks[].id] + [.reusedChecks[].id] | sort) == [.requiredChecks[].id]) and
+  (([.executedChecks[].id] - [.reusedChecks[].id]) | length) == 1
+' <<<"$check_selection" >/dev/null
+[ "$(jq -r '.requiredChecks[] | select(.id == "sql:030_definition_root_draft_store") | .relevantInputSha256' <<<"$check_selection")" != \
+  "$(jq -r '.requiredChecks[] | select(.id == "sql:030_definition_root_draft_store") | .relevantInputSha256' <<<"$unchanged")" ]
+[ "$(jq -r '.requiredChecks[] | select(.id == "sql:487_related_total_disclosure") | .relevantInputSha256' <<<"$check_selection")" = \
+  "$(jq -r '.requiredChecks[] | select(.id == "sql:487_related_total_disclosure") | .relevantInputSha256' <<<"$unchanged")" ]
 
 git -C "$repository" checkout --quiet -b unrelated-fixture "$base"
 git -C "$repository" commit --quiet --allow-empty -m "Unrelated history"

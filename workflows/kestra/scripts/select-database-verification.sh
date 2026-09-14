@@ -162,6 +162,23 @@ while IFS=$'\t' read -r check_id kind check_target paired_migration; do
   done <<<"$groups"
 done <"$checks"
 
+# The committed SQL-suite and concurrency-proof inventories are the complete,
+# exact changed-input mapping.  They deliberately do not infer dependencies
+# from names, contents, migrations, or broad check groups.
+direct_check_inputs="$temporary_root/direct-check-inputs"
+awk -F '\t' '$2 == "sql" || $2 == "concurrency" { print $3 "\t" $1 }' "$checks" |
+  LC_ALL=C sort >"$direct_check_inputs"
+[ "$(cut -f1 "$direct_check_inputs" | uniq -d | wc -l)" -eq 0 ] ||
+  die "database verification inputs must map to exactly one direct check"
+expected_direct_inputs="$temporary_root/expected-direct-check-inputs"
+{
+  cat "$inventory_sql"
+  cat "$inventory_proofs"
+} | LC_ALL=C sort >"$expected_direct_inputs"
+cut -f1 "$direct_check_inputs" >"$temporary_root/actual-direct-check-inputs"
+cmp -s "$temporary_root/actual-direct-check-inputs" "$expected_direct_inputs" ||
+  die "direct check input mapping is incomplete"
+
 all_lint="$temporary_root/all-lint"
 group_lint="$temporary_root/group-lint"
 jq --raw-output '.lintSchemas[]' "$verification_file" | LC_ALL=C sort >"$all_lint"
@@ -203,6 +220,12 @@ else
       continue
     fi
 
+    direct_check_id="$(awk -F '\t' -v path="$path" '$1 == path { print $2 }' "$direct_check_inputs")"
+    if [ -n "$before_blob" ] && [ -n "$after_blob" ] && [ -n "$direct_check_id" ]; then
+      printf '%s\t%s\n' "$direct_check_id" "$path" >>"$temporary_root/selected-checks"
+      continue
+    fi
+
     matched=false
     while IFS= read -r pattern; do
       if matches_pattern "$path" "$pattern"; then
@@ -218,6 +241,9 @@ else
 fi
 
 LC_ALL=C sort -u -o "$full_reasons" "$full_reasons"
+selected_checks="$temporary_root/selected-checks"
+[ -f "$selected_checks" ] || : >"$selected_checks"
+LC_ALL=C sort -u -o "$selected_checks" "$selected_checks"
 changed_input_sha256="$(sha256_file "$events")"
 inventory_sha256="$( { jq -S -c . "$selection_file"; jq -S -c . "$verification_file"; } | sha256sum | cut -d' ' -f1 )"
 selector_sha256="$target_selector_sha256"
@@ -230,6 +256,12 @@ while IFS= read -r pattern; do
   done <"$tree_paths"
 done <"$full_patterns"
 LC_ALL=C sort -u -o "$global_relevant" "$global_relevant"
+# Direct check files affect only their exact committed check.  Protected
+# migrations, helpers, selector/inventory/runner files, and configuration stay
+# globally relevant and still force unconditional full coverage when changed.
+awk -F '\t' 'NR == FNR { direct[$1] = 1; next } !($0 in direct) { print }' \
+  "$direct_check_inputs" "$global_relevant" >"$temporary_root/relevant-global-without-direct-checks"
+mv "$temporary_root/relevant-global-without-direct-checks" "$global_relevant"
 
 digest_for_check() {
   local check_id="$1"
@@ -260,6 +292,10 @@ while IFS=$'\t' read -r check_id kind check_target paired_migration; do
   if $full_mode; then
     execute=true
     reasons_json="$(jq -R -s -c 'split("\n")[:-1]' "$full_reasons")"
+  elif changed_check_path="$(awk -F '\t' -v id="$check_id" '$1 == id { print $2 }' "$selected_checks")" &&
+    [ -n "$changed_check_path" ]; then
+    execute=true
+    reasons_json="$(jq -cn --arg path "$changed_check_path" '["changed-check:" + $path]')"
   fi
   disposition="reused"
   $execute && disposition="executed"
