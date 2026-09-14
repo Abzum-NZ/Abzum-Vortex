@@ -139,6 +139,22 @@ matches_pattern() {
   [[ "$value" == $pattern ]]
 }
 
+has_only_regular_file_modifications() {
+  local path="$1"
+  awk -F '\t' -v path="$path" '
+    $3 == path {
+      found = 1
+      split($2, metadata, /[[:space:]]+/)
+      if (metadata[1] !~ /^:100(644|755)$/ ||
+          metadata[2] !~ /^100(644|755)$/ ||
+          metadata[5] != "M") {
+        unsafe = 1
+      }
+    }
+    END { exit !(found && !unsafe) }
+  ' "$events"
+}
+
 group_ids="$temporary_root/group-ids"
 full_patterns="$temporary_root/full-patterns"
 jq --raw-output '.groups[].id' "$selection_file" >"$group_ids"
@@ -251,8 +267,12 @@ else
 
   while IFS= read -r path; do
     [ -n "$path" ] || continue
-    before_blob="$(git -C "$repository" rev-parse "${baseline_commit}:${path}" 2>/dev/null || true)"
-    after_blob="$(git -C "$repository" rev-parse "${target_commit}:${path}" 2>/dev/null || true)"
+    if ! before_blob="$(git -C "$repository" rev-parse --verify "${baseline_commit}:${path}" 2>/dev/null)"; then
+      before_blob=""
+    fi
+    if ! after_blob="$(git -C "$repository" rev-parse --verify "${target_commit}:${path}" 2>/dev/null)"; then
+      after_blob=""
+    fi
     if [ -n "$before_blob" ] && [ "$before_blob" = "$after_blob" ]; then
       echo "full:change-and-revert:${path}" >>"$full_reasons"
       continue
@@ -260,7 +280,11 @@ else
 
     direct_check_id="$(awk -F '\t' -v path="$path" '$1 == path { print $2 }' "$direct_check_inputs")"
     if [ -n "$before_blob" ] && [ -n "$after_blob" ] && [ -n "$direct_check_id" ]; then
-      printf '%s\t%s\n' "$direct_check_id" "$path" >>"$temporary_root/selected-checks"
+      if has_only_regular_file_modifications "$path"; then
+        printf '%s\t%s\n' "$direct_check_id" "$path" >>"$temporary_root/selected-checks"
+      else
+        echo "full:nonregular-history:${path}" >>"$full_reasons"
+      fi
       continue
     fi
 

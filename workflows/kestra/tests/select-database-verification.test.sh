@@ -297,6 +297,37 @@ jq --exit-status '
   (.executedChecks | length) == (.requiredChecks | length)
 ' <<<"$direct_check_revert_selection" >/dev/null
 
+git -C "$repository" checkout --quiet -b direct-check-recreated-fixture "$base"
+rm "$repository/supabase/tests/030_definition_root_draft_store.test.sql"
+git -C "$repository" add supabase/tests/030_definition_root_draft_store.test.sql
+git -C "$repository" commit --quiet -m "Delete a direct check"
+printf 'begin; select plan(0); select * from finish(); rollback;\n' \
+  >"$repository/supabase/tests/030_definition_root_draft_store.test.sql"
+git -C "$repository" add supabase/tests/030_definition_root_draft_store.test.sql
+git -C "$repository" commit --quiet -m "Recreate a direct check"
+direct_check_recreated_commit="$(git -C "$repository" rev-parse HEAD)"
+direct_check_recreated_selection="$(run_selector "$base" "$direct_check_recreated_commit")"
+jq --exit-status '
+  .mode == "full" and
+  .fullCoverageReasons == ["full:nonregular-history:supabase/tests/030_definition_root_draft_store.test.sql"] and
+  (.executedChecks | length) == (.requiredChecks | length) and
+  (.reusedChecks | length) == 0
+' <<<"$direct_check_recreated_selection" >/dev/null
+
+git -C "$repository" checkout --quiet -b direct-check-type-change-fixture "$base"
+rm "$repository/supabase/tests/030_definition_root_draft_store.test.sql"
+ln -s 031_definition_release_contract.test.sql \
+  "$repository/supabase/tests/030_definition_root_draft_store.test.sql"
+git -C "$repository" add supabase/tests/030_definition_root_draft_store.test.sql
+git -C "$repository" commit --quiet -m "Replace a direct check with a symlink"
+direct_check_type_change_commit="$(git -C "$repository" rev-parse HEAD)"
+direct_check_type_change_selection="$(run_selector "$base" "$direct_check_type_change_commit")"
+jq --exit-status '
+  .mode == "full" and
+  .fullCoverageReasons == ["full:nonregular-history:supabase/tests/030_definition_root_draft_store.test.sql"] and
+  (.executedChecks | length) == (.requiredChecks | length)
+' <<<"$direct_check_type_change_selection" >/dev/null
+
 git -C "$repository" checkout --quiet -b global-fallback-fixture "$base"
 printf '\n# runner fallback fixture\n' >>"$repository/workflows/kestra/scripts/run-database-delivery.sh"
 printf '\n# helper fallback fixture\n' >>"$repository/supabase/tests/helpers/definition-release-writer.psql"
