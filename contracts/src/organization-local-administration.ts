@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { invitationIdSchema, organizationAccountIdSchema, revisionSchema } from "./identifiers";
+import { correlationIdSchema } from "./common";
+import {
+  administrationDuplicateKeySchema,
+  invitationIdSchema,
+  organizationAccountIdSchema,
+  organizationIdSchema,
+  revisionSchema,
+  timestampSchema,
+} from "./identifiers";
 import { invitationSchema, organizationRuntimeSettingsSchema } from "./identity-access";
 
 const javascriptSafeRevisionSchema = revisionSchema.max(Number.MAX_SAFE_INTEGER);
@@ -103,6 +111,111 @@ export const readOrganizationRuntimeSettingsResultSchema = z.discriminatedUnion(
     .strict(),
 ]);
 
+const organizationAccountLifecycleCommandFields = {
+  duplicateKey: administrationDuplicateKeySchema,
+  organizationAccountId: organizationAccountIdSchema,
+  expectedRevision: javascriptSafeRevisionSchema,
+};
+
+export const suspendOrganizationAccountCommandSchema = z
+  .object(organizationAccountLifecycleCommandFields)
+  .strict();
+export const reactivateOrganizationAccountCommandSchema = z
+  .object(organizationAccountLifecycleCommandFields)
+  .strict();
+export const closeOrganizationAccountCommandSchema = z
+  .object(organizationAccountLifecycleCommandFields)
+  .strict();
+
+export const createOrganizationInvitationForAdministrationCommandSchema = z
+  .object({
+    duplicateKey: administrationDuplicateKeySchema,
+    invitedEmail: z.string().trim().toLowerCase().pipe(z.email()),
+    expiresAt: timestampSchema,
+  })
+  .strict();
+
+export const revokeOrganizationInvitationForAdministrationCommandSchema = z
+  .object({
+    duplicateKey: administrationDuplicateKeySchema,
+    invitationId: invitationIdSchema,
+    expectedRevision: javascriptSafeRevisionSchema,
+  })
+  .strict();
+
+const acceptedOrganizationAccountLifecycleFields = {
+  outcome: z.enum(["accepted", "replayed"]),
+  organizationId: organizationIdSchema,
+  organizationAccountId: organizationAccountIdSchema,
+  revision: javascriptSafeRevisionSchema,
+  correlationId: correlationIdSchema,
+  acceptedAt: timestampSchema,
+  accessVersion: javascriptSafeRevisionSchema,
+};
+
+const organizationAccountLifecycleResult = <
+  Operation extends
+    | "suspend_organization_account"
+    | "reactivate_organization_account"
+    | "close_organization_account",
+>(
+  operation: Operation,
+) =>
+  z
+    .object({
+      ...acceptedOrganizationAccountLifecycleFields,
+      operation: z.literal(operation),
+    })
+    .strict();
+
+export const suspendOrganizationAccountResultSchema = organizationAccountLifecycleResult(
+  "suspend_organization_account",
+);
+export const reactivateOrganizationAccountResultSchema = organizationAccountLifecycleResult(
+  "reactivate_organization_account",
+);
+export const closeOrganizationAccountResultSchema = organizationAccountLifecycleResult(
+  "close_organization_account",
+);
+
+const organizationInvitationChangeFields = {
+  organizationId: organizationIdSchema,
+  invitationId: invitationIdSchema,
+  revision: javascriptSafeRevisionSchema,
+  correlationId: correlationIdSchema,
+  acceptedAt: timestampSchema,
+  accessVersion: javascriptSafeRevisionSchema,
+};
+
+export const createOrganizationInvitationForAdministrationResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("accepted"),
+        operation: z.literal("create_organization_invitation"),
+        ...organizationInvitationChangeFields,
+        invitationSecret: z.string().min(32).max(2_000),
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("replayed"),
+        operation: z.literal("create_organization_invitation"),
+        ...organizationInvitationChangeFields,
+      })
+      .strict(),
+  ],
+);
+
+export const revokeOrganizationInvitationForAdministrationResultSchema = z
+  .object({
+    outcome: z.enum(["accepted", "replayed"]),
+    operation: z.literal("revoke_organization_invitation"),
+    ...organizationInvitationChangeFields,
+  })
+  .strict();
+
 export type OrganizationAdministrationAccountSummary = z.infer<
   typeof organizationAdministrationAccountSummarySchema
 >;
@@ -127,4 +240,30 @@ export type ReadOrganizationRuntimeSettingsCommand = z.infer<
 >;
 export type ReadOrganizationRuntimeSettingsResult = z.infer<
   typeof readOrganizationRuntimeSettingsResultSchema
+>;
+export type SuspendOrganizationAccountCommand = z.infer<
+  typeof suspendOrganizationAccountCommandSchema
+>;
+export type ReactivateOrganizationAccountCommand = z.infer<
+  typeof reactivateOrganizationAccountCommandSchema
+>;
+export type CloseOrganizationAccountCommand = z.infer<typeof closeOrganizationAccountCommandSchema>;
+export type CreateOrganizationInvitationForAdministrationCommand = z.infer<
+  typeof createOrganizationInvitationForAdministrationCommandSchema
+>;
+export type RevokeOrganizationInvitationForAdministrationCommand = z.infer<
+  typeof revokeOrganizationInvitationForAdministrationCommandSchema
+>;
+export type SuspendOrganizationAccountResult = z.infer<
+  typeof suspendOrganizationAccountResultSchema
+>;
+export type ReactivateOrganizationAccountResult = z.infer<
+  typeof reactivateOrganizationAccountResultSchema
+>;
+export type CloseOrganizationAccountResult = z.infer<typeof closeOrganizationAccountResultSchema>;
+export type CreateOrganizationInvitationForAdministrationResult = z.infer<
+  typeof createOrganizationInvitationForAdministrationResultSchema
+>;
+export type RevokeOrganizationInvitationForAdministrationResult = z.infer<
+  typeof revokeOrganizationInvitationForAdministrationResultSchema
 >;

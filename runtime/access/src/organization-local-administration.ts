@@ -1,29 +1,50 @@
 import "server-only";
 
+import { createHash, randomBytes } from "node:crypto";
 import {
+  closeOrganizationAccountCommandSchema,
+  closeOrganizationAccountResultSchema,
+  createOrganizationInvitationForAdministrationCommandSchema,
+  createOrganizationInvitationForAdministrationResultSchema,
   listOrganizationAccountsCommandSchema,
   listOrganizationAccountsResultSchema,
   listOrganizationInvitationsCommandSchema,
   listOrganizationInvitationsResultSchema,
   organizationRuntimeSettingsSchema,
+  reactivateOrganizationAccountCommandSchema,
+  reactivateOrganizationAccountResultSchema,
   readOrganizationAccountCommandSchema,
   readOrganizationAccountResultSchema,
   readOrganizationInvitationCommandSchema,
   readOrganizationInvitationResultSchema,
   readOrganizationRuntimeSettingsCommandSchema,
   readOrganizationRuntimeSettingsResultSchema,
+  revokeOrganizationInvitationForAdministrationCommandSchema,
+  revokeOrganizationInvitationForAdministrationResultSchema,
+  suspendOrganizationAccountCommandSchema,
+  suspendOrganizationAccountResultSchema,
+  type CloseOrganizationAccountCommand,
+  type CloseOrganizationAccountResult,
+  type CreateOrganizationInvitationForAdministrationCommand,
+  type CreateOrganizationInvitationForAdministrationResult,
   type IdentitySession,
   type ListOrganizationAccountsCommand,
   type ListOrganizationAccountsResult,
   type ListOrganizationInvitationsCommand,
   type ListOrganizationInvitationsResult,
   type OrganizationSelectionCandidate,
+  type ReactivateOrganizationAccountCommand,
+  type ReactivateOrganizationAccountResult,
   type ReadOrganizationAccountCommand,
   type ReadOrganizationAccountResult,
   type ReadOrganizationInvitationCommand,
   type ReadOrganizationInvitationResult,
   type ReadOrganizationRuntimeSettingsCommand,
   type ReadOrganizationRuntimeSettingsResult,
+  type RevokeOrganizationInvitationForAdministrationCommand,
+  type RevokeOrganizationInvitationForAdministrationResult,
+  type SuspendOrganizationAccountCommand,
+  type SuspendOrganizationAccountResult,
 } from "@vortex/contracts";
 import type { DatabaseRow } from "@vortex/db";
 import {
@@ -67,6 +88,31 @@ type RuntimeSettingsRow = DatabaseRow & {
   access_version: unknown;
 };
 
+type AccountChangeRow = DatabaseRow & {
+  outcome: unknown;
+  operation: unknown;
+  organization_id: unknown;
+  organization_account_id: unknown;
+  revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+  access_version: unknown;
+};
+
+type InvitationChangeRow = DatabaseRow & {
+  outcome: unknown;
+  operation: unknown;
+  organization_id: unknown;
+  invitation_id: unknown;
+  revision: unknown;
+  correlation_id: unknown;
+  accepted_at: unknown;
+  access_version: unknown;
+};
+
+export type OrganizationLocalAdministrationDependencies = HumanOrganizationRequestDependencies &
+  Readonly<{ generateInvitationSecret?: () => string }>;
+
 const unavailable = (): Error => new Error("ORGANIZATION_LOCAL_ADMINISTRATION_UNAVAILABLE");
 
 const sameUuid = (left: string, right: string): boolean =>
@@ -108,6 +154,9 @@ const requireOne = <Row>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
+const fingerprintSecret = (secret: string): string =>
+  `sha256:${createHash("sha256").update(secret, "utf8").digest("hex")}`;
+
 const matchesScope = (
   row: { organization_id: unknown; access_version: unknown },
   organizationId: string,
@@ -118,9 +167,95 @@ const matchesScope = (
   revision(row.access_version) === accessVersion;
 
 export const createOrganizationLocalAdministrationService = (
-  dependencies: HumanOrganizationRequestDependencies,
+  dependencies: OrganizationLocalAdministrationDependencies,
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
+  const generateInvitationSecret =
+    dependencies.generateInvitationSecret ?? (() => randomBytes(32).toString("base64url"));
+
+  const accountChange = <Result>(
+    row: AccountChangeRow,
+    scope: { organizationId: string; accessVersion: number },
+    expected: {
+      operation:
+        | "suspend_organization_account"
+        | "reactivate_organization_account"
+        | "close_organization_account";
+      organizationAccountId: string;
+      revision: number;
+    },
+    schema: { parse(candidate: unknown): Result },
+  ): Result => {
+    const result = schema.parse({
+      outcome: row.outcome,
+      operation: row.operation,
+      organizationId: row.organization_id,
+      organizationAccountId: row.organization_account_id,
+      revision: revision(row.revision),
+      correlationId: row.correlation_id,
+      acceptedAt: timestamp(row.accepted_at),
+      accessVersion: revision(row.access_version),
+    });
+    const checked = result as {
+      outcome: "accepted" | "replayed";
+      operation: string;
+      organizationId: string;
+      organizationAccountId: string;
+      revision: number;
+      accessVersion: number;
+    };
+    if (
+      !sameUuid(checked.organizationId, scope.organizationId) ||
+      !sameUuid(checked.organizationAccountId, expected.organizationAccountId) ||
+      checked.operation !== expected.operation ||
+      checked.revision !== expected.revision ||
+      (checked.outcome === "accepted" && checked.accessVersion !== scope.accessVersion + 1)
+    )
+      throw unavailable();
+    return result;
+  };
+
+  const invitationChange = <Result>(
+    row: InvitationChangeRow,
+    scope: { organizationId: string; accessVersion: number },
+    expected: {
+      operation: "create_organization_invitation" | "revoke_organization_invitation";
+      invitationId?: string;
+      revision: number;
+    },
+    schema: { parse(candidate: unknown): Result },
+    invitationSecret?: string,
+  ): Result => {
+    const result = schema.parse({
+      outcome: row.outcome,
+      operation: row.operation,
+      organizationId: row.organization_id,
+      invitationId: row.invitation_id,
+      revision: revision(row.revision),
+      correlationId: row.correlation_id,
+      acceptedAt: timestamp(row.accepted_at),
+      accessVersion: revision(row.access_version),
+      ...(row.outcome === "accepted" && invitationSecret !== undefined ? { invitationSecret } : {}),
+    });
+    const checked = result as {
+      outcome: "accepted" | "replayed";
+      operation: string;
+      organizationId: string;
+      invitationId: string;
+      revision: number;
+      accessVersion: number;
+    };
+    if (
+      !sameUuid(checked.organizationId, scope.organizationId) ||
+      (expected.invitationId !== undefined &&
+        !sameUuid(checked.invitationId, expected.invitationId)) ||
+      checked.operation !== expected.operation ||
+      checked.revision !== expected.revision ||
+      (checked.outcome === "accepted" && checked.accessVersion !== scope.accessVersion)
+    )
+      throw unavailable();
+    return result;
+  };
 
   return Object.freeze({
     async listOrganizationAccounts(
@@ -300,6 +435,163 @@ export const createOrganizationLocalAdministrationService = (
           settings,
           accessVersion: revision(row.access_version),
         });
+      });
+    },
+
+    async suspendOrganizationAccount(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: SuspendOrganizationAccountCommand,
+    ): Promise<HumanOrganizationRequestResult<SuspendOrganizationAccountResult>> {
+      const command = suspendOrganizationAccountCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      return requests.runChange(session, selection, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<AccountChangeRow>`
+            select * from vortex_access.suspend_organization_account_for_administration(
+              ${command.data.duplicateKey}::uuid,
+              ${command.data.organizationAccountId}::uuid,
+              ${command.data.expectedRevision}::bigint
+            )
+          `,
+        );
+        return accountChange(
+          row,
+          scope,
+          {
+            operation: "suspend_organization_account",
+            organizationAccountId: command.data.organizationAccountId,
+            revision: command.data.expectedRevision + 1,
+          },
+          suspendOrganizationAccountResultSchema,
+        );
+      });
+    },
+
+    async reactivateOrganizationAccount(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: ReactivateOrganizationAccountCommand,
+    ): Promise<HumanOrganizationRequestResult<ReactivateOrganizationAccountResult>> {
+      const command = reactivateOrganizationAccountCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      return requests.runChange(session, selection, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<AccountChangeRow>`
+            select * from vortex_access.reactivate_organization_account_for_administration(
+              ${command.data.duplicateKey}::uuid,
+              ${command.data.organizationAccountId}::uuid,
+              ${command.data.expectedRevision}::bigint
+            )
+          `,
+        );
+        return accountChange(
+          row,
+          scope,
+          {
+            operation: "reactivate_organization_account",
+            organizationAccountId: command.data.organizationAccountId,
+            revision: command.data.expectedRevision + 1,
+          },
+          reactivateOrganizationAccountResultSchema,
+        );
+      });
+    },
+
+    async closeOrganizationAccount(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: CloseOrganizationAccountCommand,
+    ): Promise<HumanOrganizationRequestResult<CloseOrganizationAccountResult>> {
+      const command = closeOrganizationAccountCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      return requests.runChange(session, selection, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<AccountChangeRow>`
+            select * from vortex_access.close_organization_account_for_administration(
+              ${command.data.duplicateKey}::uuid,
+              ${command.data.organizationAccountId}::uuid,
+              ${command.data.expectedRevision}::bigint
+            )
+          `,
+        );
+        return accountChange(
+          row,
+          scope,
+          {
+            operation: "close_organization_account",
+            organizationAccountId: command.data.organizationAccountId,
+            revision: command.data.expectedRevision + 1,
+          },
+          closeOrganizationAccountResultSchema,
+        );
+      });
+    },
+
+    async createOrganizationInvitation(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: CreateOrganizationInvitationForAdministrationCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<CreateOrganizationInvitationForAdministrationResult>
+    > {
+      const command =
+        createOrganizationInvitationForAdministrationCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      return requests.runChange(session, selection, async (transaction, scope) => {
+        const invitationSecret = generateInvitationSecret();
+        if (Buffer.byteLength(invitationSecret, "utf8") < 32 || invitationSecret.length > 2_000)
+          throw unavailable();
+        const row = requireOne(
+          await transaction.query<InvitationChangeRow>`
+            select * from vortex_access.create_organization_invitation_for_administration(
+              ${command.data.duplicateKey}::uuid,
+              ${command.data.invitedEmail}::text,
+              ${fingerprintSecret(invitationSecret)}::text,
+              ${command.data.expiresAt}::timestamptz
+            )
+          `,
+        );
+        return invitationChange(
+          row,
+          scope,
+          { operation: "create_organization_invitation", revision: 1 },
+          createOrganizationInvitationForAdministrationResultSchema,
+          invitationSecret,
+        );
+      });
+    },
+
+    async revokeOrganizationInvitation(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: RevokeOrganizationInvitationForAdministrationCommand,
+    ): Promise<
+      HumanOrganizationRequestResult<RevokeOrganizationInvitationForAdministrationResult>
+    > {
+      const command =
+        revokeOrganizationInvitationForAdministrationCommandSchema.safeParse(commandCandidate);
+      if (!command.success) return { kind: "unavailable" };
+      return requests.runChange(session, selection, async (transaction, scope) => {
+        const row = requireOne(
+          await transaction.query<InvitationChangeRow>`
+            select * from vortex_access.revoke_organization_invitation_for_administration(
+              ${command.data.duplicateKey}::uuid,
+              ${command.data.invitationId}::uuid,
+              ${command.data.expectedRevision}::bigint
+            )
+          `,
+        );
+        return invitationChange(
+          row,
+          scope,
+          {
+            operation: "revoke_organization_invitation",
+            invitationId: command.data.invitationId,
+            revision: command.data.expectedRevision + 1,
+          },
+          revokeOrganizationInvitationForAdministrationResultSchema,
+        );
       });
     },
   });
