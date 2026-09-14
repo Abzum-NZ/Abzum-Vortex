@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  closeOrganizationAccountCommandSchema,
+  createOrganizationInvitationForAdministrationCommandSchema,
+  createOrganizationInvitationForAdministrationResultSchema,
   listOrganizationAccountsCommandSchema,
   listOrganizationAccountsResultSchema,
   listOrganizationInvitationsCommandSchema,
   readOrganizationAccountCommandSchema,
   readOrganizationInvitationCommandSchema,
   readOrganizationRuntimeSettingsCommandSchema,
+  reactivateOrganizationAccountCommandSchema,
+  revokeOrganizationInvitationForAdministrationCommandSchema,
+  suspendOrganizationAccountCommandSchema,
 } from "../src/organization-local-administration";
 
 const id = (value: number): string => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
@@ -90,5 +96,85 @@ describe("organisation-local administration contracts", () => {
           accessVersion: 7,
         }).success,
       ).toBe(false);
+  });
+
+  it("keeps each account lifecycle command exact, local and revision checked", () => {
+    const command = {
+      duplicateKey: id(20),
+      organizationAccountId: id(21),
+      expectedRevision: 3,
+    };
+    for (const schema of [
+      suspendOrganizationAccountCommandSchema,
+      reactivateOrganizationAccountCommandSchema,
+      closeOrganizationAccountCommandSchema,
+    ]) {
+      expect(schema.parse(command)).toEqual(command);
+      expect(schema.safeParse({ ...command, permission: "accounts.manage" }).success).toBe(false);
+      expect(schema.safeParse({ ...command, expectedRevision: 0 }).success).toBe(false);
+      expect(schema.safeParse({ ...command, organizationAccountId: nilId }).success).toBe(false);
+    }
+  });
+
+  it("normalizes invitation email and forbids intent or injected authority", () => {
+    expect(
+      createOrganizationInvitationForAdministrationCommandSchema.parse({
+        duplicateKey: id(22),
+        invitedEmail: "  PERSON@Example.TEST ",
+        expiresAt: "2026-09-16T00:00:00.000Z",
+      }),
+    ).toEqual({
+      duplicateKey: id(22),
+      invitedEmail: "person@example.test",
+      expiresAt: "2026-09-16T00:00:00.000Z",
+    });
+    expect(
+      createOrganizationInvitationForAdministrationCommandSchema.safeParse({
+        duplicateKey: id(22),
+        invitedEmail: "person@example.test",
+        expiresAt: "2026-09-16T00:00:00.000Z",
+        roleIntent: id(23),
+      }).success,
+    ).toBe(false);
+    expect(
+      revokeOrganizationInvitationForAdministrationCommandSchema.safeParse({
+        duplicateKey: id(24),
+        invitationId: id(25),
+        expectedRevision: 1,
+        actorId: id(26),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("makes an invitation secret structurally impossible on replay", () => {
+    const evidence = {
+      operation: "create_organization_invitation" as const,
+      organizationId: id(30),
+      invitationId: id(31),
+      revision: 1,
+      correlationId: id(32),
+      acceptedAt: "2026-09-14T01:00:00.000Z",
+      accessVersion: 7,
+    };
+    expect(
+      createOrganizationInvitationForAdministrationResultSchema.parse({
+        outcome: "accepted",
+        ...evidence,
+        invitationSecret: "s".repeat(32),
+      }),
+    ).toMatchObject({ outcome: "accepted", invitationSecret: "s".repeat(32) });
+    expect(
+      createOrganizationInvitationForAdministrationResultSchema.parse({
+        outcome: "replayed",
+        ...evidence,
+      }),
+    ).toEqual({ outcome: "replayed", ...evidence });
+    expect(
+      createOrganizationInvitationForAdministrationResultSchema.safeParse({
+        outcome: "replayed",
+        ...evidence,
+        invitationSecret: "s".repeat(32),
+      }).success,
+    ).toBe(false);
   });
 });

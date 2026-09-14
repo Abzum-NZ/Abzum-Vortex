@@ -24,12 +24,13 @@ const verifiedSession = {
   accessTokenExpiresAt: "2026-09-14T02:00:00.000Z",
 };
 
-const serviceFor = (rows: readonly DatabaseRow[]) => {
+const serviceFor = (rows: readonly DatabaseRow[], invitationSecret = "s".repeat(43)) => {
   const calls: Array<{ text: string; values: readonly DatabaseValue[] }> = [];
   const service = createOrganizationLocalAdministrationService({
     identityAuthorityId: id(6),
     clock: () => new Date("2026-09-14T01:00:00.000Z"),
     correlationId: () => id(7),
+    generateInvitationSecret: () => invitationSecret,
     resolvedRequestTransaction: async (resolve, operation) => {
       const resolved = await resolve({
         query: async () => [selectedScope] as never,
@@ -278,5 +279,146 @@ describe("organisation-local administration service", () => {
       } as never),
     ).resolves.toEqual({ kind: "unavailable" });
     expect(opened).toBe(false);
+  });
+
+  it("runs each account lifecycle through its one fixed protected wrapper", async () => {
+    const operations = [
+      ["suspendOrganizationAccount", "suspend_organization_account", 8],
+      ["reactivateOrganizationAccount", "reactivate_organization_account", 9],
+      ["closeOrganizationAccount", "close_organization_account", 10],
+    ] as const;
+    for (const [method, operation, target] of operations) {
+      const { calls, service } = serviceFor([
+        {
+          outcome: "accepted",
+          operation,
+          organization_id: id(2),
+          organization_account_id: id(target),
+          revision: "3",
+          correlation_id: id(40 + target),
+          accepted_at: new Date("2026-09-14T01:00:00.000Z"),
+          access_version: "8",
+        },
+      ]);
+      await expect(
+        service[method](verifiedSession, { organizationId: id(2) }, {
+          duplicateKey: id(30 + target),
+          organizationAccountId: id(target),
+          expectedRevision: 2,
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: {
+          outcome: "accepted",
+          operation,
+          organizationId: id(2),
+          organizationAccountId: id(target),
+          revision: 3,
+          accessVersion: 8,
+        },
+      });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.text).toContain(`${operation}_for_administration`);
+      expect(calls[0]?.values).toEqual([id(30 + target), id(target), 2]);
+    }
+  });
+
+  it("returns a secret only for the first committed invitation creation result", async () => {
+    const evidence = {
+      operation: "create_organization_invitation",
+      organization_id: id(2),
+      invitation_id: id(50),
+      revision: 1,
+      correlation_id: id(51),
+      accepted_at: new Date("2026-09-14T01:00:00.000Z"),
+      access_version: 7,
+    };
+    const command = {
+      duplicateKey: id(52),
+      invitedEmail: "  PERSON@Example.TEST ",
+      expiresAt: "2026-09-15T00:00:00.000Z",
+    };
+    const accepted = serviceFor([{ outcome: "accepted", ...evidence }], "a".repeat(43));
+    await expect(
+      accepted.service.createOrganizationInvitation(
+        verifiedSession,
+        { organizationId: id(2) },
+        command,
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { outcome: "accepted", invitationSecret: "a".repeat(43) },
+    });
+    expect(accepted.calls[0]?.values[1]).toBe("person@example.test");
+    expect(accepted.calls[0]?.values[2]).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(accepted.calls[0]?.values).not.toContain("a".repeat(43));
+
+    const replayed = serviceFor([{ outcome: "replayed", ...evidence }], "b".repeat(43));
+    await expect(
+      replayed.service.createOrganizationInvitation(
+        verifiedSession,
+        { organizationId: id(2) },
+        command,
+      ),
+    ).resolves.toEqual({
+      kind: "available",
+      value: {
+        outcome: "replayed",
+        operation: "create_organization_invitation",
+        organizationId: id(2),
+        invitationId: id(50),
+        revision: 1,
+        correlationId: id(51),
+        acceptedAt: "2026-09-14T01:00:00.000Z",
+        accessVersion: 7,
+      },
+    });
+  });
+
+  it("revokes only through the fixed invitation wrapper and validates stored evidence", async () => {
+    const { calls, service } = serviceFor([
+      {
+        outcome: "accepted",
+        operation: "revoke_organization_invitation",
+        organization_id: id(2),
+        invitation_id: id(60),
+        revision: 4n,
+        correlation_id: id(61),
+        accepted_at: "2026-09-14T01:00:00.000Z",
+        access_version: 7n,
+      },
+    ]);
+    await expect(
+      service.revokeOrganizationInvitation(
+        verifiedSession,
+        { organizationId: id(2) },
+        { duplicateKey: id(62), invitationId: id(60), expectedRevision: 3 },
+      ),
+    ).resolves.toMatchObject({
+      kind: "available",
+      value: { outcome: "accepted", invitationId: id(60), revision: 4, accessVersion: 7 },
+    });
+    expect(calls[0]?.text).toContain("revoke_organization_invitation_for_administration");
+    expect(calls[0]?.values).toEqual([id(62), id(60), 3]);
+
+    const malformed = serviceFor([
+      {
+        outcome: "accepted",
+        operation: "revoke_organization_invitation",
+        organization_id: id(99),
+        invitation_id: id(60),
+        revision: 4,
+        correlation_id: id(61),
+        accepted_at: "2026-09-14T01:00:00.000Z",
+        access_version: 7,
+      },
+    ]).service;
+    await expect(
+      malformed.revokeOrganizationInvitation(
+        verifiedSession,
+        { organizationId: id(2) },
+        { duplicateKey: id(62), invitationId: id(60), expectedRevision: 3 },
+      ),
+    ).resolves.toEqual({ kind: "temporarily_unavailable" });
   });
 });

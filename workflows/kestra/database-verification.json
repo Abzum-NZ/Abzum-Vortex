@@ -190,6 +190,11 @@
       "migration": "supabase/migrations/20260914200000_organization_local_administration_reads.sql",
       "proof": "supabase/tests/organization-local-administration-reads-concurrency.test.sh",
       "label": "Organization local administration reads"
+    },
+    {
+      "migration": "supabase/migrations/20260914230000_organization_local_administration_changes.sql",
+      "proof": "supabase/tests/organization-local-administration-changes-concurrency.test.sh",
+      "label": "Organization local administration changes"
     }
   ],
   "lintSchemas": [
