@@ -80,6 +80,18 @@ available.
 
 ## Task handoff
 
+Use `Role (Model Name) - #issue - short description` for each assigned agent's
+display name and the board's Current owner. The model must be the model actually
+running that task. Record its exact native task reference (or the permitted
+DeepSeek session reference) in Dispatch reference. Existing immutable task names
+are retained; never claim that an existing agent was renamed. Record each role
+separately when an agent serves more than one issue. Clear the active owner when
+the work finishes and no next owner has accepted.
+
+Respond to questions from the coordinating agent in the other chat before
+routine task work. Give verified answers, then resume the assigned task; a
+message requesting a correction is not evidence that the correction is done.
+
 After the Planner reviews and corrects the task handoff, the Coordinator supplies the
 issue, exact base revision, working directory,
 branch, role, functional outcome, included/excluded work, relevant references,
