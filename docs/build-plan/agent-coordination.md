@@ -80,6 +80,13 @@ available.
 
 ## Task handoff
 
+Every in-flight card must have an accepted owner whose current activity is
+verified from the native registry and task evidence. Match the card's displayed
+assignment and exact task reference to that worker. A completed reviewer is not
+an active owner: hand off to an active delivery owner or return awaiting work to
+Backlog. Record the active coordinator as `/root` when it owns delivery; do not
+count it as a child agent.
+
 Use `Role (Model Name) - #issue - short description` for each assigned agent's
 display name and the board's Current owner. The model must be the model actually
 running that task. Record its exact native task reference (or the permitted
