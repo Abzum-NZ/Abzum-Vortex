@@ -99,40 +99,36 @@
       "id": "foundation",
       "sqlPatterns": ["supabase/tests/000_*", "supabase/tests/010_*", "supabase/tests/012_*", "supabase/tests/020_*"],
       "concurrencyPatterns": ["supabase/tests/tenant-organization-concurrency.test.sh"],
-      "lintSchemas": ["public", "vortex_context"],
-      "inputPatterns": ["supabase/migrations/20260903022300_*", "supabase/migrations/20260903115546_*", "supabase/migrations/20260903174244_*"]
+      "lintSchemas": ["public", "vortex_context"]
     },
     {
       "id": "definition",
       "sqlPatterns": ["supabase/tests/0[3-8]0_*", "supabase/tests/460_*", "supabase/tests/465_*", "supabase/tests/470_*", "supabase/tests/472_*", "supabase/tests/480_*"],
       "concurrencyPatterns": ["supabase/tests/definition-*-concurrency.test.sh"],
-      "lintSchemas": ["public", "vortex_definition"],
-      "inputPatterns": ["supabase/migrations/*definition*", "supabase/migrations/*publication*", "supabase/migrations/*release*", "supabase/migrations/*source_identit*", "supabase/migrations/*root_draft*", "supabase/migrations/*module_dependenc*"]
+      "lintSchemas": ["public", "vortex_definition"]
     },
     {
       "id": "identity-access",
       "sqlPatterns": ["supabase/tests/0[9]*_*", "supabase/tests/1*_*", "supabase/tests/2*_*", "supabase/tests/3*_*", "supabase/tests/4[012][05]_*"],
       "concurrencyPatterns": ["supabase/tests/access-*-concurrency.test.sh", "supabase/tests/activity-*-concurrency.test.sh", "supabase/tests/application-access-*-concurrency.test.sh", "supabase/tests/identity-*-concurrency.test.sh", "supabase/tests/organization-*-concurrency.test.sh", "supabase/tests/permission-*-concurrency.test.sh", "supabase/tests/private-direct-*-concurrency.test.sh", "supabase/tests/protected-record-*-concurrency.test.sh"],
-      "lintSchemas": ["public", "vortex_identity", "vortex_access", "vortex_activity"],
-      "inputPatterns": []
+      "lintSchemas": ["public", "vortex_identity", "vortex_access", "vortex_activity"]
     },
     {
       "id": "record-runtime",
       "sqlPatterns": ["supabase/tests/43[05]_*", "supabase/tests/44[0578]_*", "supabase/tests/45[05]_*", "supabase/tests/47[05]_*", "supabase/tests/48[5678]_*"],
       "concurrencyPatterns": ["supabase/tests/event-*-concurrency.test.sh", "supabase/tests/module-storage-*-concurrency.test.sh", "supabase/tests/record-change-concurrency.test.sh"],
-      "lintSchemas": ["public", "vortex_module", "vortex_record", "vortex_event", "record_data"],
-      "inputPatterns": ["supabase/migrations/*record*", "supabase/migrations/*field*", "supabase/migrations/*event*", "supabase/migrations/*module_storage*", "supabase/migrations/*relationship*"]
+      "lintSchemas": ["public", "vortex_module", "vortex_record", "vortex_event", "record_data"]
     },
     {
       "id": "tenant-runtime",
       "sqlPatterns": ["supabase/tests/49[0]_*", "supabase/tests/5*_*"],
       "concurrencyPatterns": ["supabase/tests/cluster-*-concurrency.test.sh", "supabase/tests/configured-*-concurrency.test.sh", "supabase/tests/organization-local-*-concurrency.test.sh", "supabase/tests/organization-runtime-*-concurrency.test.sh", "supabase/tests/tenant-governance-concurrency.test.sh", "supabase/tests/tenant-organization-*-concurrency.test.sh"],
-      "lintSchemas": ["public"],
-      "inputPatterns": ["supabase/migrations/*tenant*", "supabase/migrations/*cluster_identity*", "supabase/migrations/*runtime_settings*", "supabase/migrations/*local_administration*"]
+      "lintSchemas": ["public"]
     }
   ],
   "fullCoveragePatterns": [
     "supabase/config.toml",
+    "supabase/migrations/*.sql",
     "supabase/seed.sql",
     "supabase/tests/*.sql",
     "supabase/tests/*-concurrency.test.sh",
@@ -142,13 +138,6 @@
     "workflows/kestra/database-verification-selection.json",
     "workflows/kestra/scripts/run-database-delivery.sh",
     "workflows/kestra/scripts/select-database-verification.sh",
-    "workflows/kestra/tests/select-database-verification.test.sh",
-    "supabase/migrations/*access*",
-    "supabase/migrations/*auth*",
-    "supabase/migrations/*identity*",
-    "supabase/migrations/*invitation*",
-    "supabase/migrations/*permission*",
-    "supabase/migrations/*request_context*",
-    "supabase/migrations/*security*"
+    "workflows/kestra/tests/select-database-verification.test.sh"
   ]
 }

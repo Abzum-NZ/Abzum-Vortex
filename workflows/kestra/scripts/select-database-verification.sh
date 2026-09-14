@@ -57,9 +57,9 @@ jq --exit-status '
     (unique | length) == length) and
   (.groups | type == "array" and length > 0 and
     all(type == "object" and
-      (keys == ["concurrencyPatterns", "id", "inputPatterns", "lintSchemas", "sqlPatterns"]) and
+      (keys == ["concurrencyPatterns", "id", "lintSchemas", "sqlPatterns"]) and
       (.id | type == "string" and test("^[a-z][a-z0-9-]{0,49}$")) and
-      all(.sqlPatterns[], .concurrencyPatterns[], .inputPatterns[];
+      all(.sqlPatterns[], .concurrencyPatterns[];
         type == "string" and length > 0 and length <= 200) and
       (.lintSchemas | type == "array" and all(type == "string"))) and
     (map(.id) | unique | length) == length) and
@@ -86,7 +86,7 @@ actual_sql="$temporary_root/actual-sql"
 inventory_sql="$temporary_root/inventory-sql"
 actual_proofs="$temporary_root/actual-proofs"
 inventory_proofs="$temporary_root/inventory-proofs"
-sed -n '/^supabase\/tests\/[A-Za-z0-9_.-]*\.sql$/p' "$tree_paths" >"$actual_sql"
+sed -En '/^supabase\/tests\/[A-Za-z0-9_.-]+[.]sql$/p' "$tree_paths" >"$actual_sql"
 jq --raw-output '.sqlSuites[]' "$selection_file" | LC_ALL=C sort >"$inventory_sql"
 cmp -s "$actual_sql" "$inventory_sql" ||
   die "selection inventory must list every SQL suite exactly once"
@@ -109,7 +109,6 @@ while IFS= read -r group_id; do
   jq --raw-output --arg id "$group_id" '.groups[] | select(.id == $id) | .sqlPatterns[]' "$selection_file" >"$temporary_root/group-${group_id}-sql"
   jq --raw-output --arg id "$group_id" '.groups[] | select(.id == $id) | .concurrencyPatterns[]' "$selection_file" >"$temporary_root/group-${group_id}-concurrency"
   jq --raw-output --arg id "$group_id" '.groups[] | select(.id == $id) | .lintSchemas[]' "$selection_file" >"$temporary_root/group-${group_id}-lint"
-  jq --raw-output --arg id "$group_id" '.groups[] | select(.id == $id) | .inputPatterns[]' "$selection_file" >"$temporary_root/group-${group_id}-inputs"
 done <"$group_ids"
 
 groups_for_check() {
@@ -204,24 +203,6 @@ else
       continue
     fi
 
-    if [[ "$path" == supabase/migrations/*.sql ]]; then
-      shared_function_change=false
-      for revision in "$baseline_commit" "$target_commit"; do
-        if git -C "$repository" cat-file -e "${revision}:${path}" 2>/dev/null &&
-          git -C "$repository" show "${revision}:${path}" |
-            grep --extended-regexp --ignore-case \
-              '^[[:space:]]*(create([[:space:]]+or[[:space:]]+replace)?|alter|drop)[[:space:]]+function[[:space:]]+"?vortex_(module|access|record|identity)"?[.]' \
-              >/dev/null; then
-          shared_function_change=true
-          break
-        fi
-      done
-      if $shared_function_change; then
-        echo "full:cross-domain-shared-function:${path}" >>"$full_reasons"
-        continue
-      fi
-    fi
-
     matched=false
     while IFS= read -r pattern; do
       if matches_pattern "$path" "$pattern"; then
@@ -232,23 +213,11 @@ else
     done <"$full_patterns"
     $matched && continue
 
-    while IFS= read -r group_id; do
-      while IFS= read -r pattern; do
-        if matches_pattern "$path" "$pattern"; then
-          printf '%s\t%s\n' "$group_id" "$path" >>"$temporary_root/affected-groups"
-          matched=true
-          break
-        fi
-      done <"$temporary_root/group-${group_id}-inputs"
-    done <"$group_ids"
     $matched || echo "full:unmapped-input:${path}" >>"$full_reasons"
   done <"$changed_paths"
 fi
 
 LC_ALL=C sort -u -o "$full_reasons" "$full_reasons"
-affected_groups="$temporary_root/affected-groups"
-[ -f "$affected_groups" ] || : >"$affected_groups"
-LC_ALL=C sort -u -o "$affected_groups" "$affected_groups"
 changed_input_sha256="$(sha256_file "$events")"
 inventory_sha256="$( { jq -S -c . "$selection_file"; jq -S -c . "$verification_file"; } | sha256sum | cut -d' ' -f1 )"
 selector_sha256="$target_selector_sha256"
@@ -262,30 +231,15 @@ while IFS= read -r pattern; do
 done <"$full_patterns"
 LC_ALL=C sort -u -o "$global_relevant" "$global_relevant"
 
-while IFS= read -r group_id; do
-  group_relevant="$temporary_root/relevant-group-${group_id}"
-  : >"$group_relevant"
-  while IFS= read -r pattern; do
-    while IFS= read -r path; do
-      matches_pattern "$path" "$pattern" && echo "$path" >>"$group_relevant"
-    done <"$tree_paths"
-  done <"$temporary_root/group-${group_id}-inputs"
-  LC_ALL=C sort -u -o "$group_relevant" "$group_relevant"
-done <"$group_ids"
-
 digest_for_check() {
   local check_id="$1"
   local kind="$2"
   local check_target="$3"
   local paired_migration="${4:-}"
   local relevant="$temporary_root/relevant"
-  local group_id
   cp "$global_relevant" "$relevant"
   [ "$kind" = "lint" ] || echo "$check_target" >>"$relevant"
   [ -z "$paired_migration" ] || echo "$paired_migration" >>"$relevant"
-  while IFS= read -r group_id; do
-    cat "$temporary_root/relevant-group-${group_id}" >>"$relevant"
-  done < <(awk -F '\t' -v id="$check_id" '$1 == id { print $2 }' "$check_groups")
   LC_ALL=C sort -u -o "$relevant" "$relevant"
   awk -F '\t' 'NR == FNR { wanted[$1] = 1; next } $1 in wanted { print }' \
     "$relevant" "$tree_entries" | sha256sum | cut -d' ' -f1
@@ -306,21 +260,6 @@ while IFS=$'\t' read -r check_id kind check_target paired_migration; do
   if $full_mode; then
     execute=true
     reasons_json="$(jq -R -s -c 'split("\n")[:-1]' "$full_reasons")"
-  else
-    selected_groups="$temporary_root/selected-groups"
-    jq -r '.[]' <<<"$groups_json" >"$selected_groups"
-    reason_lines="$temporary_root/check-reasons"
-    : >"$reason_lines"
-    while IFS=$'\t' read -r affected_group affected_path; do
-      if grep --fixed-strings --line-regexp --quiet "$affected_group" "$selected_groups"; then
-        printf 'affected-group:%s:%s\n' "$affected_group" "$affected_path" >>"$reason_lines"
-      fi
-    done <"$affected_groups"
-    if [ -s "$reason_lines" ]; then
-      execute=true
-      LC_ALL=C sort -u -o "$reason_lines" "$reason_lines"
-      reasons_json="$(jq -R -s -c 'split("\n")[:-1]' "$reason_lines")"
-    fi
   fi
   disposition="reused"
   $execute && disposition="executed"

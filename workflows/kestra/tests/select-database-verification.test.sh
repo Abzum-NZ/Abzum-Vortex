@@ -32,23 +32,24 @@ jq --exit-status '
   (.selectionSha256 | test("^[0-9a-f]{64}$"))
 ' <<<"$unchanged" >/dev/null
 
-record_digest_before="$(jq -r '.requiredChecks[] | select(.id == "sql:487_related_total_disclosure") | .relevantInputSha256' <<<"$unchanged")"
+foundation_digest_before="$(jq -r '.requiredChecks[] | select(.id == "sql:010_request_scope") | .relevantInputSha256' <<<"$unchanged")"
 
-printf '\n-- selector fixture: record change\n' >>"$repository/supabase/migrations/20260914013000_transactional_relationship_totals.sql"
-git -C "$repository" add supabase/migrations/20260914013000_transactional_relationship_totals.sql
-git -C "$repository" commit --quiet -m "Change record relationship input"
-record_commit="$(git -C "$repository" rev-parse HEAD)"
-record_selection="$(run_selector "$base" "$record_commit")"
+printf '\n-- selector fixture: request-role migration change\n' >>"$repository/supabase/migrations/20260903115546_database_scope_request_role.sql"
+git -C "$repository" add supabase/migrations/20260903115546_database_scope_request_role.sql
+git -C "$repository" commit --quiet -m "Change request-role migration"
+request_role_commit="$(git -C "$repository" rev-parse HEAD)"
+request_role_selection="$(run_selector "$base" "$request_role_commit")"
 jq --exit-status '
   .mode == "full" and
-  any(.fullCoverageReasons[]; startswith("full:cross-domain-shared-function:")) and
-  any(.executedChecks[]; .id == "sql:487_related_total_disclosure" and
-    any(.reasons[]; startswith("full:cross-domain-shared-function:"))) and
+  (.fullCoverageReasons | index("full:protected-input:supabase/migrations/20260903115546_database_scope_request_role.sql")) != null and
+  any(.executedChecks[]; .id == "sql:010_request_scope" and
+    (.reasons | index("full:protected-input:supabase/migrations/20260903115546_database_scope_request_role.sql")) != null) and
   any(.executedChecks[]; .id == "sql:030_definition_root_draft_store") and
+  any(.executedChecks[]; .id == "sql:487_related_total_disclosure") and
   (.reusedChecks | length) == 0 and
   (([.executedChecks[].id] + [.reusedChecks[].id] | sort) == [.requiredChecks[].id])
-' <<<"$record_selection" >/dev/null
-[ "$(jq -r '.requiredChecks[] | select(.id == "sql:487_related_total_disclosure") | .relevantInputSha256' <<<"$record_selection")" != "$record_digest_before" ]
+' <<<"$request_role_selection" >/dev/null
+[ "$(jq -r '.requiredChecks[] | select(.id == "sql:010_request_scope") | .relevantInputSha256' <<<"$request_role_selection")" != "$foundation_digest_before" ]
 
 printf '\n-- selector fixture: definition change\n' >>"$repository/supabase/migrations/20260903215549_definition_root_draft_store.sql"
 git -C "$repository" add supabase/migrations/20260903215549_definition_root_draft_store.sql
@@ -57,23 +58,23 @@ cumulative_commit="$(git -C "$repository" rev-parse HEAD)"
 cumulative="$(run_selector "$base" "$cumulative_commit")"
 jq --exit-status '
   .mode == "full" and
-  any(.fullCoverageReasons[]; startswith("full:cross-domain-shared-function:")) and
+  all(.fullCoverageReasons[]; startswith("full:protected-input:supabase/migrations/")) and
   any(.executedChecks[]; .id == "sql:030_definition_root_draft_store") and
   any(.executedChecks[]; .id == "sql:487_related_total_disclosure") and
   (.changedPaths | index("supabase/migrations/20260903215549_definition_root_draft_store.sql")) != null and
-  (.changedPaths | index("supabase/migrations/20260914013000_transactional_relationship_totals.sql")) != null
+  (.changedPaths | index("supabase/migrations/20260903115546_database_scope_request_role.sql")) != null
 ' <<<"$cumulative" >/dev/null
 
 git -C "$repository" checkout --quiet -b cross-schema-fixture "$base"
-printf '\n-- selector fixture: shared module and Access dependency change\n' \
+printf '\nCREATE OR REPLACE\nFUNCTION vortex_module.selector_multiline_shared_ddl_fixture()\nRETURNS void\nLANGUAGE sql\nAS $function$ SELECT $function$;\n' \
   >>"$repository/supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql"
 git -C "$repository" add supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql
-git -C "$repository" commit --quiet -m "Change cross-schema shared functions"
+git -C "$repository" commit --quiet -m "Change multiline shared DDL migration"
 cross_schema_commit="$(git -C "$repository" rev-parse HEAD)"
 cross_schema="$(run_selector "$base" "$cross_schema_commit")"
 jq --exit-status '
   .mode == "full" and
-  (.fullCoverageReasons | index("full:cross-domain-shared-function:supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql")) != null and
+  (.fullCoverageReasons | index("full:protected-input:supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql")) != null and
   (.executedChecks | length) == (.requiredChecks | length) and
   (.reusedChecks | length) == 0 and
   any(.executedChecks[]; .id == "sql:470_module_dependency_pin_set") and
@@ -99,6 +100,35 @@ jq --exit-status '
   any(.requiredChecks[]; .id == "sql:regression.sql" and .target == "supabase/tests/regression.sql") and
   any(.executedChecks[]; .id == "sql:regression.sql")
 ' <<<"$alternate_sql" >/dev/null
+
+git -C "$repository" checkout --quiet -b empty-sql-fixture "$base"
+printf 'select 1;\n' >"$repository/supabase/tests/.sql"
+git -C "$repository" add supabase/tests/.sql
+git -C "$repository" commit --quiet -m "Add invalid empty SQL suite name"
+empty_sql_commit="$(git -C "$repository" rev-parse HEAD)"
+empty_sql="$(run_selector "$base" "$empty_sql_commit")"
+jq --exit-status '
+  .mode == "full" and
+  (.changedPaths | index("supabase/tests/.sql")) != null and
+  (.fullCoverageReasons | index("full:protected-input:supabase/tests/.sql")) != null and
+  all(.requiredChecks[]; .target != "supabase/tests/.sql")
+' <<<"$empty_sql" >/dev/null
+
+jq '.sqlSuites += ["supabase/tests/.sql"] |
+    .groups[0].sqlPatterns += ["supabase/tests/.sql"]' \
+  "$repository/workflows/kestra/database-verification-selection.json" \
+  >"$test_root/invalid-empty-sql.json"
+mv "$test_root/invalid-empty-sql.json" "$repository/workflows/kestra/database-verification-selection.json"
+git -C "$repository" add workflows/kestra/database-verification-selection.json
+git -C "$repository" commit --quiet -m "Attempt to inventory invalid empty SQL suite name"
+invalid_empty_sql_commit="$(git -C "$repository" rev-parse HEAD)"
+if run_selector "$base" "$invalid_empty_sql_commit" >"$test_root/invalid-empty-sql.out" 2>"$test_root/invalid-empty-sql.err"; then
+  echo "expected an empty SQL suite name to be refused" >&2
+  exit 1
+fi
+grep --fixed-strings --quiet \
+  "database verification selection inventory is invalid" \
+  "$test_root/invalid-empty-sql.err"
 
 git -C "$repository" checkout --quiet -b selector-mismatch-fixture "$base"
 printf '\n# local selector mismatch fixture\n' >>"$selector"
@@ -152,7 +182,7 @@ unrelated="$(git -C "$repository" rev-parse HEAD)"
 jq --exit-status '
   .mode == "full" and .historyStatus == "non-ancestor" and
   .fullCoverageReasons == ["full:ambiguous-history:non-ancestor"]
-' <<<"$(run_selector "$record_commit" "$unrelated")" >/dev/null
+' <<<"$(run_selector "$request_role_commit" "$unrelated")" >/dev/null
 
 git -C "$repository" checkout --quiet -b incomplete-fixture "$base"
 jq '.sqlSuites = .sqlSuites[1:]' \
