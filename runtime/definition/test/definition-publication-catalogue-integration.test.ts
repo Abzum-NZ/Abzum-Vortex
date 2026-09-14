@@ -23,6 +23,7 @@ import {
   type DefinitionPublicationRepository,
   type ResolvableModuleRelease,
 } from "../src/definition-publication";
+import { verifyPublishedDefinitionHistory } from "../src/version-impact";
 
 const fixtureRoot = path.resolve(
   import.meta.dirname,
@@ -170,7 +171,11 @@ const applicationCandidate = (): DefinitionPublicationCandidate => {
     identities: baseResolution.identities.filter(
       (identity) => identity.definitionKey === source.key,
     ),
-    history: { kind: "application", definitionKey: source.key, history: [] },
+    historyEvidence: verifyPublishedDefinitionHistory(
+      { kind: "application", definitionKey: source.key, history: [] },
+      draft.rootId,
+      null,
+    ),
   };
 };
 
@@ -194,11 +199,22 @@ class PreparationRepository
   }
 
   async readCandidate(): Promise<DefinitionPublicationCandidate> {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
-  async listModuleReleases(_organizationId: string, key: string) {
-    return this.releases.filter((release) => release.key === key);
+  async readModuleReleasePage(_organizationId: string, key: string) {
+    const releases = this.releases.filter((release) => release.key === key);
+    const rootId = releases[0]?.rootId ?? null;
+    const anchorReleaseRevision = releases.at(-1)?.releaseRevision ?? null;
+    return {
+      rootId,
+      anchorReleaseRevision,
+      entries: releases.map((release, index) => ({
+        previousReleaseRevision: index === 0 ? null : releases[index - 1]!.releaseRevision,
+        release,
+      })),
+      nextAfterReleaseRevision: null,
+    };
   }
 
   async readModuleRelease(_organizationId: string, rootId: string, releaseRevision: number) {

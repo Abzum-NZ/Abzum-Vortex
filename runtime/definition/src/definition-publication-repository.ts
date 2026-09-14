@@ -50,9 +50,16 @@ import {
   type DefinitionPublicationRepository,
   type DefinitionPublicationTransaction,
   type DefinitionReleaseAppend,
+  type ModuleReleasePageCursor,
+  type ResolvableModuleReleasePage,
   type ResolvableModuleRelease,
 } from "./definition-publication";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
+import {
+  completeDefinitionPublicationHistoryFold,
+  createDefinitionPublicationHistoryFold,
+  foldDefinitionPublicationHistoryRelease,
+} from "./version-impact";
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
@@ -127,20 +134,29 @@ const storedHistoryReleaseSchema = z
   })
   .strict();
 
-const storedPublishedHistorySchema = z
-  .object({
-    kind: definitionKindSchema,
-    definitionKey: namespacedKeySchema,
-    history: z.array(storedHistoryReleaseSchema).max(10_000),
-  })
-  .strict();
-
 const publicationStateSchema = z
   .object({
     root: publicationRootSchema,
     draft: databaseStoredDraftSchema,
     identities: z.array(sourceIdentityAssignmentV3Schema),
-    history: storedPublishedHistorySchema,
+    historyLatestReleaseRevision: nullableRevisionSchema,
+  })
+  .strict();
+const publicationHistoryPageSchema = z
+  .object({
+    anchorReleaseRevision: safeRevisionSchema,
+    entries: z
+      .array(
+        z
+          .object({
+            previousReleaseRevision: nullableRevisionSchema,
+            release: storedHistoryReleaseSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+    nextAfterReleaseRevision: nullableRevisionSchema,
   })
   .strict();
 
@@ -159,7 +175,7 @@ const rawModuleReleaseSchema = z
     key: namespacedKeySchema,
     rootId: moduleRootIdSchema,
     releaseRevision: safeRevisionSchema,
-    releaseVersion: stableDefinitionReleaseVersionSchema,
+    releaseVersion: semanticVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
     compilationOutput: definitionCompilationOutputSchema,
@@ -174,9 +190,28 @@ const rawModuleReleaseSchema = z
   .strict();
 
 const publicationStateRowSchema = z.object({ publication_state: z.unknown() }).strict();
-const moduleReleaseListRowSchema = z.object({ module_releases: z.unknown() }).strict();
+const publicationHistoryPageRowSchema = z
+  .object({ publication_history_page: z.unknown() })
+  .strict();
+const rawModuleReleasePageSchema = z
+  .object({
+    rootId: z.union([moduleRootIdSchema, z.null()]),
+    anchorReleaseRevision: nullableRevisionSchema,
+    entries: z
+      .array(
+        z
+          .object({
+            previousReleaseRevision: nullableRevisionSchema,
+            release: rawModuleReleaseSchema,
+          })
+          .strict(),
+      )
+      .max(100),
+    nextAfterReleaseRevision: nullableRevisionSchema,
+  })
+  .strict();
+const moduleReleasePageRowSchema = z.object({ module_release_page: z.unknown() }).strict();
 const moduleReleaseRowSchema = z.object({ module_release: z.unknown() }).strict();
-const rawModuleReleaseListSchema = z.array(rawModuleReleaseSchema).max(10_000);
 const appendReleaseRowSchema = z
   .object({
     root_id: platformIdSchema,
@@ -290,33 +325,137 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     )
       return invalidStorage();
 
-    if (state.history.kind !== state.draft.kind || state.history.definitionKey !== state.draft.key)
+    if (state.root.currentReleaseRevision !== state.historyLatestReleaseRevision)
       return invalidStorage();
-    const history = this.materializeHistory(
-      state.history.history,
-      state.draft.kind,
-      state.draft.key,
-      state.draft.rootId,
-    );
-    return { draft: state.draft, identities: state.identities, history };
+    const anchor = state.root.currentReleaseRevision;
+    const fold = createDefinitionPublicationHistoryFold({
+      kind: state.draft.kind,
+      definitionKey: state.draft.key,
+      rootId: String(state.draft.rootId),
+      anchorReleaseRevision: anchor,
+    });
+    if (anchor !== null) {
+      let after: number | null = null;
+      while (after !== anchor) {
+        const pageRows = await this.transaction.query`
+          select vortex_definition.read_publication_history_page(
+            ${rootId}, ${anchor}, ${after}, ${100}
+          ) as publication_history_page
+        `;
+        const pageRow = parseOneRow(pageRows, publicationHistoryPageRowSchema);
+        const page = publicationHistoryPageSchema.safeParse(pageRow.publication_history_page);
+        if (!page.success || page.data.anchorReleaseRevision !== anchor) return invalidStorage();
+        let previous: number | null = after;
+        for (const entry of page.data.entries) {
+          const item = this.materializeHistory(
+            [entry.release],
+            state.draft.kind,
+            state.draft.key,
+            state.draft.rootId,
+          );
+          const release = item.history[0];
+          if (
+            release === undefined ||
+            entry.previousReleaseRevision !== previous ||
+            release.publication.revision <= (previous ?? 0) ||
+            release.publication.revision > anchor
+          )
+            return invalidStorage();
+          try {
+            foldDefinitionPublicationHistoryRelease(fold, {
+              previousReleaseRevision: entry.previousReleaseRevision,
+              release,
+            });
+          } catch {
+            return invalidStorage();
+          }
+          previous = release.publication.revision;
+        }
+        if (page.data.nextAfterReleaseRevision === null) {
+          if (previous !== anchor) return invalidStorage();
+          after = anchor;
+        } else {
+          if (
+            page.data.nextAfterReleaseRevision !== previous ||
+            previous === null ||
+            previous >= anchor
+          )
+            return invalidStorage();
+          after = previous;
+        }
+      }
+    }
+    let historyEvidence;
+    try {
+      historyEvidence = completeDefinitionPublicationHistoryFold(fold);
+    } catch {
+      return invalidStorage();
+    }
+    return {
+      draft: state.draft,
+      identities: state.identities,
+      historyEvidence,
+    };
   }
 
-  async listModuleReleases(
+  async readModuleReleasePage(
     organizationId: typeof this.context.organizationId,
     key: string,
-  ): Promise<readonly ResolvableModuleRelease[]> {
+    cursor?: ModuleReleasePageCursor,
+  ): Promise<ResolvableModuleReleasePage> {
     const rows = await this.transaction.query`
-      select vortex_definition.list_module_releases(${key}) as module_releases
+      select vortex_definition.read_module_release_page(
+        ${key},
+        ${cursor?.anchorReleaseRevision ?? null},
+        ${cursor?.afterReleaseRevision ?? null},
+        ${100}
+      ) as module_release_page
     `;
-    const row = parseOneRow(rows, moduleReleaseListRowSchema);
-    const releases = rawModuleReleaseListSchema.safeParse(row.module_releases);
-    if (!releases.success) return invalidStorage();
-    const materialized: ResolvableModuleRelease[] = [];
-    for (const release of releases.data) {
-      if (release.organizationId !== organizationId || release.key !== key) return invalidStorage();
-      materialized.push(this.materializeModuleRelease(release));
+    const row = parseOneRow(rows, moduleReleasePageRowSchema);
+    const parsed = rawModuleReleasePageSchema.safeParse(row.module_release_page);
+    if (!parsed.success) return invalidStorage();
+    const page = parsed.data;
+    if (page.rootId === null || page.anchorReleaseRevision === null) {
+      if (
+        page.rootId !== null ||
+        page.anchorReleaseRevision !== null ||
+        page.entries.length !== 0 ||
+        page.nextAfterReleaseRevision !== null ||
+        cursor !== undefined
+      )
+        return invalidStorage();
+      return {
+        rootId: null,
+        anchorReleaseRevision: null,
+        entries: [],
+        nextAfterReleaseRevision: null,
+      };
     }
-    return materialized;
+    if (
+      (cursor !== undefined &&
+        (page.rootId !== cursor.rootId ||
+          page.anchorReleaseRevision !== cursor.anchorReleaseRevision)) ||
+      page.entries.length === 0
+    )
+      return invalidStorage();
+    const entries: ResolvableModuleReleasePage["entries"] = page.entries.map((entry) => {
+      if (
+        entry.release.organizationId !== organizationId ||
+        entry.release.key !== key ||
+        entry.release.rootId !== page.rootId
+      )
+        return invalidStorage();
+      return {
+        previousReleaseRevision: entry.previousReleaseRevision,
+        release: this.materializeModuleRelease(entry.release),
+      };
+    });
+    return {
+      rootId: page.rootId,
+      anchorReleaseRevision: page.anchorReleaseRevision,
+      entries,
+      nextAfterReleaseRevision: page.nextAfterReleaseRevision,
+    };
   }
 
   async readModuleRelease(
@@ -604,7 +743,7 @@ class DatabasePublicationTransaction
         ${release.draft.rootId},
         ${release.draft.draftRevision},
         ${release.draft.sourceFingerprint},
-        ${JSON.stringify(evidence)}
+        ${JSON.stringify(evidence)}::text::jsonb
       )
     `;
     if (rows.length === 0)

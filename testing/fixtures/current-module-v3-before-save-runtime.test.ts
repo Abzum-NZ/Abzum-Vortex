@@ -9,6 +9,7 @@ import {
   type JsonValue,
   type ModuleCompilationRequestV3,
   type ModuleSourceDocumentV3,
+  type PublishedDefinitionHistory,
   type PublishDefinitionResult,
   type SessionContext,
 } from "@vortex/contracts";
@@ -18,6 +19,7 @@ import {
   createDefinitionPublicationService,
   extractModuleSourceIdentityRequirementsV3,
   fingerprintCanonicalValue,
+  verifyPublishedDefinitionHistory,
   type DefinitionPublicationCandidate,
   type DefinitionPublicationCatalogue,
   type DefinitionPublicationReader,
@@ -122,11 +124,16 @@ class PublicationRepository
     DefinitionPublicationTransaction
 {
   appended?: DefinitionReleaseAppend;
+  private candidate: DefinitionPublicationCandidate;
+  private history: PublishedDefinitionHistory;
 
   constructor(
-    readonly candidate: DefinitionPublicationCandidate,
+    candidate: DefinitionPublicationCandidate,
     readonly dependency: ResolvableModuleRelease,
-  ) {}
+  ) {
+    this.candidate = candidate;
+    this.history = { kind: "module", definitionKey: candidate.draft.key, history: [] };
+  }
 
   read<Result>(
     _context: SessionContext,
@@ -143,15 +150,44 @@ class PublicationRepository
   }
 
   async readCandidate() {
-    return structuredClone(this.candidate);
+    return {
+      draft: structuredClone(this.candidate.draft),
+      identities: structuredClone(this.candidate.identities),
+      historyEvidence: this.candidate.historyEvidence,
+    };
   }
 
   async lockCandidate() {
-    return structuredClone(this.candidate);
+    return this.readCandidate();
   }
 
-  async listModuleReleases(_organizationId: string, key: string) {
-    return key === this.dependency.key ? [this.dependency] : [];
+  async readModuleReleasePage(
+    _organizationId: string,
+    key: string,
+    cursor?: { rootId: string; anchorReleaseRevision: number; afterReleaseRevision: number },
+  ) {
+    if (key !== this.dependency.key)
+      return {
+        rootId: null,
+        anchorReleaseRevision: null,
+        entries: [],
+        nextAfterReleaseRevision: null,
+      };
+    if (
+      cursor !== undefined &&
+      (cursor.rootId !== this.dependency.rootId ||
+        cursor.anchorReleaseRevision !== this.dependency.releaseRevision)
+    )
+      throw new Error(`Invalid Module release page cursor for ${key}`);
+    return {
+      rootId: this.dependency.rootId,
+      anchorReleaseRevision: this.dependency.releaseRevision,
+      entries:
+        cursor === undefined || cursor.afterReleaseRevision < this.dependency.releaseRevision
+          ? [{ previousReleaseRevision: null, release: this.dependency }]
+          : [],
+      nextAfterReleaseRevision: null,
+    };
   }
 
   async readModuleRelease(_organizationId: string, rootId: string, releaseRevision: number) {
@@ -162,6 +198,40 @@ class PublicationRepository
 
   async appendRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {
     this.appended = release;
+    if (release.compilationOutput.kind !== "module")
+      throw new Error("Module publication append required");
+    const dependencyManifest = release.dependencyManifest.flatMap((dependency) =>
+      dependency.kind === "module" ? [this.dependency.published.publication] : [],
+    );
+    const published = moduleVersionImpactHistoryEntryV3Schema.parse({
+      publication: {
+        kind: "module",
+        rootId: release.draft.rootId,
+        revision: release.draft.draftRevision,
+        releaseVersion: release.assignedVersion,
+        contentFingerprint: release.compilationOutput.artifact.contentFingerprint,
+        publishedAt: timestamp,
+        publishedBy: release.draft.updatedBy,
+        validationContractVersion: "3.0.0",
+      },
+      content: release.compilationOutput.canonical.content,
+      dependencyManifest,
+      releaseNote: release.releaseNote,
+    });
+    this.history = {
+      kind: "module",
+      definitionKey: release.draft.key,
+      history: [...this.history.history, published],
+    };
+    this.candidate = {
+      ...this.candidate,
+      draft: { ...this.candidate.draft, publishedRevision: release.draft.draftRevision },
+      historyEvidence: verifyPublishedDefinitionHistory(
+        this.history,
+        String(release.draft.rootId),
+        release.draft.draftRevision,
+      ),
+    };
     return {
       rootId: release.draft.rootId,
       releaseRevision: release.draft.draftRevision,
@@ -255,7 +325,11 @@ describe("current Module V3 before-save engine handoff", () => {
         identities: candidateRequest.resolution.identities.filter(
           (identity) => identity.definitionKey === candidateRequest.source.key,
         ),
-        history: { kind: "module", definitionKey: candidateRequest.source.key, history: [] },
+        historyEvidence: verifyPublishedDefinitionHistory(
+          { kind: "module", definitionKey: candidateRequest.source.key, history: [] },
+          String(draft.rootId),
+          null,
+        ),
       },
       sharedRelease,
     );

@@ -43,6 +43,7 @@ import {
 import {
   compareDefinitionVersionImpact,
   confirmDefinitionVersionImpact,
+  verifyPublishedDefinitionHistory,
 } from "../src/version-impact";
 import { fingerprintCanonicalValue } from "../src/canonical-json";
 import { DefinitionVersionImpactError } from "../src/version-impact-error";
@@ -1596,15 +1597,51 @@ class V2PublicationRepository
   }
 
   async readCandidate() {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
   async lockCandidate() {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
-  async listModuleReleases(_organizationId: string, key: string) {
-    return this.modules.filter((release) => release.key === key);
+  async readModuleReleasePage(
+    _organizationId: string,
+    key: string,
+    cursor?: { rootId: string; anchorReleaseRevision: number; afterReleaseRevision: number },
+  ) {
+    const releases = this.modules
+      .filter((release) => release.key === key)
+      .sort((left, right) => left.releaseRevision - right.releaseRevision);
+    if (releases.length === 0)
+      return {
+        rootId: null,
+        anchorReleaseRevision: null,
+        entries: [],
+        nextAfterReleaseRevision: null,
+      } as const;
+    const rootId = releases[0]!.rootId;
+    const anchorReleaseRevision = cursor?.anchorReleaseRevision ?? releases.at(-1)!.releaseRevision;
+    const selected = releases
+      .filter(
+        (release) =>
+          release.releaseRevision > (cursor?.afterReleaseRevision ?? 0) &&
+          release.releaseRevision <= anchorReleaseRevision,
+      )
+      .slice(0, 100);
+    return {
+      rootId,
+      anchorReleaseRevision,
+      entries: selected.map((release) => ({
+        previousReleaseRevision:
+          releases.findLast((candidate) => candidate.releaseRevision < release.releaseRevision)
+            ?.releaseRevision ?? null,
+        release,
+      })),
+      nextAfterReleaseRevision:
+        selected.at(-1)!.releaseRevision < anchorReleaseRevision
+          ? selected.at(-1)!.releaseRevision
+          : null,
+    };
   }
 
   async readModuleRelease(_organizationId: string, rootId: string, releaseRevision: number) {
@@ -1726,7 +1763,11 @@ describe("native Application V2 draft storage", () => {
       identities: sourceResolution.identities.filter(
         (identity) => identity.definitionKey === source.key,
       ),
-      history: { kind: "application", definitionKey: source.key, history: [] },
+      historyEvidence: verifyPublishedDefinitionHistory(
+        { kind: "application", definitionKey: source.key, history: [] },
+        draft.rootId,
+        null,
+      ),
     };
     const repository = new V2PublicationRepository(candidate, dependencyModuleReleases);
     const context = sessionContextSchema.parse({
@@ -2037,11 +2078,11 @@ describe("native Application V2 draft storage", () => {
       identities: resolutionV2.identities.filter(
         (identity) => identity.definitionKey === sourceV2.key,
       ),
-      history: {
-        kind: "application",
-        definitionKey: sourceV2.key,
-        history: [legacyRelease],
-      },
+      historyEvidence: verifyPublishedDefinitionHistory(
+        { kind: "application", definitionKey: sourceV2.key, history: [legacyRelease] },
+        own.rootId,
+        1,
+      ),
     };
     const toV2Repository = new V2PublicationRepository(v2Candidate, modules);
     const toV2 = createDefinitionPublicationService(toV2Repository, catalogue);
@@ -2084,11 +2125,15 @@ describe("native Application V2 draft storage", () => {
         identities: v2FollowUpResolution.identities.filter(
           (identity) => identity.definitionKey === sourceV2.key,
         ),
-        history: {
-          kind: "application",
-          definitionKey: sourceV2.key,
-          history: [legacyRelease, v2Release],
-        },
+        historyEvidence: verifyPublishedDefinitionHistory(
+          {
+            kind: "application",
+            definitionKey: sourceV2.key,
+            history: [legacyRelease, v2Release],
+          },
+          own.rootId,
+          2,
+        ),
       },
       modules,
     );
@@ -2120,11 +2165,15 @@ describe("native Application V2 draft storage", () => {
         identities: baseResolution.identities.filter(
           (identity) => identity.definitionKey === restoredV1Source.key,
         ),
-        history: {
-          kind: "application",
-          definitionKey: restoredV1Source.key,
-          history: [legacyRelease, v2Release],
-        },
+        historyEvidence: verifyPublishedDefinitionHistory(
+          {
+            kind: "application",
+            definitionKey: restoredV1Source.key,
+            history: [legacyRelease, v2Release],
+          },
+          own.rootId,
+          2,
+        ),
       },
       modules,
     );
