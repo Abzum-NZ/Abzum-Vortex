@@ -20,14 +20,14 @@ live delivery queue.
 | Hosted Tester | Run the single entitled Testing execution, record its receipt and result, and never start a duplicate run while the original is live. |
 | User | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate. |
 
-Use these role names in visible board and documentation records. The role does
-not rename or replace the immutable canonical task reference. Record the
-resolved model, session identifier and canonical task reference as execution
-metadata at handoff instead.
+Use these role names with the actual model in visible assignments, following
+the naming format under Task handoff. Display names do not rename or replace
+immutable canonical task references. Also record the resolved model, session
+identifier and canonical task reference as execution metadata at handoff.
 
 The current direct user requirement assigns GPT-6 Astra (Medium) to both the
-Planner and Independent Reviewer roles. Record that model as execution metadata
-for each such handoff; do not turn it into a visible owner-name substitute.
+Planner and Independent Reviewer roles. Include that model alongside the role
+in visible assignments and record it in each handoff's execution metadata.
 
 GPT workers run through Codex's native worker mechanism. Do not substitute an
 external CLI or another provider for a GPT worker. DeepSeek, when explicitly
