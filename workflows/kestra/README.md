@@ -122,6 +122,12 @@ then executes that commit's regular checked-out runner. The runner and Local dat
 the same strict verification manifest, which must name every concurrency proof and every schema
 created by the migration set. A stored older supported bootstrap therefore cannot silently retain an
 older proof list or override the schema scope for the commit being delivered.
+Before selecting any subset, the selector applies that same manifest boundary: every paired
+migration and proof must exist, every operated schema created by the migration set must be linted,
+and only the runner's non-empty concurrency-proof filename form is accepted.
+The committed selection inventory groups verification checks; it does not group migrations. Any
+changed `supabase/migrations/*.sql` file forces the complete SQL, concurrency, and lint set, so
+migration filenames, formatting, and inferred function ownership never narrow that coverage.
 `supabase test db` deliberately uses a Docker helper, so it remains the
 local-development command and is not used by the operated flow: Kestra does not receive the host
 Docker socket. Only a completely successful run writes credential-free evidence to the
