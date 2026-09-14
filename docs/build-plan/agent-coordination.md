@@ -1,27 +1,45 @@
 # Agent coordination
 
 Approved by the user on 9 September 2026; routing updated on 12 September 2026.
-This governs engineering coordination, not product behaviour. It replaces earlier requirements for an additional Sol
-review on newly assigned work; historical review receipts remain accurate.
+This governs engineering coordination, not product behaviour. It replaces an
+earlier additional-review requirement for newly assigned work; historical review
+receipts remain accurate.
+Issue [#467](https://github.com/Abzum-NZ/Abzum-Vortex/issues/467) records the
+stable dispatch and board-accountability rules below; it does not represent a
+live delivery queue.
 
 ## Responsibilities
 
-| Owner             | Work                                                                                                                                                                                                                                    |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Codex coordinator | Select dependency-ready tasks, commission reviews, dispatch Astra-corrected handoffs, monitor drift/blockers and usage, maintain progress, and coordinate delivery after normal checks. |
-| GPT-6 Astra (Medium) | Act as BA and Tester. Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. Independently verify actual implementation and record remaining findings. |
-| Claude Fable 5.1  | Own every full-system review across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Choose the simplest sufficient design. Do not use for routine work or implement unless explicitly reassigned. |
-| GPT-5.6 Terra / Sol | Current user-authorized implementation: execute bounded Astra-reviewed plans, test behavior and return reviewable changes; coordinator owns merges. |
-| Claude Opus 5     | Implement the assigned plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction.                                   |
-| Claude Sonnet 5   | Handle bounded intermediate implementation, focused analysis and well-specified follow-up work. Escalate architectural ambiguity instead of expanding scope.                                                                             |
-| User              | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate.                                                                                                                              |
+| Role | Work |
+| --- | --- |
+| Coordinator | Select dependency-ready tasks, commission reviews, dispatch corrected handoffs, monitor drift/blockers and usage, maintain progress, and coordinate delivery after normal checks. |
+| Planner | Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. |
+| Developer | Execute a bounded approved plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction. |
+| Independent Reviewer | Verify the implementation against the issue and approved product model, and record findings or approval independently of the Developer. |
+| Architecture Reviewer | Own explicitly assigned full-system reviews across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Choose the simplest sufficient design. Do not use for routine work or implementation unless explicitly reassigned. |
+| Hosted Tester | Run the single entitled Testing execution, record its receipt and result, and never start a duplicate run while the original is live. |
+| User | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate. |
 
-Fable 5.1 handles explicitly assigned full-system architecture reviews.
-Astra at Medium assesses findings and directly corrects
-agreed specifications, plans, tasks and dependencies before the coordinator
-dispatches bounded implementation to GPT-5.6 Terra or Sol under the user's current
-instruction. Historical Claude review receipts remain valid.
-Astra independently verifies their work. This does not authorize simultaneous
+Use these role names in visible board and documentation records. The role does
+not rename or replace the immutable canonical task reference. Record the
+resolved model, session identifier and canonical task reference as execution
+metadata at handoff instead.
+
+The current direct user requirement assigns GPT-6 Astra (Medium) to both the
+Planner and Independent Reviewer roles. Record that model as execution metadata
+for each such handoff; do not turn it into a visible owner-name substitute.
+
+GPT workers run through Codex's native worker mechanism. Do not substitute an
+external CLI or another provider for a GPT worker. DeepSeek, when explicitly
+chosen for a bounded task, is an external CLI worker only: its invocation,
+canonical task reference and returned evidence must be recorded like any other
+handoff. It is not evidence that a native GPT worker has been launched.
+
+The Architecture Reviewer handles explicitly assigned full-system reviews.
+The Planner assesses findings and directly corrects agreed specifications,
+plans, tasks and dependencies before the Coordinator dispatches bounded
+implementation. The Independent Reviewer verifies the resulting work.
+Historical review receipts remain valid. This does not authorize simultaneous
 conflicting edits or duplicate reviews.
 
 The [GitHub project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) remains
@@ -34,9 +52,35 @@ scope instead of preserving it under corrective comments. Retain applicable
 requirements and dependencies. Use comments for review evidence and progress,
 not as a substitute for a clear current description.
 
+## Board and dispatch record
+
+The board is the delivery record, not a list of intentions. Before assigning,
+sequencing or reporting work, read every project item and every relevant field,
+including paginated results beyond the first 30 items and beyond the first 30
+fields. Do not infer an empty queue, a dependency state, a current owner or
+available capacity from a partial board view.
+
+Moving an issue into an active status does not itself launch work. The
+coordinator must first launch or explicitly hand off the task, confirm the
+recipient accepted it, and record the actual canonical worker/task name—not a
+planned role—in the issue's board record. A text-only assignment is planned
+work, not active work: keep it Backlog. Ready is reserved for work whose named
+Planner has accepted the planning handoff; record the required GPT-6 Astra
+(Medium) model in that handoff's execution metadata.
+
+At every spawn, handoff and status transition, update the board together with
+the issue status: current owner, canonical worker/task reference, started or
+finished UTC time as applicable, measured active time when available, current
+evidence, and the next accountable owner. If a launch fails, keep the issue
+Backlog, record the demonstrated reason, and select other dependency-ready
+work; do not leave it marked active. When a worker finishes or is stopped,
+record its result before assigning the next owner. These are stable operating
+rules, not a live queue or a claim that a particular worker is currently
+available.
+
 ## Task handoff
 
-After Astra reviews and corrects the task handoff, the coordinator supplies the
+After the Planner reviews and corrects the task handoff, the Coordinator supplies the
 issue, exact base revision, working directory,
 branch, role, functional outcome, included/excluded work, relevant references,
 required checks and stopping point. Each session verifies these before acting.
@@ -53,10 +97,17 @@ repeating unrelated completed reviews.
 Observe live progress. Repeated searches, retries or rewrites without new evidence
 require intervention: clarify the task, resolve a demonstrated blocker or reassign
 it. Do not restart a live session solely because an observation timed out.
-Track session and model-specific usage. Fable 5.1 consumes its allowance faster,
-so reserve it for the complex responsibilities above and scope broad reviews into
-coherent passes. If a limit is exhausted, stop retries, wait for the stated reset,
-then resume the already assigned work without creating duplicate sessions.
+If a subagent remains active for more than 20 minutes, inspect its transcript
+and current work before continuing or replacing it; use that evidence to decide
+whether it is progressing, blocked or drifting. Do not presume a capacity
+blocker. State one only when the native dispatch mechanism returns concrete
+capacity evidence. Do not work around a missing or unavailable native GPT
+worker by starting an external GPT session.
+Track session and model-specific usage as execution metadata. Reserve the
+full-system Architecture Reviewer for its complex responsibilities and scope
+broad reviews into coherent passes. If a limit is exhausted, stop retries, wait
+for the stated reset, then resume the already assigned work without creating
+duplicate sessions.
 
 ## Scope and communication rules
 
@@ -73,7 +124,7 @@ then resume the already assigned work without creating duplicate sessions.
   development work. When the cause is in an engine, contract or schema, correct it
   there rather than preserving an unsuitable shape with wrappers or compatibility
   layers. Keep compatibility only where a published product behaviour genuinely
-  relies on it. Astra applies this rule when correcting the handoff before
+  relies on it. The Planner applies this rule when correcting the handoff before
   developers receive it; required access and data-integrity rules remain part
   of the owning engine's contract.
 - No unrelated refactoring, dependency upgrades, infrastructure work, visual
@@ -88,20 +139,21 @@ then resume the already assigned work without creating duplicate sessions.
 - Business ambiguity: ask the coordinator, who asks the user only when needed.
   Technical dependency: identify it and continue independent assigned work.
   Low-priority maintenance: recommend backlog. Engineering detail: architect
-  decides, documents material reasoning, Astra corrects the handoff, developer
-  implements and Astra verifies.
+  decides, documents material reasoning, the Planner corrects the handoff, the
+  Developer implements and the Independent Reviewer verifies.
 - Prior safety denials remain binding across tools and agents. Do not recover a
-  rejected patch from an older worktree or execute it through Claude as a workaround.
+  rejected patch from an older worktree or execute it through another agent as a workaround.
   No permission-bypass mode, credential copying, broad reset or silent deployment.
 
 ## Completion handoff
 
 Return: changed functionality; files/commit; tests actually run and results;
 remaining acceptance gaps; necessary spec/plan/task updates; and any real blocker.
-Astra reviews the patch against the issue and approved product model and corrects
-any planning or acceptance errors before the coordinator returns specific
-implementation findings to the developer. The coordinator merges only after
-applicable checks pass. Existing independent approval is reused for unchanged work.
+The Independent Reviewer reviews the patch against the issue and approved
+product model and corrects any planning or acceptance errors before the
+Coordinator returns specific implementation findings to the Developer. The
+Coordinator merges only after applicable checks pass. Existing independent
+approval is reused for unchanged work.
 
 User reports use Completed, Coming up, Pending User Decision and Overall Progress
 rows, with linked tasks and functional descriptions. Overall Progress counts all
