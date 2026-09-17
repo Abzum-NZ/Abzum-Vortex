@@ -1,376 +1,109 @@
 # Abzum Vortex
 
-Vortex is a business application builder. One organisation assembles its applications from parts the
-platform already understands — record types, fields, relationships, permissions, actions, rules and
-events — and the platform draws every page from those definitions, which it stores as rows in a
-database rather than as code.
+Vortex is a platform for building business applications from versioned definitions:
+modules, record types, fields, relationships, pages, permissions, flows and connections.
+It serves multiple organisations through one application, with access enforced by
+the platform and database.
 
-Many organisations share one deployment. Rules inside the database keep each organisation's data
-apart from every other organisation's.
+The project is under active development. The current priority is to prove complete
+applications defined in files before building the visual App Designer. The
+[roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) records delivery status;
+a specification or contract does not mean the feature is implemented.
 
-## The documents that govern this repository
+## Start here
 
-| Document | Where |
-|---|---|
-| Platform Specification | [Current approved version](docs/specification/README.md) |
-| Build Plan 2.23 | [docs/build-plan/README.md](docs/build-plan/README.md) |
-| Open business decisions | [docs/specification/appendices/decisions.md](docs/specification/appendices/decisions.md) |
-| Coverage of the earlier specification and plan | [docs/specification/appendices/traceability.md](docs/specification/appendices/traceability.md) |
-| Specification-to-GitHub task coverage | [docs/specification/appendices/github-delivery-map.md](docs/specification/appendices/github-delivery-map.md) |
-| Project board | [Vortex GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2) |
-| Earlier Platform Specification (superseded source) | [33 chapters and 5 appendices](https://claude.ai/code/artifact/f202d3c7-4c73-417c-bd3f-90740c2bc1d4) |
-| Earlier Build Plan (superseded source) | [Prerequisites, dependency map and ten phases](https://claude.ai/code/artifact/58852ead-2acc-4ca6-a693-6cb03705bcef) |
+| Document | Purpose |
+| --- | --- |
+| [Platform specification](docs/specification/README.md) | Product behaviour and architecture |
+| [Build plan](docs/build-plan/README.md) | Delivery phases, dependencies and acceptance |
+| [Engine-first delivery](docs/build-plan/engine-first-application-delivery.md) | Path to a usable application before the designer |
+| [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current tasks, ownership and pickup order |
+| [Agent coordination](docs/build-plan/agent-coordination.md) | Planning, implementation, review and reporting rules |
+| [Agent handover — 18 September 2026](docs/build-plan/agent-handover-2026-09-18.md) | Copyable continuation prompt and dated checkpoint |
+| [Open decisions](docs/specification/appendices/decisions.md) | Unresolved product choices requiring the owner's input |
 
-The current approved Platform Specification and Build Plan linked above are authoritative. Change the specification before
-changing behaviour, never after.
+## Architecture
 
-## What runs
+| Component | Responsibility |
+| --- | --- |
+| Next.js on Vercel | Web application and server entry points |
+| Supabase | PostgreSQL, authentication, private files and database-backed platform services |
+| Kestra on Coolify | Durable background execution and operational delivery jobs |
 
-Three operated services, and nothing else ([runtime hosting boundaries](docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries)).
+Core contracts describe the capabilities needed to define, validate, publish,
+secure and execute arbitrary applications. Business applications, including
+Abzum's own, use those same primitives. Application names and business-specific
+rules belong in definitions and fixtures, not in generic engines.
 
-| Service | What it is |
-|---|---|
-| The web application | One Next.js project on Vercel. It serves every organisation, application and page. |
-| The database | One Supabase project. It provides PostgreSQL, sign-in, private file storage, content-free live invalidation and a durable queue. |
-| Kestra | A self-hosted Kestra server on a Coolify-managed machine, with its own database. It runs background work. |
+Application workflow steps use protected Vortex operations. Kestra's operational
+database credentials are separate from application workflow execution. See the
+[runtime boundaries](docs/specification/17-runtime-storage-and-caching.md) and
+[workflow specification](docs/specification/09-workflows-and-pipelines.md).
 
-**Kestra is not one of the sixteen engines, and nobody using Vortex ever sees it.** The
-[workflow boundary](docs/specification/09-workflows-and-pipelines.md) draws the line. Vortex owns the designer where someone draws a workflow, owns the
-definitions, and owns every touch of a business record. A business workflow step calls back into
-Vortex, so the same permission checks apply as when a person clicks a button; Kestra never receives a
-broad runtime credential that lets a workflow read organisation data directly. Separate operational
-flows use narrowly scoped database roles for migrations, access-rule tests, and encrypted backups.
-Those roles cannot be used by customer-authored workflows and do not replace Vortex's service and
-permission boundaries.
+## Repository
 
-The **Workflow engine** is a different thing. It is one of the sixteen
-[platform services](docs/specification/17-runtime-storage-and-caching.md#platform-services-inside-the-codebase), and it is our code — the code that drives Kestra. Where this file says *Kestra* it means
-the server. Where it says *the Workflow engine* it means our code. They are never the same thing.
+| Path | Contents |
+| --- | --- |
+| `apps/web/` | The Next.js application and deployment root |
+| `contracts/` | Shared definition and operation schemas |
+| `runtime/` | Engine packages with explicit public interfaces |
+| `db/` | Database connection and transaction boundary |
+| `ui/`, `studio/` | Shared UI and designer packages |
+| `modules/` | Shipped application and module definitions |
+| `testing/` | Shared fixtures and cross-package verification |
+| `supabase/` | Database configuration, migrations, seed and database tests |
+| `workflows/kestra/` | Operational flows, scripts and delivery documentation |
+| `tooling/` | Workspace checks and development tools |
+| `docs/` | Specification, build plans, prototypes and evidence |
 
-## Repository layout
+A Vortex module is an application definition; a workspace package is source code.
+Packages import one another through their public interfaces. The workspace
+[boundary checker](tooling/boundaries/check.mjs) enforces dependency and environment rules.
 
-One repository, one deployable application ([delivery layout](docs/specification/18-delivery-and-testing.md#repository-layout-convention)).
+## Development
 
-### The workspace
+Use Node 24 and the pnpm version pinned in [package.json](package.json).
+Dependency versions live in package manifests, the [workspace catalogue](pnpm-workspace.yaml)
+and lockfile.
 
-The root `package.json` declares the workspace. It also pins the Node version and holds the scripts
-every package shares.
-
-```text
-package.json          The workspace root. It declares the members below.
-apps/web/             The Next.js application. The only thing Vercel deploys.
-contracts/            The shapes of modules, pages, records and events. Depends on nothing.
-db/                   Database clients, the server data layer, the access rules, generated types.
-runtime/              Sixteen packages, one per engine. See below.
-ui/                   The shadcn/ui base and the block library.
-studio/               The designers — the screens where someone builds an application.
-modules/              The module definitions Abzum ships.
-testing/              Fixtures, the permission matrix, the database tests.
-supabase/             Not a package. Supabase CLI configuration, migrations, synthetic seed and pgTAP tests.
-workflows/            Not a package. Kestra flow definitions.
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-The workspace members are:
+The development server binds to `127.0.0.1`. Authentication and protected data
+operations also require the appropriate environment configuration and database;
+installing packages alone does not configure them. Follow the
+[local database guide](supabase/README.md) and
+[environment and credential rules](docs/specification/18-delivery-and-testing.md).
 
-```json
-"workspaces": ["apps/*", "contracts", "db", "runtime/*", "ui", "studio", "modules", "testing"]
-```
+Useful commands from the repository root:
 
-`runtime/*` is the line that matters. The
-[platform service boundary](docs/specification/17-runtime-storage-and-caching.md#platform-services-inside-the-codebase)
-requires one package per engine rather than one package holding all sixteen. So `runtime/` is a
-directory that contains packages, and is never a package itself. The sixteen, in the order the
-[current service table](docs/specification/17-runtime-storage-and-caching.md#platform-services-inside-the-codebase)
-lists them:
+| Command | Purpose |
+| --- | --- |
+| `pnpm verify` | Database-free formatting, lint, types, boundaries, tests, fixtures and build |
+| `pnpm fixtures` | Validate the shipped application fixtures |
+| `pnpm db:verify` | Full local database verification using the disposable harness; requires Docker |
 
-```text
-runtime/definition   runtime/identity   runtime/access      runtime/module
-runtime/record       runtime/query      runtime/rule        runtime/event
-runtime/workflow     runtime/app        runtime/page        runtime/theme
-runtime/search       runtime/file       runtime/connection  runtime/interface
-```
+Choose checks appropriate to the changed behaviour. For focused database checks
+and cleanup, use the [database guide](supabase/README.md); do not reset shared environments.
 
-Name every package after its public responsibility, prefixed with `@vortex/`. So `contracts/`
-becomes `@vortex/contracts`, and `runtime/record` becomes `@vortex/record`. The `runtime/` directory
-groups engine packages in the repository; it is not part of their public import names.
+## Delivery and contribution
 
-`supabase/` and `workflows/` sit outside the workspace. Nothing imports either one. The Supabase CLI
-owns the standard migration layout; Kestra applies shared-environment migrations. The application
-never does.
-
-### What every package declares
-
-Dependencies run one way only. No package reaches inside another package's files; the
-[service ownership rules](docs/specification/17-runtime-storage-and-caching.md#platform-services-inside-the-codebase)
-and build-plan dependency order govern allowed dependencies.
-
-Every package declares three things. The build works out the allowed dependency graph from those
-declarations, rather than from a list someone keeps by hand.
-
-| Declaration | What it decides |
-|---|---|
-| What the package makes public | The build refuses any import that reaches past it |
-| Where the package sits in the build-plan service order | Which packages it may depend on |
-| Whether the package may run in a browser | Whether server-only code may enter it |
-
-Database credentials and secrets carry a server-only marker. The build refuses to let them enter a
-package that runs in a browser.
-
-### The word "module" means two unrelated things
-
-This catches people out, so read it once.
-
-| Sense | Where it lives | What it is |
-|---|---|---|
-| A **Vortex module** | Rows in the database. Abzum authors its own under `modules/` | A definition — record types, fields, relationships, permissions, rules, and events. An organisation assembles its application from these under the [module contract](docs/specification/05-modules-fields-and-relationships.md). |
-| A **package** | A directory in this repository | Code that ships. The workspace members listed above |
-
-So `studio/` is a package and not a Vortex module. It is code. Nothing stores it as rows, and no
-application carries it.
-
-The word *workflow* splits the same way. A workflow **inside an application** is a definition, and the
-application carries it and publishes it in the same revision under the
-[workflow ownership rules](docs/specification/09-workflows-and-pipelines.md#ownership-and-versioning). The
-`workflows/` directory holds something unrelated: Kestra flows that operate the platform itself, such
-as applying migrations. One is product. The other is plumbing.
-
-## How a change reaches production
-
-This flow is the approved delivery policy. Pull requests do not start a database; database migrations
-and access tests run after merge to `testing` and must pass before that revision can be promoted to
-`main`. See [Delivery environments, database changes and testing](docs/specification/18-delivery-and-testing.md).
-
-```text
-feature branch ──PR──▶ testing ──PR──▶ main
-     │                    │              │
-  Development          Testing       Production
-  (preview per PR)  (staging alias)  (live domain)
-```
-
-- Vercel builds, deploys, and gates. Its Git integration builds every pull request and every branch.
-  Branch protection on `testing` and `main` requires one check before a merge: `Vercel`.
-- The Vercel project Root Directory is `apps/web`, with workspace files included. Its application-local
-  configuration returns to the repository root to run the same `pnpm verify` command used locally,
-  then deploys `apps/web/.next`.
-- The build runs formatting, types, linting, package-boundary, unit, contract and build checks without
-  a database. A failing check fails the build, so the change cannot merge and gets no preview until
-  someone fixes it. We accept that cost deliberately, to run one system rather than two.
-- **Nothing runs on GitHub Actions, and nothing stores a credential there.** Cut a release with
-  `gh release create --generate-notes`, which needs no workflow.
-- The access-rule tests create roles and switch row-level security on and off. That needs a real
-  PostgreSQL session, which a Vercel build cannot hold, so Kestra runs them against the second
-  Supabase project — the testing one. Kestra also applies migrations: to testing without asking, and
-  to production only after someone approves.
-- Every schema change ships as a migration file, and carries its permission tests in the same change.
-- `testing` is the integration branch. Vercel serves it at the staging address.
-- `main` is production. It accepts pull requests from `testing` only, and releases are tagged from it.
-- Administrator bypass remains available only for break-glass recovery. Every use records an incident, exact commit, operator, time, reason normal review was impossible, and an immediate follow-up review; it cannot make a failed required check acceptable.
-- Rolling back a build never reverses a migration that has already run.
-
-## Secrets and connections
-
-Doppler is the source of record for application and database secret material. Nobody types a
-Vercel variable by hand. Coolify stores only the four protected bootstrap values that Kestra must
-receive when its container starts: two environment-specific webhook keys and two read-only Doppler
-service tokens.
-
-| Doppler config | Vercel environment | Consumer / sync status |
-|---|---|---|
-| `prd` | Production | `main` |
-| `stg` | Preview | `testing` and every pull request preview |
-| `dev` | Development | `vercel dev` on your own machine |
-| `ops_stg` | None | Testing database delivery through Kestra; no external sync |
-| `ops_prd` | None | Production database delivery through Kestra; no external sync |
-
-Change a value in Doppler and it reaches Vercel within seconds. Change one in Vercel and the next
-sync overwrites it, so there is exactly one place to change application values. Only the `prd`,
-`stg`, and `dev` root configs have Vercel syncs. A separate Doppler `Operations` environment contains
-the unsynced `ops_stg` and `ops_prd` configs. Kestra reads their exact migration values at run time
-through separate config-scoped, read-only service tokens. Doppler branch configs inherit their root
-config, so migration secrets do not live below the Vercel-synced `stg` or `prd` roots.
-
-### Vercel can refuse a secret and still report success
-
-Vercel lets a variable carry a **Sensitive** marker. Nobody can read the value back afterwards, not
-even you. Doppler writes its variables that way. Vercel also insists that **one name carries the same
-marker everywhere**: a name cannot be Sensitive in Production and ordinary in Preview.
-
-So when an ordinary variable already exists under a name Doppler is about to write, Vercel refuses
-Doppler's — and reports nothing. Doppler keeps showing `In Sync`, Vercel shows no error, and the value
-never arrives. This happened twice while we set the project up: to `DATABASE_URL`, and to the three
-`KESTRA_API_*` values. Each cost an hour, because a green status looked like proof.
-
-**When a secret has a value in Doppler but has not appeared in Vercel:** find the hand-made copy of
-that name on another environment, delete it, then re-sync from Doppler's **Config Syncs** tab. A sync
-that reports `In Sync` proves nothing about whether it wrote anything.
-
-That is why nobody adds a variable in Vercel by hand.
-
-### Each password lives in exactly one place
-
-The Vercel-synced `VORTEX_RUNTIME_DATABASE_URL` contains only the restricted runtime account and its
-generated password:
-
-```text
-postgresql://vortex_runtime.<project-ref>:<generated-password>@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres
-```
-
-The password is not copied into a second Vercel variable. Rotate the database role password and
-`VORTEX_RUNTIME_DATABASE_URL` together as one controlled operation. The application also receives
-`VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` and refuses a connection unless certificate and hostname
-verification are available.
-
-The Supabase project-owner address and password use `VORTEX_MIGRATION_DATABASE_URL` and
-`VORTEX_MIGRATION_DATABASE_PASSWORD` in `ops_stg` and `ops_prd`. Those configs
-are never synced to Vercel. Rotating a migration password changes its named value in the matching
-operations config. The URL is already credential-free; Kestra validates its owner, project, host,
-session-mode port and database, then supplies the separate raw password through `PGPASSWORD`. A
-runtime process never receives a migration credential, and a migration process requests only its
-three reviewed database values.
-
-### Public Supabase configuration
-
-The neutral authentication journeys run in Next.js server actions and read
-`VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`, and `VORTEX_SITE_URL` only on the server.
-The publishable key remains public by design, but it does not need to be included in the current
-browser bundle. A later browser feature such as Realtime may add separately reviewed
-`NEXT_PUBLIC_` variables when browser code genuinely needs those public values.
-
-Identity-session verification also reads the non-secret `VORTEX_ENVIRONMENT`
-(`local`, `testing` or `production`) and stable `VORTEX_IDENTITY_AUTHORITY_ID`. The configured
-environment must match the site's secure hosted or exact HTTP-loopback profile.
-
-Identity sessions deliberately use no browser Supabase Auth client. Next.js creates a request-specific
-server client from the same three validated values, and only server code reads or writes its
-`HttpOnly` cookie family. Testing and Production use `__Host-vortex-session` with `Secure`,
-`SameSite=Lax`, `Path=/` and no `Domain`; exact HTTP loopback uses the separate
-`vortex-local-session` name without `Secure`. The supported Local command listens only on
-`127.0.0.1`, and the request host/protocol must match the configured site. Proxy refreshes through
-`getClaims()` and forwards its own closed request-state marker; a protected resolver retries no
-provider refresh after a Proxy failure. Protected server operations independently verify the current
-access token and read the local identity projection without mutating it.
-
-**No Supabase service-role key exists anywhere, deliberately.** The application connects as the
-application database account over PostgreSQL, which the
-[database rules](docs/specification/17-runtime-storage-and-caching.md#database-and-storage-rules) require. If a
-service-role key appears, treat it as a bug.
-
-### Two ways into the database, on purpose
-
-| Caller | Route | Port | Why |
-|---|---|---|---|
-| The web application | Shared transaction pooler | 6543 | Supabase recommends transaction mode for serverless and automatically scaling application traffic. The shared pooler is reachable over IPv4 on every project tier. |
-| Kestra operational flows | Session pooler | 5432 | Migrations and access-rule tests need a real PostgreSQL session, which Supabase session mode preserves while remaining reachable over IPv4. Encrypted logical backup uses a dedicated read-only backup role. Each job uses its own narrow role, and business workflow steps do not use these connections. |
-
-The application disables prepared statements and keeps a minimal client pool. Every protected
-operation explicitly begins one transaction as `vortex_runtime`, establishes its request context
-once, in an owner-only row bound to that transaction, through the private initializer, enters the
-non-owning `vortex_request` role with `SET LOCAL ROLE`, completes the work, and commits or rolls
-back. Only `vortex_runtime` may execute
-the initializer; only `vortex_request` may execute the context accessors used by protected service
-SQL. Transaction mode keeps one physical connection for that complete transaction; no operation
-relies on state from an earlier transaction. Start with one client connection per serverless instance
-and raise it only from measured demand.
-
-Local development uses the same non-owning `vortex_runtime` login over the Supabase CLI database's
-exact loopback endpoint on port 54322. The disposable Local seed assigns that role a fixed
-Local-only password; the database adapter accepts it only when `VORTEX_ENVIRONMENT=local`, the host
-is loopback, the database is `postgres`, and the login is exactly `vortex_runtime`. Local PostgreSQL
-does not offer hosted TLS. Testing and Production continue to require the Supavisor transaction
-pooler, the environment-specific runtime login and full certificate and hostname verification.
-
-Session mode behaves like a direct connection for the migration and verification commands that need
-it. Its project-owner credential comes only from the unsynced operations config and never reaches a
-Vercel build, function, preview, or browser.
-
-## Pinned versions
-
-Each of these moves only in its own pull request, never as a side effect of another change. Use no
-caret and no range on any of them.
-
-| Dependency | Pin | Why this one |
-|---|---|---|
-| `next` | `16.3.3` | Newest stable 16.x. Every page renders through it. |
-| `react`, `react-dom` | `19.2.8` | Next.js and Puck each constrain React. We choose the version rather than let a resolver pick it. |
-| `@supabase/ssr` | `0.12.6` | Official server-side Auth/cookie adapter used only by request-specific Next.js server clients. |
-| `@supabase/supabase-js` | `2.115.0` | Exact compatible Supabase client used by Identity authority, journeys and sessions. |
-| `@puckeditor/core` | `0.23.0` | The page designer. |
-| Node | `24` | Next.js 16 requires `>= 20.9.0`. 24 is current long-term support and the version Vercel selects by default, so there is one less value to keep in step. |
-
-**Pin Node in three files, and miss none of them.** Vercel does not read `.nvmrc`. It reads
-`engines.node` in `package.json` first, then a `.node-version` file, then the setting in the Vercel
-dashboard. `.nvmrc` serves local tooling only.
-
-Set one and miss the others, and your machine quietly runs a different Node from the one that builds
-production. That already happened here: `.nvmrc` said 22 while Vercel built with 24, and nobody would
-have noticed until something broke on one and not the other.
-
-| File | Read by |
-|---|---|
-| `.nvmrc` | `nvm` and local tooling. Vercel ignores it. |
-| `.node-version` | Vercel, and most version managers. |
-| `engines.node` in `package.json` | Vercel, ahead of everything else. Added when the workspace root lands (#10). |
-
-**Puck is `@puckeditor/core`, not `@measured/puck`.** The project renamed its package. The old name
-froze at `0.20.2` in September 2025 and receives nothing, while the project released `0.23.0` in
-August 2026 and commits to it actively. Reaching for the old name gets you a package a year stale that
-looks maintained, because the project behind it is.
-
-Puck has not reached 1.0. The
-[block registration contract](docs/specification/07-applications-pages-and-themes.md#page-composition)
-keeps the integration behind one platform-owned registry, so a
-breaking change upstream lands in one place rather than across the whole block library.
-
-## Addresses
-
-| Environment | Address | Serves |
-|---|---|---|
-| Production | `https://vortex.abzum.com` | `main` |
-| Testing | `https://vortex-testing.abzum.com` | `testing`, behind Vercel Authentication |
-| Development | A preview address issued per pull request | that pull request's branch |
-
-The organisation's short name is the first path segment under the
-[application-address rules](docs/specification/07-applications-pages-and-themes.md#addresses-and-routing):
-
-```text
-https://vortex.abzum.com/{organisation}/{application}/{page}
-```
-
-People sign in at one address, outside any organisation. Tenant Administration is an application like any
-other, and every organisation has it installed, so it appears under that organisation's own segment
-beside every other application.
-
-Two route families coexist deliberately. Platform account and administration routes keep their own
-first segments — today `auth`, `health`, `organizations` and `signed-in`, with
-`/organizations/{organizationId}` addressing platform-level organisation administration — while
-definition-led runtime application routes use the organisation/application/page form above. Neither
-family silently replaces the other.
-
-The first path segment therefore holds both organisation short names and the platform's own paths. So
-the platform reserves every first segment it actually serves — currently `auth`, `health`,
-`organizations` and `signed-in` — plus `signin` and `api`, and refuses them all as short names. The
-platform reads that reserved list from the same table it reads
-addresses from. Add a path to the platform, and add it to that list in the same change.
-
-Subdomains per organisation, `{organisation}.abzum.com`, are not in the first release. Adding them
-later needs a wildcard domain on the Vercel project, which is a paid feature. It also needs the
-[address verification rule](docs/specification/07-applications-pages-and-themes.md#addresses-and-routing): an address works only once someone
-verifies it, and the platform refuses an address it does not recognise rather than falling back to a
-default. A blanket wildcard would contradict that rule, so we configure none. The `*.abzum.com` record
-that exists in Cloudflare today points elsewhere and has nothing to do with this platform.
-
-Cloudflare serves DNS. Both platform records are `CNAME` records pointing at Vercel with the proxy
-switched off. Vercel terminates TLS itself, and a proxied record would break certificate issue.
-
-## Working here
-
-- The [GitHub Project](https://github.com/orgs/Abzum-NZ/projects/2) records what anyone is working on.
-  Every change belongs to an issue. Update the issue when the work lands.
-- Issues follow the phases in the [revised Build Plan](docs/build-plan/README.md). Use GitHub's native
-  dependency links: start an issue only once everything blocking it is closed.
-- Where an issue touches something a person sees, attach a screenshot of the built functionality to
-  the issue before closing it.
-- **Everything fails loudly.** Nothing falls back to a default, carries on with a wrong value, or
-  continues when it cannot establish what it needs. Many organisations share one database here, so a
-  silent wrong answer is worse than an error: the damage is done before anyone knows there is a
-  problem.
+- Work from a GitHub issue with clear scope, dependencies and acceptance criteria.
+  Keep its description and roadmap status current.
+- Use the existing engine boundaries and official framework conventions. Update
+  the specification and build plan when agreed behaviour or sequencing changes.
+- Keep changes focused. Preserve organisation isolation, current permission checks,
+  atomic writes and revision checks without introducing unnecessary abstractions.
+- Obtain independent review and pass required PR checks before merging. Distinguish
+  source merged, preview built, and hosted behaviour verified in the evidence.
+- Use [Testing](https://vortex-testing.abzum.com) for current hosted acceptance.
+  Production deployment is deferred until the final project stage. A merge to
+  `main` is not evidence of a production release or successful database delivery.
+- Follow the [delivery specification](docs/specification/18-delivery-and-testing.md)
+  and [Kestra runbook](workflows/kestra/README.md) for environment changes. The dated
+  handover records the recent authorised source consolidation and its remaining
+  Testing requirements.
+- Manage secrets through the documented Doppler configuration. Keep credentials
+  out of source, browser bundles, agent prompts and logs.
