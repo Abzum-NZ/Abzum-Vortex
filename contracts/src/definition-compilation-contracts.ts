@@ -375,20 +375,18 @@ export const definitionCompilationOutputSchema = z.union([
     .strict(),
 ]);
 
+const publishedModuleHistoryEntrySchema = z.union([
+  publishedModuleDefinitionSchema,
+  moduleVersionImpactHistoryEntryV2Schema,
+  moduleVersionImpactHistoryEntryV3Schema,
+]);
+
 export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("module"),
       definitionKey: namespacedKeySchema,
-      history: z
-        .array(
-          z.union([
-            publishedModuleDefinitionSchema,
-            moduleVersionImpactHistoryEntryV2Schema,
-            moduleVersionImpactHistoryEntryV3Schema,
-          ]),
-        )
-        .max(10_000),
+      history: z.array(publishedModuleHistoryEntrySchema).max(10_000),
     })
     .strict(),
   z
@@ -399,6 +397,59 @@ export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+
+const historyEvidenceCommon = {
+  definitionKey: namespacedKeySchema,
+  releaseCount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  anchorReleaseRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER).nullable(),
+  validationContractVersions: z.array(semanticVersionSchema).max(3),
+};
+
+/**
+ * Compact result of auditing immutable publication history. The runtime keeps
+ * authenticity separately; this contract deliberately carries evidence facts,
+ * not a caller-controlled `validated` flag or a fabricated one-row history.
+ */
+export const definitionPublicationHistoryEvidenceSchema = z
+  .discriminatedUnion("kind", [
+    z
+      .object({
+        kind: z.literal("module"),
+        ...historyEvidenceCommon,
+        rootId: moduleRootIdSchema,
+        latestRelease: publishedModuleHistoryEntrySchema.nullable(),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("application"),
+        ...historyEvidenceCommon,
+        rootId: applicationRootIdSchema,
+        latestRelease: publishedApplicationDefinitionSchema.nullable(),
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    const empty = value.releaseCount === 0;
+    if (
+      empty !== (value.anchorReleaseRevision === null) ||
+      empty !== (value.latestRelease === null)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "History evidence emptiness, anchor and latest release must agree",
+      });
+    if (
+      value.latestRelease !== null &&
+      (value.latestRelease.publication.kind !== value.kind ||
+        value.latestRelease.publication.rootId !== value.rootId ||
+        value.latestRelease.publication.revision !== value.anchorReleaseRevision)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "History evidence latest release must match its subject and anchor",
+      });
+  });
 
 export const definitionPublicationContextSchema = z
   .object({
@@ -481,6 +532,9 @@ export type ApplicationCompilationOutputV2 = z.infer<typeof applicationCompilati
 export type CompiledDefinitionArtifact = z.infer<typeof compiledDefinitionArtifactSchema>;
 export type DefinitionProvenanceEntry = z.infer<typeof definitionProvenanceEntrySchema>;
 export type PublishedDefinitionHistory = z.infer<typeof publishedDefinitionHistorySchema>;
+export type DefinitionPublicationHistoryEvidence = z.infer<
+  typeof definitionPublicationHistoryEvidenceSchema
+>;
 export type DefinitionPublicationContext = z.infer<typeof definitionPublicationContextSchema>;
 export type DefinitionInstallCheckRequest = z.infer<typeof definitionInstallCheckRequestSchema>;
 export type DefinitionInstallCheckResult = z.infer<typeof definitionInstallCheckResultSchema>;

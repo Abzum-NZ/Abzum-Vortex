@@ -26,6 +26,7 @@ import {
 } from "../src/definition-publication";
 import { extractStoredSourceIdentityRequirements } from "../src/source-identities";
 import { validateDefinitionSource } from "../src/validation";
+import { verifyPublishedDefinitionHistory } from "../src/version-impact";
 import { graphModuleRequests } from "./module-v3-fixtures";
 
 // #44 (corrected scope, 12 September 2026; retargeted by the coordinator after
@@ -109,13 +110,18 @@ class RecordingRepository
     return operation(this);
   }
   async readCandidate() {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
   async lockCandidate() {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
-  async listModuleReleases() {
-    return [];
+  async readModuleReleasePage() {
+    return {
+      rootId: null,
+      anchorReleaseRevision: null,
+      entries: [],
+      nextAfterReleaseRevision: null,
+    } as const;
   }
   async readModuleRelease() {
     return undefined;
@@ -278,7 +284,11 @@ describe("Module V2 draft missing personal_data", () => {
     const candidate: DefinitionPublicationCandidate = {
       draft,
       identities: resolution.identities.filter((identity) => identity.definitionKey === source.key),
-      history: { kind: "module", definitionKey: source.key, history: [] },
+      historyEvidence: verifyPublishedDefinitionHistory(
+        { kind: "module", definitionKey: source.key, history: [] },
+        draft.rootId,
+        null,
+      ),
     };
     const repository = new RecordingRepository(candidate);
     const service = createDefinitionPublicationService(repository, catalogue);
@@ -356,7 +366,11 @@ describe("Module V3 draft missing personal_data", () => {
       identities: request.resolution.identities.filter(
         (identity) => identity.definitionKey === source.key,
       ),
-      history: { kind: "module", definitionKey: source.key, history: [] },
+      historyEvidence: verifyPublishedDefinitionHistory(
+        { kind: "module", definitionKey: source.key, history: [] },
+        draft.rootId,
+        null,
+      ),
     };
     const repository = new RecordingRepository(candidate);
     const service = createDefinitionPublicationService(repository, catalogue);

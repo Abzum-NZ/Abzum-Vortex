@@ -159,7 +159,7 @@ export const exactDecimalFitsDigitsV2 = (
 };
 
 const wholeNumberValueV2Schema = z.number().int();
-const dateValueV2Schema = z.iso.date();
+export const dateValueV2Schema = z.iso.date();
 const dateTimeValueV2Schema = z.iso.datetime({ offset: true });
 const choiceValueV2Schema = z.string().min(1).max(120);
 const severalChoicesValueV2Schema = z.array(choiceValueV2Schema);

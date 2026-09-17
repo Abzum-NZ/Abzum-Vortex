@@ -44,6 +44,25 @@ tasks:
     key: "database-testing-{{ outputs.await_approval.onResume.testing_commit }}"
     errorOnMissing: true
 
+  - id: validate_testing_evidence_form
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - >-
+        case "$VORTEX_TESTING_VERIFICATION_MODE" in
+          full|reused) ;;
+          *) echo "unsupported Testing verification receipt form" >&2; exit 1 ;;
+        esac
+    env:
+      VORTEX_TESTING_VERIFICATION_MODE: "{{ outputs.load_testing_evidence.value.verification.mode }}"
+
+  - id: load_testing_full_source_evidence
+    type: io.kestra.plugin.core.kv.Get
+    namespace: vortex.operations
+    key: "{{ outputs.load_testing_evidence.value.verification.source.evidence_key }}"
+    errorOnMissing: true
+
   - id: apply_and_verify
     type: io.kestra.plugin.scripts.shell.Commands
     taskRunner:
@@ -62,23 +81,8 @@ tasks:
       VORTEX_APPROVED: "{{ outputs.await_approval.onResume.approved }}"
       VORTEX_APPROVING_ACTOR: "kestra-execution:{{ execution.id }}"
       VORTEX_TESTING_COMMIT: "{{ outputs.await_approval.onResume.testing_commit }}"
-      VORTEX_TESTING_EXECUTION_ID: "{{ outputs.load_testing_evidence.value.execution_id }}"
-      VORTEX_TESTING_MIGRATION_SET_SHA256: "{{ outputs.load_testing_evidence.value.migration_set_sha256 }}"
-      VORTEX_TESTING_EVIDENCE_SCHEMA_VERSION: "{{ outputs.load_testing_evidence.value.schema_version }}"
-      VORTEX_TESTING_EVIDENCE_ENVIRONMENT: "{{ outputs.load_testing_evidence.value.environment }}"
-      VORTEX_TESTING_EVIDENCE_REPOSITORY: "{{ outputs.load_testing_evidence.value.repository }}"
-      VORTEX_TESTING_EVIDENCE_REF: "{{ outputs.load_testing_evidence.value.ref }}"
-      VORTEX_TESTING_EVIDENCE_COMMIT: "{{ outputs.load_testing_evidence.value.commit }}"
-      VORTEX_TESTING_EVIDENCE_STATUS: "{{ outputs.load_testing_evidence.value.status }}"
-      VORTEX_TESTING_EVIDENCE_SUPABASE_CLI_VERSION: "{{ outputs.load_testing_evidence.value.supabase_cli_version }}"
-      VORTEX_TESTING_EVIDENCE_POSTGRES_MAJOR: "{{ outputs.load_testing_evidence.value.postgres_major }}"
-      VORTEX_TESTING_EVIDENCE_RUNNER_SHA256: "{{ outputs.load_testing_evidence.value.runner.sha256 }}"
-      VORTEX_TESTING_EVIDENCE_MANIFEST_SHA256: "{{ outputs.load_testing_evidence.value.verification_manifest.sha256 }}"
-      VORTEX_TESTING_EVIDENCE_COVERAGE_SHA256: "{{ outputs.load_testing_evidence.value.verification_coverage_sha256 }}"
-      VORTEX_TESTING_EVIDENCE_SELECTED_CONCURRENCY_PROOFS: "{{ outputs.load_testing_evidence.value.selected_concurrency_proofs | toJson }}"
-      VORTEX_TESTING_EVIDENCE_COMPLETED_CONCURRENCY_PROOFS: "{{ outputs.load_testing_evidence.value.completed_concurrency_proofs | toJson }}"
-      VORTEX_TESTING_EVIDENCE_SELECTED_LINT_SCHEMAS: "{{ outputs.load_testing_evidence.value.selected_lint_schemas | toJson }}"
-      VORTEX_TESTING_EVIDENCE_COMPLETED_LINT_SCHEMAS: "{{ outputs.load_testing_evidence.value.completed_lint_schemas | toJson }}"
+      VORTEX_TESTING_EVIDENCE: "{{ outputs.load_testing_evidence.value | toJson }}"
+      VORTEX_TESTING_FULL_SOURCE_EVIDENCE: "{{ outputs.load_testing_full_source_evidence.value | toJson }}"
       VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_PRODUCTION_DOPPLER_TOKEN') }}"
       VORTEX_DOPPLER_PROJECT: abzum-vortex
       VORTEX_DOPPLER_CONFIG: ops_prd

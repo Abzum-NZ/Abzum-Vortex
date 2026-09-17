@@ -19,8 +19,12 @@ select has_function(
   'the Definition service exposes one atomic append-and-advance publication operation'
 );
 select has_function(
-  'vortex_definition', 'list_module_releases', array['text'],
-  'the Definition service exposes a same-organization Module dependency release listing'
+  'vortex_definition', 'read_publication_history_page', array['uuid', 'bigint', 'bigint', 'integer'],
+  'the Definition service exposes a bounded anchored publication-history page read'
+);
+select has_function(
+  'vortex_definition', 'read_module_release_page', array['text', 'bigint', 'bigint', 'integer'],
+  'the Definition service exposes a bounded anchored Module dependency release page read'
 );
 select has_function(
   'vortex_definition', 'read_module_release', array['uuid', 'bigint'],
@@ -31,7 +35,10 @@ select ok(
     'vortex_request', 'vortex_definition.read_publication_state(uuid)', 'EXECUTE'
   )
   and pg_catalog.has_function_privilege(
-    'vortex_request', 'vortex_definition.list_module_releases(text)', 'EXECUTE'
+    'vortex_request', 'vortex_definition.read_publication_history_page(uuid,bigint,bigint,integer)', 'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'vortex_request', 'vortex_definition.read_module_release_page(text,bigint,bigint,integer)', 'EXECUTE'
   )
   and pg_catalog.has_function_privilege(
     'vortex_request', 'vortex_definition.read_module_release(uuid,bigint)', 'EXECUTE'
@@ -46,7 +53,10 @@ select ok(
     'vortex_runtime', 'vortex_definition.append_release(uuid,bigint,text,jsonb)', 'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
-    'vortex_runtime', 'vortex_definition.list_module_releases(text)', 'EXECUTE'
+    'vortex_runtime', 'vortex_definition.read_publication_history_page(uuid,bigint,bigint,integer)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'vortex_runtime', 'vortex_definition.read_module_release_page(text,bigint,bigint,integer)', 'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'service_role', 'vortex_definition.read_publication_state(uuid)', 'EXECUTE'
@@ -244,10 +254,53 @@ select throws_ok(
 );
 select is(
   pg_catalog.jsonb_array_length(
-    vortex_definition.list_module_releases('example.publication_dependency')
+    vortex_definition.read_module_release_page(
+      'example.publication_dependency', null, null, 100
+    ) -> 'entries'
   ),
   1,
-  'module release listing returns only exact same-organization releases for the requested key'
+  'the first Module page returns only exact same-organization releases for the requested key'
+);
+select is(
+  vortex_definition.read_module_release_page(
+    'example.publication_dependency', null, null, 100
+  ) ->> 'anchorReleaseRevision',
+  '1',
+  'the first Module page anchors selection to the immutable current release'
+);
+select throws_ok(
+  $$select vortex_definition.read_module_release_page(
+      'example.publication_dependency', null, null, null::integer
+    )$$,
+  '22023'::char(5),
+  'Definition module release page selector is invalid',
+  'Module release pages reject a null page size'
+);
+select is(
+  pg_catalog.jsonb_array_length(
+    vortex_definition.read_publication_history_page(
+      :'publication_dependency_root_id'::uuid, 1, null, 100
+    ) -> 'entries'
+  ),
+  1,
+  'publication history is returned as one bounded anchored page'
+);
+select throws_ok(
+  format(
+    'select vortex_definition.read_publication_history_page(%L::uuid, 1, null, null::integer)',
+    :'publication_dependency_root_id'
+  ),
+  '22023'::char(5),
+  'Definition publication history page selector is invalid',
+  'publication-history pages reject a null page size'
+);
+select throws_ok(
+  $$select vortex_definition.read_publication_history_page(
+      '30000000-0000-4000-8000-000000000060'::uuid, 1, null, 100
+    )$$,
+  '42501'::char(5),
+  'Definition root does not belong to the context organization',
+  'cross-tenant publication-history page reads remain refused'
 );
 select is(
   vortex_definition.read_module_release(
@@ -411,22 +464,26 @@ select is(
 );
 select is(
   pg_catalog.jsonb_array_length(
-    vortex_definition.read_publication_state(:'publication_application_root_id'::uuid) -> 'history' -> 'history'
+    vortex_definition.read_publication_history_page(
+      :'publication_application_root_id'::uuid, 1, null, 100
+    ) -> 'entries'
   ),
   1,
   'the publication read returns immutable release history after publication'
 );
 select is(
   (
-    vortex_definition.read_publication_state(:'publication_application_root_id'::uuid)
-      -> 'history' -> 'history' -> 0 -> 'dependencyManifest' -> 0 ? 'key'
+    vortex_definition.read_publication_history_page(
+      :'publication_application_root_id'::uuid, 1, null, 100
+    ) -> 'entries' -> 0 -> 'release' -> 'dependencyManifest' -> 0 ? 'key'
   ),
   false,
   'published history exposes public dependency references rather than internal exact manifest entries'
 );
 select is(
-  vortex_definition.read_publication_state(:'publication_application_root_id'::uuid)
-    -> 'history' -> 'history' -> 0 -> 'dependencyManifest' -> 0 ->> 'revision',
+  vortex_definition.read_publication_history_page(
+    :'publication_application_root_id'::uuid, 1, null, 100
+  ) -> 'entries' -> 0 -> 'release' -> 'dependencyManifest' -> 0 ->> 'revision',
   '1',
   'published history binds a module dependency to its immutable published release reference'
 );
@@ -640,6 +697,7 @@ begin
   raise exception 'injected dependency write failure' using errcode = 'P0001';
 end
 $function$;
+
 create trigger release_dependencies_test_abort
 before insert on vortex_definition.release_dependencies
 for each row execute function pg_temp.abort_definition_dependency_write();
@@ -1008,7 +1066,7 @@ insert into vortex_definition.drafts (
   source_fingerprint, updated_at, updated_by
 ) values (
   '30000000-0000-4000-8000-000000000063',
-  10001,
+  10002,
   '{"source_contract_version":"1.0.0","kind":"module","key":"example.release_history_limit","body":{}}'::jsonb,
   '1.0.0',
   'sha256:' || pg_catalog.repeat('9', 64),
@@ -1022,24 +1080,160 @@ insert into vortex_definition.releases (
   validation_contract_version, comparison_fingerprint, impact_reasons,
   release_note, published_at, published_by
 )
+with release_values as (
+  select
+    revision,
+    case when revision = 1 then '1.0.0' else '1.0.' || (revision - 1) end as release_version,
+    pg_catalog.format('{"historyRevision":%s}', revision) as canonical_content,
+    pg_catalog.format(
+      '{"body":{"historyRevision":%s},"key":"example.release_history_limit","kind":"module","source_contract_version":"1.0.0"}',
+      revision
+    ) as canonical_source
+  from pg_catalog.generate_series(1, 10001) as revision
+), release_evidence as (
+  select
+    release_values.*,
+    pg_catalog.format(
+      '{"contractVersion":"1.0.0","definitions":[{"exactVersion":"%s","key":"example.release_history_limit","kind":"module","rootId":"30000000-0000-4000-8000-000000000063"}],"identities":[]}',
+      release_version
+    ) as canonical_resolution,
+    'sha256:' || pg_catalog.encode(
+      extensions.digest(pg_catalog.convert_to(canonical_content, 'UTF8'), 'sha256'), 'hex'
+    ) as content_fingerprint,
+    'sha256:' || pg_catalog.encode(
+      extensions.digest(pg_catalog.convert_to(canonical_source, 'UTF8'), 'sha256'), 'hex'
+    ) as source_fingerprint
+  from release_values
+), authenticated_release_evidence as (
+  select
+    release_evidence.*,
+    'sha256:' || pg_catalog.encode(
+      extensions.digest(pg_catalog.convert_to(canonical_resolution, 'UTF8'), 'sha256'), 'hex'
+    ) as resolution_fingerprint
+  from release_evidence
+)
 select
   '30000000-0000-4000-8000-000000000063'::uuid,
   revision,
-  '0.0.' || revision,
-  '{"source_contract_version":"1.0.0","kind":"module","key":"example.release_history_limit","body":{}}'::jsonb,
-  'sha256:' || pg_catalog.repeat('1', 64),
+  release_version,
+  canonical_source::jsonb,
+  source_fingerprint,
   '1.0.0',
-  '{}'::jsonb,
-  pg_catalog.jsonb_build_object('fingerprint', 'sha256:' || pg_catalog.repeat('2', 64)),
-  'sha256:' || pg_catalog.repeat('3', 64),
-  'sha256:' || pg_catalog.repeat('2', 64),
+  pg_catalog.jsonb_build_object(
+    'kind', 'module',
+    'resolutionFingerprint', resolution_fingerprint,
+    'artifact', pg_catalog.jsonb_build_object(
+      'kind', 'module',
+      'rootId', '30000000-0000-4000-8000-000000000063'::uuid,
+      'definitionKey', 'example.release_history_limit',
+      'exactVersion', release_version,
+      'contentFingerprint', content_fingerprint,
+      'resolutionFingerprint', resolution_fingerprint
+    ),
+    'canonical', pg_catalog.jsonb_build_object(
+      'envelope', pg_catalog.jsonb_build_object(
+        'kind', 'module',
+        'key', 'example.release_history_limit',
+        'rootId', '30000000-0000-4000-8000-000000000063'::uuid,
+        'organizationId', '20000000-0000-4000-8000-000000000060'::uuid
+      ),
+      'content', canonical_content::jsonb
+    )
+  ),
+  pg_catalog.jsonb_set(
+    canonical_resolution::jsonb,
+    '{fingerprint}',
+    pg_catalog.to_jsonb(resolution_fingerprint)
+  ),
+  content_fingerprint,
+  resolution_fingerprint,
   '1.0.0',
-  'sha256:' || pg_catalog.repeat('4', 64),
+  content_fingerprint,
   '[]'::jsonb,
-  'History limit fixture',
+  'History limit fixture ' || revision,
   pg_catalog.statement_timestamp(),
   '90000000-0000-4000-8000-000000000060'::uuid
-from pg_catalog.generate_series(1, 10000) as revision;
+from authenticated_release_evidence;
+
+select is(
+  (
+    select pg_catalog.count(distinct pg_catalog.jsonb_build_array(
+      authored_source,
+      authored_source_fingerprint,
+      content_fingerprint,
+      compilation_output
+    ))::bigint
+    from vortex_definition.releases
+    where root_id = '30000000-0000-4000-8000-000000000063'::uuid
+  ),
+  10001::bigint,
+  'every seeded high-history release has distinct authored source, fingerprint, content and compilation evidence'
+);
+select is(
+  (
+    select pg_catalog.count(*)::bigint
+    from vortex_definition.releases
+    where root_id = '30000000-0000-4000-8000-000000000063'::uuid
+      and (
+        (authored_source -> 'body' ->> 'historyRevision')::bigint <> release_revision
+        or (compilation_output -> 'canonical' -> 'content' ->> 'historyRevision')::bigint
+          <> release_revision
+        or compilation_output -> 'artifact' ->> 'exactVersion' <> release_version
+        or compilation_output -> 'artifact' ->> 'contentFingerprint' <> content_fingerprint
+        or compilation_output ->> 'resolutionFingerprint' <> resolution_fingerprint
+        or resolution_snapshot ->> 'fingerprint' <> resolution_fingerprint
+      )
+  ),
+  0::bigint,
+  'every seeded high-history release carries internally matching immutable publication evidence'
+);
+
+create function pg_temp.high_history_release_evidence()
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'releaseVersion', '1.0.10001',
+    'compilationOutput', pg_catalog.jsonb_build_object(
+      'kind', 'module',
+      'resolutionFingerprint', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'artifact', pg_catalog.jsonb_build_object(
+        'kind', 'module', 'rootId', '30000000-0000-4000-8000-000000000063'::uuid,
+        'definitionKey', 'example.release_history_limit', 'exactVersion', '1.0.10001',
+        'contentFingerprint', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'resolutionFingerprint', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+      ),
+      'canonical', pg_catalog.jsonb_build_object(
+        'envelope', pg_catalog.jsonb_build_object(
+          'kind', 'module', 'key', 'example.release_history_limit',
+          'rootId', '30000000-0000-4000-8000-000000000063'::uuid,
+          'organizationId', '20000000-0000-4000-8000-000000000060'::uuid
+        ),
+        'content', '{}'::jsonb
+      )
+    ),
+    'resolutionSnapshot', pg_catalog.jsonb_build_object(
+      'fingerprint', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'definitions', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'kind', 'module', 'key', 'example.release_history_limit',
+        'rootId', '30000000-0000-4000-8000-000000000063'::uuid,
+        'exactVersion', '1.0.10001'
+      ))
+    ),
+    'contentFingerprint', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'resolutionFingerprint', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    'validationContractVersion', '1.0.0',
+    'comparisonFingerprint', 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+    'impactReasons', '[]'::jsonb,
+    'releaseNote', 'Published beyond the former history limit',
+    'dependencies', '[]'::jsonb
+  )
+$function$;
+
+grant execute on function pg_temp.high_history_release_evidence() to vortex_request;
+
 update vortex_definition.roots
 set current_release_revision = 10000
 where root_id = '30000000-0000-4000-8000-000000000063'::uuid;
@@ -1052,7 +1246,30 @@ select throws_ok(
   $$
     select * from vortex_definition.append_release(
       '30000000-0000-4000-8000-000000000063'::uuid,
-      10001,
+      10002,
+      'sha256:9999999999999999999999999999999999999999999999999999999999999999',
+      pg_temp.high_history_release_evidence()
+    )
+  $$,
+  '23514'::char(5),
+  'Definition root current release pointer does not match immutable release history',
+  'append refuses an immutable release above the root current-release pointer'
+);
+reset role;
+
+update vortex_definition.roots
+set current_release_revision = 10001
+where root_id = '30000000-0000-4000-8000-000000000063'::uuid;
+
+delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+set local role vortex_runtime;
+select vortex_context.initialize(pg_temp.publication_operation_context());
+set local role vortex_request;
+select throws_ok(
+  $$
+    select * from vortex_definition.append_release(
+      '30000000-0000-4000-8000-000000000063'::uuid,
+       10002,
       'sha256:9999999999999999999999999999999999999999999999999999999999999999',
       '{}'::jsonb
     )
@@ -1067,55 +1284,31 @@ delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_ba
 set local role vortex_runtime;
 select vortex_context.initialize(pg_temp.publication_operation_context());
 set local role vortex_request;
-select throws_ok(
+select lives_ok(
   $$
     select * from vortex_definition.append_release(
       '30000000-0000-4000-8000-000000000063'::uuid,
-      10001,
+       10002,
       'sha256:9999999999999999999999999999999999999999999999999999999999999999',
-      jsonb_build_object(
-        'releaseVersion', '1.0.0',
-        'compilationOutput', jsonb_build_object(
-          'kind', 'module',
-          'resolutionFingerprint', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-          'artifact', jsonb_build_object(
-            'kind', 'module', 'rootId', '30000000-0000-4000-8000-000000000063'::uuid,
-            'definitionKey', 'example.release_history_limit', 'exactVersion', '1.0.0',
-            'contentFingerprint', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-            'resolutionFingerprint', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
-          ),
-          'canonical', jsonb_build_object(
-            'envelope', jsonb_build_object(
-              'kind', 'module', 'key', 'example.release_history_limit',
-              'rootId', '30000000-0000-4000-8000-000000000063'::uuid,
-              'organizationId', '20000000-0000-4000-8000-000000000060'::uuid
-            ),
-            'content', '{}'::jsonb
-          )
-        ),
-        'resolutionSnapshot', jsonb_build_object(
-          'fingerprint', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-          'definitions', jsonb_build_array(jsonb_build_object(
-            'kind', 'module', 'key', 'example.release_history_limit',
-            'rootId', '30000000-0000-4000-8000-000000000063'::uuid,
-            'exactVersion', '1.0.0'
-          ))
-        ),
-        'contentFingerprint', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        'resolutionFingerprint', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-        'validationContractVersion', '1.0.0',
-        'comparisonFingerprint', 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-        'impactReasons', '[]'::jsonb,
-        'releaseNote', 'Rejected over history limit',
-        'dependencies', '[]'::jsonb
-      )
+      pg_temp.high_history_release_evidence()
     )
   $$,
-  '54000'::char(5),
-  'Definition release history reached its supported limit',
-  'the database enforces the same ten-thousand-release bound as the runtime contract'
+  'a valid next immutable release is not refused after the root already has more than ten thousand releases'
 );
 reset role;
+
+select is(
+  (select count(*)::bigint from vortex_definition.releases
+   where root_id = '30000000-0000-4000-8000-000000000063'::uuid),
+  10002::bigint,
+  'the high-history root retains more than ten thousand old releases and appends its next revision'
+);
+select is(
+  (select current_release_revision from vortex_definition.roots
+   where root_id = '30000000-0000-4000-8000-000000000063'::uuid),
+  10002::bigint,
+  'the high-history append advances only the existing root pointer'
+);
 
 select * from finish();
 

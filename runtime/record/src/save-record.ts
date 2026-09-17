@@ -36,7 +36,8 @@ import {
 type PreparationRow = DatabaseRow & { readonly preparation: unknown };
 type SaveRow = DatabaseRow & { readonly result: unknown };
 
-type PreparedSave = Readonly<{
+/** @internal Shared only by the fixed named-action save composition. */
+export type PreparedSave = Readonly<{
   outcome: "prepared";
   recordType: ReturnType<typeof recordTypeDefinitionV2Schema.parse>;
   existingValues: Readonly<Record<string, unknown>>;
@@ -51,7 +52,8 @@ type PreparationOutcome =
   | Readonly<{ outcome: "conflict"; correlationId?: string }>
   | Readonly<{ outcome: "unavailable"; correlationId?: string }>;
 
-type RelationshipTotalPreparationOutcome =
+/** @internal Shared only by the fixed named-action save composition. */
+export type RelationshipTotalPreparationOutcome =
   | LockedRelationshipTotalPreparation
   | Readonly<{
       outcome: "restart" | "conflict" | "refused" | "refused_recorded" | "defer" | "not_required";
@@ -85,7 +87,8 @@ type StoredResult =
 const recordedRefusal = Symbol("recordedRecordSaveRefusal");
 const restartRelationshipTotalSave = Symbol("restartRelationshipTotalSave");
 
-const revision = (candidate: unknown): number | undefined => {
+/** @internal Shared only by the fixed named-action save composition. */
+export const revision = (candidate: unknown): number | undefined => {
   if (typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate > 0)
     return candidate;
   if (
@@ -201,7 +204,8 @@ type CalculatedFieldValues =
  * generated values were already refused by the initial preparation; only the
  * trusted calculation engine can add calculation values here.
  */
-const calculateAndFinalize = (
+/** @internal Shared only by the fixed named-action save composition. */
+export const calculateAndFinalize = (
   prepared: Extract<PreparationOutcome, { outcome: "prepared" }>,
   command: SaveRecordCommandV2,
   issuedAt: string,
@@ -276,7 +280,8 @@ const calculateAndFinalize = (
   });
 };
 
-const operationClock = (
+/** @internal Shared only by the fixed named-action save composition. */
+export const operationClock = (
   recordTypes: readonly ReturnType<typeof recordTypeDefinitionV2Schema.parse>[],
   issuedAt: string,
   timeZone: string | undefined,
@@ -368,7 +373,8 @@ const prepare = async (
   return parsePreparation(one(rows).preparation);
 };
 
-const parseRelationshipTotalPreparation = (
+/** @internal Shared only by the fixed named-action save composition. */
+export const parseRelationshipTotalPreparation = (
   candidate: unknown,
 ): RelationshipTotalPreparationOutcome => {
   if (typeof candidate !== "object" || candidate === null) return { outcome: "refused" };
@@ -520,7 +526,8 @@ const persist = async (
  * two phases: a replay or refusal never observes settings, and persistence
  * always resumes with the runtime role.
  */
-const readOrganizationRuntimeSettings = async (transaction: RequestDatabaseTransaction) => {
+/** @internal Shared only by the fixed named-action save composition. */
+export const readOrganizationRuntimeSettings = async (transaction: RequestDatabaseTransaction) => {
   await transaction.query`set local role vortex_request`;
   try {
     return await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);

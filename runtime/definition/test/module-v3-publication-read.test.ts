@@ -26,6 +26,7 @@ import {
 } from "../src/definition-publication";
 import { createDatabaseDefinitionPublicationRepository } from "../src/definition-publication-repository";
 import { extractStoredSourceIdentityRequirements } from "../src/source-identities";
+import { verifyPublishedDefinitionHistory } from "../src/version-impact";
 import { graphModuleRequests } from "./module-v3-fixtures";
 
 const requests = graphModuleRequests();
@@ -52,7 +53,11 @@ const publicationCandidate: DefinitionPublicationCandidate = {
   identities: candidateRequest.resolution.identities.filter(
     (identity) => identity.definitionKey === candidateRequest.source.key,
   ),
-  history: { kind: "module", definitionKey: candidateRequest.source.key, history: [] },
+  historyEvidence: verifyPublishedDefinitionHistory(
+    { kind: "module", definitionKey: candidateRequest.source.key, history: [] },
+    candidateDraft.rootId,
+    null,
+  ),
 };
 
 const context = (): SessionContext =>
@@ -130,15 +135,27 @@ class ModuleV3PublicationRepository
   }
 
   async readCandidate() {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
   async lockCandidate() {
-    return structuredClone(this.candidate);
+    return this.candidate;
   }
 
-  async listModuleReleases(_organizationId: string, key: string) {
-    return key === sharedRelease.key ? [sharedRelease] : [];
+  async readModuleReleasePage(_organizationId: string, key: string) {
+    return key === sharedRelease.key
+      ? {
+          rootId: sharedRelease.rootId,
+          anchorReleaseRevision: sharedRelease.releaseRevision,
+          entries: [{ previousReleaseRevision: null, release: sharedRelease }],
+          nextAfterReleaseRevision: null,
+        }
+      : {
+          rootId: null,
+          anchorReleaseRevision: null,
+          entries: [],
+          nextAfterReleaseRevision: null,
+        };
   }
 
   async readModuleRelease(_organizationId: string, rootId: string, releaseRevision: number) {
@@ -299,11 +316,7 @@ describe("Module V3 publication, read and restore", () => {
               },
               draft: candidateDraft,
               identities: publicationCandidate.identities,
-              history: {
-                kind: "module",
-                definitionKey: candidateDraft.key,
-                history: [],
-              },
+              historyLatestReleaseRevision: null,
             },
           },
         ] as readonly ResultRow[],

@@ -20,6 +20,7 @@ import {
   createDefinitionConsumerReadService,
   createDefinitionPublicationService,
   fingerprintCanonicalValue,
+  verifyPublishedDefinitionHistory,
   type DefinitionPublicationCandidate,
   type DefinitionPublicationCatalogue,
   type DefinitionPublicationReader,
@@ -240,7 +241,11 @@ const candidateFor = (
   return {
     draft,
     identities: resolution.identities.filter((identity) => identity.definitionKey === source.key),
-    history,
+    historyEvidence: verifyPublishedDefinitionHistory(
+      history,
+      String(draft.rootId),
+      draft.publishedRevision ?? null,
+    ),
   };
 };
 
@@ -251,6 +256,7 @@ class FixturePublicationRepository
     DefinitionPublicationTransaction
 {
   readonly candidates = new Map<string, DefinitionPublicationCandidate>();
+  readonly histories = new Map<string, PublishedDefinitionHistory>();
   readonly moduleReleases: ResolvableModuleRelease[];
   readonly releaseEvidence = new Map<string, unknown>();
 
@@ -258,7 +264,19 @@ class FixturePublicationRepository
     candidates: readonly DefinitionPublicationCandidate[],
     moduleReleases: readonly ResolvableModuleRelease[] = historicalModuleReleases,
   ) {
-    for (const candidate of candidates) this.candidates.set(candidate.draft.rootId, candidate);
+    for (const candidate of candidates) {
+      this.candidates.set(candidate.draft.rootId, candidate);
+      this.histories.set(
+        candidate.draft.rootId,
+        candidate.draft.publishedRevision === undefined
+          ? { kind: candidate.draft.kind, definitionKey: candidate.draft.key, history: [] }
+          : publishedDefinitionHistorySchema.parse({
+              kind: candidate.draft.kind,
+              definitionKey: candidate.draft.key,
+              history: [historicalPublishedByKey.get(candidate.draft.key)],
+            }),
+      );
+    }
     this.moduleReleases = structuredClone(moduleReleases) as ResolvableModuleRelease[];
   }
 
@@ -278,17 +296,68 @@ class FixturePublicationRepository
 
   async readCandidate(rootId: string) {
     const candidate = this.candidates.get(rootId);
-    return candidate === undefined ? undefined : structuredClone(candidate);
+    return candidate === undefined
+      ? undefined
+      : {
+          draft: structuredClone(candidate.draft),
+          identities: structuredClone(candidate.identities),
+          historyEvidence: candidate.historyEvidence,
+        };
   }
 
   async lockCandidate(rootId: string) {
     return this.readCandidate(rootId);
   }
 
-  async listModuleReleases(candidateOrganizationId: string, key: string) {
-    return this.moduleReleases.filter(
-      (release) => release.organizationId === candidateOrganizationId && release.key === key,
-    );
+  async readModuleReleasePage(
+    candidateOrganizationId: string,
+    key: string,
+    cursor?: { rootId: string; anchorReleaseRevision: number; afterReleaseRevision: number },
+  ) {
+    const releases = this.moduleReleases
+      .filter(
+        (release) => release.organizationId === candidateOrganizationId && release.key === key,
+      )
+      .sort((left, right) => left.releaseRevision - right.releaseRevision);
+    if (releases.length === 0)
+      return {
+        rootId: null,
+        anchorReleaseRevision: null,
+        entries: [],
+        nextAfterReleaseRevision: null,
+      };
+    const rootId = releases[0]!.rootId;
+    const anchorReleaseRevision = releases.at(-1)!.releaseRevision;
+    if (
+      cursor !== undefined &&
+      (cursor.rootId !== rootId || cursor.anchorReleaseRevision !== anchorReleaseRevision)
+    )
+      throw new Error(`Invalid Module release page cursor for ${key}`);
+    const afterReleaseRevision = cursor?.afterReleaseRevision ?? 0;
+    const anchoredReleases = releases.filter((release) => release.rootId === rootId);
+    const entries = anchoredReleases
+      .filter(
+        (release) =>
+          release.releaseRevision > afterReleaseRevision &&
+          release.releaseRevision <= anchorReleaseRevision,
+      )
+      .slice(0, 100)
+      .map((release) => {
+        const releaseIndex = anchoredReleases.indexOf(release);
+        return {
+          previousReleaseRevision:
+            releaseIndex === 0 ? null : anchoredReleases[releaseIndex - 1]!.releaseRevision,
+          release,
+        };
+      });
+    const lastRevision = entries.at(-1)?.release.releaseRevision;
+    return {
+      rootId,
+      anchorReleaseRevision,
+      entries,
+      nextAfterReleaseRevision:
+        lastRevision !== undefined && lastRevision < anchorReleaseRevision ? lastRevision : null,
+    };
   }
 
   async readModuleRelease(
@@ -334,15 +403,22 @@ class FixturePublicationRepository
     };
     const candidate = this.candidates.get(release.draft.rootId);
     if (!candidate) throw new Error(`Candidate required for ${release.draft.key}`);
+    const candidateHistory = this.histories.get(release.draft.rootId);
+    if (!candidateHistory) throw new Error(`Candidate history required for ${release.draft.key}`);
     const history = publishedDefinitionHistorySchema.parse({
       kind: output.kind,
       definitionKey: release.draft.key,
-      history: [...candidate.history.history, entry],
+      history: [...candidateHistory.history, entry],
     });
+    this.histories.set(release.draft.rootId, history);
     this.candidates.set(release.draft.rootId, {
       ...candidate,
       draft: { ...candidate.draft, publishedRevision: release.draft.draftRevision },
-      history,
+      historyEvidence: verifyPublishedDefinitionHistory(
+        history,
+        String(release.draft.rootId),
+        release.draft.draftRevision,
+      ),
     });
 
     if (output.kind === "module") {
@@ -507,7 +583,12 @@ describe("current Module V2 fixture runtime", () => {
     expect(first.accepts).toEqual(["field"]);
     expect(second.accepts).toEqual(["field"]);
 
-    const updated = structuredClone(repository.candidates.get(original.rootId)!);
+    const stored = repository.candidates.get(original.rootId)!;
+    const updated = {
+      draft: structuredClone(stored.draft),
+      identities: structuredClone(stored.identities),
+      historyEvidence: stored.historyEvidence,
+    };
     if (updated.draft.source.kind !== "module") throw new Error("Module source required");
     updated.draft.source.body.extension_points[0]!.key = "renamed_company_fields";
     updated.draft.draftRevision = 3;

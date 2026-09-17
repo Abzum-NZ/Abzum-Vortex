@@ -61,6 +61,39 @@ Access, Rule and Activity boundaries, not a new executor in page components.
    dispatch, retry and durable workflow execution remain their owning tasks;
    a declaration test is not evidence that they work.
 
+### Delivered protected named-action slice (2026-09-15)
+
+The first Action execution slice now provides one public human-request service
+for exact installed Application/Module action identities. It accepts the
+published typed inputs and value sources and deliberately supports only ordered
+`set_field` and `announce_event` effects. It reuses the existing named
+permission, record scope, field bounds, precondition, calculation, relationship
+total, Activity and transactional Event/queue boundaries; it does not introduce
+a generic executor or another permission engine.
+
+The terminal transaction rechecks current authority and subject revision under
+lock, then commits the Record change, calculated values and parent totals,
+content-free Activity, declared occurrence/outbox row, queue message and command
+receipt atomically. Event-only actions are valid. Unsupported effects or Rule
+participation, invalid fields or inputs, foreign/nonexistent account and Record
+references, failed preconditions and stale revisions refuse without partial
+effects. A denied exact named permission is recorded once through the existing
+locked owning refusal append; replay never bypasses withdrawn authority.
+
+Focused evidence covers the public preview → typed composition → reference
+validation → locked preparation → total calculation → writer path against real
+PostgreSQL. It includes named-only authority without ordinary Record read,
+event-only/set-only/mixed actions, exact-owner refusal under an Application V1 +
+Module V2 installation, parent-total propagation, replay, authority withdrawal,
+late rollback and a competing-revision race with one complete success and one
+safe refusal.
+
+Later Action slices still own every effect kind other than `set_field` and
+`announce_event`, supported Rule execution for named actions, non-human caller
+surfaces, and any page/MCP/workflow adapters. The System information and broader
+Event availability/occurrence work described elsewhere in this plan also remains;
+this bounded delivery does not close task #50.
+
 ### Event availability implementation
 
 Use a closed descriptor: either a standard event kind and record type, or a

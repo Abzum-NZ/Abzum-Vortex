@@ -141,6 +141,23 @@ const rawModuleRelease = {
   },
 };
 
+const storedHistoryRelease = {
+  publication,
+  content: compilationOutput.canonical.content,
+  dependencyManifest: [],
+  releaseNote: "Initial release",
+  evidence: {
+    authoredSource: source,
+    authoredSourceFingerprint: fingerprintCanonicalValue(source),
+    sourceContractVersion: source.source_contract_version,
+    compilationOutput,
+    resolutionSnapshot: resolution,
+    resolutionFingerprint: resolution.fingerprint,
+    comparisonFingerprint,
+    impactReasons: [],
+  },
+};
+
 const publicationState = {
   root: {
     rootId: ownResolution.rootId,
@@ -153,35 +170,14 @@ const publicationState = {
   },
   draft,
   identities: currentSourceIdentities,
-  history: {
-    kind: "module",
-    definitionKey: source.key,
-    history: [
-      {
-        publication,
-        content: compilationOutput.canonical.content,
-        dependencyManifest: [],
-        releaseNote: "Initial release",
-        evidence: {
-          authoredSource: source,
-          authoredSourceFingerprint: fingerprintCanonicalValue(source),
-          sourceContractVersion: source.source_contract_version,
-          compilationOutput,
-          resolutionSnapshot: resolution,
-          resolutionFingerprint: resolution.fingerprint,
-          comparisonFingerprint,
-          impactReasons: [],
-        },
-      },
-    ],
-  },
+  historyLatestReleaseRevision: 1,
 };
 
 const initialPublicationState = {
   ...publicationState,
   root: { ...publicationState.root, currentReleaseRevision: null },
   draft: { ...draft, publishedRevision: null },
-  history: { ...publicationState.history, history: [] },
+  historyLatestReleaseRevision: null,
 };
 
 type Call = { text: string; values: readonly DatabaseValue[] };
@@ -205,7 +201,27 @@ const runnerWith = (
 
 const responseFor = (text: string): readonly DatabaseRow[] => {
   if (text.includes("read_publication_state")) return [{ publication_state: publicationState }];
-  if (text.includes("list_module_releases")) return [{ module_releases: [rawModuleRelease] }];
+  if (text.includes("read_publication_history_page"))
+    return [
+      {
+        publication_history_page: {
+          anchorReleaseRevision: 1,
+          entries: [{ previousReleaseRevision: null, release: storedHistoryRelease }],
+          nextAfterReleaseRevision: null,
+        },
+      },
+    ];
+  if (text.includes("read_module_release_page"))
+    return [
+      {
+        module_release_page: {
+          rootId: ownResolution.rootId,
+          anchorReleaseRevision: 1,
+          entries: [{ previousReleaseRevision: null, release: rawModuleRelease }],
+          nextAfterReleaseRevision: null,
+        },
+      },
+    ];
   if (text.includes("read_module_release")) return [{ module_release: rawModuleRelease }];
   if (text.includes("append_release"))
     return [
@@ -314,7 +330,7 @@ const lifecycleRunner = () => {
       updatedBy: actorId,
     },
     identities: identitiesFor(identityRequirements),
-    history: { kind: "module", definitionKey: source.key, history },
+    historyLatestReleaseRevision: publishedRevision ?? null,
   });
 
   const transaction: RequestDatabaseTransaction = {
@@ -325,6 +341,34 @@ const lifecycleRunner = () => {
       const text = strings.join("$value");
       if (text.includes("read_publication_state"))
         return [{ publication_state: publicationStateForCurrentDraft() }] as readonly ResultRow[];
+      if (text.includes("read_publication_history_page")) {
+        const anchor = Number(values[1]);
+        const after = values[2] === null ? 0 : Number(values[2]);
+        const pageSize = Number(values[3]);
+        const entries = history
+          .map((release, index) => ({
+            previousReleaseRevision: index === 0 ? null : index,
+            release,
+          }))
+          .filter((entry) => {
+            const release = entry.release as { publication: { revision: number } };
+            return release.publication.revision > after && release.publication.revision <= anchor;
+          })
+          .slice(0, pageSize);
+        const last = entries.at(-1)?.release as { publication: { revision: number } } | undefined;
+        return [
+          {
+            publication_history_page: {
+              anchorReleaseRevision: anchor,
+              entries,
+              nextAfterReleaseRevision:
+                last !== undefined && last.publication.revision < anchor
+                  ? last.publication.revision
+                  : null,
+            },
+          },
+        ] as readonly ResultRow[];
+      }
       if (text.includes("save_draft")) {
         if (
           values[0] !== ownResolution.rootId ||
@@ -413,13 +457,66 @@ describe("database Definition publication repository", () => {
       reader.readCandidate(ownResolution.rootId),
     );
 
-    expect(candidate?.history).toMatchObject({
+    expect(candidate?.historyEvidence).toMatchObject({
       kind: "module",
       definitionKey: source.key,
-      history: [{ publication: { revision: 1 }, dependencyManifest: [] }],
+      releaseCount: 1,
+      latestRelease: { publication: { revision: 1 }, dependencyManifest: [] },
     });
-    expect(calls).toHaveLength(1);
+    expect(candidate?.historyEvidence).not.toHaveProperty("history");
+    expect(calls).toHaveLength(2);
     expect(calls[0]?.text).toContain("vortex_definition.read_publication_state");
+    expect(calls[1]?.text).toContain("vortex_definition.read_publication_history_page");
+  });
+
+  it("refuses malformed publication-history page response shapes", async () => {
+    const repository = createDatabaseDefinitionPublicationRepository(
+      runnerWith((text) =>
+        text.includes("read_publication_state")
+          ? [{ publication_state: publicationState }]
+          : [
+              {
+                publication_history_page: {
+                  anchorReleaseRevision: 1,
+                  entries: [],
+                  nextAfterReleaseRevision: null,
+                },
+              },
+            ],
+      ).transaction,
+    );
+
+    await expect(
+      repository.read(context(), (reader) => reader.readCandidate(ownResolution.rootId)),
+    ).rejects.toMatchObject({ code: "DEFINITION_PUBLICATION_FAILED" });
+  });
+
+  it("refuses incomplete publication-history page traversals", async () => {
+    const stateWithMissingLatestRelease = {
+      ...publicationState,
+      root: { ...publicationState.root, currentReleaseRevision: 2 },
+      draft: { ...draft, draftRevision: 3, publishedRevision: 2 },
+      historyLatestReleaseRevision: 2,
+    };
+    const repository = createDatabaseDefinitionPublicationRepository(
+      runnerWith((text) =>
+        text.includes("read_publication_state")
+          ? [{ publication_state: stateWithMissingLatestRelease }]
+          : [
+              {
+                publication_history_page: {
+                  anchorReleaseRevision: 2,
+                  entries: [{ previousReleaseRevision: null, release: storedHistoryRelease }],
+                  nextAfterReleaseRevision: null,
+                },
+              },
+            ],
+      ).transaction,
+    );
+
+    await expect(
+      repository.read(context(), (reader) => reader.readCandidate(ownResolution.rootId)),
+    ).rejects.toMatchObject({ code: "DEFINITION_PUBLICATION_FAILED" });
   });
 
   it("normalizes the database's explicit null pointer for an unpublished draft", async () => {
@@ -432,7 +529,10 @@ describe("database Definition publication repository", () => {
     );
 
     expect(candidate?.draft.publishedRevision).toBeUndefined();
-    expect(candidate?.history.history).toEqual([]);
+    expect(candidate?.historyEvidence).toMatchObject({
+      releaseCount: 0,
+      latestRelease: null,
+    });
   });
 
   it("lists and reads only strict immutable Module releases using stored snapshots", async () => {
@@ -440,14 +540,16 @@ describe("database Definition publication repository", () => {
     const repository = createDatabaseDefinitionPublicationRepository(transaction);
 
     const result = await repository.read(context(), async (reader) => ({
-      listed: await reader.listModuleReleases(context().organizationId, source.key),
+      page: await reader.readModuleReleasePage(context().organizationId, source.key),
       exact: await reader.readModuleRelease(context().organizationId, ownResolution.rootId, 1),
     }));
 
-    expect(result.listed[0]?.resolutionSnapshot.fingerprint).toBe(resolution.fingerprint);
+    expect(result.page.entries[0]?.release.resolutionSnapshot.fingerprint).toBe(
+      resolution.fingerprint,
+    );
     expect(result.exact?.published.publication.revision).toBe(1);
     expect(calls.map((call) => call.text)).toEqual([
-      expect.stringContaining("vortex_definition.list_module_releases"),
+      expect.stringContaining("vortex_definition.read_module_release_page"),
       expect.stringContaining("vortex_definition.read_module_release"),
     ]);
   });
