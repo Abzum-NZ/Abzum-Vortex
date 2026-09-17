@@ -5,6 +5,7 @@ import {
   builderKeySchema,
   fieldIdSchema,
   moduleRootIdSchema,
+  organizationAccountIdSchema,
   organizationIdSchema,
   groupIdSchema,
   platformIdSchema,
@@ -65,6 +66,68 @@ export const saveRecordCommandV2Schema = z.discriminatedUnion("operation", [
       operation: z.literal("update"),
       recordId: recordIdSchema,
       expectedConcurrencyNumber: saveRecordRevisionSchema,
+    })
+    .strict(),
+]);
+
+const transferRecordOwnershipCommandFields = {
+  contractVersion: saveRecordContractVersionSchema,
+  commandId: platformIdSchema,
+  recordTypeId: recordTypeIdSchema,
+  recordId: recordIdSchema,
+  expectedConcurrencyNumber: saveRecordRevisionSchema,
+};
+
+/**
+ * Fixed single-record owner change.  This is intentionally distinct from a
+ * field update and from named actions; server context supplies scope and actor.
+ */
+export const transferRecordOwnershipCommandV2Schema = z
+  .discriminatedUnion("targetKind", [
+    z
+      .object({
+        ...transferRecordOwnershipCommandFields,
+        targetKind: z.literal("organization_account"),
+        targetOrganizationAccountId: organizationAccountIdSchema,
+      })
+      .strict(),
+    z
+      .object({
+        ...transferRecordOwnershipCommandFields,
+        targetKind: z.literal("group"),
+        targetGroupId: groupIdSchema,
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    if (
+      value.targetKind === "organization_account" &&
+      value.targetOrganizationAccountId === undefined
+    )
+      context.addIssue({
+        code: "custom",
+        message: "An account transfer requires an account target",
+      });
+    if (value.targetKind === "group" && value.targetGroupId === undefined)
+      context.addIssue({ code: "custom", message: "A Group transfer requires a Group target" });
+  });
+
+export const transferRecordOwnershipResultV2Schema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      contractVersion: saveRecordContractVersionSchema,
+      outcome: z.literal("transferred"),
+      recordId: recordIdSchema,
+      concurrencyNumber: saveRecordRevisionSchema,
+      correlationId: correlationIdSchema,
+      replayed: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      contractVersion: saveRecordContractVersionSchema,
+      outcome: z.literal("refused"),
+      error: safeErrorResponseSchema,
     })
     .strict(),
 ]);
@@ -130,5 +193,9 @@ export const saveRecordResultV2Schema = z.discriminatedUnion("outcome", [
 
 export type RecordScope = z.infer<typeof recordScopeSchema>;
 export type SaveRecordCommandV2 = z.infer<typeof saveRecordCommandV2Schema>;
+export type TransferRecordOwnershipCommandV2 = z.infer<
+  typeof transferRecordOwnershipCommandV2Schema
+>;
+export type TransferRecordOwnershipResultV2 = z.infer<typeof transferRecordOwnershipResultV2Schema>;
 export type RecordSaveFieldCorrection = z.infer<typeof recordSaveFieldCorrectionSchema>;
 export type SaveRecordResultV2 = z.infer<typeof saveRecordResultV2Schema>;
