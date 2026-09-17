@@ -122,6 +122,11 @@
       "label": "Organization structural Access reductions"
     },
     {
+      "migration": "supabase/migrations/20260912141932_record_remaining_access_administration_refusals.sql",
+      "proof": "supabase/tests/record-ownership-target-retirement-concurrency.test.sh",
+      "label": "Record ownership target retirement"
+    },
+    {
       "migration": "supabase/migrations/20260907023622_coordinate_private_direct_share_changes.sql",
       "proof": "supabase/tests/private-direct-record-share-change-concurrency.test.sh",
       "label": "Private direct record-share changes"
