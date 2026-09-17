@@ -18,6 +18,10 @@
 #                 row lock, then serialize. Both can complete, or the link clear
 #                 returns a stale conflict after delete clears it; no partial
 #                 edge/value/lifecycle state is possible.
+#   transfer   -- two protected ownership transfers carry the same expected
+#                 revision. The second waits on the generated Record row, then
+#                 returns the committed revision as a conflict. Only the first
+#                 transfer's owner, receipt, Activity and Event effects remain.
 #
 # What enforces this, established by targeted mutation on fresh clusters:
 #   * The adapter locks the target row before it reads any other fact, and
@@ -62,6 +66,7 @@ readonly permission_delete='c4760000-0000-4000-8000-000000000034'
 readonly field_required_link='c4760000-0000-4000-8000-000000000035'
 readonly relationship_required='c4760000-0000-4000-8000-000000000036'
 readonly permission_restore='c4760000-0000-4000-8000-000000000037'
+readonly permission_transfer='c4760000-0000-4000-8000-000000000038'
 readonly role_id='c4760000-0000-4000-8000-000000000018'
 readonly assignment_id='c4760000-0000-4000-8000-000000000019'
 readonly steward_role_id='c4760000-0000-4000-8000-00000000001a'
@@ -84,6 +89,8 @@ readonly same_save_activity_two='c4760000-0000-4000-8000-000000000059'
 readonly same_save_event_two='c4760000-0000-4000-8000-00000000005a'
 readonly owner_group_id='c4760000-0000-4000-8000-000000000060'
 readonly owner_membership_id='c4760000-0000-4000-8000-000000000061'
+readonly transfer_target_a_group_id='c4760000-0000-4000-8000-000000000068'
+readonly transfer_target_b_group_id='c4760000-0000-4000-8000-000000000069'
 readonly group_save_command='c4760000-0000-4000-8000-000000000063'
 readonly group_save_activity='c4760000-0000-4000-8000-000000000064'
 readonly group_save_event='c4760000-0000-4000-8000-000000000065'
@@ -95,6 +102,13 @@ readonly link_add_source_record_id='c4760000-0000-4000-8000-000000000043'
 readonly link_add_target_record_id='c4760000-0000-4000-8000-000000000044'
 readonly restore_source_record_id='c4760000-0000-4000-8000-000000000045'
 readonly restore_target_record_id='c4760000-0000-4000-8000-000000000046'
+readonly transfer_record_id='c4760000-0000-4000-8000-000000000047'
+readonly transfer_command_a='c4760000-0000-4000-8000-000000000070'
+readonly transfer_activity_a='c4760000-0000-4000-8000-000000000071'
+readonly transfer_occurrence_a='c4760000-0000-4000-8000-000000000072'
+readonly transfer_command_b='c4760000-0000-4000-8000-000000000073'
+readonly transfer_activity_b='c4760000-0000-4000-8000-000000000074'
+readonly transfer_occurrence_b='c4760000-0000-4000-8000-000000000075'
 readonly physical_table='rt_c4760000000040008000000000000013'
 readonly column_one='f_c4760000000040008000000000000014'
 readonly column_reference='f_c4760000000040008000000000000030'
@@ -217,7 +231,8 @@ cleanup_fixture() {
     delete from pgmq.q_vortex_event_occurrences
       where message ->> 'occurrenceId' in (
         '$base_save_event_one', '$base_save_event_two',
-        '$same_save_event_one', '$same_save_event_two', '$group_save_event'
+        '$same_save_event_one', '$same_save_event_two', '$group_save_event',
+        '$transfer_occurrence_a', '$transfer_occurrence_b'
       );
     delete from vortex_event.event_outbox
       where organization_id = '$organization_id';
@@ -267,7 +282,7 @@ finalize() {
   touch "$proof_root/conflict-release" "$proof_root/base-save-release" \
     "$proof_root/same-command-release" "$proof_root/group-membership-release" \
     "$proof_root/revocation-release" \
-    "$proof_root/reference-release" >/dev/null 2>&1 || true
+    "$proof_root/reference-release" "$proof_root/transfer-release" >/dev/null 2>&1 || true
   touch "$proof_root/link-delete-release" >/dev/null 2>&1 || true
   touch "$proof_root/link-add-release" "$proof_root/restore-target-release" >/dev/null 2>&1 || true
   stop_owned_workers
@@ -299,12 +314,14 @@ schema_state="$(run_sql "
     pg_catalog.to_regprocedure('vortex_record.change_record(uuid,uuid,bigint,jsonb,uuid[])') is not null,
     pg_catalog.to_regprocedure('vortex_record.read_record(uuid,uuid)') is not null,
     pg_catalog.to_regprocedure('vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid)') is not null,
+    pg_catalog.to_regprocedure('vortex_record.transfer_record_ownership(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid)') is not null,
     pg_catalog.to_regprocedure('vortex_record.save_base_record_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb)') is not null,
+    pg_catalog.has_function_privilege('vortex_runtime', 'vortex_record.transfer_record_ownership(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid)', 'EXECUTE'),
     pg_catalog.has_function_privilege('vortex_runtime', 'vortex_record.save_base_record_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb)', 'EXECUTE'),
     not pg_catalog.has_function_privilege('vortex_runtime', 'vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid)', 'EXECUTE')
   );
 ")"
-[ "$schema_state" = 't|t|t|t|t|t' ] || {
+[ "$schema_state" = 't|t|t|t|t|t|t|t' ] || {
   echo 'the record adapter migrations must already be applied to the proof database' >&2
   exit 1
 }
@@ -326,6 +343,22 @@ human_context() {
     'primaryAuthenticatedAt',pg_catalog.statement_timestamp()));" \
     "$actor_id" "$tenant_id" "$organization_id" "$account_id" "$identity_id" \
     "$application_root_id" "$version_expression"
+}
+
+# A distinct verified human context for each competing protected request.
+transfer_human_context() {
+  local version_expression="$1" session_id="$2" correlation_id="$3"
+  printf "select vortex_context.initialize(pg_catalog.jsonb_build_object(
+    'callerKind','human','identityAuthorityId','%s','tenantId','%s','organizationId','%s',
+    'organizationAccountId','%s','identityId','%s','applicationRootId','%s',
+    'sessionId','%s','authenticationStrength','single_factor',
+    'issuedAt',pg_catalog.statement_timestamp(),
+    'expiresAt',pg_catalog.statement_timestamp()+interval '1 hour',
+    'accessVersion',%s,'correlationId','%s',
+    'accessTokenIssuedAt',pg_catalog.statement_timestamp(),
+    'primaryAuthenticatedAt',pg_catalog.statement_timestamp()));" \
+    "$actor_id" "$tenant_id" "$organization_id" "$account_id" "$identity_id" \
+    "$application_root_id" "$session_id" "$version_expression" "$correlation_id"
 }
 
 current_version() {
@@ -365,7 +398,13 @@ readonly permissions_sql="pg_catalog.jsonb_build_array(
     'recordScope','{\"routes\":[{\"kind\":\"all_records\"}]}'::jsonb,
     'fieldPolicy',pg_catalog.jsonb_build_object(
       'readableFieldIds','[]'::jsonb,'changeableFieldIds','[]'::jsonb),
-    'actionKind','restore','administrative',false))"
+    'actionKind','restore','administrative',false),
+  pg_catalog.jsonb_build_object('permissionId','$permission_transfer','key','record_change.transfer',
+    'label','Transfer','description','Transfer ownership of the concurrency record.','recordTypeId','$record_type_id',
+    'recordScope','{\"routes\":[{\"kind\":\"all_records\"}]}'::jsonb,
+    'fieldPolicy',pg_catalog.jsonb_build_object(
+      'readableFieldIds','[]'::jsonb,'changeableFieldIds','[]'::jsonb),
+    'actionKind','transfer','administrative',false))"
 
 readonly module_content="pg_catalog.jsonb_build_object(
   'name','Record change concurrency','description','One record type for the change proof.',
@@ -447,6 +486,14 @@ run_sql "
     'create_group','$organization_id','$owner_group_id',null,
     'record_change_owners','Record change owners','$actor_id',
     'c4760000-0000-4000-8000-000000000066');
+  select * from vortex_access.coordinate_organization_group_change(
+    'create_group','$organization_id','$transfer_target_a_group_id',null,
+    'record_change_transfer_a','Record change transfer A','$actor_id',
+    'c4760000-0000-4000-8000-00000000006a');
+  select * from vortex_access.coordinate_organization_group_change(
+    'create_group','$organization_id','$transfer_target_b_group_id',null,
+    'record_change_transfer_b','Record change transfer B','$actor_id',
+    'c4760000-0000-4000-8000-00000000006b');
   select * from vortex_access.coordinate_organization_group_membership_change(
     'add_membership','$organization_id','$owner_membership_id',null,
     '$owner_group_id','$account_id',pg_catalog.clock_timestamp()-interval '1 minute',
@@ -577,7 +624,7 @@ run_sql "
       'templates',pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'template',pg_catalog.jsonb_build_object('roleId','c4760000-0000-4000-8000-0000000000c1',
           'key','change_template','name','Change template','homePageId','c4760000-0000-4000-8000-0000000000c2',
-          'permissionKeys','[\"record_change.read\",\"record_change.update\"]'::jsonb,
+          'permissionKeys','[\"record_change.read\",\"record_change.update\",\"record_change.transfer\"]'::jsonb,
           'permissionSelection','{\"kind\":\"exact\"}'::jsonb),
         'sourceTemplateFingerprint',$(sha "'template'"),
         'sourcePermissions',candidate.entry_values,'livePermissions',candidate.entry_values)),
@@ -683,7 +730,11 @@ run_sql "
       null,1,'$owner_group_id','soft_deleted',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',
       pg_catalog.statement_timestamp(),'$account_id',
       'restore source','RC-EXIST-9',null,
-      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$restore_target_record_id'));
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$restore_target_record_id')),
+    ('$organization_id','$module_root_id','$record_type_id','$storage_contract_id','$transfer_record_id',
+      null,1,'$owner_group_id','active',1,pg_catalog.statement_timestamp(),'$account_id',pg_catalog.statement_timestamp(),'$account_id',null,null,
+      'transfer source','RC-EXIST-11',null,
+      pg_catalog.jsonb_build_object('recordTypeId','$record_type_id','recordId','$anchor_record_id'));
   insert into vortex_record.relationship_edges (
     relationship_id, from_organisation_id, to_organisation_id,
     from_application_root_id, to_application_root_id,
@@ -708,7 +759,8 @@ run_sql "
       ('$link_add_source_record_id'::uuid,'$anchor_record_id'::uuid),
       ('$link_add_target_record_id'::uuid,'$anchor_record_id'::uuid),
       ('$restore_target_record_id'::uuid,'$anchor_record_id'::uuid),
-      ('$restore_source_record_id'::uuid,'$restore_target_record_id'::uuid)
+      ('$restore_source_record_id'::uuid,'$restore_target_record_id'::uuid),
+      ('$transfer_record_id'::uuid,'$anchor_record_id'::uuid)
     ) as required_edge(source_id, target_id);
   reset role;
   delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
@@ -1327,7 +1379,114 @@ same_command_effects="$(run_sql "select pg_catalog.concat_ws('|',
 echo "same-command race: replay=$same_command_second_result, row is $same_command_state, effects are $same_command_effects"
 
 # ----------------------------------------------------------------------------
-# Race seven: a Group membership removal and a Group-owned shared Record create
+# Race seven: two protected transfers from real request sessions carry revision
+# one for the same generated Group-owned row. The first completes its operation
+# but keeps the transaction open; the second must visibly wait on that row.
+# After the first commits revision two, the waiter returns an exact stale
+# conflict and retains no receipt, Activity, Event or queue effect.
+# ----------------------------------------------------------------------------
+access_version="$(current_version)"
+transfer_data_version_before="$(run_sql "begin;
+  delete from vortex_context.request_contexts where backend_pid=pg_catalog.pg_backend_pid();
+  $(human_context "$access_version")
+  set local role vortex_record_adapter;
+  select data_version from vortex_record.record_data_versions
+  where organization_id='$organization_id' and storage_contract_id='$storage_contract_id'
+    and application_root_id is null;
+  reset role; commit;" | tr -d '[:space:]')"
+
+"${psql_command[@]}" >"$proof_root/transfer-a.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/transfer-a.pid'
+$(transfer_human_context "$access_version" 'c4760000-0000-4000-8000-000000000076' 'c4760000-0000-4000-8000-000000000077')
+set local role vortex_runtime;
+select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'recordId',
+  result ->> 'concurrencyNumber', result ->> 'correlationId', result ->> 'replayed')
+from (select vortex_record.transfer_record_ownership(
+  '$transfer_command_a','$record_type_id','$transfer_record_id',1,
+  'group','$transfer_target_a_group_id','$transfer_activity_a','$transfer_occurrence_a'
+) as result) as transferred \g '$proof_root/transfer-a.result'
+reset role;
+\! touch '$proof_root/transfer-a-ready'
+\! deadline=600; while [ ! -f '$proof_root/transfer-release' ] && [ \$deadline -gt 0 ]; do sleep 0.05; deadline=\$((deadline-1)); done; [ -f '$proof_root/transfer-release' ]
+commit;
+SQL
+transfer_a_pid=$!; worker_pids+=("$transfer_a_pid")
+wait_for_file "$proof_root/transfer-a-ready"
+transfer_a_backend="$(read_backend_pid "$proof_root/transfer-a.pid")"
+
+"${psql_command[@]}" >"$proof_root/transfer-b.log" 2>&1 <<SQL &
+begin;
+set local lock_timeout='30s'; set local statement_timeout='45s';
+select pg_catalog.pg_backend_pid() \g '$proof_root/transfer-b.pid'
+$(transfer_human_context "$access_version" 'c4760000-0000-4000-8000-000000000078' 'c4760000-0000-4000-8000-000000000079')
+set local role vortex_runtime;
+select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'concurrencyNumber',
+  result ->> 'correlationId')
+from (select vortex_record.transfer_record_ownership(
+  '$transfer_command_b','$record_type_id','$transfer_record_id',1,
+  'group','$transfer_target_b_group_id','$transfer_activity_b','$transfer_occurrence_b'
+) as result) as transferred \g '$proof_root/transfer-b.result'
+reset role;
+commit;
+SQL
+transfer_b_pid=$!; worker_pids+=("$transfer_b_pid")
+transfer_b_backend="$(read_backend_pid "$proof_root/transfer-b.pid")"
+wait_for_database_blocker "$transfer_b_backend" "$transfer_a_backend" \
+  'the competing ownership transfer'
+touch "$proof_root/transfer-release"
+
+wait_owned_worker "$transfer_a_pid" || { echo 'the first ownership transfer failed' >&2; exit 1; }
+wait_owned_worker "$transfer_b_pid" || { echo 'the competing ownership transfer invocation failed' >&2; exit 1; }
+transfer_a_result="$(tr -d '[:space:]' <"$proof_root/transfer-a.result")"
+transfer_b_result="$(tr -d '[:space:]' <"$proof_root/transfer-b.result")"
+[ "$transfer_a_result" = "transferred|$transfer_record_id|2|c4760000-0000-4000-8000-000000000077|false" ] || {
+  printf 'the first ownership transfer did not commit revision two: %q\n' "$transfer_a_result" >&2; exit 1
+}
+[ "$transfer_b_result" = 'conflict|2|c4760000-0000-4000-8000-000000000079' ] || {
+  printf 'the competing ownership transfer did not return revision two: %q\n' "$transfer_b_result" >&2; exit 1
+}
+
+transfer_state="$(run_sql "begin;
+  delete from vortex_context.request_contexts where backend_pid=pg_catalog.pg_backend_pid();
+  $(human_context "(select current_version from vortex_access.organization_access_versions where organization_id='$organization_id')")
+  set local role vortex_record_adapter;
+  select pg_catalog.concat_ws('|', stored.owner_group_id::text,
+    stored.concurrency_number::text,
+    (select data_version::text from vortex_record.record_data_versions
+      where organization_id='$organization_id' and storage_contract_id='$storage_contract_id'
+        and application_root_id is null))
+  from record_data.$physical_table as stored where stored.record_id='$transfer_record_id';
+  reset role; commit;" | tr -d '[:space:]')"
+expected_transfer_data_version="$((transfer_data_version_before + 1))"
+[ "$transfer_state" = "$transfer_target_a_group_id|2|$expected_transfer_data_version" ] || {
+  printf 'the competing transfers left an unexpected owner, revision or data version: %q\n' "$transfer_state" >&2; exit 1
+}
+transfer_effects="$(run_sql "select pg_catalog.concat_ws('|',
+  (select pg_catalog.count(*) from vortex_record.save_command_receipts
+    where organization_id='$organization_id' and command_id='$transfer_command_a' and state='completed'),
+  (select pg_catalog.count(*) from vortex_record.save_command_receipts
+    where organization_id='$organization_id' and command_id='$transfer_command_b'),
+  (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+    where organization_id='$organization_id' and activity_id='$transfer_activity_a' and outcome='completed'),
+  (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+    where organization_id='$organization_id' and activity_id='$transfer_activity_b'),
+  (select pg_catalog.count(*) from vortex_event.event_outbox
+    where organization_id='$organization_id' and occurrence_id='$transfer_occurrence_a'),
+  (select pg_catalog.count(*) from vortex_event.event_outbox
+    where organization_id='$organization_id' and occurrence_id='$transfer_occurrence_b'),
+  (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences
+    where message ->> 'occurrenceId'='$transfer_occurrence_a'),
+  (select pg_catalog.count(*) from pgmq.q_vortex_event_occurrences
+    where message ->> 'occurrenceId'='$transfer_occurrence_b'));")"
+[ "$transfer_effects" = '1|0|1|0|1|0|1|0' ] || {
+  printf 'the competing transfers retained partial or losing effects: %q\n' "$transfer_effects" >&2; exit 1
+}
+echo "ownership transfer race: first=$transfer_a_result, second=$transfer_b_result, state=$transfer_state, effects=$transfer_effects"
+
+# ----------------------------------------------------------------------------
+# Race eight: a Group membership removal and a Group-owned shared Record create
 # serialize on the exact membership row. The save carries the last committed
 # Access version, which remains valid while the removal is uncommitted, then its
 # production Group-owner check waits for the removal's membership lock. Once the
@@ -1399,7 +1558,7 @@ group_save_state="$(run_sql "select pg_catalog.concat_ws('|',
 echo "Group membership/save race: save=$group_save_result, state=$group_save_state"
 
 # ----------------------------------------------------------------------------
-# Race eight: the acting account's own role assignment is revoked while a change
+# Race nine: the acting account's own role assignment is revoked while a change
 # waits at the row lock.
 # ----------------------------------------------------------------------------
 access_version="$(current_version)"

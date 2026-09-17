@@ -137,7 +137,7 @@
       "label": "Protected record-share authority"
     },
     {
-      "migration": "supabase/migrations/20260912011556_fixed_record_adapters.sql",
+      "migration": "supabase/migrations/20260915090000_protected_single_record_ownership_transfer.sql",
       "proof": "supabase/tests/record-change-concurrency.test.sh",
       "label": "Record change"
     },
