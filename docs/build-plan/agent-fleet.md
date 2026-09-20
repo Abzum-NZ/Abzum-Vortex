@@ -215,24 +215,35 @@ Every new proof:
 ## Branch and promotion model
 
 A task's branch is cut from `origin/main` and, once gates and review pass,
-merges by pull request into `testing`. That is where nearly all task-level
-delivery ends under the phase-gate policy above — a task does not wait for a
-hosted run to reach Done.
+merges by pull request back into `main`. That is where task-level delivery
+ends under the phase-gate policy above — a task does not wait for a hosted run
+to reach Done.
 
-At a phase boundary, the orchestrator confirms the accumulated `testing`
-revision, the phase's hosted Kestra verification runs there once, and — once
-that revision is verified — a promotion pull request merges `testing` into
-`main`. See [Branch flow](../specification/18-delivery-and-testing.md#branch-flow)
-for the authoritative sequence and the break-glass exception.
+At a phase boundary, a promotion pull request merges `main` into `testing`,
+and the hosted Kestra verification runs against that `testing` revision. Work
+that has reached `main` but not `testing` is delivered but not hosted-verified;
+the board must never blur the two. A migration that re-establishes a baseline
+is promoted on its own, with nothing else bundled.
 
-Check for unexpected divergence between the two branches at the start of any
-cycle that touches hosted results. `origin/testing..origin/main` should be
-empty outside a recorded break-glass exception, since nothing should reach
-`main` except through a verified promotion; a growing
-`origin/main..origin/testing` gap is the normal, expected shape of an
-in-progress phase, but should not be left to grow indefinitely. A failed
-promotion becomes a new bug issue and returns to the queue rather than
-blocking the branch.
+Check divergence at the start of any cycle that touches hosted results:
+
+```
+git rev-list --count origin/testing..origin/main
+```
+
+A non-zero count means `testing` is behind and every hosted result is testing
+older code. A repaired concurrency proof once sat on `main` for six days while
+every hosted run re-tested the broken copy on `testing` and failed identically.
+Nothing reported it. A failed promotion becomes a new bug issue and returns to
+the queue rather than blocking the branch.
+
+> **Known contradiction.** [Branch flow](../specification/18-delivery-and-testing.md#branch-flow)
+> in the specification still describes the earlier model — feature branches
+> merging into `testing`, with the verified `testing` revision promoted to
+> `main`. Delivery has run the other way round since at least September 2026:
+> every feature pull request bases on `main`, and promotions base on `testing`.
+> This document records what actually happens. Which model the project keeps is
+> tracked separately and is not the orchestrator's decision to make.
 
 ## Dispatch brief template
 
