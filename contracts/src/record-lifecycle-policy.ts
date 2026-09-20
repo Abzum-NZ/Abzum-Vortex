@@ -29,6 +29,22 @@ export const recordLifecycleActionSchema = z.enum(["delete", "archive_workflow"]
 export type RecordLifecycleAction = z.infer<typeof recordLifecycleActionSchema>;
 
 /**
+ * Closed, typed archive destination reference identifier.
+ * Must be a lowercase alphanumeric identifier using hyphen or underscore delimiters.
+ * Strictly excludes URLs, connection strings, SQL escape hatches, and credential patterns.
+ */
+export const archiveDestinationReferenceSchema = z
+  .string()
+  .min(1)
+  .max(80)
+  .regex(
+    /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/,
+    "Archive destination reference must be a lowercase alphanumeric identifier using hyphen or underscore delimiters",
+  )
+  .brand<"ArchiveDestinationReference">();
+export type ArchiveDestinationReference = z.infer<typeof archiveDestinationReferenceSchema>;
+
+/**
  * Organisation runtime settings lifecycle ceiling schema.
  * Bound to organizationId and settingsRevision.
  * Limits must be internally closed: either a finite positive ceiling is set,
@@ -43,7 +59,7 @@ export const organizationLifecycleLimitsSchema = z
     allowUnlimitedRetentionDays: z.boolean(),
     allowUnlimitedRecordCount: z.boolean(),
     allowedActions: z.array(recordLifecycleActionSchema).min(1),
-    allowedArchiveDestinations: z.array(z.string().min(1).max(120)),
+    allowedArchiveDestinations: z.array(archiveDestinationReferenceSchema),
   })
   .strict()
   .superRefine((limits, context) => {
@@ -211,7 +227,7 @@ export const archiveWorkflowRecordLifecyclePolicySchema = z
     archiveWorkflowId: workflowIdSchema,
     expectedWorkflowRevision: revisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
-    archiveDestination: z.string().min(1).max(120),
+    archiveDestination: archiveDestinationReferenceSchema,
   })
   .strict()
   .superRefine(validatePolicyLimitsConsistency)
@@ -242,11 +258,15 @@ export type RecordTypeLifecyclePolicy = z.infer<typeof recordTypeLifecyclePolicy
 
 /**
  * Evidence item for an exact active registered workflow in runtime.
+ * Scope-bound to matching organizationId, authorizedApplicationIds, and allowOrganizationShared.
  */
 export const registeredWorkflowEvidenceSchema = z
   .object({
     workflowId: workflowIdSchema,
     workflowRevision: revisionSchema,
+    organizationId: organizationIdSchema,
+    authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
+    allowOrganizationShared: z.boolean().default(false),
     state: z.literal("active"),
   })
   .strict();
@@ -254,12 +274,15 @@ export type RegisteredWorkflowEvidence = z.infer<typeof registeredWorkflowEviden
 
 /**
  * Evidence item for an exact active connection instance in runtime.
+ * Scope-bound to matching organizationId, closed destinationKey, authorizedApplicationIds, and allowOrganizationShared.
  */
 export const activeConnectionEvidenceSchema = z
   .object({
     connectionInstanceId: connectionInstanceIdSchema,
-    destinationKey: z.string().min(1).max(120),
+    destinationKey: archiveDestinationReferenceSchema,
     organizationId: organizationIdSchema,
+    authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
+    allowOrganizationShared: z.boolean().default(false),
     state: z.literal("active"),
   })
   .strict();
@@ -335,12 +358,39 @@ export const validateRecordTypeLifecyclePolicyDefinition = (
  *    - Exact archiveConnectionInstanceId and archiveDestination must be in activeConnections with matching organisationId.
  *    - Unavailable archival NEVER silently falls back to deletion.
  */
+export interface ValidateRecordTypeLifecyclePolicyOptions {
+  expectedSettingsRevision?: number;
+}
+
 export const validateRecordTypeLifecyclePolicy = (
   policyCandidate: unknown,
   organizationLimitsCandidate: unknown,
   readinessEvidenceCandidate?: unknown,
+  optionsOrExpectedSettingsRevision?: ValidateRecordTypeLifecyclePolicyOptions | number | unknown,
 ): PolicyValidationResult => {
   const issues: PolicyValidationIssue[] = [];
+
+  let expectedSettingsRevision: number | undefined;
+  if (typeof optionsOrExpectedSettingsRevision === "number") {
+    expectedSettingsRevision = optionsOrExpectedSettingsRevision;
+  } else if (
+    optionsOrExpectedSettingsRevision !== null &&
+    typeof optionsOrExpectedSettingsRevision === "object" &&
+    "expectedSettingsRevision" in optionsOrExpectedSettingsRevision &&
+    typeof (optionsOrExpectedSettingsRevision as Record<string, unknown>)
+      .expectedSettingsRevision === "number"
+  ) {
+    expectedSettingsRevision = (optionsOrExpectedSettingsRevision as Record<string, unknown>)
+      .expectedSettingsRevision as number;
+  } else if (
+    policyCandidate !== null &&
+    typeof policyCandidate === "object" &&
+    "expectedSettingsRevision" in policyCandidate &&
+    typeof (policyCandidate as Record<string, unknown>).expectedSettingsRevision === "number"
+  ) {
+    expectedSettingsRevision = (policyCandidate as Record<string, unknown>)
+      .expectedSettingsRevision as number;
+  }
 
   const parsedPolicy = recordTypeLifecyclePolicySchema.safeParse(policyCandidate);
   if (!parsedPolicy.success) {
@@ -376,7 +426,18 @@ export const validateRecordTypeLifecyclePolicy = (
   const policy = parsedPolicy.data;
   const limits = parsedLimits.data;
 
-  // 1. Cross-organisation isolation check
+  // 1. Settings revision check (reject stale or concurrent settings)
+  if (expectedSettingsRevision !== undefined) {
+    if (limits.settingsRevision !== expectedSettingsRevision) {
+      issues.push({
+        code: "stale_settings_revision",
+        path: ["settingsRevision"],
+        message: `Organisation limits settings revision (${limits.settingsRevision}) does not match expected revision (${expectedSettingsRevision}); settings were concurrently modified or stale`,
+      });
+    }
+  }
+
+  // 2. Cross-organisation isolation check
   if (policy.organizationId !== limits.organizationId) {
     issues.push({
       code: "organization_isolation_violation",
@@ -488,14 +549,36 @@ export const validateRecordTypeLifecyclePolicy = (
           (w) =>
             w.workflowId === policy.archiveWorkflowId &&
             w.workflowRevision === policy.expectedWorkflowRevision &&
+            w.organizationId === policy.organizationId &&
             w.state === "active",
         );
         if (!matchingWorkflow) {
           issues.push({
             code: "archive_workflow_not_registered",
             path: ["archiveWorkflowId"],
-            message: `Active workflow ${policy.archiveWorkflowId} at expected revision ${policy.expectedWorkflowRevision} is not registered in runtime workflows; archival cannot fall back to deletion`,
+            message: `Active workflow ${policy.archiveWorkflowId} at expected revision ${policy.expectedWorkflowRevision} in organisation ${policy.organizationId} is not registered in runtime workflows; archival cannot fall back to deletion`,
           });
+        } else {
+          if (policy.applicationRootId === null) {
+            if (!matchingWorkflow.allowOrganizationShared) {
+              issues.push({
+                code: "archive_workflow_scope_mismatch",
+                path: ["archiveWorkflowId"],
+                message: `Registered workflow ${policy.archiveWorkflowId} does not permit organisation-shared use (allowOrganizationShared is false)`,
+              });
+            }
+          } else {
+            const isAuthorized =
+              matchingWorkflow.authorizedApplicationIds.includes(policy.applicationRootId) ||
+              matchingWorkflow.allowOrganizationShared;
+            if (!isAuthorized) {
+              issues.push({
+                code: "archive_workflow_scope_mismatch",
+                path: ["archiveWorkflowId"],
+                message: `Registered workflow ${policy.archiveWorkflowId} is not authorized for permanent application root ${policy.applicationRootId}`,
+              });
+            }
+          }
         }
 
         // Exact connection instance check
@@ -512,6 +595,27 @@ export const validateRecordTypeLifecyclePolicy = (
             path: ["archiveConnectionInstanceId"],
             message: `Active connection instance ${policy.archiveConnectionInstanceId} for destination "${policy.archiveDestination}" in organisation ${policy.organizationId} is unavailable; archival cannot fall back to deletion`,
           });
+        } else {
+          if (policy.applicationRootId === null) {
+            if (!matchingConnection.allowOrganizationShared) {
+              issues.push({
+                code: "archive_connection_scope_mismatch",
+                path: ["archiveConnectionInstanceId"],
+                message: `Active connection instance ${policy.archiveConnectionInstanceId} does not permit organisation-shared use (allowOrganizationShared is false)`,
+              });
+            }
+          } else {
+            const isAuthorized =
+              matchingConnection.authorizedApplicationIds.includes(policy.applicationRootId) ||
+              matchingConnection.allowOrganizationShared;
+            if (!isAuthorized) {
+              issues.push({
+                code: "archive_connection_scope_mismatch",
+                path: ["archiveConnectionInstanceId"],
+                message: `Active connection instance ${policy.archiveConnectionInstanceId} is not authorized for permanent application root ${policy.applicationRootId}`,
+              });
+            }
+          }
         }
       }
     }
@@ -547,6 +651,44 @@ export type LifecycleCandidateRecord = z.infer<typeof lifecycleCandidateRecordSc
 export const recordLifecycleDueReasonSchema = z.enum(["age", "count_excess", "both"]);
 export type RecordLifecycleDueReason = z.infer<typeof recordLifecycleDueReasonSchema>;
 
+const validateItemReasonsConsistency = (
+  item: {
+    dueReasons: ("age" | "count_excess")[];
+    primaryReason: RecordLifecycleDueReason;
+  },
+  context: z.RefinementCtx,
+) => {
+  const set = new Set(item.dueReasons);
+  if (set.size !== item.dueReasons.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["dueReasons"],
+      message: "dueReasons cannot contain duplicates",
+    });
+  }
+  if (item.primaryReason === "both" && (!set.has("age") || !set.has("count_excess"))) {
+    context.addIssue({
+      code: "custom",
+      path: ["primaryReason"],
+      message: "primaryReason 'both' requires both 'age' and 'count_excess' in dueReasons",
+    });
+  }
+  if (item.primaryReason === "age" && (set.has("count_excess") || !set.has("age"))) {
+    context.addIssue({
+      code: "custom",
+      path: ["primaryReason"],
+      message: "primaryReason 'age' requires exactly ['age'] in dueReasons",
+    });
+  }
+  if (item.primaryReason === "count_excess" && (set.has("age") || !set.has("count_excess"))) {
+    context.addIssue({
+      code: "custom",
+      path: ["primaryReason"],
+      message: "primaryReason 'count_excess' requires exactly ['count_excess'] in dueReasons",
+    });
+  }
+};
+
 /**
  * Actionable handoff item for recoverable deletion.
  */
@@ -559,7 +701,8 @@ export const dueDeleteRecordHandoffItemSchema = z
     action: z.literal("delete"),
     createdAt: timestampSchema,
   })
-  .strict();
+  .strict()
+  .superRefine(validateItemReasonsConsistency);
 
 /**
  * Actionable handoff item for durable workflow archival.
@@ -574,10 +717,11 @@ export const dueArchiveRecordHandoffItemSchema = z
     archiveWorkflowId: workflowIdSchema,
     expectedWorkflowRevision: revisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
-    archiveDestination: z.string().min(1).max(120),
+    archiveDestination: archiveDestinationReferenceSchema,
     createdAt: timestampSchema,
   })
-  .strict();
+  .strict()
+  .superRefine(validateItemReasonsConsistency);
 
 /**
  * Discriminated union of due record items for executor #117.
@@ -600,7 +744,8 @@ export const blockedRemovalRecordSchema = z
     blockReason: z.enum(["legal_hold", "recovery_protection", "held_and_protected"]),
     createdAt: timestampSchema,
   })
-  .strict();
+  .strict()
+  .superRefine(validateItemReasonsConsistency);
 export type BlockedRemovalRecord = z.infer<typeof blockedRemovalRecordSchema>;
 
 /**
@@ -649,7 +794,7 @@ export const recordLifecycleHandoffSchema = z
         archiveWorkflowId: workflowIdSchema,
         expectedWorkflowRevision: revisionSchema,
         archiveConnectionInstanceId: connectionInstanceIdSchema,
-        archiveDestination: z.string().min(1).max(120),
+        archiveDestination: archiveDestinationReferenceSchema,
       })
       .strict()
       .optional(),
@@ -662,7 +807,7 @@ export const recordLifecycleHandoffSchema = z
   })
   .strict()
   .superRefine((handoff, context) => {
-    // 1. Action and archive metadata correspondence
+    // 1. Action and archive metadata correspondence between aggregate and items
     if (handoff.action === "archive_workflow" && !handoff.archiveMetadata) {
       context.addIssue({
         code: "custom",
@@ -678,7 +823,61 @@ export const recordLifecycleHandoffSchema = z
       });
     }
 
-    // 2. Counts matching array lengths
+    for (let i = 0; i < handoff.dueRecords.length; i++) {
+      const item = handoff.dueRecords[i]!;
+      if (item.action !== handoff.action) {
+        context.addIssue({
+          code: "custom",
+          path: ["dueRecords", i, "action"],
+          message: `Due record action (${item.action}) must match handoff action (${handoff.action})`,
+        });
+      }
+      if (handoff.action === "archive_workflow" && handoff.archiveMetadata) {
+        if (item.action === "archive_workflow") {
+          if (item.archiveWorkflowId !== handoff.archiveMetadata.archiveWorkflowId) {
+            context.addIssue({
+              code: "custom",
+              path: ["dueRecords", i, "archiveWorkflowId"],
+              message: `Due record archiveWorkflowId (${item.archiveWorkflowId}) does not match handoff archiveMetadata.archiveWorkflowId (${handoff.archiveMetadata.archiveWorkflowId})`,
+            });
+          }
+          if (item.expectedWorkflowRevision !== handoff.archiveMetadata.expectedWorkflowRevision) {
+            context.addIssue({
+              code: "custom",
+              path: ["dueRecords", i, "expectedWorkflowRevision"],
+              message: `Due record expectedWorkflowRevision (${item.expectedWorkflowRevision}) does not match handoff archiveMetadata.expectedWorkflowRevision (${handoff.archiveMetadata.expectedWorkflowRevision})`,
+            });
+          }
+          if (
+            item.archiveConnectionInstanceId !== handoff.archiveMetadata.archiveConnectionInstanceId
+          ) {
+            context.addIssue({
+              code: "custom",
+              path: ["dueRecords", i, "archiveConnectionInstanceId"],
+              message: `Due record archiveConnectionInstanceId (${item.archiveConnectionInstanceId}) does not match handoff archiveMetadata.archiveConnectionInstanceId (${handoff.archiveMetadata.archiveConnectionInstanceId})`,
+            });
+          }
+          if (item.archiveDestination !== handoff.archiveMetadata.archiveDestination) {
+            context.addIssue({
+              code: "custom",
+              path: ["dueRecords", i, "archiveDestination"],
+              message: `Due record archiveDestination (${item.archiveDestination}) does not match handoff archiveMetadata.archiveDestination (${handoff.archiveMetadata.archiveDestination})`,
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Sane totalRetainedCount
+    if (handoff.totalRetainedCount < handoff.dueCount) {
+      context.addIssue({
+        code: "custom",
+        path: ["totalRetainedCount"],
+        message: `totalRetainedCount (${handoff.totalRetainedCount}) cannot be less than dueCount (${handoff.dueCount})`,
+      });
+    }
+
+    // 3. Counts matching array lengths and truthful statusReport derivation
     if (handoff.dueCount !== handoff.dueRecords.length + handoff.blockedRecords.length) {
       context.addIssue({
         code: "custom",
@@ -701,38 +900,93 @@ export const recordLifecycleHandoffSchema = z
       });
     }
 
-    // 3. Unique records within arrays and disjoint across due/blocked
-    const dueIds = new Set<string>();
+    const expectedStatus: LifecycleEvaluationStatus =
+      handoff.dueRecords.length === 0 && handoff.blockedRecords.length === 0
+        ? "compliant"
+        : handoff.dueRecords.length > 0 && handoff.blockedRecords.length === 0
+          ? "pending_removal"
+          : handoff.dueRecords.length === 0 && handoff.blockedRecords.length > 0
+            ? "blocked_over_limit"
+            : "pending_and_blocked";
+
+    if (handoff.statusReport.status !== expectedStatus) {
+      context.addIssue({
+        code: "custom",
+        path: ["statusReport", "status"],
+        message: `statusReport.status (${handoff.statusReport.status}) does not match expected status (${expectedStatus}) derived from pending and blocked counts`,
+      });
+    }
+
+    const expectedIsOverLimit = handoff.blockedRecords.length > 0;
+    if (handoff.statusReport.isOverLimit !== expectedIsOverLimit) {
+      context.addIssue({
+        code: "custom",
+        path: ["statusReport", "isOverLimit"],
+        message: `statusReport.isOverLimit (${handoff.statusReport.isOverLimit}) must be ${expectedIsOverLimit} based on blocked records`,
+      });
+    }
+
+    // 4. Unique records within arrays and disjoint across due/blocked (canonical lowercase UUIDs)
+    const dueCanonicalIds = new Set<string>();
     for (let i = 0; i < handoff.dueRecords.length; i++) {
-      const id = handoff.dueRecords[i]!.recordId;
-      if (dueIds.has(id)) {
+      const canonicalId = handoff.dueRecords[i]!.recordId.toLowerCase();
+      if (dueCanonicalIds.has(canonicalId)) {
         context.addIssue({
           code: "custom",
           path: ["dueRecords", i, "recordId"],
-          message: `Duplicate recordId ${id} in dueRecords`,
+          message: `Duplicate recordId ${handoff.dueRecords[i]!.recordId} in dueRecords`,
         });
       }
-      dueIds.add(id);
+      dueCanonicalIds.add(canonicalId);
     }
 
-    const blockedIds = new Set<string>();
+    const blockedCanonicalIds = new Set<string>();
     for (let i = 0; i < handoff.blockedRecords.length; i++) {
-      const id = handoff.blockedRecords[i]!.recordId;
-      if (blockedIds.has(id)) {
+      const canonicalId = handoff.blockedRecords[i]!.recordId.toLowerCase();
+      if (blockedCanonicalIds.has(canonicalId)) {
         context.addIssue({
           code: "custom",
           path: ["blockedRecords", i, "recordId"],
-          message: `Duplicate recordId ${id} in blockedRecords`,
+          message: `Duplicate recordId ${handoff.blockedRecords[i]!.recordId} in blockedRecords`,
         });
       }
-      if (dueIds.has(id)) {
+      if (dueCanonicalIds.has(canonicalId)) {
         context.addIssue({
           code: "custom",
           path: ["blockedRecords", i, "recordId"],
-          message: `Record ${id} is present in both dueRecords and blockedRecords`,
+          message: `Record ${handoff.blockedRecords[i]!.recordId} is present in both dueRecords and blockedRecords`,
         });
       }
-      blockedIds.add(id);
+      blockedCanonicalIds.add(canonicalId);
+    }
+
+    // Exact blockedRecordIds matching
+    if (handoff.statusReport.blockedRecordIds.length !== handoff.blockedRecords.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["statusReport", "blockedRecordIds"],
+        message: `statusReport.blockedRecordIds length (${handoff.statusReport.blockedRecordIds.length}) does not match blockedRecords length (${handoff.blockedRecords.length})`,
+      });
+    } else {
+      const seenBlockedReportIds = new Set<string>();
+      for (let i = 0; i < handoff.statusReport.blockedRecordIds.length; i++) {
+        const cId = handoff.statusReport.blockedRecordIds[i]!.toLowerCase();
+        if (seenBlockedReportIds.has(cId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["statusReport", "blockedRecordIds", i],
+            message: `Duplicate recordId in statusReport.blockedRecordIds: ${handoff.statusReport.blockedRecordIds[i]}`,
+          });
+        }
+        seenBlockedReportIds.add(cId);
+        if (!blockedCanonicalIds.has(cId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["statusReport", "blockedRecordIds", i],
+            message: `statusReport.blockedRecordIds contains ${handoff.statusReport.blockedRecordIds[i]} which is not in blockedRecords`,
+          });
+        }
+      }
     }
 
     // 4. Primary reason and dueReasons consistency
@@ -825,15 +1079,16 @@ export const selectDueRecordsForLifecycleHandoff = (
   const evaluatedAtIso = evaluationDate.toISOString();
   const evaluationTime = evaluationDate.getTime();
 
-  // Validate candidates and reject duplicate IDs
-  const seenIds = new Set<string>();
+  // Validate candidates and reject duplicate IDs (canonical lowercase UUID comparison)
+  const seenCanonicalIds = new Set<string>();
   const validatedRecords: LifecycleCandidateRecord[] = [];
   for (const candidate of input.records) {
     const parsed = lifecycleCandidateRecordSchema.parse(candidate);
-    if (seenIds.has(parsed.recordId)) {
+    const canonicalId = parsed.recordId.toLowerCase();
+    if (seenCanonicalIds.has(canonicalId)) {
       throw new Error(`Duplicate candidate recordId detected: ${parsed.recordId}`);
     }
-    seenIds.add(parsed.recordId);
+    seenCanonicalIds.add(canonicalId);
     validatedRecords.push(parsed);
   }
 
