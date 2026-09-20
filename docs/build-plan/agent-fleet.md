@@ -95,10 +95,11 @@ third implementation attempt.
 ## Root coordinator and issue owners
 
 The root coordinator is the orchestrator. It is generic: it is not linked to any
-issue or pull request and owns no implementation. Issue and pull request
-metadata belong to the owners and workers doing the work. The root supervises
-owners, sequences work across issues, performs independent
-acceptance and decides promotion.
+issue or pull request and owns no implementation. The root alone reads the
+full GitHub board and publishes the shared evidence described below. An owner
+may make its single serialized assignment-dossier pass; workers make no GitHub
+reads. The root supervises owners, sequences work across issues, performs
+independent acceptance and decides promotion.
 
 **A multi-slice issue gets one issue owner.** The owner reads the full issue,
 plans its own slices, dispatches and supervises its workers, and owns acceptance
@@ -119,9 +120,43 @@ Owners are bound by the same rules as the root:
   observation is recorded, and an existing worker is never duplicated. A worker
   already running on part of the issue is adopted under the new owner, not
   restarted.
-- An owner may open review pull requests and reconcile the issue's board record.
-  The root keeps the merge and promotion decisions and the independent
-  acceptance.
+- An owner may push its branch and open a review pull request only when that is
+  authorized. An owner may make only the assignment-dossier read below; workers
+  do not read GitHub and neither role reconciles board records. The root keeps
+  board updates, merge and promotion decisions, and independent acceptance.
+
+### Central GitHub snapshot and issue dossiers
+
+At the start of each root cycle, the root makes one serialized, complete
+live-board read and writes
+`C:/Users/vijay/AppData/Local/Temp/vortex-fleet/board-snapshot.json`. Its first
+field is `snapshotUtc`. Owners and workers consume that snapshot; nobody else
+runs `gh project item-list` or performs another full-board refresh in the same
+cycle.
+
+When assigning an issue, the owner makes one serialized dossier pass for the
+issue body, all comments, `blocked_by` and blocking edges, subissues, and linked
+pull requests. It preserves all dependency edges as audit evidence and filters
+to `state=open` only when deciding eligibility. It writes the result with a
+timestamp to
+`C:/Users/vijay/AppData/Local/Temp/vortex-fleet/issue-<n>.md`. Reuse retrieved
+data; workers read the dossier and never make GitHub reads. A request for fresher
+mid-cycle data goes to the root, which makes one targeted call rather than a
+duplicate full-board refresh.
+
+### GitHub call discipline
+
+Stagger GitHub callers; never run simultaneous refreshes or endpoint-polling
+loops. Wait on agent terminals instead. On a rate-limit error, stop, read the
+response `Retry-After` or reset time, wait, make exactly one retry, and report
+the result. If no reset is supplied, do not invent one or tight-loop; escalate.
+A rate-limit response or unknown owner type may be throttling, not proof that
+the data is invalid.
+
+The following are user-observed operational measurements, not universal
+constants: REST core 5,000/hour (283 used when measured), GraphQL 5,000 points
+per hour, search 30/minute, and code search 10/minute. Secondary burst or
+concurrency throttling can occur while those measured quotas remain.
 
 ## The dispatch loop
 
@@ -136,7 +171,8 @@ issue, the directly dispatched worker is that owner for the bounded task; the
 root still does not decompose a multi-slice issue into its workers.
 
 1. **Select** — pick the next dependency-ready task; see Queue selection below.
-2. **Brief** — verify the premise, then write a drift-proof brief; see Dispatch brief template below.
+2. **Brief** — verify the premise from the shared snapshot and issue dossier,
+   then write a drift-proof brief; see Dispatch brief template below.
 3. **Dispatch** — start one agent in one new worktree on one branch, in a single command. The agent is an issue owner for a multi-slice issue and a worker for a single-slice one; see Root coordinator and issue owners above. For example:
 
    ```
@@ -147,22 +183,29 @@ root still does not decompose a multi-slice issue into its workers.
 
 4. **Watch** — check the agent at least every twenty minutes; see Watching below.
 5. **Gate** — run local verification and independent review where required; see Gates below.
-6. **Land** — open the pull request into `main` (an issue owner may open it for review) and merge once gates and review pass; the root decides the merge. Promotion to `testing` remains a separate phase gate, subject to any user hold.
+6. **Land** — open the pull request into `main` (an issue owner may open it
+   for review only when authorized) and merge once gates and review pass; the
+   root decides the merge. Promotion to `testing` remains a separate phase
+   gate, subject to any user hold.
 7. **Reconcile and report — immediate step.** Immediately after any agent
-   finishes, its owning orchestrator reads and corrects the board before any
-   other work, then scans the whole board for newly unblocked issues. A task is
-   not finished until its board row is true.
+   finishes, its owner reports completion to the root. Before any other work,
+   the root batches the issue-field changes and confirms the changed row against
+   the snapshot. It posts one closing comment only when whole-issue acceptance
+   closes the issue, then scans the shared board for newly unblocked issues. A
+   task is not finished until its board row is true.
 8. **Clean up.** Once the branch is merged and the board row is verified, remove
    the finished checkout with `orca worktree rm`; see Worktree cleanup below.
 
 ### Blocking completion and resume gate
 
 After every worker completion, review verdict, merge, hosted result or closure,
-and before the first dispatch after a resume:
+and before the first dispatch after a resume, the root applies this central
+protocol:
 
-1. Read the complete live board and its fields. Reconcile open issues against
-   their PRs, actual branch ancestry, local gates, applicable hosted receipts and
-   remaining acceptance. A merged slice is not automatically a completed issue.
+1. Use the cycle snapshot and root-confirmed changed-row evidence to reconcile
+   open issues against their PRs, actual branch ancestry, local gates, applicable
+   hosted receipts and remaining acceptance. A merged slice is not automatically
+   a completed issue. Owners do not re-read GitHub for this step.
 2. Set the actual delivery stage. Use **In progress** only for accepted active
    work; **In review** for an open review/delivery PR or Coordinator-owned work
    merged to `main` but awaiting promotion. State that post-merge waiting stage
@@ -176,10 +219,11 @@ and before the first dispatch after a resume:
    named separately with their evidence.
 3. Record the real owner, canonical dispatch reference, completion time, exact
    commit/PR, checks actually run and remaining acceptance or hold. Clear completed
-   workers; name the next accountable owner. Post a completion comment citing the
-   delivering PR and evidence, and a closing comment when acceptance is complete.
-4. Re-read native dependencies across the whole board, filtering blockers to
-   `state=open`; move every startable row to Ready or its current true state,
+   workers; name the next accountable owner. Batch the issue-field changes.
+   Post one closing comment citing the delivering PR and evidence only when
+   whole-issue acceptance closes the issue.
+4. Scan the shared board and timestamped dossiers for dependencies, filtering
+   blockers to `state=open`; move every startable row to Ready or its current true state,
    derive the pickup order, and exclude #520 because it is a parked user
    decision. Keep sequencing generic and manual. Post Completed, Coming up,
    Pending User Decision and Overall Progress rows, and recount the numerator
@@ -198,8 +242,9 @@ returning to Brief. A failed gate never blocks the loop: it becomes a new
 tracked issue and re-enters Select on its own merits, rather than stopping
 work behind it.
 
-The orchestrator keeps itself alive between cycles with a scheduled prompt so
-a crash or restart resumes the loop rather than ending it.
+The root schedules cycles every 30 minutes to avoid overlapping root sessions.
+This does not weaken the terminal-supervision cadence. Never create a yielding
+duplicate root.
 
 ## Queue selection
 
@@ -208,16 +253,12 @@ names and old comments are not evidence of sequence — native GitHub
 dependencies are.
 
 1. **Collect candidates.** Open issues whose board status is Ready or Backlog.
-2. **Drop anything genuinely blocked.** Query each issue's blocking
-   dependencies and confirm the response actually parsed before trusting an
-   empty result — a failed call that returns nothing looks identical to no
-   blockers, and trusting it has produced false "unblocked" verdicts.
-   Paginate the `issues/{number}/dependencies/blocked_by` endpoint and count
-   only edges whose issue `state` is `open`. Closed blockers remain in this
-   endpoint: a nonempty response is not evidence of an open blocker. Retain
-   closed edges as audit evidence, not exclusions. An unknown state or failed
-   page leaves eligibility unknown until resolved. Re-run this filter across
-   the whole board on resume and after completions, not just the old queue.
+2. **Drop anything genuinely blocked.** Use the root's shared snapshot and
+   the owner's assignment dossier. Preserve all dependency edges in the dossier
+   as audit evidence, but count only edges whose issue `state` is `open` for
+   eligibility. An unknown state or missing dossier leaves eligibility unknown
+   until the root supplies one targeted fresh read. Scan the whole shared board
+   after completions and on resume, not just the old queue.
 3. **Order by roadmap lane, then priority, then dependency depth.** Work that
    unblocks the most downstream issues goes first within a lane.
 4. **Prefer functionality over maintenance.** Between two startable tasks,
@@ -234,18 +275,20 @@ dependencies are.
 6. **Verify the premise before briefing.** Search the full commit history for
    the affected path and search closed issues. A fix that already exists on
    another branch is the single most expensive thing to re-implement.
-7. **Dispatch, then record and read it back on the board.** An owner starts
-   work immediately in **In progress**, with status, agent, resolved model,
-   worktree and started-at; read back the board record. Verify the resolved
-   model in the launched terminal before treating the task as started.
+7. **Dispatch, then use one grouped transition.** The root immediately marks
+   the dispatched issue **In progress** with status, agent, resolved model,
+   worktree and started-at, then reads back the grouped transition. Verify the
+   resolved model in the launched terminal before treating the task as started.
 
 ## Watching
 
-Every cycle, first read the complete live board and all relevant fields,
-including paginated items and fields, then read every in-flight agent's
-terminal with `orca terminal read`; check actual task activity, empty
-worktrees and failed launches. This live-board verification is required even
-when no agent has just finished.
+Every cycle, the root alone reads the complete live board and all relevant
+fields, including paginated items and fields, once and publishes the central
+snapshot before anyone reads it. It then reads every in-flight agent terminal
+with `orca terminal read`; check actual task activity, empty worktrees and
+failed launches. This live-board verification is required even when no agent
+has just finished; owners and workers reuse the snapshot rather than calling
+GitHub.
 The root reads each issue owner's terminal, and each owner reads its own
 workers' terminals; nobody skips a level or starts a worker that already exists.
 The interval between checks must never exceed twenty minutes, per the
@@ -331,13 +374,13 @@ See [agent coordination](agent-coordination.md#board-and-dispatch-record) for
 what each board status means and who owns it; this section does not restate
 that. The fleet adds one standing cadence rule on top of it:
 
-**After every agent finishes a task, the accountable issue owner (the
-orchestrator for a single-slice worker) immediately reads and corrects the
-board — status, evidence comment and a whole-board re-derived pickup order —
-before any other work.** The closing comment cites the delivering pull request and the
-evidence (test counts, reviewer, file:line citations), and the board
-percentage is recounted from the board itself rather than estimated. A
-finished task that is not on the board is not finished.
+**After every agent finishes a task, the accountable issue owner reports to
+the root. Before any other work, the root batches the board field changes and
+confirms the changed row using the snapshot and root-confirmed evidence.** It
+posts one closing comment citing the delivering pull request and evidence only
+when whole-issue acceptance closes the issue. The board percentage is recounted
+from the board itself rather than estimated. A finished task that is not on the
+board is not finished.
 
 Closure requires evidence, never source inspection: an issue closes when its
 acceptance criteria are met by merged code and the local gates ran — not
@@ -506,15 +549,19 @@ every long command, so silence is interpretable.
 Queue for the fleet's maximum two concurrent pnpm db:* verification clusters;
 this is not permission to dispatch · pnpm db:clean only · never db:reset or
 supabase start|stop · never read .codex-tmp/ or .tmp/ · never print secrets
-· commit and push the branch · no PR, no merge, no issue edits.
+· workers make zero gh or GitHub reads: read the shared snapshot and assigned
+dossier, and ask the owner for missing context · commit and push the branch ·
+open a PR only when explicitly briefed · no merge or issue edits.
 ```
 
 The brief above is for a single-slice worker, which commits and pushes its
-branch only. An issue owner's brief states the whole outcome and its
-constraints, not a per-slice decomposition, and adds that the owner may open
-review pull requests and reconcile the issue's board record. For every agent,
-merging and promoting are the root's decisions, made after the gates above
-pass — never the dispatched agent's own.
+branch and may open a PR only when authorized. An issue owner's brief states
+the whole outcome and its constraints, not a per-slice decomposition, and adds
+the one serialized assignment-dossier pass and that an owner may open a review
+PR only when authorized. Owners report grouped proposed changes to the root;
+they do not reconcile board records. For every agent, merging and promoting
+are the root's decisions, made after the gates above pass — never the
+dispatched agent's own.
 
 The heartbeat line is not bureaucracy. Without it, a twenty-minute check
 cannot tell a slightly-long gate from an agent waiting on a notification that
