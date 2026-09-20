@@ -205,3 +205,25 @@ Use Claude Code's existing model selection, programmatic sessions and worktrees:
 Authentication and billing authorization belong in Claude's own interface, not
 repository files. The coordinator keeps deployment credentials and board mutation
 authority out of developer prompts unless explicitly needed for the assigned work.
+
+## Autonomous fleet operation
+
+When this project runs as an unattended agent fleet inside Orca, one
+orchestrator carries out the Coordinator's dispatch and monitoring duties, and
+the Planner's handoff-correction work, for every task the fleet runs.
+[Agent fleet operations](agent-fleet.md) is the operational reference for that
+mode: the model roster, the escalation ladder, queue ordering, the
+twenty-minute watch, the verification gates, the branch and promotion model,
+and the dispatch brief template. It does not restate the roles, board
+statuses or completion handoff defined above, and nothing in it overrides them.
+
+The orchestrator decides sequencing, model choice, escalation and worktree
+lifecycle; splits an issue whose scope is too broad to verify; raises a new
+issue for any defect a gate surfaces; merges reviewed task branches once
+gates and review pass; promotes a verified revision to `main` at a phase
+boundary; and corrects board state, dependencies and stale plan documents. It
+parks, without stopping the queue, genuine product decisions, anything
+needing a credential or that would place a secret in a prompt, log or commit,
+Production deployment, destructive action outside a worktree, and any attempt
+to weaken a check to make something pass. See [Agent fleet
+operations](agent-fleet.md#autonomy-boundaries) for the complete list.

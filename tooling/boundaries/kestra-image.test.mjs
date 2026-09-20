@@ -54,7 +54,18 @@ describe("Kestra deployment image", () => {
     expect(productionFlow).toContain("VORTEX_EVIDENCE_PATH: preparation-evidence.json");
     expect(productionFlow).toContain("VORTEX_EVIDENCE_PATH: delivery-evidence.json");
     expect(productionFlow).toContain("id: load_testing_full_source_evidence");
-    expect(productionFlow).toContain("VORTEX_TESTING_FULL_SOURCE_EVIDENCE:");
+    expect(productionFlow).toContain(
+      'testing-evidence.json: "{{ outputs.load_testing_evidence.value | toJson }}"',
+    );
+    expect(productionFlow).toContain(
+      'testing-full-source-evidence.json: "{{ outputs.load_testing_full_source_evidence.value | toJson }}"',
+    );
+    expect(productionFlow).toContain("VORTEX_TESTING_EVIDENCE_PATH: testing-evidence.json");
+    expect(productionFlow).toContain(
+      "VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH: testing-full-source-evidence.json",
+    );
+    // A complete receipt exceeds Linux's 131072-byte single environment string limit.
+    expect(productionFlow).not.toMatch(/^\s+VORTEX_TESTING_(FULL_SOURCE_)?EVIDENCE:/m);
     expect(testingFlow).not.toContain("{{ workingDir }}");
     expect(productionFlow).not.toContain("{{ workingDir }}");
   });
