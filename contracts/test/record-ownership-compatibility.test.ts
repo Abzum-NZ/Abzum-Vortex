@@ -123,13 +123,31 @@ describe("offboarding transfer command identity", () => {
   });
 
   it("is deterministic and normalizes semantically equivalent UUID case", () => {
-    const commandId = offboardingTransferCommandId(id(10), id(11), id(12));
-    expect(offboardingTransferCommandId(id(10), id(11), id(12))).toBe(commandId);
+    const recordTypeId = "abcdefab-cdef-4abc-8def-abcdefabcdef";
+    const recordId = "bcdefabc-defa-4bcd-8efa-bcdefabcdefa";
+    const targetOrganizationAccountId = "cdefabcd-efab-4cde-8fab-cdefabcdefab";
+    const uppercaseRecordTypeId = recordTypeId.toUpperCase();
+    const uppercaseRecordId = recordId.toUpperCase();
+    const uppercaseTargetOrganizationAccountId = targetOrganizationAccountId.toUpperCase();
+
+    expect(uppercaseRecordTypeId).not.toBe(recordTypeId);
+    expect(uppercaseRecordId).not.toBe(recordId);
+    expect(uppercaseTargetOrganizationAccountId).not.toBe(targetOrganizationAccountId);
+
+    const commandId = offboardingTransferCommandId(
+      recordTypeId,
+      recordId,
+      targetOrganizationAccountId,
+    );
+    expect(commandId).toBe("f41d361c-bc47-515c-964d-595b4ddac585");
+    expect(offboardingTransferCommandId(recordTypeId, recordId, targetOrganizationAccountId)).toBe(
+      commandId,
+    );
     expect(
       offboardingTransferCommandId(
-        id(10).toUpperCase(),
-        id(11).toUpperCase(),
-        id(12).toUpperCase(),
+        uppercaseRecordTypeId,
+        uppercaseRecordId,
+        uppercaseTargetOrganizationAccountId,
       ),
     ).toBe(commandId);
   });

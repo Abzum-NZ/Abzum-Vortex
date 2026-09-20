@@ -67,7 +67,18 @@ export const recordOffboardingInventoryItemSchema = z
     installationState: z.enum(["active", "detached"]),
     classification: recordOffboardingInventoryClassificationSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.lifecycleState === "removal_pending" &&
+      value.classification !== "refused_incompatible"
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["classification"],
+        message: "A removal-pending record must be classified as refused-incompatible",
+      });
+  });
 
 export const recordOffboardingPerRecordTypeCountSchema = z
   .object({

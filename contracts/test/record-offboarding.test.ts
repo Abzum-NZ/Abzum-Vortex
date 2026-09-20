@@ -6,6 +6,7 @@ import {
   offboardingTransferBatchResultSchema,
   recordOffboardingInventoryClassificationSchema,
   recordOffboardingInventoryCommandSchema,
+  recordOffboardingInventoryItemSchema,
   recordOffboardingInventoryResultSchema,
   recordOffboardingSectionSchema,
   recordOffboardingTargetSchema,
@@ -124,6 +125,47 @@ describe("record offboarding inventory contracts", () => {
             classification: "refused_incompatible",
           },
         ],
+        perRecordType: [{ recordTypeId: id(4), transferable: 0, refusedIncompatible: 1 }],
+        complete: true,
+        accessVersion: 4,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a transferable removal-pending standalone item", () => {
+    expect(
+      recordOffboardingInventoryItemSchema.safeParse({
+        ...inventoryItem,
+        lifecycleState: "removal_pending",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a complete result containing a transferable removal-pending item", () => {
+    expect(
+      recordOffboardingInventoryResultSchema.safeParse({
+        contractVersion: "1.0.0",
+        section: { kind: "application", applicationRootId: id(2) },
+        items: [{ ...inventoryItem, lifecycleState: "removal_pending" }],
+        perRecordType: [{ recordTypeId: id(4), transferable: 1, refusedIncompatible: 0 }],
+        complete: true,
+        accessVersion: 4,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts removal-pending refused-incompatible items and matching result counts", () => {
+    const removalPendingItem = {
+      ...inventoryItem,
+      lifecycleState: "removal_pending",
+      classification: "refused_incompatible",
+    } as const;
+    expect(recordOffboardingInventoryItemSchema.safeParse(removalPendingItem).success).toBe(true);
+    expect(
+      recordOffboardingInventoryResultSchema.safeParse({
+        contractVersion: "1.0.0",
+        section: { kind: "application", applicationRootId: id(2) },
+        items: [removalPendingItem],
         perRecordType: [{ recordTypeId: id(4), transferable: 0, refusedIncompatible: 1 }],
         complete: true,
         accessVersion: 4,
