@@ -16,6 +16,10 @@
 --     and validated `systemActorId`.  Rejects human, federated, and public callers.
 --   - Binds the context organization to an existing tenant/organization row in
 --     `vortex_identity.organizations`.
+--   - The RLS policy on `vortex_identity.organizations` is narrowly bound to the
+--     active transaction context (organization_id = vortex_context.organization_id()
+--     and tenant_id = context tenant), granting zero ambient visibility to other
+--     organizations in the database.
 --   - Resolves physical table and scope through `vortex_record.storage_catalogue` only.
 --   - Application-contained storage scopes the query to the context's exact
 --     permanent application root.  Organization-shared storage stays correctly
@@ -35,10 +39,16 @@
 -- ownership are preserved.
 
 -- Grants for tenant/organization validation under vortex_record_adapter.
+-- The read policy is strictly scoped to the active request context.
 grant usage on schema vortex_identity to vortex_record_adapter;
 grant select on vortex_identity.organizations to vortex_record_adapter;
+
 create policy organizations_record_adapter_read on vortex_identity.organizations
-  for select to vortex_record_adapter using (true);
+  for select to vortex_record_adapter
+  using (
+    organization_id = vortex_context.organization_id()
+    and tenant_id = (vortex_context.current_context() ->> 'tenantId')::uuid
+  );
 
 -- The adapter owner needs CREATE temporarily to define the function below.
 set local role vortex_record_owner;

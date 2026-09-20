@@ -1,10 +1,9 @@
 import "server-only";
 
 import {
-  lifecycleCandidateRecordSchema,
   recordIdSchema,
   storageContractIdSchema,
-  type LifecycleCandidateRecord,
+  type RecordId,
   type StorageContractId,
 } from "@vortex/contracts";
 import type { RequestDatabaseTransaction } from "@vortex/db";
@@ -21,30 +20,46 @@ type SelectionReaderRow = Readonly<{
 }>;
 
 /**
+ * Raw candidate record facts returned by the lifecycle selection reader.
+ * Contains only source-owned physical storage facts: identity, revision, and creation time.
+ *
+ * Distinct from `LifecycleCandidateRecord` because hold and recovery protection facts
+ * are not evaluated by this raw reader and must not be defaulted to `false`. An explicit
+ * enrichment step is required before evaluating lifecycle policy handoffs.
+ */
+export type RawLifecycleCandidateRecord = Readonly<{
+  recordId: RecordId;
+  expectedRecordRevision: number;
+  createdAt: string;
+}>;
+
+/**
  * Reads lifecycle candidate records from the database for a given storage
  * contract, within an already-established system request transaction/context.
  *
- * Returns an array of validated `LifecycleCandidateRecord` objects containing:
- * recordId, expectedRecordRevision, and createdAt.  The `isHeld` and
- * `isProtected` fields default to `false` because this reader reads raw candidate
- * rows from physical storage; hold/recovery evaluation belongs to the lifecycle
- * policy engine and executor #117.
+ * Returns an array of raw `RawLifecycleCandidateRecord` objects containing:
+ * recordId, expectedRecordRevision, and createdAt.
+ *
+ * Deliberately does not construct `LifecycleCandidateRecord` or populate
+ * `isHeld` / `isProtected` defaults, ensuring raw candidate facts cannot be passed
+ * directly to the lifecycle policy handoff selector without an authoritative hold/recovery
+ * evaluation step.
  *
  * Fails closed on:
  *   - Missing, nil, or malformed storage contract identity
  *   - Duplicate record IDs in the result set
- *   - Non-JSON-safe revision values (outside 1..2^53 - 1)
+ *   - Non-JSON-safe revision values (outside 1..2^53 - 1) or precision-losing coercions
  *   - Malformed timestamps
  *   - Any database error (propagated as-is)
  *
- * Does not expose an arbitrary-SQL/table reader.  The storage contract identity
+ * Does not expose an arbitrary-SQL/table reader. The storage contract identity
  * is validated and the physical table is resolved server-side through the
  * authoritative storage catalogue.
  */
 export async function readLifecycleCandidateRecords(
   transaction: RequestDatabaseTransaction,
   storageContractId: StorageContractId,
-): Promise<readonly LifecycleCandidateRecord[]> {
+): Promise<readonly RawLifecycleCandidateRecord[]> {
   // Validate the storage contract identifier before sending to the database.
   const validatedStorageContractId = storageContractIdSchema.parse(storageContractId);
 
@@ -54,7 +69,7 @@ export async function readLifecycleCandidateRecords(
   `;
 
   const seenRecordIds = new Set<string>();
-  const candidates: LifecycleCandidateRecord[] = [];
+  const candidates: RawLifecycleCandidateRecord[] = [];
 
   for (const row of rows) {
     // Validate the record ID is a valid platform-issued non-nil UUID using contracts schema.
@@ -95,6 +110,18 @@ export async function readLifecycleCandidateRecords(
       );
     }
 
+    // Exact string and bigint representation check: detect precision loss outside safe integers.
+    if (typeof rawRevision === "string" && String(numericRevision) !== rawRevision.trim()) {
+      throw new Error(
+        `Lifecycle selection reader: precision loss in string record revision for record ${recordId}: ${rawRevision}`,
+      );
+    }
+    if (typeof rawRevision === "bigint" && BigInt(numericRevision) !== rawRevision) {
+      throw new Error(
+        `Lifecycle selection reader: precision loss in bigint record revision for record ${recordId}: ${rawRevision.toString()}`,
+      );
+    }
+
     // Validate the created_at timestamp.
     const rawCreatedAt = row.created_at;
     if (rawCreatedAt === null || rawCreatedAt === undefined) {
@@ -111,15 +138,14 @@ export async function readLifecycleCandidateRecords(
     }
     const createdAtIso = createdAtDate.toISOString();
 
-    // Validate the complete candidate against the accepted contract schema.
-    const candidate = lifecycleCandidateRecordSchema.parse({
-      recordId,
-      expectedRecordRevision: numericRevision,
-      createdAt: createdAtIso,
-    });
-
-    candidates.push(candidate);
+    candidates.push(
+      Object.freeze({
+        recordId,
+        expectedRecordRevision: numericRevision,
+        createdAt: createdAtIso,
+      }),
+    );
   }
 
-  return candidates;
+  return Object.freeze(candidates);
 }
