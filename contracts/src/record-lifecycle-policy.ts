@@ -258,7 +258,7 @@ export type RecordTypeLifecyclePolicy = z.infer<typeof recordTypeLifecyclePolicy
 
 /**
  * Evidence item for an exact active registered workflow in runtime.
- * Scope-bound to matching organizationId, authorizedApplicationIds, and allowOrganizationShared.
+ * Scope-bound to matching organizationId and authorizedApplicationIds.
  */
 export const registeredWorkflowEvidenceSchema = z
   .object({
@@ -266,7 +266,6 @@ export const registeredWorkflowEvidenceSchema = z
     workflowRevision: revisionSchema,
     organizationId: organizationIdSchema,
     authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
-    allowOrganizationShared: z.boolean().default(false),
     state: z.literal("active"),
   })
   .strict();
@@ -274,15 +273,14 @@ export type RegisteredWorkflowEvidence = z.infer<typeof registeredWorkflowEviden
 
 /**
  * Evidence item for an exact active connection instance in runtime.
- * Scope-bound to matching organizationId, closed destinationKey, authorizedApplicationIds, and allowOrganizationShared.
+ * Scope-bound to matching organizationId, closed destinationKey, and canonical authorizedApplicationIds (min 1).
  */
 export const activeConnectionEvidenceSchema = z
   .object({
     connectionInstanceId: connectionInstanceIdSchema,
     destinationKey: archiveDestinationReferenceSchema,
     organizationId: organizationIdSchema,
-    authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
-    allowOrganizationShared: z.boolean().default(false),
+    authorizedApplicationIds: z.array(applicationRootIdSchema).min(1),
     state: z.literal("active"),
   })
   .strict();
@@ -342,55 +340,15 @@ export const validateRecordTypeLifecyclePolicyDefinition = (
 };
 
 /**
- * Live policy and activation validation: validates a record-type policy against
- * the organisation's protected settings limits and typed runtime readiness evidence.
- *
- * Enforces:
- * 1. Policy and limits conform to their strict contracts.
- * 2. Organisation isolation: policy.organizationId MUST match organizationLimits.organizationId.
- * 3. Ceilings: maxAgeDays <= maxRetentionDays, maxCount <= maxRecordCount.
- * 4. Unlimited permissions: allowUnlimitedAge / allowUnlimitedCount require organisation permission.
- * 5. Action permission: policy.action is in organisationLimits.allowedActions.
- * 6. For archive_workflow:
- *    - Destination is in organisationLimits.allowedArchiveDestinations.
- *    - readinessEvidence is mandatory and must match policy.organizationId.
- *    - Exact archiveWorkflowId and expectedWorkflowRevision must be in registeredWorkflows with state "active".
- *    - Exact archiveConnectionInstanceId and archiveDestination must be in activeConnections with matching organisationId.
- *    - Unavailable archival NEVER silently falls back to deletion.
+ * Definition-only validation against organisation limits: checks declared policy shape
+ * and static ceilings/actions without requiring live concurrency (expectedSettingsRevision)
+ * or live runtime readiness evidence.
  */
-export interface ValidateRecordTypeLifecyclePolicyOptions {
-  expectedSettingsRevision?: number;
-}
-
-export const validateRecordTypeLifecyclePolicy = (
+export const validateRecordTypeLifecyclePolicyDefinitionAgainstLimits = (
   policyCandidate: unknown,
   organizationLimitsCandidate: unknown,
-  readinessEvidenceCandidate?: unknown,
-  optionsOrExpectedSettingsRevision?: ValidateRecordTypeLifecyclePolicyOptions | number | unknown,
 ): PolicyValidationResult => {
   const issues: PolicyValidationIssue[] = [];
-
-  let expectedSettingsRevision: number | undefined;
-  if (typeof optionsOrExpectedSettingsRevision === "number") {
-    expectedSettingsRevision = optionsOrExpectedSettingsRevision;
-  } else if (
-    optionsOrExpectedSettingsRevision !== null &&
-    typeof optionsOrExpectedSettingsRevision === "object" &&
-    "expectedSettingsRevision" in optionsOrExpectedSettingsRevision &&
-    typeof (optionsOrExpectedSettingsRevision as Record<string, unknown>)
-      .expectedSettingsRevision === "number"
-  ) {
-    expectedSettingsRevision = (optionsOrExpectedSettingsRevision as Record<string, unknown>)
-      .expectedSettingsRevision as number;
-  } else if (
-    policyCandidate !== null &&
-    typeof policyCandidate === "object" &&
-    "expectedSettingsRevision" in policyCandidate &&
-    typeof (policyCandidate as Record<string, unknown>).expectedSettingsRevision === "number"
-  ) {
-    expectedSettingsRevision = (policyCandidate as Record<string, unknown>)
-      .expectedSettingsRevision as number;
-  }
 
   const parsedPolicy = recordTypeLifecyclePolicySchema.safeParse(policyCandidate);
   if (!parsedPolicy.success) {
@@ -426,18 +384,7 @@ export const validateRecordTypeLifecyclePolicy = (
   const policy = parsedPolicy.data;
   const limits = parsedLimits.data;
 
-  // 1. Settings revision check (reject stale or concurrent settings)
-  if (expectedSettingsRevision !== undefined) {
-    if (limits.settingsRevision !== expectedSettingsRevision) {
-      issues.push({
-        code: "stale_settings_revision",
-        path: ["settingsRevision"],
-        message: `Organisation limits settings revision (${limits.settingsRevision}) does not match expected revision (${expectedSettingsRevision}); settings were concurrently modified or stale`,
-      });
-    }
-  }
-
-  // 2. Cross-organisation isolation check
+  // 1. Cross-organisation isolation check
   if (policy.organizationId !== limits.organizationId) {
     issues.push({
       code: "organization_isolation_violation",
@@ -451,59 +398,244 @@ export const validateRecordTypeLifecyclePolicy = (
     issues.push({
       code: "action_not_allowed",
       path: ["action"],
-      message: `Lifecycle action "${policy.action}" is not permitted by organisation limits (allowed: ${limits.allowedActions.join(", ")})`,
+      message: `Action "${policy.action}" is not permitted by organisation limits (allowed: ${limits.allowedActions.join(", ")})`,
     });
   }
 
-  // 3. Age checks against organisation ceiling
-  if (policy.allowUnlimitedAge) {
-    if (!limits.allowUnlimitedRetentionDays) {
-      issues.push({
-        code: "unlimited_retention_days_forbidden",
-        path: ["allowUnlimitedAge"],
-        message:
-          "Organisation limits forbid unlimited retention days (allowUnlimitedRetentionDays is false)",
-      });
-    }
-  } else if (policy.maxAgeDays !== null) {
+  // 3. Age ceiling check
+  if (policy.maxAgeDays !== null) {
     if (
       limits.maxRetentionDays !== null &&
       limits.maxRetentionDays !== undefined &&
       policy.maxAgeDays > limits.maxRetentionDays
     ) {
       issues.push({
-        code: "max_age_exceeds_ceiling",
+        code: "max_age_exceeds_limit",
         path: ["maxAgeDays"],
         message: `Policy maxAgeDays (${policy.maxAgeDays}) exceeds organisation limit (${limits.maxRetentionDays})`,
       });
     }
+  } else if (policy.allowUnlimitedAge && !limits.allowUnlimitedRetentionDays) {
+    issues.push({
+      code: "unlimited_age_not_allowed",
+      path: ["allowUnlimitedAge"],
+      message: "Policy requests unlimited age retention, but organisation limits forbid it",
+    });
   }
 
-  // 4. Count checks against organisation ceiling
-  if (policy.allowUnlimitedCount) {
-    if (!limits.allowUnlimitedRecordCount) {
-      issues.push({
-        code: "unlimited_record_count_forbidden",
-        path: ["allowUnlimitedCount"],
-        message:
-          "Organisation limits forbid unlimited record count (allowUnlimitedRecordCount is false)",
-      });
-    }
-  } else if (policy.maxCount !== null) {
+  // 4. Count ceiling check
+  if (policy.maxCount !== null) {
     if (
       limits.maxRecordCount !== null &&
       limits.maxRecordCount !== undefined &&
       policy.maxCount > limits.maxRecordCount
     ) {
       issues.push({
-        code: "max_count_exceeds_ceiling",
+        code: "max_count_exceeds_limit",
         path: ["maxCount"],
         message: `Policy maxCount (${policy.maxCount}) exceeds organisation limit (${limits.maxRecordCount})`,
       });
     }
+  } else if (policy.allowUnlimitedCount && !limits.allowUnlimitedRecordCount) {
+    issues.push({
+      code: "unlimited_count_not_allowed",
+      path: ["allowUnlimitedCount"],
+      message: "Policy requests unlimited record count, but organisation limits forbid it",
+    });
   }
 
-  // 5. Archive workflow readiness and destination checks
+  // 5. Destination check in allowedArchiveDestinations (if archive_workflow)
+  if (policy.action === "archive_workflow") {
+    if (!limits.allowedArchiveDestinations.includes(policy.archiveDestination)) {
+      issues.push({
+        code: "archive_destination_not_allowed",
+        path: ["archiveDestination"],
+        message: `Archive destination "${policy.archiveDestination}" is not in organisation's allowed destinations (allowed: ${limits.allowedArchiveDestinations.join(", ") || "none"})`,
+      });
+    }
+  }
+
+  const isValid = issues.length === 0;
+  return {
+    valid: isValid,
+    success: isValid,
+    issues,
+    errors: issues.map((i) => i.message),
+  };
+};
+
+/**
+ * Live policy and activation validation: validates a record-type policy against
+ * the organisation's protected settings limits, mandatory expectedSettingsRevision,
+ * and typed runtime readiness evidence.
+ *
+ * Enforces:
+ * 1. expectedSettingsRevision is MANDATORY, validated by revisionSchema, and must match limits.settingsRevision.
+ * 2. Policy and limits conform to their strict contracts.
+ * 3. Organisation isolation: policy.organizationId MUST match organizationLimits.organizationId.
+ * 4. Ceilings: maxAgeDays <= maxRetentionDays, maxCount <= maxRecordCount.
+ * 5. Unlimited permissions: allowUnlimitedAge / allowUnlimitedCount require organisation permission.
+ * 6. Action permission: policy.action is in organisationLimits.allowedActions.
+ * 7. For archive_workflow:
+ *    - Destination is in organisationLimits.allowedArchiveDestinations.
+ *    - readinessEvidence is mandatory and must match policy.organizationId.
+ *    - Exact archiveWorkflowId and expectedWorkflowRevision must be in registeredWorkflows with state "active".
+ *    - Exact archiveConnectionInstanceId and archiveDestination must be in activeConnections with matching organisationId.
+ *    - Permanent application root scope: policy.applicationRootId must be present in authorizedApplicationIds
+ *      for both workflow and connection; organisation-shared policies cannot activate archive_workflow without application scope.
+ *    - Unavailable archival NEVER silently falls back to deletion.
+ */
+export interface ValidateRecordTypeLifecyclePolicyOptions {
+  expectedSettingsRevision: number;
+}
+
+export const validateRecordTypeLifecyclePolicy = (
+  policyCandidate: unknown,
+  organizationLimitsCandidate: unknown,
+  readinessEvidenceCandidate: unknown,
+  expectedSettingsRevisionCandidate: unknown,
+): PolicyValidationResult => {
+  const issues: PolicyValidationIssue[] = [];
+
+  // 1. Mandatory expected settings revision validation
+  let rawExpectedRevision: unknown = expectedSettingsRevisionCandidate;
+  if (
+    expectedSettingsRevisionCandidate !== null &&
+    typeof expectedSettingsRevisionCandidate === "object" &&
+    "expectedSettingsRevision" in expectedSettingsRevisionCandidate
+  ) {
+    rawExpectedRevision = (expectedSettingsRevisionCandidate as Record<string, unknown>)
+      .expectedSettingsRevision;
+  }
+
+  let parsedExpectedRevisionData: number | undefined;
+  if (rawExpectedRevision === undefined) {
+    issues.push({
+      code: "missing_expected_settings_revision",
+      path: ["expectedSettingsRevision"],
+      message:
+        "expectedSettingsRevision is mandatory for live policy validation to prevent stale or concurrent settings mutations",
+    });
+  } else {
+    const parsedExpectedRevision = revisionSchema.safeParse(rawExpectedRevision);
+    if (!parsedExpectedRevision.success) {
+      issues.push({
+        code: "invalid_expected_settings_revision",
+        path: ["expectedSettingsRevision"],
+        message: "expectedSettingsRevision must be a valid positive integer revision",
+      });
+    } else {
+      parsedExpectedRevisionData = parsedExpectedRevision.data;
+    }
+  }
+
+  const parsedPolicy = recordTypeLifecyclePolicySchema.safeParse(policyCandidate);
+  if (!parsedPolicy.success) {
+    for (const issue of parsedPolicy.error.issues) {
+      issues.push({
+        code: issue.code,
+        message: issue.message,
+        path: issue.path as (string | number)[],
+      });
+    }
+  }
+
+  const parsedLimits = organizationLifecycleLimitsSchema.safeParse(organizationLimitsCandidate);
+  if (!parsedLimits.success) {
+    for (const issue of parsedLimits.error.issues) {
+      issues.push({
+        code: issue.code,
+        message: issue.message,
+        path: issue.path as (string | number)[],
+      });
+    }
+  }
+
+  if (
+    parsedExpectedRevisionData !== undefined &&
+    parsedLimits.success &&
+    parsedLimits.data.settingsRevision !== parsedExpectedRevisionData
+  ) {
+    issues.push({
+      code: "stale_settings_revision",
+      path: ["settingsRevision"],
+      message: `Organisation limits settings revision (${parsedLimits.data.settingsRevision}) does not match expected revision (${parsedExpectedRevisionData}); settings were concurrently modified or stale`,
+    });
+  }
+
+  if (!parsedPolicy.success || !parsedLimits.success) {
+    return {
+      valid: false,
+      success: false,
+      issues,
+      errors: issues.map((i) => i.message),
+    };
+  }
+
+  const policy = parsedPolicy.data;
+  const limits = parsedLimits.data;
+
+  // Cross-organisation isolation check
+  if (policy.organizationId !== limits.organizationId) {
+    issues.push({
+      code: "organization_isolation_violation",
+      path: ["organizationId"],
+      message: `Policy organizationId (${policy.organizationId}) does not match organisation limits organizationId (${limits.organizationId}); cross-organisation policy application is strictly forbidden`,
+    });
+  }
+
+  // Action permitted check
+  if (!limits.allowedActions.includes(policy.action)) {
+    issues.push({
+      code: "action_not_allowed",
+      path: ["action"],
+      message: `Action "${policy.action}" is not permitted by organisation limits (allowed: ${limits.allowedActions.join(", ")})`,
+    });
+  }
+
+  // Age ceiling check
+  if (policy.maxAgeDays !== null) {
+    if (
+      limits.maxRetentionDays !== null &&
+      limits.maxRetentionDays !== undefined &&
+      policy.maxAgeDays > limits.maxRetentionDays
+    ) {
+      issues.push({
+        code: "max_age_exceeds_limit",
+        path: ["maxAgeDays"],
+        message: `Policy maxAgeDays (${policy.maxAgeDays}) exceeds organisation limit (${limits.maxRetentionDays})`,
+      });
+    }
+  } else if (policy.allowUnlimitedAge && !limits.allowUnlimitedRetentionDays) {
+    issues.push({
+      code: "unlimited_age_not_allowed",
+      path: ["allowUnlimitedAge"],
+      message: "Policy requests unlimited age retention, but organisation limits forbid it",
+    });
+  }
+
+  // Count ceiling check
+  if (policy.maxCount !== null) {
+    if (
+      limits.maxRecordCount !== null &&
+      limits.maxRecordCount !== undefined &&
+      policy.maxCount > limits.maxRecordCount
+    ) {
+      issues.push({
+        code: "max_count_exceeds_limit",
+        path: ["maxCount"],
+        message: `Policy maxCount (${policy.maxCount}) exceeds organisation limit (${limits.maxRecordCount})`,
+      });
+    }
+  } else if (policy.allowUnlimitedCount && !limits.allowUnlimitedRecordCount) {
+    issues.push({
+      code: "unlimited_count_not_allowed",
+      path: ["allowUnlimitedCount"],
+      message: "Policy requests unlimited record count, but organisation limits forbid it",
+    });
+  }
+
+  // Archive workflow readiness and destination checks
   if (policy.action === "archive_workflow") {
     // Destination check in allowedArchiveDestinations
     if (!limits.allowedArchiveDestinations.includes(policy.archiveDestination)) {
@@ -560,24 +692,19 @@ export const validateRecordTypeLifecyclePolicy = (
           });
         } else {
           if (policy.applicationRootId === null) {
-            if (!matchingWorkflow.allowOrganizationShared) {
-              issues.push({
-                code: "archive_workflow_scope_mismatch",
-                path: ["archiveWorkflowId"],
-                message: `Registered workflow ${policy.archiveWorkflowId} does not permit organisation-shared use (allowOrganizationShared is false)`,
-              });
-            }
-          } else {
-            const isAuthorized =
-              matchingWorkflow.authorizedApplicationIds.includes(policy.applicationRootId) ||
-              matchingWorkflow.allowOrganizationShared;
-            if (!isAuthorized) {
-              issues.push({
-                code: "archive_workflow_scope_mismatch",
-                path: ["archiveWorkflowId"],
-                message: `Registered workflow ${policy.archiveWorkflowId} is not authorized for permanent application root ${policy.applicationRootId}`,
-              });
-            }
+            issues.push({
+              code: "archive_workflow_scope_mismatch",
+              path: ["archiveWorkflowId"],
+              message: `Organisation-shared policy (${policy.policyId}) cannot activate archive_workflow because registered workflows require permanent application scope`,
+            });
+          } else if (
+            !matchingWorkflow.authorizedApplicationIds.includes(policy.applicationRootId)
+          ) {
+            issues.push({
+              code: "archive_workflow_scope_mismatch",
+              path: ["archiveWorkflowId"],
+              message: `Registered workflow ${policy.archiveWorkflowId} is not authorized for permanent application root ${policy.applicationRootId}`,
+            });
           }
         }
 
@@ -597,24 +724,19 @@ export const validateRecordTypeLifecyclePolicy = (
           });
         } else {
           if (policy.applicationRootId === null) {
-            if (!matchingConnection.allowOrganizationShared) {
-              issues.push({
-                code: "archive_connection_scope_mismatch",
-                path: ["archiveConnectionInstanceId"],
-                message: `Active connection instance ${policy.archiveConnectionInstanceId} does not permit organisation-shared use (allowOrganizationShared is false)`,
-              });
-            }
-          } else {
-            const isAuthorized =
-              matchingConnection.authorizedApplicationIds.includes(policy.applicationRootId) ||
-              matchingConnection.allowOrganizationShared;
-            if (!isAuthorized) {
-              issues.push({
-                code: "archive_connection_scope_mismatch",
-                path: ["archiveConnectionInstanceId"],
-                message: `Active connection instance ${policy.archiveConnectionInstanceId} is not authorized for permanent application root ${policy.applicationRootId}`,
-              });
-            }
+            issues.push({
+              code: "archive_connection_scope_mismatch",
+              path: ["archiveConnectionInstanceId"],
+              message: `Organisation-shared policy (${policy.policyId}) cannot activate archive_workflow because connection instances require permanent application scope`,
+            });
+          } else if (
+            !matchingConnection.authorizedApplicationIds.includes(policy.applicationRootId)
+          ) {
+            issues.push({
+              code: "archive_connection_scope_mismatch",
+              path: ["archiveConnectionInstanceId"],
+              message: `Active connection instance ${policy.archiveConnectionInstanceId} is not authorized for permanent application root ${policy.applicationRootId}`,
+            });
           }
         }
       }
@@ -923,6 +1045,42 @@ export const recordLifecycleHandoffSchema = z
         code: "custom",
         path: ["statusReport", "isOverLimit"],
         message: `statusReport.isOverLimit (${handoff.statusReport.isOverLimit}) must be ${expectedIsOverLimit} based on blocked records`,
+      });
+    }
+
+    // Derived excessCount and expiredAgeCount from canonical due/blocked item reasons
+    let derivedExcessCount = 0;
+    let derivedExpiredAgeCount = 0;
+    for (const item of handoff.dueRecords) {
+      if (item.dueReasons.includes("count_excess")) {
+        derivedExcessCount++;
+      }
+      if (item.dueReasons.includes("age")) {
+        derivedExpiredAgeCount++;
+      }
+    }
+    for (const item of handoff.blockedRecords) {
+      if (item.dueReasons.includes("count_excess")) {
+        derivedExcessCount++;
+      }
+      if (item.dueReasons.includes("age")) {
+        derivedExpiredAgeCount++;
+      }
+    }
+
+    if (handoff.statusReport.excessCount !== derivedExcessCount) {
+      context.addIssue({
+        code: "custom",
+        path: ["statusReport", "excessCount"],
+        message: `statusReport.excessCount (${handoff.statusReport.excessCount}) does not match the count of due and blocked records with count_excess reason (${derivedExcessCount})`,
+      });
+    }
+
+    if (handoff.statusReport.expiredAgeCount !== derivedExpiredAgeCount) {
+      context.addIssue({
+        code: "custom",
+        path: ["statusReport", "expiredAgeCount"],
+        message: `statusReport.expiredAgeCount (${handoff.statusReport.expiredAgeCount}) does not match the count of due and blocked records with age reason (${derivedExpiredAgeCount})`,
       });
     }
 

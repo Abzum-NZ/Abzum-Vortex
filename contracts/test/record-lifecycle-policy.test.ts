@@ -4,6 +4,7 @@ import {
   archiveDestinationReferenceSchema,
   archiveWorkflowRecordLifecyclePolicySchema,
   blockedRemovalRecordSchema,
+  connectionInstanceSchema,
   deleteRecordLifecyclePolicySchema,
   dueArchiveRecordHandoffItemSchema,
   dueDeleteRecordHandoffItemSchema,
@@ -21,6 +22,7 @@ import {
   selectDueRecordsForLifecycleHandoff,
   validateRecordTypeLifecyclePolicy,
   validateRecordTypeLifecyclePolicyDefinition,
+  validateRecordTypeLifecyclePolicyDefinitionAgainstLimits,
   type ArchiveDestinationReference,
   type ArchiveWorkflowRecordLifecyclePolicy,
   type DeleteRecordLifecyclePolicy,
@@ -102,7 +104,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
           workflowRevision: 2,
           organizationId: orgA,
           authorizedApplicationIds: [uuid(30)],
-          allowOrganizationShared: true,
           state: "active",
         },
       ],
@@ -112,7 +113,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
           destinationKey: "cold_archive_s3",
           organizationId: orgA,
           authorizedApplicationIds: [uuid(30)],
-          allowOrganizationShared: true,
           state: "active",
         },
       ],
@@ -188,7 +188,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         workflowRevision: 1,
         organizationId: orgA,
         authorizedApplicationIds: [uuid(30)],
-        allowOrganizationShared: false,
         state: "active",
       });
       expect(wf.state).toBe("active");
@@ -199,7 +198,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         destinationKey: "s3_archive",
         organizationId: orgA,
         authorizedApplicationIds: [uuid(30)],
-        allowOrganizationShared: false,
         state: "active",
       });
       expect(conn.destinationKey).toBe("s3_archive");
@@ -558,49 +556,103 @@ describe("record lifecycle policy contracts and organisation limits", () => {
       const policyOrgB = createValidDeletePolicy({ organizationId: orgB });
 
       // Pass orgA limits to orgB policy -> MUST reject
-      const result = validateRecordTypeLifecyclePolicy(policyOrgB, validOrgLimits);
+      const result = validateRecordTypeLifecyclePolicy(policyOrgB, validOrgLimits, undefined, 1);
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.includes("cross-organisation policy application"))).toBe(
         true,
       );
     });
 
-    it("refuses policy when organisation limits settingsRevision does not match expected revision", () => {
+    it("enforces mandatory expectedSettingsRevision at the live validation boundary", () => {
       const policy = createValidDeletePolicy();
-      // Limits currently at settingsRevision: 1
-      // Case A: pass expectedSettingsRevision as number
-      const staleResult = validateRecordTypeLifecyclePolicy(policy, validOrgLimits, undefined, 2);
-      expect(staleResult.valid).toBe(false);
+
+      // Case A: omitted 4th argument entirely
+      // @ts-expect-error testing missing 4th argument at runtime boundary
+      const omittedResult = validateRecordTypeLifecyclePolicy(policy, validOrgLimits);
+      expect(omittedResult.valid).toBe(false);
       expect(
-        staleResult.errors.some((e) => e.includes("settings were concurrently modified or stale")),
+        omittedResult.issues.some((i) => i.code === "missing_expected_settings_revision"),
       ).toBe(true);
 
-      // Case B: pass options object with different revision
-      const concurrentResult = validateRecordTypeLifecyclePolicy(
+      // Case B: explicitly undefined 4th argument
+      const undefinedResult = validateRecordTypeLifecyclePolicy(
         policy,
         validOrgLimits,
         undefined,
-        {
-          expectedSettingsRevision: 3,
-        },
+        undefined,
       );
-      expect(concurrentResult.valid).toBe(false);
+      expect(undefinedResult.valid).toBe(false);
       expect(
-        concurrentResult.errors.some((e) =>
-          e.includes("settings were concurrently modified or stale"),
-        ),
+        undefinedResult.issues.some((i) => i.code === "missing_expected_settings_revision"),
       ).toBe(true);
 
-      // Matching revision succeeds
-      const validResult = validateRecordTypeLifecyclePolicy(policy, validOrgLimits, undefined, {
+      // Case C: non-numeric / malformed revision inputs
+      for (const malformed of ["not-a-number", -1, 0, 1.5, null, {}]) {
+        const malformedResult = validateRecordTypeLifecyclePolicy(
+          policy,
+          validOrgLimits,
+          undefined,
+          malformed,
+        );
+        expect(malformedResult.valid).toBe(false);
+        expect(
+          malformedResult.issues.some(
+            (i) =>
+              i.code === "invalid_expected_settings_revision" ||
+              i.code === "missing_expected_settings_revision",
+          ),
+        ).toBe(true);
+      }
+
+      // Case D: mismatched / stale settings revision (limits at revision 1, pass 2 or 3)
+      const staleNumResult = validateRecordTypeLifecyclePolicy(
+        policy,
+        validOrgLimits,
+        undefined,
+        2,
+      );
+      expect(staleNumResult.valid).toBe(false);
+      expect(staleNumResult.issues.some((i) => i.code === "stale_settings_revision")).toBe(true);
+
+      const staleOptResult = validateRecordTypeLifecyclePolicy(policy, validOrgLimits, undefined, {
+        expectedSettingsRevision: 3,
+      });
+      expect(staleOptResult.valid).toBe(false);
+      expect(staleOptResult.issues.some((i) => i.code === "stale_settings_revision")).toBe(true);
+
+      // Case E: matching revision succeeds (as number or options object)
+      const validNumResult = validateRecordTypeLifecyclePolicy(
+        policy,
+        validOrgLimits,
+        undefined,
+        1,
+      );
+      expect(validNumResult.valid).toBe(true);
+
+      const validOptResult = validateRecordTypeLifecyclePolicy(policy, validOrgLimits, undefined, {
         expectedSettingsRevision: 1,
       });
-      expect(validResult.valid).toBe(true);
+      expect(validOptResult.valid).toBe(true);
+    });
+
+    it("validates declared shape against limits via validateRecordTypeLifecyclePolicyDefinitionAgainstLimits without live concurrency", () => {
+      const declaredDelete = createValidDeletePolicy();
+      const defAgainstLimits = validateRecordTypeLifecyclePolicyDefinitionAgainstLimits(
+        declaredDelete,
+        validOrgLimits,
+      );
+      expect(defAgainstLimits.valid).toBe(true);
+
+      // Rejects when ceilings exceeded
+      const exceeding = createValidDeletePolicy({ maxAgeDays: 400 });
+      expect(
+        validateRecordTypeLifecyclePolicyDefinitionAgainstLimits(exceeding, validOrgLimits).valid,
+      ).toBe(false);
     });
 
     it("accepts a policy within organisation ceilings and allowed actions", () => {
       const policy = createValidDeletePolicy();
-      const result = validateRecordTypeLifecyclePolicy(policy, validOrgLimits);
+      const result = validateRecordTypeLifecyclePolicy(policy, validOrgLimits, undefined, 1);
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
@@ -617,6 +669,7 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         archivePolicy,
         deleteOnlyOrg,
         createValidReadinessEvidence(),
+        1,
       );
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.includes("not permitted by organisation limits"))).toBe(
@@ -626,14 +679,14 @@ describe("record lifecycle policy contracts and organisation limits", () => {
 
     it("refuses policy when maxAgeDays exceeds organisation ceiling", () => {
       const exceeding = createValidDeletePolicy({ maxAgeDays: 400 });
-      const result = validateRecordTypeLifecyclePolicy(exceeding, validOrgLimits);
+      const result = validateRecordTypeLifecyclePolicy(exceeding, validOrgLimits, undefined, 1);
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.includes("exceeds organisation limit"))).toBe(true);
     });
 
     it("refuses policy when maxCount exceeds organisation ceiling", () => {
       const exceeding = createValidDeletePolicy({ maxCount: 20_000 });
-      const result = validateRecordTypeLifecyclePolicy(exceeding, validOrgLimits);
+      const result = validateRecordTypeLifecyclePolicy(exceeding, validOrgLimits, undefined, 1);
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.includes("exceeds organisation limit"))).toBe(true);
     });
@@ -643,13 +696,17 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         maxAgeDays: null,
         allowUnlimitedAge: true,
       });
-      expect(validateRecordTypeLifecyclePolicy(unlimitedAge, validOrgLimits).valid).toBe(false);
+      expect(
+        validateRecordTypeLifecyclePolicy(unlimitedAge, validOrgLimits, undefined, 1).valid,
+      ).toBe(false);
 
       const unlimitedCount = createValidDeletePolicy({
         maxCount: null,
         allowUnlimitedCount: true,
       });
-      expect(validateRecordTypeLifecyclePolicy(unlimitedCount, validOrgLimits).valid).toBe(false);
+      expect(
+        validateRecordTypeLifecyclePolicy(unlimitedCount, validOrgLimits, undefined, 1).valid,
+      ).toBe(false);
     });
 
     it("accepts unlimited age and count when organisation explicitly permits both", () => {
@@ -666,7 +723,9 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         allowUnlimitedAge: true,
         allowUnlimitedCount: true,
       });
-      expect(validateRecordTypeLifecyclePolicy(unlimited, permissiveOrg).valid).toBe(true);
+      expect(validateRecordTypeLifecyclePolicy(unlimited, permissiveOrg, undefined, 1).valid).toBe(
+        true,
+      );
     });
 
     it("refuses archive_workflow when destination is not in allowedArchiveDestinations", () => {
@@ -677,6 +736,7 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         archivePolicy,
         validOrgLimits,
         createValidReadinessEvidence(),
+        1,
       );
       expect(result.valid).toBe(false);
       expect(
@@ -686,7 +746,7 @@ describe("record lifecycle policy contracts and organisation limits", () => {
 
     it("refuses archive_workflow when readiness evidence is missing (no silent fallback)", () => {
       const archivePolicy = createValidArchivePolicy();
-      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits);
+      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, undefined, 1);
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.includes("Readiness evidence is required"))).toBe(true);
     });
@@ -699,6 +759,7 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         archivePolicy,
         validOrgLimits,
         foreignEvidence,
+        1,
       );
       expect(result.valid).toBe(false);
       expect(
@@ -720,13 +781,12 @@ describe("record lifecycle policy contracts and organisation limits", () => {
             workflowRevision: 2, // does not match expected 5
             organizationId: orgA,
             authorizedApplicationIds: [uuid(30)],
-            allowOrganizationShared: true,
             state: "active",
           },
         ],
       });
 
-      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence);
+      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence, 1);
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.includes("is not registered in runtime workflows"))).toBe(
         true,
@@ -739,7 +799,7 @@ describe("record lifecycle policy contracts and organisation limits", () => {
       });
       const evidence = createValidReadinessEvidence(); // contains uuid(50), not uuid(99)
 
-      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence);
+      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence, 1);
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.includes("is unavailable"))).toBe(true);
     });
@@ -753,7 +813,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
             workflowRevision: 2,
             organizationId: orgA,
             authorizedApplicationIds: [uuid(999)], // App 999, not App 30
-            allowOrganizationShared: false,
             state: "active",
           },
         ],
@@ -762,6 +821,7 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         appScopedPolicy,
         validOrgLimits,
         evidenceDifferentApp,
+        1,
       );
       expect(result.valid).toBe(false);
       expect(
@@ -769,29 +829,38 @@ describe("record lifecycle policy contracts and organisation limits", () => {
       ).toBe(true);
     });
 
-    it("refuses archive_workflow for organisation-shared policy when workflow disallows shared use", () => {
-      const sharedPolicy = createValidArchivePolicy({ applicationRootId: null });
-      const appOnlyEvidence = createValidReadinessEvidence({
+    it("refuses archive_workflow when registered workflow attempts allowOrganizationShared: true bypass with wrong application", () => {
+      const appScopedPolicy = createValidArchivePolicy({ applicationRootId: uuid(30) });
+      // Attempted bypass with allowOrganizationShared: true and wrong application
+      const rawEvidenceBypass = {
+        organizationId: orgA,
         registeredWorkflows: [
           {
             workflowId: uuid(40),
             workflowRevision: 2,
             organizationId: orgA,
-            authorizedApplicationIds: [uuid(30)],
-            allowOrganizationShared: false, // does not allow shared root
+            authorizedApplicationIds: [uuid(999)],
+            allowOrganizationShared: true,
             state: "active",
           },
         ],
-      });
+        activeConnections: [
+          {
+            connectionInstanceId: uuid(50),
+            destinationKey: "cold_archive_s3",
+            organizationId: orgA,
+            authorizedApplicationIds: [uuid(30)],
+            state: "active",
+          },
+        ],
+      };
       const result = validateRecordTypeLifecyclePolicy(
-        sharedPolicy,
+        appScopedPolicy,
         validOrgLimits,
-        appOnlyEvidence,
+        rawEvidenceBypass,
+        1,
       );
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.includes("does not permit organisation-shared use"))).toBe(
-        true,
-      );
     });
 
     it("refuses archive_workflow when connection instance is not authorized for application root", () => {
@@ -803,7 +872,6 @@ describe("record lifecycle policy contracts and organisation limits", () => {
             destinationKey: "cold_archive_s3",
             organizationId: orgA,
             authorizedApplicationIds: [uuid(999)], // App 999, not App 30
-            allowOrganizationShared: false,
             state: "active",
           },
         ],
@@ -812,6 +880,7 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         appScopedPolicy,
         validOrgLimits,
         evidenceDifferentApp,
+        1,
       );
       expect(result.valid).toBe(false);
       expect(
@@ -819,35 +888,128 @@ describe("record lifecycle policy contracts and organisation limits", () => {
       ).toBe(true);
     });
 
-    it("refuses archive_workflow for organisation-shared policy when connection disallows shared use", () => {
-      const sharedPolicy = createValidArchivePolicy({ applicationRootId: null });
-      const appOnlyEvidence = createValidReadinessEvidence({
+    it("refuses archive_workflow when connection instance attempts allowOrganizationShared: true bypass with wrong application", () => {
+      const appScopedPolicy = createValidArchivePolicy({ applicationRootId: uuid(30) });
+      // Attempted bypass with allowOrganizationShared: true and wrong application
+      const rawEvidenceBypass = {
+        organizationId: orgA,
+        registeredWorkflows: [
+          {
+            workflowId: uuid(40),
+            workflowRevision: 2,
+            organizationId: orgA,
+            authorizedApplicationIds: [uuid(30)],
+            state: "active",
+          },
+        ],
         activeConnections: [
           {
             connectionInstanceId: uuid(50),
             destinationKey: "cold_archive_s3",
             organizationId: orgA,
-            authorizedApplicationIds: [uuid(30)],
-            allowOrganizationShared: false,
+            authorizedApplicationIds: [uuid(999)],
+            allowOrganizationShared: true,
             state: "active",
           },
         ],
-      });
+      };
       const result = validateRecordTypeLifecyclePolicy(
-        sharedPolicy,
+        appScopedPolicy,
         validOrgLimits,
-        appOnlyEvidence,
+        rawEvidenceBypass,
+        1,
       );
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.includes("does not permit organisation-shared use"))).toBe(
-        true,
+    });
+
+    it("refuses archive_workflow for organisation-shared policy when registered workflow or connection requires application scope", () => {
+      const sharedPolicy = createValidArchivePolicy({ applicationRootId: null });
+      const evidence = createValidReadinessEvidence();
+      const result = validateRecordTypeLifecyclePolicy(sharedPolicy, validOrgLimits, evidence, 1);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) =>
+          e.includes(
+            "cannot activate archive_workflow because registered workflows require permanent application scope",
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it("accepts archive_workflow with readiness evidence built from canonical connectionInstanceSchema shape", () => {
+      const archivePolicy = createValidArchivePolicy({ applicationRootId: uuid(30) });
+      const canonicalConnection = connectionInstanceSchema.parse({
+        connectionInstanceId: uuid(50),
+        organizationId: orgA,
+        connectionTypeId: uuid(100),
+        connectionTypeVersion: "1.0.0",
+        secretReference: {
+          provider: "doppler",
+          referenceId: uuid(200),
+          key: "archive_key",
+        },
+        authorizedApplicationIds: [uuid(30)],
+        state: "active",
+        grantedScopes: ["archive:write"],
+        lastHealthOutcome: "healthy",
+        administratorActivityId: uuid(101),
+      });
+
+      const evidence = createValidReadinessEvidence({
+        activeConnections: [
+          {
+            connectionInstanceId: canonicalConnection.connectionInstanceId,
+            destinationKey: "cold_archive_s3",
+            organizationId: canonicalConnection.organizationId,
+            authorizedApplicationIds: canonicalConnection.authorizedApplicationIds,
+            state: canonicalConnection.state,
+          },
+        ],
+      });
+
+      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence, 1);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+
+      // Canonical connection with different application root is rejected
+      const canonicalWrongApp = connectionInstanceSchema.parse({
+        ...canonicalConnection,
+        connectionInstanceId: uuid(51),
+        authorizedApplicationIds: [uuid(999)],
+      });
+      const evidenceWrong = createValidReadinessEvidence({
+        activeConnections: [
+          {
+            connectionInstanceId: canonicalWrongApp.connectionInstanceId,
+            destinationKey: "cold_archive_s3",
+            organizationId: canonicalWrongApp.organizationId,
+            authorizedApplicationIds: canonicalWrongApp.authorizedApplicationIds,
+            state: canonicalWrongApp.state,
+          },
+        ],
+      });
+      const policyWrongConn = createValidArchivePolicy({
+        applicationRootId: uuid(30),
+        archiveConnectionInstanceId: uuid(51),
+      });
+      const resultWrong = validateRecordTypeLifecyclePolicy(
+        policyWrongConn,
+        validOrgLimits,
+        evidenceWrong,
+        1,
       );
+      expect(resultWrong.valid).toBe(false);
+      expect(
+        resultWrong.errors.some((e) =>
+          e.includes("is not authorized for permanent application root"),
+        ),
+      ).toBe(true);
     });
 
     it("accepts archive_workflow when exact typed registration and connection evidence are verified", () => {
       const archivePolicy = createValidArchivePolicy();
       const evidence = createValidReadinessEvidence();
-      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence);
+      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence, 1);
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
@@ -1428,6 +1590,28 @@ describe("record lifecycle policy contracts and organisation limits", () => {
       const untruthfulOverLimit = validHandoffPayload();
       untruthfulOverLimit.statusReport.isOverLimit = false;
       expect(recordLifecycleHandoffSchema.safeParse(untruthfulOverLimit).success).toBe(false);
+    });
+
+    it("rejects untruthful statusReport excessCount or expiredAgeCount tampering", () => {
+      // Tampered excessCount under-reporting (reported 0 when actual items with count_excess is 1)
+      const tamperedExcessLow = validHandoffPayload();
+      tamperedExcessLow.statusReport.excessCount = 0;
+      expect(recordLifecycleHandoffSchema.safeParse(tamperedExcessLow).success).toBe(false);
+
+      // Tampered excessCount over-reporting (reported 99 when actual is 1)
+      const tamperedExcessHigh = validHandoffPayload();
+      tamperedExcessHigh.statusReport.excessCount = 99;
+      expect(recordLifecycleHandoffSchema.safeParse(tamperedExcessHigh).success).toBe(false);
+
+      // Tampered expiredAgeCount under-reporting (reported 0 when actual items with age is 1)
+      const tamperedAgeLow = validHandoffPayload();
+      tamperedAgeLow.statusReport.expiredAgeCount = 0;
+      expect(recordLifecycleHandoffSchema.safeParse(tamperedAgeLow).success).toBe(false);
+
+      // Tampered expiredAgeCount over-reporting (reported 99 when actual is 1)
+      const tamperedAgeHigh = validHandoffPayload();
+      tamperedAgeHigh.statusReport.expiredAgeCount = 99;
+      expect(recordLifecycleHandoffSchema.safeParse(tamperedAgeHigh).success).toBe(false);
     });
 
     it("rejects totalRetainedCount less than dueCount", () => {
