@@ -19,6 +19,7 @@ export default defineConfig({
       "apps/web/test/**/*.test.tsx",
       "db/src/**/*.test.ts",
       "runtime/**/test/**/*.test.ts",
+      "studio/test/**/*.test.ts",
       "testing/fixtures/**/*.test.ts",
       "tooling/**/*.test.mjs",
       "tooling/**/*.test.ts",
