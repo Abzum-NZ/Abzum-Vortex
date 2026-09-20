@@ -26,10 +26,13 @@ dispatched for has drifted from its brief.
 Orca's unit of work is the agent session: one CLI agent in one terminal in one
 worktree. Each agent has its own disposable checkout to work in, and the
 orchestrator can discard a branch without touching anyone else's work. Orca
-launches every agent with its full-autonomy permission flag already applied
-on that basis: the worktree is the sandbox. The orchestrator never edits
-another agent's worktree; it steers by sending text into that agent's
-terminal and by reading the terminal back.
+launches agents with their configured permissions: the worktree is the
+sandbox. Do not alter tool permissions or diagnose a lane as broken merely
+from a prior permission report. The orchestrator never edits another agent's
+worktree; it steers by sending text into that agent's terminal and by reading
+the terminal back. Sandboxed agents receive an inline brief or a brief placed
+in their own worktree. OpenCode permissions are globally allowed by the user's
+configuration.
 
 ## Roster and model assignment
 
@@ -41,12 +44,12 @@ treating it as fixed.
 
 | Lane | Model | Does | Owns |
 | --- | --- | --- | --- |
-| Orchestrator (root coordinator) | GPT 6 Astra · medium (Codex) | Supervises issue owners and single-slice workers, sequences work across issues, manages fleet capacity, performs independent acceptance, and decides merges and promotions. Generic: it has no linked issue or pull request and no implementation ownership. If it starts writing code, the queue stops moving. | Cross-issue dependency order, fleet capacity, phase gates, merge and promotion decisions |
+| Orchestrator (root coordinator) | GPT 6 Astra · medium (Codex) | Supervises issue owners and single-slice workers, sequences work across issues, performs independent acceptance, and decides merges and promotions. Generic: it has no linked issue or pull request and no implementation ownership. If it starts writing code, the queue stops moving. | Cross-issue dependency order, database-verification admission, phase gates, merge and promotion decisions |
 | Schema & security | Claude Opus 5 · high | Privileged database objects, migrations, row-level security, permission binding, concurrency writers — anything where a mistake widens access or corrupts a revision | `supabase/migrations/**`, access and record writers |
 | Runtime & contracts | Claude Sonnet 5 · high | TypeScript engines, contracts, adapters and the definition-led execution path; escalates to the Schema & security lane the moment a change reaches into a privileged writer | `runtime/**`, `contracts/**` |
 | Proofs | Claude Sonnet 5 · high | pgTAP suites and the two-session concurrency harness; builds every fixture through the owning writer, never by direct insert; reports defects rather than softening assertions | `supabase/tests/**` and verification registration |
-| Workhorse (suspended) | GLM 5.3 (OpenCode) | **Suspended.** Headless OpenCode is broken: the models, authentication and binary exist, but `opencode run` exits silently. Dispatch nothing to this lane and make no retries until the coordinator records that it is fixed. The workhorse fallback below applies. | — |
-| Workhorse (fallback) | Claude Sonnet 5 · high, or GPT 5.6 Terra · medium (Codex) | High-volume, well-specified, low-blast-radius work where the answer is checkable: plan-document sync, registration and inventory sweeps, scaffolds, evidence collection, dependency audits | `docs/**`, manifests, selectors, audits |
+| Workhorse (OpenCode) | GLM 5.3 Flash (OpenCode) | High-volume, well-specified, low-blast-radius work where the answer is checkable: plan-document sync, registration and inventory sweeps, scaffolds, evidence collection and dependency audits | `docs/**`, manifests, selectors, audits |
+| Workhorse | Claude Sonnet 5 · high, or GPT 5.6 Terra · medium (Codex) | The same checkable workhorse tasks when the assignment benefits from those lanes | `docs/**`, manifests, selectors, audits |
 | Workhorse (Antigravity) | Gemini 3.8 Flash (`agy` TUI) | An allowed lane for the same workhorse tasks. Before dispatch, verify that `agy` is installed and that the exact model resolves in the launched terminal. Availability is not claimed without launch evidence. | Workhorse tasks, once launch is evidenced |
 | Triage | GPT 5.6 Terra · low (Codex) | Cheap and fast: read an issue, reproduce a failure, scan logs, confirm a premise, summarise a diff. The first responder that stops expensive agents being dispatched on false premises | Pre-dispatch premise checks, failure triage |
 | Analysis | GPT 5.6 Sol · high (Codex) | Root-cause work and slice design when a defect resists the obvious reading, or when an issue owner needs the issue's scope split before anyone implements it | Diagnosis notes, slice proposals, spec deltas |
@@ -63,12 +66,11 @@ session are recorded.
 wherever a Luna lane or reference would otherwise apply.
 
 Documentation, manifests, inventories, dependency audits and evidence gathering
-go to the workhorse fallback (Claude Sonnet 5 or GPT 5.6 Terra), or to Gemini 3.8
-Flash once its launch is evidenced. The GLM 5.3 (OpenCode) lane is suspended, so
-OpenCode is not a mandatory route for any task and its silent exit is not a
-reason to stop the task. Do not retry OpenCode until the coordinator records it
-as fixed; the first retry after that must confirm GLM 5.3 in the launched
-terminal before the brief is sent.
+are spread across GLM 5.3 Flash, Gemini 3.8 Flash, Claude Sonnet 5 and GPT 5.6
+Terra according to the task. GLM 5.3 (OpenCode) is restored as a workhorse:
+the prior default-model and stdin failure is resolved. Verify the exact resolved
+model in the launched terminal before sending its brief; a provider capacity
+response alone is not a failed launch or evidence that a lane is broken.
 
 For any Antigravity dispatch, confirm in the launched terminal that the exact
 model is Gemini 3.8 Flash, and record the terminal and observed model with the
@@ -78,9 +80,10 @@ entry alone. Record the terminal and observed model for every other launch too.
 ## Escalation ladder
 
 The ladder is two rungs, not a staircase. A task that stalls or fails twice
-while assigned to **GPT 5.6 Terra or Gemini 3.8 Flash (or GLM 5.3, once
-unsuspended) escalates directly to GPT 6 Astra (medium) or Claude Opus 5
-(high)** — nothing in between.
+while assigned to **GPT 5.6 Terra, Gemini 3.8 Flash or GLM 5.3 Flash**
+escalates directly to GPT 6 Astra (medium). Escalate to Claude Opus 5 (high)
+only for privileged database, security or concurrency work — nothing in
+between.
 Escalating one model at a time re-runs the same failure at each intermediate
 step instead of resolving it.
 
@@ -92,10 +95,11 @@ third implementation attempt.
 ## Root coordinator and issue owners
 
 The root coordinator is the orchestrator. It is generic: it is not linked to any
-issue or pull request and owns no implementation. Issue and pull request
-metadata belong to the owners and workers doing the work. The root supervises
-owners, sequences work across issues, manages capacity, performs independent
-acceptance and decides promotion.
+issue or pull request and owns no implementation. The root alone reads the
+full GitHub board and publishes the shared evidence described below. An owner
+may make its single serialized assignment-dossier pass; workers make no GitHub
+reads. The root supervises owners, sequences work across issues, performs
+independent acceptance and decides promotion.
 
 **A multi-slice issue gets one issue owner.** The owner reads the full issue,
 plans its own slices, dispatches and supervises its workers, and owns acceptance
@@ -107,25 +111,68 @@ Owners are bound by the same rules as the root:
 
 - The blocking completion and resume gate, terminal monitoring and worktree
   cleanup below apply to each owner for its own issue and workers.
-- The concurrency caps under Queue selection are fleet-wide. Nested workers
-  count against them, and an owner requests slots from the root before it
-  spawns a worker.
+- Owners dispatch workers freely. There is no maximum number of agents,
+  owners or workers, and no slot request or permission is required to spawn a
+  worker. The only shared limit is the two concurrent `pnpm db:*` verification
+  clusters described in Queue selection; workers queue for a cluster, not for
+  permission to exist.
 - The root oversees owners and each owner oversees its workers. Every handle and
   observation is recorded, and an existing worker is never duplicated. A worker
   already running on part of the issue is adopted under the new owner, not
   restarted.
-- An owner may open review pull requests and reconcile the issue's board record.
-  The root keeps the merge and promotion decisions and the independent
-  acceptance.
+- An owner may push its branch and open a review pull request only when that is
+  authorized. An owner may make only the assignment-dossier read below; workers
+  do not read GitHub and neither role reconciles board records. The root keeps
+  board updates, merge and promotion decisions, and independent acceptance.
+
+### Central GitHub snapshot and issue dossiers
+
+At the start of each root cycle, the root makes one serialized, complete
+live-board read and writes
+`C:/Users/vijay/AppData/Local/Temp/vortex-fleet/board-snapshot.json`. Its first
+field is `snapshotUtc`. Owners and workers consume that snapshot; nobody else
+runs `gh project item-list` or performs another full-board refresh in the same
+cycle.
+
+When assigning an issue, the owner makes one serialized dossier pass for the
+issue body, all comments, `blocked_by` and blocking edges, subissues, and linked
+pull requests. It preserves all dependency edges as audit evidence and filters
+to `state=open` only when deciding eligibility. It writes the result with a
+timestamp to
+`C:/Users/vijay/AppData/Local/Temp/vortex-fleet/issue-<n>.md`. Reuse retrieved
+data; workers read the dossier and never make GitHub reads. A request for fresher
+mid-cycle data goes to the root, which makes one targeted call rather than a
+duplicate full-board refresh.
+
+### GitHub call discipline
+
+Stagger GitHub callers; never run simultaneous refreshes or endpoint-polling
+loops. Wait on agent terminals instead. On a rate-limit error, stop, read the
+response `Retry-After` or reset time, wait, make exactly one retry, and report
+the result. If no reset is supplied, do not invent one or tight-loop; escalate.
+A rate-limit response or unknown owner type may be throttling, not proof that
+the data is invalid.
+
+The following are user-observed operational measurements, not universal
+constants: REST core 5,000/hour (283 used when measured), GraphQL 5,000 points
+per hour, search 30/minute, and code search 10/minute. Secondary burst or
+concurrency throttling can occur while those measured quotas remain.
 
 ## The dispatch loop
 
 The orchestrator runs one loop, continuously, without waiting for a human.
-Every pass through it either advances a task, parks it with a reason, or
-raises a new issue. It stops only when the board has no startable work left.
+Every pass with startable work dispatches at least one new owner or worker.
+Bookkeeping alone is not output. If none is dispatched, report one line
+listing each specific issue examined and why it was not startable. It stops
+only when the board has no startable work left.
+
+Every startable issue has an accountable owner. For a genuinely single-slice
+issue, the directly dispatched worker is that owner for the bounded task; the
+root still does not decompose a multi-slice issue into its workers.
 
 1. **Select** — pick the next dependency-ready task; see Queue selection below.
-2. **Brief** — verify the premise, then write a drift-proof brief; see Dispatch brief template below.
+2. **Brief** — verify the premise from the shared snapshot and issue dossier,
+   then write a drift-proof brief; see Dispatch brief template below.
 3. **Dispatch** — start one agent in one new worktree on one branch, in a single command. The agent is an issue owner for a multi-slice issue and a worker for a single-slice one; see Root coordinator and issue owners above. For example:
 
    ```
@@ -136,19 +183,29 @@ raises a new issue. It stops only when the board has no startable work left.
 
 4. **Watch** — check the agent at least every twenty minutes; see Watching below.
 5. **Gate** — run local verification and independent review where required; see Gates below.
-6. **Land** — open the pull request into `main` (an issue owner may open it for review) and merge once gates and review pass; the root decides the merge. Promotion to `testing` remains a separate phase gate, subject to any user hold.
-7. **Reconcile and report — blocking step.** The issue owner, or the root for a single-slice worker, completes the board reconciliation below before selecting or dispatching another task. A task is not finished until its board row is true.
+6. **Land** — open the pull request into `main` (an issue owner may open it
+   for review only when authorized) and merge once gates and review pass; the
+   root decides the merge. Promotion to `testing` remains a separate phase
+   gate, subject to any user hold.
+7. **Reconcile and report — immediate step.** Immediately after any agent
+   finishes, its owner reports completion to the root. Before any other work,
+   the root batches the issue-field changes and confirms the changed row against
+   the snapshot. It posts one closing comment only when whole-issue acceptance
+   closes the issue, then scans the shared board for newly unblocked issues. A
+   task is not finished until its board row is true.
 8. **Clean up.** Once the branch is merged and the board row is verified, remove
    the finished checkout with `orca worktree rm`; see Worktree cleanup below.
 
 ### Blocking completion and resume gate
 
 After every worker completion, review verdict, merge, hosted result or closure,
-and before the first dispatch after a resume:
+and before the first dispatch after a resume, the root applies this central
+protocol:
 
-1. Read the complete live board and its fields. Reconcile open issues against
-   their PRs, actual branch ancestry, local gates, applicable hosted receipts and
-   remaining acceptance. A merged slice is not automatically a completed issue.
+1. Use the cycle snapshot and root-confirmed changed-row evidence to reconcile
+   open issues against their PRs, actual branch ancestry, local gates, applicable
+   hosted receipts and remaining acceptance. A merged slice is not automatically
+   a completed issue. Owners do not re-read GitHub for this step.
 2. Set the actual delivery stage. Use **In progress** only for accepted active
    work; **In review** for an open review/delivery PR or Coordinator-owned work
    merged to `main` but awaiting promotion. State that post-merge waiting stage
@@ -162,11 +219,15 @@ and before the first dispatch after a resume:
    named separately with their evidence.
 3. Record the real owner, canonical dispatch reference, completion time, exact
    commit/PR, checks actually run and remaining acceptance or hold. Clear completed
-   workers; name the next accountable owner. Post a completion comment citing the
-   delivering PR and evidence, and a closing comment when acceptance is complete.
-4. Re-read native dependencies, derive the pickup order for newly unblocked work,
-   and post Completed, Coming up, Pending User Decision and Overall Progress rows.
-   Recount the numerator and denominator from the live board.
+   workers; name the next accountable owner. Batch the issue-field changes.
+   Post one closing comment citing the delivering PR and evidence only when
+   whole-issue acceptance closes the issue.
+4. Scan the shared board and timestamped dossiers for dependencies, filtering
+   blockers to `state=open`; move every startable row to Ready or its current true state,
+   derive the pickup order, and exclude #520 because it is a parked user
+   decision. Keep sequencing generic and manual. Post Completed, Coming up,
+   Pending User Decision and Overall Progress rows, and recount the numerator
+   and denominator from the live board.
 5. Read back the changed board rows and issue states. **Do not dispatch the next
    worker until these writes are verified.** A failed or incomplete reconciliation
    blocks new dispatch, not an already running worker's authorized work.
@@ -181,8 +242,9 @@ returning to Brief. A failed gate never blocks the loop: it becomes a new
 tracked issue and re-enters Select on its own merits, rather than stopping
 work behind it.
 
-The orchestrator keeps itself alive between cycles with a scheduled prompt so
-a crash or restart resumes the loop rather than ending it.
+The root schedules cycles every 30 minutes to avoid overlapping root sessions.
+This does not weaken the terminal-supervision cadence. Never create a yielding
+duplicate root.
 
 ## Queue selection
 
@@ -191,16 +253,12 @@ names and old comments are not evidence of sequence — native GitHub
 dependencies are.
 
 1. **Collect candidates.** Open issues whose board status is Ready or Backlog.
-2. **Drop anything genuinely blocked.** Query each issue's blocking
-   dependencies and confirm the response actually parsed before trusting an
-   empty result — a failed call that returns nothing looks identical to no
-   blockers, and trusting it has produced false "unblocked" verdicts.
-   Paginate the `issues/{number}/dependencies/blocked_by` endpoint and count
-   only edges whose issue `state` is `open`. Closed blockers remain in this
-   endpoint: a nonempty response is not evidence of an open blocker. Retain
-   closed edges as audit evidence, not exclusions. An unknown state or failed
-   page leaves eligibility unknown until resolved. Re-run this filter across
-   the whole board on resume and after completions, not just the old queue.
+2. **Drop anything genuinely blocked.** Use the root's shared snapshot and
+   the owner's assignment dossier. Preserve all dependency edges in the dossier
+   as audit evidence, but count only edges whose issue `state` is `open` for
+   eligibility. An unknown state or missing dossier leaves eligibility unknown
+   until the root supplies one targeted fresh read. Scan the whole shared board
+   after completions and on resume, not just the old queue.
 3. **Order by roadmap lane, then priority, then dependency depth.** Work that
    unblocks the most downstream issues goes first within a lane.
 4. **Prefer functionality over maintenance.** Between two startable tasks,
@@ -208,21 +266,29 @@ dependencies are.
    A defect in a shipped writer is functionality; adding tests around a
    working one is not — this is the same rule that makes test maintenance an
    invalid task on its own.
-5. **Respect the concurrency caps.** At most two database-cluster
-   verification tasks in flight at once, four agents in flight in total.
-   The caps are fleet-wide and count owners and nested workers alike; an owner
-   requests slots from the root before it spawns. Running more has produced
-   clock skew across parallel verification clusters and failed unrelated
-   time-dependent proofs.
+5. **Reserve database-cluster verification.** At most two `pnpm db:*`
+   verification clusters run concurrently across the fleet, because #384
+   demonstrated clock skew from additional parallel clusters. This is not an
+   agent, owner or worker cap: any number of agents may read, write, analyse or
+   review while verification waits for a cluster. Do not request permission or
+   a slot to dispatch them.
 6. **Verify the premise before briefing.** Search the full commit history for
    the affected path and search closed issues. A fix that already exists on
    another branch is the single most expensive thing to re-implement.
-7. **Dispatch, and record the dispatch on the board** — status, agent, model,
-   worktree, started-at.
+7. **Dispatch, then use one grouped transition.** The root immediately marks
+   the dispatched issue **In progress** with status, agent, resolved model,
+   worktree and started-at, then reads back the grouped transition. Verify the
+   resolved model in the launched terminal before treating the task as started.
 
 ## Watching
 
-Every cycle, read every in-flight agent's terminal with `orca terminal read`.
+Every cycle, the root alone reads the complete live board and all relevant
+fields, including paginated items and fields, once and publishes the central
+snapshot before anyone reads it. It then reads every in-flight agent terminal
+with `orca terminal read`; check actual task activity, empty worktrees and
+failed launches. This live-board verification is required even when no agent
+has just finished; owners and workers reuse the snapshot rather than calling
+GitHub.
 The root reads each issue owner's terminal, and each owner reads its own
 workers' terminals; nobody skips a level or starts a worker that already exists.
 The interval between checks must never exceed twenty minutes, per the
@@ -237,7 +303,19 @@ brief and any steering sent. If progress appears stalled, use `orca terminal
 send` to ask what it is waiting on and what it has completed, then read or wait
 for its answer. Input acceptance alone does not prove the question was answered.
 Never replace this interaction with host-process or cluster sampling, and never
-stop an agent that has not failed to answer the question.
+stop an agent that has not failed to answer the question. Recover a failed
+launch only after proving the prior session exited. Then verify the
+replacement's actual task start and resolved model. Do not leave an idle agent,
+orphan worktree or stale branch after its work has ended.
+
+### GLM stale sweep
+
+GLM stale-sweep automation runs every 15 minutes as a read-only observer. It
+writes `C:/Users/vijay/AppData/Local/Temp/vortex-fleet/stale-sweep.md` and sends
+its summary to the root. The root forwards each finding to the owning
+orchestrator and records that orchestrator's reply; it does not independently
+mutate an owner's worktree. This observer does not replace terminal readback,
+board reconciliation or proven-exit recovery.
 
 Evidence that means something:
 
@@ -267,15 +345,18 @@ answer.
 | Drifting — wrong files, scope creep | Send the scope and file list again | Re-check in 10 minutes |
 | Retrying around a failure | Send the diagnosis, or dispatch Triage to reproduce it independently | Re-check in 10 minutes |
 | Idle, unfinished, no answer | Stop the session; keep the worktree and its diff | Escalate |
-| Two failed attempts | Escalate straight to Astra medium or Opus 5 high, re-dispatching with what was learned | Fresh worktree |
+| Two failed attempts | Escalate to Astra medium; use Opus 5 high only for privileged database, security or concurrency work, re-dispatching with what was learned | Fresh worktree |
 | Blocked on a real decision | Park the issue with a written question, pick up the next one | Queue moves on |
 
 ## Worktree cleanup
 
-After a task branch is merged and its board row is true, remove its finished
-worktree with `orca worktree rm --worktree <exact-selector>`. Do this as part
-of completion, before the next dispatch; repeat the audit on resume. A held
-hosted receipt does not require retaining a finished developer's checkout.
+Done requires deleting merged issue branches locally and remotely where
+applicable, stopping attached agents, and removing their worktrees after
+preserving drafts and unmerged work. After a task branch is merged and its
+board row is true, remove its finished worktree with `orca worktree rm
+--worktree <exact-selector>`. Do this as part of completion; repeat the audit
+on resume. A held hosted receipt does not require retaining a finished
+developer's checkout.
 
 First read the agent terminal to confirm completion, preserve reports and any
 unsent drafts outside the disposable checkout without submitting them, check
@@ -293,12 +374,13 @@ See [agent coordination](agent-coordination.md#board-and-dispatch-record) for
 what each board status means and who owns it; this section does not restate
 that. The fleet adds one standing cadence rule on top of it:
 
-**After every agent finishes a task, the accountable issue owner (the
-orchestrator for a single-slice worker) updates the board — status, evidence
-comment and a re-derived pickup order — before the next one is dispatched.** The closing comment cites the delivering pull request and the
-evidence (test counts, reviewer, file:line citations), and the board
-percentage is recounted from the board itself rather than estimated. A
-finished task that is not on the board is not finished.
+**After every agent finishes a task, the accountable issue owner reports to
+the root. Before any other work, the root batches the board field changes and
+confirms the changed row using the snapshot and root-confirmed evidence.** It
+posts one closing comment citing the delivering pull request and evidence only
+when whole-issue acceptance closes the issue. The board percentage is recounted
+from the board itself rather than estimated. A finished task that is not on the
+board is not finished.
 
 Closure requires evidence, never source inspection: an issue closes when its
 acceptance criteria are met by merged code and the local gates ran — not
@@ -351,7 +433,9 @@ report its exact stderr.
   stderr can carry CLI notices, so the execution state and the assertions decide
   whether a run failed, not the mere presence of an ERROR line.
 - **Before any promotion or trigger,** list and check for an in-flight run of the
-  flow, and read the outcome of every promotion once it lands.
+  flow and for an existing run of the exact candidate revision. Hosted-run
+  admission is separate from agent dispatch; never trigger a duplicate exact
+  run. Read the outcome of every promotion once it lands.
 - **Superseded runs.** `kestractl executions kill <ID>` is only for a run that a
   newer promotion has superseded. Never kill a run that is still the entitled
   Testing execution.
@@ -428,9 +512,14 @@ prediction defect explicitly and investigate before repeating it.
 Every brief is drift-proof by construction: it names the objective, the
 exact files in scope, the evidence required, and the things that will
 otherwise go wrong. A vague brief costs an entire agent run.
+Every brief and template, including an inline or owner brief, includes this
+exact line: `Respond only in English.` Correct or replace an agent that responds
+in another language. Every response is in English.
 
 ```
 # Brief — <objective in one line>
+
+Respond only in English.
 
 Read CLAUDE.md and docs/build-plan/agent-coordination.md first.
 Setup: git fetch origin && git checkout -b <branch> origin/main
@@ -457,17 +546,22 @@ Append a timestamped line to <notes path> immediately before and after
 every long command, so silence is interpretable.
 
 ## Hard rules
-One verification cluster at a time · pnpm db:clean only · never db:reset or
+Queue for the fleet's maximum two concurrent pnpm db:* verification clusters;
+this is not permission to dispatch · pnpm db:clean only · never db:reset or
 supabase start|stop · never read .codex-tmp/ or .tmp/ · never print secrets
-· commit and push the branch · no PR, no merge, no issue edits.
+· workers make zero gh or GitHub reads: read the shared snapshot and assigned
+dossier, and ask the owner for missing context · commit and push the branch ·
+open a PR only when explicitly briefed · no merge or issue edits.
 ```
 
 The brief above is for a single-slice worker, which commits and pushes its
-branch only. An issue owner's brief states the whole outcome and its
-constraints, not a per-slice decomposition, and adds that the owner may open
-review pull requests and reconcile the issue's board record. For every agent,
-merging and promoting are the root's decisions, made after the gates above
-pass — never the dispatched agent's own.
+branch and may open a PR only when authorized. An issue owner's brief states
+the whole outcome and its constraints, not a per-slice decomposition, and adds
+the one serialized assignment-dossier pass and that an owner may open a review
+PR only when authorized. Owners report grouped proposed changes to the root;
+they do not reconcile board records. For every agent, merging and promoting
+are the root's decisions, made after the gates above pass — never the
+dispatched agent's own.
 
 The heartbeat line is not bureaucracy. Without it, a twenty-minute check
 cannot tell a slightly-long gate from an agent waiting on a notification that
