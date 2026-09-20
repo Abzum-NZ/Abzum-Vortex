@@ -211,6 +211,10 @@ root still does not decompose a multi-slice issue into its workers.
      --prompt "$(cat brief.md)" --json
    ```
 
+   Immediately verify that the actual agent is attached and shows real task
+   activity before recording the task as started. Deliberately recover or close
+   an orphan worktree; never ignore it.
+
 4. **Watch** — check the agent at least every twenty minutes; see Watching below.
 5. **Gate** — run local verification and independent review where required; see Gates below.
 6. **Land** — open the pull request into `main` (an issue owner may open it
@@ -231,6 +235,13 @@ root still does not decompose a multi-slice issue into its workers.
 After every worker completion, review verdict, merge, hosted result or closure,
 and before the first dispatch after a resume, the root applies this central
 protocol:
+
+A stopped talking or done pane is not task completion. Before marking work done
+or removing its worktree, the issue owner reviews every dirty diff and confirms
+that the work was committed and pushed, or that it was explicitly discarded with
+the reason recorded by the root on the issue. Preserve partial and untracked
+evidence until that decision. A merged base alone never authorizes cleanup; the
+generic root's supervising worktree is exempt from merged-worktree cleanup.
 
 1. Use the cycle snapshot and root-confirmed changed-row evidence to reconcile
    open issues against their PRs, actual branch ancestry, local gates, applicable
@@ -389,14 +400,18 @@ on resume. A held hosted receipt does not require retaining a finished
 developer's checkout.
 
 First read the agent terminal to confirm completion, preserve reports and any
-unsent drafts outside the disposable checkout without submitting them, check
-for uncommitted work, and verify the branch's delivery in `main`. For squash
-merges verify the delivering PR and patch, not just commit ancestry. Record
-the removal and clear obsolete worktree references on the board. Do not
-discard unmerged edits or stop a still-working agent to satisfy this cleanup.
-Remove unused analysis worktrees after verifying they contain no unique work.
-Keep only live-work checkouts, including the active coordinator; the canonical
-repository checkout is not a disposable agent worktree.
+unsent drafts outside the disposable checkout without submitting them, inspect
+every dirty diff, and confirm the work was committed and pushed or was
+explicitly discarded with the root-recorded issue reason. Preserve partial and
+untracked evidence until that decision, then verify the branch's delivery in
+`main`. For squash merges verify the delivering PR and patch, not just commit
+ancestry; a merged base alone never authorizes cleanup. Record the removal and
+clear obsolete worktree references on the board. Do not discard unmerged edits
+or stop a still-working agent to satisfy this cleanup. Deliberately recover or
+close an orphan worktree; do not ignore it. Remove unused analysis worktrees
+only after verifying they contain no unique work. Keep only live-work checkouts,
+including the generic root's supervising worktree; the canonical repository
+checkout is not a disposable agent worktree.
 
 ## Board
 
