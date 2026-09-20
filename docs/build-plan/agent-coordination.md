@@ -87,9 +87,11 @@ Moving an issue into an active status does not itself launch work. The
 coordinator must first launch or explicitly hand off the task, confirm the
 recipient accepted it, and record the actual canonical worker/task name—not a
 planned role—in the issue's board record. A text-only assignment is planned
-work, not active work: keep it Backlog. Ready is reserved for work whose named
-GPT-5.6 Sol Planner has accepted the planning handoff; record its resolved model
-and session evidence.
+work, not active work: keep it Backlog. Ready is reserved for work whose native
+open dependency DAG has no open blocker and whose named GPT-5.6 Sol Planner has
+accepted the planning handoff; record its resolved model and session evidence.
+Never move dependency-unready Backlog work to Ready to manufacture a queue
+position.
 
 At every spawn, handoff and status transition, the root updates the board
 together with the issue status: current owner, canonical worker/task reference,
@@ -100,6 +102,11 @@ work; do not leave it marked active. When a worker finishes or is stopped,
 record its result before assigning the next owner. These are stable operating
 rules, not a live queue or a claim that a particular worker is currently
 available.
+
+After bounded work completes, the root settles the outgoing-owner handoff and
+board record exactly once in one grouped reconciliation before the next
+assignment. Do not repeatedly wake a completed worker for informational
+acknowledgements or make speculative completion retries.
 
 ### Status meaning
 
