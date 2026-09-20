@@ -54,6 +54,12 @@ OpenCode. Do not substitute an external CLI or another provider for a named
 worker — [agent coordination](agent-coordination.md) governs how a resolved
 model and session are recorded.
 
+Use `--agent opencode` for documentation, manifests, inventories, dependency
+audits and evidence gathering. Confirm GLM 5.3 in the launched terminal before
+sending the brief. Record the terminal and observed model with the dispatch.
+If OpenCode fails to launch, report and record the exact failure; do not silently
+fall back to Claude. Apply the escalation ladder only with the failure evidence.
+
 ## Escalation ladder
 
 The ladder is two rungs, not a staircase. A task that stalls or fails twice
@@ -85,8 +91,44 @@ raises a new issue. It stops only when the board has no startable work left.
 
 4. **Watch** — check the agent at least every twenty minutes; see Watching below.
 5. **Gate** — run local verification and independent review where required; see Gates below.
-6. **Land** — open the pull request and merge to `testing` once gates and review pass.
-7. **Report** — update the board (status, evidence, re-derived pickup order) before selecting the next task.
+6. **Land** — open the pull request into `main` and merge once gates and review pass. Promotion to `testing` remains a separate phase gate, subject to any user hold.
+7. **Reconcile and report — blocking step.** Complete the board reconciliation below before selecting or dispatching another task. A task is not finished until its board row is true.
+8. **Clean up.** Once the branch is merged and the board row is verified, remove
+   the finished checkout with `orca worktree rm`; see Worktree cleanup below.
+
+### Blocking completion and resume gate
+
+After every worker completion, review verdict, merge, hosted result or closure,
+and before the first dispatch after a resume:
+
+1. Read the complete live board and its fields. Reconcile open issues against
+   their PRs, actual branch ancestry, local gates, applicable hosted receipts and
+   remaining acceptance. A merged slice is not automatically a completed issue.
+2. Set the actual delivery stage. Use **In progress** only for accepted active
+   work; **In review** for an open review/delivery PR or Coordinator-owned work
+   merged to `main` but awaiting promotion. State that post-merge waiting stage
+   explicitly; do not imply that a PR or reviewer is still active. Use **Testing**
+   only when the work is actually on `testing` and awaiting its required receipt.
+   Record a promotion/run hold without inventing an active Hosted Tester.
+   Use **Done** and close the issue only when its acceptance is met, local gates
+   ran and any required hosted evidence exists. Do not return fully implemented
+   work to Backlog merely because its worker finished. Backlog may describe
+   genuinely unstarted remaining scope after accepted slices, which must be
+   named separately with their evidence.
+3. Record the real owner, canonical dispatch reference, completion time, exact
+   commit/PR, checks actually run and remaining acceptance or hold. Clear completed
+   workers; name the next accountable owner. Post a completion comment citing the
+   delivering PR and evidence, and a closing comment when acceptance is complete.
+4. Re-read native dependencies, derive the pickup order for newly unblocked work,
+   and post Completed, Coming up, Pending User Decision and Overall Progress rows.
+   Recount the numerator and denominator from the live board.
+5. Read back the changed board rows and issue states. **Do not dispatch the next
+   worker until these writes are verified.** A failed or incomplete reconciliation
+   blocks new dispatch, not an already running worker's authorized work.
+
+On resume, repair stale rows before continuing the queue. A local checkpoint or
+watchdog handoff is not a substitute for the GitHub board. Preserve user holds;
+never promote merely to make a status label fit.
 
 Two feedback paths run outside that sequence. A stall or drift caught while
 watching can be steered, re-briefed, or escalated to a stronger model,
@@ -108,6 +150,12 @@ dependencies are.
    dependencies and confirm the response actually parsed before trusting an
    empty result — a failed call that returns nothing looks identical to no
    blockers, and trusting it has produced false "unblocked" verdicts.
+   Paginate the `issues/{number}/dependencies/blocked_by` endpoint and count
+   only edges whose issue `state` is `open`. Closed blockers remain in this
+   endpoint: a nonempty response is not evidence of an open blocker. Retain
+   closed edges as audit evidence, not exclusions. An unknown state or failed
+   page leaves eligibility unknown until resolved. Re-run this filter across
+   the whole board on resume and after completions, not just the old queue.
 3. **Order by roadmap lane, then priority, then dependency depth.** Work that
    unblocks the most downstream issues goes first within a lane.
 4. **Prefer functionality over maintenance.** Between two startable tasks,
@@ -127,12 +175,20 @@ dependencies are.
 
 ## Watching
 
-Every in-flight agent is checked at least every twenty minutes, per the
+Every cycle, read every in-flight agent's terminal with `orca terminal read`.
+The interval between checks must never exceed twenty minutes, per the
 20-minute rule in [agent coordination](agent-coordination.md#task-handoff).
 The check reads what the agent actually did — its terminal, its diff, its
 notes — and compares that against the brief. Telling a working agent apart
 from a parked one is the hard part, and getting it wrong in either direction
 is expensive.
+
+Record each terminal handle, check time, observed action, comparison with the
+brief and any steering sent. If progress appears stalled, use `orca terminal
+send` to ask what it is waiting on and what it has completed, then read or wait
+for its answer. Input acceptance alone does not prove the question was answered.
+Never replace this interaction with host-process or cluster sampling, and never
+stop an agent that has not failed to answer the question.
 
 Evidence that means something:
 
@@ -164,6 +220,23 @@ answer.
 | Idle, unfinished, no answer | Stop the session; keep the worktree and its diff | Escalate |
 | Two failed attempts | Escalate straight to Astra medium or Opus 5 high, re-dispatching with what was learned | Fresh worktree |
 | Blocked on a real decision | Park the issue with a written question, pick up the next one | Queue moves on |
+
+## Worktree cleanup
+
+After a task branch is merged and its board row is true, remove its finished
+worktree with `orca worktree rm --worktree <exact-selector>`. Do this as part
+of completion, before the next dispatch; repeat the audit on resume. A held
+hosted receipt does not require retaining a finished developer's checkout.
+
+First read the agent terminal to confirm completion, preserve reports and any
+unsent drafts outside the disposable checkout without submitting them, check
+for uncommitted work, and verify the branch's delivery in `main`. For squash
+merges verify the delivering PR and patch, not just commit ancestry. Record
+the removal and clear obsolete worktree references on the board. Do not
+discard unmerged edits or stop a still-working agent to satisfy this cleanup.
+Remove unused analysis worktrees after verifying they contain no unique work.
+Keep only live-work checkouts, including the active coordinator; the canonical
+repository checkout is not a disposable agent worktree.
 
 ## Board
 
@@ -245,6 +318,40 @@ the queue rather than blocking the branch.
 > This document records what actually happens. Which model the project keeps is
 > tracked separately and is not the orchestrator's decision to make.
 
+### Predict verification before every promotion
+
+Every promotion PR body must state **Expected verification: full** or
+**Expected verification: selective**, with the reason, exact candidate and
+Testing base. Inspect `git diff --name-only origin/testing..origin/main`, the
+intervening path history and the reusable baseline, then compare with
+`fullCoveragePatterns` in `workflows/kestra/database-verification-selection.json`
+and the committed selector. Do not infer mode from the issue or PR label.
+
+Existing SQL suites and concurrency proofs map to their exact registered check
+and are subtracted from globally relevant inputs. The remaining protected
+inputs force full coverage: `supabase/migrations/*.sql`, `supabase/config.toml`,
+`supabase/seed.sql`, `supabase/tests/helpers/*`, `tooling/supabase/*`, and the
+Kestra verification manifest, selection inventory, database-state snapshot,
+delivery runner, selector and selector test. The inventory is authoritative
+if this list changes. Missing, invalid or non-ancestor baseline evidence,
+change-and-revert history and unmapped changed inputs also force full coverage.
+
+A cheap selective run requires a valid successful ancestor baseline. After
+failed runs have invalidated it, obtain one successful full run first; trying
+to split protected changes cannot restore missing reuse evidence. The recovery
+promotion containing #525/#526/#527 is explicitly a full baseline run because
+#525 and #527 changed the delivery runner. Confirm #526 is merged and #523's
+board row is true before that promotion. #525 runs lint immediately after
+migrations, before SQL suites and concurrency, so schema errors fail early.
+
+After the baseline is green, promote changes limited to existing suites/proofs
+separately. Deliberately batch migrations and infrastructure into their own
+full promotion. If selective is intended but a protected path is in the diff,
+split before promoting; never bundle a migration into proof-only work intended
+for selective verification. Compare the actual receipt mode and reasons to the
+prediction. If a predicted selective run executes full coverage, record the
+prediction defect explicitly and investigate before repeating it.
+
 ## Dispatch brief template
 
 Every brief is drift-proof by construction: it names the objective, the
@@ -306,9 +413,9 @@ Decides alone:
 - Sequencing, model choice, escalation, worktree lifecycle.
 - Splitting an issue whose scope is too broad to verify.
 - Raising a new issue for any defect a gate surfaces.
-- Merging reviewed task branches to `testing` once gates and review pass.
-- Promoting the verified `testing` revision to `main` at a phase boundary,
-  after reading the hosted result.
+- Merging reviewed task branches to `main` once gates and review pass.
+- Promoting `main` to `testing` at an eligible phase boundary, respecting user
+  holds and recording the exact hosted result before claiming acceptance.
 - Correcting board state, dependencies and stale plan documents.
 
 Parks and moves on:
