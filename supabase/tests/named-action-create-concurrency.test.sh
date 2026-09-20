@@ -303,13 +303,15 @@ finalize() {
   local original_status=$? cleanup_status=0 operation_status
   trap - EXIT INT TERM
   set +e
+  if [ "$original_status" -ne 0 ]; then
+    echo 'named action create concurrency proof failed; bounded diagnostics follow' >&2
+    dump_active_workers
+  fi
   touch "$proof_root/opposite-share-release" "$proof_root/opposite-counter-release" \
     "$proof_root/queued-share-release" "$proof_root/queued-counter-release" \
     "$proof_root/queued-exclusive-release" >/dev/null 2>&1 || true
   stop_owned_workers
   if [ "$original_status" -ne 0 ]; then
-    echo 'named action create concurrency proof failed; bounded diagnostics follow' >&2
-    dump_active_workers
     if [ -f "$proof_root/timeline.log" ]; then
       printf '%s\n' '--- timeline.log ---' >&2
       tail -n 80 -- "$proof_root/timeline.log" >&2

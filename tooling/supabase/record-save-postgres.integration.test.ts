@@ -2094,19 +2094,27 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
             owner: string;
             security_definer: boolean;
             volatility: string;
-            execute_grantees: string[];
+            acl_entries: string[];
           }[]
         >`select expected.signature,
             pg_catalog.pg_get_userbyid(installed.proowner) as owner,
             installed.prosecdef as security_definer,
             installed.provolatile::text as volatility,
             array(
-              select role.rolname
-              from pg_catalog.aclexplode(installed.proacl) privilege
-              join pg_catalog.pg_roles role on role.oid = privilege.grantee
-              where privilege.privilege_type = 'EXECUTE'
-              order by role.rolname
-            ) as execute_grantees
+              select pg_catalog.concat_ws(':',
+                case privilege.grantee
+                  when 0 then 'PUBLIC'
+                  else coalesce(role.rolname, 'OID-' || privilege.grantee::text)
+                end,
+                privilege.privilege_type,
+                privilege.is_grantable::text
+              )
+              from pg_catalog.aclexplode(
+                coalesce(installed.proacl, pg_catalog.acldefault('f', installed.proowner))
+              ) privilege
+              left join pg_catalog.pg_roles role on role.oid = privilege.grantee
+              order by privilege.grantee, privilege.privilege_type, privilege.is_grantable
+            ) as acl_entries
           from pg_catalog.unnest(${replacementSignatures}::text[]) expected(signature)
           join pg_catalog.pg_proc installed
             on installed.oid = pg_catalog.to_regprocedure(expected.signature)
@@ -2117,14 +2125,14 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           owner: "vortex_record_adapter",
           security_definer: false,
           volatility: "v",
-          execute_grantees: ["vortex_record_adapter"],
+          acl_entries: ["vortex_record_adapter:EXECUTE:false"],
         },
         {
           signature: replacementSignatures[1],
           owner: "vortex_record_adapter",
           security_definer: true,
           volatility: "v",
-          execute_grantees: ["vortex_record_adapter"],
+          acl_entries: ["vortex_record_adapter:EXECUTE:false"],
         },
       ]);
       await expect(
