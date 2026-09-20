@@ -1,11 +1,13 @@
 import { z } from "zod";
 import {
   applicationRootIdSchema,
+  connectionInstanceIdSchema,
   organizationIdSchema,
   recordIdSchema,
   revisionSchema,
   storageContractIdSchema,
   timestampSchema,
+  workflowIdSchema,
 } from "./identifiers";
 
 const nonNilUuidSchema = z
@@ -28,145 +30,253 @@ export type RecordLifecycleAction = z.infer<typeof recordLifecycleActionSchema>;
 
 /**
  * Organisation runtime settings lifecycle ceiling schema.
- * Defines the maximum limits and allowed actions permitted within the organisation.
+ * Bound to organizationId and settingsRevision.
+ * Limits must be internally closed: either a finite positive ceiling is set,
+ * or allowUnlimited is explicitly true. Finite ceiling with unlimited is prohibited.
  */
 export const organizationLifecycleLimitsSchema = z
   .object({
+    organizationId: organizationIdSchema,
+    settingsRevision: revisionSchema,
     maxRetentionDays: z.number().int().positive().nullable().optional(),
     maxRecordCount: z.number().int().positive().nullable().optional(),
-    allowUnlimitedRetentionDays: z.boolean().default(false),
-    allowUnlimitedRecordCount: z.boolean().default(false),
+    allowUnlimitedRetentionDays: z.boolean(),
+    allowUnlimitedRecordCount: z.boolean(),
     allowedActions: z.array(recordLifecycleActionSchema).min(1),
-    allowedArchiveDestinations: z.array(z.string().min(1)).default([]),
+    allowedArchiveDestinations: z.array(z.string().min(1).max(120)),
   })
   .strict()
-  .refine(
-    (limits) => {
-      const uniqueActions = new Set(limits.allowedActions);
-      return uniqueActions.size === limits.allowedActions.length;
-    },
-    {
-      message: "allowedActions cannot contain duplicate values",
-    },
-  );
+  .superRefine((limits, context) => {
+    // 1. Retention days closed representation check
+    if (limits.allowUnlimitedRetentionDays) {
+      if (limits.maxRetentionDays !== null && limits.maxRetentionDays !== undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["maxRetentionDays"],
+          message:
+            "maxRetentionDays must be null or omitted when allowUnlimitedRetentionDays is true",
+        });
+      }
+    } else {
+      if (limits.maxRetentionDays === null || limits.maxRetentionDays === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["maxRetentionDays"],
+          message:
+            "maxRetentionDays must be specified when allowUnlimitedRetentionDays is false; missing limit is not an unlimited fallback",
+        });
+      }
+    }
+
+    // 2. Record count closed representation check
+    if (limits.allowUnlimitedRecordCount) {
+      if (limits.maxRecordCount !== null && limits.maxRecordCount !== undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["maxRecordCount"],
+          message: "maxRecordCount must be null or omitted when allowUnlimitedRecordCount is true",
+        });
+      }
+    } else {
+      if (limits.maxRecordCount === null || limits.maxRecordCount === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["maxRecordCount"],
+          message:
+            "maxRecordCount must be specified when allowUnlimitedRecordCount is false; missing limit is not an unlimited fallback",
+        });
+      }
+    }
+
+    // 3. Unique allowed actions
+    const uniqueActions = new Set(limits.allowedActions);
+    if (uniqueActions.size !== limits.allowedActions.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["allowedActions"],
+        message: "allowedActions cannot contain duplicate values",
+      });
+    }
+
+    // 4. Archive workflow requires at least one allowed destination
+    if (
+      limits.allowedActions.includes("archive_workflow") &&
+      limits.allowedArchiveDestinations.length === 0
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["allowedArchiveDestinations"],
+        message:
+          "allowedArchiveDestinations cannot be empty when 'archive_workflow' is an allowed action",
+      });
+    }
+
+    // 5. No URLs or SQL in destination names
+    for (let i = 0; i < limits.allowedArchiveDestinations.length; i++) {
+      const dest = limits.allowedArchiveDestinations[i]!;
+      if (/^https?:\/\/|postgres:\/\/|select\s|insert\s/i.test(dest)) {
+        context.addIssue({
+          code: "custom",
+          path: ["allowedArchiveDestinations", i],
+          message:
+            "Archive destination cannot contain URLs, connection strings, or SQL escape hatches",
+        });
+      }
+    }
+  });
+
 export type OrganizationLifecycleLimits = z.infer<typeof organizationLifecycleLimitsSchema>;
 
 /**
- * Monotonically increasing policy revision number (>= 1).
+ * Standard JSON-safe positive integer revision schema matching repository conventions.
  */
-export const policyRevisionSchema = z.union([
-  z.bigint().refine((val) => val >= 1n, { message: "policyRevision must be at least 1" }),
-  z
-    .number()
-    .int()
-    .positive({ message: "policyRevision must be at least 1" })
-    .transform((val) => BigInt(val)),
-]);
-export type PolicyRevision = bigint;
+export const policyRevisionSchema = revisionSchema;
+export type PolicyRevision = z.infer<typeof policyRevisionSchema>;
+
+const policyBaseFields = {
+  policyId: recordLifecyclePolicyIdSchema,
+  organizationId: organizationIdSchema,
+  storageContractId: storageContractIdSchema,
+  applicationRootId: applicationRootIdSchema.nullable(),
+  policyRevision: policyRevisionSchema,
+  maxAgeDays: z.number().int().positive().nullable(),
+  maxCount: z.number().int().positive().nullable(),
+  allowUnlimitedAge: z.boolean(),
+  allowUnlimitedCount: z.boolean(),
+};
+
+const validatePolicyLimitsConsistency = (
+  policy: {
+    allowUnlimitedAge: boolean;
+    maxAgeDays: number | null;
+    allowUnlimitedCount: boolean;
+    maxCount: number | null;
+  },
+  context: z.RefinementCtx,
+) => {
+  // Age consistency
+  if (policy.allowUnlimitedAge && policy.maxAgeDays !== null) {
+    context.addIssue({
+      code: "custom",
+      path: ["maxAgeDays"],
+      message: "maxAgeDays must be null when allowUnlimitedAge is true",
+    });
+  }
+  if (!policy.allowUnlimitedAge && policy.maxAgeDays === null) {
+    context.addIssue({
+      code: "custom",
+      path: ["maxAgeDays"],
+      message: "maxAgeDays must be specified when allowUnlimitedAge is false",
+    });
+  }
+
+  // Count consistency
+  if (policy.allowUnlimitedCount && policy.maxCount !== null) {
+    context.addIssue({
+      code: "custom",
+      path: ["maxCount"],
+      message: "maxCount must be null when allowUnlimitedCount is true",
+    });
+  }
+  if (!policy.allowUnlimitedCount && policy.maxCount === null) {
+    context.addIssue({
+      code: "custom",
+      path: ["maxCount"],
+      message: "maxCount must be specified when allowUnlimitedCount is false",
+    });
+  }
+};
 
 /**
- * Record-type lifecycle policy contract.
- * Scope is organisation + storage contract + permanent application root ID
- * (applicationRootId is null for organisation-shared record types).
+ * Policy contract for recoverable deletion. Carries no archive metadata.
  */
-export const recordTypeLifecyclePolicySchema = z
+export const deleteRecordLifecyclePolicySchema = z
   .object({
-    policyId: recordLifecyclePolicyIdSchema,
-    organizationId: organizationIdSchema,
-    storageContractId: storageContractIdSchema,
-    applicationRootId: applicationRootIdSchema.nullable(),
-    policyRevision: policyRevisionSchema,
-    maxAgeDays: z.number().int().positive().nullable(),
-    maxCount: z.number().int().positive().nullable(),
-    action: recordLifecycleActionSchema,
-    archiveWorkflowReference: z.string().min(1).optional(),
-    archiveDestination: z.string().min(1).optional(),
-    allowUnlimitedAge: z.boolean(),
-    allowUnlimitedCount: z.boolean(),
+    ...policyBaseFields,
+    action: z.literal("delete"),
   })
   .strict()
+  .superRefine(validatePolicyLimitsConsistency);
+
+export type DeleteRecordLifecyclePolicy = z.infer<typeof deleteRecordLifecyclePolicySchema>;
+
+/**
+ * Policy contract for durable workflow archival followed by protected deletion.
+ * Carries exact typed workflow reference, expected revision, connection instance and destination.
+ */
+export const archiveWorkflowRecordLifecyclePolicySchema = z
+  .object({
+    ...policyBaseFields,
+    action: z.literal("archive_workflow"),
+    archiveWorkflowId: workflowIdSchema,
+    expectedWorkflowRevision: revisionSchema,
+    archiveConnectionInstanceId: connectionInstanceIdSchema,
+    archiveDestination: z.string().min(1).max(120),
+  })
+  .strict()
+  .superRefine(validatePolicyLimitsConsistency)
   .superRefine((policy, context) => {
-    // Action-specific requirement checks
-    if (policy.action === "archive_workflow") {
-      if (!policy.archiveWorkflowReference || policy.archiveWorkflowReference.trim().length === 0) {
-        context.addIssue({
-          code: "custom",
-          path: ["archiveWorkflowReference"],
-          message: "archiveWorkflowReference is required when action is 'archive_workflow'",
-        });
-      }
-      if (!policy.archiveDestination || policy.archiveDestination.trim().length === 0) {
-        context.addIssue({
-          code: "custom",
-          path: ["archiveDestination"],
-          message: "archiveDestination is required when action is 'archive_workflow'",
-        });
-      }
-    }
-
-    // Age consistency checks
-    if (policy.allowUnlimitedAge && policy.maxAgeDays !== null) {
+    if (/^https?:\/\/|postgres:\/\/|select\s|insert\s/i.test(policy.archiveDestination)) {
       context.addIssue({
         code: "custom",
-        path: ["maxAgeDays"],
-        message: "maxAgeDays must be null when allowUnlimitedAge is true",
-      });
-    }
-    if (!policy.allowUnlimitedAge && policy.maxAgeDays === null) {
-      context.addIssue({
-        code: "custom",
-        path: ["maxAgeDays"],
-        message: "maxAgeDays must be specified when allowUnlimitedAge is false",
-      });
-    }
-
-    // Count consistency checks
-    if (policy.allowUnlimitedCount && policy.maxCount !== null) {
-      context.addIssue({
-        code: "custom",
-        path: ["maxCount"],
-        message: "maxCount must be null when allowUnlimitedCount is true",
-      });
-    }
-    if (!policy.allowUnlimitedCount && policy.maxCount === null) {
-      context.addIssue({
-        code: "custom",
-        path: ["maxCount"],
-        message: "maxCount must be specified when allowUnlimitedCount is false",
+        path: ["archiveDestination"],
+        message:
+          "archiveDestination cannot contain URLs, connection strings, or SQL escape hatches",
       });
     }
   });
 
-export type RecordTypeLifecyclePolicy = {
-  policyId: RecordLifecyclePolicyId;
-  organizationId: z.infer<typeof organizationIdSchema>;
-  storageContractId: z.infer<typeof storageContractIdSchema>;
-  applicationRootId: z.infer<typeof applicationRootIdSchema> | null;
-  policyRevision: bigint;
-  maxAgeDays: number | null;
-  maxCount: number | null;
-  action: RecordLifecycleAction;
-  archiveWorkflowReference?: string | undefined;
-  archiveDestination?: string | undefined;
-  allowUnlimitedAge: boolean;
-  allowUnlimitedCount: boolean;
-};
+export type ArchiveWorkflowRecordLifecyclePolicy = z.infer<
+  typeof archiveWorkflowRecordLifecyclePolicySchema
+>;
 
 /**
- * Capability context for verifying whether required lifecycle actions can be executed.
+ * Discriminated union of record-type lifecycle policies.
  */
-export interface LifecycleActionCapabilitiesInput {
-  workflowRegistrationAvailable?: boolean;
-  connectionAvailable?: boolean;
-  archiveWorkflowRegistrationAvailable?: boolean;
-  archiveDestinationConnectionAvailable?: boolean;
-  destinationConnectionAvailable?: boolean;
-  registeredWorkflows?: readonly string[] | Set<string>;
-  availableConnections?: readonly string[] | Set<string>;
-}
+export const recordTypeLifecyclePolicySchema = z.discriminatedUnion("action", [
+  deleteRecordLifecyclePolicySchema,
+  archiveWorkflowRecordLifecyclePolicySchema,
+]);
 
-export type LifecycleCapabilities =
-  LifecycleActionCapabilitiesInput | readonly string[] | Set<string> | boolean;
+export type RecordTypeLifecyclePolicy = z.infer<typeof recordTypeLifecyclePolicySchema>;
+
+/**
+ * Evidence item for an exact active registered workflow in runtime.
+ */
+export const registeredWorkflowEvidenceSchema = z
+  .object({
+    workflowId: workflowIdSchema,
+    workflowRevision: revisionSchema,
+    state: z.literal("active"),
+  })
+  .strict();
+export type RegisteredWorkflowEvidence = z.infer<typeof registeredWorkflowEvidenceSchema>;
+
+/**
+ * Evidence item for an exact active connection instance in runtime.
+ */
+export const activeConnectionEvidenceSchema = z
+  .object({
+    connectionInstanceId: connectionInstanceIdSchema,
+    destinationKey: z.string().min(1).max(120),
+    organizationId: organizationIdSchema,
+    state: z.literal("active"),
+  })
+  .strict();
+export type ActiveConnectionEvidence = z.infer<typeof activeConnectionEvidenceSchema>;
+
+/**
+ * Scope-bound live readiness evidence contract required for activation and live policy validation.
+ * Proves that exact workflows and connections are active and bound to the matching organisation.
+ */
+export const lifecycleReadinessEvidenceSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    registeredWorkflows: z.array(registeredWorkflowEvidenceSchema),
+    activeConnections: z.array(activeConnectionEvidenceSchema),
+  })
+  .strict();
+export type LifecycleReadinessEvidence = z.infer<typeof lifecycleReadinessEvidenceSchema>;
 
 export interface PolicyValidationIssue {
   code: string;
@@ -182,23 +292,53 @@ export interface PolicyValidationResult {
 }
 
 /**
- * Validates a record-type lifecycle policy against organisation limits and execution capabilities.
+ * Definition-only authoring validation: validates declared policy shape
+ * without requiring live organisation limits or live runtime connection instances.
+ */
+export const validateRecordTypeLifecyclePolicyDefinition = (
+  policyCandidate: unknown,
+): PolicyValidationResult => {
+  const issues: PolicyValidationIssue[] = [];
+  const parsedPolicy = recordTypeLifecyclePolicySchema.safeParse(policyCandidate);
+  if (!parsedPolicy.success) {
+    for (const issue of parsedPolicy.error.issues) {
+      issues.push({
+        code: issue.code,
+        message: issue.message,
+        path: issue.path as (string | number)[],
+      });
+    }
+  }
+  const isValid = issues.length === 0;
+  return {
+    valid: isValid,
+    success: isValid,
+    issues,
+    errors: issues.map((i) => i.message),
+  };
+};
+
+/**
+ * Live policy and activation validation: validates a record-type policy against
+ * the organisation's protected settings limits and typed runtime readiness evidence.
  *
- * Checks:
- * 1. Policy and limits conform to their respective contracts.
- * 2. At least one of age or count is specified, or explicit absence/unlimited is declared and allowed.
- * 3. Age does not exceed organisation's maxRetentionDays ceiling.
- * 4. Count does not exceed organisation's maxRecordCount ceiling.
- * 5. Selected action is permitted by organisation's allowedActions.
- * 6. If action is archive_workflow:
- *    - Destination is in allowedArchiveDestinations.
- *    - Workflow registration and connection capabilities are verified available.
- *    - Unavailable workflow archival NEVER silently falls back to deletion.
+ * Enforces:
+ * 1. Policy and limits conform to their strict contracts.
+ * 2. Organisation isolation: policy.organizationId MUST match organizationLimits.organizationId.
+ * 3. Ceilings: maxAgeDays <= maxRetentionDays, maxCount <= maxRecordCount.
+ * 4. Unlimited permissions: allowUnlimitedAge / allowUnlimitedCount require organisation permission.
+ * 5. Action permission: policy.action is in organisationLimits.allowedActions.
+ * 6. For archive_workflow:
+ *    - Destination is in organisationLimits.allowedArchiveDestinations.
+ *    - readinessEvidence is mandatory and must match policy.organizationId.
+ *    - Exact archiveWorkflowId and expectedWorkflowRevision must be in registeredWorkflows with state "active".
+ *    - Exact archiveConnectionInstanceId and archiveDestination must be in activeConnections with matching organisationId.
+ *    - Unavailable archival NEVER silently falls back to deletion.
  */
 export const validateRecordTypeLifecyclePolicy = (
   policyCandidate: unknown,
   organizationLimitsCandidate: unknown,
-  capabilities?: LifecycleCapabilities,
+  readinessEvidenceCandidate?: unknown,
 ): PolicyValidationResult => {
   const issues: PolicyValidationIssue[] = [];
 
@@ -224,7 +364,6 @@ export const validateRecordTypeLifecyclePolicy = (
     }
   }
 
-  // If basic schema checks failed, return immediately with collected issues
   if (!parsedPolicy.success || !parsedLimits.success) {
     return {
       valid: false,
@@ -237,7 +376,16 @@ export const validateRecordTypeLifecyclePolicy = (
   const policy = parsedPolicy.data;
   const limits = parsedLimits.data;
 
-  // 1. Check action is in organisation's allowedActions
+  // 1. Cross-organisation isolation check
+  if (policy.organizationId !== limits.organizationId) {
+    issues.push({
+      code: "organization_isolation_violation",
+      path: ["organizationId"],
+      message: `Policy organizationId (${policy.organizationId}) does not match organisation limits organizationId (${limits.organizationId}); cross-organisation policy application is strictly forbidden`,
+    });
+  }
+
+  // 2. Action permitted check
   if (!limits.allowedActions.includes(policy.action)) {
     issues.push({
       code: "action_not_allowed",
@@ -246,7 +394,7 @@ export const validateRecordTypeLifecyclePolicy = (
     });
   }
 
-  // 2. Check age against organisation ceiling and unlimited policy
+  // 3. Age checks against organisation ceiling
   if (policy.allowUnlimitedAge) {
     if (!limits.allowUnlimitedRetentionDays) {
       issues.push({
@@ -270,7 +418,7 @@ export const validateRecordTypeLifecyclePolicy = (
     }
   }
 
-  // 3. Check count against organisation ceiling and unlimited policy
+  // 4. Count checks against organisation ceiling
   if (policy.allowUnlimitedCount) {
     if (!limits.allowUnlimitedRecordCount) {
       issues.push({
@@ -294,105 +442,78 @@ export const validateRecordTypeLifecyclePolicy = (
     }
   }
 
-  // 4. Check archive_workflow specific constraints and capabilities
+  // 5. Archive workflow readiness and destination checks
   if (policy.action === "archive_workflow") {
-    // Destination must be in organisation's allowed destinations
-    const destination = policy.archiveDestination;
-    if (destination && !limits.allowedArchiveDestinations.includes(destination)) {
+    // Destination check in allowedArchiveDestinations
+    if (!limits.allowedArchiveDestinations.includes(policy.archiveDestination)) {
       issues.push({
         code: "archive_destination_not_allowed",
         path: ["archiveDestination"],
-        message: `Archive destination "${destination}" is not in organisation's allowed destinations (allowed: ${limits.allowedArchiveDestinations.join(", ") || "none"})`,
+        message: `Archive destination "${policy.archiveDestination}" is not in organisation's allowed destinations (allowed: ${limits.allowedArchiveDestinations.join(", ") || "none"})`,
       });
     }
 
-    // Required action capabilities check
-    // Workflow registration and Connection must be verified ready
-    let workflowRegistrationAvailable = false;
-    let connectionAvailable = false;
-
-    if (typeof capabilities === "boolean") {
-      workflowRegistrationAvailable = capabilities;
-      connectionAvailable = capabilities;
-    } else if (Array.isArray(capabilities)) {
-      const caps = new Set(capabilities);
-      workflowRegistrationAvailable =
-        caps.has("workflow_registration") ||
-        caps.has("archive_workflow") ||
-        (policy.archiveWorkflowReference ? caps.has(policy.archiveWorkflowReference) : false);
-      connectionAvailable =
-        caps.has("connection") ||
-        caps.has("destination_connection") ||
-        (destination ? caps.has(destination) : false);
-    } else if (capabilities instanceof Set) {
-      workflowRegistrationAvailable =
-        capabilities.has("workflow_registration") ||
-        capabilities.has("archive_workflow") ||
-        (policy.archiveWorkflowReference
-          ? capabilities.has(policy.archiveWorkflowReference)
-          : false);
-      connectionAvailable =
-        capabilities.has("connection") ||
-        capabilities.has("destination_connection") ||
-        (destination ? capabilities.has(destination) : false);
-    } else if (capabilities && typeof capabilities === "object") {
-      const input = capabilities as LifecycleActionCapabilitiesInput;
-      workflowRegistrationAvailable =
-        input.workflowRegistrationAvailable ?? input.archiveWorkflowRegistrationAvailable ?? false;
-      connectionAvailable =
-        input.connectionAvailable ??
-        input.archiveDestinationConnectionAvailable ??
-        input.destinationConnectionAvailable ??
-        false;
-
-      // Optional registered workflows check
-      if (input.registeredWorkflows && policy.archiveWorkflowReference) {
-        const workflows =
-          input.registeredWorkflows instanceof Set
-            ? input.registeredWorkflows
-            : new Set(input.registeredWorkflows);
-        if (!workflows.has(policy.archiveWorkflowReference)) {
-          workflowRegistrationAvailable = false;
-          issues.push({
-            code: "archive_workflow_not_registered",
-            path: ["archiveWorkflowReference"],
-            message: `Archive workflow "${policy.archiveWorkflowReference}" is not registered in runtime workflows`,
-          });
-        }
-      }
-
-      // Optional available connections check
-      if (input.availableConnections && destination) {
-        const conns =
-          input.availableConnections instanceof Set
-            ? input.availableConnections
-            : new Set(input.availableConnections);
-        if (!conns.has(destination)) {
-          connectionAvailable = false;
-          issues.push({
-            code: "archive_destination_connection_not_available",
-            path: ["archiveDestination"],
-            message: `Connection for archive destination "${destination}" is not available`,
-          });
-        }
-      }
-    }
-
-    if (!workflowRegistrationAvailable) {
+    // Typed readiness evidence check
+    if (readinessEvidenceCandidate === undefined || readinessEvidenceCandidate === null) {
       issues.push({
-        code: "archive_workflow_capability_unavailable",
+        code: "readiness_evidence_required",
         path: ["action"],
         message:
-          "Workflow registration is unavailable; archive workflow policy cannot be enabled and cannot silently fall back to deletion",
+          "Readiness evidence is required to activate archive_workflow; unavailable workflow archival cannot silently fall back to deletion",
       });
-    }
+    } else {
+      const parsedEvidence = lifecycleReadinessEvidenceSchema.safeParse(readinessEvidenceCandidate);
+      if (!parsedEvidence.success) {
+        for (const issue of parsedEvidence.error.issues) {
+          issues.push({
+            code: "invalid_readiness_evidence",
+            path: ["readinessEvidence", ...(issue.path as (string | number)[])],
+            message: `Invalid readiness evidence: ${issue.message}`,
+          });
+        }
+      } else {
+        const evidence = parsedEvidence.data;
 
-    if (!connectionAvailable) {
-      issues.push({
-        code: "archive_connection_capability_unavailable",
-        path: ["archiveDestination"],
-        message: `Connection for archive destination "${destination ?? "unspecified"}" is unavailable; archive workflow policy cannot be enabled and cannot silently fall back to deletion`,
-      });
+        // Evidence organisation isolation check
+        if (evidence.organizationId !== policy.organizationId) {
+          issues.push({
+            code: "readiness_evidence_organization_mismatch",
+            path: ["readinessEvidence", "organizationId"],
+            message: `Readiness evidence organizationId does not match policy organizationId (evidence: ${evidence.organizationId}, policy: ${policy.organizationId})`,
+          });
+        }
+
+        // Exact workflow registration check
+        const matchingWorkflow = evidence.registeredWorkflows.find(
+          (w) =>
+            w.workflowId === policy.archiveWorkflowId &&
+            w.workflowRevision === policy.expectedWorkflowRevision &&
+            w.state === "active",
+        );
+        if (!matchingWorkflow) {
+          issues.push({
+            code: "archive_workflow_not_registered",
+            path: ["archiveWorkflowId"],
+            message: `Active workflow ${policy.archiveWorkflowId} at expected revision ${policy.expectedWorkflowRevision} is not registered in runtime workflows; archival cannot fall back to deletion`,
+          });
+        }
+
+        // Exact connection instance check
+        const matchingConnection = evidence.activeConnections.find(
+          (c) =>
+            c.connectionInstanceId === policy.archiveConnectionInstanceId &&
+            c.destinationKey === policy.archiveDestination &&
+            c.organizationId === policy.organizationId &&
+            c.state === "active",
+        );
+        if (!matchingConnection) {
+          issues.push({
+            code: "archive_connection_not_active",
+            path: ["archiveConnectionInstanceId"],
+            message: `Active connection instance ${policy.archiveConnectionInstanceId} for destination "${policy.archiveDestination}" in organisation ${policy.organizationId} is unavailable; archival cannot fall back to deletion`,
+          });
+        }
+      }
     }
   }
 
@@ -407,47 +528,73 @@ export const validateRecordTypeLifecyclePolicy = (
 
 /**
  * Candidate record input schema for evaluating lifecycle selection.
+ * Requires expectedRecordRevision to ensure retries do not delete a newer record.
  */
 export const lifecycleCandidateRecordSchema = z
   .object({
     recordId: recordIdSchema,
+    expectedRecordRevision: revisionSchema,
     createdAt: timestampSchema,
     isHeld: z.boolean().default(false),
     isProtected: z.boolean().default(false),
-    concurrencyNumber: revisionSchema.max(Number.MAX_SAFE_INTEGER).optional(),
   })
   .strict();
 export type LifecycleCandidateRecord = z.infer<typeof lifecycleCandidateRecordSchema>;
 
 /**
- * The specific reason(s) why a record became due for lifecycle removal.
+ * Reason(s) why a record became due for lifecycle removal.
  */
 export const recordLifecycleDueReasonSchema = z.enum(["age", "count_excess", "both"]);
 export type RecordLifecycleDueReason = z.infer<typeof recordLifecycleDueReasonSchema>;
 
 /**
- * Item in the handoff payload representing a due record ready for executor action.
+ * Actionable handoff item for recoverable deletion.
  */
-export const dueRecordHandoffItemSchema = z
+export const dueDeleteRecordHandoffItemSchema = z
   .object({
     recordId: recordIdSchema,
+    expectedRecordRevision: revisionSchema,
     dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
     primaryReason: recordLifecycleDueReasonSchema,
-    action: recordLifecycleActionSchema,
-    archiveWorkflowReference: z.string().min(1).optional(),
-    archiveDestination: z.string().min(1).optional(),
+    action: z.literal("delete"),
     createdAt: timestampSchema,
-    concurrencyNumber: revisionSchema.max(Number.MAX_SAFE_INTEGER).optional(),
   })
   .strict();
+
+/**
+ * Actionable handoff item for durable workflow archival.
+ */
+export const dueArchiveRecordHandoffItemSchema = z
+  .object({
+    recordId: recordIdSchema,
+    expectedRecordRevision: revisionSchema,
+    dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
+    primaryReason: recordLifecycleDueReasonSchema,
+    action: z.literal("archive_workflow"),
+    archiveWorkflowId: workflowIdSchema,
+    expectedWorkflowRevision: revisionSchema,
+    archiveConnectionInstanceId: connectionInstanceIdSchema,
+    archiveDestination: z.string().min(1).max(120),
+    createdAt: timestampSchema,
+  })
+  .strict();
+
+/**
+ * Discriminated union of due record items for executor #117.
+ */
+export const dueRecordHandoffItemSchema = z.discriminatedUnion("action", [
+  dueDeleteRecordHandoffItemSchema,
+  dueArchiveRecordHandoffItemSchema,
+]);
 export type DueRecordHandoffItem = z.infer<typeof dueRecordHandoffItemSchema>;
 
 /**
- * Item representing a due record whose removal is blocked by legal holds or protected recovery.
+ * Due record whose removal is blocked by active legal holds or recovery protections.
  */
 export const blockedRemovalRecordSchema = z
   .object({
     recordId: recordIdSchema,
+    expectedRecordRevision: revisionSchema,
     dueReasons: z.array(z.enum(["age", "count_excess"])).min(1),
     primaryReason: recordLifecycleDueReasonSchema,
     blockReason: z.enum(["legal_hold", "recovery_protection", "held_and_protected"]),
@@ -457,58 +604,185 @@ export const blockedRemovalRecordSchema = z
 export type BlockedRemovalRecord = z.infer<typeof blockedRemovalRecordSchema>;
 
 /**
- * Visible over-limit condition reported when due records cannot be removed
- * because of legal holds or recovery protections.
+ * Lifecycle evaluation status reporting truthful system state.
  */
-export const lifecycleOverLimitConditionSchema = z
+export const lifecycleEvaluationStatusSchema = z.enum([
+  "compliant",
+  "pending_removal",
+  "blocked_over_limit",
+  "pending_and_blocked",
+]);
+export type LifecycleEvaluationStatus = z.infer<typeof lifecycleEvaluationStatusSchema>;
+
+/**
+ * Truthful status report reflecting both pending due work and blocked-removal conditions.
+ */
+export const lifecycleStatusReportSchema = z
   .object({
+    status: lifecycleEvaluationStatusSchema,
     isOverLimit: z.boolean(),
+    pendingRemovalCount: z.number().int().nonnegative(),
+    blockedRemovalCount: z.number().int().nonnegative(),
     excessCount: z.number().int().nonnegative(),
     expiredAgeCount: z.number().int().nonnegative(),
-    blockedCount: z.number().int().nonnegative(),
     blockedRecordIds: z.array(recordIdSchema),
     description: z.string(),
   })
   .strict();
-export type LifecycleOverLimitCondition = z.infer<typeof lifecycleOverLimitConditionSchema>;
+export type LifecycleStatusReport = z.infer<typeof lifecycleStatusReportSchema>;
 
 /**
- * Complete lifecycle handoff package for #117 executor.
+ * Complete, JSON-transportable lifecycle handoff package for #117 executor.
+ * Strict invariants guarantee semantic consistency: counts match arrays,
+ * record IDs are unique and disjoint, and reasons match throughout.
  */
 export const recordLifecycleHandoffSchema = z
   .object({
     policyId: recordLifecyclePolicyIdSchema,
-    policyRevision: policyRevisionSchema,
+    policyRevision: revisionSchema,
     organizationId: organizationIdSchema,
     storageContractId: storageContractIdSchema,
     applicationRootId: applicationRootIdSchema.nullable(),
     action: recordLifecycleActionSchema,
-    archiveWorkflowReference: z.string().min(1).optional(),
-    archiveDestination: z.string().min(1).optional(),
+    archiveMetadata: z
+      .object({
+        archiveWorkflowId: workflowIdSchema,
+        expectedWorkflowRevision: revisionSchema,
+        archiveConnectionInstanceId: connectionInstanceIdSchema,
+        archiveDestination: z.string().min(1).max(120),
+      })
+      .strict()
+      .optional(),
     evaluatedAt: timestampSchema,
     totalRetainedCount: z.number().int().nonnegative(),
     dueCount: z.number().int().nonnegative(),
     dueRecords: z.array(dueRecordHandoffItemSchema),
     blockedRecords: z.array(blockedRemovalRecordSchema),
-    overLimitCondition: lifecycleOverLimitConditionSchema,
+    statusReport: lifecycleStatusReportSchema,
   })
-  .strict();
-export type RecordLifecycleHandoff = {
-  policyId: RecordLifecyclePolicyId;
-  policyRevision: bigint;
-  organizationId: z.infer<typeof organizationIdSchema>;
-  storageContractId: z.infer<typeof storageContractIdSchema>;
-  applicationRootId: z.infer<typeof applicationRootIdSchema> | null;
-  action: RecordLifecycleAction;
-  archiveWorkflowReference?: string | undefined;
-  archiveDestination?: string | undefined;
-  evaluatedAt: string;
-  totalRetainedCount: number;
-  dueCount: number;
-  dueRecords: DueRecordHandoffItem[];
-  blockedRecords: BlockedRemovalRecord[];
-  overLimitCondition: LifecycleOverLimitCondition;
-};
+  .strict()
+  .superRefine((handoff, context) => {
+    // 1. Action and archive metadata correspondence
+    if (handoff.action === "archive_workflow" && !handoff.archiveMetadata) {
+      context.addIssue({
+        code: "custom",
+        path: ["archiveMetadata"],
+        message: "archiveMetadata is required when action is 'archive_workflow'",
+      });
+    }
+    if (handoff.action === "delete" && handoff.archiveMetadata !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["archiveMetadata"],
+        message: "archiveMetadata cannot be present when action is 'delete'",
+      });
+    }
+
+    // 2. Counts matching array lengths
+    if (handoff.dueCount !== handoff.dueRecords.length + handoff.blockedRecords.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["dueCount"],
+        message: `dueCount (${handoff.dueCount}) does not match sum of dueRecords (${handoff.dueRecords.length}) and blockedRecords (${handoff.blockedRecords.length})`,
+      });
+    }
+    if (handoff.statusReport.pendingRemovalCount !== handoff.dueRecords.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["statusReport", "pendingRemovalCount"],
+        message: "statusReport.pendingRemovalCount does not match dueRecords.length",
+      });
+    }
+    if (handoff.statusReport.blockedRemovalCount !== handoff.blockedRecords.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["statusReport", "blockedRemovalCount"],
+        message: "statusReport.blockedRemovalCount does not match blockedRecords.length",
+      });
+    }
+
+    // 3. Unique records within arrays and disjoint across due/blocked
+    const dueIds = new Set<string>();
+    for (let i = 0; i < handoff.dueRecords.length; i++) {
+      const id = handoff.dueRecords[i]!.recordId;
+      if (dueIds.has(id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["dueRecords", i, "recordId"],
+          message: `Duplicate recordId ${id} in dueRecords`,
+        });
+      }
+      dueIds.add(id);
+    }
+
+    const blockedIds = new Set<string>();
+    for (let i = 0; i < handoff.blockedRecords.length; i++) {
+      const id = handoff.blockedRecords[i]!.recordId;
+      if (blockedIds.has(id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["blockedRecords", i, "recordId"],
+          message: `Duplicate recordId ${id} in blockedRecords`,
+        });
+      }
+      if (dueIds.has(id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["blockedRecords", i, "recordId"],
+          message: `Record ${id} is present in both dueRecords and blockedRecords`,
+        });
+      }
+      blockedIds.add(id);
+    }
+
+    // 4. Primary reason and dueReasons consistency
+    const checkReasonConsistency = (
+      item: {
+        dueReasons: ("age" | "count_excess")[];
+        primaryReason: RecordLifecycleDueReason;
+      },
+      pathPrefix: (string | number)[],
+    ) => {
+      const set = new Set(item.dueReasons);
+      if (set.size !== item.dueReasons.length) {
+        context.addIssue({
+          code: "custom",
+          path: [...pathPrefix, "dueReasons"],
+          message: "dueReasons cannot contain duplicates",
+        });
+      }
+      if (item.primaryReason === "both" && (!set.has("age") || !set.has("count_excess"))) {
+        context.addIssue({
+          code: "custom",
+          path: [...pathPrefix, "primaryReason"],
+          message: "primaryReason 'both' requires both 'age' and 'count_excess' in dueReasons",
+        });
+      }
+      if (item.primaryReason === "age" && (set.has("count_excess") || !set.has("age"))) {
+        context.addIssue({
+          code: "custom",
+          path: [...pathPrefix, "primaryReason"],
+          message: "primaryReason 'age' requires exactly ['age'] in dueReasons",
+        });
+      }
+      if (item.primaryReason === "count_excess" && (set.has("age") || !set.has("count_excess"))) {
+        context.addIssue({
+          code: "custom",
+          path: [...pathPrefix, "primaryReason"],
+          message: "primaryReason 'count_excess' requires exactly ['count_excess'] in dueReasons",
+        });
+      }
+    };
+
+    for (let i = 0; i < handoff.dueRecords.length; i++) {
+      checkReasonConsistency(handoff.dueRecords[i]!, ["dueRecords", i]);
+    }
+    for (let i = 0; i < handoff.blockedRecords.length; i++) {
+      checkReasonConsistency(handoff.blockedRecords[i]!, ["blockedRecords", i]);
+    }
+  });
+
+export type RecordLifecycleHandoff = z.infer<typeof recordLifecycleHandoffSchema>;
 
 export interface EvaluateRecordLifecycleHandoffInput {
   policy: RecordTypeLifecyclePolicy;
@@ -516,15 +790,22 @@ export interface EvaluateRecordLifecycleHandoffInput {
   evaluatedAt?: string | Date;
 }
 
+const compareCanonicalUuids = (a: string, b: string): number => {
+  const normA = a.toLowerCase();
+  const normB = b.toLowerCase();
+  return normA < normB ? -1 : normA > normB ? 1 : 0;
+};
+
 /**
  * Selects due records and produces the exact policy/revision handoff for #117 selection/removal.
  *
- * Rules:
+ * Enforces:
+ * - Duplicate candidate record IDs are rejected immediately.
  * - Age is UTC elapsed time since record creation.
- * - Count includes all retained records in policy scope, including recoverable or held rows.
- * - Excess candidates are selected oldest-created first, with permanent record ID as tie-breaker.
- * - When removal is blocked (legal holds / recovery protection), an over-limit condition is reported
- *   rather than inventing create denial or silently deleting protected data.
+ * - Excess candidates are selected oldest-created first, with canonical UUID tie-breaker.
+ * - Partitions due records into dueRecords versus blockedRecords.
+ * - Reports truthful status and visible over-limit condition when removal is blocked.
+ * - Output payload is strictly validated and JSON-transportable.
  */
 export const selectDueRecordsForLifecycleHandoff = (
   input: EvaluateRecordLifecycleHandoffInput,
@@ -537,25 +818,37 @@ export const selectDueRecordsForLifecycleHandoff = (
         ? new Date(input.evaluatedAt)
         : new Date();
 
+  if (Number.isNaN(evaluationDate.getTime())) {
+    throw new Error(`Invalid evaluatedAt timestamp: ${String(input.evaluatedAt)}`);
+  }
+
   const evaluatedAtIso = evaluationDate.toISOString();
   const evaluationTime = evaluationDate.getTime();
 
-  // Validate candidate records
-  const validatedRecords = input.records.map((r) => lifecycleCandidateRecordSchema.parse(r));
+  // Validate candidates and reject duplicate IDs
+  const seenIds = new Set<string>();
+  const validatedRecords: LifecycleCandidateRecord[] = [];
+  for (const candidate of input.records) {
+    const parsed = lifecycleCandidateRecordSchema.parse(candidate);
+    if (seenIds.has(parsed.recordId)) {
+      throw new Error(`Duplicate candidate recordId detected: ${parsed.recordId}`);
+    }
+    seenIds.add(parsed.recordId);
+    validatedRecords.push(parsed);
+  }
 
-  // Map to track due reasons per record
-  const ageDueSet = new Set<string>();
-  const countDueSet = new Set<string>();
-
-  // Sort all records oldest-created first; tie-breaker: permanent record ID
+  // Sort candidates oldest-created first; tie-breaker: canonical lowercase UUID comparison
   const sortedRecords = [...validatedRecords].sort((a, b) => {
     const timeA = new Date(a.createdAt).getTime();
     const timeB = new Date(b.createdAt).getTime();
     if (timeA !== timeB) {
       return timeA - timeB;
     }
-    return a.recordId.localeCompare(b.recordId);
+    return compareCanonicalUuids(a.recordId, b.recordId);
   });
+
+  const ageDueSet = new Set<string>();
+  const countDueSet = new Set<string>();
 
   // 1. Age selection (UTC elapsed since creation >= maxAgeDays)
   if (policy.maxAgeDays !== null && !policy.allowUnlimitedAge) {
@@ -569,7 +862,7 @@ export const selectDueRecordsForLifecycleHandoff = (
     }
   }
 
-  // 2. Excess count selection (oldest first, permanent record ID tie-breaker)
+  // 2. Excess count selection (oldest first, canonical tie-breaker)
   if (policy.maxCount !== null && !policy.allowUnlimitedCount) {
     const totalCount = sortedRecords.length;
     if (totalCount > policy.maxCount) {
@@ -581,7 +874,7 @@ export const selectDueRecordsForLifecycleHandoff = (
     }
   }
 
-  // 3. Classify due records into ready for removal vs blocked by holds/protection
+  // 3. Classify due records into ready for removal vs blocked
   const dueRecords: DueRecordHandoffItem[] = [];
   const blockedRecords: BlockedRemovalRecord[] = [];
 
@@ -612,69 +905,105 @@ export const selectDueRecordsForLifecycleHandoff = (
 
       blockedRecords.push({
         recordId: record.recordId,
+        expectedRecordRevision: record.expectedRecordRevision,
         dueReasons,
         primaryReason,
         blockReason,
         createdAt: record.createdAt,
       });
     } else {
-      const item: DueRecordHandoffItem = {
-        recordId: record.recordId,
-        dueReasons,
-        primaryReason,
-        action: policy.action,
-        createdAt: record.createdAt,
-      };
-
-      if (policy.archiveWorkflowReference) {
-        item.archiveWorkflowReference = policy.archiveWorkflowReference;
+      if (policy.action === "archive_workflow") {
+        dueRecords.push({
+          recordId: record.recordId,
+          expectedRecordRevision: record.expectedRecordRevision,
+          dueReasons,
+          primaryReason,
+          action: "archive_workflow",
+          archiveWorkflowId: policy.archiveWorkflowId,
+          expectedWorkflowRevision: policy.expectedWorkflowRevision,
+          archiveConnectionInstanceId: policy.archiveConnectionInstanceId,
+          archiveDestination: policy.archiveDestination,
+          createdAt: record.createdAt,
+        });
+      } else {
+        dueRecords.push({
+          recordId: record.recordId,
+          expectedRecordRevision: record.expectedRecordRevision,
+          dueReasons,
+          primaryReason,
+          action: "delete",
+          createdAt: record.createdAt,
+        });
       }
-      if (policy.archiveDestination) {
-        item.archiveDestination = policy.archiveDestination;
-      }
-      if (record.concurrencyNumber !== undefined) {
-        item.concurrencyNumber = record.concurrencyNumber;
-      }
-
-      dueRecords.push(item);
     }
   }
 
-  // 4. Over-limit condition assessment
+  // 4. Truthful status assessment
   const hasBlocked = blockedRecords.length > 0;
+  const hasDue = dueRecords.length > 0;
   const excessCount =
     policy.maxCount !== null && !policy.allowUnlimitedCount
-      ? Math.max(0, validatedRecords.length - policy.maxCount)
+      ? Math.max(0, sortedRecords.length - policy.maxCount)
       : 0;
   const expiredAgeCount = ageDueSet.size;
 
-  const overLimitCondition: LifecycleOverLimitCondition = {
+  const evaluationStatus: LifecycleEvaluationStatus =
+    hasBlocked && hasDue
+      ? "pending_and_blocked"
+      : hasBlocked
+        ? "blocked_over_limit"
+        : hasDue
+          ? "pending_removal"
+          : "compliant";
+
+  let description =
+    "Lifecycle targets satisfied; no pending due records and no removal-blocking holds.";
+  if (evaluationStatus === "pending_removal") {
+    description = `${dueRecords.length} record(s) pending removal by executor #117; no removal-blocking holds.`;
+  } else if (evaluationStatus === "blocked_over_limit") {
+    description = `Record lifecycle over-limit condition: ${blockedRecords.length} due record(s) cannot be removed due to active holds or protected recovery. Create operations remain permitted; silent deletion is prohibited.`;
+  } else if (evaluationStatus === "pending_and_blocked") {
+    description = `${dueRecords.length} record(s) pending removal by executor #117; ${blockedRecords.length} due record(s) blocked by active holds or protected recovery. Create operations remain permitted; silent deletion is prohibited.`;
+  }
+
+  const statusReport: LifecycleStatusReport = {
+    status: evaluationStatus,
     isOverLimit: hasBlocked,
+    pendingRemovalCount: dueRecords.length,
+    blockedRemovalCount: blockedRecords.length,
     excessCount,
     expiredAgeCount,
-    blockedCount: blockedRecords.length,
     blockedRecordIds: blockedRecords.map((r) => r.recordId),
-    description: hasBlocked
-      ? `Record lifecycle over-limit condition: ${blockedRecords.length} due record(s) cannot be removed due to active holds or protected recovery. Create operations remain permitted; silent deletion is prohibited.`
-      : "Lifecycle targets satisfied; no removal-blocking holds or recovery protections.",
+    description,
   };
 
-  return {
+  const handoffPayload = {
     policyId: policy.policyId,
     policyRevision: policy.policyRevision,
     organizationId: policy.organizationId,
     storageContractId: policy.storageContractId,
     applicationRootId: policy.applicationRootId,
     action: policy.action,
-    archiveWorkflowReference: policy.archiveWorkflowReference,
-    archiveDestination: policy.archiveDestination,
+    ...(policy.action === "archive_workflow"
+      ? {
+          archiveMetadata: {
+            archiveWorkflowId: policy.archiveWorkflowId,
+            expectedWorkflowRevision: policy.expectedWorkflowRevision,
+            archiveConnectionInstanceId: policy.archiveConnectionInstanceId,
+            archiveDestination: policy.archiveDestination,
+          },
+        }
+      : {}),
     evaluatedAt: evaluatedAtIso,
-    totalRetainedCount: validatedRecords.length,
+    totalRetainedCount: sortedRecords.length,
     dueCount: dueRecords.length + blockedRecords.length,
     dueRecords,
     blockedRecords,
-    overLimitCondition,
+    statusReport,
   };
+
+  // Validate the aggregate handoff contract before returning to guarantee semantic consistency
+  return recordLifecycleHandoffSchema.parse(handoffPayload);
 };
 
 /**
