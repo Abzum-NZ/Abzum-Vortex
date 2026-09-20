@@ -365,7 +365,7 @@ readonly module_content="pg_catalog.jsonb_build_object(
           'required',true,'unique',false,'filterable',false,'sortable',false,
           'settings',pg_catalog.jsonb_build_object('maxLength',200))),
       'relationships','[]'::jsonb,
-      'standardActions',pg_catalog.jsonb_build_array('read','update','delete','restore'),
+      'standardActions',pg_catalog.jsonb_build_array('read','update','soft_delete','restore'),
       'customActionIds','[]'::jsonb),
     pg_catalog.jsonb_build_object(
       'recordTypeId','$category_type_id','key','category','singularLabel','Category','pluralLabel','Categories',
@@ -414,7 +414,7 @@ readonly module_content="pg_catalog.jsonb_build_object(
           'toRecordType',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','$module_root_id',
             'recordTypeId','$category_type_id'),
           'cardinality','many_to_one','onParentDelete','empty_optional')),
-      'standardActions',pg_catalog.jsonb_build_array('read','update','delete','restore'),
+      'standardActions',pg_catalog.jsonb_build_array('read','update','soft_delete','restore'),
       'customActionIds','[]'::jsonb)),
   'permissions',$permissions_sql,
   'actions','[]'::jsonb,'events','[]'::jsonb,'rules','[]'::jsonb,

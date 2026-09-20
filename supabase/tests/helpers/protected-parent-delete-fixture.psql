@@ -171,7 +171,7 @@ returns jsonb language sql stable set search_path = '' as $function$
             '{"maxLength":200}'::jsonb, true)
         ),
         'relationships', '[]'::jsonb,
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'delete', 'restore'),
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'soft_delete', 'restore'),
         'customActionIds', '[]'::jsonb
       ),
       -- G: the published `refuse` policy.
@@ -276,7 +276,7 @@ returns jsonb language sql stable set search_path = '' as $function$
             'f4950000-0000-4000-8000-000000000043'::uuid,
             'd4950000-0000-4000-8000-000000000004'::uuid, 'empty_optional')
         ),
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'delete', 'restore'),
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'soft_delete', 'restore'),
         'customActionIds', '[]'::jsonb
       ),
       -- S: the nested dependant, inherited through its own relationship to L.
@@ -306,7 +306,7 @@ returns jsonb language sql stable set search_path = '' as $function$
             'f4950000-0000-4000-8000-000000000053'::uuid,
             'd4950000-0000-4000-8000-000000000004'::uuid, 'empty_optional')
         ),
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'delete', 'restore'),
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'soft_delete', 'restore'),
         'customActionIds', '[]'::jsonb
       )
     ),

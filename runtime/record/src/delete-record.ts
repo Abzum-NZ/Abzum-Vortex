@@ -46,7 +46,8 @@ type PreparedDelete = Extract<RelationshipTotalPreparationOutcome, { outcome: "p
 type DeletePreparation =
   | Readonly<{ outcome: "prepared"; preparation: PreparedDelete }>
   | Readonly<{ outcome: "completed"; result: ProtectedParentDeleteResult }>
-  | Readonly<{ outcome: "conflict" | "refused"; correlationId?: string }>;
+  | Readonly<{ outcome: "conflict"; correlationId?: string }>
+  | Readonly<{ outcome: "refused"; correlationId?: string }>;
 
 const uuid = (value: unknown): value is string =>
   typeof value === "string" &&
@@ -61,12 +62,15 @@ const parseCommand = (value: unknown): ProtectedParentDeleteCommand | undefined 
   const keys = Object.keys(candidate).sort();
   if (
     keys.length !== 4 ||
-    keys.some((key, index) =>
-      key !== ["commandId", "expectedConcurrencyNumber", "recordId", "recordTypeId"][index],
+    keys.some(
+      (key, index) =>
+        key !== ["commandId", "expectedConcurrencyNumber", "recordId", "recordTypeId"][index],
     )
   )
     return undefined;
-  return uuid(candidate.commandId) && uuid(candidate.recordTypeId) && uuid(candidate.recordId) &&
+  return uuid(candidate.commandId) &&
+    uuid(candidate.recordTypeId) &&
+    uuid(candidate.recordId) &&
     positiveRevision(candidate.expectedConcurrencyNumber)
     ? {
         commandId: candidate.commandId,
@@ -85,7 +89,9 @@ const one = <Value>(rows: readonly Value[]): Value => {
 const parseCompleted = (candidate: unknown): ProtectedParentDeleteResult | undefined => {
   if (typeof candidate !== "object" || candidate === null) return undefined;
   const value = candidate as Record<string, unknown>;
-  return value.outcome === "completed" && uuid(value.recordId) && positiveRevision(value.concurrencyNumber) &&
+  return value.outcome === "completed" &&
+    uuid(value.recordId) &&
+    positiveRevision(value.concurrencyNumber) &&
     uuid(value.correlationId)
     ? {
         outcome: "deleted",
@@ -102,17 +108,38 @@ const parsePreparation = (candidate: unknown): DeletePreparation => {
   if (completed !== undefined) return { outcome: "completed", result: completed };
   const totals = parseRelationshipTotalPreparation(candidate);
   if (totals.outcome === "prepared") return { outcome: "prepared", preparation: totals };
+  if (totals.outcome === "conflict")
+    return {
+      outcome: "conflict",
+      ...(totals.correlationId === undefined ? {} : { correlationId: totals.correlationId }),
+    };
   return {
-    outcome: totals.outcome === "conflict" ? "conflict" : "refused",
+    outcome: "refused",
     ...(totals.correlationId === undefined ? {} : { correlationId: totals.correlationId }),
   };
 };
 
 class DeleteRollback extends Error {
-  constructor(readonly correlationId: string | undefined, readonly reason: "conflict" | "refused") {
+  constructor(
+    readonly correlationId: string | undefined,
+    readonly reason: "conflict" | "refused" | "terminal",
+  ) {
     super("PROTECTED_PARENT_DELETE_ROLLBACK");
   }
 }
+
+const databaseCode = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null && "code" in error
+    ? String((error as { readonly code?: unknown }).code)
+    : undefined;
+
+const rollbackFor = (error: unknown, correlationId?: string): DeleteRollback => {
+  if (error instanceof DeleteRollback) return error;
+  const code = databaseCode(error);
+  if (code === "40001" || code === "40P01") return new DeleteRollback(correlationId, "conflict");
+  if (code === "42501") return new DeleteRollback(correlationId, "refused");
+  return new DeleteRollback(correlationId, "terminal");
+};
 
 const prepare = async (
   transaction: RequestDatabaseTransaction,
@@ -200,50 +227,64 @@ export const createProtectedParentDeleteService = (
       }
 
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          const response = await requests.runChange(session, selection, async (transaction, _scope, issuedAt) => {
-            const prepared = await prepare(transaction, command, activityId);
-            if (prepared.outcome === "completed") return prepared.result;
-            if (prepared.outcome === "conflict")
-              return { outcome: "conflict" as const, correlationId: prepared.correlationId };
-            if (prepared.outcome === "refused")
-              return { outcome: "refused" as const, correlationId: prepared.correlationId };
+        let rolledBack: DeleteRollback | undefined;
+        const response = await requests.runChange(
+          session,
+          selection,
+          async (transaction, _scope, issuedAt) => {
+            let correlationId: string | undefined;
+            try {
+              const prepared = await prepare(transaction, command, activityId);
+              if (prepared.outcome === "completed") return prepared.result;
+              if (prepared.outcome === "conflict") {
+                correlationId = prepared.correlationId;
+                throw new DeleteRollback(prepared.correlationId, "conflict");
+              }
+              if (prepared.outcome === "refused") {
+                correlationId = prepared.correlationId;
+                throw new DeleteRollback(prepared.correlationId, "refused");
+              }
 
-            const settings = await readOrganizationRuntimeSettings(transaction);
-            const clock = operationClock(
-              prepared.preparation.records.map((record) => record.recordType),
-              issuedAt,
-              settings?.timeZone,
-            );
-            if (clock === undefined) throw new DeleteRollback(prepared.preparation.correlationId, "refused");
-            const calculated = calculateLockedRelationshipTotalSave({
-              command: evaluatorCommand(command),
-              preparation: prepared.preparation,
-              ...(settings?.currency === undefined ? {} : { organizationCurrency: settings.currency }),
-              clock,
-            });
-            if (!calculated.success || calculated.pendingChecks.length !== 0)
-              throw new DeleteRollback(prepared.preparation.correlationId, "refused");
-            occurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
-            return finalize(
-              transaction,
-              command,
-              activityId,
-              occurrenceId,
-              calculated.parentMutations,
-            );
-          });
-          if (response.kind !== "available") return response;
-          if (response.value.outcome === "conflict") continue;
-          if (response.value.outcome === "refused") return { kind: "unavailable" };
-          return { kind: "available", value: response.value };
-        } catch (error) {
-          if (error instanceof DeleteRollback) {
-            if (error.reason === "conflict") continue;
-            return { kind: "unavailable" };
-          }
+              correlationId = prepared.preparation.correlationId;
+              const settings = await readOrganizationRuntimeSettings(transaction);
+              const clock = operationClock(
+                prepared.preparation.records.map((record) => record.recordType),
+                issuedAt,
+                settings?.timeZone,
+              );
+              if (clock === undefined)
+                throw new DeleteRollback(prepared.preparation.correlationId, "refused");
+              const calculated = calculateLockedRelationshipTotalSave({
+                command: evaluatorCommand(command),
+                preparation: prepared.preparation,
+                ...(settings?.currency === undefined
+                  ? {}
+                  : { organizationCurrency: settings.currency }),
+                clock,
+              });
+              if (!calculated.success || calculated.pendingChecks.length !== 0)
+                throw new DeleteRollback(prepared.preparation.correlationId, "refused");
+              occurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
+              return await finalize(
+                transaction,
+                command,
+                activityId,
+                occurrenceId,
+                calculated.parentMutations,
+              );
+            } catch (error) {
+              rolledBack = rollbackFor(error, correlationId);
+              throw error;
+            }
+          },
+        );
+        if (rolledBack !== undefined) {
+          if (rolledBack.reason === "conflict") continue;
+          if (rolledBack.reason === "refused") return { kind: "unavailable" };
           return { kind: "temporarily_unavailable" };
         }
+        if (response.kind !== "available") return response;
+        return { kind: "available", value: response.value };
       }
       return { kind: "temporarily_unavailable" };
     },
