@@ -87,8 +87,8 @@ figures are live observations, not fixed thresholds, so do not copy historical
 percentages into a rule. When Claude is near or exhausted, its owner first
 checkpoints the state, findings, exact next step, partial edits and evidence in
 the issue dossier, then stops that exact agent. The root records the handoff on
-the issue and transfers the work to a fresh worktree on one available Terra,
-Gemini or GLM lane, with no duplicate editor. The owner/planner remains Sol;
+the issue; the owner transfers the work to a fresh worktree on one available
+Terra, Gemini or GLM lane, with no duplicate editor. The owner/planner remains Sol;
 do not create Astra children or use Luna. Opus remains privileged-only: if it
 is unavailable, report that through the root on the issue and continue with the
 next independent task rather than waiting. The user's current authorized Sol
