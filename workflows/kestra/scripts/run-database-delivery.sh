@@ -176,6 +176,25 @@ validate_plain_value() {
   [[ "$value" =~ ^[A-Za-z0-9._:/@+-]+$ ]] || die "${name} contains unsupported characters"
 }
 
+# Stored Testing receipts arrive as local files named by variables. A complete receipt is larger
+# than Linux's 131072-byte limit on one environment string, and a string over that limit makes
+# every later process launch fail, so the receipt is never carried in the environment.
+read_testing_receipt() {
+  local target="$1"
+  local path_variable="$2"
+  local label="$3"
+  local path="${!path_variable}"
+
+  [[ "$path" =~ ^[a-z0-9][a-z0-9-]{0,99}[.]json$ ]] ||
+    die "${label} path must be a local JSON filename"
+  [ -e "$path" ] || [ -L "$path" ] || die "${label} file is missing"
+  { [ -f "$path" ] && [ ! -L "$path" ]; } || die "${label} file must be a regular file"
+  [ -s "$path" ] || die "${label} file is empty"
+  jq --exit-status 'type == "object"' "$path" >/dev/null 2>&1 ||
+    die "${label} file is not a JSON object"
+  printf -v "$target" '%s' "$(<"$path")"
+}
+
 migration_digest() {
   local revision="$1"
   local file
@@ -839,13 +858,18 @@ if [ "$VORTEX_DELIVERY_ENVIRONMENT" = "production" ]; then
   require_variable VORTEX_APPROVED
   require_variable VORTEX_APPROVING_ACTOR
   require_variable VORTEX_TESTING_COMMIT
-  require_variable VORTEX_TESTING_EVIDENCE
-  require_variable VORTEX_TESTING_FULL_SOURCE_EVIDENCE
+  for retired_evidence_variable in VORTEX_TESTING_EVIDENCE VORTEX_TESTING_FULL_SOURCE_EVIDENCE; do
+    [ -z "${!retired_evidence_variable+x}" ] ||
+      die "${retired_evidence_variable} is no longer accepted; use ${retired_evidence_variable}_PATH"
+  done
+  require_variable VORTEX_TESTING_EVIDENCE_PATH
+  require_variable VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH
   [ "$VORTEX_APPROVED" = "true" ] || die "production approval was not granted"
   is_commit "$VORTEX_TESTING_COMMIT" || die "approved Testing commit is invalid"
   validate_plain_value VORTEX_APPROVING_ACTOR
-  testing_evidence_json="$VORTEX_TESTING_EVIDENCE"
-  testing_source_evidence_json="$VORTEX_TESTING_FULL_SOURCE_EVIDENCE"
+  read_testing_receipt testing_evidence_json VORTEX_TESTING_EVIDENCE_PATH "Testing evidence"
+  read_testing_receipt testing_source_evidence_json VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH \
+    "Testing full-source evidence"
   testing_verification_mode="$(
     jq --raw-output '.verification.mode // empty' <<<"$testing_evidence_json" 2>/dev/null
   )"
