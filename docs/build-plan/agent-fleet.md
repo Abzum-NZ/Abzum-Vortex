@@ -54,6 +54,12 @@ OpenCode. Do not substitute an external CLI or another provider for a named
 worker — [agent coordination](agent-coordination.md) governs how a resolved
 model and session are recorded.
 
+Use `--agent opencode` for documentation, manifests, inventories, dependency
+audits and evidence gathering. Confirm GLM 5.3 in the launched terminal before
+sending the brief. Record the terminal and observed model with the dispatch.
+If OpenCode fails to launch, report and record the exact failure; do not silently
+fall back to Claude. Apply the escalation ladder only with the failure evidence.
+
 ## Escalation ladder
 
 The ladder is two rungs, not a staircase. A task that stalls or fails twice
@@ -87,6 +93,8 @@ raises a new issue. It stops only when the board has no startable work left.
 5. **Gate** — run local verification and independent review where required; see Gates below.
 6. **Land** — open the pull request into `main` and merge once gates and review pass. Promotion to `testing` remains a separate phase gate, subject to any user hold.
 7. **Reconcile and report — blocking step.** Complete the board reconciliation below before selecting or dispatching another task. A task is not finished until its board row is true.
+8. **Clean up.** Once the branch is merged and the board row is verified, remove
+   the finished checkout with `orca worktree rm`; see Worktree cleanup below.
 
 ### Blocking completion and resume gate
 
@@ -142,6 +150,12 @@ dependencies are.
    dependencies and confirm the response actually parsed before trusting an
    empty result — a failed call that returns nothing looks identical to no
    blockers, and trusting it has produced false "unblocked" verdicts.
+   Paginate the `issues/{number}/dependencies/blocked_by` endpoint and count
+   only edges whose issue `state` is `open`. Closed blockers remain in this
+   endpoint: a nonempty response is not evidence of an open blocker. Retain
+   closed edges as audit evidence, not exclusions. An unknown state or failed
+   page leaves eligibility unknown until resolved. Re-run this filter across
+   the whole board on resume and after completions, not just the old queue.
 3. **Order by roadmap lane, then priority, then dependency depth.** Work that
    unblocks the most downstream issues goes first within a lane.
 4. **Prefer functionality over maintenance.** Between two startable tasks,
@@ -161,12 +175,20 @@ dependencies are.
 
 ## Watching
 
-Every in-flight agent is checked at least every twenty minutes, per the
+Every cycle, read every in-flight agent's terminal with `orca terminal read`.
+The interval between checks must never exceed twenty minutes, per the
 20-minute rule in [agent coordination](agent-coordination.md#task-handoff).
 The check reads what the agent actually did — its terminal, its diff, its
 notes — and compares that against the brief. Telling a working agent apart
 from a parked one is the hard part, and getting it wrong in either direction
 is expensive.
+
+Record each terminal handle, check time, observed action, comparison with the
+brief and any steering sent. If progress appears stalled, use `orca terminal
+send` to ask what it is waiting on and what it has completed, then read or wait
+for its answer. Input acceptance alone does not prove the question was answered.
+Never replace this interaction with host-process or cluster sampling, and never
+stop an agent that has not failed to answer the question.
 
 Evidence that means something:
 
@@ -198,6 +220,23 @@ answer.
 | Idle, unfinished, no answer | Stop the session; keep the worktree and its diff | Escalate |
 | Two failed attempts | Escalate straight to Astra medium or Opus 5 high, re-dispatching with what was learned | Fresh worktree |
 | Blocked on a real decision | Park the issue with a written question, pick up the next one | Queue moves on |
+
+## Worktree cleanup
+
+After a task branch is merged and its board row is true, remove its finished
+worktree with `orca worktree rm --worktree <exact-selector>`. Do this as part
+of completion, before the next dispatch; repeat the audit on resume. A held
+hosted receipt does not require retaining a finished developer's checkout.
+
+First read the agent terminal to confirm completion, preserve reports and any
+unsent drafts outside the disposable checkout without submitting them, check
+for uncommitted work, and verify the branch's delivery in `main`. For squash
+merges verify the delivering PR and patch, not just commit ancestry. Record
+the removal and clear obsolete worktree references on the board. Do not
+discard unmerged edits or stop a still-working agent to satisfy this cleanup.
+Remove unused analysis worktrees after verifying they contain no unique work.
+Keep only live-work checkouts, including the active coordinator; the canonical
+repository checkout is not a disposable agent worktree.
 
 ## Board
 
