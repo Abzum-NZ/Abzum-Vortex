@@ -289,6 +289,18 @@ describe("headless Vortex-to-Puck adapter", () => {
     expect(returned.placements[id(20)]!.slots.body.order.desktop).toEqual([id(23), id(22)]);
   });
 
+  it("rejects contradictory duplicated responsive order metadata across siblings", () => {
+    const data = adapter.toPuckData(slot([20, 21]));
+    const node1Props = data.content[1]!.props as Record<string, unknown>;
+    const node1Vortex = node1Props.vortex as Record<string, unknown>;
+    node1Vortex.order = {
+      desktop: [id(20), id(21)],
+      tablet: [id(20), id(21)],
+      phone: [id(20), id(21)],
+    };
+    expect(() => adapter.fromPuckData(data)).toThrow(VortexPuckAdapterError);
+  });
+
   it("performs complete and stable round-trip conversion for application shells", () => {
     const shell: ApplicationShellV2 = {
       shellId: id(50),
@@ -417,17 +429,50 @@ describe("headless Vortex-to-Puck adapter", () => {
       VortexPuckAdapterError,
     );
 
-    // Empty required slot on Section
-    const emptySlotNode = {
-      ...missingSlotNode,
-      props: {
-        ...missingSlotNode.props,
-        content: [],
+    // Preserves schema-valid required empty slots and round-trips required empty shell targets
+    const requiredTargetShell: ApplicationShellV2 = {
+      shellId: id(70),
+      key: "section_shell",
+      name: "Section Shell",
+      layout: {
+        placements: {
+          [id(47)]: {
+            block: { blockId: id(90), releaseVersion: "1.0.0" },
+            settings: { title: { kind: "text", value: "Section Title" } },
+            themeOverrides: {},
+            responsive,
+            slots: {
+              content: {
+                placements: {},
+                order: { desktop: [], tablet: [], phone: [] },
+              },
+            },
+          },
+        },
+        order: {
+          desktop: [id(47)],
+          tablet: [id(47)],
+          phone: [id(47)],
+        },
       },
+      contentSlots: [
+        {
+          slotId: id(71),
+          key: "page_content",
+          label: "Page Content",
+          required: true,
+          allowedChildCategories: ["content"],
+          parentPlacementId: id(47),
+          parentSlotKey: "content",
+        },
+      ],
     };
-    expect(() => adapter.fromPuckData({ root: {}, content: [emptySlotNode], zones: {} })).toThrow(
-      VortexPuckAdapterError,
-    );
+    const puckShellData = adapter.toPuckShell(requiredTargetShell);
+    expect(adapter.fromPuckShell(requiredTargetShell, puckShellData)).toEqual(requiredTargetShell);
+    expect(adapter.fromPuckData(puckShellData).placements[id(47)]!.slots.content).toEqual({
+      placements: {},
+      order: { desktop: [], tablet: [], phone: [] },
+    });
 
     // Disallowed child category: Badge (feedback) in Card body (only content allowed)
     const disallowedChildData = adapter.toPuckData(slot([48]));

@@ -52,6 +52,22 @@ const string = (value: unknown, at: string) => {
   return value;
 };
 
+const sameOrderMetadata = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
+  for (const breakpoint of ["desktop", "tablet", "phone"] as const) {
+    const listA = a[breakpoint];
+    const listB = b[breakpoint];
+    if (!Array.isArray(listA) || !Array.isArray(listB)) {
+      if (listA !== listB) return false;
+      continue;
+    }
+    if (listA.length !== listB.length) return false;
+    for (let i = 0; i < listA.length; i++) {
+      if (listA[i] !== listB[i]) return false;
+    }
+  }
+  return true;
+};
+
 type VortexSlot = ReturnType<typeof placementSlotV2Schema.parse>;
 type RichTextDocument = ReturnType<typeof richTextDocumentV2Schema.parse>;
 type RichTextInline = { kind: string; children?: RichTextInline[] };
@@ -371,19 +387,21 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
           declaration,
           `${at}[${index}].props.${declaration.key}`,
         );
-        if (declaration.required && Object.keys(childSlot.placements).length === 0) {
-          throw new VortexPuckAdapterError(
-            `Required slot "${declaration.key}" must not be empty at ${at}[${index}].props`,
-          );
-        }
         slots[declaration.key] = childSlot;
       }
 
-      savedOrder = exact(
+      const currentOrder = exact(
         meta.order,
         ["desktop", "tablet", "phone"],
         `${at}[${index}].props.vortex.order`,
       );
+      if (index === 0) {
+        savedOrder = currentOrder;
+      } else if (!sameOrderMetadata(currentOrder, savedOrder)) {
+        throw new VortexPuckAdapterError(
+          `Contradictory responsive order metadata across siblings at ${at}[${index}].props.vortex.order`,
+        );
+      }
       placements[id] = {
         block,
         settings: clone(settings),
