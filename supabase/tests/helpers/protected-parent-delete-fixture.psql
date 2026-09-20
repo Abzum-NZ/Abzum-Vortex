@@ -1,0 +1,747 @@
+-- Included only by 489_protected_parent_deletion.test.sql.  It creates the
+-- smallest real installed application that carries all three published
+-- onParentDelete policies together with concrete relationship totals, which is
+-- what #49 composes.  Definition publishing, permission registration, role
+-- assignment, storage provisioning and activation all use their owning
+-- writers; every Record under test is created through the owning create
+-- primitive, and the pre-delete generated values are written through the owning
+-- generated-value writer.  Only fixture identifiers, the tenant, the
+-- organisation and the first administrator account are inserted directly,
+-- because no provisioning writer exists for them (#30).
+--
+-- Shape.
+--   parent      P  -- the named delete subject; no generated values of its own
+--   guard       G  -- refuse            -> P   (blocks P1's deletion)
+--   note        N  -- empty_optional    -> P   (cleared when P2 is deleted)
+--   line        L  -- soft_delete_dependent -> P, inherited ownership through
+--                     that same relationship, and empty_optional -> C
+--   subline     S  -- soft_delete_dependent -> L, inherited ownership through
+--                     that same relationship, and empty_optional -> C
+--   category    C  -- the SURVIVING total-bearing parent of L and S
+--
+-- Deleting P2 therefore cascades L and its nested dependant S, clears N's
+-- optional link, and must leave C's two totals and its dependent calculation
+-- authoritative.  Deleting P1 must refuse because G declares `refuse`.
+
+\set tenant '14950000-0000-4000-8000-000000000001'
+\set org '24950000-0000-4000-8000-000000000001'
+\set actor '94950000-0000-4000-8000-000000000001'
+\set admin_identity '54950000-0000-4000-8000-000000000001'
+\set admin_account '64950000-0000-4000-8000-000000000001'
+\set module '44950000-0000-4000-8000-000000000001'
+\set app '34950000-0000-4000-8000-000000000001'
+
+\set parent_type 'd4950000-0000-4000-8000-000000000001'
+\set guard_type 'd4950000-0000-4000-8000-000000000002'
+\set note_type 'd4950000-0000-4000-8000-000000000003'
+\set category_type 'd4950000-0000-4000-8000-000000000004'
+\set line_type 'd4950000-0000-4000-8000-000000000005'
+\set subline_type 'd4950000-0000-4000-8000-000000000006'
+
+\set parent_storage 'b4950000-0000-4000-8000-000000000001'
+\set guard_storage 'b4950000-0000-4000-8000-000000000002'
+\set note_storage 'b4950000-0000-4000-8000-000000000003'
+\set category_storage 'b4950000-0000-4000-8000-000000000004'
+\set line_storage 'b4950000-0000-4000-8000-000000000005'
+\set subline_storage 'b4950000-0000-4000-8000-000000000006'
+
+\set rel_guard_parent 'a4950000-0000-4000-8000-000000000001'
+\set rel_note_parent 'a4950000-0000-4000-8000-000000000002'
+\set rel_line_parent 'a4950000-0000-4000-8000-000000000003'
+\set rel_line_category 'a4950000-0000-4000-8000-000000000004'
+\set rel_subline_line 'a4950000-0000-4000-8000-000000000005'
+\set rel_subline_category 'a4950000-0000-4000-8000-000000000006'
+
+\set f_parent_title 'f4950000-0000-4000-8000-000000000001'
+\set f_guard_title 'f4950000-0000-4000-8000-000000000011'
+\set f_guard_parent 'f4950000-0000-4000-8000-000000000012'
+\set f_note_title 'f4950000-0000-4000-8000-000000000021'
+\set f_note_parent 'f4950000-0000-4000-8000-000000000022'
+\set f_category_title 'f4950000-0000-4000-8000-000000000031'
+\set f_category_line_total 'f4950000-0000-4000-8000-000000000032'
+\set f_category_display 'f4950000-0000-4000-8000-000000000033'
+\set f_category_subline_total 'f4950000-0000-4000-8000-000000000034'
+\set f_line_amount 'f4950000-0000-4000-8000-000000000041'
+\set f_line_parent 'f4950000-0000-4000-8000-000000000042'
+\set f_line_category 'f4950000-0000-4000-8000-000000000043'
+\set f_subline_amount 'f4950000-0000-4000-8000-000000000051'
+\set f_subline_line 'f4950000-0000-4000-8000-000000000052'
+\set f_subline_category 'f4950000-0000-4000-8000-000000000053'
+
+\set p_parent_read 'c4950000-0000-4000-8000-000000000001'
+\set p_parent_update 'c4950000-0000-4000-8000-000000000002'
+\set p_parent_delete 'c4950000-0000-4000-8000-000000000003'
+\set p_parent_restore 'c4950000-0000-4000-8000-000000000004'
+\set p_guard_read 'c4950000-0000-4000-8000-000000000011'
+\set p_note_read 'c4950000-0000-4000-8000-000000000021'
+\set p_note_update 'c4950000-0000-4000-8000-000000000022'
+\set p_category_read 'c4950000-0000-4000-8000-000000000031'
+\set p_category_update 'c4950000-0000-4000-8000-000000000032'
+\set p_line_read 'c4950000-0000-4000-8000-000000000041'
+\set p_line_update 'c4950000-0000-4000-8000-000000000042'
+\set p_line_delete 'c4950000-0000-4000-8000-000000000043'
+\set p_line_restore 'c4950000-0000-4000-8000-000000000044'
+\set p_line_delete_owned 'c4950000-0000-4000-8000-000000000045'
+\set p_subline_read 'c4950000-0000-4000-8000-000000000051'
+\set p_subline_update 'c4950000-0000-4000-8000-000000000052'
+\set p_subline_delete 'c4950000-0000-4000-8000-000000000053'
+\set p_subline_restore 'c4950000-0000-4000-8000-000000000054'
+
+\set parent_table 'rt_b4950000000040008000000000000001'
+\set guard_table 'rt_b4950000000040008000000000000002'
+\set note_table 'rt_b4950000000040008000000000000003'
+\set category_table 'rt_b4950000000040008000000000000004'
+\set line_table 'rt_b4950000000040008000000000000005'
+\set subline_table 'rt_b4950000000040008000000000000006'
+
+create function pg_temp.delete_sha(p_value text)
+returns text language sql immutable set search_path = '' as $function$
+  select 'sha256:' || pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p_value, 'UTF8')), 'hex')
+$function$;
+
+create function pg_temp.delete_field(
+  p_field_id uuid, p_type text, p_settings jsonb default '{}'::jsonb,
+  p_required boolean default false
+)
+returns jsonb language sql immutable set search_path = '' as $function$
+  select pg_catalog.jsonb_build_object(
+    'fieldId', p_field_id, 'key', 'f_' || pg_catalog.replace(p_field_id::text, '-', ''),
+    'type', p_type, 'required', p_required, 'unique', false, 'filterable', false,
+    'sortable', false, 'settings', p_settings)
+$function$;
+
+create function pg_temp.delete_link(p_target_type uuid, p_on_parent_delete text)
+returns jsonb language sql immutable set search_path = '' as $function$
+  select pg_catalog.jsonb_build_object(
+    'target', pg_catalog.jsonb_build_object('state', 'resolved',
+      'moduleRootId', '44950000-0000-4000-8000-000000000001'::uuid,
+      'recordTypeId', p_target_type),
+    'onParentDelete', p_on_parent_delete)
+$function$;
+
+create function pg_temp.delete_relationship(
+  p_relationship_id uuid, p_key text, p_from_type uuid, p_from_field uuid,
+  p_to_type uuid, p_on_parent_delete text
+)
+returns jsonb language sql immutable set search_path = '' as $function$
+  select pg_catalog.jsonb_build_object(
+    'relationshipId', p_relationship_id, 'key', p_key,
+    'fromRecordTypeId', p_from_type, 'fromFieldId', p_from_field,
+    'toRecordType', pg_catalog.jsonb_build_object('state', 'resolved',
+      'moduleRootId', '44950000-0000-4000-8000-000000000001'::uuid,
+      'recordTypeId', p_to_type),
+    'cardinality', 'many_to_one', 'onParentDelete', p_on_parent_delete)
+$function$;
+
+create function pg_temp.delete_permission(
+  p_permission_id uuid, p_key text, p_record_type_id uuid, p_action_kind text,
+  p_fields uuid[], p_routes jsonb default '[{"kind":"all_records"}]'::jsonb
+)
+returns jsonb language sql immutable set search_path = '' as $function$
+  select pg_catalog.jsonb_build_object(
+    'permissionId', p_permission_id, 'key', p_key, 'label', p_key,
+    'description', 'Protected parent delete fixture permission.',
+    'recordTypeId', p_record_type_id,
+    'recordScope', pg_catalog.jsonb_build_object('routes', p_routes),
+    'fieldPolicy', pg_catalog.jsonb_build_object(
+      'readableFieldIds', pg_catalog.to_jsonb(p_fields),
+      'changeableFieldIds', case when p_action_kind in ('update', 'create')
+        then pg_catalog.to_jsonb(p_fields) else '[]'::jsonb end),
+    'actionKind', p_action_kind, 'administrative', false)
+$function$;
+
+create function pg_temp.delete_module_content()
+returns jsonb language sql stable set search_path = '' as $function$
+  select pg_catalog.jsonb_build_object(
+    'name', 'Protected parent delete fixture',
+    'description', 'Installed parent, guard, note, category, line and subline records.',
+    'dependencies', '[]'::jsonb,
+    'recordTypes', pg_catalog.jsonb_build_array(
+      -- P: the delete subject. It declares no generated value of its own, so
+      -- every authoritative value this command must preserve belongs to a
+      -- surviving affected record.
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4950000-0000-4000-8000-000000000001'::uuid, 'key', 'parent',
+        'singularLabel', 'Parent', 'pluralLabel', 'Parents',
+        'titleFieldId', 'f4950000-0000-4000-8000-000000000001'::uuid,
+        'storageContractId', 'b4950000-0000-4000-8000-000000000001'::uuid,
+        'storageScope', 'application_contained', 'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000001'::uuid, 'text',
+            '{"maxLength":200}'::jsonb, true)
+        ),
+        'relationships', '[]'::jsonb,
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'delete', 'restore'),
+        'customActionIds', '[]'::jsonb
+      ),
+      -- G: the published `refuse` policy.
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4950000-0000-4000-8000-000000000002'::uuid, 'key', 'guard',
+        'singularLabel', 'Guard', 'pluralLabel', 'Guards',
+        'titleFieldId', 'f4950000-0000-4000-8000-000000000011'::uuid,
+        'storageContractId', 'b4950000-0000-4000-8000-000000000002'::uuid,
+        'storageScope', 'application_contained', 'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000011'::uuid, 'text',
+            '{"maxLength":200}'::jsonb, true),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000012'::uuid, 'link',
+            pg_temp.delete_link('d4950000-0000-4000-8000-000000000001'::uuid, 'refuse'), true)
+        ),
+        'relationships', pg_catalog.jsonb_build_array(
+          pg_temp.delete_relationship('a4950000-0000-4000-8000-000000000001'::uuid,
+            'guard_parent', 'd4950000-0000-4000-8000-000000000002'::uuid,
+            'f4950000-0000-4000-8000-000000000012'::uuid,
+            'd4950000-0000-4000-8000-000000000001'::uuid, 'refuse')
+        ),
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update'),
+        'customActionIds', '[]'::jsonb
+      ),
+      -- N: the published `empty_optional` policy on a surviving child.
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4950000-0000-4000-8000-000000000003'::uuid, 'key', 'note',
+        'singularLabel', 'Note', 'pluralLabel', 'Notes',
+        'titleFieldId', 'f4950000-0000-4000-8000-000000000021'::uuid,
+        'storageContractId', 'b4950000-0000-4000-8000-000000000003'::uuid,
+        'storageScope', 'application_contained', 'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000021'::uuid, 'text',
+            '{"maxLength":200}'::jsonb, true),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000022'::uuid, 'link',
+            pg_temp.delete_link('d4950000-0000-4000-8000-000000000001'::uuid, 'empty_optional'))
+        ),
+        'relationships', pg_catalog.jsonb_build_array(
+          pg_temp.delete_relationship('a4950000-0000-4000-8000-000000000002'::uuid,
+            'note_parent', 'd4950000-0000-4000-8000-000000000003'::uuid,
+            'f4950000-0000-4000-8000-000000000022'::uuid,
+            'd4950000-0000-4000-8000-000000000001'::uuid, 'empty_optional')
+        ),
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update'),
+        'customActionIds', '[]'::jsonb
+      ),
+      -- C: the surviving total-bearing parent of both cascade-deleted types.
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4950000-0000-4000-8000-000000000004'::uuid, 'key', 'category',
+        'singularLabel', 'Category', 'pluralLabel', 'Categories',
+        'titleFieldId', 'f4950000-0000-4000-8000-000000000031'::uuid,
+        'storageContractId', 'b4950000-0000-4000-8000-000000000004'::uuid,
+        'storageScope', 'application_contained', 'ownershipMode', 'organization_account',
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000031'::uuid, 'text',
+            '{"maxLength":200}'::jsonb, true),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000032'::uuid, 'total',
+            pg_catalog.jsonb_build_object(
+              'relationshipId', 'a4950000-0000-4000-8000-000000000004'::uuid,
+              'operation', 'sum', 'resultType', 'decimal_number',
+              'fieldId', 'f4950000-0000-4000-8000-000000000041'::uuid)),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000033'::uuid, 'calculation',
+            pg_catalog.jsonb_build_object('resultType', 'decimal_number',
+              'dependencyFieldIds', pg_catalog.jsonb_build_array(
+                'f4950000-0000-4000-8000-000000000032'::uuid,
+                'f4950000-0000-4000-8000-000000000034'::uuid))),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000034'::uuid, 'total',
+            pg_catalog.jsonb_build_object(
+              'relationshipId', 'a4950000-0000-4000-8000-000000000006'::uuid,
+              'operation', 'sum', 'resultType', 'decimal_number',
+              'fieldId', 'f4950000-0000-4000-8000-000000000051'::uuid))
+        ),
+        'relationships', '[]'::jsonb,
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update'),
+        'customActionIds', '[]'::jsonb
+      ),
+      -- L: the published `soft_delete_dependent` policy, with inherited
+      -- ownership declared through that same relationship.
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4950000-0000-4000-8000-000000000005'::uuid, 'key', 'line',
+        'singularLabel', 'Line', 'pluralLabel', 'Lines',
+        'titleFieldId', 'f4950000-0000-4000-8000-000000000041'::uuid,
+        'storageContractId', 'b4950000-0000-4000-8000-000000000005'::uuid,
+        'storageScope', 'application_contained', 'ownershipMode', 'inherited',
+        'ownershipRelationshipId', 'a4950000-0000-4000-8000-000000000003'::uuid,
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000041'::uuid, 'decimal_number',
+            '{"digitsBeforeDecimal":10,"decimalPlaces":2}'::jsonb, true),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000042'::uuid, 'link',
+            pg_temp.delete_link('d4950000-0000-4000-8000-000000000001'::uuid,
+              'soft_delete_dependent'), true),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000043'::uuid, 'link',
+            pg_temp.delete_link('d4950000-0000-4000-8000-000000000004'::uuid, 'empty_optional'))
+        ),
+        'relationships', pg_catalog.jsonb_build_array(
+          pg_temp.delete_relationship('a4950000-0000-4000-8000-000000000003'::uuid,
+            'line_parent', 'd4950000-0000-4000-8000-000000000005'::uuid,
+            'f4950000-0000-4000-8000-000000000042'::uuid,
+            'd4950000-0000-4000-8000-000000000001'::uuid, 'soft_delete_dependent'),
+          pg_temp.delete_relationship('a4950000-0000-4000-8000-000000000004'::uuid,
+            'line_category', 'd4950000-0000-4000-8000-000000000005'::uuid,
+            'f4950000-0000-4000-8000-000000000043'::uuid,
+            'd4950000-0000-4000-8000-000000000004'::uuid, 'empty_optional')
+        ),
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'delete', 'restore'),
+        'customActionIds', '[]'::jsonb
+      ),
+      -- S: the nested dependant, inherited through its own relationship to L.
+      pg_catalog.jsonb_build_object(
+        'recordTypeId', 'd4950000-0000-4000-8000-000000000006'::uuid, 'key', 'subline',
+        'singularLabel', 'Subline', 'pluralLabel', 'Sublines',
+        'titleFieldId', 'f4950000-0000-4000-8000-000000000051'::uuid,
+        'storageContractId', 'b4950000-0000-4000-8000-000000000006'::uuid,
+        'storageScope', 'application_contained', 'ownershipMode', 'inherited',
+        'ownershipRelationshipId', 'a4950000-0000-4000-8000-000000000005'::uuid,
+        'fields', pg_catalog.jsonb_build_array(
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000051'::uuid, 'decimal_number',
+            '{"digitsBeforeDecimal":10,"decimalPlaces":2}'::jsonb, true),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000052'::uuid, 'link',
+            pg_temp.delete_link('d4950000-0000-4000-8000-000000000005'::uuid,
+              'soft_delete_dependent'), true),
+          pg_temp.delete_field('f4950000-0000-4000-8000-000000000053'::uuid, 'link',
+            pg_temp.delete_link('d4950000-0000-4000-8000-000000000004'::uuid, 'empty_optional'))
+        ),
+        'relationships', pg_catalog.jsonb_build_array(
+          pg_temp.delete_relationship('a4950000-0000-4000-8000-000000000005'::uuid,
+            'subline_line', 'd4950000-0000-4000-8000-000000000006'::uuid,
+            'f4950000-0000-4000-8000-000000000052'::uuid,
+            'd4950000-0000-4000-8000-000000000005'::uuid, 'soft_delete_dependent'),
+          pg_temp.delete_relationship('a4950000-0000-4000-8000-000000000006'::uuid,
+            'subline_category', 'd4950000-0000-4000-8000-000000000006'::uuid,
+            'f4950000-0000-4000-8000-000000000053'::uuid,
+            'd4950000-0000-4000-8000-000000000004'::uuid, 'empty_optional')
+        ),
+        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'delete', 'restore'),
+        'customActionIds', '[]'::jsonb
+      )
+    ),
+    'permissions', pg_catalog.jsonb_build_array(
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000001'::uuid,
+        'delete.parent.read', 'd4950000-0000-4000-8000-000000000001'::uuid, 'read',
+        array['f4950000-0000-4000-8000-000000000001'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000002'::uuid,
+        'delete.parent.update', 'd4950000-0000-4000-8000-000000000001'::uuid, 'update',
+        array['f4950000-0000-4000-8000-000000000001'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000003'::uuid,
+        'delete.parent.delete', 'd4950000-0000-4000-8000-000000000001'::uuid, 'delete',
+        array['f4950000-0000-4000-8000-000000000001'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000004'::uuid,
+        'delete.parent.restore', 'd4950000-0000-4000-8000-000000000001'::uuid, 'restore',
+        array['f4950000-0000-4000-8000-000000000001'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000011'::uuid,
+        'delete.guard.read', 'd4950000-0000-4000-8000-000000000002'::uuid, 'read',
+        array['f4950000-0000-4000-8000-000000000011'::uuid,
+          'f4950000-0000-4000-8000-000000000012'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000021'::uuid,
+        'delete.note.read', 'd4950000-0000-4000-8000-000000000003'::uuid, 'read',
+        array['f4950000-0000-4000-8000-000000000021'::uuid,
+          'f4950000-0000-4000-8000-000000000022'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000022'::uuid,
+        'delete.note.update', 'd4950000-0000-4000-8000-000000000003'::uuid, 'update',
+        array['f4950000-0000-4000-8000-000000000021'::uuid,
+          'f4950000-0000-4000-8000-000000000022'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000031'::uuid,
+        'delete.category.read', 'd4950000-0000-4000-8000-000000000004'::uuid, 'read',
+        array['f4950000-0000-4000-8000-000000000031'::uuid,
+          'f4950000-0000-4000-8000-000000000032'::uuid,
+          'f4950000-0000-4000-8000-000000000033'::uuid,
+          'f4950000-0000-4000-8000-000000000034'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000032'::uuid,
+        'delete.category.update', 'd4950000-0000-4000-8000-000000000004'::uuid, 'update',
+        array['f4950000-0000-4000-8000-000000000031'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000041'::uuid,
+        'delete.line.read', 'd4950000-0000-4000-8000-000000000005'::uuid, 'read',
+        array['f4950000-0000-4000-8000-000000000041'::uuid,
+          'f4950000-0000-4000-8000-000000000042'::uuid,
+          'f4950000-0000-4000-8000-000000000043'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000042'::uuid,
+        'delete.line.update', 'd4950000-0000-4000-8000-000000000005'::uuid, 'update',
+        array['f4950000-0000-4000-8000-000000000041'::uuid,
+          'f4950000-0000-4000-8000-000000000042'::uuid,
+          'f4950000-0000-4000-8000-000000000043'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000043'::uuid,
+        'delete.line.delete', 'd4950000-0000-4000-8000-000000000005'::uuid, 'delete',
+        array['f4950000-0000-4000-8000-000000000041'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000044'::uuid,
+        'delete.line.restore', 'd4950000-0000-4000-8000-000000000005'::uuid, 'restore',
+        array['f4950000-0000-4000-8000-000000000041'::uuid]),
+      -- The same declared delete action, reachable only through ownership. An
+      -- account holding this instead of the all-records delete can load the
+      -- affected line but is not allowed on it, which is the exact authority
+      -- refusal #49 must produce without naming the blocking record.
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000045'::uuid,
+        'delete.line.delete_owned', 'd4950000-0000-4000-8000-000000000005'::uuid, 'delete',
+        array['f4950000-0000-4000-8000-000000000041'::uuid],
+        '[{"kind":"ownership"}]'::jsonb),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000051'::uuid,
+        'delete.subline.read', 'd4950000-0000-4000-8000-000000000006'::uuid, 'read',
+        array['f4950000-0000-4000-8000-000000000051'::uuid,
+          'f4950000-0000-4000-8000-000000000052'::uuid,
+          'f4950000-0000-4000-8000-000000000053'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000052'::uuid,
+        'delete.subline.update', 'd4950000-0000-4000-8000-000000000006'::uuid, 'update',
+        array['f4950000-0000-4000-8000-000000000051'::uuid,
+          'f4950000-0000-4000-8000-000000000052'::uuid,
+          'f4950000-0000-4000-8000-000000000053'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000053'::uuid,
+        'delete.subline.delete', 'd4950000-0000-4000-8000-000000000006'::uuid, 'delete',
+        array['f4950000-0000-4000-8000-000000000051'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000054'::uuid,
+        'delete.subline.restore', 'd4950000-0000-4000-8000-000000000006'::uuid, 'restore',
+        array['f4950000-0000-4000-8000-000000000051'::uuid])
+    ),
+    'actions', '[]'::jsonb, 'events', '[]'::jsonb, 'rules', '[]'::jsonb,
+    'sharingConditions', '[]'::jsonb, 'extensionPoints', '[]'::jsonb
+  )
+$function$;
+
+create function pg_temp.delete_context(p_application_root_id uuid, p_account_id uuid)
+returns void language plpgsql volatile set search_path = '' as $function$
+declare value jsonb;
+begin
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+  select pg_catalog.jsonb_build_object(
+    'callerKind','human','identityAuthorityId','c4950000-0000-4000-8000-0000000000f1',
+    'tenantId', organization.tenant_id,'organizationId',organization.organization_id,
+    'organizationAccountId',account.organization_account_id,'identityId',account.identity_id,
+    'sessionId','c4950000-0000-4000-8000-0000000000f2','authenticationStrength','single_factor',
+    'issuedAt',pg_catalog.statement_timestamp(),'expiresAt',pg_catalog.statement_timestamp()+interval '2 hours',
+    'accessVersion',version.current_version,'correlationId',pg_catalog.gen_random_uuid(),
+    'accessTokenIssuedAt',pg_catalog.statement_timestamp(),'primaryAuthenticatedAt',pg_catalog.statement_timestamp()
+  ) || case when p_application_root_id is null then '{}'::jsonb
+    else pg_catalog.jsonb_build_object('applicationRootId',p_application_root_id) end
+  into strict value
+  from vortex_identity.organizations organization
+  join vortex_identity.organization_accounts account
+    on account.organization_id=organization.organization_id
+    and account.organization_account_id=p_account_id
+  join vortex_access.organization_access_versions version
+    on version.organization_id=organization.organization_id
+  where organization.organization_id = '24950000-0000-4000-8000-000000000001'::uuid;
+  perform vortex_context.initialize(value);
+end
+$function$;
+
+create function pg_temp.delete_account(p_identity_id uuid, p_display_name text)
+returns uuid language plpgsql volatile set search_path = '' as $function$
+declare accepted record; token text := pg_temp.delete_sha('invite:' || p_identity_id::text);
+begin
+  perform 1 from vortex_identity.ensure_identity_projection(p_identity_id, pg_catalog.gen_random_uuid());
+  perform pg_temp.delete_context(null, '64950000-0000-4000-8000-000000000001'::uuid);
+  perform 1 from vortex_identity.create_organization_invitation(
+    'delete-' || p_identity_id::text || '@example.test', token,
+    pg_catalog.clock_timestamp()+interval '1 day');
+  delete from vortex_context.request_contexts where backend_pid=pg_catalog.pg_backend_pid();
+  select result.* into strict accepted from vortex_access.accept_organization_invitation(
+    token,p_identity_id,'delete-' || p_identity_id::text || '@example.test',
+    p_display_name,pg_catalog.gen_random_uuid()) result;
+  if accepted.outcome <> 'accepted' then
+    raise exception 'protected delete fixture account was not accepted';
+  end if;
+  return accepted.organization_account_id;
+end
+$function$;
+
+create function pg_temp.delete_registration_candidate()
+returns jsonb language sql stable set search_path = '' as $function$
+  with entries as (
+    select pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId','34950000-0000-4000-8000-000000000001'::uuid,
+        'ownerKind','module','ownerId','44950000-0000-4000-8000-000000000001'::uuid,
+        'permission',permission.value,
+        'sourceRelease',pg_catalog.jsonb_build_object(
+          'kind','module','definitionKey',root.key,'rootId',root.root_id,
+          'releaseRevision',release.release_revision,'releaseVersion',release.release_version,
+          'validationContractVersion',release.validation_contract_version,
+          'contentFingerprint',release.content_fingerprint,
+          'resolutionFingerprint',release.resolution_fingerprint),
+        'meaningFingerprint',pg_temp.delete_sha('meaning:' || (permission.value->>'permissionId'))
+      ) order by (permission.value->>'key'), (permission.value->>'permissionId')
+    ) as value
+    from vortex_definition.roots root
+    join vortex_definition.releases release on release.root_id=root.root_id
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output#>'{canonical,content,permissions}') permission(value)
+    where root.root_id='44950000-0000-4000-8000-000000000001'::uuid and release.release_revision=1
+  )
+  select pg_catalog.jsonb_build_object(
+    'contractVersion','1.0.0','organizationId','24950000-0000-4000-8000-000000000001'::uuid,
+    'applicationRootId','34950000-0000-4000-8000-000000000001'::uuid,
+    'applicationRelease',(select pg_catalog.jsonb_build_object(
+      'kind','application','definitionKey',root.key,'rootId',root.root_id,
+      'releaseRevision',release.release_revision,'releaseVersion',release.release_version,
+      'validationContractVersion',release.validation_contract_version,
+      'contentFingerprint',release.content_fingerprint,
+      'resolutionFingerprint',release.resolution_fingerprint)
+      from vortex_definition.roots root join vortex_definition.releases release
+        on release.root_id=root.root_id
+      where root.root_id='34950000-0000-4000-8000-000000000001'::uuid
+        and release.release_revision=1),
+    'applicationCatalogueFingerprint',pg_temp.delete_sha('catalogue'),
+    'applicationPermissionIds','[]'::jsonb,
+    'entries',entries.value,'candidateFingerprint',pg_temp.delete_sha('candidate')
+  ) from entries
+$function$;
+
+create function pg_temp.delete_register_application()
+returns void language plpgsql volatile set search_path = '' as $function$
+declare candidate jsonb := pg_temp.delete_registration_candidate(); outcome record;
+begin
+  select result.* into strict outcome
+  from vortex_access.coordinate_application_access_change(
+    'register', null,
+    pg_catalog.jsonb_build_object(
+      'contractVersion','1.0.0',
+      'preparationBasis',pg_catalog.jsonb_build_object('kind','registration_candidate'),
+      'permissionRegistration',candidate,
+      'templates',pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'template',pg_catalog.jsonb_build_object(
+            'roleId',pg_catalog.gen_random_uuid(),'key','delete_template',
+            'name','Delete template','homePageId',pg_catalog.gen_random_uuid(),
+            'permissionKeys',(
+              select pg_catalog.jsonb_agg(item.value#>'{permission,key}' order by item.ordinality)
+              from pg_catalog.jsonb_array_elements(candidate->'entries')
+                with ordinality as item(value,ordinality)
+            ),
+            'permissionSelection',pg_catalog.jsonb_build_object('kind','exact')
+          ),
+          'sourceTemplateFingerprint',pg_temp.delete_sha('template'),
+          'sourcePermissions',candidate->'entries','livePermissions',candidate->'entries'
+        )
+      ),
+      'candidateFingerprint',pg_temp.delete_sha('preparation')
+    ),
+    '24950000-0000-4000-8000-000000000001'::uuid,
+    '34950000-0000-4000-8000-000000000001'::uuid,
+    '94950000-0000-4000-8000-000000000001'::uuid,
+    pg_catalog.gen_random_uuid()
+  ) as result;
+  if outcome.outcome <> 'changed' then
+    raise exception 'protected delete fixture registration failed';
+  end if;
+end
+$function$;
+
+create function pg_temp.delete_role(p_role_id uuid,p_key text,p_permission_ids uuid[])
+returns void language plpgsql volatile set search_path = '' as $function$
+declare refs jsonb;
+begin
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('kind','exact',
+    'applicationRootId',entry.application_root_id,'ownerKind',entry.owner_kind,
+    'ownerId',entry.owner_id,'permissionId',entry.permission_id,
+    'acceptedRegistrationRevision',registration.revision,
+    'catalogueFingerprint',registration.permission_catalogue_fingerprint,
+    'continuityRevision',continuity.continuity_revision,
+    'meaningFingerprint',entry.meaning_fingerprint)
+    order by entry.application_root_id,entry.owner_kind collate "C",entry.owner_id,
+      entry.permission_id) into refs
+  from vortex_access.permission_registrations registration
+  join vortex_access.permission_catalogue_entries entry
+    on entry.organization_id=registration.organization_id
+    and entry.registration_kind=registration.registration_kind
+    and entry.registration_owner_id=registration.registration_owner_id
+    and entry.registration_revision=registration.revision
+  join vortex_access.permission_continuities continuity
+    on continuity.organization_id=entry.organization_id
+    and continuity.application_root_id is not distinct from entry.application_root_id
+    and continuity.owner_kind=entry.owner_kind and continuity.owner_id=entry.owner_id
+    and continuity.permission_id=entry.permission_id
+  where registration.organization_id='24950000-0000-4000-8000-000000000001'::uuid
+    and registration.registration_kind='application'
+    and registration.registration_owner_id='34950000-0000-4000-8000-000000000001'::uuid
+    and registration.state='active' and entry.permission_id=any(p_permission_ids);
+  if pg_catalog.jsonb_array_length(coalesce(refs,'[]'::jsonb)) <> pg_catalog.cardinality(p_permission_ids) then
+    raise exception 'protected delete fixture permission refs missing';
+  end if;
+  perform 1 from vortex_access.coordinate_organization_role_change(
+    pg_catalog.jsonb_build_object('contractVersion','1.0.0',
+    'candidate',pg_catalog.jsonb_build_object('operation','create_custom',
+      'organizationId','24950000-0000-4000-8000-000000000001'::uuid,'roleId',p_role_id,
+      'key',p_key,'label',p_key,'description','Protected parent delete fixture role.',
+      'privilegeClassification','standard',
+      'assignmentPolicy',pg_catalog.jsonb_build_object('kind','standing'),'permissions',refs),
+    'roleCandidateFingerprint',pg_temp.delete_sha('role:'||p_role_id::text)),
+    '94950000-0000-4000-8000-000000000001'::uuid,pg_catalog.gen_random_uuid());
+end
+$function$;
+
+create function pg_temp.delete_assign(p_assignment_id uuid,p_role_id uuid,p_account_id uuid)
+returns void language plpgsql volatile set search_path = '' as $function$
+declare revision bigint;
+begin
+  select live_revision into strict revision from vortex_access.organization_roles
+  where organization_id='24950000-0000-4000-8000-000000000001'::uuid and role_id=p_role_id;
+  perform 1 from vortex_access.coordinate_organization_role_assignment_change(
+    'grant','24950000-0000-4000-8000-000000000001'::uuid,p_assignment_id,null,p_role_id,
+    revision,'organization_account',p_account_id,null,'standing',
+    pg_catalog.clock_timestamp()-interval '1 minute',null,
+    '94950000-0000-4000-8000-000000000001'::uuid,pg_catalog.gen_random_uuid());
+end
+$function$;
+
+-- Bootstrap facts which do not have a provisioning writer yet, followed by the
+-- Access writers that establish the first administrator's platform authority.
+insert into vortex_identity.tenants (tenant_id,short_name,display_name,state,created_at,created_by,state_changed_at,revision)
+values (:'tenant'::uuid,'parent_delete','Parent delete','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1);
+insert into vortex_identity.organizations (organization_id,tenant_id,short_name,display_name,state,created_at,created_by,state_changed_at,revision)
+values (:'org'::uuid,:'tenant'::uuid,'parent_delete','Parent delete','active',pg_catalog.clock_timestamp(),:'actor'::uuid,pg_catalog.clock_timestamp(),1);
+select * from vortex_access.initialize_organization_access_version(:'org'::uuid,:'actor'::uuid,'c4950000-0000-4000-8000-0000000000a1');
+select * from vortex_access.initialize_platform_permission_catalogue(:'org'::uuid,:'actor'::uuid,'c4950000-0000-4000-8000-0000000000a2');
+select * from vortex_identity.ensure_identity_projection(:'admin_identity'::uuid,'c4950000-0000-4000-8000-0000000000a3');
+insert into vortex_identity.organization_accounts (organization_account_id,organization_id,identity_id,display_name,state,activated_at,changed_at,state_changed_at,state_changed_by,state_change_correlation_id,revision)
+values (:'admin_account'::uuid,:'org'::uuid,:'admin_identity'::uuid,'Fixture administrator','active',pg_catalog.clock_timestamp()-interval '1 minute',pg_catalog.clock_timestamp(),pg_catalog.clock_timestamp(),:'actor'::uuid,'c4950000-0000-4000-8000-0000000000a4',1);
+select * from vortex_access.revise_platform_permission_catalogue_metadata(:'org'::uuid,1,'1.0.0','1.0.1',:'actor'::uuid,'c4950000-0000-4000-8000-0000000000a5');
+select * from vortex_access.coordinate_organization_stewardship_adoption(
+  :'org'::uuid,:'admin_account'::uuid,'74950000-0000-4000-8000-000000000101','delete_steward','Delete steward','Fixture stewardship.',
+  '74950000-0000-4000-8000-000000000102','74950000-0000-4000-8000-000000000103',:'admin_identity'::uuid,'c4950000-0000-4000-8000-0000000000a6');
+select * from vortex_access.adopt_shipped_platform_permission_catalogue(:'org'::uuid,2,'1.1.0','sha256:cb42d4b24ebead7fe9e4ba6358115ceb3ae752d3a0b4cbedc458dcb218013778',:'actor'::uuid,'c4950000-0000-4000-8000-0000000000a7');
+
+-- Fixed root IDs are fixture identities. Releases are published by the normal
+-- definition writer.
+insert into vortex_definition.roots(root_id,organization_id,kind,key,created_at,created_by) values
+  (:'module'::uuid,:'org'::uuid,'module','vortex.parent_delete.module',pg_catalog.clock_timestamp()-interval '1 minute',:'actor'::uuid),
+  (:'app'::uuid,:'org'::uuid,'application','vortex.parent_delete.app',pg_catalog.clock_timestamp()-interval '1 minute',:'actor'::uuid);
+select pg_temp.append_writer_release(:'module'::uuid,'2.0.0','[]'::jsonb,pg_temp.delete_module_content(),'2.0.0');
+select pg_temp.append_writer_release(:'app'::uuid,'1.0.0',pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_array(:'module'::uuid,1)),
+  pg_catalog.jsonb_build_object('permissions','[]'::jsonb),'1.0.0');
+select pg_temp.delete_register_application();
+
+-- Accounts, roles and assignments all use their owning Access writers. The
+-- full account holds every declared action over all records; the scoped account
+-- holds the same actions except that its line delete is reachable only through
+-- ownership, which it does not have over the fixture's lines.
+select pg_temp.delete_account('54950000-0000-4000-8000-000000000011','Full author') as full_account \gset
+select pg_temp.delete_account('54950000-0000-4000-8000-000000000012','Scoped author') as scoped_account \gset
+select pg_temp.delete_role('74950000-0000-4000-8000-000000000111','parent_delete_full', array[
+  :'p_parent_read'::uuid,:'p_parent_update'::uuid,:'p_parent_delete'::uuid,:'p_parent_restore'::uuid,
+  :'p_guard_read'::uuid,:'p_note_read'::uuid,:'p_note_update'::uuid,
+  :'p_category_read'::uuid,:'p_category_update'::uuid,
+  :'p_line_read'::uuid,:'p_line_update'::uuid,:'p_line_delete'::uuid,:'p_line_restore'::uuid,
+  :'p_subline_read'::uuid,:'p_subline_update'::uuid,:'p_subline_delete'::uuid,:'p_subline_restore'::uuid]);
+select pg_temp.delete_role('74950000-0000-4000-8000-000000000112','parent_delete_scoped', array[
+  :'p_parent_read'::uuid,:'p_parent_update'::uuid,:'p_parent_delete'::uuid,:'p_parent_restore'::uuid,
+  :'p_guard_read'::uuid,:'p_note_read'::uuid,:'p_note_update'::uuid,
+  :'p_category_read'::uuid,:'p_category_update'::uuid,
+  :'p_line_read'::uuid,:'p_line_update'::uuid,:'p_line_delete_owned'::uuid,:'p_line_restore'::uuid,
+  :'p_subline_read'::uuid,:'p_subline_update'::uuid,:'p_subline_delete'::uuid,:'p_subline_restore'::uuid]);
+select pg_temp.delete_assign('74950000-0000-4000-8000-000000000121','74950000-0000-4000-8000-000000000111',:'full_account'::uuid);
+select pg_temp.delete_assign('74950000-0000-4000-8000-000000000122','74950000-0000-4000-8000-000000000112',:'scoped_account'::uuid);
+
+-- The platform's installation permission is not application-owned, so the
+-- fixture binds the shipped catalogue entry exactly as the provisioning tests
+-- do. It is needed only for the real provision/activate calls below.
+insert into vortex_access.organization_roles(organization_id,role_id,role_kind,role_key,live_revision,created_by,created_at)
+values(:'org'::uuid,'74950000-0000-4000-8000-000000000131','custom','delete_installer',1,:'actor'::uuid,pg_catalog.statement_timestamp());
+insert into vortex_access.organization_role_permission_entries(organization_id,role_id,role_revision,entry_ordinal,role_kind,role_application_root_id,application_root_id,owner_kind,owner_id,permission_id,registration_kind,registration_owner_id,accepted_registration_revision,catalogue_fingerprint,continuity_revision,meaning_fingerprint)
+select entry.organization_id,'74950000-0000-4000-8000-000000000131'::uuid,1,1,'custom',null,entry.application_root_id,entry.owner_kind,entry.owner_id,entry.permission_id,entry.registration_kind,entry.registration_owner_id,entry.registration_revision,registration.permission_catalogue_fingerprint,continuity.continuity_revision,entry.meaning_fingerprint
+from vortex_access.permission_catalogue_entries entry
+join vortex_access.permission_registration_revisions registration on registration.organization_id=entry.organization_id and registration.registration_kind=entry.registration_kind and registration.registration_owner_id=entry.registration_owner_id and registration.revision=entry.registration_revision
+join vortex_access.permission_continuities continuity on continuity.organization_id=entry.organization_id and continuity.application_root_id is not distinct from entry.application_root_id and continuity.owner_kind=entry.owner_kind and continuity.owner_id=entry.owner_id and continuity.permission_id=entry.permission_id
+where entry.organization_id=:'org'::uuid and entry.registration_kind='platform' and entry.registration_revision=3 and entry.permission_id='7ecd3304-f16c-47d4-94db-0964980091ba';
+insert into vortex_access.organization_role_revisions(organization_id,role_id,revision,role_kind,lifecycle,privilege_classification,assignment_policy,policy_continuity_revision,authority_continuity_revision,role_key,label,description,changed_by,changed_at,change_correlation_id)
+values(:'org'::uuid,'74950000-0000-4000-8000-000000000131',1,'custom','active','privileged','standing',1,1,'delete_installer','Delete installer','Fixture install authority.',:'actor'::uuid,pg_catalog.statement_timestamp(),'c4950000-0000-4000-8000-0000000000a8');
+insert into vortex_access.organization_role_assignments(organization_id,role_assignment_id,role_id,assignee_kind,organization_account_id,assignment_kind,revision,starts_at,state,granted_by,granted_at,grant_correlation_id,changed_by,changed_at,change_correlation_id)
+values(:'org'::uuid,'74950000-0000-4000-8000-000000000132','74950000-0000-4000-8000-000000000131','organization_account',:'admin_account'::uuid,'standing',1,pg_catalog.statement_timestamp()-interval '1 minute','live',:'actor'::uuid,pg_catalog.statement_timestamp(),'c4950000-0000-4000-8000-0000000000a9',:'actor'::uuid,pg_catalog.statement_timestamp(),'c4950000-0000-4000-8000-0000000000a9');
+
+-- Storage is provisioned and the installation is then activated by the
+-- lifecycle writer, with the binding revision returned by provisioning (1).
+select pg_temp.delete_context(null,:'admin_account'::uuid);
+set local role vortex_request;
+select * from vortex_module.provision_module_installation_storage(:'app'::uuid,1,:'module'::uuid,1,null);
+reset role;
+select pg_temp.delete_context(:'app'::uuid,:'admin_account'::uuid);
+set local role vortex_request;
+select vortex_module.activate_application_installation(:'app'::uuid,1,
+  pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('moduleRootId',:'module'::uuid,'bindingRevision',1)));
+reset role;
+
+-- Every Record under test is created through the owning create primitive, so
+-- its scope, ownership, typed values and exact relationship edges are all
+-- written by the engine that owns them.
+select pg_temp.delete_context(:'app'::uuid,:'full_account'::uuid);
+set local role vortex_record_adapter;
+create temporary table delete_fixture_records on commit drop as
+with refused_parent as (
+  select vortex_record.create_record_internal(
+    :'parent_type'::uuid,
+    pg_catalog.jsonb_build_object(:'f_parent_title', 'Refused parent'),
+    array[:'f_parent_title']::uuid[], null) as result
+), deletable_parent as (
+  select vortex_record.create_record_internal(
+    :'parent_type'::uuid,
+    pg_catalog.jsonb_build_object(:'f_parent_title', 'Deletable parent'),
+    array[:'f_parent_title']::uuid[], null) as result
+), category as (
+  select vortex_record.create_record_internal(
+    :'category_type'::uuid,
+    pg_catalog.jsonb_build_object(:'f_category_title', 'Category'),
+    array[:'f_category_title']::uuid[], null) as result
+)
+select 'refused_parent' as label, (result ->> 'recordId')::uuid as record_id from refused_parent
+union all select 'deletable_parent', (result ->> 'recordId')::uuid from deletable_parent
+union all select 'category', (result ->> 'recordId')::uuid from category;
+
+insert into delete_fixture_records(label, record_id)
+select 'guard', (vortex_record.create_record_internal(
+  :'guard_type'::uuid,
+  pg_catalog.jsonb_build_object(
+    :'f_guard_title', 'Guard',
+    :'f_guard_parent', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'parent_type'::uuid,
+      'recordId', (select record_id from delete_fixture_records where label = 'refused_parent'))),
+  array[:'f_guard_title', :'f_guard_parent']::uuid[], null) ->> 'recordId')::uuid;
+
+insert into delete_fixture_records(label, record_id)
+select 'note', (vortex_record.create_record_internal(
+  :'note_type'::uuid,
+  pg_catalog.jsonb_build_object(
+    :'f_note_title', 'Note',
+    :'f_note_parent', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'parent_type'::uuid,
+      'recordId', (select record_id from delete_fixture_records where label = 'deletable_parent'))),
+  array[:'f_note_title', :'f_note_parent']::uuid[], null) ->> 'recordId')::uuid;
+
+insert into delete_fixture_records(label, record_id)
+select 'line', (vortex_record.create_record_internal(
+  :'line_type'::uuid,
+  pg_catalog.jsonb_build_object(
+    :'f_line_amount', '10.00',
+    :'f_line_parent', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'parent_type'::uuid,
+      'recordId', (select record_id from delete_fixture_records where label = 'deletable_parent')),
+    :'f_line_category', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'category_type'::uuid,
+      'recordId', (select record_id from delete_fixture_records where label = 'category'))),
+  array[:'f_line_amount', :'f_line_parent', :'f_line_category']::uuid[], null) ->> 'recordId')::uuid;
+
+insert into delete_fixture_records(label, record_id)
+select 'subline', (vortex_record.create_record_internal(
+  :'subline_type'::uuid,
+  pg_catalog.jsonb_build_object(
+    :'f_subline_amount', '4.00',
+    :'f_subline_line', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'line_type'::uuid,
+      'recordId', (select record_id from delete_fixture_records where label = 'line')),
+    :'f_subline_category', pg_catalog.jsonb_build_object(
+      'recordTypeId', :'category_type'::uuid,
+      'recordId', (select record_id from delete_fixture_records where label = 'category'))),
+  array[:'f_subline_amount', :'f_subline_line', :'f_subline_category']::uuid[], null) ->> 'recordId')::uuid;
+
+-- The category's pre-delete generated values are written by the owning
+-- generated-value writer, never by a direct update, so the revision, Activity
+-- and Event they carry are the real ones.
+select vortex_record.apply_relationship_total_parent_internal(
+  :'category_type'::uuid,
+  (select record_id from delete_fixture_records where label = 'category'),
+  1,
+  pg_catalog.jsonb_build_object(
+    :'f_category_line_total', '10.00',
+    :'f_category_display', '14.00',
+    :'f_category_subline_total', '4.00')
+);
+reset role;
+
+select record_id as refused_parent_record from delete_fixture_records where label = 'refused_parent' \gset
+select record_id as deletable_parent_record from delete_fixture_records where label = 'deletable_parent' \gset
+select record_id as category_record from delete_fixture_records where label = 'category' \gset
+select record_id as guard_record from delete_fixture_records where label = 'guard' \gset
+select record_id as note_record from delete_fixture_records where label = 'note' \gset
+select record_id as line_record from delete_fixture_records where label = 'line' \gset
+select record_id as subline_record from delete_fixture_records where label = 'subline' \gset
