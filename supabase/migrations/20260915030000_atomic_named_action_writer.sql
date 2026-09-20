@@ -126,8 +126,17 @@ begin
     E'p_activity_id, ''update'', organization_id_value,\n        array[]::uuid[], ''refused''',
     E'p_activity_id, p_record_id, array[]::uuid[], ''refused''');
   named_definition := pg_catalog.replace(named_definition,
+    E'p_activity_id, ''update'', context_organization_id,\n        array[]::uuid[], ''refused''',
+    E'p_activity_id, p_record_id, array[]::uuid[], ''refused''');
+  named_definition := pg_catalog.replace(named_definition,
+    E'p_activity_id, ''create'', organization_id_value,\n        array[]::uuid[], ''refused''',
+    E'p_activity_id, p_record_id, array[]::uuid[], ''refused''');
+  named_definition := pg_catalog.replace(named_definition,
     E'p_activity_id, p_operation, saved_record_id,\n    changed_field_ids, ''completed''',
     E'p_activity_id, saved_record_id, changed_field_ids, ''completed''');
+  named_definition := pg_catalog.replace(named_definition,
+    E'pg_catalog.gen_random_uuid(), ''update'', p_record_id, changed_field_ids, ''completed''',
+    E'p_activity_id, p_record_id, changed_field_ids, ''completed''');
   named_definition := pg_catalog.replace(named_definition,
     'projection := vortex_record.read_record(p_record_type_id, saved_record_id);',
     E'projection := vortex_record.project_named_action_record_internal(\n    p_action_owner_kind, p_action_owner_id, p_action_release_revision,\n    p_action_id, p_record_type_id, saved_record_id\n  );');
@@ -140,6 +149,13 @@ begin
     or pg_catalog.strpos(named_definition, 'load_named_action_facts_internal') = 0
     or pg_catalog.strpos(named_definition, 'change_record_by_named_action_internal') = 0
     or pg_catalog.strpos(named_definition, 'append_base_save_activity_internal') > 0
+    or pg_catalog.strpos(named_definition,
+      E'append_named_action_activity_internal(\n        p_activity_id, ''update''') > 0
+    or pg_catalog.strpos(named_definition,
+      E'append_named_action_activity_internal(\n        p_activity_id, ''create''') > 0
+    or pg_catalog.strpos(named_definition,
+      'append_named_action_activity_internal(
+    pg_catalog.gen_random_uuid(), ''update''') > 0
     or pg_catalog.strpos(named_definition, 'read_record(p_record_type_id') > 0 then
     raise exception using errcode = '55000',
       message = 'Named action set writer clone failed';
