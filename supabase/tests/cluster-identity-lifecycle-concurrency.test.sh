@@ -26,7 +26,13 @@ readonly invitation_id="e${run_uuid:1}"
 readonly duplicate_scope="1${run_uuid:1}" duplicate_manager_one="2${run_uuid:1}"
 readonly duplicate_manager_two="3${run_uuid:1}" duplicate_suspend="4${run_uuid:1}"
 readonly duplicate_close="5${run_uuid:1}" duplicate_request="6${run_uuid:1}"
-readonly duplicate_same="7${run_uuid:1}" duplicate_create="8${run_uuid:1}"
+readonly duplicate_same="7${run_uuid:1}"
+# Both organisation creations below run as manager_two in one tenant, so their
+# duplicate keys share a single (actor, tenant, operation) replay scope. A
+# one-character prefix would alias duplicate_steward_org_create whenever the
+# run UUID's second character is 3; a fixed two-character prefix stays distinct
+# for every run UUID.
+readonly duplicate_create="84${run_uuid:2}"
 readonly duplicate_create_lifecycle="82${run_uuid:2}"
 readonly duplicate_invitation_lifecycle="9${run_uuid:1}"
 readonly duplicate_assignment="a${run_uuid:1}"
