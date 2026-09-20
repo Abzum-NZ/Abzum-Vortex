@@ -512,8 +512,28 @@ export VORTEX_DELIVERY_OPERATION=apply
 export VORTEX_APPROVED=true
 export VORTEX_APPROVING_ACTOR=local-reviewer
 export VORTEX_TESTING_COMMIT="$fixture_commit"
-export VORTEX_TESTING_EVIDENCE="$(jq --compact-output '.status = "failed"' <<<"$testing_full_evidence")"
-export VORTEX_TESTING_FULL_SOURCE_EVIDENCE="$testing_full_evidence"
+
+# Production reads the stored Testing receipts from local files named by these
+# variables. A complete receipt exceeds Linux's 131072-byte limit on a single
+# environment string, which makes every later process launch fail.
+set_testing_evidence() {
+  printf '%s' "$1" >"$VORTEX_TESTING_EVIDENCE_PATH"
+}
+set_testing_source_evidence() {
+  printf '%s' "$1" >"$VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH"
+}
+use_testing_evidence_files() {
+  export VORTEX_TESTING_EVIDENCE_PATH=testing-evidence.json
+  export VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH=testing-full-source-evidence.json
+}
+clear_testing_evidence() {
+  rm -f -- testing-evidence.json testing-full-source-evidence.json
+  unset VORTEX_TESTING_EVIDENCE_PATH VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH
+}
+
+use_testing_evidence_files
+set_testing_evidence "$(jq --compact-output '.status = "failed"' <<<"$testing_full_evidence")"
+set_testing_source_evidence "$testing_full_evidence"
 if "$older_bootstrap" >"$test_root/refusal.log" 2>&1; then
   echo "expected unsuccessful Testing evidence to be refused" >&2
   exit 1
@@ -522,7 +542,7 @@ grep --fixed-strings --quiet \
   "stored Testing evidence is invalid or does not cover the Production inputs" \
   "$test_root/refusal.log"
 
-export VORTEX_TESTING_EVIDENCE="$testing_full_evidence"
+set_testing_evidence "$testing_full_evidence"
 
 assert_testing_coverage_refused() {
   local name="$1"
@@ -530,7 +550,7 @@ assert_testing_coverage_refused() {
   local expected_message="${3:-stored Testing evidence is invalid or does not cover the Production inputs}"
   local log="$test_root/${name}.log"
 
-  export VORTEX_TESTING_EVIDENCE="$(jq --compact-output "$evidence_filter" <<<"$testing_full_evidence")"
+  set_testing_evidence "$(jq --compact-output "$evidence_filter" <<<"$testing_full_evidence")"
   if "$older_bootstrap" >"$log" 2>&1; then
     echo "expected ${name} Testing coverage to be refused" >&2
     exit 1
@@ -561,7 +581,72 @@ assert_testing_coverage_refused \
   '.verification.mode = "reused" | .verification.source = null | .completed_sql_suites = [] | .completed_concurrency_proofs = [] | .completed_lint_schemas = []' \
   'stored Testing source commit is invalid'
 
-export VORTEX_TESTING_EVIDENCE="$testing_full_evidence"
+set_testing_evidence "$testing_full_evidence"
+
+# The transport fails closed before secret access, and never falls back to
+# another source or to the retired environment-string form.
+assert_testing_transport_refused() {
+  local name="$1"
+  local expected_message="$2"
+  local log="$test_root/${name}.log"
+
+  if "$older_bootstrap" >"$log" 2>&1; then
+    echo "expected ${name} Testing evidence transport to be refused" >&2
+    exit 1
+  fi
+  grep --fixed-strings --quiet "$expected_message" "$log"
+  if grep --fixed-strings --quiet "VORTEX_DOPPLER_TOKEN is not set" "$log"; then
+    echo "expected ${name} Testing evidence transport to be refused before secret access" >&2
+    exit 1
+  fi
+}
+
+unset VORTEX_TESTING_EVIDENCE_PATH
+assert_testing_transport_refused evidence-path-unset \
+  'VORTEX_TESTING_EVIDENCE_PATH is not set'
+use_testing_evidence_files
+unset VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH
+assert_testing_transport_refused source-path-unset \
+  'VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH is not set'
+use_testing_evidence_files
+VORTEX_TESTING_EVIDENCE_PATH=../testing-evidence.json \
+  assert_testing_transport_refused evidence-path-outside \
+  'Testing evidence path must be a local JSON filename'
+VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH=testing-source.txt \
+  assert_testing_transport_refused source-path-not-json \
+  'Testing full-source evidence path must be a local JSON filename'
+VORTEX_TESTING_EVIDENCE_PATH=absent-testing-evidence.json \
+  assert_testing_transport_refused evidence-file-missing \
+  'Testing evidence file is missing'
+VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH=absent-testing-source.json \
+  assert_testing_transport_refused source-file-missing \
+  'Testing full-source evidence file is missing'
+ln -s testing-evidence.json linked-testing-evidence.json
+VORTEX_TESTING_EVIDENCE_PATH=linked-testing-evidence.json \
+  assert_testing_transport_refused evidence-file-symlink \
+  'Testing evidence file must be a regular file'
+rm -f linked-testing-evidence.json
+: >empty-testing-source.json
+VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH=empty-testing-source.json \
+  assert_testing_transport_refused source-file-empty \
+  'Testing full-source evidence file is empty'
+rm -f empty-testing-source.json
+printf '%s' '{"not json' >malformed-testing-evidence.json
+VORTEX_TESTING_EVIDENCE_PATH=malformed-testing-evidence.json \
+  assert_testing_transport_refused evidence-file-malformed \
+  'Testing evidence file is not a JSON object'
+rm -f malformed-testing-evidence.json
+printf '%s' '[]' >non-object-testing-source.json
+VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH=non-object-testing-source.json \
+  assert_testing_transport_refused source-file-non-object \
+  'Testing full-source evidence file is not a JSON object'
+rm -f non-object-testing-source.json
+VORTEX_TESTING_EVIDENCE="$testing_full_evidence" \
+  assert_testing_transport_refused legacy-evidence-environment \
+  'VORTEX_TESTING_EVIDENCE is no longer accepted'
+VORTEX_TESTING_FULL_SOURCE_EVIDENCE="$testing_full_evidence" \
+  assert_testing_transport_refused legacy-source-environment \
+  'VORTEX_TESTING_FULL_SOURCE_EVIDENCE is no longer accepted'
 
 if "$older_bootstrap" >"$test_root/secret-boundary.log" 2>&1; then
   echo "expected the credential-free test to stop before database access" >&2
@@ -806,9 +891,8 @@ export VORTEX_GITHUB_REF=refs/heads/testing
 unset \
   VORTEX_APPROVED \
   VORTEX_APPROVING_ACTOR \
-  VORTEX_TESTING_COMMIT \
-  VORTEX_TESTING_EVIDENCE \
-  VORTEX_TESTING_FULL_SOURCE_EVIDENCE
+  VORTEX_TESTING_COMMIT
+clear_testing_evidence
 export VORTEX_GITHUB_COMMIT="$fixture_commit"
 export VORTEX_EXECUTION_ID=testing-full-baseline
 export VORTEX_REUSABLE_BASELINE_PATH=reusable-baseline.json
@@ -1040,11 +1124,12 @@ git --git-dir="$test_root/remote.git" update-ref refs/heads/testing "$reuse_comm
 export VORTEX_FORCE_FULL_VERIFICATION=false
 export VORTEX_GITHUB_COMMIT="$reuse_commit"
 
-export VORTEX_TESTING_EVIDENCE="$(
+use_testing_evidence_files
+set_testing_evidence "$(
   jq --compact-output '.database_project_ref = "abflfptnguasinoussws"' \
     <<<"$testing_reused_evidence"
 )"
-export VORTEX_TESTING_FULL_SOURCE_EVIDENCE="$(
+set_testing_source_evidence "$(
   jq --compact-output '.sources[0].database_project_ref = "abflfptnguasinoussws" | .sources[0]' \
     <<<"$testing_full_baseline"
 )"
@@ -1065,6 +1150,75 @@ fi
 grep --fixed-strings --quiet \
   'stored Testing evidence has an unsupported verification mode' \
   "$test_root/production-selected-refusal.log"
+if grep --fixed-strings --quiet 'Argument list too long' \
+  "$test_root/production-selected-refusal.log"; then
+  echo "expected the oversized selected receipt to be read and refused, not to break process launch" >&2
+  exit 1
+fi
+
+# The complete authentic Testing full receipt from the run above, with the
+# complete current verification inventory, is larger than Linux's 131072-byte
+# environment-string limit. Production must still validate it in full and, when
+# it is valid, apply from it; a tampered copy must be refused for its content.
+oversized_full_receipt="$(
+  jq --compact-output '.receipt | .database_project_ref = "abflfptnguasinoussws"' \
+    <<<"$testing_full_baseline"
+)"
+if [ "${#oversized_full_receipt}" -le 131072 ]; then
+  echo "expected the complete Testing full receipt to exceed the environment-string limit" >&2
+  exit 1
+fi
+git --git-dir="$test_root/remote.git" update-ref refs/heads/main "$fixture_commit"
+export VORTEX_GITHUB_COMMIT="$fixture_commit"
+export VORTEX_TESTING_COMMIT="$fixture_commit"
+export VORTEX_EXECUTION_ID=production-from-oversized-full-testing
+set_testing_source_evidence "$oversized_full_receipt"
+
+assert_oversized_receipt_refused() {
+  local name="$1"
+  local evidence_filter="$2"
+  local log="$test_root/${name}.log"
+
+  set_testing_evidence "$(jq --compact-output "$evidence_filter" <<<"$oversized_full_receipt")"
+  rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+  if "$older_bootstrap" >"$log" 2>&1; then
+    echo "expected ${name} oversized Testing receipt to be refused" >&2
+    exit 1
+  fi
+  grep --fixed-strings --quiet \
+    'stored Testing evidence is invalid or does not cover the Production inputs' "$log"
+  if grep --fixed-strings --quiet 'Argument list too long' "$log"; then
+    echo "expected ${name} oversized Testing receipt to be refused for its content" >&2
+    exit 1
+  fi
+  test ! -e "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+  test ! -e "$VORTEX_EVIDENCE_PATH"
+}
+
+assert_oversized_receipt_refused oversized-failed-status '.status = "failed"'
+assert_oversized_receipt_refused oversized-partial-sql-coverage \
+  '.completed_sql_suites = .completed_sql_suites[0:-1]'
+assert_oversized_receipt_refused oversized-partial-proof-coverage \
+  '.completed_concurrency_proofs = .completed_concurrency_proofs[0:-1]'
+assert_oversized_receipt_refused oversized-wrong-runner \
+  '.runner.sha256 = "0000000000000000000000000000000000000000000000000000000000000000"'
+
+set_testing_evidence "$oversized_full_receipt"
+rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+run_logged_bootstrap "Production from an oversized Testing full receipt" \
+  "$test_root/production-oversized-acceptance.log"
+grep --quiet '^db push ' "$VORTEX_TEST_SUPABASE_CALL_MARKER"
+jq --exit-status \
+  '.status == "succeeded" and
+   .environment == "production" and
+   .commit == env.VORTEX_GITHUB_COMMIT and
+   .verification.mode == "full" and
+   .completed_sql_suites == .selected_sql_suites and
+   .completed_concurrency_proofs == .selected_concurrency_proofs and
+   .completed_lint_schemas == .selected_lint_schemas and
+   .approval.testing_commit == env.VORTEX_TESTING_COMMIT and
+   .approval.testing_execution_id == "testing-full-baseline"' \
+  "$VORTEX_EVIDENCE_PATH" >/dev/null
 
 export VORTEX_DELIVERY_ENVIRONMENT=testing
 export VORTEX_EXPECTED_REF=refs/heads/testing
@@ -1072,9 +1226,8 @@ export VORTEX_GITHUB_REF=refs/heads/testing
 unset \
   VORTEX_APPROVED \
   VORTEX_APPROVING_ACTOR \
-  VORTEX_TESTING_COMMIT \
-  VORTEX_TESTING_EVIDENCE \
-  VORTEX_TESTING_FULL_SOURCE_EVIDENCE
+  VORTEX_TESTING_COMMIT
+clear_testing_evidence
 
 # A descendant with no changed paths executes nothing and still proves complete
 # coverage through the same direct fresh receipts, without creating a chain.

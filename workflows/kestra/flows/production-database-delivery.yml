@@ -69,6 +69,9 @@ tasks:
       type: io.kestra.plugin.core.runner.Process
     commands:
       - /app/vortex-operations/deliver-database.sh
+    inputFiles:
+      testing-evidence.json: "{{ outputs.load_testing_evidence.value | toJson }}"
+      testing-full-source-evidence.json: "{{ outputs.load_testing_full_source_evidence.value | toJson }}"
     env:
       VORTEX_DELIVERY_OPERATION: apply
       VORTEX_DELIVERY_ENVIRONMENT: production
@@ -81,8 +84,8 @@ tasks:
       VORTEX_APPROVED: "{{ outputs.await_approval.onResume.approved }}"
       VORTEX_APPROVING_ACTOR: "kestra-execution:{{ execution.id }}"
       VORTEX_TESTING_COMMIT: "{{ outputs.await_approval.onResume.testing_commit }}"
-      VORTEX_TESTING_EVIDENCE: "{{ outputs.load_testing_evidence.value | toJson }}"
-      VORTEX_TESTING_FULL_SOURCE_EVIDENCE: "{{ outputs.load_testing_full_source_evidence.value | toJson }}"
+      VORTEX_TESTING_EVIDENCE_PATH: testing-evidence.json
+      VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH: testing-full-source-evidence.json
       VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_PRODUCTION_DOPPLER_TOKEN') }}"
       VORTEX_DOPPLER_PROJECT: abzum-vortex
       VORTEX_DOPPLER_CONFIG: ops_prd
