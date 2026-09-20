@@ -116,7 +116,7 @@
     {
       "id": "record-runtime",
       "sqlPatterns": ["supabase/tests/43[05]_*", "supabase/tests/44[0578]_*", "supabase/tests/45[05]_*", "supabase/tests/47[05]_*", "supabase/tests/48[5678]_*"],
-      "concurrencyPatterns": ["supabase/tests/event-*-concurrency.test.sh", "supabase/tests/module-storage-*-concurrency.test.sh", "supabase/tests/record-change-concurrency.test.sh", "supabase/tests/record-ownership-*-concurrency.test.sh"],
+      "concurrencyPatterns": ["supabase/tests/event-*-concurrency.test.sh", "supabase/tests/module-storage-*-concurrency.test.sh", "supabase/tests/named-action-create-concurrency.test.sh", "supabase/tests/record-change-concurrency.test.sh", "supabase/tests/record-ownership-*-concurrency.test.sh"],
       "lintSchemas": ["public", "vortex_module", "vortex_record", "vortex_event", "record_data"]
     },
     {

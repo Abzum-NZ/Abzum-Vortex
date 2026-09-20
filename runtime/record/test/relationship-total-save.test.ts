@@ -158,6 +158,7 @@ describe("locked relationship total save calculation", () => {
     expect(result).toEqual({
       success: true,
       sourceFinalValues: { [ids.title]: "Changed", [ids.recursiveTotal]: "0" },
+      creationFinalValues: {},
       parentMutations: [
         {
           recordTypeId: ids.recordType,

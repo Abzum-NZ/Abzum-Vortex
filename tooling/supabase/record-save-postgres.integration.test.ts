@@ -207,6 +207,11 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
           "action_set_title",
           "action_set_title_and_note",
           "action_validate_references",
+          "action_create_note",
+          "action_create_note_for",
+          "action_create_restricted_note",
+          "action_create_ruled_child",
+          "action_note_and_create",
         ],
         fields: [
           {
@@ -317,7 +322,12 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         ownership_mode: "none",
         title_field: "title",
         standard_actions: ["create", "read", "update"],
-        custom_actions: ["action_set_total_child_amount"],
+        custom_actions: [
+          "action_set_total_child_amount",
+          "action_add_child",
+          "action_set_amount_and_add_sibling",
+          "action_create_anchored_note",
+        ],
         fields: [
           {
             id: "field_total_parent_title",
@@ -709,6 +719,172 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
           },
         ],
       },
+      {
+        id: "record_created_note",
+        storage_contract_id: "storage_created_note",
+        key: "created_note",
+        name: "Created note",
+        plural_name: "Created notes",
+        storage_scope: "application_contained",
+        ownership_mode: "none",
+        title_field: "title",
+        standard_actions: ["create", "read", "update"],
+        custom_actions: [],
+        fields: [
+          {
+            id: "field_created_note_title",
+            key: "title",
+            type: "text",
+            label: "Title",
+            required: true,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { max_length: 120 },
+          },
+          {
+            id: "field_created_note_body",
+            key: "body",
+            type: "text",
+            label: "Body",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { max_length: 120 },
+          },
+          {
+            id: "field_created_note_reference",
+            key: "reference",
+            type: "reference_number",
+            label: "Reference",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { prefix: "NOTE-", digits: 5 },
+          },
+          {
+            id: "field_created_note_person",
+            key: "person",
+            type: "link_to_person",
+            label: "Person",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              audience: "organisation_accounts",
+              application_root_required: false,
+              on_person_deactivation: "retain_reference",
+            },
+          },
+          {
+            id: "field_created_note_at",
+            key: "at",
+            type: "date_time",
+            label: "At",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: { display_time_zone: "organisation" },
+          },
+          {
+            id: "field_created_note_amount",
+            key: "amount",
+            type: "money",
+            label: "Amount",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { currency_mode: "organisation_default", minimum: "0" },
+          },
+          {
+            id: "field_created_note_restricted",
+            key: "restricted",
+            type: "text",
+            label: "Restricted",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            search_priority: "normal",
+            personal_data: "none",
+            public_display: "refused",
+            settings: { max_length: 120 },
+          },
+          {
+            id: "field_created_note_anchor",
+            key: "anchor",
+            type: "link",
+            label: "Anchor",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              target: "example.record_save_proof:total_parent",
+              reverse_key: "anchored_notes",
+              on_parent_delete: "empty_optional",
+            },
+          },
+          {
+            id: "field_created_note_source",
+            key: "source",
+            type: "link",
+            label: "Source",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              target: "example.record_save_proof:item",
+              reverse_key: "created_notes",
+              on_parent_delete: "empty_optional",
+            },
+          },
+        ],
+        relationships: [
+          {
+            id: "relationship_created_note_anchor",
+            key: "anchor",
+            from_field: "anchor",
+            to_record_type: "example.record_save_proof:total_parent",
+            cardinality: "many_to_one",
+            on_parent_delete: "empty_optional",
+          },
+          {
+            id: "relationship_created_note_source",
+            key: "source",
+            from_field: "source",
+            to_record_type: "example.record_save_proof:item",
+            cardinality: "many_to_one",
+            on_parent_delete: "empty_optional",
+          },
+        ],
+      },
     ],
     permissions: [
       {
@@ -844,48 +1020,178 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
           changeable_fields: ["amount"],
         },
       },
-      ...(["total_parent", "total_child", "ruled_child", "recursive_total"] as const).flatMap(
-        (recordType) =>
-          (["create", "read", "update"] as const).map((action) => ({
-            id: `permission_${recordType}_${action}`,
-            key: `example.record_save_proof.${recordType}.${action}`,
-            label: `${action} ${recordType}`,
-            description: `${action} the transactional total proof ${recordType}.`,
-            record_type: recordType,
-            action_kind: action,
-            administrative: false,
-            record_scope: { routes: [{ kind: "all_records" as const }] },
-            field_policy: {
-              readable_fields:
-                recordType === "total_parent"
-                  ? ["title", "included_total", "display_total", "money_total"]
+      {
+        id: "permission_create_note",
+        key: "example.record_save_proof.item.create_note",
+        label: "Create a note for an item",
+        description: "Run the named create_record proof action.",
+        record_type: "item",
+        action_kind: "named",
+        named_action: "create_note",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: { readable_fields: ["title", "amount"], changeable_fields: [] },
+      },
+      {
+        id: "permission_create_note_for",
+        key: "example.record_save_proof.item.create_note_for",
+        label: "Create a note for a chosen item",
+        description: "Run the named create_record proof action over a declared link input.",
+        record_type: "item",
+        action_kind: "named",
+        named_action: "create_note_for",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: { readable_fields: ["title"], changeable_fields: [] },
+      },
+      {
+        id: "permission_note_and_create",
+        key: "example.record_save_proof.item.note_and_create",
+        label: "Set, create and note an item",
+        description: "Run the mixed set_field, create_record and announce_event proof action.",
+        record_type: "item",
+        action_kind: "named",
+        named_action: "note_and_create",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: { readable_fields: ["title", "title_copy"], changeable_fields: ["title"] },
+      },
+      {
+        id: "permission_create_restricted_note",
+        key: "example.record_save_proof.item.create_restricted_note",
+        label: "Create a restricted note",
+        description: "Run the named create_record proof action outside the create field bounds.",
+        record_type: "item",
+        action_kind: "named",
+        named_action: "create_restricted_note",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: { readable_fields: ["title"], changeable_fields: [] },
+      },
+      {
+        id: "permission_create_ruled_child",
+        key: "example.record_save_proof.item.create_ruled_child",
+        label: "Create a ruled child",
+        description: "Run the named create_record proof action without target create authority.",
+        record_type: "item",
+        action_kind: "named",
+        named_action: "create_ruled_child",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: { readable_fields: ["title"], changeable_fields: [] },
+      },
+      {
+        id: "permission_create_anchored_note",
+        key: "example.record_save_proof.total_parent.create_anchored_note",
+        label: "Create an anchored note",
+        description: "Run the create_record proof action used by the mixed-path race.",
+        record_type: "total_parent",
+        action_kind: "named",
+        named_action: "create_anchored_note",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: {
+          readable_fields: ["title", "included_total", "display_total", "money_total"],
+          changeable_fields: [],
+        },
+      },
+      {
+        id: "permission_add_child",
+        key: "example.record_save_proof.total_parent.add_child",
+        label: "Add a child to a total parent",
+        description: "Run the create-only named proof action whose creation links to its subject.",
+        record_type: "total_parent",
+        action_kind: "named",
+        named_action: "add_child",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: {
+          readable_fields: ["title", "included_total", "display_total", "money_total"],
+          changeable_fields: [],
+        },
+      },
+      {
+        id: "permission_set_amount_and_add_sibling",
+        key: "example.record_save_proof.total_child.set_amount_and_add_sibling",
+        label: "Set amount and add a sibling",
+        description: "Run the mixed set_field plus create_record proof action under one parent.",
+        record_type: "total_child",
+        action_kind: "named",
+        named_action: "set_amount_and_add_sibling",
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" }] },
+        field_policy: {
+          readable_fields: [
+            "title",
+            "amount",
+            "included",
+            "filter_operand",
+            "amount_step_one",
+            "aggregate_amount",
+            "included_for_total",
+            "money_amount",
+            "parent",
+          ],
+          changeable_fields: ["amount"],
+        },
+      },
+      ...(
+        ["total_parent", "total_child", "ruled_child", "recursive_total", "created_note"] as const
+      ).flatMap((recordType) =>
+        (["create", "read", "update"] as const).map((action) => ({
+          id: `permission_${recordType}_${action}`,
+          key: `example.record_save_proof.${recordType}.${action}`,
+          label: `${action} ${recordType}`,
+          description: `${action} the transactional total proof ${recordType}.`,
+          record_type: recordType,
+          action_kind: action,
+          administrative: false,
+          record_scope: { routes: [{ kind: "all_records" as const }] },
+          field_policy: {
+            readable_fields:
+              recordType === "total_parent"
+                ? ["title", "included_total", "display_total", "money_total"]
+                : recordType === "total_child"
+                  ? [
+                      "title",
+                      "amount",
+                      "included",
+                      "filter_operand",
+                      "amount_step_one",
+                      "aggregate_amount",
+                      "included_for_total",
+                      "money_amount",
+                      "parent",
+                    ]
+                  : recordType === "ruled_child"
+                    ? ["title", "parent"]
+                    : recordType === "created_note"
+                      ? [
+                          "title",
+                          "body",
+                          "reference",
+                          "restricted",
+                          "person",
+                          "at",
+                          "amount",
+                          "anchor",
+                          "source",
+                        ]
+                      : ["title", "children_total", "parent"],
+            changeable_fields:
+              action === "read"
+                ? []
+                : recordType === "total_parent"
+                  ? ["title"]
                   : recordType === "total_child"
-                    ? [
-                        "title",
-                        "amount",
-                        "included",
-                        "filter_operand",
-                        "amount_step_one",
-                        "aggregate_amount",
-                        "included_for_total",
-                        "money_amount",
-                        "parent",
-                      ]
+                    ? ["title", "amount", "included", "filter_operand", "money_amount", "parent"]
                     : recordType === "ruled_child"
                       ? ["title", "parent"]
-                      : ["title", "children_total", "parent"],
-              changeable_fields:
-                action === "read"
-                  ? []
-                  : recordType === "total_parent"
-                    ? ["title"]
-                    : recordType === "total_child"
-                      ? ["title", "amount", "included", "filter_operand", "money_amount", "parent"]
-                      : recordType === "ruled_child"
-                        ? ["title", "parent"]
+                      : recordType === "created_note"
+                        ? ["title", "body", "person", "at", "amount", "anchor", "source"]
                         : ["title", "parent"],
-            },
-          })),
+          },
+        })),
       ),
     ],
     actions: [
@@ -952,6 +1258,180 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
           },
         ],
         effects: [{ kind: "announce_event", event: "example.record_save_proof.item.noted" }],
+      },
+      {
+        id: "action_create_note",
+        key: "example.record_save_proof.item.create_note",
+        label: "Create a note for an item",
+        record_type: "item",
+        permission: "example.record_save_proof.item.create_note",
+        shareable: false,
+        inputs: [{ key: "body", label: "Body", required: true, type: "text" }],
+        effects: [
+          {
+            kind: "create_record",
+            record_type: "example.record_save_proof:created_note",
+            values: {
+              title: { source: "literal", value: "Created by action" },
+              body: { source: "input", input: "body" },
+              amount: { source: "subject_field", field: "amount" },
+              person: { source: "current_actor" },
+              at: { source: "current_time" },
+              source: { source: "subject_record" },
+            },
+          },
+        ],
+      },
+      {
+        id: "action_create_note_for",
+        key: "example.record_save_proof.item.create_note_for",
+        label: "Create a note for a chosen item",
+        record_type: "item",
+        permission: "example.record_save_proof.item.create_note_for",
+        shareable: false,
+        inputs: [
+          {
+            key: "target",
+            label: "Target",
+            required: true,
+            type: "record_reference",
+            record_types: ["example.record_save_proof:item"],
+          },
+        ],
+        effects: [
+          {
+            kind: "create_record",
+            record_type: "example.record_save_proof:created_note",
+            values: {
+              title: { source: "literal", value: "Created for a chosen item" },
+              source: { source: "input", input: "target" },
+            },
+          },
+        ],
+      },
+      {
+        id: "action_create_restricted_note",
+        key: "example.record_save_proof.item.create_restricted_note",
+        label: "Create a restricted note",
+        record_type: "item",
+        permission: "example.record_save_proof.item.create_restricted_note",
+        shareable: false,
+        inputs: [],
+        effects: [
+          {
+            kind: "create_record",
+            record_type: "example.record_save_proof:created_note",
+            values: {
+              title: { source: "literal", value: "Outside the create field bounds" },
+              restricted: { source: "literal", value: "Not changeable on create" },
+            },
+          },
+        ],
+      },
+      {
+        id: "action_create_ruled_child",
+        key: "example.record_save_proof.item.create_ruled_child",
+        label: "Create a ruled child",
+        record_type: "item",
+        permission: "example.record_save_proof.item.create_ruled_child",
+        shareable: false,
+        inputs: [],
+        effects: [
+          {
+            kind: "create_record",
+            record_type: "example.record_save_proof:ruled_child",
+            values: { title: { source: "literal", value: "Without create authority" } },
+          },
+        ],
+      },
+      {
+        id: "action_note_and_create",
+        key: "example.record_save_proof.item.note_and_create",
+        label: "Set, create and note an item",
+        record_type: "item",
+        permission: "example.record_save_proof.item.note_and_create",
+        shareable: false,
+        inputs: [{ key: "title", label: "Title", required: true, type: "text" }],
+        effects: [
+          { kind: "set_field", field: "title", value: { source: "input", input: "title" } },
+          {
+            kind: "create_record",
+            record_type: "example.record_save_proof:created_note",
+            values: {
+              title: { source: "literal", value: "Created beside a set field" },
+              source: { source: "subject_record" },
+            },
+          },
+          { kind: "announce_event", event: "example.record_save_proof.item.noted" },
+        ],
+      },
+      {
+        id: "action_create_anchored_note",
+        key: "example.record_save_proof.total_parent.create_anchored_note",
+        label: "Create an anchored note",
+        record_type: "total_parent",
+        permission: "example.record_save_proof.total_parent.create_anchored_note",
+        shareable: false,
+        inputs: [{ key: "body", label: "Body", required: true, type: "text" }],
+        effects: [
+          {
+            kind: "create_record",
+            record_type: "example.record_save_proof:created_note",
+            values: {
+              title: { source: "literal", value: "Anchored note" },
+              body: { source: "input", input: "body" },
+              anchor: { source: "subject_record" },
+            },
+          },
+        ],
+      },
+      {
+        id: "action_add_child",
+        key: "example.record_save_proof.total_parent.add_child",
+        label: "Add a child to a total parent",
+        record_type: "total_parent",
+        permission: "example.record_save_proof.total_parent.add_child",
+        shareable: false,
+        inputs: [{ key: "amount", label: "Amount", required: true, type: "decimal_number" }],
+        effects: [
+          {
+            kind: "create_record",
+            record_type: "example.record_save_proof:total_child",
+            values: {
+              title: { source: "literal", value: "Added child" },
+              amount: { source: "input", input: "amount" },
+              included: { source: "literal", value: true },
+              filter_operand: { source: "literal", value: "1" },
+              parent: { source: "subject_record" },
+            },
+          },
+        ],
+      },
+      {
+        id: "action_set_amount_and_add_sibling",
+        key: "example.record_save_proof.total_child.set_amount_and_add_sibling",
+        label: "Set amount and add a sibling",
+        record_type: "total_child",
+        permission: "example.record_save_proof.total_child.set_amount_and_add_sibling",
+        shareable: false,
+        inputs: [
+          { key: "amount", label: "Amount", required: true, type: "decimal_number" },
+          { key: "sibling", label: "Sibling amount", required: true, type: "decimal_number" },
+        ],
+        effects: [
+          { kind: "set_field", field: "amount", value: { source: "input", input: "amount" } },
+          {
+            kind: "create_record",
+            record_type: "example.record_save_proof:total_child",
+            values: {
+              title: { source: "literal", value: "Added sibling" },
+              amount: { source: "input", input: "sibling" },
+              included: { source: "literal", value: true },
+              filter_operand: { source: "literal", value: "1" },
+              parent: { source: "subject_field", field: "parent" },
+            },
+          },
+        ],
       },
       {
         id: "action_set_total_child_amount",
@@ -1178,6 +1658,47 @@ const setTotalChildAmountPermissionId = componentId(
   "permission_set_total_child_amount",
 );
 const openPermissionId = componentId("permission", "permission_open");
+const createdNoteRecordTypeId = componentId("record_type", "record_created_note");
+const createdNoteStorageId = componentId("storage_contract", "storage_created_note");
+const createdNoteTitleFieldId = componentId("field", "field_created_note_title");
+const createdNoteBodyFieldId = componentId("field", "field_created_note_body");
+const createdNoteReferenceFieldId = componentId("field", "field_created_note_reference");
+const createdNotePersonFieldId = componentId("field", "field_created_note_person");
+const createdNoteAtFieldId = componentId("field", "field_created_note_at");
+const createdNoteAmountFieldId = componentId("field", "field_created_note_amount");
+const createdNoteSourceFieldId = componentId("field", "field_created_note_source");
+const createdNoteSourceRelationshipId = componentId(
+  "relationship",
+  "relationship_created_note_source",
+);
+const createNoteActionId = componentId("action", "action_create_note");
+const createNoteForActionId = componentId("action", "action_create_note_for");
+const noteAndCreateActionId = componentId("action", "action_note_and_create");
+const createdNoteAnchorFieldId = componentId("field", "field_created_note_anchor");
+const createAnchoredNoteActionId = componentId("action", "action_create_anchored_note");
+const createAnchoredNotePermissionId = componentId("permission", "permission_create_anchored_note");
+const addChildActionId = componentId("action", "action_add_child");
+const setAmountAndAddSiblingActionId = componentId("action", "action_set_amount_and_add_sibling");
+const createdNoteRestrictedFieldId = componentId("field", "field_created_note_restricted");
+const createRestrictedNoteActionId = componentId("action", "action_create_restricted_note");
+const createRuledChildActionId = componentId("action", "action_create_ruled_child");
+const createRestrictedNotePermissionId = componentId(
+  "permission",
+  "permission_create_restricted_note",
+);
+const createRuledChildPermissionId = componentId("permission", "permission_create_ruled_child");
+const createNotePermissionId = componentId("permission", "permission_create_note");
+const createNoteForPermissionId = componentId("permission", "permission_create_note_for");
+const noteAndCreatePermissionId = componentId("permission", "permission_note_and_create");
+const addChildPermissionId = componentId("permission", "permission_add_child");
+const setAmountAndAddSiblingPermissionId = componentId(
+  "permission",
+  "permission_set_amount_and_add_sibling",
+);
+const createdNoteCreatePermissionId = componentId("permission", "permission_created_note_create");
+const createdNoteReadPermissionId = componentId("permission", "permission_created_note_read");
+const totalParentReadPermissionId = componentId("permission", "permission_total_parent_read");
+const totalChildCreatePermissionId = componentId("permission", "permission_total_child_create");
 
 const resolutionDefinitions = [
   { kind: "module" as const, key: moduleSource.key, rootId: moduleRootId, exactVersion: "2.0.0" },
@@ -1597,7 +2118,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           definitionCatalogue: { connectionTypeReleases: [], platformThemeReleases: [] },
           resolvedRequestTransaction: resolvedRequestRunner(transaction),
         }).readExact();
-        expect(registration.permissionRegistration.entries).toHaveLength(21);
+        expect(registration.permissionRegistration.entries).toHaveLength(32);
         const registeredPermissionKeys = registration.permissionRegistration.entries.map(
           (entry) => entry.permission.key,
         );
@@ -1737,6 +2258,29 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityConflictId,
         activityNamedRecordCreateId,
         activityNamedReferenceCreateId,
+        id(403),
+        id(404),
+        id(405),
+        id(800),
+        id(801),
+        id(802),
+        id(803),
+        id(804),
+        id(805),
+        id(806),
+        id(807),
+        id(808),
+        id(809),
+        id(810),
+        id(811),
+        id(812),
+        id(813),
+        id(814),
+        id(815),
+        id(816),
+        id(817),
+        id(818),
+        id(819),
         activityFreshId,
         activityFreshReplayId,
         activityMissingSettingsId,
@@ -1779,6 +2323,29 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         occurrenceUpdateId,
         occurrenceNamedRecordCreateId,
         occurrenceNamedReferenceCreateId,
+        id(406),
+        id(407),
+        id(408),
+        id(830),
+        id(831),
+        id(832),
+        id(833),
+        id(834),
+        id(835),
+        id(836),
+        id(837),
+        id(838),
+        id(839),
+        id(840),
+        id(841),
+        id(842),
+        id(843),
+        id(844),
+        id(845),
+        id(846),
+        id(847),
+        id(848),
+        id(849),
         occurrenceFreshId,
         occurrenceExplicitMoneyId,
         occurrenceParentOneId,
@@ -1944,6 +2511,50 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         throw new Error("Named action reference was not created");
       const referencedRecordId = referencedRecord.value.recordId;
 
+      // Subjects for the create_record effect proof, made while the actor still
+      // holds ordinary authority. Every create_record assertion below then runs
+      // under the named-only role, which deliberately has no ordinary `item`
+      // read.
+      const createSubject = await service.save(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: id(400),
+        operation: "create",
+        recordTypeId,
+        submittedValues: { [fieldId]: "Create effect subject" },
+      });
+      if (createSubject.kind !== "available" || createSubject.value.outcome !== "saved")
+        throw new Error("Create effect subject was not created");
+      const createSubjectId = createSubject.value.recordId;
+      const namedParent = await service.save(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: id(401),
+        operation: "create",
+        recordTypeId: totalParentRecordTypeId,
+        submittedValues: { [totalParentTitleFieldId]: "Named action total parent" },
+      });
+      if (namedParent.kind !== "available" || namedParent.value.outcome !== "saved")
+        throw new Error("Named action total parent was not created");
+      const namedParentId = namedParent.value.recordId;
+      const namedChild = await service.save(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: id(402),
+        operation: "create",
+        recordTypeId: totalChildRecordTypeId,
+        submittedValues: {
+          [totalChildTitleFieldId]: "Named action child",
+          [totalChildAmountFieldId]: "4",
+          [totalChildIncludedFieldId]: true,
+          [totalChildFilterOperandFieldId]: "1",
+          [totalChildParentFieldId]: {
+            recordTypeId: totalParentRecordTypeId,
+            recordId: namedParentId,
+          },
+        },
+      });
+      if (namedChild.kind !== "available" || namedChild.value.outcome !== "saved")
+        throw new Error("Named action total child was not created");
+      const namedChildId = namedChild.value.recordId;
+
       await expect(
         admin<{ application_version: string; module_version: string }[]>`
           select
@@ -1962,6 +2573,22 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         setTitleAndNotePermissionId,
         validateReferencesPermissionId,
         openPermissionId,
+        createNotePermissionId,
+        createNoteForPermissionId,
+        createRestrictedNotePermissionId,
+        createRuledChildPermissionId,
+        noteAndCreatePermissionId,
+        addChildPermissionId,
+        setAmountAndAddSiblingPermissionId,
+        createAnchoredNotePermissionId,
+        // Ordinary create authority on the creation targets, and ordinary read
+        // on the one link target that is not the command's subject. Ordinary
+        // `item` read is deliberately absent, so a creation that links to its
+        // own subject can only succeed through the named-action authority.
+        createdNoteCreatePermissionId,
+        createdNoteReadPermissionId,
+        totalChildCreatePermissionId,
+        totalParentReadPermissionId,
       ]);
       const namedOnlyPermissions = allRolePermissions.filter((candidate) => {
         if (typeof candidate !== "object" || candidate === null) return false;
@@ -1969,7 +2596,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           String((candidate as { permissionId?: unknown }).permissionId),
         );
       });
-      expect(namedOnlyPermissions).toHaveLength(5);
+      expect(namedOnlyPermissions).toHaveLength(17);
       await admin`select * from vortex_access.coordinate_organization_role_change(
         ${JSON.stringify({
           contractVersion: "1.0.0",
@@ -1998,12 +2625,19 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         activityId: string;
         standardOccurrenceId: string;
         declaredOccurrenceIds: readonly string[];
+        creationOccurrenceIds?: readonly string[];
         ownerId?: string;
         releaseRevision?: number;
         targetRecordTypeId?: string;
         targetRecordId?: string;
       }) => {
-        const occurrences = [candidate.standardOccurrenceId, ...candidate.declaredOccurrenceIds];
+        // The service mints the subject's standard occurrence first, then one
+        // per declared Event, then one per created record.
+        const occurrences = [
+          candidate.standardOccurrenceId,
+          ...candidate.declaredOccurrenceIds,
+          ...(candidate.creationOccurrenceIds ?? []),
+        ];
         const namedActions = createNamedActionService({
           identityAuthorityId,
           clock: () => operationAt,
@@ -2277,6 +2911,428 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         revision: "4",
       });
 
+      // ---------------------------------------------------------------------
+      // #50 slice 2: the create_record effect. Every assertion below runs under
+      // the named-only role, which holds no ordinary `item` read.
+      // ---------------------------------------------------------------------
+      const createdNoteTable = `record_data.rt_${createdNoteStorageId.replaceAll("-", "")}`;
+      const ruledChildTable = `record_data.rt_${ruledChildStorageId.replaceAll("-", "")}`;
+      const namedParentTable = `record_data.rt_${totalParentStorageId.replaceAll("-", "")}`;
+      const namedChildTable = `record_data.rt_${totalChildStorageId.replaceAll("-", "")}`;
+      const namedSubjectTable = `record_data.rt_${storageContractId.replaceAll("-", "")}`;
+      const column = (value: string) => `f_${value.replaceAll("-", "")}`;
+      const readCreatedNotes = async () =>
+        admin.unsafe<
+          {
+            record_id: string;
+            title: string;
+            body: string | null;
+            reference: string | null;
+            restricted: string | null;
+            person: string | null;
+            at: string | null;
+            amount: string | null;
+            source: string | null;
+          }[]
+        >(
+          `select record_id::text as record_id,
+             ${column(createdNoteTitleFieldId)} as title,
+             ${column(createdNoteBodyFieldId)} as body,
+             ${column(createdNoteReferenceFieldId)} as reference,
+             ${column(createdNoteRestrictedFieldId)} as restricted,
+             ${column(createdNotePersonFieldId)}::text as person,
+             ${column(createdNoteAtFieldId)}::text as at,
+             ${column(createdNoteAmountFieldId)}::text as amount,
+             ${column(createdNoteSourceFieldId)}::text as source
+           from ${createdNoteTable}
+           where organisation_id = $1
+           order by ${column(createdNoteReferenceFieldId)}`,
+          [organizationId],
+        );
+      const readCreateEffectState = async () => {
+        const [state] = await admin.unsafe<
+          {
+            notes: string;
+            ruled: string;
+            edges: string;
+            counter: string;
+            receipts: string;
+            activities: string;
+            subject_title: string;
+            subject_revision: string;
+          }[]
+        >(
+          `select
+             (select pg_catalog.count(*)::text from ${createdNoteTable}
+              where organisation_id = $1) as notes,
+             (select pg_catalog.count(*)::text from ${ruledChildTable}
+              where organisation_id = $1) as ruled,
+             (select pg_catalog.count(*)::text from vortex_record.relationship_edges
+              where relationship_id = $3 and from_organisation_id = $1) as edges,
+             (select coalesce(pg_catalog.max(next_number)::text, 'none')
+              from vortex_record.record_reference_counters
+              where organization_id = $1 and storage_contract_id = $4) as counter,
+             (select pg_catalog.count(*)::text
+              from vortex_record.named_action_command_receipts
+              where organization_id = $1) as receipts,
+             (select pg_catalog.count(*)::text
+              from vortex_activity.organization_activity_entries
+              where organization_id = $1 and action = 'execute_named_action') as activities,
+             (select ${column(fieldId)} from ${namedSubjectTable}
+              where organisation_id = $1 and record_id = $2) as subject_title,
+             (select concurrency_number::text from ${namedSubjectTable}
+              where organisation_id = $1 and record_id = $2) as subject_revision`,
+          [organizationId, createSubjectId, createdNoteSourceRelationshipId, createdNoteStorageId],
+        );
+        if (state === undefined) throw new Error("create_record effect state is unavailable");
+        return state;
+      };
+
+      const beforeCreate = await readCreateEffectState();
+      const createNoteCommand = {
+        commandId: id(410),
+        actionId: createNoteActionId,
+        expectedConcurrencyNumber: 1,
+        inputs: { body: "Composed body" },
+        activityId: id(411),
+        standardOccurrenceId: id(412),
+        declaredOccurrenceIds: [] as readonly string[],
+        creationOccurrenceIds: [id(413)],
+        targetRecordId: createSubjectId,
+      };
+      const createNoteResult = await runNamedAction(createNoteCommand);
+      expect(createNoteResult).toMatchObject({
+        kind: "available",
+        // A create-only action whose created record is not one of the subject's
+        // own totals leaves the subject's revision exactly where it was.
+        value: { outcome: "completed", recordId: createSubjectId, concurrencyNumber: 1 },
+      });
+      const [composedNote] = await readCreatedNotes();
+      if (composedNote === undefined) throw new Error("The created Record is missing");
+      expect(composedNote).toMatchObject({
+        title: "Created by action",
+        body: "Composed body",
+        reference: "NOTE-00001",
+        restricted: null,
+      });
+      expect(composedNote.person).toContain(organizationAccountId);
+      expect(composedNote.amount).toContain("12.34");
+      expect(composedNote.at).not.toBeNull();
+      expect(composedNote.source).toContain(createSubjectId);
+      const afterCreate = await readCreateEffectState();
+      expect(afterCreate).toMatchObject({
+        notes: "1",
+        // The created record's link names the command's own subject, which this
+        // actor cannot read through any ordinary permission.
+        edges: "1",
+        counter: "2",
+        subject_revision: "1",
+        receipts: String(Number(beforeCreate.receipts) + 1),
+        // Exactly two: the subject's content-free entry and the created
+        // record's own completed entry.
+        activities: String(Number(beforeCreate.activities) + 2),
+      });
+      await expect(
+        admin`select envelope #>> '{descriptor,kind}' as descriptor_kind,
+            envelope #>> '{descriptor,eventKind}' as event_kind
+          from vortex_event.event_outbox
+          where organization_id = ${organizationId}::uuid
+            and occurrence_id = ${id(413)}::uuid`,
+      ).resolves.toEqual([{ descriptor_kind: "standard", event_kind: "created" }]);
+
+      // Exact replay creates nothing and burns no reference number.
+      await expect(runNamedAction(createNoteCommand)).resolves.toEqual(createNoteResult);
+      expect(await readCreateEffectState()).toEqual(afterCreate);
+      // A conflicting reuse of the same command identity refuses.
+      await expect(
+        runNamedAction({ ...createNoteCommand, inputs: { body: "Different body" } }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "operation_refused" } },
+      });
+      expect(await readCreateEffectState()).toEqual(afterCreate);
+
+      // A link target that is not the command's subject keeps the ordinary read
+      // requirement, which this actor does not hold.
+      await expect(
+        runNamedAction({
+          commandId: id(414),
+          actionId: createNoteForActionId,
+          expectedConcurrencyNumber: 1,
+          inputs: { target: { recordTypeId, recordId: referencedRecordId } },
+          activityId: id(415),
+          standardOccurrenceId: id(416),
+          declaredOccurrenceIds: [],
+          creationOccurrenceIds: [id(417)],
+          targetRecordId: createSubjectId,
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "operation_refused" } },
+      });
+      expect(await readCreateEffectState()).toEqual(afterCreate);
+      // The same action, the same field, the command's own subject as the
+      // target: allowed by the installed named authority alone.
+      await expect(
+        runNamedAction({
+          commandId: id(418),
+          actionId: createNoteForActionId,
+          expectedConcurrencyNumber: 1,
+          inputs: { target: { recordTypeId, recordId: createSubjectId } },
+          activityId: id(419),
+          standardOccurrenceId: id(420),
+          declaredOccurrenceIds: [],
+          creationOccurrenceIds: [id(421)],
+          targetRecordId: createSubjectId,
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "completed", concurrencyNumber: 1 },
+      });
+      const afterSubjectLink = await readCreateEffectState();
+      expect(afterSubjectLink).toMatchObject({ notes: "2", edges: "2", counter: "3" });
+
+      // Mixed set_field, create_record and announce_event in one commit.
+      await expect(
+        runNamedAction({
+          commandId: id(422),
+          actionId: noteAndCreateActionId,
+          expectedConcurrencyNumber: 1,
+          inputs: { title: "Mixed effects" },
+          activityId: id(423),
+          standardOccurrenceId: id(424),
+          declaredOccurrenceIds: [id(425)],
+          creationOccurrenceIds: [id(426)],
+          targetRecordId: createSubjectId,
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "completed", concurrencyNumber: 2 },
+      });
+      const afterMixed = await readCreateEffectState();
+      expect(afterMixed).toMatchObject({
+        notes: "3",
+        subject_title: "Mixed effects",
+        subject_revision: "2",
+      });
+      await expect(
+        admin`select pg_catalog.count(*)::text as declared
+          from vortex_event.event_outbox
+          where organization_id = ${organizationId}::uuid
+            and occurrence_id = ${id(425)}::uuid
+            and envelope #>> '{descriptor,kind}' = 'declared'`,
+      ).resolves.toEqual([{ declared: "1" }]);
+
+      const readNamedTotalState = async () => {
+        const [state] = await admin.unsafe<
+          {
+            parent_total: string;
+            parent_revision: string;
+            children: string;
+            child_revision: string;
+            parent_changed: string;
+          }[]
+        >(
+          `select
+             (select ${column(totalParentSumFieldId)}::text from ${namedParentTable}
+              where organisation_id = $1 and record_id = $2) as parent_total,
+             (select concurrency_number::text from ${namedParentTable}
+              where organisation_id = $1 and record_id = $2) as parent_revision,
+             (select pg_catalog.count(*)::text from ${namedChildTable}
+              where organisation_id = $1) as children,
+             (select concurrency_number::text from ${namedChildTable}
+              where organisation_id = $1 and record_id = $3) as child_revision,
+             (select pg_catalog.count(*)::text from vortex_event.event_outbox
+              where organization_id = $1
+                and (envelope ->> 'recordId')::uuid = $2
+                and envelope #>> '{descriptor,eventKind}' = 'changed') as parent_changed`,
+          [organizationId, namedParentId, namedChildId],
+        );
+        if (state === undefined) throw new Error("Named total state is unavailable");
+        return state;
+      };
+      const beforeAddChild = await readNamedTotalState();
+      expect(beforeAddChild).toMatchObject({ parent_total: "4", parent_revision: "2" });
+      // Create-only where the created record links to the subject and the
+      // subject declares the total over that relationship: the subject advances
+      // by exactly one revision and carries exactly one changed occurrence,
+      // without any fabricated field change.
+      await expect(
+        runNamedAction({
+          commandId: id(427),
+          actionId: addChildActionId,
+          expectedConcurrencyNumber: 2,
+          inputs: { amount: "7" },
+          activityId: id(428),
+          standardOccurrenceId: id(429),
+          declaredOccurrenceIds: [],
+          creationOccurrenceIds: [id(430)],
+          targetRecordTypeId: totalParentRecordTypeId,
+          targetRecordId: namedParentId,
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "completed", recordId: namedParentId, concurrencyNumber: 3 },
+      });
+      const afterAddChild = await readNamedTotalState();
+      expect(afterAddChild).toMatchObject({
+        parent_total: "11",
+        parent_revision: "3",
+        children: String(Number(beforeAddChild.children) + 1),
+        parent_changed: String(Number(beforeAddChild.parent_changed) + 1),
+      });
+
+      // One merged closure: the subject's own change and the created sibling
+      // both reach the shared parent, which advances by exactly one revision.
+      await expect(
+        runNamedAction({
+          commandId: id(431),
+          actionId: setAmountAndAddSiblingActionId,
+          expectedConcurrencyNumber: 1,
+          inputs: { amount: "6", sibling: "3" },
+          activityId: id(432),
+          standardOccurrenceId: id(433),
+          declaredOccurrenceIds: [],
+          creationOccurrenceIds: [id(434)],
+          targetRecordTypeId: totalChildRecordTypeId,
+          targetRecordId: namedChildId,
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "completed", recordId: namedChildId, concurrencyNumber: 2 },
+      });
+      expect(await readNamedTotalState()).toMatchObject({
+        parent_total: "16",
+        parent_revision: "4",
+        child_revision: "2",
+        children: String(Number(beforeAddChild.children) + 2),
+        parent_changed: String(Number(beforeAddChild.parent_changed) + 2),
+      });
+
+      // A target field outside the create field bounds is only decidable after
+      // the insert, so the whole command rolls back: no created record, no
+      // reference number, no edge, no Activity, no receipt.
+      const beforeLateDenial = await readCreateEffectState();
+      await expect(
+        runNamedAction({
+          commandId: id(435),
+          actionId: createRestrictedNoteActionId,
+          expectedConcurrencyNumber: 2,
+          inputs: {},
+          activityId: id(436),
+          standardOccurrenceId: id(437),
+          declaredOccurrenceIds: [],
+          creationOccurrenceIds: [id(438)],
+          targetRecordId: createSubjectId,
+        }),
+      ).resolves.toEqual({ kind: "unavailable" });
+      expect(await readCreateEffectState()).toEqual(beforeLateDenial);
+      // The same rollback for a target record type the actor cannot create.
+      await expect(
+        runNamedAction({
+          commandId: id(439),
+          actionId: createRuledChildActionId,
+          expectedConcurrencyNumber: 2,
+          inputs: {},
+          activityId: id(440),
+          standardOccurrenceId: id(441),
+          declaredOccurrenceIds: [],
+          creationOccurrenceIds: [id(442)],
+          targetRecordId: createSubjectId,
+        }),
+      ).resolves.toEqual({ kind: "unavailable" });
+      expect(await readCreateEffectState()).toEqual(beforeLateDenial);
+
+      // Mixed-path concurrency. Each iteration races the new create-bearing
+      // named action against an ordinary create of the same target record type
+      // linked to the same record, so both transactions contend for the same
+      // reference-number counter, the same link-target row and the same
+      // relationship advisory key, in each path's own acquisition order. The
+      // ordinary path allocates its counter before locking the link target;
+      // the named path locks its closure first. Any inversion between the two
+      // surfaces here as `40P01`, which the request runner reports as
+      // `temporarily_unavailable`.
+      const raceIterations = 20;
+      for (let iteration = 0; iteration < raceIterations; iteration += 1) {
+        const [namedRace, ordinaryRace] = await Promise.all([
+          runNamedAction({
+            commandId: id(600 + iteration * 4),
+            actionId: createAnchoredNoteActionId,
+            // The anchored note contributes to no total on its link target, so
+            // the raced parent revision stays where the earlier assertions left
+            // it.
+            expectedConcurrencyNumber: 4,
+            inputs: { body: `Race ${iteration}` },
+            activityId: id(601 + iteration * 4),
+            standardOccurrenceId: id(602 + iteration * 4),
+            declaredOccurrenceIds: [],
+            creationOccurrenceIds: [id(603 + iteration * 4)],
+            targetRecordTypeId: totalParentRecordTypeId,
+            targetRecordId: namedParentId,
+          }),
+          service.save(session, selection, {
+            contractVersion: "2.0.0",
+            commandId: id(700 + iteration),
+            operation: "create",
+            recordTypeId: createdNoteRecordTypeId,
+            submittedValues: {
+              [createdNoteTitleFieldId]: `Ordinary race ${iteration}`,
+              [createdNoteAnchorFieldId]: {
+                recordTypeId: totalParentRecordTypeId,
+                recordId: namedParentId,
+              },
+            },
+          }),
+        ]);
+        expect(namedRace).toMatchObject({
+          kind: "available",
+          value: { outcome: "completed" },
+        });
+        expect(ordinaryRace).toMatchObject({
+          kind: "available",
+          value: { outcome: "saved" },
+        });
+      }
+      const afterRace = await readCreateEffectState();
+      expect(afterRace).toMatchObject({
+        notes: String(Number(beforeLateDenial.notes) + raceIterations * 2),
+        receipts: String(Number(beforeLateDenial.receipts) + raceIterations),
+      });
+
+      // A stale expected revision and a forged action owner both refuse before
+      // any creation.
+      await expect(
+        runNamedAction({
+          commandId: id(443),
+          actionId: createNoteActionId,
+          expectedConcurrencyNumber: 1,
+          inputs: { body: "Stale" },
+          activityId: id(444),
+          standardOccurrenceId: id(445),
+          declaredOccurrenceIds: [],
+          creationOccurrenceIds: [id(446)],
+          targetRecordId: createSubjectId,
+        }),
+      ).resolves.toMatchObject({
+        kind: "available",
+        value: { outcome: "refused", error: { code: "conflict" } },
+      });
+      await expect(
+        runNamedAction({
+          commandId: id(447),
+          actionId: createNoteActionId,
+          expectedConcurrencyNumber: 2,
+          inputs: { body: "Forged owner" },
+          activityId: id(448),
+          standardOccurrenceId: id(449),
+          declaredOccurrenceIds: [],
+          creationOccurrenceIds: [id(450)],
+          ownerId: applicationRootId,
+          targetRecordId: createSubjectId,
+        }),
+      ).resolves.toEqual({ kind: "unavailable" });
+      expect(await readCreateEffectState()).toEqual(afterRace);
+
       await admin`select * from vortex_access.coordinate_organization_role_change(
         ${JSON.stringify({
           contractVersion: "1.0.0",
@@ -2373,10 +3429,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         }),
       ).resolves.toEqual({ kind: "unavailable" });
       expect(await namedEffects()).toEqual({
-        receipts: "4",
-        activities: "6",
-        outbox: "2",
-        queue: "2",
+        receipts: "29",
+        activities: "56",
+        outbox: "3",
+        queue: "3",
       });
 
       const restoreRoleEvidence = prepareOrganizationRoleChangeEvidence({
@@ -2707,10 +3763,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         private_direct: "private generated source",
         private_transitive: "private generated source",
         concurrency_number: "2",
-        receipt_count: "6",
+        receipt_count: "29",
         activity_count: "2",
-        outbox_count: "13",
-        queue_count: "13",
+        outbox_count: "67",
+        queue_count: "67",
       });
       await expect(
         admin.unsafe(
@@ -2719,7 +3775,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           [organizationId, freshRecordId],
         ),
       ).resolves.toEqual([{ amount: { amount: "12.34", currency: "AUD" } }]);
-      expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(4);
+      expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(9);
       expect(moduleRelease.content.events).toHaveLength(1);
 
       const createTotalParent = async (commandId: string, title: string) => {
