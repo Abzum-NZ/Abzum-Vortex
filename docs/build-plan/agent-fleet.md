@@ -85,8 +85,42 @@ raises a new issue. It stops only when the board has no startable work left.
 
 4. **Watch** — check the agent at least every twenty minutes; see Watching below.
 5. **Gate** — run local verification and independent review where required; see Gates below.
-6. **Land** — open the pull request and merge to `testing` once gates and review pass.
-7. **Report** — update the board (status, evidence, re-derived pickup order) before selecting the next task.
+6. **Land** — open the pull request into `main` and merge once gates and review pass. Promotion to `testing` remains a separate phase gate, subject to any user hold.
+7. **Reconcile and report — blocking step.** Complete the board reconciliation below before selecting or dispatching another task. A task is not finished until its board row is true.
+
+### Blocking completion and resume gate
+
+After every worker completion, review verdict, merge, hosted result or closure,
+and before the first dispatch after a resume:
+
+1. Read the complete live board and its fields. Reconcile open issues against
+   their PRs, actual branch ancestry, local gates, applicable hosted receipts and
+   remaining acceptance. A merged slice is not automatically a completed issue.
+2. Set the actual delivery stage. Use **In progress** only for accepted active
+   work; **In review** for an open review/delivery PR or Coordinator-owned work
+   merged to `main` but awaiting promotion. State that post-merge waiting stage
+   explicitly; do not imply that a PR or reviewer is still active. Use **Testing**
+   only when the work is actually on `testing` and awaiting its required receipt.
+   Record a promotion/run hold without inventing an active Hosted Tester.
+   Use **Done** and close the issue only when its acceptance is met, local gates
+   ran and any required hosted evidence exists. Do not return fully implemented
+   work to Backlog merely because its worker finished. Backlog may describe
+   genuinely unstarted remaining scope after accepted slices, which must be
+   named separately with their evidence.
+3. Record the real owner, canonical dispatch reference, completion time, exact
+   commit/PR, checks actually run and remaining acceptance or hold. Clear completed
+   workers; name the next accountable owner. Post a completion comment citing the
+   delivering PR and evidence, and a closing comment when acceptance is complete.
+4. Re-read native dependencies, derive the pickup order for newly unblocked work,
+   and post Completed, Coming up, Pending User Decision and Overall Progress rows.
+   Recount the numerator and denominator from the live board.
+5. Read back the changed board rows and issue states. **Do not dispatch the next
+   worker until these writes are verified.** A failed or incomplete reconciliation
+   blocks new dispatch, not an already running worker's authorized work.
+
+On resume, repair stale rows before continuing the queue. A local checkpoint or
+watchdog handoff is not a substitute for the GitHub board. Preserve user holds;
+never promote merely to make a status label fit.
 
 Two feedback paths run outside that sequence. A stall or drift caught while
 watching can be steered, re-briefed, or escalated to a stronger model,
