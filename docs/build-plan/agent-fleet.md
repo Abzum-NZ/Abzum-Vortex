@@ -243,6 +243,15 @@ the reason recorded by the root on the issue. Preserve partial and untracked
 evidence until that decision. A merged base alone never authorizes cleanup; the
 generic root's supervising worktree is exempt from merged-worktree cleanup.
 
+For completion and every model handoff, use `git status --porcelain=v1
+--untracked-files=all`, not `git diff` alone, and report separate counts for
+tracked modified, deleted, staged and untracked paths. Inspect untracked paths
+and explicitly add untracked product files before committing. A model handoff
+commits and pushes complete WIP, including untracked migrations, runtime files
+and tests, or archives that complete WIP; state notes alone are insufficient.
+Preserve an existing rescue archive. Suspend new dispatch behind an existing
+rescue until it is deliberately recovered or closed.
+
 1. Use the cycle snapshot and root-confirmed changed-row evidence to reconcile
    open issues against their PRs, actual branch ancestry, local gates, applicable
    hosted receipts and remaining acceptance. A merged slice is not automatically
@@ -356,7 +365,10 @@ writes `C:/Users/vijay/AppData/Local/Temp/vortex-fleet/stale-sweep.md` and sends
 its summary to the root. The root forwards each finding to the owning
 orchestrator and records that orchestrator's reply; it does not independently
 mutate an owner's worktree. This observer does not replace terminal readback,
-board reconciliation or proven-exit recovery.
+board reconciliation or proven-exit recovery. For a rescue finding, the owner
+performs the porcelain-status inventory and complete-WIP commit or archive above;
+the root preserves any existing rescue archive and holds new dispatch until the
+rescue is deliberately recovered or closed.
 
 Evidence that means something:
 
@@ -403,15 +415,21 @@ First read the agent terminal to confirm completion, preserve reports and any
 unsent drafts outside the disposable checkout without submitting them, inspect
 every dirty diff, and confirm the work was committed and pushed or was
 explicitly discarded with the root-recorded issue reason. Preserve partial and
-untracked evidence until that decision, then verify the branch's delivery in
-`main`. For squash merges verify the delivering PR and patch, not just commit
-ancestry; a merged base alone never authorizes cleanup. Record the removal and
-clear obsolete worktree references on the board. Do not discard unmerged edits
-or stop a still-working agent to satisfy this cleanup. Deliberately recover or
-close an orphan worktree; do not ignore it. Remove unused analysis worktrees
-only after verifying they contain no unique work. Keep only live-work checkouts,
-including the generic root's supervising worktree; the canonical repository
-checkout is not a disposable agent worktree.
+untracked evidence until that decision. Before committing or removing the
+worktree, use porcelain status including untracked files, report separate
+tracked modified/deleted/staged and untracked counts, inspect those untracked
+paths and explicitly add product files. A handoff must commit and push, or
+archive, complete WIP including untracked migrations, runtime files and tests;
+notes alone are insufficient. Preserve an existing rescue archive and suspend
+new dispatch until it is deliberately recovered or closed, then verify the
+branch's delivery in `main`. For squash merges verify the delivering PR and
+patch, not just commit ancestry; a merged base alone never authorizes cleanup.
+Record the removal and clear obsolete worktree references on the board. Do not
+discard unmerged edits or stop a still-working agent to satisfy this cleanup.
+Deliberately recover or close an orphan worktree; do not ignore it. Remove
+unused analysis worktrees only after verifying they contain no unique work.
+Keep only live-work checkouts, including the generic root's supervising
+worktree; the canonical repository checkout is not a disposable agent worktree.
 
 ## Board
 
