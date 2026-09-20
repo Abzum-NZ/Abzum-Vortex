@@ -149,7 +149,13 @@ the Testing commit; they do not type their own identity, an execution identifier
 fingerprint. The receipt records the approving Kestra execution, and that execution's audit log holds
 the authenticated account that resumed the hold. The Pause task does not expose that account to the
 flow, so the receipt references it rather than restating it. Production then
-loads the successful Testing evidence itself. The delivery script independently proves that the
+loads the successful Testing evidence itself and hands it to the delivery script as two local files,
+`testing-evidence.json` and `testing-full-source-evidence.json`, named by
+`VORTEX_TESTING_EVIDENCE_PATH` and `VORTEX_TESTING_FULL_SOURCE_EVIDENCE_PATH`. A complete receipt is
+larger than Linux's 131072-byte limit on one environment string, so it is never carried in the
+environment; the script refuses a missing, empty, non-regular or non-object file and refuses the
+retired `VORTEX_TESTING_EVIDENCE` and `VORTEX_TESTING_FULL_SOURCE_EVIDENCE` variables outright rather
+than choosing between them. The delivery script independently proves that the
 tested commit is an ancestor of the Production commit and that both revisions contain the same
 migration set, commit-owned runner and verification manifest before opening the Production database
 connection. The current Production reader remains deliberately narrower than Testing selection: it
