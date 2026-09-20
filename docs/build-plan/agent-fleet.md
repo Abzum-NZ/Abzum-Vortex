@@ -31,8 +31,11 @@ sandbox. Do not alter tool permissions or diagnose a lane as broken merely
 from a prior permission report. The orchestrator never edits another agent's
 worktree; it steers by sending text into that agent's terminal and by reading
 the terminal back. Sandboxed agents receive an inline brief or a brief placed
-in their own worktree. OpenCode permissions are globally allowed by the user's
-configuration.
+in their own worktree. Existing OpenCode allow configuration is user-owned:
+agents do not change it or introduce global wildcard permission rules. A custom
+`agy` command must explicitly include the user-selected
+`--dangerously-skip-permissions` flag; that command-specific requirement does
+not authorize a global permission change.
 
 ## Roster and model assignment
 
@@ -45,16 +48,17 @@ treating it as fixed.
 | Lane | Model | Does | Owns |
 | --- | --- | --- | --- |
 | Orchestrator (root coordinator) | GPT 6 Astra · medium (Codex) | Supervises issue owners and single-slice workers, sequences work across issues, performs independent acceptance, and decides merges and promotions. Generic: it has no linked issue or pull request and no implementation ownership. If it starts writing code, the queue stops moving. | Cross-issue dependency order, database-verification admission, phase gates, merge and promotion decisions |
-| Schema & security | Claude Opus 5 · high | Privileged database objects, migrations, row-level security, permission binding, concurrency writers — anything where a mistake widens access or corrupts a revision | `supabase/migrations/**`, access and record writers |
-| Runtime & contracts | Claude Sonnet 5 · high | TypeScript engines, contracts, adapters and the definition-led execution path; escalates to the Schema & security lane the moment a change reaches into a privileged writer | `runtime/**`, `contracts/**` |
-| Proofs | Claude Sonnet 5 · high | pgTAP suites and the two-session concurrency harness; builds every fixture through the owning writer, never by direct insert; reports defects rather than softening assertions | `supabase/tests/**` and verification registration |
+| Issue owner / Planner | GPT 5.6 Sol · high (Codex) | Every issue-level orchestrator, issue owner and Planner: plans the whole issue, supervises its workers and corrects handoffs. No Astra child may fill these roles. | Issue slices, worker supervision and planning evidence |
+| Privileged review | Claude Opus 5 · high | Review only privileged database, security and concurrency work; do not use it as a general implementation or routine-review lane | Privileged review verdicts |
+| Runtime & contracts | Claude Sonnet 5 · high | TypeScript engines, contracts, adapters and the definition-led execution path. During the current Claude quota outage, reassign to Terra high, Sol high, or Gemini 3.8 Flash with actual activity evidence. | `runtime/**`, `contracts/**` |
+| Proofs | Claude Sonnet 5 · high | pgTAP suites and the two-session concurrency harness; builds every fixture through the owning writer, never by direct insert; reports defects rather than softening assertions. During the current Claude quota outage, use the authorized reassignment lanes. | `supabase/tests/**` and verification registration |
 | Workhorse (OpenCode) | GLM 5.3 Flash (OpenCode) | High-volume, well-specified, low-blast-radius work where the answer is checkable: plan-document sync, registration and inventory sweeps, scaffolds, evidence collection and dependency audits | `docs/**`, manifests, selectors, audits |
-| Workhorse | Claude Sonnet 5 · high, or GPT 5.6 Terra · medium (Codex) | The same checkable workhorse tasks when the assignment benefits from those lanes | `docs/**`, manifests, selectors, audits |
+| Workhorse | Claude Sonnet 5 · high, or GPT 5.6 Terra · medium/high (Codex) | The same checkable workhorse tasks when the assignment benefits from those lanes; Terra high is authorized during the current Claude quota outage. | `docs/**`, manifests, selectors, audits |
 | Workhorse (Antigravity) | Gemini 3.8 Flash (`agy` TUI) | An allowed lane for the same workhorse tasks. Before dispatch, verify that `agy` is installed and that the exact model resolves in the launched terminal. Availability is not claimed without launch evidence. | Workhorse tasks, once launch is evidenced |
 | Triage | GPT 5.6 Terra · low (Codex) | Cheap and fast: read an issue, reproduce a failure, scan logs, confirm a premise, summarise a diff. The first responder that stops expensive agents being dispatched on false premises | Pre-dispatch premise checks, failure triage |
-| Analysis | GPT 5.6 Sol · high (Codex) | Root-cause work and slice design when a defect resists the obvious reading, or when an issue owner needs the issue's scope split before anyone implements it | Diagnosis notes, slice proposals, spec deltas |
-| Second lane | GPT 5.6 Terra · medium (Codex) | A balanced implementer for independent work when the Claude lanes are saturated, and the default author for changes that are broad but shallow | Overflow implementation |
-| Reviewer | Claude Opus 5 · high, or GPT 6 Astra · medium | Independent review where the change touches security, privileged database objects or concurrency. Must be a different model family than the implementer — a model reviewing its own reasoning is not independent | Approve, reject, or name what is missing |
+| Deep analysis | GPT 5.6 Sol · high (Codex) | Root-cause work and slice design when a defect resists the obvious reading, or when an issue owner needs the issue's scope split before anyone implements it. Sol high is authorized during the current Claude quota outage. | Diagnosis notes, slice proposals, spec deltas |
+| Second lane | GPT 5.6 Terra · medium/high (Codex) | A balanced implementer for independent work when Claude is available, and an authorized high-effort reassignment lane during the current Claude quota outage | Overflow implementation |
+| Independent Reviewer | GPT 5.6 Sol · high; Claude Opus 5 · high only for privileged work | A separate session verifies the patch against the issue and actual evidence. Independence means a distinct reviewer session and no author self-review; it does not require a different model family. No Astra child reviewer is launched. | Approve, reject, or name what is missing |
 
 GPT lanes run through Codex's native worker mechanism; Claude lanes run as
 Claude Code agents; the Antigravity lane runs through the `agy` TUI. Do not
@@ -67,21 +71,28 @@ wherever a Luna lane or reference would otherwise apply.
 
 Documentation, manifests, inventories, dependency audits and evidence gathering
 are spread across GLM 5.3 Flash, Gemini 3.8 Flash, Claude Sonnet 5 and GPT 5.6
-Terra according to the task. GLM 5.3 (OpenCode) is restored as a workhorse:
-the prior default-model and stdin failure is resolved. Verify the exact resolved
-model in the launched terminal before sending its brief; a provider capacity
-response alone is not a failed launch or evidence that a lane is broken.
+Terra according to the task; Sol is the deep-analysis lane. GLM 5.3 (OpenCode)
+is restored as a workhorse. During the current Claude quota outage, Terra high,
+Sol high and Gemini 3.8 Flash are explicitly authorized replacements. Verify
+the launched terminal's readiness and exact resolved model before sending its
+brief, then verify actual task activity after the brief before claiming
+availability. A capacity response, an idle shell, or a retry loop is not
+availability evidence; retain the demonstrated failure and reassign once or
+report the blocker.
 
 For any Antigravity dispatch, confirm in the launched terminal that the exact
 model is Gemini 3.8 Flash, and record the terminal and observed model with the
 dispatch. Do not describe the lane as available on the strength of the roster
 entry alone. Record the terminal and observed model for every other launch too.
+Every custom Antigravity command includes the user-selected permission flag,
+for example `agy <selected arguments> --dangerously-skip-permissions`. This is
+an explicit per-command argument, not permission to modify a global rule.
 
 ## Escalation ladder
 
 The ladder is two rungs, not a staircase. A task that stalls or fails twice
 while assigned to **GPT 5.6 Terra, Gemini 3.8 Flash or GLM 5.3 Flash**
-escalates directly to GPT 6 Astra (medium). Escalate to Claude Opus 5 (high)
+escalates directly to GPT 5.6 Sol (high). Escalate to Claude Opus 5 (high)
 only for privileged database, security or concurrency work — nothing in
 between.
 Escalating one model at a time re-runs the same failure at each intermediate
@@ -89,19 +100,20 @@ step instead of resolving it.
 
 Escalation carries the failure forward: the new brief states what was already
 tried and why it failed, so the stronger model does not repeat it. A task
-that still fails at that top rung becomes an analysis task for Sol, not a
-third implementation attempt.
+that still fails at that top rung returns to the Sol owner for a documented
+next-action decision, not a third implementation attempt.
 
 ## Root coordinator and issue owners
 
-The root coordinator is the orchestrator. It is generic: it is not linked to any
-issue or pull request and owns no implementation. The root alone reads the
-full GitHub board and publishes the shared evidence described below. An owner
-may make its single serialized assignment-dossier pass; workers make no GitHub
-reads. The root supervises owners, sequences work across issues, performs
-independent acceptance and decides promotion.
+The root coordinator is the sole GPT-6 Astra orchestrator. It is generic: it is
+not linked to any issue or pull request and owns no implementation. The root is
+the sole GitHub reader and issue/board mutation owner, publishes the shared
+evidence described below, performs independent acceptance, and decides
+promotion. Owners and workers make zero GitHub reads and no issue or board
+writes; they may push branches and open a review pull request only when
+explicitly authorized.
 
-**A multi-slice issue gets one issue owner.** The owner reads the full issue,
+**A multi-slice issue gets one GPT-5.6 Sol issue owner.** The owner reads the full issue,
 plans its own slices, dispatches and supervises its workers, and owns acceptance
 and board evidence and reports until the whole issue is done. The root briefs the
 whole outcome and its constraints, never a per-slice decomposition. Dispatch a
@@ -116,14 +128,16 @@ Owners are bound by the same rules as the root:
   worker. The only shared limit is the two concurrent `pnpm db:*` verification
   clusters described in Queue selection; workers queue for a cluster, not for
   permission to exist.
-- The root oversees owners and each owner oversees its workers. Every handle and
+- The root oversees owners and each owner oversees its workers. Existing
+  non-Sol owners transition at safe handoff boundaries without losing drafts or
+  evidence; no duplicate owner or Astra child is launched. Every handle and
   observation is recorded, and an existing worker is never duplicated. A worker
   already running on part of the issue is adopted under the new owner, not
   restarted.
 - An owner may push its branch and open a review pull request only when that is
-  authorized. An owner may make only the assignment-dossier read below; workers
-  do not read GitHub and neither role reconciles board records. The root keeps
-  board updates, merge and promotion decisions, and independent acceptance.
+  authorized. Owners and workers make no GitHub reads or issue/board writes and
+  neither role reconciles board records. The root keeps board updates, merge and
+  promotion decisions, and independent acceptance.
 
 ### Central GitHub snapshot and issue dossiers
 
@@ -134,24 +148,26 @@ field is `snapshotUtc`. Owners and workers consume that snapshot; nobody else
 runs `gh project item-list` or performs another full-board refresh in the same
 cycle.
 
-When assigning an issue, the owner makes one serialized dossier pass for the
-issue body, all comments, `blocked_by` and blocking edges, subissues, and linked
-pull requests. It preserves all dependency edges as audit evidence and filters
-to `state=open` only when deciding eligibility. It writes the result with a
-timestamp to
-`C:/Users/vijay/AppData/Local/Temp/vortex-fleet/issue-<n>.md`. Reuse retrieved
-data; workers read the dossier and never make GitHub reads. A request for fresher
-mid-cycle data goes to the root, which makes one targeted call rather than a
-duplicate full-board refresh.
+When assigning an issue, the root creates the timestamped
+`C:/Users/vijay/AppData/Local/Temp/vortex-fleet/issue-<n>.md` dossier from its
+serialized GitHub access. It includes the issue body, all comments, `blocked_by`
+and blocking edges, subissues, and linked pull requests. It preserves all
+dependency edges as audit evidence and filters to `state=open` only when
+deciding eligibility. Owners and workers reuse the dossier and make no GitHub
+reads or issue/board writes. A request for fresher mid-cycle data goes to the
+root, which makes the single authorized targeted call rather than a duplicate
+refresh.
 
 ### GitHub call discipline
 
-Stagger GitHub callers; never run simultaneous refreshes or endpoint-polling
-loops. Wait on agent terminals instead. On a rate-limit error, stop, read the
-response `Retry-After` or reset time, wait, make exactly one retry, and report
-the result. If no reset is supplied, do not invent one or tight-loop; escalate.
-A rate-limit response or unknown owner type may be throttling, not proof that
-the data is invalid.
+The root is the only GitHub reader and issue/board mutation owner. It makes one
+complete board snapshot per 30-minute root cycle and any necessary serialized
+targeted calls; owners and workers make no GitHub reads or issue/board writes.
+Never endpoint-poll: wait on agent terminals.
+On a rate-limit error, stop, honor the response `Retry-After` or reset time,
+make exactly one retry, and report the result. If no reset is supplied, do not
+invent one or tight-loop; escalate. A rate-limit response or unknown owner type
+may be throttling, not proof that the data is invalid.
 
 The following are user-observed operational measurements, not universal
 constants: REST core 5,000/hour (283 used when measured), GraphQL 5,000 points
@@ -171,7 +187,7 @@ issue, the directly dispatched worker is that owner for the bounded task; the
 root still does not decompose a multi-slice issue into its workers.
 
 1. **Select** — pick the next dependency-ready task; see Queue selection below.
-2. **Brief** — verify the premise from the shared snapshot and issue dossier,
+2. **Brief** — verify the premise from the root-published snapshot and issue dossier,
    then write a drift-proof brief; see Dispatch brief template below.
 3. **Dispatch** — start one agent in one new worktree on one branch, in a single command. The agent is an issue owner for a multi-slice issue and a worker for a single-slice one; see Root coordinator and issue owners above. For example:
 
@@ -420,9 +436,15 @@ Every new proof:
 
 Hosted Testing evidence is read and controlled with `kestractl`, authenticated
 to `https://kestra.abzum.com`, tenant `main`. Add `C:/home/abzum/.npm-global` to
-`PATH` first. Never conclude that hosted state is unobservable from an
-unauthenticated generic HTTP request; and when a `kestractl` command fails,
-report its exact stderr.
+`PATH` first, or use the authenticated absolute executable
+`C:/home/abzum/.npm-global/kestractl.exe`. Before claiming authentication is
+unavailable, also try the signed-in Orca embedded browser at that URL and tenant.
+Never copy credentials or cookies into prompts or files. Never conclude that
+hosted state is unobservable from an unauthenticated generic HTTP request; and
+when a `kestractl` command fails, report its exact stderr.
+Every issue owner relays these access and launch constraints to its workers and
+includes them in future briefs. Access does not change the single mutation owner
+or authorize duplicate executions.
 
 - **Find the run.** `kestractl executions list --size 200 --output json`; keep
   entries whose `flowId` is `testing_database_delivery`, and order them by their
@@ -440,12 +462,22 @@ report its exact stderr.
   newer promotion has superseded. Never kill a run that is still the entitled
   Testing execution.
 
+Only dev and staging executions are authorized. Production is unwanted, not a
+pending approval: never approve, restart, or release Production; never rename a
+Production destination to staging, or restart the Kestra server as a queue
+workaround. #489 is the sole current Production-queue cleanup owner. It disables
+Production admissions before cancelling verified obsolete queued Production
+executions, then cancels obsolete paused Production executions; it records exact
+before/after IDs and counts, verifies the actual destination behind Testing
+naming, preserves dev/staging work and successful receipts, and does not create
+a duplicate run. This does not clear any unrelated product-decision hold.
+
 ## Branch and promotion model
 
 A task's branch is cut from `origin/main` and, once gates and review pass,
-merges by pull request back into `main`. That is where task-level delivery
-ends under the phase-gate policy above — a task does not wait for a hosted run
-to reach Done.
+merges by pull request back into `main`. Task-level delivery can end there, but
+an issue reaches Done only after its accepted evidence, local gates, true board
+row, closure work, and any hosted receipt required by the applicable phase gate.
 
 At a phase boundary, a promotion pull request merges `main` into `testing`,
 and the hosted Kestra verification runs against that `testing` revision. Work
@@ -549,17 +581,18 @@ every long command, so silence is interpretable.
 Queue for the fleet's maximum two concurrent pnpm db:* verification clusters;
 this is not permission to dispatch · pnpm db:clean only · never db:reset or
 supabase start|stop · never read .codex-tmp/ or .tmp/ · never print secrets
-· workers make zero gh or GitHub reads: read the shared snapshot and assigned
-dossier, and ask the owner for missing context · commit and push the branch ·
+  · owners and workers make zero GitHub reads and no issue or board writes: read
+  the shared snapshot and assigned dossier, and ask the root for missing context
+  · commit and push the branch ·
 open a PR only when explicitly briefed · no merge or issue edits.
 ```
 
 The brief above is for a single-slice worker, which commits and pushes its
 branch and may open a PR only when authorized. An issue owner's brief states
-the whole outcome and its constraints, not a per-slice decomposition, and adds
-the one serialized assignment-dossier pass and that an owner may open a review
-PR only when authorized. Owners report grouped proposed changes to the root;
-they do not reconcile board records. For every agent, merging and promoting
+the whole outcome and its constraints, not a per-slice decomposition, and says
+that the root supplies the dossier and that an owner may open a review PR only
+when authorized. Owners report grouped proposed changes to the root; they do
+not reconcile board records. For every agent, merging and promoting
 are the root's decisions, made after the gates above pass — never the
 dispatched agent's own.
 
@@ -596,7 +629,9 @@ Parks and moves on:
 - Product decisions — what a capability should do for a user.
 - Anything requiring a credential, or that would place a secret in a prompt,
   log or commit.
-- Production deployment, which stays parked until final delivery.
+- Production deployment: Production is unwanted, not pending user approval.
+  Only dev and staging executions are authorized; never approve, restart or
+  release Production, rename it to staging, or restart Kestra as a workaround.
 - Destructive action outside a worktree — shared stacks, remote state,
   history rewrites.
 - Recovering rejected historical SQL from `.codex-tmp/` or `.tmp/` — never,

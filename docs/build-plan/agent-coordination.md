@@ -1,6 +1,8 @@
 # Agent coordination
 
-Approved by the user on 9 September 2026; routing updated on 12 September 2026.
+Approved by the user on 9 September 2026; routing was last reconciled on
+21 September 2026. The latest direct user decisions override historical fleet
+rules and historical handoff notes.
 This governs engineering coordination, not product behaviour. It replaces an
 earlier additional-review requirement for newly assigned work; historical review
 receipts remain accurate.
@@ -12,11 +14,11 @@ live delivery queue.
 
 | Role | Work |
 | --- | --- |
-| Coordinator | Select dependency-ready tasks, commission reviews, dispatch corrected handoffs, monitor drift/blockers and usage, maintain progress, and coordinate delivery after normal checks. |
-| Planner | Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. |
+| Coordinator (generic root) | Select dependency-ready tasks, commission reviews, dispatch corrected handoffs, monitor drift/blockers and usage, maintain progress, own all GitHub and board access, perform acceptance, and coordinate delivery after normal checks. It has no implementation issue or pull-request ownership. |
+| Planner (GPT 5.6 Sol) | Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. |
 | Developer | Execute a bounded approved plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction. |
-| Independent Reviewer | Verify the implementation against the issue and approved product model, and record findings or approval independently of the Developer. |
-| Architecture Reviewer | Own explicitly assigned full-system reviews across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Choose the simplest sufficient design. Do not use for routine work or implementation unless explicitly reassigned. |
+| Independent Reviewer (GPT 5.6 Sol; Claude Opus only for privileged work) | In a separate session, verify the implementation against the issue and approved product model, inspect actual evidence, and record findings or approval independently of the Developer. |
+| Architecture Reviewer | Own explicitly assigned full-system reviews across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Claude Opus is reserved for privileged database, security or concurrency review. Choose the simplest sufficient design. Do not use for routine work or implementation unless explicitly reassigned. |
 | Hosted Tester | Run the single entitled Testing execution, record its receipt and result, and never start a duplicate run while the original is live. |
 | User | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate. |
 
@@ -25,9 +27,23 @@ the naming format under Task handoff. Display names do not rename or replace
 immutable canonical task references. Also record the resolved model, session
 identifier and canonical task reference as execution metadata at handoff.
 
-The current direct user requirement assigns GPT-6 Astra (Medium) to both the
-Planner and Independent Reviewer roles. Include that model alongside the role
-in visible assignments and record it in each handoff's execution metadata.
+GPT-6 Astra (Medium) is reserved exclusively for the one generic main fleet
+orchestrator. Every issue owner, issue-level orchestrator and Planner is GPT
+5.6 Sol. Do not launch Astra children, including Planner or Independent
+Reviewer children. Existing mismatches transition only at a safe handoff
+boundary, preserving work and evidence; board records retain the actual model
+until the replacement's task activity is verified.
+
+The permitted non-privileged execution lanes are GLM 5.3 Flash, Gemini 3.8
+Flash, Claude Sonnet 5, GPT 5.6 Terra and GPT 5.6 Sol; Sol owns issue planning
+and deep analysis. GPT 5.6 Luna is never dispatched. During the current Claude quota
+outage, the user explicitly authorizes reassignment to Terra (high), Sol
+(high), or Gemini 3.8 Flash, including work otherwise assigned to Claude.
+Record the reassignment, the observed task activity, resolved model and session
+evidence. Verify terminal readiness and resolved model before the initial brief,
+then verify actual task activity after it. Do not retry a launch in a loop:
+after a demonstrated failure, retain the evidence and choose the authorized
+reassignment or report the blocker.
 
 GPT workers run through Codex's native worker mechanism. Do not substitute an
 external CLI or another provider for a GPT worker. DeepSeek, when explicitly
@@ -45,7 +61,10 @@ conflicting edits or duplicate reviews.
 The [GitHub project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) remains
 the task board. Issues hold scope, acceptance, dependencies and status. Existing
 task-plan documents hold material design reasoning. Pull requests hold changes
-and review results. Do not build another coordination service or duplicate board.
+and review results. The generic root is the sole GitHub reader and issue/board
+mutation owner. Owners and workers make zero GitHub reads and no issue or board
+writes; they may push a branch and open a pull request only when explicitly
+briefed. Do not build another coordination service or duplicate the board.
 
 Keep the issue description current: replace or remove obsolete or irrelevant
 scope instead of preserving it under corrective comments. Retain applicable
@@ -54,25 +73,27 @@ not as a substitute for a clear current description.
 
 ## Board and dispatch record
 
-The board is the delivery record, not a list of intentions. Before assigning,
-sequencing or reporting work, read every project item and every relevant field,
-including paginated results beyond the first 30 items and beyond the first 30
-fields. Do not infer an empty queue, a dependency state, a current owner or
-available capacity from a partial board view.
+The board is the delivery record, not a list of intentions. At the start of each
+30-minute root cycle, the root makes the one complete board read, including
+paginated items and relevant fields, and publishes the timestamped snapshot and
+issue dossiers for owners and workers to consume. Do not infer an empty queue,
+a dependency state, a current owner or available capacity from a partial board
+view. No owner or worker refreshes the board or an issue: missing or fresher
+context is requested from the root.
 
 Moving an issue into an active status does not itself launch work. The
 coordinator must first launch or explicitly hand off the task, confirm the
 recipient accepted it, and record the actual canonical worker/task name—not a
 planned role—in the issue's board record. A text-only assignment is planned
 work, not active work: keep it Backlog. Ready is reserved for work whose named
-Planner has accepted the planning handoff; record the required GPT-6 Astra
-(Medium) model in that handoff's execution metadata.
+GPT-5.6 Sol Planner has accepted the planning handoff; record its resolved model
+and session evidence.
 
-At every spawn, handoff and status transition, update the board together with
-the issue status: current owner, canonical worker/task reference, started or
-finished UTC time as applicable, measured active time when available, current
-evidence, and the next accountable owner. If a launch fails, keep the issue
-Backlog, record the demonstrated reason, and select other dependency-ready
+At every spawn, handoff and status transition, the root updates the board
+together with the issue status: current owner, canonical worker/task reference,
+started or finished UTC time as applicable, measured active time when available,
+current evidence, and the next accountable owner. If a launch fails, keep the
+issue Backlog, record the demonstrated reason, and select other dependency-ready
 work; do not leave it marked active. When a worker finishes or is stopped,
 record its result before assigning the next owner. These are stable operating
 rules, not a live queue or a claim that a particular worker is currently
@@ -88,7 +109,9 @@ remain the active owner while the same status waits for the normal pull-request
 check and merge. The card must say explicitly which of those two states applies;
 never imply that a completed reviewer is still active. **Testing** begins only
 after the reviewed change is merged to Testing and the Hosted Tester owns the
-one exact execution. **Done** requires the applicable receipt and closure work.
+one exact execution. **Done** requires accepted evidence, completed applicable
+local gates, any required hosted receipt, a true board row, and closure work.
+A merged branch or finished worker alone is not Done.
 
 This definition avoids inventing a second pre-Testing status while keeping
 reviewer and Coordinator ownership truthful.
@@ -120,9 +143,12 @@ After the Planner reviews and corrects the task handoff, the Coordinator supplie
 issue, exact base revision, working directory,
 branch, role, functional outcome, included/excluded work, relevant references,
 required checks and stopping point. Each session verifies these before acting.
-Use separate architecture and development sessions with explicit model selection;
-record the resolved model and session identifier. Report an unavailable or changed
-model instead of silently substituting one.
+Use separate architecture, development and independent-review sessions with
+explicit model selection; record the resolved model, session identifier and
+actual task evidence. A reviewer must not review its own authoring session, but
+need not be from a different model family. Report an unavailable or changed
+model unless the current Claude-outage reassignment above authorizes the named
+replacement.
 
 One developer writes a task worktree at a time. Independent concurrent tasks use
 separate worktrees. Never run competing dependency installations or edits in one
@@ -141,12 +167,13 @@ capacity evidence. Do not work around a missing or unavailable native GPT
 worker by starting an external GPT session.
 Track session and model-specific usage as execution metadata. Reserve the
 full-system Architecture Reviewer for its complex responsibilities and scope
-broad reviews into coherent passes. If a limit is exhausted, stop retries, wait
-for the stated reset, then resume the already assigned work without creating
-duplicate sessions.
+broad reviews into coherent passes. If a limit is exhausted, stop retries and
+do not create duplicate sessions; use the explicitly authorized current-outage
+reassignment where it fits, otherwise record the reset/blocker.
 
 ## Scope and communication rules
 
+- Respond only in English in every brief, terminal prompt, handoff and response.
 - State the functional outcome and concrete facts. Avoid theatrical claims such
   as "bulletproof", "catastrophic", "constitution" or "fully complete" without
   evidence. Do not narrate confidence as proof.
@@ -179,17 +206,29 @@ duplicate sessions.
   Developer implements and the Independent Reviewer verifies.
 - Prior safety denials remain binding across tools and agents. Do not recover a
   rejected patch from an older worktree or execute it through another agent as a workaround.
-  No permission-bypass mode, credential copying, broad reset or silent deployment.
+  Do not add global wildcard permission rules, copy credentials, broadly reset,
+  or silently deploy. A custom `agy` command must explicitly include the
+  user-selected `--dangerously-skip-permissions` flag; this narrow command
+  requirement does not authorize a new global permission rule. Existing
+  OpenCode allow configuration remains user-owned and is not edited by agents.
+- Before claiming hosted authentication is unavailable, try
+  `C:/home/abzum/.npm-global/kestractl.exe` (or add that directory to `PATH`) and
+  the signed-in Orca embedded browser at `https://kestra.abzum.com`, tenant
+  `main`. Never copy credentials or cookies into prompts or files. Access does
+  not authorize a duplicate execution, a second mutation owner, or any
+  Production action.
 
 ## Completion handoff
 
 Return: changed functionality; files/commit; tests actually run and results;
 remaining acceptance gaps; necessary spec/plan/task updates; and any real blocker.
-The Independent Reviewer reviews the patch against the issue and approved
-product model and corrects any planning or acceptance errors before the
-Coordinator returns specific implementation findings to the Developer. The
-Coordinator merges only after applicable checks pass. Existing independent
-approval is reused for unchanged work.
+The Independent Reviewer, in a separate session, reviews the patch against the
+issue and approved product model using actual evidence and corrects any planning
+or acceptance errors before the Coordinator returns specific implementation
+findings to the Developer. Privileged database, security or concurrency changes
+also receive the privileged review required by the fleet rules. The Coordinator
+merges only after applicable checks pass. Existing independent approval is
+reused for unchanged work.
 
 User reports use Completed, Coming up, Pending User Decision and Overall Progress
 rows, with linked tasks and functional descriptions. Overall Progress counts all
@@ -208,9 +247,12 @@ authority out of developer prompts unless explicitly needed for the assigned wor
 
 ## Autonomous fleet operation
 
-When this project runs as an unattended agent fleet inside Orca, one
-orchestrator carries out the Coordinator's dispatch and monitoring duties, and
-the Planner's handoff-correction work, for every task the fleet runs.
+When this project runs as an unattended agent fleet inside Orca, one generic
+GPT-6 Astra root orchestrator carries out the Coordinator's dispatch,
+GitHub/board, acceptance and monitoring duties. A GPT-5.6 Sol Planner carries
+out handoff correction for each task, and every multi-slice issue has a GPT-5.6
+Sol issue owner that supervises its workers; there is no owner or worker cap apart from the two
+concurrent `pnpm db:*` verification clusters.
 [Agent fleet operations](agent-fleet.md) is the operational reference for that
 mode: the model roster, the escalation ladder, queue ordering, the
 twenty-minute watch, the verification gates, the branch and promotion model,
@@ -225,5 +267,8 @@ boundary; and corrects board state, dependencies and stale plan documents. It
 parks, without stopping the queue, genuine product decisions, anything
 needing a credential or that would place a secret in a prompt, log or commit,
 Production deployment, destructive action outside a worktree, and any attempt
-to weaken a check to make something pass. See [Agent fleet
+to weaken a check to make something pass. Production is unwanted: only dev
+and staging executions are authorized; never approve, restart or release
+Production, rename it to staging, or restart the Kestra server as a workaround.
+See [Agent fleet
 operations](agent-fleet.md#autonomy-boundaries) for the complete list.
