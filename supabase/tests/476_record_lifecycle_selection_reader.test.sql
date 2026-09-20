@@ -11,20 +11,22 @@ select no_plan();
 --
 -- Exercises:
 --   1. Catalogue and policy assertions on vortex_identity.organizations and the reader.
---   2. System context enforcement: requires callerKind = 'system' and service auth.
---   3. Human context rejection: callerKind = 'human' fails closed with 42501.
---   4. Non-service system authentication rejection (fails closed).
---   5. Missing system actor rejection (fails closed).
---   6. Mismatched tenant/organization context fails closed with 23503.
---   7. All three retained lifecycle states (active, soft_deleted, removal_pending) returned.
---   8. Results ordered by created_at ascending; oldest first.
---   9. Revision and timestamp projection accuracy.
---  10. Contained scope requires applicationRootId; correct app sees record.
---  11. Same-table wrong-app isolation: app two on the same contained table sees 0 rows.
---  12. Cross-organisation isolation: org two system context sees 0 rows from org one storage.
---  13. Org two sees its own records from its own storage.
---  14. Malformed storage identity (nil UUID, null, nonexistent).
---  15. Role-based access: vortex_request can execute, vortex_runtime cannot.
+--   2. Semantic adapter-role proof: direct SELECT under org-one context sees org one
+--      and cannot see org two (0 ambient visibility into whole table).
+--   3. System context enforcement: requires callerKind = 'system' and service auth.
+--   4. Human context rejection: callerKind = 'human' fails closed with 42501.
+--   5. Non-service system authentication rejection (fails closed at initialization).
+--   6. Missing system actor rejection (fails closed at initialization).
+--   7. Mismatched tenant/organization context fails closed with 23503.
+--   8. All three retained lifecycle states (active, soft_deleted, removal_pending) returned.
+--   9. Results ordered by created_at ascending; oldest first.
+--  10. Revision and timestamp projection accuracy.
+--  11. Contained scope requires applicationRootId; correct app sees record.
+--  12. Same-table wrong-app isolation: app two on the same contained table sees 0 rows.
+--  13. Cross-organisation isolation: org two system context sees 0 rows from org one storage.
+--  14. Org two sees its own records from its own storage.
+--  15. Malformed storage identity (nil UUID, null, nonexistent).
+--  16. Role-based access: vortex_request can execute, vortex_runtime cannot.
 --
 -- Fixture shape:
 --   Organisation 1:
@@ -275,31 +277,103 @@ select pg_temp.append_writer_release(
 );
 
 -- ============================================================================
--- Provision storage and activate installations with context established.
+-- Canonical context helpers (derived from 475_record_adapters pattern).
+-- Queries the live organization account identity and current access version.
 -- ============================================================================
-create function pg_temp.human_admin_context(p_org_id uuid, p_account_id uuid)
-returns void language plpgsql volatile set search_path = '' as $fn$
+create function pg_temp.adapter_context(
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_account_id uuid
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
 begin
-  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
-  perform vortex_context.initialize(pg_catalog.jsonb_build_object(
+  delete from vortex_context.request_contexts
+  where backend_pid = pg_catalog.pg_backend_pid();
+
+  select pg_catalog.jsonb_build_object(
     'callerKind', 'human',
     'identityAuthorityId', '94760000-0000-4000-8000-000000000001'::uuid,
-    'tenantId', '14760000-0000-4000-8000-000000000001'::uuid,
-    'organizationId', p_org_id,
+    'tenantId', organization.tenant_id,
+    'organizationId', p_organization_id,
     'organizationAccountId', p_account_id,
-    'identityId', '54760000-0000-4000-8000-0000000000a1'::uuid,
+    'identityId', account.identity_id,
     'sessionId', 'c4760000-0000-4000-8000-0000000000f2'::uuid,
     'authenticationStrength', 'single_factor',
     'issuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
     'expiresAt', pg_catalog.clock_timestamp() + interval '2 hours',
-    'accessVersion', 1,
-    'correlationId', 'c4760000-0000-4000-8000-0000000000f3'::uuid
-  ));
+    'accessVersion', version.current_version,
+    'correlationId', 'c4760000-0000-4000-8000-0000000000f3'::uuid,
+    'accessTokenIssuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
+    'primaryAuthenticatedAt', pg_catalog.clock_timestamp() - interval '1 minute'
+  ) || case
+    when p_application_root_id is null then '{}'::jsonb
+    else pg_catalog.jsonb_build_object('applicationRootId', p_application_root_id)
+  end
+  into strict context_value
+  from vortex_identity.organizations as organization
+  join vortex_access.organization_access_versions as version
+    on version.organization_id = organization.organization_id
+  join vortex_identity.organization_accounts as account
+    on account.organization_id = organization.organization_id
+    and account.organization_account_id = p_account_id
+  where organization.organization_id = p_organization_id;
+
+  perform vortex_context.initialize(context_value);
+end
+$function$;
+
+-- Helper for establishing system context in tests.
+create function pg_temp.system_context(
+  p_tenant_id uuid,
+  p_org_id uuid,
+  p_app_root_id uuid default null,
+  p_system_actor_id uuid default '94760000-0000-4000-8000-000000000001'::uuid,
+  p_auth_strength text default 'service'
+)
+returns void language plpgsql volatile set search_path = '' as $fn$
+declare
+  ctx jsonb;
+  current_access_version bigint;
+begin
+  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+
+  select coalesce(
+    (select version.current_version from vortex_access.organization_access_versions as version where version.organization_id = p_org_id),
+    1::bigint
+  ) into current_access_version;
+
+  ctx := pg_catalog.jsonb_build_object(
+    'callerKind', 'system',
+    'tenantId', p_tenant_id,
+    'organizationId', p_org_id,
+    'sessionId', 'c4760000-0000-4000-8000-0000000000e1'::uuid,
+    'authenticationStrength', p_auth_strength,
+    'issuedAt', to_char(now() - interval '1 minute', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'expiresAt', to_char(now() + interval '30 minutes', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'accessVersion', current_access_version,
+    'correlationId', 'c4760000-0000-4000-8000-0000000000e2'::uuid
+  );
+  if p_system_actor_id is not null then
+    ctx := ctx || pg_catalog.jsonb_build_object('systemActorId', p_system_actor_id);
+  end if;
+  if p_app_root_id is not null then
+    ctx := ctx || pg_catalog.jsonb_build_object('applicationRootId', p_app_root_id);
+  end if;
+  perform vortex_context.initialize(ctx);
 end
 $fn$;
 
+-- ============================================================================
+-- Provision storage and activate installations with valid human context.
+-- ============================================================================
 -- Provision & activate App 1 and App 2 in Org One.
-select pg_temp.human_admin_context(:'org_one', '64760000-0000-4000-8000-0000000000a1');
+select pg_temp.adapter_context(:'org_one', null, '64760000-0000-4000-8000-0000000000a1');
 set local role vortex_request;
 select * from vortex_module.provision_module_installation_storage(:'app_one', 1, :'module_one', 1, null);
 select * from vortex_module.provision_module_installation_storage(:'app_two', 1, :'module_one', 1, null);
@@ -313,8 +387,8 @@ select * from vortex_module.activate_application_installation(
 );
 reset role;
 
--- Provision & activate App 3 in Org Two.
-select pg_temp.human_admin_context(:'org_two', '64760000-0000-4000-8000-0000000000a2');
+-- Provision & activate App 3 in Org Two (using Org Two's account and identity).
+select pg_temp.adapter_context(:'org_two', null, '64760000-0000-4000-8000-0000000000a2');
 set local role vortex_request;
 select * from vortex_module.provision_module_installation_storage(:'app_three', 1, :'module_two', 1, null);
 select * from vortex_module.activate_application_installation(
@@ -322,40 +396,6 @@ select * from vortex_module.activate_application_installation(
   pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('moduleRootId', :'module_two', 'bindingRevision', 1))
 );
 reset role;
-
--- Helper for establishing system context in tests.
-create function pg_temp.system_context(
-  p_tenant_id uuid,
-  p_org_id uuid,
-  p_app_root_id uuid default null,
-  p_system_actor_id uuid default '94760000-0000-4000-8000-000000000001'::uuid,
-  p_auth_strength text default 'service'
-)
-returns void language plpgsql volatile set search_path = '' as $fn$
-declare
-  ctx jsonb;
-begin
-  delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
-  ctx := pg_catalog.jsonb_build_object(
-    'callerKind', 'system',
-    'tenantId', p_tenant_id,
-    'organizationId', p_org_id,
-    'sessionId', 'c4760000-0000-4000-8000-0000000000e1'::uuid,
-    'authenticationStrength', p_auth_strength,
-    'issuedAt', to_char(now() - interval '1 minute', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-    'expiresAt', to_char(now() + interval '30 minutes', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-    'accessVersion', 1,
-    'correlationId', 'c4760000-0000-4000-8000-0000000000e2'::uuid
-  );
-  if p_system_actor_id is not null then
-    ctx := ctx || pg_catalog.jsonb_build_object('systemActorId', p_system_actor_id);
-  end if;
-  if p_app_root_id is not null then
-    ctx := ctx || pg_catalog.jsonb_build_object('applicationRootId', p_app_root_id);
-  end if;
-  perform vortex_context.initialize(ctx);
-end
-$fn$;
 
 -- ============================================================================
 -- Section 1: Catalogue-level grant and policy assertions.
@@ -379,9 +419,32 @@ select ok(
     from pg_catalog.pg_policy as policy
     where policy.polrelid = 'vortex_identity.organizations'::regclass
       and policy.polname = 'organizations_record_adapter_read'
-      and policy.polcmd = 'r'
   ),
   'vortex_identity.organizations has the scoped record adapter read policy'
+);
+
+select is(
+  (
+    select role_name.rolname
+    from pg_catalog.pg_policy as policy
+    cross join lateral pg_catalog.unnest(policy.polroles) as assigned(role_oid)
+    join pg_catalog.pg_roles as role_name on role_name.oid = assigned.role_oid
+    where policy.polrelid = 'vortex_identity.organizations'::regclass
+      and policy.polname = 'organizations_record_adapter_read'
+  ),
+  'vortex_record_adapter',
+  'organizations_record_adapter_read targets only vortex_record_adapter'
+);
+
+select is(
+  (
+    select policy.polcmd
+    from pg_catalog.pg_policy as policy
+    where policy.polrelid = 'vortex_identity.organizations'::regclass
+      and policy.polname = 'organizations_record_adapter_read'
+  ),
+  'r',
+  'organizations_record_adapter_read is a SELECT (r) policy'
 );
 
 select ok(
@@ -394,8 +457,38 @@ select ok(
 );
 
 -- ============================================================================
+-- Section 2: Semantic RLS proof: direct SELECT under vortex_record_adapter.
+-- Under an organization-one context, direct SELECT can see org one and cannot
+-- see org two, confirming zero ambient visibility into the whole table.
+-- ============================================================================
+reset role;
+select pg_temp.system_context(:'tenant', :'org_one');
+set local role vortex_record_adapter;
+
+select is(
+  (select count(*)::integer from vortex_identity.organizations where organization_id = :'org_one'),
+  1,
+  'Direct adapter SELECT under org_one context sees organization one'
+);
+
+select is(
+  (select count(*)::integer from vortex_identity.organizations where organization_id = :'org_two'),
+  0,
+  'Direct adapter SELECT under org_one context cannot see organization two'
+);
+
+select is(
+  (select count(*)::integer from vortex_identity.organizations),
+  1,
+  'Direct adapter SELECT is strictly scoped to context organization (0 ambient visibility)'
+);
+
+reset role;
+
+-- ============================================================================
 -- Insert test records under vortex_record_adapter with scope policies active.
 -- ============================================================================
+-- 1-3. Organization-shared records in S1 (established with org context).
 select pg_temp.system_context(:'tenant', :'org_one');
 set local role vortex_record_adapter;
 
@@ -447,8 +540,13 @@ insert into record_data.rt_b4760000000040008000000000000001 (
   '2026-09-18T00:00:00Z'::timestamptz, :'actor',
   '2026-09-18T00:00:00Z'::timestamptz, :'actor'
 );
+reset role;
 
--- 4. Contained record in C1 belonging to App 1.
+-- 4. Contained record in C1 belonging to App 1:
+-- Must establish app_one application context before contained row insertion.
+select pg_temp.system_context(:'tenant', :'org_one', :'app_one');
+set local role vortex_record_adapter;
+
 insert into record_data.rt_b4760000000040008000000000000002 (
   organisation_id, module_root_id, record_type_id, storage_contract_id,
   record_id, application_root_id, definition_revision,
@@ -462,6 +560,7 @@ insert into record_data.rt_b4760000000040008000000000000002 (
   '2026-09-10T09:00:00Z'::timestamptz, :'actor',
   '2026-09-10T09:00:00Z'::timestamptz, :'actor'
 );
+reset role;
 
 -- 5. Record in Org Two storage S2.
 select pg_temp.system_context(:'tenant', :'org_two');
@@ -479,11 +578,10 @@ insert into record_data.rt_b4760000000040008000000000000011 (
   '2026-07-20T06:00:00Z'::timestamptz, :'actor',
   '2026-07-20T06:00:00Z'::timestamptz, :'actor'
 );
-
 reset role;
 
 -- ============================================================================
--- Section 2: Retained states, sorting, and projection under system context.
+-- Section 3: Retained states, sorting, and projection under system context.
 -- ============================================================================
 select pg_temp.system_context(:'tenant', :'org_one');
 set local role vortex_request;
@@ -531,7 +629,7 @@ select is(
 );
 
 -- ============================================================================
--- Section 3: Contained storage and same-table application isolation.
+-- Section 4: Contained storage and same-table application isolation.
 -- ============================================================================
 -- Contained storage without application root fails closed.
 select throws_ok(
@@ -569,7 +667,7 @@ select is(
 );
 
 -- ============================================================================
--- Section 4: Cross-organisation isolation.
+-- Section 5: Cross-organisation isolation.
 -- ============================================================================
 reset role;
 select pg_temp.system_context(:'tenant', :'org_two');
@@ -596,11 +694,11 @@ select is(
 );
 
 -- ============================================================================
--- Section 5: Security negatives (human, non-service auth, missing actor, mismatch).
+-- Section 6: Security negatives (human, non-service auth, missing actor, mismatch).
 -- ============================================================================
--- 1. Human caller rejection.
+-- 1. Human caller rejection (built from live organization account and access version).
 reset role;
-select pg_temp.human_admin_context(:'org_one', '64760000-0000-4000-8000-0000000000a1');
+select pg_temp.adapter_context(:'org_one', null, '64760000-0000-4000-8000-0000000000a1');
 set local role vortex_request;
 
 select throws_ok(
@@ -664,7 +762,7 @@ select throws_ok(
 );
 
 -- ============================================================================
--- Section 6: Malformed storage contract parameter.
+-- Section 7: Malformed storage contract parameter.
 -- ============================================================================
 reset role;
 select pg_temp.system_context(:'tenant', :'org_one');
@@ -696,7 +794,7 @@ select throws_ok(
 );
 
 -- ============================================================================
--- Section 7: Role boundary rejection (vortex_runtime).
+-- Section 8: Role boundary rejection (vortex_runtime).
 -- ============================================================================
 reset role;
 set local role vortex_runtime;
