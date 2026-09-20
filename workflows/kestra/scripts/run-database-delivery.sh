@@ -1193,6 +1193,24 @@ if [ "$verification_mode" = "full" ] || ! cmp --silent "$local_history" "$remote
 else
   say "migration history is already current; running only the selected database checks"
 fi
+# Lint is cheap and static, so a lint failure stops delivery before the long SQL
+# suites and concurrency proofs run.
+run_database_lint() {
+  local lint_schema
+  while IFS= read -r lint_schema; do
+    run_timed_stage "lint:${lint_schema}" supabase db lint \
+      --db-url "$database_url" \
+      --schema "$lint_schema" \
+      --level warning \
+      --fail-on error || return $?
+    completed_lint_schemas_json="$(
+      jq --compact-output --arg schema "$lint_schema" '. + [$schema]' \
+        <<<"$completed_lint_schemas_json"
+    )"
+  done < <(jq --raw-output '.[]' <<<"$selected_lint_schemas_json")
+}
+run_timed_stage database_lint run_database_lint
+
 run_sql_suites() {
   local sql_suite
   while IFS= read -r sql_suite; do
@@ -1224,21 +1242,6 @@ run_concurrency_proofs() {
 }
 run_timed_stage concurrency_proofs run_concurrency_proofs
 
-run_database_lint() {
-  local lint_schema
-  while IFS= read -r lint_schema; do
-    run_timed_stage "lint:${lint_schema}" supabase db lint \
-      --db-url "$database_url" \
-      --schema "$lint_schema" \
-      --level warning \
-      --fail-on error || return $?
-    completed_lint_schemas_json="$(
-      jq --compact-output --arg schema "$lint_schema" '. + [$schema]' \
-        <<<"$completed_lint_schemas_json"
-    )"
-  done < <(jq --raw-output '.[]' <<<"$selected_lint_schemas_json")
-}
-run_timed_stage database_lint run_database_lint
 cd "$execution_directory"
 
 jq --exit-status --argjson completed "$completed_concurrency_proofs_json" \

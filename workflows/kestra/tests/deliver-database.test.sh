@@ -8,6 +8,12 @@ readonly test_root="$(mktemp -d /tmp/vortex-database-delivery-test.XXXXXX)"
 trap 'rm -rf "$test_root"' EXIT
 cd "$test_root"
 
+# Runner stages that ran to completion, in execution order, from its timing lines.
+completed_check_stages() {
+  sed --quiet --regexp-extended \
+    's/^database-delivery: timing (migration_apply|lint:[^:]*|sql:.*|proof:.*): [0-9]+ms$/\1/p' "$1"
+}
+
 git config --global --add safe.directory "$source_repository"
 git clone --bare --quiet "$source_repository" "$test_root/remote.git"
 git --git-dir="$test_root/remote.git" config user.name delivery-test
@@ -772,16 +778,34 @@ fi
 test ! -e "$VORTEX_EVIDENCE_PATH"
 unset VORTEX_TEST_FAIL_PG_PROVE
 
-rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
+# Lint runs directly after migration apply, so a lint failure must stop delivery
+# before any SQL suite or concurrency proof starts.
+export VORTEX_TEST_PG_PROVE_MARKER="$test_root/pg-prove-called"
+rm -f "$VORTEX_EVIDENCE_PATH" "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER" \
+  "$VORTEX_TEST_PG_PROVE_MARKER"
 export VORTEX_TEST_FAIL_DATABASE_LINT=true
 if "$older_bootstrap" >"$test_root/lint-failure.log" 2>&1; then
   echo "expected a failed database lint command to fail delivery" >&2
   exit 1
 fi
 test ! -e "$VORTEX_EVIDENCE_PATH"
-test "$(wc -l <"$VORTEX_TEST_CONCURRENCY_PROOF_MARKER" | tr -d '[:space:]')" = \
-  "$parity_proof_count"
-unset VORTEX_TEST_FAIL_DATABASE_LINT
+test ! -e "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER" || {
+  echo "expected a lint failure to stop before any concurrency proof" >&2
+  exit 1
+}
+test ! -e "$VORTEX_TEST_PG_PROVE_MARKER" || {
+  echo "expected a lint failure to stop before any SQL suite" >&2
+  exit 1
+}
+first_lint_schema="$(jq --raw-output '.lintSchemas[0]' \
+  "$fixture_checkout/workflows/kestra/database-verification.json")"
+test "$(completed_check_stages "$test_root/lint-failure.log")" = \
+  "$(printf '%s\n' migration_apply "lint:${first_lint_schema}")" || {
+  echo "expected a lint failure to stop after migration apply and the first lint schema" >&2
+  completed_check_stages "$test_root/lint-failure.log" >&2
+  exit 1
+}
+unset VORTEX_TEST_FAIL_DATABASE_LINT VORTEX_TEST_PG_PROVE_MARKER
 
 rm -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
 export VORTEX_TEST_REMOTE_MIGRATION_MISMATCH=true
@@ -820,7 +844,7 @@ grep --fixed-strings --quiet \
 unset VORTEX_TEST_FAIL_CONCURRENCY_PROOF
 
 rm -f "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-"$older_bootstrap"
+"$older_bootstrap" >"$test_root/full-order.log" 2>&1
 test -f "$VORTEX_TEST_PG_PROVE_MARKER" || {
   echo "expected the successful full run to record SQL suites" >&2
   exit 1
@@ -863,6 +887,19 @@ if ! jq --exit-status \
   echo "expected the successful full run receipt to record complete coverage and approval" >&2
   exit 1
 fi
+# Every selected check ran exactly once: migration apply, then lint, then SQL
+# suites, then concurrency proofs, each in its selected order.
+expected_stages="$(jq --raw-output '
+  ["migration_apply"] +
+  (.selected_lint_schemas | map("lint:" + .)) +
+  (.selected_sql_suites | map("sql:" + .)) +
+  (.selected_concurrency_proofs | map("proof:" + .)) | .[]' \
+  "$VORTEX_EVIDENCE_PATH")"
+test "$(completed_check_stages "$test_root/full-order.log")" = "$expected_stages" || {
+  echo "expected each selected check to run once: migration, lint, SQL suites, concurrency proofs" >&2
+  diff <(completed_check_stages "$test_root/full-order.log") <(printf '%s\n' "$expected_stages") >&2 || true
+  exit 1
+}
 
 run_logged_bootstrap() {
   local scenario="$1"
