@@ -165,11 +165,16 @@ whether it is progressing, blocked or drifting. Do not presume a capacity
 blocker. State one only when the native dispatch mechanism returns concrete
 capacity evidence. Do not work around a missing or unavailable native GPT
 worker by starting an external GPT session.
-Track session and model-specific usage as execution metadata. Reserve the
-full-system Architecture Reviewer for its complex responsibilities and scope
-broad reviews into coherent passes. If a limit is exhausted, stop retries and
-do not create duplicate sessions; use the explicitly authorized current-outage
-reassignment where it fits, otherwise record the reset/blocker.
+Before every assignment, inspect Orca's live status-bar usage roster and record
+the observation timestamp and available headroom as execution metadata. Prefer
+an available lane and never queue behind an exhausted model; observed usage is
+live, not a fixed percentage to copy into a rule. Apply the checkpoint, safe
+handoff and privileged-Opus-unavailability procedure in [agent fleet
+operations](agent-fleet.md#roster-and-model-assignment). Reserve the full-system
+Architecture Reviewer for its complex responsibilities and scope broad reviews
+into coherent passes. If a limit is exhausted, stop retries and do not create
+duplicate sessions; use the explicitly authorized current-outage reassignment
+where it fits, otherwise record the reset/blocker.
 
 ## Scope and communication rules
 

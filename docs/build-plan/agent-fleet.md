@@ -80,6 +80,20 @@ availability. A capacity response, an idle shell, or a retry loop is not
 availability evidence; retain the demonstrated failure and reassign once or
 report the blocker.
 
+Before every assignment, inspect Orca's live status-bar usage roster and record
+its observation timestamp and available headroom in the assignment evidence.
+Choose an available lane; never queue work behind an exhausted model. Usage
+figures are live observations, not fixed thresholds, so do not copy historical
+percentages into a rule. When Claude is near or exhausted, its owner first
+checkpoints the state, findings, exact next step, partial edits and evidence in
+the issue dossier, then stops that exact agent. The root records the handoff on
+the issue and transfers the work to a fresh worktree on one available Terra,
+Gemini or GLM lane, with no duplicate editor. The owner/planner remains Sol;
+do not create Astra children or use Luna. Opus remains privileged-only: if it
+is unavailable, report that through the root on the issue and continue with the
+next independent task rather than waiting. The user's current authorized Sol
+and Terra privileged recoveries remain available.
+
 For any Antigravity dispatch, confirm in the launched terminal that the exact
 model is Gemini 3.8 Flash, and record the terminal and observed model with the
 dispatch. Do not describe the lane as available on the strength of the roster
