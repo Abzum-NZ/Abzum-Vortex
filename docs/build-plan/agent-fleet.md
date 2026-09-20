@@ -361,7 +361,7 @@ answer.
 | Drifting — wrong files, scope creep | Send the scope and file list again | Re-check in 10 minutes |
 | Retrying around a failure | Send the diagnosis, or dispatch Triage to reproduce it independently | Re-check in 10 minutes |
 | Idle, unfinished, no answer | Stop the session; keep the worktree and its diff | Escalate |
-| Two failed attempts | Escalate to Astra medium; use Opus 5 high only for privileged database, security or concurrency work, re-dispatching with what was learned | Fresh worktree |
+| Two failed attempts | Escalate to Sol high; use Opus 5 high only for privileged database, security or concurrency work, re-dispatching with what was learned | Fresh worktree |
 | Blocked on a real decision | Park the issue with a written question, pick up the next one | Queue moves on |
 
 ## Worktree cleanup
