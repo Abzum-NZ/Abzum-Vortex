@@ -8,12 +8,12 @@ packages:
   - modules
   - testing
 catalog:
-  "@supabase/ssr": 0.12.6
-  "@supabase/supabase-js": 2.115.0
-  "@types/semver": 7.7.1
+  "@supabase/ssr": 0.12.7
+  "@supabase/supabase-js": 2.116.0
+  "@types/semver": 7.8.0
   postgres: 3.4.9
   semver: 7.8.5
-  supabase: 2.116.0
+  supabase: 2.117.0
   vitest: 4.1.11
 
 catalogMode: strict
