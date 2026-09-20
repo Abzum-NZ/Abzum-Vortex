@@ -50,6 +50,7 @@ export const permissionActionKindSchema = z.enum([
   "export",
   "share",
   "manage",
+  "transfer",
   "named",
 ]);
 
