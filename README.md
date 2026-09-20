@@ -10,6 +10,13 @@ applications defined in files before building the visual App Designer. The
 [roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) records delivery status;
 a specification or contract does not mean the feature is implemented.
 
+Development is carried out by an orchestrated fleet of autonomous coding agents
+rather than a single continuous team: one orchestrator plans, dispatches, watches
+and reports, and implementer agents deliver work in isolated worktrees.
+[Agent coordination](docs/build-plan/agent-coordination.md) and [agent fleet
+operations](docs/build-plan/agent-fleet.md) record how that work is planned,
+verified and promoted.
+
 ## Start here
 
 | Document | Purpose |
@@ -19,6 +26,7 @@ a specification or contract does not mean the feature is implemented.
 | [Engine-first delivery](docs/build-plan/engine-first-application-delivery.md) | Path to a usable application before the designer |
 | [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current tasks, ownership and pickup order |
 | [Agent coordination](docs/build-plan/agent-coordination.md) | Planning, implementation, review and reporting rules |
+| [Agent fleet operations](docs/build-plan/agent-fleet.md) | Roster, escalation, queue selection, gates and promotion for the autonomous fleet |
 | [Agent handover — 18 September 2026](docs/build-plan/agent-handover-2026-09-18.md) | Copyable continuation prompt and dated checkpoint |
 | [Open decisions](docs/specification/appendices/decisions.md) | Unresolved product choices requiring the owner's input |
 
