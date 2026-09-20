@@ -4,6 +4,7 @@ export * from "./field-values";
 export * from "./calculations";
 export * from "./totals";
 export * from "./save-record";
+export * from "./delete-record";
 export * from "./transfer-record-ownership";
 export * from "./named-actions";
 
