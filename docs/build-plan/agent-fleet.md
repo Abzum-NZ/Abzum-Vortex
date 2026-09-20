@@ -206,7 +206,7 @@ root still does not decompose a multi-slice issue into its workers.
 3. **Dispatch** — start one agent in one new worktree on one branch, in a single command. The agent is an issue owner for a multi-slice issue and a worker for a single-slice one; see Root coordinator and issue owners above. For example:
 
    ```
-   orca worktree create --repo id:<repoId> --name <branch-name> \
+   C:/Users/vijay/AppData/Local/Programs/orca/resources/bin/orca.exe worktree create --repo id:<repoId> --name <branch-name> \
      --agent claude --setup run --parent-worktree active \
      --prompt "$(cat brief.md)" --json
    ```
@@ -228,7 +228,9 @@ root still does not decompose a multi-slice issue into its workers.
    closes the issue, then scans the shared board for newly unblocked issues. A
    task is not finished until its board row is true.
 8. **Clean up.** Once the branch is merged and the board row is verified, remove
-   the finished checkout with `orca worktree rm`; see Worktree cleanup below.
+   the finished checkout with
+   `C:/Users/vijay/AppData/Local/Programs/orca/resources/bin/orca.exe worktree rm`;
+   see Worktree cleanup below.
 
 ### Blocking completion and resume gate
 
@@ -279,12 +281,11 @@ owners supply this evidence to the root; the root alone writes it on the issue.
    workers; name the next accountable owner. Batch the issue-field changes.
    Post one closing comment citing the delivering PR and evidence only when
    whole-issue acceptance closes the issue.
-4. Scan the shared board and timestamped dossiers for dependencies, filtering
-   blockers to `state=open`; move every startable row to Ready or its current true state,
-   derive the pickup order, and exclude #520 because it is a parked user
-   decision. Keep sequencing generic and manual. Post Completed, Coming up,
-   Pending User Decision and Overall Progress rows, and recount the numerator
-   and denominator from the live board.
+4. Scan the shared board and timestamped dossiers for the native dependency DAG,
+   filtering blockers to `state=open`. Reconcile each row's true state and derive
+   Pickup Order under Queue selection below. Keep sequencing generic and manual.
+   Post Completed, Coming up, Pending User Decision and Overall Progress rows,
+   and recount the numerator and denominator from the live board.
 5. Read back the changed board rows and issue states. **Do not dispatch the next
    worker until these writes are verified.** A failed or incomplete reconciliation
    blocks new dispatch, not an already running worker's authorized work.
@@ -305,17 +306,20 @@ duplicate root.
 
 ## Queue selection
 
-Order comes from the repository, not from intuition. Issue numbers, folder
-names and old comments are not evidence of sequence — native GitHub
-dependencies are.
+Pickup Order and Ready eligibility come from the native open dependency DAG,
+not from intuition. Issue numbers, folder names and old comments are not
+evidence of sequence.
 
 1. **Collect candidates.** Open issues whose board status is Ready or Backlog.
+   Do not number epics or explicitly deferred or user-decision items in Pickup
+   Order unless the user directly authorizes their pickup.
 2. **Drop anything genuinely blocked.** Use the root's shared snapshot and
    the owner's assignment dossier. Preserve all dependency edges in the dossier
    as audit evidence, but count only edges whose issue `state` is `open` for
    eligibility. An unknown state or missing dossier leaves eligibility unknown
    until the root supplies one targeted fresh read. Scan the whole shared board
-   after completions and on resume, not just the old queue.
+   after completions and on resume, not just the old queue. Never move a Backlog
+   item with an open blocker to Ready or assign it an arbitrary queue position.
 3. **Order by roadmap lane, then priority, then dependency depth.** Work that
    unblocks the most downstream issues goes first within a lane.
 4. **Prefer functionality over maintenance.** Between two startable tasks,
@@ -342,10 +346,11 @@ dependencies are.
 Every cycle, the root alone reads the complete live board and all relevant
 fields, including paginated items and fields, once and publishes the central
 snapshot before anyone reads it. It then reads every in-flight agent terminal
-with `orca terminal read`; check actual task activity, empty worktrees and
-failed launches. This live-board verification is required even when no agent
-has just finished; owners and workers reuse the snapshot rather than calling
-GitHub.
+with
+`C:/Users/vijay/AppData/Local/Programs/orca/resources/bin/orca.exe terminal read`;
+check actual task activity, empty worktrees and failed launches. This live-board
+verification is required even when no agent has just finished; owners and
+workers reuse the snapshot rather than calling GitHub.
 The root reads each issue owner's terminal, and each owner reads its own
 workers' terminals; nobody skips a level or starts a worker that already exists.
 The interval between checks must never exceed twenty minutes, per the
@@ -356,26 +361,28 @@ from a parked one is the hard part, and getting it wrong in either direction
 is expensive.
 
 Record each terminal handle, check time, observed action, comparison with the
-brief and any steering sent. If progress appears stalled, use `orca terminal
-send` to ask what it is waiting on and what it has completed, then read or wait
-for its answer. Input acceptance alone does not prove the question was answered.
+brief and any steering sent. At 30 minutes elapsed, record a checkpoint based on
+actual progress: the exact current command, new output since the prior
+checkpoint, last meaningful progress, current blocker and next step. Elapsed
+time alone never kills or replaces a session. If progress appears stalled, use
+`C:/Users/vijay/AppData/Local/Programs/orca/resources/bin/orca.exe terminal send`
+to ask what it is waiting on and what it has completed, then read or wait for
+its answer. Input acceptance alone does not prove the question was answered.
 Never replace this interaction with host-process or cluster sampling, and never
 stop an agent that has not failed to answer the question. Recover a failed
 launch only after proving the prior session exited. Then verify the
 replacement's actual task start and resolved model. Do not leave an idle agent,
 orphan worktree or stale branch after its work has ended.
 
-### GLM stale sweep
+### Stale-sweep status
 
-GLM stale-sweep automation runs every 15 minutes as a read-only observer. It
-writes `C:/Users/vijay/AppData/Local/Temp/vortex-fleet/stale-sweep.md` and sends
-its summary to the root. The root forwards each finding to the owning
-orchestrator and records that orchestrator's reply; it does not independently
-mutate an owner's worktree. This observer does not replace terminal readback,
-board reconciliation or proven-exit recovery. For a rescue finding, the owner
-performs the porcelain-status inventory and complete-WIP commit or archive above;
-the root preserves any existing rescue archive and holds new dispatch until the
-rescue is deliberately recovered or closed.
+Recurring stale-sweep automation is disabled after recurring launcher failures.
+It is not fixed, and no scheduled observer is active. Retained historical sweep
+evidence may inform manual review, but it never replaces terminal readback,
+root-only board reconciliation or proven-exit recovery. For a rescue finding,
+the owner performs the porcelain-status inventory and complete-WIP commit or
+archive above; the root preserves any existing rescue archive and holds new
+dispatch until the rescue is deliberately recovered or closed.
 
 Evidence that means something:
 
@@ -413,10 +420,11 @@ answer.
 Done requires deleting merged issue branches locally and remotely where
 applicable, stopping attached agents, and removing their worktrees after
 preserving drafts and unmerged work. After a task branch is merged and its
-board row is true, remove its finished worktree with `orca worktree rm
---worktree <exact-selector>`. Do this as part of completion; repeat the audit
-on resume. A held hosted receipt does not require retaining a finished
-developer's checkout.
+board row is true, remove its finished worktree with
+`C:/Users/vijay/AppData/Local/Programs/orca/resources/bin/orca.exe worktree rm
+--worktree <exact-selector>`. Do this as part of completion; repeat the audit on
+resume. A held hosted receipt does not require retaining a finished developer's
+checkout.
 
 First read the agent terminal to confirm completion, preserve reports and any
 unsent drafts outside the disposable checkout without submitting them, inspect
@@ -464,10 +472,16 @@ environments, database changes and testing](../specification/18-delivery-and-tes
 and the build plan's [planning rules](README.md#planning-rules) for the
 current policy and the selective-verification mechanics.
 
-Every task:
+Every task runs the applicable repository gate. Do not blindly rerun an
+unchanged full suite: reuse still-applicable accepted results and run checks
+proportionate to the changed surface. Run `pnpm verify` (format, lint, typecheck,
+boundaries, tests, fixtures, build) in the **foreground** whenever the affected
+product surface or missing or stale evidence requires the full gate.
 
-- `pnpm verify` (format, lint, typecheck, boundaries, tests, fixtures, build)
-  run in the **foreground**.
+- Use the existing scoped formatting selection with only changed product paths.
+  Exclude scratch files and local brief or evidence artifacts from the product
+  formatting input. This input scoping never skips a changed product file or
+  weakens the repository's formatting rules.
 - The database checks the change actually affects, each on a fresh
   verification cluster.
 - Clean up with `pnpm db:clean` only — never `db:reset` or
@@ -612,6 +626,8 @@ Workers and owners supply evidence to the root; the root alone writes on the iss
 
 Read CLAUDE.md and docs/build-plan/agent-coordination.md first.
 Setup: git fetch origin && git checkout -b <branch> origin/main
+Orca CLI: C:/Users/vijay/AppData/Local/Programs/orca/resources/bin/orca.exe
+Use that absolute executable in every Orca command; never use bare orca.
 
 ## Verify the premise FIRST
 Confirm the defect still exists on your branch and that no fix exists on
