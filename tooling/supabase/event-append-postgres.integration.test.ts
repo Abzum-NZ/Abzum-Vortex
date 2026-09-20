@@ -328,9 +328,31 @@ const rollbackProof = new Error("ROLLBACK_EVENT_APPEND_PROOF");
 describeDatabase("compiled private Event append PostgreSQL proof", () => {
   it("publishes, provisions and appends a runtime-validated V2 occurrence", async () => {
     const sql = postgres(databaseUrl!, { max: 1, prepare: false });
+    // One instant for every timestamp this proof derives, as the Record save
+    // proof already does with its own `operationAt`. `sessionContextSchema`
+    // refuses authentication evidence that postdates access-token issuance,
+    // so reading the clock separately for `accessTokenIssuedAt` and
+    // `primaryAuthenticatedAt` refused the context whenever the millisecond
+    // ticked between the two reads (#512, the second failure in that run).
+    const operationAt = new Date();
     try {
       try {
         await sql.begin(async (transaction) => {
+          // Same lock order as the Record save proof, for the same reason
+          // (#512): this transaction writes the tenant identity rows and then
+          // provisions record storage, and the generated `record_data` table's
+          // foreign keys make that CREATE TABLE ask for ShareRowExclusiveLock
+          // on the three relations the inserts below already hold
+          // RowExclusiveLock on. Both proofs run against one verification
+          // cluster under `pnpm db:verify`, so without this the two
+          // provisioning calls deadlocked against each other. The stronger
+          // lock is taken first, before any insert, so there is nothing to
+          // escalate.
+          await transaction`lock table
+            vortex_identity.organizations,
+            vortex_identity.organization_accounts,
+            vortex_access.organization_groups
+            in share row exclusive mode`;
           await transaction`insert into vortex_identity.tenants (
             tenant_id, short_name, display_name, state, created_at, created_by,
             state_changed_at, revision
@@ -390,8 +412,8 @@ describeDatabase("compiled private Event append PostgreSQL proof", () => {
               systemActorId: actorId,
               sessionId: id(93),
               authenticationStrength: "service",
-              issuedAt: new Date(Date.now() - 1_000).toISOString(),
-              expiresAt: new Date(Date.now() + 60_000).toISOString(),
+              issuedAt: new Date(operationAt.valueOf() - 1_000).toISOString(),
+              expiresAt: new Date(operationAt.valueOf() + 60_000).toISOString(),
               accessVersion: 1,
               correlationId,
             })}::text::jsonb)`;
@@ -441,12 +463,12 @@ describeDatabase("compiled private Event append PostgreSQL proof", () => {
             applicationRootId,
             sessionId: id(94),
             authenticationStrength: "single_factor",
-            issuedAt: new Date(Date.now() - 1_000).toISOString(),
-            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            issuedAt: new Date(operationAt.valueOf() - 1_000).toISOString(),
+            expiresAt: new Date(operationAt.valueOf() + 60_000).toISOString(),
             accessVersion: 1,
             correlationId,
-            accessTokenIssuedAt: new Date(Date.now() - 1_000).toISOString(),
-            primaryAuthenticatedAt: new Date(Date.now() - 1_000).toISOString(),
+            accessTokenIssuedAt: new Date(operationAt.valueOf() - 1_000).toISOString(),
+            primaryAuthenticatedAt: new Date(operationAt.valueOf() - 1_000).toISOString(),
           } satisfies SessionContext);
           await transaction`select vortex_context.initialize(
             ${JSON.stringify(humanContext)}::text::jsonb

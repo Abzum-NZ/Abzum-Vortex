@@ -1430,6 +1430,26 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
     try {
       await cleanRecordSaveFixture(admin);
       await admin.begin(async (transaction) => {
+        // This fixture writes tenant identity rows and then provisions record
+        // storage in one transaction. `vortex_record.provision_exact_module_storage`
+        // creates each `record_data` table with foreign keys to
+        // `vortex_identity.organizations`, `vortex_identity.organization_accounts`
+        // and `vortex_access.organization_groups`, so the CREATE TABLE needs
+        // ShareRowExclusiveLock on all three. The inserts below already hold the
+        // weaker RowExclusiveLock on them, so two fixtures running at once (this
+        // proof and the Event append proof share one verification cluster) each
+        // held RowExclusiveLock and each waited for the other's
+        // ShareRowExclusiveLock: a deadlock inside provisioning (#512). Taking
+        // the stronger lock first, in the same relation order the generated
+        // DDL uses, removes the escalation; concurrent fixtures now serialize
+        // here instead. The provisioning concurrency proof
+        // (supabase/tests/module-storage-provisioning-concurrency.test.sh)
+        // never hit this because it commits its identity fixture first.
+        await transaction`lock table
+          vortex_identity.organizations,
+          vortex_identity.organization_accounts,
+          vortex_access.organization_groups
+          in share row exclusive mode`;
         await transaction`insert into vortex_identity.tenants (
           tenant_id, short_name, display_name, state, created_at, created_by,
           state_changed_at, revision
