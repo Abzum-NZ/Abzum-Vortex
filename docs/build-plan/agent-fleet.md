@@ -318,6 +318,40 @@ the queue rather than blocking the branch.
 > This document records what actually happens. Which model the project keeps is
 > tracked separately and is not the orchestrator's decision to make.
 
+### Predict verification before every promotion
+
+Every promotion PR body must state **Expected verification: full** or
+**Expected verification: selective**, with the reason, exact candidate and
+Testing base. Inspect `git diff --name-only origin/testing..origin/main`, the
+intervening path history and the reusable baseline, then compare with
+`fullCoveragePatterns` in `workflows/kestra/database-verification-selection.json`
+and the committed selector. Do not infer mode from the issue or PR label.
+
+Existing SQL suites and concurrency proofs map to their exact registered check
+and are subtracted from globally relevant inputs. The remaining protected
+inputs force full coverage: `supabase/migrations/*.sql`, `supabase/config.toml`,
+`supabase/seed.sql`, `supabase/tests/helpers/*`, `tooling/supabase/*`, and the
+Kestra verification manifest, selection inventory, database-state snapshot,
+delivery runner, selector and selector test. The inventory is authoritative
+if this list changes. Missing, invalid or non-ancestor baseline evidence,
+change-and-revert history and unmapped changed inputs also force full coverage.
+
+A cheap selective run requires a valid successful ancestor baseline. After
+failed runs have invalidated it, obtain one successful full run first; trying
+to split protected changes cannot restore missing reuse evidence. The recovery
+promotion containing #525/#526/#527 is explicitly a full baseline run because
+#525 and #527 changed the delivery runner. Confirm #526 is merged and #523's
+board row is true before that promotion. #525 runs lint immediately after
+migrations, before SQL suites and concurrency, so schema errors fail early.
+
+After the baseline is green, promote changes limited to existing suites/proofs
+separately. Deliberately batch migrations and infrastructure into their own
+full promotion. If selective is intended but a protected path is in the diff,
+split before promoting; never bundle a migration into proof-only work intended
+for selective verification. Compare the actual receipt mode and reasons to the
+prediction. If a predicted selective run executes full coverage, record the
+prediction defect explicitly and investigate before repeating it.
+
 ## Dispatch brief template
 
 Every brief is drift-proof by construction: it names the objective, the
