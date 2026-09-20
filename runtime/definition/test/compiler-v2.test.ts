@@ -1737,6 +1737,7 @@ describe("native Application V2 draft storage", () => {
     );
   });
 
+  // Compiling the full V2 fixture set is CPU-bound and inflates under parallel load.
   it("publishes, consumes, and restores one exact native V2 application", async () => {
     const { source, catalogue } = await publicationCatalogueV2();
     const sourceResolution = createResolution(source);
@@ -2014,8 +2015,9 @@ describe("native Application V2 draft storage", () => {
       }),
     ).rejects.toMatchObject({ code: "DEFINITION_RELEASE_INTEGRITY_FAILED" });
     expect(restoreMutated).toBe(false);
-  });
+  }, 15_000);
 
+  // Compiling the full V2 fixture set is CPU-bound and inflates under parallel load.
   it("publishes symmetric representation transitions as major and a native V2 follow-up natively", async () => {
     const { source: sourceV2, catalogue } = await publicationCatalogueV2();
     const modules = dependencyModuleReleases;
@@ -2182,5 +2184,5 @@ describe("native Application V2 draft storage", () => {
       catalogue,
     ).prepare(context, { rootId: own.rootId, expectedDraftRevision: 3 });
     expect(restoredV1.confirmation).toMatchObject({ impact: "major", assignedVersion: "3.0.0" });
-  });
+  }, 15_000);
 });

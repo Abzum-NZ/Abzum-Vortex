@@ -1430,6 +1430,26 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
     try {
       await cleanRecordSaveFixture(admin);
       await admin.begin(async (transaction) => {
+        // This fixture writes tenant identity rows and then provisions record
+        // storage in one transaction. `vortex_record.provision_exact_module_storage`
+        // creates each `record_data` table with foreign keys to
+        // `vortex_identity.organizations`, `vortex_identity.organization_accounts`
+        // and `vortex_access.organization_groups`, so the CREATE TABLE needs
+        // ShareRowExclusiveLock on all three. The inserts below already hold the
+        // weaker RowExclusiveLock on them, so two fixtures running at once (this
+        // proof and the Event append proof share one verification cluster) each
+        // held RowExclusiveLock and each waited for the other's
+        // ShareRowExclusiveLock: a deadlock inside provisioning (#512). Taking
+        // the stronger lock first, in the same relation order the generated
+        // DDL uses, removes the escalation; concurrent fixtures now serialize
+        // here instead. The provisioning concurrency proof
+        // (supabase/tests/module-storage-provisioning-concurrency.test.sh)
+        // never hit this because it commits its identity fixture first.
+        await transaction`lock table
+          vortex_identity.organizations,
+          vortex_identity.organization_accounts,
+          vortex_access.organization_groups
+          in share row exclusive mode`;
         await transaction`insert into vortex_identity.tenants (
           tenant_id, short_name, display_name, state, created_at, created_by,
           state_changed_at, revision
@@ -2095,6 +2115,20 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         outbox: "1",
         queue: "1",
       });
+      await expect(
+        admin<
+          { action: string; subject_ids: string[]; changed_field_ids: string[]; outcome: string }[]
+        >`select action, subject_ids, changed_field_ids, outcome
+          from vortex_activity.organization_activity_entries
+          where activity_id = ${activityNamedSetId}::uuid`,
+      ).resolves.toEqual([
+        {
+          action: "execute_named_action",
+          subject_ids: [namedRecordId],
+          changed_field_ids: [fieldId, calculatedFieldId],
+          outcome: "completed",
+        },
+      ]);
 
       await expect(
         runNamedAction({
@@ -2267,6 +2301,61 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         })}::text::jsonb,
         ${actorId}::uuid, ${id(161)}::uuid
       )`;
+      const deniedWriterResult = await admin.begin(async (transaction) => {
+        const [scope] = await transaction<
+          { tenant_id: string; organization_account_id: string; access_version: string }[]
+        >`select * from vortex_access.resolve_human_application_change_scope(
+          ${identityId}::uuid, ${organizationId}::uuid, ${applicationRootId}::uuid
+        )`;
+        if (scope === undefined) throw new Error("Named writer refusal scope is unavailable");
+        await transaction`select vortex_context.initialize(${JSON.stringify({
+          callerKind: "human",
+          identityAuthorityId,
+          tenantId: scope.tenant_id,
+          organizationId,
+          organizationAccountId: scope.organization_account_id,
+          applicationRootId,
+          identityId,
+          sessionId: session.sessionId,
+          authenticationStrength: session.authenticationStrength,
+          accessTokenIssuedAt: session.accessTokenIssuedAt,
+          primaryAuthenticatedAt: session.primaryAuthenticatedAt,
+          issuedAt: operationAt.toISOString(),
+          expiresAt: session.accessTokenExpiresAt,
+          accessVersion: Number(scope.access_version),
+          correlationId: id(27),
+        })}::text::jsonb)`;
+        await transaction`set local role vortex_record_adapter`;
+        const [row] = await transaction<{ result: unknown }[]>`
+          select vortex_record.save_named_action_set_fields_internal(
+            ${id(210)}::uuid, 'update', ${recordTypeId}::uuid,
+            ${namedRecordId}::uuid, 4,
+            ${JSON.stringify({ [fieldId]: "Denied writer" })}::text::jsonb,
+            ${JSON.stringify({ [fieldId]: "Denied writer" })}::text::jsonb,
+            null::uuid, ${id(211)}::uuid, ${id(212)}::uuid,
+            'module', ${moduleRootId}::uuid, 1, ${setTitleActionId}::uuid,
+            ${JSON.stringify({ title: "Denied writer" })}::text::jsonb
+          ) as result`;
+        return row?.result;
+      });
+      expect(deniedWriterResult).toEqual({
+        outcome: "refused_recorded",
+        reasonCode: "record_unavailable",
+      });
+      await expect(
+        admin<
+          { action: string; subject_ids: string[]; changed_field_ids: string[]; outcome: string }[]
+        >`select action, subject_ids, changed_field_ids, outcome
+          from vortex_activity.organization_activity_entries
+          where activity_id = ${id(211)}::uuid`,
+      ).resolves.toEqual([
+        {
+          action: "execute_named_action",
+          subject_ids: [namedRecordId],
+          changed_field_ids: [],
+          outcome: "refused",
+        },
+      ]);
       const beforeWithdrawnReplay = await namedEffects();
       await expect(runNamedAction(eventOnly)).resolves.toMatchObject({
         kind: "available",
@@ -2285,7 +2374,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       ).resolves.toEqual({ kind: "unavailable" });
       expect(await namedEffects()).toEqual({
         receipts: "4",
-        activities: "5",
+        activities: "6",
         outbox: "2",
         queue: "2",
       });
