@@ -55,6 +55,9 @@ select no_plan();
 --     grant_organization_direct_record_share, which owns the revision check,
 --     Activity append and Access invalidation. The protected #37 invocation on
 --     top of it needs a facts adapter of its own and is proved in 450.
+--   * platform-backed fixture roles: the organization-role writer accepts
+--     application-owned permissions only, so the fixed platform-role shape
+--     used by 455 and the storage-provisioning proof is repeated explicitly.
 -- ============================================================================
 
 \set tenant '14750000-0000-4000-8000-000000000001'
@@ -1778,6 +1781,74 @@ select pg_temp.adapter_assign(:'org_one', '74750000-0000-4000-8000-000000000048'
   '74750000-0000-4000-8000-000000000027', :'all_account');
 select pg_temp.adapter_assign(:'org_two', '74750000-0000-4000-8000-000000000047',
   '74750000-0000-4000-8000-000000000031', :'other_account');
+
+-- Direct inserts: the role writer accepts application-owned permissions only.
+-- The platform accounts.manage prerequisite therefore follows the existing
+-- platform-install authority fixture below, while all Record fixtures continue
+-- to use their owning writers.
+insert into vortex_access.organization_roles (
+  organization_id, role_id, role_kind, role_key, live_revision, created_by, created_at
+) values (
+  :'org_one', '74750000-0000-4000-8000-000000000091', 'custom',
+  'offboarding_administrator', 1, :'actor', pg_catalog.statement_timestamp()
+);
+insert into vortex_access.organization_role_permission_entries (
+  organization_id, role_id, role_revision, entry_ordinal, role_kind,
+  role_application_root_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id,
+  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
+  meaning_fingerprint
+)
+select entry.organization_id, '74750000-0000-4000-8000-000000000091'::uuid,
+  1, 1, 'custom', null, entry.application_root_id, entry.owner_kind, entry.owner_id,
+  entry.permission_id, entry.registration_kind, entry.registration_owner_id,
+  entry.registration_revision, registration.permission_catalogue_fingerprint,
+  continuity.continuity_revision, entry.meaning_fingerprint
+from vortex_access.permission_catalogue_entries as entry
+join vortex_access.permission_registration_revisions as registration
+  on registration.organization_id = entry.organization_id
+  and registration.registration_kind = entry.registration_kind
+  and registration.registration_owner_id = entry.registration_owner_id
+  and registration.revision = entry.registration_revision
+join vortex_access.permission_continuities as continuity
+  on continuity.organization_id = entry.organization_id
+  and continuity.application_root_id is not distinct from entry.application_root_id
+  and continuity.owner_kind = entry.owner_kind
+  and continuity.owner_id = entry.owner_id
+  and continuity.permission_id = entry.permission_id
+where entry.organization_id = :'org_one'
+  and entry.registration_kind = 'platform'
+  and entry.registration_revision = 3
+  and entry.permission_id = '630a980c-0ff5-40b1-a329-7326a2122395';
+insert into vortex_access.organization_role_revisions (
+  organization_id, role_id, revision, role_kind, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
+  authority_continuity_revision, role_key, label, description,
+  changed_by, changed_at, change_correlation_id
+) values (
+  :'org_one', '74750000-0000-4000-8000-000000000091', 1, 'custom', 'active',
+  'privileged', 'standing', 1, 1, 'offboarding_administrator',
+  'Offboarding administrator', 'Exact protected offboarding transfer authority.',
+  :'actor', pg_catalog.statement_timestamp(), 'c4750000-0000-4000-8000-000000000091'
+);
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, assignment_kind, revision, starts_at, state,
+  granted_by, granted_at, grant_correlation_id, changed_by, changed_at,
+  change_correlation_id
+) values
+  (:'org_one', '74750000-0000-4000-8000-000000000092',
+    '74750000-0000-4000-8000-000000000091', 'organization_account',
+    :'owner_account', 'standing', 1, pg_catalog.statement_timestamp() - interval '1 minute',
+    'live', :'actor', pg_catalog.statement_timestamp(),
+    'c4750000-0000-4000-8000-000000000092', :'actor',
+    pg_catalog.statement_timestamp(), 'c4750000-0000-4000-8000-000000000092'),
+  (:'org_one', '74750000-0000-4000-8000-000000000093',
+    '74750000-0000-4000-8000-000000000091', 'organization_account',
+    :'all_account', 'standing', 1, pg_catalog.statement_timestamp() - interval '1 minute',
+    'live', :'actor', pg_catalog.statement_timestamp(),
+    'c4750000-0000-4000-8000-000000000093', :'actor',
+    pg_catalog.statement_timestamp(), 'c4750000-0000-4000-8000-000000000093');
 
 -- Direct inserts: installation authority. A role over the shipped platform
 -- install permission is built the same way 455 and the storage-provisioning
@@ -5453,12 +5524,19 @@ reset role;
 select is((select result ->> 'reasonCode' from ownership_transfer_conflicting_retry),
   'command_identity_conflict', 'conflicting command-id reuse safely refuses');
 
--- The offboarding entry is deliberately not a runtime capability.  These
--- controlled prerequisite rows let real protected transfer operations prove
--- its no-read result, retained-row source proof and detached-installation
--- stored-definition branch without introducing #407 inventory or batching.
+-- The source-bound engine remains private.  The sole runtime surface is the
+-- protected offboarding entry, which first establishes accounts.manage and
+-- only then delegates to the fixed engine.
 select ok(
-  not pg_catalog.has_function_privilege(
+  pg_catalog.has_function_privilege(
+    'vortex_runtime',
+    'vortex_record.transfer_record_ownership_for_offboarding(uuid,uuid,uuid,bigint,uuid,uuid,uuid,uuid)',
+    'EXECUTE'
+  ) and not pg_catalog.has_function_privilege(
+    'vortex_request',
+    'vortex_record.transfer_record_ownership_for_offboarding(uuid,uuid,uuid,bigint,uuid,uuid,uuid,uuid)',
+    'EXECUTE'
+  ) and not pg_catalog.has_function_privilege(
     'vortex_runtime',
     'vortex_record.transfer_record_ownership_for_offboarding_internal(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid,uuid)',
     'EXECUTE'
@@ -5474,7 +5552,7 @@ select ok(
     'vortex_record_adapter',
     'vortex_event.append_detached_offboarding_reassignment_internal(uuid,uuid,uuid,uuid)',
     'EXECUTE'
-  ), 'only the narrow detached reassignment Event entry is available to the private Record writer'
+  ), 'only the runtime wrapper is granted while the source-bound engine stays private'
 );
 
 select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
@@ -5583,25 +5661,63 @@ select is((
 ), pg_catalog.concat_ws('|', '2', :'reparent_account', '0', '0', '0', '0'),
   'transfer queue failure rolls back owner, revision, receipt, Activity, Event and queue');
 
--- The private entry accepts a retained row only while the locked row proves
--- its exact source account.  It neither restores the lifecycle nor grants a
--- public endpoint.
--- This actor has only the ownership-routed transfer declaration, proving the
--- retained facts view still uses the normal scope evaluator rather than an
--- all-records-only transfer shortcut.
+-- The wrapper refuses before observing record facts when the actor lacks the
+-- additional administrative authority.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'reparent_account');
+set local role vortex_runtime;
+select throws_ok(
+  pg_catalog.format(
+    'select vortex_record.transfer_record_ownership_for_offboarding(%L::uuid,%L::uuid,%L::uuid,1,%L::uuid,%L::uuid,%L::uuid,%L::uuid)',
+    'a4750000-0000-4000-8000-000000000584', :'type_c',
+    'd5750000-0000-4000-8000-000000000082', :'reparent_account',
+    'a4750000-0000-4000-8000-000000000585', 'a4750000-0000-4000-8000-000000000586',
+    :'owner_account'
+  ),
+  '42501'::text, 'Organization account administration change is unavailable'::text,
+  'a transfer-capable non-administrator cannot enter offboarding transfer'
+);
+reset role;
+
+-- A manager with the record route still cannot nominate a source that is not
+-- the locked stored owner, and the refusal discloses no record fact.
 select pg_temp.adapter_context(:'org_one', :'app_one', :'owner_account');
-set local role vortex_record_adapter;
+set local role vortex_runtime;
+create temporary table ownership_transfer_wrong_source on commit drop as
+select vortex_record.transfer_record_ownership_for_offboarding(
+  'a4750000-0000-4000-8000-000000000587'::uuid,
+  :'type_c'::uuid, 'd5750000-0000-4000-8000-000000000082'::uuid, 1,
+  :'reparent_account'::uuid,
+  'a4750000-0000-4000-8000-000000000588'::uuid,
+  'a4750000-0000-4000-8000-000000000589'::uuid, :'related_account'::uuid
+) as result;
+reset role;
+select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode',
+  coalesce(result ->> 'recordId', ''), coalesce(result ->> 'concurrencyNumber', ''))
+  from ownership_transfer_wrong_source), 'refused|owner_unavailable||',
+  'the protected entry keeps a source-account mismatch undisclosed');
+
+-- This actor has only the ownership-routed transfer declaration plus the new
+-- accounts.manage prerequisite.  It cannot read the retained row, proving the
+-- successful call and its replay never depend on a post-write record lookup.
+select pg_temp.adapter_context(:'org_one', :'app_one', :'owner_account');
+set local role vortex_request;
+select is(vortex_record.read_record(:'type_c'::uuid,
+  'd5750000-0000-4000-8000-000000000082'::uuid) ->> 'outcome', 'refused',
+  'the offboarding administrator cannot read the retained record before transfer');
+reset role;
+select pg_temp.adapter_context(:'org_one', :'app_one', :'owner_account');
+set local role vortex_runtime;
 create temporary table ownership_transfer_retained_result on commit drop as
-select vortex_record.transfer_record_ownership_for_offboarding_internal(
+select vortex_record.transfer_record_ownership_for_offboarding(
   'a4750000-0000-4000-8000-000000000484'::uuid,
   :'type_c'::uuid, 'd5750000-0000-4000-8000-000000000082'::uuid, 1,
-  'organization_account', :'reparent_account'::uuid,
+  :'reparent_account'::uuid,
   'a4750000-0000-4000-8000-000000000485'::uuid,
   'a4750000-0000-4000-8000-000000000486'::uuid, :'owner_account'::uuid
 ) as result;
 reset role;
 select is((select result ->> 'outcome' from ownership_transfer_retained_result),
-  'transferred', 'the source-account-bound entry honors ownership-scoped transfer authority');
+  'transferred', 'the protected entry transfers a retained row to an active compatible account');
 select is((select pg_catalog.concat_ws('|', lifecycle_state,
   owner_organisation_account_id::text, concurrency_number::text)
   from record_data.rt_b4750000000040008000000000000002
@@ -5624,22 +5740,57 @@ select is((
 ), 'completed|completed|reassigned|1',
   'retained transfer commits its receipt, Activity, reassignment Event and queue atomically');
 
--- A wrong stored source is indistinguishable from an unavailable owner and
--- leaves the retained row unchanged.
+-- A completed matching command replays from its receipt even though this
+-- actor still cannot read the transferred row.  No owner metadata or new
+-- Activity/Event effect is exposed.
 select pg_temp.adapter_context(:'org_one', :'app_one', :'owner_account');
-set local role vortex_record_adapter;
-create temporary table ownership_transfer_wrong_source on commit drop as
-select vortex_record.transfer_record_ownership_for_offboarding_internal(
-  'a4750000-0000-4000-8000-000000000487'::uuid,
+set local role vortex_request;
+select is(vortex_record.read_record(:'type_c'::uuid,
+  'd5750000-0000-4000-8000-000000000082'::uuid) ->> 'outcome', 'refused',
+  'the offboarding administrator still cannot read the transferred record');
+reset role;
+select pg_temp.adapter_context(:'org_one', :'app_one', :'owner_account');
+set local role vortex_runtime;
+create temporary table ownership_transfer_retained_replay on commit drop as
+select vortex_record.transfer_record_ownership_for_offboarding(
+  'a4750000-0000-4000-8000-000000000484'::uuid,
+  :'type_c'::uuid, 'd5750000-0000-4000-8000-000000000082'::uuid, 1,
+  :'reparent_account'::uuid,
+  'a4750000-0000-4000-8000-00000000048a'::uuid,
+  'a4750000-0000-4000-8000-00000000048b'::uuid, :'owner_account'::uuid
+) as result;
+reset role;
+select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'replayed',
+  result ->> 'recordId', result ->> 'concurrencyNumber',
+  (result ? 'ownerOrganizationAccountId')::text, (result ? 'ownerGroupId')::text)
+  from ownership_transfer_retained_replay),
+  'transferred|true|d5750000-0000-4000-8000-000000000082|2|false|false',
+  'a completed offboarding command replays its canonical undisclosed result without a record read');
+select is((
+  select pg_catalog.concat_ws('|',
+    (select pg_catalog.count(*) from vortex_activity.organization_activity_entries
+      where activity_id in ('a4750000-0000-4000-8000-000000000485'::uuid,
+        'a4750000-0000-4000-8000-00000000048a'::uuid)),
+    (select pg_catalog.count(*) from vortex_event.event_outbox
+      where occurrence_id in ('a4750000-0000-4000-8000-000000000486'::uuid,
+        'a4750000-0000-4000-8000-00000000048b'::uuid))
+  )
+), '1|1', 'the completed offboarding replay adds no Activity or Event');
+
+select pg_temp.adapter_context(:'org_one', :'app_one', :'owner_account');
+set local role vortex_runtime;
+create temporary table ownership_transfer_retained_conflicting_retry on commit drop as
+select vortex_record.transfer_record_ownership_for_offboarding(
+  'a4750000-0000-4000-8000-000000000484'::uuid,
   :'type_c'::uuid, 'd5750000-0000-4000-8000-000000000082'::uuid, 2,
-  'organization_account', :'owner_account'::uuid,
-  'a4750000-0000-4000-8000-000000000488'::uuid,
-  'a4750000-0000-4000-8000-000000000489'::uuid, :'related_account'::uuid
+  :'reparent_account'::uuid,
+  'a4750000-0000-4000-8000-00000000048c'::uuid,
+  'a4750000-0000-4000-8000-00000000048d'::uuid, :'owner_account'::uuid
 ) as result;
 reset role;
 select is((select pg_catalog.concat_ws('|', result ->> 'outcome', result ->> 'reasonCode')
-  from ownership_transfer_wrong_source), 'refused|owner_unavailable',
-  'the offboarding entry requires the exact stored source account');
+  from ownership_transfer_retained_conflicting_retry), 'refused|command_identity_conflict',
+  'a changed offboarding expected revision remains a command identity conflict');
 
 -- ============================================================================
 -- #475: the refusals the fixed ownership transfer promises. Every refused
@@ -6321,18 +6472,18 @@ select is((select pg_catalog.concat_ws('|', result ->> 'outcome',
   'refused|record_unavailable|',
   'ordinary transfer never discloses a detached record revision');
 select pg_temp.adapter_context(:'org_one', :'app_one', :'all_account');
-set local role vortex_record_adapter;
+set local role vortex_runtime;
 create temporary table ownership_transfer_detached_result on commit drop as
-select vortex_record.transfer_record_ownership_for_offboarding_internal(
+select vortex_record.transfer_record_ownership_for_offboarding(
   'a4750000-0000-4000-8000-000000000490'::uuid,
   :'type_c'::uuid, 'd5750000-0000-4000-8000-000000000083'::uuid, 1,
-  'organization_account', :'owner_account'::uuid,
+  :'owner_account'::uuid,
   'a4750000-0000-4000-8000-000000000491'::uuid,
   'a4750000-0000-4000-8000-000000000492'::uuid, :'reparent_account'::uuid
 ) as result;
 reset role;
 select is((select result ->> 'outcome' from ownership_transfer_detached_result),
-  'transferred', 'disabled-installation transfer uses the exact stored definition');
+  'transferred', 'the protected entry transfers a detached-installation row through its stored definition');
 select is((select pg_catalog.concat_ws('|', lifecycle_state,
   owner_organisation_account_id::text, concurrency_number::text)
   from record_data.rt_b4750000000040008000000000000002
