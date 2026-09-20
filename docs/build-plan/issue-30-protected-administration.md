@@ -9,9 +9,9 @@ Governing requirements: [people and organisations](../specification/02-people-or
 
 ## Status, delivered slices and dependency boundary
 
-Slice 5 is delivered. [#455](https://github.com/Abzum-NZ/Abzum-Vortex/issues/455)
-has delivered its hosted Testing verification prerequisite, so Slice 6 recovery
-is in progress. Completed prerequisite history is retained for context only. The hosted delivery of the
+Slice 5 and Slice 6 are delivered. [#455](https://github.com/Abzum-NZ/Abzum-Vortex/issues/455)
+has delivered its hosted Testing verification prerequisite. Completed prerequisite
+history is retained for context only. The hosted delivery of the
 [central Access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
 is [complete](../evidence/issue-34-access-decision.md#delivery-boundary). The other native prerequisites — [#23](https://github.com/Abzum-NZ/Abzum-Vortex/issues/23),
 [#24](https://github.com/Abzum-NZ/Abzum-Vortex/issues/24),
@@ -57,11 +57,11 @@ Delivered on `testing`:
   ([PR #451](https://github.com/Abzum-NZ/Abzum-Vortex/pull/451)).
 - **Slice 5** — organisation-local administrative reads
   ([PR #453](https://github.com/Abzum-NZ/Abzum-Vortex/pull/453)).
+- **Slice 6** — organisation-local account lifecycle and invitations
+  ([PR #473](https://github.com/Abzum-NZ/Abzum-Vortex/pull/473)).
 
-Slices 1, 2, 3A, 3B, 3C, 3D, 4A, 4B and 5 are delivered to Testing. Slice 6 —
-organisation-local account lifecycle and invitation mutations — is in recovery
-on the current Testing baseline. The delivered reads remain context and are not
-Slice 6 scope.
+Slices 1, 2, 3A, 3B, 3C, 3D, 4A, 4B, 5 and 6 are delivered to Testing. The
+delivered reads remain context and are not Slice 6 scope.
 
 ## Outcome
 
@@ -577,9 +577,9 @@ Account or invitation mutation, offboarding, ownership transfer, Groups, PIM,
 general query/filter engines, UI, application definitions, MCP/AI, provider
 operations and Production deployment remain outside this slice.
 
-## Slice 6 — next organisation-local account lifecycle and invitations
+## Slice 6 — organisation-local account lifecycle and invitations
 
-This recovery slice adds five
+This slice adds five
 server-only commands: `suspendOrganizationAccount`,
 `reactivateOrganizationAccount`, `closeOrganizationAccount`,
 `createOrganizationInvitation`, and `revokeOrganizationInvitation`. Account
