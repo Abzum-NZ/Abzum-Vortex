@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "semver": "catalog:",
+    "uuid": "catalog:",
     "zod": "4.6.5"
   },
   "devDependencies": {

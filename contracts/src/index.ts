@@ -43,6 +43,7 @@ export * from "./organization-role-changes";
 export * from "./organization-stewardship";
 export * from "./permissions";
 export * from "./permission-registry";
+export * from "./record-offboarding";
 export * from "./record-ownership-compatibility";
 export * from "./records";
 export * from "./record-share-operations";
