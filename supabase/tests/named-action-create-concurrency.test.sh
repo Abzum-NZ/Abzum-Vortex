@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# #50 slice 2: the create_record named-action path against ordinary create,
-# under deterministic barriers, on the two resources whose acquisition order
-# differs between the two paths.
+# #50 slice 2: the create_record lock protocol against ordinary create, under
+# deterministic barriers, on the two resources whose acquisition order differs
+# between the two paths. This script isolates the exact share-then-counter
+# sequence used by the named path; it does not claim to execute the full
+# named-action service. The full preflight and terminal writer are exercised by
+# the real-service race in `record-save-postgres.integration.test.ts`.
 #
 # The unsynchronised twenty-iteration race in
 # `tooling/supabase/record-save-postgres.integration.test.ts` cannot
@@ -114,10 +117,15 @@ readonly column_required_link='f_c4810000000040008000000000000035'
 fixture_claimed=0
 declare -a worker_pids=()
 declare -A reaped_worker_pids=()
+declare -A worker_labels=()
 
 psql_command=(psql --no-psqlrc --quiet --tuples-only --no-align --set=ON_ERROR_STOP=1)
 if [ -n "$database_url" ]; then psql_command+=("$database_url"); fi
 run_sql() { "${psql_command[@]}" --command "$1"; }
+
+record_stage() {
+  printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%S.%3NZ')" "$1" >>"$proof_root/timeline.log"
+}
 
 wait_for_file() {
   local candidate="$1" deadline=$((SECONDS + 20))
@@ -164,10 +172,30 @@ wait_for_database_blocker() {
 }
 
 wait_owned_worker() {
-  local pid="$1" status
+  local pid="$1" label="${2:-worker}" status
   if wait "$pid"; then status=0; else status=$?; fi
   reaped_worker_pids["$pid"]=1
+  record_stage "$label shell_pid=$pid exited status=$status"
   return "$status"
+}
+
+dump_active_workers() {
+  local pid_path backend label
+  record_stage 'failure diagnostics started'
+  for pid_path in "$proof_root"/*.pid; do
+    [ -f "$pid_path" ] || continue
+    backend="$(tr -d '[:space:]' <"$pid_path")"
+    label="${pid_path##*/}"; label="${label%.pid}"
+    printf '%s backend_pid=%s shell_pid=%s\n' "$label" "$backend" \
+      "${worker_labels[$label]:-unknown}" >&2
+    [[ "$backend" =~ ^[1-9][0-9]*$ ]] || continue
+    run_sql "select pg_catalog.concat_ws('|',
+        pg_catalog.clock_timestamp()::text, pid::text, state, wait_event_type, wait_event,
+        coalesce(pg_catalog.array_to_string(pg_catalog.pg_blocking_pids(pid), ','), ''),
+        coalesce(xact_start::text, ''), coalesce(query_start::text, ''),
+        pg_catalog.left(query, 240))
+      from pg_catalog.pg_stat_activity where pid = $backend;" >&2 || true
+  done
 }
 
 stop_owned_workers() {
@@ -281,6 +309,11 @@ finalize() {
   stop_owned_workers
   if [ "$original_status" -ne 0 ]; then
     echo 'named action create concurrency proof failed; bounded diagnostics follow' >&2
+    dump_active_workers
+    if [ -f "$proof_root/timeline.log" ]; then
+      printf '%s\n' '--- timeline.log ---' >&2
+      tail -n 80 -- "$proof_root/timeline.log" >&2
+    fi
     for log_path in "$proof_root"/*.log; do
       [ -f "$log_path" ] || continue
       printf '%s\n' "--- ${log_path##*/} ---" >&2
@@ -935,8 +968,11 @@ reset role;
 commit;
 SQL
 opposite_share_pid=$!; worker_pids+=("$opposite_share_pid")
+worker_labels[opposite-share]="$opposite_share_pid"
+record_stage "opposite-share launched shell_pid=$opposite_share_pid"
 wait_for_file "$proof_root/opposite-share-ready"
 opposite_share_backend="$(read_backend_pid "$proof_root/opposite-share.pid")"
+record_stage "opposite-share ready backend_pid=$opposite_share_backend"
 [ "$(tr -d '[:space:]' <"$proof_root/opposite-share.locked")" = 't' ] || {
   echo 'the named-action preflight did not take its link-target share lock' >&2; exit 1
 }
@@ -957,20 +993,25 @@ reset role;
 commit;
 SQL
 opposite_counter_pid=$!; worker_pids+=("$opposite_counter_pid")
+worker_labels[opposite-counter]="$opposite_counter_pid"
+record_stage "opposite-counter launched shell_pid=$opposite_counter_pid"
 wait_for_file "$proof_root/opposite-counter-ready"
 opposite_counter_backend="$(read_backend_pid "$proof_root/opposite-counter.pid")"
+record_stage "opposite-counter ready backend_pid=$opposite_counter_backend"
 
 # Both opposite resources are now held. Release the share holder so it waits on
 # the counter, then release the counter holder into the share it must pass.
 touch "$proof_root/opposite-share-release"
+record_stage 'opposite-share released toward counter'
 wait_for_database_blocker "$opposite_share_backend" "$opposite_counter_backend" \
   'the named-action creation waiting for the ordinary counter'
 touch "$proof_root/opposite-counter-release"
+record_stage 'opposite-counter released toward share'
 
-wait_owned_worker "$opposite_counter_pid" || {
+wait_owned_worker "$opposite_counter_pid" 'opposite-counter' || {
   echo 'the ordinary create did not complete through the held share lock' >&2; exit 1
 }
-wait_owned_worker "$opposite_share_pid" || {
+wait_owned_worker "$opposite_share_pid" 'opposite-share' || {
   echo 'the named-action creation did not complete after the counter was released' >&2; exit 1
 }
 deadlock_free 'opposite order' "$proof_root/opposite-share.log" "$proof_root/opposite-counter.log" || exit 1
@@ -1013,8 +1054,11 @@ reset role;
 commit;
 SQL
 queued_share_pid=$!; worker_pids+=("$queued_share_pid")
+worker_labels[queued-share]="$queued_share_pid"
+record_stage "queued-share launched shell_pid=$queued_share_pid"
 wait_for_file "$proof_root/queued-share-ready"
 queued_share_backend="$(read_backend_pid "$proof_root/queued-share.pid")"
+record_stage "queued-share ready backend_pid=$queued_share_backend"
 
 "${psql_command[@]}" >"$proof_root/queued-counter.log" 2>&1 <<SQL &
 begin;
@@ -1032,8 +1076,11 @@ reset role;
 commit;
 SQL
 queued_counter_pid=$!; worker_pids+=("$queued_counter_pid")
+worker_labels[queued-counter]="$queued_counter_pid"
+record_stage "queued-counter launched shell_pid=$queued_counter_pid"
 wait_for_file "$proof_root/queued-counter-ready"
 queued_counter_backend="$(read_backend_pid "$proof_root/queued-counter.pid")"
+record_stage "queued-counter ready backend_pid=$queued_counter_backend"
 
 "${psql_command[@]}" >"$proof_root/queued-exclusive.log" 2>&1 <<SQL &
 begin;
@@ -1050,24 +1097,30 @@ reset role;
 commit;
 SQL
 queued_exclusive_pid=$!; worker_pids+=("$queued_exclusive_pid")
+worker_labels[queued-exclusive]="$queued_exclusive_pid"
+record_stage "queued-exclusive launched shell_pid=$queued_exclusive_pid"
 wait_for_file "$proof_root/queued-exclusive-started"
 queued_exclusive_backend="$(read_backend_pid "$proof_root/queued-exclusive.pid")"
+record_stage "queued-exclusive started backend_pid=$queued_exclusive_backend"
 wait_for_database_blocker "$queued_exclusive_backend" "$queued_share_backend" \
   'the exclusive waiter queued behind the named-action share'
 
 touch "$proof_root/queued-share-release"
+record_stage 'queued-share released toward counter'
 wait_for_database_blocker "$queued_share_backend" "$queued_counter_backend" \
   'the named-action creation waiting for the ordinary counter'
 touch "$proof_root/queued-counter-release"
+record_stage 'queued-counter released toward queued share'
 
-wait_owned_worker "$queued_counter_pid" || {
+wait_owned_worker "$queued_counter_pid" 'queued-counter' || {
   echo 'the ordinary create did not pass the queued exclusive waiter' >&2; exit 1
 }
-wait_owned_worker "$queued_share_pid" || {
+wait_owned_worker "$queued_share_pid" 'queued-share' || {
   echo 'the named-action creation did not complete behind the queued waiter' >&2; exit 1
 }
 touch "$proof_root/queued-exclusive-release"
-wait_owned_worker "$queued_exclusive_pid" || {
+record_stage 'queued-exclusive released'
+wait_owned_worker "$queued_exclusive_pid" 'queued-exclusive' || {
   echo 'the exclusive waiter did not complete' >&2; exit 1
 }
 deadlock_free 'queued exclusive' "$proof_root/queued-share.log" \

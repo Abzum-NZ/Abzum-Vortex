@@ -524,6 +524,13 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 return safeRefusal(prepared.correlationId, "operation_refused");
               if (calculated.pendingChecks.some((check) => check.kind !== "record_reference"))
                 return safeRefusal(prepared.correlationId, "operation_refused");
+              if (
+                "creationPendingChecks" in calculated &&
+                Object.values(calculated.creationPendingChecks).some((checks) =>
+                  checks.some((check) => check.kind !== "record_reference"),
+                )
+              )
+                return safeRefusal(prepared.correlationId, "operation_refused");
               finalValues =
                 "sourceFinalValues" in calculated
                   ? { ...calculated.sourceFinalValues }

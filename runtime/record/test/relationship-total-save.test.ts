@@ -28,6 +28,14 @@ const ids = {
   rootRecord: id(20),
   parentRecord: id(21),
   grandparentRecord: id(22),
+  creationRecordType: id(23),
+  creationStorage: id(24),
+  creationPerson: id(25),
+  creationFiles: id(26),
+  creationChoice: id(27),
+  requiredPermission: id(28),
+  organizationAccount: id(29),
+  file: id(34),
 } as const;
 
 const field = (
@@ -159,6 +167,7 @@ describe("locked relationship total save calculation", () => {
       success: true,
       sourceFinalValues: { [ids.title]: "Changed", [ids.recursiveTotal]: "0" },
       creationFinalValues: {},
+      creationPendingChecks: {},
       parentMutations: [
         {
           recordTypeId: ids.recordType,
@@ -174,6 +183,99 @@ describe("locked relationship total save calculation", () => {
         },
       ],
       pendingChecks: [],
+    });
+  });
+
+  it("preserves every creation pending check beside that creation's final values", () => {
+    const rootType = recursiveType();
+    const creationType = recordTypeDefinitionV2Schema.parse({
+      recordTypeId: ids.creationRecordType,
+      key: "created",
+      singularLabel: "Created",
+      pluralLabel: "Created",
+      titleFieldId: ids.title,
+      storageContractId: ids.creationStorage,
+      storageScope: "organization_shared",
+      ownershipMode: "none",
+      fields: [
+        field(ids.title, "title", "text", { maxLength: 100 }, true),
+        field(ids.creationPerson, "person", "link_to_person", {
+          audience: "organization_accounts",
+          applicationRootIdRequired: false,
+          onPersonDeactivation: "retain_reference",
+        }),
+        field(ids.creationFiles, "files", "attachment", {
+          allowedKinds: ["document"],
+          maxFileSizeMb: 20,
+          multiple: false,
+        }),
+        field(ids.creationChoice, "state", "choice", {
+          options: [
+            { value: "open", label: "Open" },
+            {
+              value: "restricted",
+              label: "Restricted",
+              requiredPermissionId: ids.requiredPermission,
+            },
+          ],
+        }),
+      ],
+      relationships: [],
+      standardActions: ["create", "read", "update"],
+      customActionIds: [],
+    });
+    const result = calculateLockedRelationshipTotalSave({
+      command,
+      creations: [
+        {
+          ordinal: 3,
+          values: {
+            [ids.title]: "Created",
+            [ids.creationPerson]: { organizationAccountId: ids.organizationAccount },
+            [ids.creationFiles]: [ids.file],
+            [ids.creationChoice]: "restricted",
+          },
+        },
+      ],
+      preparation: {
+        outcome: "prepared",
+        correlationId: id(35),
+        readableFieldIds: [ids.title],
+        records: [
+          {
+            recordKey: "root",
+            recordId: ids.rootRecord,
+            recordType: rootType,
+            concurrencyNumber: 1,
+            existingValues: { [ids.title]: "Root", [ids.recursiveTotal]: "0" },
+            relationshipSources: source(rootType, []),
+          },
+          {
+            recordKey: "create:3",
+            recordType: creationType,
+            existingValues: {},
+            relationshipSources: [],
+          },
+        ],
+      },
+      clock: { instant: "2026-09-14T00:00:00.000Z", organizationLocalDate: "2026-09-14" },
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      creationPendingChecks: {
+        3: expect.arrayContaining([
+          expect.objectContaining({
+            kind: "person_reference",
+            organizationAccountId: ids.organizationAccount,
+          }),
+          expect.objectContaining({ kind: "file_reference", fileId: ids.file }),
+          expect.objectContaining({
+            kind: "choice_permission",
+            permissionId: ids.requiredPermission,
+          }),
+        ]),
+      },
     });
   });
 

@@ -209,6 +209,9 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
           "action_validate_references",
           "action_create_note",
           "action_create_note_for",
+          "action_create_invalid_person_note",
+          "action_create_invalid_file_note",
+          "action_create_unauthorized_choice_note",
           "action_create_restricted_note",
           "action_create_ruled_child",
           "action_note_and_create",
@@ -791,6 +794,45 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
             },
           },
           {
+            id: "field_created_note_files",
+            key: "files",
+            type: "attachment",
+            label: "Files",
+            required: false,
+            unique: false,
+            filterable: false,
+            sortable: false,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              allowed_kinds: ["document"],
+              max_file_size_mb: 20,
+              multiple: false,
+            },
+          },
+          {
+            id: "field_created_note_state",
+            key: "state",
+            type: "choice",
+            label: "State",
+            required: false,
+            unique: false,
+            filterable: true,
+            sortable: true,
+            personal_data: "none",
+            public_display: "refused",
+            settings: {
+              options: [
+                { value: "open", label: "Open" },
+                {
+                  value: "restricted",
+                  label: "Restricted",
+                  required_permission: "example.record_save_proof.item.update",
+                },
+              ],
+            },
+          },
+          {
             id: "field_created_note_at",
             key: "at",
             type: "date_time",
@@ -1044,6 +1086,22 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
         record_scope: { routes: [{ kind: "all_records" }] },
         field_policy: { readable_fields: ["title"], changeable_fields: [] },
       },
+      ...[
+        ["invalid_person", "invalid person"],
+        ["invalid_file", "invalid file"],
+        ["unauthorized_choice", "unauthorized choice"],
+      ].map(([key, label]) => ({
+        id: `permission_create_${key}_note`,
+        key: `example.record_save_proof.item.create_${key}_note`,
+        label: `Create a note with an ${label}`,
+        description: `Run the named create_record pending-check proof for an ${label}.`,
+        record_type: "item" as const,
+        action_kind: "named" as const,
+        named_action: `create_${key}_note`,
+        administrative: false,
+        record_scope: { routes: [{ kind: "all_records" as const }] },
+        field_policy: { readable_fields: ["title"], changeable_fields: [] },
+      })),
       {
         id: "permission_note_and_create",
         key: "example.record_save_proof.item.note_and_create",
@@ -1172,6 +1230,8 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
                           "reference",
                           "restricted",
                           "person",
+                          "files",
+                          "state",
                           "at",
                           "amount",
                           "anchor",
@@ -1188,7 +1248,17 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
                     : recordType === "ruled_child"
                       ? ["title", "parent"]
                       : recordType === "created_note"
-                        ? ["title", "body", "person", "at", "amount", "anchor", "source"]
+                        ? [
+                            "title",
+                            "body",
+                            "person",
+                            "files",
+                            "state",
+                            "at",
+                            "amount",
+                            "anchor",
+                            "source",
+                          ]
                         : ["title", "parent"],
           },
         })),
@@ -1275,7 +1345,6 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
               title: { source: "literal", value: "Created by action" },
               body: { source: "input", input: "body" },
               amount: { source: "subject_field", field: "amount" },
-              person: { source: "current_actor" },
               at: { source: "current_time" },
               source: { source: "subject_record" },
             },
@@ -1309,6 +1378,50 @@ const moduleSource: ModuleSourceDocumentV2 = moduleSourceDocumentV2Schema.parse(
           },
         ],
       },
+      ...[
+        {
+          id: "action_create_invalid_person_note",
+          key: "invalid_person",
+          label: "Create a note with an invalid person",
+          value: {
+            person: {
+              source: "literal" as const,
+              value: { organizationAccountId: foreignOrganizationAccountId },
+            },
+          },
+        },
+        {
+          id: "action_create_invalid_file_note",
+          key: "invalid_file",
+          label: "Create a note with an invalid file",
+          value: { files: { source: "literal" as const, value: [id(901)] } },
+        },
+        {
+          id: "action_create_unauthorized_choice_note",
+          key: "unauthorized_choice",
+          label: "Create a note with an unauthorized choice",
+          value: { state: { source: "literal" as const, value: "restricted" } },
+        },
+      ].map(({ id: actionId, key, label, value }) => ({
+        id: actionId,
+        key: `example.record_save_proof.item.create_${key}_note`,
+        label,
+        record_type: "item" as const,
+        permission: `example.record_save_proof.item.create_${key}_note`,
+        shareable: false,
+        inputs: [],
+        effects: [
+          {
+            kind: "create_record" as const,
+            record_type: "example.record_save_proof:created_note",
+            values: {
+              title: { source: "literal" as const, value: label },
+              source: { source: "subject_record" as const },
+              ...value,
+            },
+          },
+        ],
+      })),
       {
         id: "action_create_restricted_note",
         key: "example.record_save_proof.item.create_restricted_note",
@@ -1664,6 +1777,8 @@ const createdNoteTitleFieldId = componentId("field", "field_created_note_title")
 const createdNoteBodyFieldId = componentId("field", "field_created_note_body");
 const createdNoteReferenceFieldId = componentId("field", "field_created_note_reference");
 const createdNotePersonFieldId = componentId("field", "field_created_note_person");
+const createdNoteFilesFieldId = componentId("field", "field_created_note_files");
+const createdNoteStateFieldId = componentId("field", "field_created_note_state");
 const createdNoteAtFieldId = componentId("field", "field_created_note_at");
 const createdNoteAmountFieldId = componentId("field", "field_created_note_amount");
 const createdNoteSourceFieldId = componentId("field", "field_created_note_source");
@@ -1673,6 +1788,12 @@ const createdNoteSourceRelationshipId = componentId(
 );
 const createNoteActionId = componentId("action", "action_create_note");
 const createNoteForActionId = componentId("action", "action_create_note_for");
+const createInvalidPersonNoteActionId = componentId("action", "action_create_invalid_person_note");
+const createInvalidFileNoteActionId = componentId("action", "action_create_invalid_file_note");
+const createUnauthorizedChoiceNoteActionId = componentId(
+  "action",
+  "action_create_unauthorized_choice_note",
+);
 const noteAndCreateActionId = componentId("action", "action_note_and_create");
 const createdNoteAnchorFieldId = componentId("field", "field_created_note_anchor");
 const createAnchoredNoteActionId = componentId("action", "action_create_anchored_note");
@@ -1689,6 +1810,18 @@ const createRestrictedNotePermissionId = componentId(
 const createRuledChildPermissionId = componentId("permission", "permission_create_ruled_child");
 const createNotePermissionId = componentId("permission", "permission_create_note");
 const createNoteForPermissionId = componentId("permission", "permission_create_note_for");
+const createInvalidPersonNotePermissionId = componentId(
+  "permission",
+  "permission_create_invalid_person_note",
+);
+const createInvalidFileNotePermissionId = componentId(
+  "permission",
+  "permission_create_invalid_file_note",
+);
+const createUnauthorizedChoiceNotePermissionId = componentId(
+  "permission",
+  "permission_create_unauthorized_choice_note",
+);
 const noteAndCreatePermissionId = componentId("permission", "permission_note_and_create");
 const addChildPermissionId = componentId("permission", "permission_add_child");
 const setAmountAndAddSiblingPermissionId = componentId(
@@ -1826,6 +1959,7 @@ const fixtureStorageTables = [
   totalChildStorageId,
   ruledChildStorageId,
   recursiveStorageId,
+  createdNoteStorageId,
 ].map((storageId) => `record_data.rt_${storageId.replaceAll("-", "")}`);
 
 const cleanRecordSaveFixture = async (admin: Sql): Promise<void> => {
@@ -1949,6 +2083,61 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
     let failure: unknown;
     let allRolePermissions: unknown[] = [];
     try {
+      const replacementSignatures = [
+        "vortex_record.prepare_named_action_set_announce_internal(boolean,uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid)",
+        "vortex_record.save_named_action_set_announce(uuid,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,jsonb,text,uuid,bigint,uuid,jsonb)",
+      ] as const;
+      await expect(
+        admin<
+          {
+            signature: string;
+            owner: string;
+            security_definer: boolean;
+            volatility: string;
+            execute_grantees: string[];
+          }[]
+        >`select expected.signature,
+            pg_catalog.pg_get_userbyid(installed.proowner) as owner,
+            installed.prosecdef as security_definer,
+            installed.provolatile::text as volatility,
+            array(
+              select role.rolname
+              from pg_catalog.aclexplode(installed.proacl) privilege
+              join pg_catalog.pg_roles role on role.oid = privilege.grantee
+              where privilege.privilege_type = 'EXECUTE'
+              order by role.rolname
+            ) as execute_grantees
+          from pg_catalog.unnest(${replacementSignatures}::text[]) expected(signature)
+          join pg_catalog.pg_proc installed
+            on installed.oid = pg_catalog.to_regprocedure(expected.signature)
+          order by expected.signature`,
+      ).resolves.toEqual([
+        {
+          signature: replacementSignatures[0],
+          owner: "vortex_record_adapter",
+          security_definer: false,
+          volatility: "v",
+          execute_grantees: ["vortex_record_adapter"],
+        },
+        {
+          signature: replacementSignatures[1],
+          owner: "vortex_record_adapter",
+          security_definer: true,
+          volatility: "v",
+          execute_grantees: ["vortex_record_adapter"],
+        },
+      ]);
+      await expect(
+        admin<{ old_total_writer_absent: boolean; old_total_preflight_absent: boolean }[]>`
+          select
+            pg_catalog.to_regprocedure(
+              'vortex_record.save_named_action_set_announce_with_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid,uuid,jsonb,jsonb,text,uuid,bigint,uuid,jsonb)'
+            ) is null as old_total_writer_absent,
+            pg_catalog.to_regprocedure(
+              'vortex_record.prepare_named_action_relationship_totals(uuid,text,uuid,uuid,bigint,jsonb,uuid,uuid,text,uuid,bigint,uuid)'
+            ) is null as old_total_preflight_absent`,
+      ).resolves.toEqual([{ old_total_writer_absent: true, old_total_preflight_absent: true }]);
+
       await cleanRecordSaveFixture(admin);
       await admin.begin(async (transaction) => {
         // This fixture writes tenant identity rows and then provisions record
@@ -2118,7 +2307,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           definitionCatalogue: { connectionTypeReleases: [], platformThemeReleases: [] },
           resolvedRequestTransaction: resolvedRequestRunner(transaction),
         }).readExact();
-        expect(registration.permissionRegistration.entries).toHaveLength(32);
+        expect(registration.permissionRegistration.entries).toHaveLength(35);
         const registeredPermissionKeys = registration.permissionRegistration.entries.map(
           (entry) => entry.permission.key,
         );
@@ -2575,6 +2764,9 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         openPermissionId,
         createNotePermissionId,
         createNoteForPermissionId,
+        createInvalidPersonNotePermissionId,
+        createInvalidFileNotePermissionId,
+        createUnauthorizedChoiceNotePermissionId,
         createRestrictedNotePermissionId,
         createRuledChildPermissionId,
         noteAndCreatePermissionId,
@@ -2596,7 +2788,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           String((candidate as { permissionId?: unknown }).permissionId),
         );
       });
-      expect(namedOnlyPermissions).toHaveLength(17);
+      expect(namedOnlyPermissions).toHaveLength(20);
       await admin`select * from vortex_access.coordinate_organization_role_change(
         ${JSON.stringify({
           contractVersion: "1.0.0",
@@ -2721,6 +2913,57 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       await expect(runNamedAction(eventOnly)).resolves.toMatchObject({
         kind: "available",
         value: { outcome: "completed", recordId: namedRecordId, concurrencyNumber: 1 },
+      });
+      expect(await namedEffects()).toEqual({
+        receipts: "1",
+        activities: "1",
+        outbox: "1",
+        queue: "1",
+      });
+      const exactReplacementResults = await admin.begin(async (transaction) => {
+        const [scope] = await transaction<
+          { tenant_id: string; organization_account_id: string; access_version: string }[]
+        >`select * from vortex_access.resolve_human_application_change_scope(
+          ${identityId}::uuid, ${organizationId}::uuid, ${applicationRootId}::uuid
+        )`;
+        if (scope === undefined) throw new Error("Named replacement overload scope is unavailable");
+        await transaction`select vortex_context.initialize(${JSON.stringify({
+          callerKind: "human",
+          identityAuthorityId,
+          tenantId: scope.tenant_id,
+          organizationId,
+          organizationAccountId: scope.organization_account_id,
+          applicationRootId,
+          identityId,
+          sessionId: session.sessionId,
+          authenticationStrength: session.authenticationStrength,
+          accessTokenIssuedAt: session.accessTokenIssuedAt,
+          primaryAuthenticatedAt: session.primaryAuthenticatedAt,
+          issuedAt: operationAt.toISOString(),
+          expiresAt: session.accessTokenExpiresAt,
+          accessVersion: Number(scope.access_version),
+          correlationId: id(27),
+        })}::text::jsonb)`;
+        await transaction`set local role vortex_record_adapter`;
+        const [row] = await transaction<{ prepared: unknown; saved: unknown }[]>`
+          select
+            vortex_record.prepare_named_action_set_announce_internal(
+              false, ${eventOnly.commandId}::uuid, 'module', ${moduleRootId}::uuid, 1,
+              ${eventOnly.actionId}::uuid, ${recordTypeId}::uuid, ${namedRecordId}::uuid,
+              ${eventOnly.expectedConcurrencyNumber}, '{}'::jsonb, ${eventOnly.activityId}::uuid
+            ) as prepared,
+            vortex_record.save_named_action_set_announce(
+              ${eventOnly.commandId}::uuid, ${recordTypeId}::uuid, ${namedRecordId}::uuid,
+              ${eventOnly.expectedConcurrencyNumber}, '{}'::jsonb, '{}'::jsonb,
+              ${eventOnly.activityId}::uuid, ${eventOnly.standardOccurrenceId}::uuid,
+              ${JSON.stringify(eventOnly.declaredOccurrenceIds)}::text::jsonb,
+              'module', ${moduleRootId}::uuid, 1, ${eventOnly.actionId}::uuid, '{}'::jsonb
+            ) as saved`;
+        return row;
+      });
+      expect(exactReplacementResults).toMatchObject({
+        prepared: { outcome: "completed", recordId: namedRecordId },
+        saved: { outcome: "completed", recordId: namedRecordId },
       });
       expect(await namedEffects()).toEqual({
         receipts: "1",
@@ -2930,6 +3173,8 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
             reference: string | null;
             restricted: string | null;
             person: string | null;
+            files: unknown;
+            state: string | null;
             at: string | null;
             amount: string | null;
             source: string | null;
@@ -2941,6 +3186,8 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
              ${column(createdNoteReferenceFieldId)} as reference,
              ${column(createdNoteRestrictedFieldId)} as restricted,
              ${column(createdNotePersonFieldId)}::text as person,
+             ${column(createdNoteFilesFieldId)} as files,
+             ${column(createdNoteStateFieldId)} as state,
              ${column(createdNoteAtFieldId)}::text as at,
              ${column(createdNoteAmountFieldId)}::text as amount,
              ${column(createdNoteSourceFieldId)}::text as source
@@ -2958,6 +3205,8 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
             counter: string;
             receipts: string;
             activities: string;
+            outbox: string;
+            queue: string;
             subject_title: string;
             subject_revision: string;
           }[]
@@ -2976,8 +3225,14 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
               from vortex_record.named_action_command_receipts
               where organization_id = $1) as receipts,
              (select pg_catalog.count(*)::text
-              from vortex_activity.organization_activity_entries
-              where organization_id = $1 and action = 'execute_named_action') as activities,
+               from vortex_activity.organization_activity_entries
+               where organization_id = $1 and action = 'execute_named_action') as activities,
+             (select pg_catalog.count(*)::text from vortex_event.event_outbox
+               where organization_id = $1) as outbox,
+             (select pg_catalog.count(*)::text from pgmq.q_vortex_event_occurrences queued
+               join vortex_event.event_outbox event
+                 on queued.message ->> 'occurrenceId' = event.occurrence_id::text
+               where event.organization_id = $1) as queue,
              (select ${column(fieldId)} from ${namedSubjectTable}
               where organisation_id = $1 and record_id = $2) as subject_title,
              (select concurrency_number::text from ${namedSubjectTable}
@@ -3014,8 +3269,10 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
         body: "Composed body",
         reference: "NOTE-00001",
         restricted: null,
+        person: null,
+        files: null,
+        state: null,
       });
-      expect(composedNote.person).toContain(organizationAccountId);
       expect(composedNote.amount).toContain("12.34");
       expect(composedNote.at).not.toBeNull();
       expect(composedNote.source).toContain(createSubjectId);
@@ -3091,6 +3348,45 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
       });
       const afterSubjectLink = await readCreateEffectState();
       expect(afterSubjectLink).toMatchObject({ notes: "2", edges: "2", counter: "3" });
+
+      // Each creation participates in the merged closure through `source`, so
+      // its finalized checks must survive that path. The authoritative runtime
+      // boundary refuses them before the terminal writer: no insert, counter,
+      // edge, Activity, Event/outbox/queue message or receipt may be observed.
+      const beforePendingCheckRefusals = await readCreateEffectState();
+      const pendingCheckActions = [
+        createInvalidPersonNoteActionId,
+        createInvalidFileNoteActionId,
+        createUnauthorizedChoiceNoteActionId,
+      ];
+      const pendingCheckResults = [];
+      const pendingCheckStates = [];
+      for (const [index, actionId] of pendingCheckActions.entries()) {
+        pendingCheckResults.push(
+          await runNamedAction({
+            commandId: id(451 + index * 3),
+            actionId,
+            expectedConcurrencyNumber: 1,
+            inputs: {},
+            activityId: id(452 + index * 3),
+            standardOccurrenceId: id(453 + index * 3),
+            declaredOccurrenceIds: [],
+            creationOccurrenceIds: [id(460 + index)],
+            targetRecordId: createSubjectId,
+          }),
+        );
+        pendingCheckStates.push(await readCreateEffectState());
+      }
+      expect(pendingCheckResults).toEqual(
+        pendingCheckActions.map(() => ({
+          kind: "available",
+          value: expect.objectContaining({
+            outcome: "refused",
+            error: expect.objectContaining({ code: "operation_refused" }),
+          }),
+        })),
+      );
+      expect(pendingCheckStates).toEqual(pendingCheckActions.map(() => beforePendingCheckRefusals));
 
       // Mixed set_field, create_record and announce_event in one commit.
       await expect(
@@ -3775,7 +4071,7 @@ describeDatabase("compiled public Record save service PostgreSQL proof", () => {
           [organizationId, freshRecordId],
         ),
       ).resolves.toEqual([{ amount: { amount: "12.34", currency: "AUD" } }]);
-      expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(9);
+      expect(moduleRelease.content.recordTypes[0]?.customActionIds).toHaveLength(12);
       expect(moduleRelease.content.events).toHaveLength(1);
 
       const createTotalParent = async (commandId: string, title: string) => {

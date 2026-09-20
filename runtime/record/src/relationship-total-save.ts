@@ -9,6 +9,7 @@ import { evaluateRecordCalculationsV2 } from "./calculations";
 import {
   finalizeRecordFieldCandidateV2,
   prepareInitialRecordFieldCandidateV2,
+  type RecordFieldValuePendingCheck,
   type PrepareRecordFieldValuesV2Result,
 } from "./field-values";
 import { evaluateRecordTotalsV2 } from "./totals";
@@ -61,6 +62,7 @@ export type CalculateRelationshipTotalSaveResult =
       success: true;
       sourceFinalValues: Readonly<Record<string, JsonValue | null>>;
       creationFinalValues: Readonly<Record<number, Readonly<Record<string, JsonValue | null>>>>;
+      creationPendingChecks: Readonly<Record<number, readonly RecordFieldValuePendingCheck[]>>;
       parentMutations: readonly RelationshipTotalParentMutation[];
       pendingChecks: PrepareRecordFieldValuesV2Result extends infer Result
         ? Result extends { success: true; pendingChecks: infer Checks }
@@ -351,11 +353,13 @@ export const calculateLockedRelationshipTotalSave = (
   const sourceFinalValues: Record<string, JsonValue | null> = { ...source.setValues };
   for (const fieldId of source.clearFieldIds) sourceFinalValues[fieldId] = null;
   const creationFinalValues: Record<number, Record<string, JsonValue | null>> = {};
+  const creationPendingChecks: Record<number, readonly RecordFieldValuePendingCheck[]> = {};
   for (const [recordKey, creation] of creationRoots) {
     const created = finalized.get(recordKey)!;
     const values: Record<string, JsonValue | null> = { ...created.setValues };
     for (const fieldId of created.clearFieldIds) values[fieldId] = null;
     creationFinalValues[creation.ordinal] = values;
+    creationPendingChecks[creation.ordinal] = created.pendingChecks;
   }
   const parentMutations: RelationshipTotalParentMutation[] = [];
   for (const record of records.values()) {
@@ -392,6 +396,7 @@ export const calculateLockedRelationshipTotalSave = (
     success: true,
     sourceFinalValues,
     creationFinalValues,
+    creationPendingChecks,
     parentMutations,
     pendingChecks: source.pendingChecks,
   };

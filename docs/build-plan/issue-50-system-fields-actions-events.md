@@ -141,14 +141,28 @@ conflicting command reuse, stale revisions, forged action owners, and both late
 rollback classes. Twenty real concurrent iterations race the new create-bearing
 path against an ordinary create of the same target type linked to the same
 record, contending on the same reference-number counter, link-target row and
-relationship advisory key; both complete every time. Because an unsynchronised
-race cannot guarantee that two sessions hold the opposite resources at the same
-moment, `supabase/tests/named-action-create-concurrency.test.sh` pins that
-moment with deterministic barriers: one scenario holds the preflight's link
-share while the ordinary create holds the reference counter and releases each
-into the other's resource, and a second repeats it with an exclusive waiter
-queued on the link target so the only soft edge in the wait-for cycle is the
-ordinary create's queue position. Neither deadlocks.
+relationship advisory key; both complete every time. The same real writer now
+refuses created-field person, file and permissioned-choice pending checks before
+its terminal call, with equality proofs over records, counters, edges, Activity,
+Event/outbox/queue rows and receipts.
+
+Because the unsynchronised full-service race cannot guarantee that two sessions
+hold the opposite resources at the same moment,
+`supabase/tests/named-action-create-concurrency.test.sh` separately isolates the
+named path's share-then-counter lock protocol with deterministic barriers. It
+does not claim to execute the full named-action preflight or terminal writer.
+One scenario holds the same link share while the ordinary create holds the
+reference counter and releases each into the other's resource; a second repeats
+it with an exclusive waiter queued on the link target so the only soft edge in
+the wait-for cycle is the ordinary create's queue position. Neither deadlocks.
+The shell proof records the exact shell/backend identities, barrier releases,
+exit statuses and live blocker state when a run fails.
+
+One earlier full-service run exceeded its unchanged 45-second Vitest budget,
+but its raw failure log and backend identity were not retained. Later sampled
+runs do not identify that missing process and therefore do not explain the
+failure. Reproduction with the new process evidence, or recovery of the
+original raw receipt, remains the exact prerequisite for diagnosing it.
 
 ### Known limitation of this slice
 
