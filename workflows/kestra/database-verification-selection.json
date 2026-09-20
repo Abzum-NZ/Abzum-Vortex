@@ -77,6 +77,7 @@
     "supabase/tests/470_permission_record_scope_parity.test.sql",
     "supabase/tests/472_definition_field_policy_publication.test.sql",
     "supabase/tests/475_record_adapters.test.sql",
+    "supabase/tests/476_record_lifecycle_selection_reader.test.sql",
     "supabase/tests/480_system_application_bound_release_set.test.sql",
     "supabase/tests/485_organization_runtime_settings.test.sql",
     "supabase/tests/485_private_event_append.test.sql",
@@ -115,7 +116,7 @@
     },
     {
       "id": "record-runtime",
-      "sqlPatterns": ["supabase/tests/43[05]_*", "supabase/tests/44[0578]_*", "supabase/tests/45[05]_*", "supabase/tests/47[05]_*", "supabase/tests/48[5678]_*"],
+      "sqlPatterns": ["supabase/tests/43[05]_*", "supabase/tests/44[0578]_*", "supabase/tests/45[05]_*", "supabase/tests/47[056]_*", "supabase/tests/48[5678]_*"],
       "concurrencyPatterns": ["supabase/tests/event-*-concurrency.test.sh", "supabase/tests/module-storage-*-concurrency.test.sh", "supabase/tests/record-change-concurrency.test.sh", "supabase/tests/record-ownership-*-concurrency.test.sh"],
       "lintSchemas": ["public", "vortex_module", "vortex_record", "vortex_event", "record_data"]
     },
