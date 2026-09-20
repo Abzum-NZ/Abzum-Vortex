@@ -490,6 +490,10 @@ importers:
       '@vortex/ui':
         specifier: workspace:*
         version: link:../ui
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.6)(happy-dom@20.14.5)(vite@8.2.2(@types/node@24.13.6))
 
   testing:
     dependencies:

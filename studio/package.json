@@ -19,5 +19,8 @@
     "tier": 11,
     "environment": "browser",
     "ships": true
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   }
 }
