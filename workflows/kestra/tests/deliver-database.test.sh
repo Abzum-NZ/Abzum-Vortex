@@ -704,8 +704,14 @@ if "$older_bootstrap" >"$test_root/lint-failure.log" 2>&1; then
   exit 1
 fi
 test ! -e "$VORTEX_EVIDENCE_PATH"
-test ! -e "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER"
-test ! -e "$VORTEX_TEST_PG_PROVE_MARKER"
+test ! -e "$VORTEX_TEST_CONCURRENCY_PROOF_MARKER" || {
+  echo "expected a lint failure to stop before any concurrency proof" >&2
+  exit 1
+}
+test ! -e "$VORTEX_TEST_PG_PROVE_MARKER" || {
+  echo "expected a lint failure to stop before any SQL suite" >&2
+  exit 1
+}
 first_lint_schema="$(jq --raw-output '.lintSchemas[0]' \
   "$fixture_checkout/workflows/kestra/database-verification.json")"
 test "$(completed_check_stages "$test_root/lint-failure.log")" = \
