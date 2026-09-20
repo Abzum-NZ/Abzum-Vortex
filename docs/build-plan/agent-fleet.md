@@ -252,6 +252,13 @@ and tests, or archives that complete WIP; state notes alone are insufficient.
 Preserve an existing rescue archive. Suspend new dispatch behind an existing
 rescue until it is deliberately recovered or closed.
 
+After a worker reports done, the owner runs `git status --porcelain
+--untracked-files=all` and `git rev-list --count origin/main..HEAD`, records
+the untracked count, and verifies the branch's HEAD was pushed to the remote.
+If the status is dirty, or the branch is ahead by zero despite changes, return
+the work to the worker to land or discard. Do not call WIP accepted. Workers and
+owners supply this evidence to the root; the root alone writes it on the issue.
+
 1. Use the cycle snapshot and root-confirmed changed-row evidence to reconcile
    open issues against their PRs, actual branch ancestry, local gates, applicable
    hosted receipts and remaining acceptance. A merged slice is not automatically
@@ -599,6 +606,9 @@ in another language. Every response is in English.
 # Brief — <objective in one line>
 
 Respond only in English.
+
+You are not finished until your work is committed and pushed on a branch, or you have written on the issue why it is being discarded. Reaching the end of your analysis is not finishing.
+Workers and owners supply evidence to the root; the root alone writes on the issue.
 
 Read CLAUDE.md and docs/build-plan/agent-coordination.md first.
 Setup: git fetch origin && git checkout -b <branch> origin/main
