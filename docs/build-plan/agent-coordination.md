@@ -35,15 +35,17 @@ boundary, preserving work and evidence; board records retain the actual model
 until the replacement's task activity is verified.
 
 The permitted non-privileged execution lanes are GLM 5.3 Flash, Gemini 3.8
-Flash, Claude Sonnet 5, GPT 5.6 Terra and GPT 5.6 Sol; Sol owns issue planning
-and deep analysis. GPT 5.6 Luna is never dispatched. During the current Claude quota
-outage, the user explicitly authorizes reassignment to Terra (high), Sol
-(high), or Gemini 3.8 Flash, including work otherwise assigned to Claude.
-Record the reassignment, the observed task activity, resolved model and session
-evidence. Verify terminal readiness and resolved model before the initial brief,
-then verify actual task activity after it. Do not retry a launch in a loop:
-after a demonstrated failure, retain the evidence and choose the authorized
-reassignment or report the blocker.
+Flash, Claude Sonnet 5, GPT 5.6 Terra, GPT 5.6 Luna and GPT 5.6 Sol; Sol owns
+issue planning and deep analysis, and Luna is permitted for mechanical work.
+Route bounded contracts, fixtures, documentation, evidence and mechanical work
+to Gemini or GLM where available; use Terra or Sonnet for bounded coding and
+Opus or Sol for complex authorization or SQL/security-sensitive review. Cost is
+measured by successful delivery. Claude's reset is confirmed: the next useful
+bounded dispatch verifies actual availability, never a synthetic test. Record
+the observed task activity, resolved model and session evidence. Verify terminal
+readiness and resolved model before the initial brief, then verify actual task
+activity after it. GLM capacity requires the same verification. Do not retry a
+launch in a loop: retain a demonstrated failure and reassign once or report it.
 
 GPT workers run through Codex's native worker mechanism. Do not substitute an
 external CLI or another provider for a GPT worker. DeepSeek, when explicitly
@@ -147,8 +149,7 @@ Use separate architecture, development and independent-review sessions with
 explicit model selection; record the resolved model, session identifier and
 actual task evidence. A reviewer must not review its own authoring session, but
 need not be from a different model family. Report an unavailable or changed
-model unless the current Claude-outage reassignment above authorizes the named
-replacement.
+model unless the current cost routing above authorizes the named replacement.
 
 One developer writes a task worktree at a time. Independent concurrent tasks use
 separate worktrees. Never run competing dependency installations or edits in one
@@ -173,8 +174,8 @@ handoff and privileged-Opus-unavailability procedure in [agent fleet
 operations](agent-fleet.md#roster-and-model-assignment). Reserve the full-system
 Architecture Reviewer for its complex responsibilities and scope broad reviews
 into coherent passes. If a limit is exhausted, stop retries and do not create
-duplicate sessions; use the explicitly authorized current-outage reassignment
-where it fits, otherwise record the reset/blocker.
+duplicate sessions; use the current cost-routing reassignment where it fits,
+otherwise record the reset/blocker.
 
 ## Scope and communication rules
 

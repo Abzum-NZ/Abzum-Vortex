@@ -50,14 +50,15 @@ treating it as fixed.
 | Orchestrator (root coordinator) | GPT 6 Astra · medium (Codex) | Supervises issue owners and single-slice workers, sequences work across issues, performs independent acceptance, and decides merges and promotions. Generic: it has no linked issue or pull request and no implementation ownership. If it starts writing code, the queue stops moving. | Cross-issue dependency order, database-verification admission, phase gates, merge and promotion decisions |
 | Issue owner / Planner | GPT 5.6 Sol · high (Codex) | Every issue-level orchestrator, issue owner and Planner: plans the whole issue, supervises its workers and corrects handoffs. No Astra child may fill these roles. | Issue slices, worker supervision and planning evidence |
 | Privileged review | Claude Opus 5 · high | Review only privileged database, security and concurrency work; do not use it as a general implementation or routine-review lane | Privileged review verdicts |
-| Runtime & contracts | Claude Sonnet 5 · high | TypeScript engines, contracts, adapters and the definition-led execution path. During the current Claude quota outage, reassign to Terra high, Sol high, or Gemini 3.8 Flash with actual activity evidence. | `runtime/**`, `contracts/**` |
-| Proofs | Claude Sonnet 5 · high | pgTAP suites and the two-session concurrency harness; builds every fixture through the owning writer, never by direct insert; reports defects rather than softening assertions. During the current Claude quota outage, use the authorized reassignment lanes. | `supabase/tests/**` and verification registration |
+| Runtime & contracts | Claude Sonnet 5 · high | TypeScript engines, contracts, adapters and the definition-led execution path for bounded coding after actual availability is verified. | `runtime/**`, `contracts/**` |
+| Proofs | Claude Sonnet 5 · high | pgTAP suites and the two-session concurrency harness; builds every fixture through the owning writer, never by direct insert; reports defects rather than softening assertions. | `supabase/tests/**` and verification registration |
 | Workhorse (OpenCode) | GLM 5.3 Flash (OpenCode) | High-volume, well-specified, low-blast-radius work where the answer is checkable: plan-document sync, registration and inventory sweeps, scaffolds, evidence collection and dependency audits | `docs/**`, manifests, selectors, audits |
-| Workhorse | Claude Sonnet 5 · high, or GPT 5.6 Terra · medium/high (Codex) | The same checkable workhorse tasks when the assignment benefits from those lanes; Terra high is authorized during the current Claude quota outage. | `docs/**`, manifests, selectors, audits |
+| Workhorse | Claude Sonnet 5 · high, or GPT 5.6 Terra · medium/high (Codex) | Bounded coding when the assignment benefits from those lanes and actual availability is verified. | `docs/**`, manifests, selectors, audits |
 | Workhorse (Antigravity) | Gemini 3.8 Flash (`agy` TUI) | An allowed lane for the same workhorse tasks. Before dispatch, verify that `agy` is installed and that the exact model resolves in the launched terminal. Availability is not claimed without launch evidence. | Workhorse tasks, once launch is evidenced |
 | Triage | GPT 5.6 Terra · low (Codex) | Cheap and fast: read an issue, reproduce a failure, scan logs, confirm a premise, summarise a diff. The first responder that stops expensive agents being dispatched on false premises | Pre-dispatch premise checks, failure triage |
-| Deep analysis | GPT 5.6 Sol · high (Codex) | Root-cause work and slice design when a defect resists the obvious reading, or when an issue owner needs the issue's scope split before anyone implements it. Sol high is authorized during the current Claude quota outage. | Diagnosis notes, slice proposals, spec deltas |
-| Second lane | GPT 5.6 Terra · medium/high (Codex) | A balanced implementer for independent work when Claude is available, and an authorized high-effort reassignment lane during the current Claude quota outage | Overflow implementation |
+| Mechanical workhorse | GPT 5.6 Luna | Checkable mechanical work under a concise, file-specific brief. | Mechanical `docs/**`, manifests, selectors and inventories |
+| Deep analysis | GPT 5.6 Sol · high (Codex) | Root-cause work and slice design when a defect resists the obvious reading, or when an issue owner needs the issue's scope split before anyone implements it. | Diagnosis notes, slice proposals, spec deltas |
+| Second lane | GPT 5.6 Terra · medium/high (Codex) | A balanced implementer for independent bounded coding. | Overflow implementation |
 | Independent Reviewer | GPT 5.6 Sol · high; Claude Opus 5 · high only for privileged work | A separate session verifies the patch against the issue and actual evidence. Independence means a distinct reviewer session and no author self-review; it does not require a different model family. No Astra child reviewer is launched. | Approve, reject, or name what is missing |
 
 GPT lanes run through Codex's native worker mechanism; Claude lanes run as
@@ -66,30 +67,29 @@ substitute an external CLI or another provider for a named worker —
 [agent coordination](agent-coordination.md) governs how a resolved model and
 session are recorded.
 
-**GPT 5.6 Luna is prohibited by the user.** Never dispatch it, and use Terra
-wherever a Luna lane or reference would otherwise apply.
-
 Documentation, manifests, inventories, dependency audits and evidence gathering
-are spread across GLM 5.3 Flash, Gemini 3.8 Flash, Claude Sonnet 5 and GPT 5.6
-Terra according to the task; Sol is the deep-analysis lane. GLM 5.3 (OpenCode)
-is restored as a workhorse. During the current Claude quota outage, Terra high,
-Sol high and Gemini 3.8 Flash are explicitly authorized replacements. Verify
-the launched terminal's readiness and exact resolved model before sending its
-brief, then verify actual task activity after the brief before claiming
-availability. A capacity response, an idle shell, or a retry loop is not
-availability evidence; retain the demonstrated failure and reassign once or
-report the blocker.
+are cost-routed to Gemini 3.8 Flash or GLM 5.3 Flash for bounded contracts,
+fixtures, documentation, evidence and mechanical work; Luna is also permitted
+for mechanical work. Use Terra or Sonnet for bounded coding, and Opus or Sol
+for complex authorization or SQL/security-sensitive review. Cost is measured by
+successful delivery. Verify a launched terminal's readiness, resolved model and
+actual task activity before claiming availability. Claude's reset is confirmed:
+the next useful bounded Claude dispatch verifies actual availability, never a
+synthetic test. GLM capacity also requires actual verification; do not retry in
+a loop. Retain a demonstrated failure and reassign once or report the blocker.
 
 Before every assignment, inspect Orca's live status-bar usage roster and record
 its observation timestamp and available headroom in the assignment evidence.
 Choose an available lane; never queue work behind an exhausted model. Usage
 figures are live observations, not fixed thresholds, so do not copy historical
-percentages into a rule. When Claude is near or exhausted, its owner first
-checkpoints the state, findings, exact next step, partial edits and evidence in
-the issue dossier, then stops that exact agent. The root records the handoff on
-the issue; the owner transfers the work to a fresh worktree on one available
-Terra, Gemini or GLM lane, with no duplicate editor. The owner/planner remains Sol;
-do not create Astra children or use Luna. Opus remains privileged-only: if it
+percentages into a rule. Near-finished workers finish. Otherwise, migrate only
+at a checkpoint: its owner records concise state, file-specific findings, exact
+next step, edits, commits and evidence in the dossier, then stops that exact
+agent. The root records the handoff on the issue; the owner transfers the work
+to a fresh worktree on one available lane, with no duplicate editor or repeated
+analysis. Owners supervise at checkpoints with concise file-specific briefs and
+evidence paths, not verbose polling or full-context rescans. The owner/planner
+remains Sol; do not create Astra children. Opus remains privileged-only: if it
 is unavailable, report that through the root on the issue and continue with the
 next independent task rather than waiting. The user's current authorized Sol
 and Terra privileged recoveries remain available.
