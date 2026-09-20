@@ -340,9 +340,9 @@ Decides alone:
 - Sequencing, model choice, escalation, worktree lifecycle.
 - Splitting an issue whose scope is too broad to verify.
 - Raising a new issue for any defect a gate surfaces.
-- Merging reviewed task branches to `testing` once gates and review pass.
-- Promoting the verified `testing` revision to `main` at a phase boundary,
-  after reading the hosted result.
+- Merging reviewed task branches to `main` once gates and review pass.
+- Promoting `main` to `testing` at an eligible phase boundary, respecting user
+  holds and recording the exact hosted result before claiming acceptance.
 - Correcting board state, dependencies and stale plan documents.
 
 Parks and moves on:
