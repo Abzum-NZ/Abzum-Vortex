@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "@vortex/db": "workspace:*",
     "@vortex/workflow": "workspace:*",
     "server-only": "0.0.1"
   },
@@ -21,5 +22,8 @@
     "ships": true,
     "engine": true,
     "service": "connection"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   }
 }

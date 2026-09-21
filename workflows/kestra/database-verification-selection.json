@@ -83,6 +83,7 @@
     "supabase/tests/486_calculated_field_disclosure.test.sql",
     "supabase/tests/487_related_total_disclosure.test.sql",
     "supabase/tests/488_transactional_relationship_total_acl.test.sql",
+    "supabase/tests/489_connection_instance_readiness.test.sql",
     "supabase/tests/490_tenant_administration_facts.test.sql",
     "supabase/tests/500_configured_tenant_provisioning.test.sql",
     "supabase/tests/510_tenant_governance.test.sql",
@@ -124,6 +125,12 @@
       "sqlPatterns": ["supabase/tests/49[0]_*", "supabase/tests/5*_*"],
       "concurrencyPatterns": ["supabase/tests/cluster-*-concurrency.test.sh", "supabase/tests/configured-*-concurrency.test.sh", "supabase/tests/organization-local-*-concurrency.test.sh", "supabase/tests/organization-runtime-*-concurrency.test.sh", "supabase/tests/tenant-governance-concurrency.test.sh", "supabase/tests/tenant-organization-*-concurrency.test.sh"],
       "lintSchemas": ["public"]
+    },
+    {
+      "id": "connection",
+      "sqlPatterns": ["supabase/tests/489_*"],
+      "concurrencyPatterns": ["supabase/tests/connection-*-concurrency.test.sh"],
+      "lintSchemas": ["public", "vortex_connection"]
     }
   ],
   "fullCoveragePatterns": [
