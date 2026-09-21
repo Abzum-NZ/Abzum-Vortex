@@ -123,10 +123,10 @@ Application's dependency closure pins each Module root at exactly one revision,
 the publication writer refuses a closure that breaks it, and the coordinator,
 both readers and the permission registry all read their Module set from it. An
 exact Module reachable only through another Module is provisioned and registered;
-an unrelated or substituted Module release is refused. The provisioner also
-accepts the compiled ownership value `team`, which is what the compiler actually
-emits for a Group-owned record type; the superseded runtime term `group` is
-refused rather than carried as a second spelling.
+an unrelated or substituted Module release is refused. The provisioner accepts
+the compiled ownership value `group`, which is what the compiler emits for a
+Group-owned record type; the retired value `team` is refused rather than carried
+as a second spelling.
 
 Treat #43, #45 and #50's registration slice as coordinated work, not a sequence
 requiring a fake completed install before its storage exists. Likewise, #44's
