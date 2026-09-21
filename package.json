@@ -38,7 +38,7 @@
     "boundaries": "node tooling/boundaries/check.mjs",
     "test": "vitest run",
     "fixtures": "vitest run testing/fixtures/validate-fixtures.test.ts testing/fixtures/current-module-v2-runtime.test.ts",
-    "build": "turbo run build",
+    "build": "turbo run build --filter=!@vortex/testing",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm fixtures && pnpm build"
   },
   "devDependencies": {
