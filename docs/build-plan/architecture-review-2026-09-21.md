@@ -188,6 +188,19 @@ Old dispatch logs, obsolete phase holds and compatibility/proof instructions are
 
 ## Implementation and review discipline
 
+### Second issue-by-issue source review, 22 September
+
+All 439 issues and subissues were reviewed again against main commit `e4cd4375958b91c55a5bd93b00c86656b98a8d13`. Each issue separates code already present from its remaining implementation and links to the relevant source. Parent scopes list their remaining children; only implementation leaves are dispatched. Completed and retired issues have no future pickup, worktree or implementation estimate.
+
+- #10 is complete: the Next.js application shell and package boundaries exist. #327 and its children own the missing installed-application route and runtime composition.
+- Existing contracts, pure evaluators, private SQL primitives and package markers do not imply that their public runtime services or UI integration exist. Those remaining operations are named explicitly in the owning leaves.
+- #512 changed coordination in existing development setup helpers. It did not change the product storage provisioner.
+- #502's checked-in delivery flows already read namespace KV without holding Kestra administrative API credentials. No speculative replacement service is needed. This source finding does not claim anything about live credential rotation.
+- #49 and #50 retain their preserved partial candidates; #407 retains its merged inventory portion. Their remaining functionality stays open.
+- #520 remains source review of this pull request, with zero additional implementation minutes. These policy changes are not yet on main.
+
+The resulting plan contains 228 remaining implementation leaves. Source inspection supplies the completion distinction; this review does not claim executed, database or hosted validation.
+
 Each task and child issue has a functional summary, bounded architectural build points, specification/source references, current dependencies, code-reviewable acceptance, planned agent, active-work estimate, pickup number and issue-based worktree/branch metadata.
 
 Prefer Luna for mechanical wiring and documentation when the owning contract is fixed, Terra for bounded feature implementation, and Sol for a demonstrated cross-service or authority design problem. Planned model assignment is not evidence that a worker is running.

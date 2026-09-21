@@ -22,7 +22,7 @@ Pick an open leaf task whose Blocked by issues are complete, in ascending Pickup
 | 10 | Connections and interfaces | [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109) | 70.5 |
 | 11 | Sharing, copying and data exchange | [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164) | 65.8 |
 | 12 | Privacy, retention and capability limits | [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165) | 32.5 |
-| 13 | Operational functionality | [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166) | 42.5 |
+| 13 | Operational functionality | [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166) | 40.0 |
 
 These estimates are planning estimates for the named model's active implementation plus ordinary review corrections. They are not elapsed calendar deadlines. Parent and phase figures are sums of their leaves; do not add them again. When elapsed active work exceeds its estimate, the orchestrator inspects the actual diff and remaining scope, records the reason and adjusts or splits the work. Thirty minutes without useful progress also merits a checkpoint; neither trigger automatically kills a worker.
 
