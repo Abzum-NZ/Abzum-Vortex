@@ -197,6 +197,16 @@ insert into vortex_definition.roots (
   '94890000-0000-4000-8000-000000000001'
 );
 
+-- Ungranted application root in Org A (for grant authorization negative test)
+insert into vortex_definition.roots (
+  root_id, organization_id, kind, key, created_at, created_by
+) values (
+  '34890000-0000-4000-8000-000000000004',
+  '24890000-0000-4000-8000-000000000001',
+  'application', 'test.app.a.ungranted', pg_catalog.clock_timestamp(),
+  '94890000-0000-4000-8000-000000000001'
+);
+
 -- Module root in Org A (for non-application negative test)
 insert into vortex_definition.roots (
   root_id, organization_id, kind, key, created_at, created_by
@@ -579,12 +589,31 @@ select is(
 );
 
 -- Ungranted application root
+reset role;
+delete from vortex_context.request_contexts
+where backend_pid = pg_catalog.pg_backend_pid();
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'tenantId', '14890000-0000-4000-8000-000000000001',
+  'organizationId', '24890000-0000-4000-8000-000000000001',
+  'applicationRootId', '34890000-0000-4000-8000-000000000004',
+  'identityId', '44890000-0000-4000-8000-000000000001',
+  'organizationAccountId', '54890000-0000-4000-8000-000000000001',
+  'callerKind', 'human',
+  'identityAuthorityId', '94890000-0000-4000-8000-000000000002',
+  'sessionId', 'a4890000-0000-4000-8000-000000000018',
+  'correlationId', 'a4890000-0000-4000-8000-000000000019',
+  'accessVersion', 1,
+  'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
+  'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
+  'authenticationStrength', 'single_factor'
+));
+set local role vortex_request;
 select is(
   (
     select (readiness ->> 'reasonCode')
     from vortex_connection.resolve_connection_instance_readiness(
       '24890000-0000-4000-8000-000000000001',
-      '34890000-0000-4000-8000-000000000002',
+      '34890000-0000-4000-8000-000000000004',
       '64890000-0000-4000-8000-000000000001',
       'cold_archive_s3',
       2,
@@ -594,6 +623,26 @@ select is(
   'grant_unauthorized',
   'resolver refuses ungranted application root'
 );
+
+reset role;
+delete from vortex_context.request_contexts
+where backend_pid = pg_catalog.pg_backend_pid();
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'tenantId', '14890000-0000-4000-8000-000000000001',
+  'organizationId', '24890000-0000-4000-8000-000000000001',
+  'applicationRootId', '34890000-0000-4000-8000-000000000001',
+  'identityId', '44890000-0000-4000-8000-000000000001',
+  'organizationAccountId', '54890000-0000-4000-8000-000000000001',
+  'callerKind', 'human',
+  'identityAuthorityId', '94890000-0000-4000-8000-000000000002',
+  'sessionId', 'a4890000-0000-4000-8000-000000000022',
+  'correlationId', 'a4890000-0000-4000-8000-000000000023',
+  'accessVersion', 1,
+  'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
+  'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
+  'authenticationStrength', 'single_factor'
+));
+set local role vortex_request;
 
 -- Organization mismatch
 select is(
