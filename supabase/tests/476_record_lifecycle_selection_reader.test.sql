@@ -424,6 +424,110 @@ select pg_temp.append_writer_release(
   )
 );
 
+-- Activation requires the exact Application release to have a current Access
+-- permission registration even when neither the Application nor its pinned
+-- Module declares permissions. Register the empty catalogues through the same
+-- coordinated writer used by the canonical adapter fixture.
+create function pg_temp.register_empty_application_permissions(
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_source_role_id uuid,
+  p_changed_by uuid,
+  p_correlation_id uuid
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  application_release jsonb;
+  candidate jsonb;
+  outcome record;
+begin
+  select pg_catalog.jsonb_build_object(
+    'kind', 'application',
+    'definitionKey', root.key,
+    'rootId', root.root_id,
+    'releaseRevision', release.release_revision,
+    'releaseVersion', release.release_version,
+    'validationContractVersion', release.validation_contract_version,
+    'contentFingerprint', release.content_fingerprint,
+    'resolutionFingerprint', release.resolution_fingerprint
+  )
+  into strict application_release
+  from vortex_definition.roots as root
+  join vortex_definition.releases as release
+    on release.root_id = root.root_id
+    and release.release_revision = root.current_release_revision
+  where root.organization_id = p_organization_id
+    and root.root_id = p_application_root_id
+    and root.kind = 'application';
+
+  candidate := pg_catalog.jsonb_build_object(
+    'contractVersion', '1.0.0',
+    'organizationId', p_organization_id,
+    'applicationRootId', p_application_root_id,
+    'applicationRelease', application_release,
+    'applicationCatalogueFingerprint', pg_temp.writer_fixture_fingerprint(
+      'catalogue:' || p_application_root_id::text
+    ),
+    'applicationPermissionIds', '[]'::jsonb,
+    'entries', '[]'::jsonb,
+    'candidateFingerprint', pg_temp.writer_fixture_fingerprint(
+      'candidate:' || p_application_root_id::text
+    )
+  );
+
+  select result.* into strict outcome
+  from vortex_access.coordinate_application_access_change(
+    'register', null,
+    pg_catalog.jsonb_build_object(
+      'contractVersion', '1.0.0',
+      'preparationBasis', pg_catalog.jsonb_build_object('kind', 'registration_candidate'),
+      'permissionRegistration', candidate,
+      'templates', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'template', pg_catalog.jsonb_build_object(
+          'roleId', p_source_role_id,
+          'key', 'lifecycle_reader_template',
+          'name', 'Lifecycle reader template',
+          'homePageId', pg_catalog.gen_random_uuid(),
+          'permissionKeys', '[]'::jsonb,
+          'permissionSelection', pg_catalog.jsonb_build_object('kind', 'exact')
+        ),
+        'sourceTemplateFingerprint', pg_temp.writer_fixture_fingerprint(
+          'template:' || p_application_root_id::text
+        ),
+        'sourcePermissions', '[]'::jsonb,
+        'livePermissions', '[]'::jsonb
+      )),
+      'candidateFingerprint', pg_temp.writer_fixture_fingerprint(
+        'preparation:' || p_application_root_id::text
+      )
+    ),
+    p_organization_id, p_application_root_id, p_changed_by, p_correlation_id
+  ) as result;
+
+  if outcome.outcome <> 'changed' then
+    raise exception 'Lifecycle reader fixture registration of % was not applied',
+      p_application_root_id;
+  end if;
+end
+$function$;
+
+select pg_temp.register_empty_application_permissions(
+  :'org_one', :'app_one', '84760000-0000-4000-8000-000000000061',
+  :'actor', 'c4760000-0000-4000-8000-000000000061'
+);
+select pg_temp.register_empty_application_permissions(
+  :'org_one', :'app_two', '84760000-0000-4000-8000-000000000062',
+  :'actor', 'c4760000-0000-4000-8000-000000000062'
+);
+select pg_temp.register_empty_application_permissions(
+  :'org_two', :'app_three', '84760000-0000-4000-8000-000000000063',
+  :'actor', 'c4760000-0000-4000-8000-000000000063'
+);
+
 -- ============================================================================
 -- Canonical context helpers (derived from 475_record_adapters pattern).
 -- Queries the live organization account identity and current access version.
