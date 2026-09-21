@@ -41,7 +41,7 @@ describe("Kestra deployment image", () => {
     expect(testingFlow).toContain("key: database-testing-reusable-full-baseline");
     expect(testingFlow).toContain("id: publish_immutable_fresh_receipt");
     expect(testingFlow).toContain(
-      "fromJson(read(outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.receipt_key",
+      "fromJson(read(outputs.route_queued_database_admission.outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.receipt_key",
     );
     expect(testingFlow).not.toContain("id: publish_immutable_full_source");
     expect(testingFlow).toContain("overwrite: false");
