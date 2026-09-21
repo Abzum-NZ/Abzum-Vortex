@@ -7,6 +7,7 @@ export * from "./save-record";
 export * from "./transfer-record-ownership";
 export * from "./named-actions";
 export * from "./record-lifecycle-selection";
+export * from "./record-removal-protection";
 
 export const RecordService = Object.freeze({
   key: "record",

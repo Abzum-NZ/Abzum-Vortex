@@ -1,0 +1,260 @@
+-- Real #408 recovery/hold fixture shared by pgTAP and the two-session proof.
+-- The caller owns the surrounding transaction.
+
+\set rph_tenant 'a4780000-0000-4000-8000-000000000001'
+\set rph_org 'a4780000-0000-4000-8000-000000000002'
+\set rph_identity 'a4780000-0000-4000-8000-000000000003'
+\set rph_account 'a4780000-0000-4000-8000-000000000004'
+\set rph_actor 'a4780000-0000-4000-8000-000000000005'
+\set rph_app_one 'a4780000-0000-4000-8000-000000000006'
+\set rph_app_two 'a4780000-0000-4000-8000-000000000007'
+\set rph_module 'a4780000-0000-4000-8000-000000000008'
+\set rph_shared_type 'a4780000-0000-4000-8000-000000000009'
+\set rph_contained_type 'a4780000-0000-4000-8000-00000000000a'
+\set rph_shared_storage 'a4780000-0000-4000-8000-00000000000b'
+\set rph_contained_storage 'a4780000-0000-4000-8000-00000000000c'
+\set rph_policy_shared 'a4780000-0000-4000-8000-00000000000d'
+\set rph_policy_contained 'a4780000-0000-4000-8000-00000000000e'
+\set rph_active 'a4780000-0000-4000-8000-000000000010'
+\set rph_recoverable 'a4780000-0000-4000-8000-000000000011'
+\set rph_expired 'a4780000-0000-4000-8000-000000000012'
+\set rph_pending 'a4780000-0000-4000-8000-000000000013'
+\set rph_held 'a4780000-0000-4000-8000-000000000014'
+\set rph_released 'a4780000-0000-4000-8000-000000000015'
+\set rph_missing 'a4780000-0000-4000-8000-000000000016'
+\set rph_same_record 'a4780000-0000-4000-8000-000000000017'
+\set rph_hold_active 'a4780000-0000-4000-8000-000000000020'
+\set rph_hold_released 'a4780000-0000-4000-8000-000000000021'
+
+insert into vortex_identity.tenants (
+  tenant_id, short_name, display_name, state, created_at, created_by,
+  state_changed_at, revision
+) values (
+  :'rph_tenant', 'test_tenant_478', 'Test Tenant 478', 'active',
+  pg_catalog.clock_timestamp(), :'rph_actor', pg_catalog.clock_timestamp(), 1
+);
+insert into vortex_identity.organizations (
+  organization_id, tenant_id, short_name, display_name, state,
+  created_at, created_by, state_changed_at, revision
+) values (
+  :'rph_org', :'rph_tenant', 'test_org_478', 'Test Org 478', 'active',
+  pg_catalog.clock_timestamp(), :'rph_actor', pg_catalog.clock_timestamp(), 1
+);
+select * from vortex_access.initialize_organization_access_version(
+  :'rph_org', :'rph_actor', 'a4780000-0000-4000-8000-000000000030'
+);
+select * from vortex_identity.ensure_identity_projection(
+  :'rph_identity', 'a4780000-0000-4000-8000-000000000031'
+);
+insert into vortex_identity.organization_accounts (
+  organization_account_id, organization_id, identity_id, display_name, state,
+  activated_at, changed_at, state_changed_at, state_changed_by,
+  state_change_correlation_id, revision
+) values (
+  :'rph_account', :'rph_org', :'rph_identity', 'Hold administrator', 'active',
+  pg_catalog.clock_timestamp() - interval '1 minute', pg_catalog.clock_timestamp(),
+  pg_catalog.clock_timestamp(), :'rph_actor',
+  'a4780000-0000-4000-8000-000000000032', 1
+);
+
+insert into vortex_record.storage_catalogue (
+  storage_contract_id, physical_schema_token, physical_table_token,
+  module_root_id, record_type_id, storage_scope,
+  first_compatible_release_revision, state, generator_contract_version,
+  content_fingerprint, record_type_definition
+) values
+  (:'rph_shared_storage', 'record_data', 'rt_a478000000004000800000000000000b',
+    :'rph_module', :'rph_shared_type', 'organization_shared', 1, 'active', '1.0.0',
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    pg_catalog.jsonb_build_object(
+      'recordTypeId', :'rph_shared_type', 'storageContractId', :'rph_shared_storage',
+      'storageScope', 'organization_shared'
+    )),
+  (:'rph_contained_storage', 'record_data', 'rt_a478000000004000800000000000000c',
+    :'rph_module', :'rph_contained_type', 'application_contained', 1, 'active', '1.0.0',
+    'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    pg_catalog.jsonb_build_object(
+      'recordTypeId', :'rph_contained_type',
+      'storageContractId', :'rph_contained_storage',
+      'storageScope', 'application_contained'
+    ));
+
+set local role vortex_record_owner;
+create table record_data.rt_a478000000004000800000000000000b (
+  organisation_id uuid not null,
+  record_type_id uuid not null,
+  storage_contract_id uuid not null,
+  record_id uuid not null,
+  application_root_id uuid,
+  lifecycle_state text not null,
+  concurrency_number bigint not null,
+  created_at timestamptz not null,
+  deleted_at timestamptz,
+  removal_due_at timestamptz,
+  primary key (organisation_id, record_id)
+);
+create table record_data.rt_a478000000004000800000000000000c (
+  organisation_id uuid not null,
+  record_type_id uuid not null,
+  storage_contract_id uuid not null,
+  record_id uuid not null,
+  application_root_id uuid not null,
+  lifecycle_state text not null,
+  concurrency_number bigint not null,
+  created_at timestamptz not null,
+  deleted_at timestamptz,
+  removal_due_at timestamptz,
+  primary key (organisation_id, application_root_id, record_id)
+);
+alter table record_data.rt_a478000000004000800000000000000b enable row level security;
+alter table record_data.rt_a478000000004000800000000000000b force row level security;
+alter table record_data.rt_a478000000004000800000000000000c enable row level security;
+alter table record_data.rt_a478000000004000800000000000000c force row level security;
+create policy record_scope on record_data.rt_a478000000004000800000000000000b
+  for all to vortex_record_adapter
+  using (organisation_id = vortex_context.organization_id())
+  with check (organisation_id = vortex_context.organization_id());
+create policy record_scope on record_data.rt_a478000000004000800000000000000c
+  for all to vortex_record_adapter
+  using (
+    organisation_id = vortex_context.organization_id()
+    and application_root_id = vortex_context.application_root_id(true)
+  )
+  with check (
+    organisation_id = vortex_context.organization_id()
+    and application_root_id = vortex_context.application_root_id(true)
+  );
+grant select, insert, update, delete
+  on record_data.rt_a478000000004000800000000000000b,
+    record_data.rt_a478000000004000800000000000000c
+  to vortex_record_adapter;
+reset role;
+
+create function pg_temp.rph_context(p_application_root_id uuid, p_human boolean)
+returns void language plpgsql volatile set search_path = '' as $function$
+declare
+  context_value jsonb;
+begin
+  delete from vortex_context.request_contexts
+  where backend_pid = pg_catalog.pg_backend_pid();
+  context_value := pg_catalog.jsonb_build_object(
+    'callerKind', case when p_human then 'human' else 'system' end,
+    'tenantId', 'a4780000-0000-4000-8000-000000000001'::uuid,
+    'organizationId', 'a4780000-0000-4000-8000-000000000002'::uuid,
+    'sessionId', 'a4780000-0000-4000-8000-000000000040'::uuid,
+    'authenticationStrength', case when p_human then 'single_factor' else 'service' end,
+    'issuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
+    'expiresAt', pg_catalog.clock_timestamp() + interval '1 hour',
+    'accessVersion', 1,
+    'correlationId', 'a4780000-0000-4000-8000-000000000041'::uuid
+  ) || case when p_application_root_id is null then '{}'::jsonb
+    else pg_catalog.jsonb_build_object('applicationRootId', p_application_root_id) end;
+  if p_human then
+    context_value := context_value || pg_catalog.jsonb_build_object(
+      'identityAuthorityId', 'a4780000-0000-4000-8000-000000000005'::uuid,
+      'organizationAccountId', 'a4780000-0000-4000-8000-000000000004'::uuid,
+      'identityId', 'a4780000-0000-4000-8000-000000000003'::uuid,
+      'accessTokenIssuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
+      'primaryAuthenticatedAt', pg_catalog.clock_timestamp() - interval '1 minute'
+    );
+  else
+    context_value := context_value || pg_catalog.jsonb_build_object(
+      'systemActorId', 'a4780000-0000-4000-8000-000000000005'::uuid
+    );
+  end if;
+  perform vortex_context.initialize(context_value);
+end
+$function$;
+
+select pg_temp.rph_context(null, false);
+set local role vortex_record_adapter;
+insert into record_data.rt_a478000000004000800000000000000b (
+  organisation_id, record_type_id, storage_contract_id, record_id,
+  application_root_id, lifecycle_state, concurrency_number, created_at,
+  deleted_at, removal_due_at
+) values
+  (:'rph_org', :'rph_shared_type', :'rph_shared_storage', :'rph_active',
+    null, 'active', 1, pg_catalog.statement_timestamp() - interval '40 days', null, null),
+  (:'rph_org', :'rph_shared_type', :'rph_shared_storage', :'rph_recoverable',
+    null, 'soft_deleted', 2, pg_catalog.statement_timestamp() - interval '20 days',
+    pg_catalog.statement_timestamp() - interval '1 day', null),
+  (:'rph_org', :'rph_shared_type', :'rph_shared_storage', :'rph_expired',
+    null, 'soft_deleted', 2, pg_catalog.statement_timestamp() - interval '40 days',
+    pg_catalog.statement_timestamp() - interval '20 days', null),
+  (:'rph_org', :'rph_shared_type', :'rph_shared_storage', :'rph_pending',
+    null, 'removal_pending', 2, pg_catalog.statement_timestamp() - interval '40 days',
+    pg_catalog.statement_timestamp() - interval '20 days', null),
+  (:'rph_org', :'rph_shared_type', :'rph_shared_storage', :'rph_held',
+    null, 'removal_pending', 2, pg_catalog.statement_timestamp() - interval '40 days',
+    pg_catalog.statement_timestamp() - interval '20 days', null),
+  (:'rph_org', :'rph_shared_type', :'rph_shared_storage', :'rph_released',
+    null, 'removal_pending', 2, pg_catalog.statement_timestamp() - interval '40 days',
+    pg_catalog.statement_timestamp() - interval '20 days', null),
+  (:'rph_org', :'rph_shared_type', :'rph_shared_storage', :'rph_missing',
+    null, 'soft_deleted', 2, pg_catalog.statement_timestamp() - interval '20 days',
+    pg_catalog.statement_timestamp() - interval '1 day', null);
+select vortex_record.record_current_recovery_policy_internal(
+  :'rph_shared_storage', :'rph_shared_type', :'rph_policy_shared', 1, 14
+);
+select vortex_record.record_recovery_provenance_internal(
+  :'rph_shared_storage', :'rph_shared_type', record_id, 2
+)
+from (values
+  (:'rph_recoverable'::uuid), (:'rph_expired'::uuid), (:'rph_pending'::uuid),
+  (:'rph_held'::uuid), (:'rph_released'::uuid)
+) as fixture(record_id);
+reset role;
+
+select pg_temp.rph_context(:'rph_app_one', false);
+set local role vortex_record_adapter;
+insert into record_data.rt_a478000000004000800000000000000c (
+  organisation_id, record_type_id, storage_contract_id, record_id,
+  application_root_id, lifecycle_state, concurrency_number, created_at,
+  deleted_at, removal_due_at
+) values (
+  :'rph_org', :'rph_contained_type', :'rph_contained_storage', :'rph_same_record',
+  :'rph_app_one', 'soft_deleted', 2, pg_catalog.statement_timestamp() - interval '20 days',
+  pg_catalog.statement_timestamp() - interval '20 days', null
+);
+select vortex_record.record_current_recovery_policy_internal(
+  :'rph_contained_storage', :'rph_contained_type', :'rph_policy_contained', 1, 0
+);
+select vortex_record.record_recovery_provenance_internal(
+  :'rph_contained_storage', :'rph_contained_type', :'rph_same_record', 2
+);
+reset role;
+
+select pg_temp.rph_context(:'rph_app_two', false);
+set local role vortex_record_adapter;
+insert into record_data.rt_a478000000004000800000000000000c (
+  organisation_id, record_type_id, storage_contract_id, record_id,
+  application_root_id, lifecycle_state, concurrency_number, created_at,
+  deleted_at, removal_due_at
+) values (
+  :'rph_org', :'rph_contained_type', :'rph_contained_storage', :'rph_same_record',
+  :'rph_app_two', 'soft_deleted', 2, pg_catalog.statement_timestamp() - interval '2 days',
+  pg_catalog.statement_timestamp() - interval '1 day', null
+);
+select vortex_record.record_current_recovery_policy_internal(
+  :'rph_contained_storage', :'rph_contained_type', :'rph_policy_contained', 1, 14
+);
+select vortex_record.record_recovery_provenance_internal(
+  :'rph_contained_storage', :'rph_contained_type', :'rph_same_record', 2
+);
+reset role;
+
+select pg_temp.rph_context(null, true);
+set local role vortex_record_adapter;
+select vortex_record.change_record_legal_hold_internal(
+  'apply', :'rph_hold_active', :'rph_shared_storage', :'rph_shared_type', :'rph_held',
+  null, 'Court preservation order', pg_catalog.statement_timestamp() + interval '30 days'
+);
+select vortex_record.change_record_legal_hold_internal(
+  'apply', :'rph_hold_released', :'rph_shared_storage', :'rph_shared_type', :'rph_released',
+  null, 'Investigation preservation', pg_catalog.statement_timestamp() + interval '30 days'
+);
+select vortex_record.change_record_legal_hold_internal(
+  'release', :'rph_hold_released', :'rph_shared_storage', :'rph_shared_type', :'rph_released',
+  1, 'Investigation closed', null
+);
+reset role;

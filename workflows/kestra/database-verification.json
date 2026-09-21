@@ -147,6 +147,11 @@
       "label": "Record change"
     },
     {
+      "migration": "supabase/migrations/20260923003000_record_recovery_and_hold_state.sql",
+      "proof": "supabase/tests/record-removal-protection-concurrency.test.sh",
+      "label": "Record removal protection"
+    },
+    {
       "migration": "supabase/migrations/20260913060000_first_private_transactional_event_append.sql",
       "proof": "supabase/tests/event-append-concurrency.test.sh",
       "label": "Event append"
