@@ -48,7 +48,7 @@ An action cannot wait, call an external system, send email, send notifications, 
 
 ## Rules
 
-A rule flow has a trigger, optional condition, priority, declared typed inputs and flow variables, and an ordered graph of registered nodes. Rules for the same trigger run in a stable published order. The current single-effect implementation is a legacy contract, not the limit of the approved designer; [versioned compatibility](appendices/frontend-rule-designer.md#contracts-and-compatibility-delivery) must preserve existing published releases.
+A rule flow has a trigger, optional condition, priority, declared typed inputs and flow variables, and an ordered graph of registered nodes. Rules for the same trigger run in a stable published order. The [current graph contract](appendices/frontend-rule-designer.md#current-contracts-and-delivery) replaces the obsolete single-effect representation throughout current definitions and consumers; product publication identity and release selection remain explicit.
 
 The immediate save-rule effects remain:
 
@@ -83,15 +83,15 @@ Relationship traversal is limited and validated. Conditions cannot execute code 
 
 The early [record-visibility foundation #36](../build-plan/issue-36-ownership-and-visibility.md) supplies the shared typed Boolean evaluator using the existing condition contract. It validates the complete tree and declared inputs before evaluating truth: invalid or missing input cannot become an allowance through negation or a short-circuited branch. Values are compared without implicit type conversion, and pure evaluation and PostgreSQL restrictions use the same tested meaning. The [condition builder #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) later adds authoring and general-rule extensions to that same implementation; the operators listed conceptually above are not a claim that all extensions already ship.
 
-Module V2 adds the [exact-value Rule semantics](../build-plan/issue-44-record-field-values.md#rule-consumer-handoff)
+The current Module contract supplies the [exact-value Rule semantics](../build-plan/issue-44-record-field-values.md)
 needed by its field definitions. Select them from the trusted owning Module
 contract, not from how an incoming value looks or the containing Application's
-version. Keep the same condition tree and error meanings; decimal and money
-parameters are explicit types, while historical `number` parameters retain their
-meaning. The existing V1 evaluator remains available for historical Definition
-evidence. Runtime, publication tests and database-backed predicates must agree
-before the new value format is activated for records. This work does not require
-the visual Conditions Designer or a second rule engine.
+version. Keep the same condition tree and error meanings. Decimal and money
+parameters are explicit exact-value types; an explicitly declared `number`
+parameter uses its finite-double meaning. Runtime, publication validation and
+database-backed predicates apply the same declared operand semantics. No obsolete
+evaluator or representation conversion is retained, and the visual Conditions
+Designer is not required to execute these semantics.
 
 Application-owned rules, actions, queries, pipeline gates and record-bound
 workflow conditions use the value format of the exact Module owning the fields
@@ -100,7 +100,7 @@ and input mappings must have compatible declared formats. A containing
 Application's format version cannot turn an exact decimal into a floating-point
 number, reinterpret money currency, or turn ordinary text into a number. Compile
 and validate these consumers with the same owning helpers described in the
-[field-value plan](../build-plan/issue-44-record-field-values.md#rule-consumer-handoff).
+[field-value plan](../build-plan/issue-44-record-field-values.md).
 
 A workflow input bound to a record field retains its declared allowed record
 types. The field's possible targets must fit within that declaration; downstream

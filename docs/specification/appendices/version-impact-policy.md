@@ -198,12 +198,12 @@ Version impact does not prove installed dependant compatibility, resolve authore
 
 ## Page-representation completion
 
-[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) extends this policy together with source/canonical schemas, compiler and retained immutable-release readers. Shell/slot identity, binding context, typed operation input/output and access changes receive explicit classification. Pure presentation changes may remain patch; no structural migration may silently lower executable or access impact. Legacy releases remain immutable, and conversion occurs only in a new draft under [page-builder contracts](page-builder-contracts.md#compatibility-and-proof).
+[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) aligns this policy with the current source/canonical schemas, compiler and publication readers. Shell/slot identity, binding context, typed operation input/output and access changes receive explicit classification. Pure presentation changes may remain patch; structural changes cannot silently lower executable or access impact. Apply the [current page representation](page-builder-contracts.md#current-representation) consistently without retaining obsolete format readers or conversion paths.
 
-### Native V2 composition comparison
+### Current composition comparison
 
-The following rules apply to the explicitly selected V2 representation. They do
-not reinterpret V1 releases or change existing V1 comparison fingerprints.
+The following rules apply to the current application representation. Application
+release versions remain distinct from the schema revision used to describe them.
 
 | Change | Impact and reason |
 | --- | --- |
@@ -241,26 +241,17 @@ exposed shell-slot declarations carry their own meaning. Page-to-shell content
 bindings remain explicitly compared. Exact authored/canonical fingerprints and
 stored releases are never rewritten by comparison normalization.
 
-V2 comparison requires exact `validationContractVersion: "2.0.0"` metadata on
-the request and each supplied V2 history entry. Unknown, missing or mixed
-representation metadata is refused by this native-V2 comparison path. It uses
-its own comparison-policy version; the existing V1 policy remains unchanged.
-Both representations use the same compare-and-confirm operation, including
-exact content fingerprints and stale-confirmation checks. Comparison evidence
-alone is not permission to publish or decode a stored V2 release.
+Comparison validates the request and supplied history against the declared
+current contract and refuses missing, unknown or mismatched contract metadata.
+The compare-and-confirm operation binds the policy revision, exact content
+fingerprints and assigned release version; stale confirmation is refused.
+An impact assessment does not itself authorise publication or reading a release.
 
-The later coordinated conversion/publication step must separately handle a root
-with V1 history followed by V2 content. Preserve its immutable history and
-continuous application release numbering; never reset it to `1.0.0`, relabel old
-content as V2, or accept mixed history through shape inference. That transition
-requires explicit version-selected comparison evidence before V2 publication is
-enabled; the native-V2 comparison checkpoint does not complete it.
-
-At that coordinated boundary, changing between the two supported representations
-is a major release, in either direction. This includes publishing exact V1 content
-restored after a V2 release. Compare representation metadata, not a guessed
-cross-format structural equivalence; assign the next major from the latest
-application release. Validate each historical entry using its own recorded
-version and preserve its bytes and fingerprint. Same-representation changes use
-their normal comparator. Unknown or mismatched version pairs still refuse. This
-keeps the existing restore promise without adding a one-way conversion gate.
+Within the current contract, retain immutable published content, fingerprints
+and continuous application release numbering. Restoration uses the selected
+published content as a new draft, then applies ordinary comparison and publication
+against the latest release. It does not overwrite history or reset numbering.
+No second representation comparator, legacy release reader, cross-format
+conversion or representation-transition approval is required. Update checked-in
+development definitions and their consumers together when removing obsolete
+formats; do not mislabel obsolete content as satisfying the current contract.

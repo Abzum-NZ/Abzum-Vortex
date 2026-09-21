@@ -51,7 +51,7 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 
 Supabase Cron is not a second workflow system: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
 
-Supabase OAuth 2.1 server availability and required MCP interoperability are revalidated against the deployed Local, Testing and Production versions before [Phase 9](../build-plan/README.md#phase-9--connections-and-interfaces) implementation. If the managed capability is unavailable or cannot meet the approved authorization contract, Phase 9 stops and the specification is reviewed; implementation does not silently introduce a second identity or token service.
+The Phase 10 MCP interface uses the managed Supabase OAuth 2.1 server under the approved authorization contract. Its adapter implements the required protocol behavior and returns a safe unavailable result when the configured capability cannot serve the request. A missing provider capability cannot silently introduce a second identity or token service; any necessary change to the approved provider boundary belongs to the owning specification decision. Hosted capability checks are not a development completion gate.
 
 ```mermaid
 flowchart LR
@@ -345,7 +345,7 @@ and grants no record access. It refuses a detached target. Unrelated detached
 history does not invalidate a complete current installation. See the
 [active installation read plan](../build-plan/issue-43-active-installation-read.md).
 
-The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
+The [Application lifecycle permission](../build-plan/issue-64-application-runtime.md)
 is the organisation-scoped platform permission
 `platform.organization.applications.manage`. The operation binds the exact
 application and additionally checks delegated management of its complete affected
@@ -402,11 +402,12 @@ change, not silent reuse or automatic refusal of every compatible addition.
 Exact release content/resolution evidence records what was provisioned. No extra
 plan fingerprint, receipt counter or second platform migration ledger is needed.
 
-The provisioner must explicitly support the exact Module source/validation pairs
-2.0.0/2.0.0 and 3.0.0/3.0.0. Module 3 reuses the V2 field storage model; accepting
-it does not relabel a published release or create a separate table for its rules.
-See the [compatibility implementation plan](../build-plan/issue-45-module3-storage-compatibility.md)
-for the bounded delivery and remaining installation dependencies.
+The provisioner accepts the declared current Module source/validation pair and
+uses its exact-value field storage model and graph definitions consistently.
+Rule changes do not create a separate record table or relabel a published release.
+Remove obsolete pair selectors with [Module consolidation #548](https://github.com/Abzum-NZ/Abzum-Vortex/issues/548);
+the [storage owner](../build-plan/issue-45-module3-storage-compatibility.md) retains
+the existing allocation and installation responsibilities.
 
 An unchanged retry of the original first-provision command may return the same
 inactive provisioned binding after a lost response, even though its expected
