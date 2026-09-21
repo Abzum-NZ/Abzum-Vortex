@@ -147,6 +147,11 @@
       "label": "Record change"
     },
     {
+      "migration": "supabase/migrations/20260921100000_named_action_create_record.sql",
+      "proof": "supabase/tests/named-action-create-concurrency.test.sh",
+      "label": "Named action create"
+    },
+    {
       "migration": "supabase/migrations/20260913060000_first_private_transactional_event_append.sql",
       "proof": "supabase/tests/event-append-concurrency.test.sh",
       "label": "Event append"
@@ -200,6 +205,11 @@
       "migration": "supabase/migrations/20260914230000_organization_local_administration_changes.sql",
       "proof": "supabase/tests/organization-local-administration-changes-concurrency.test.sh",
       "label": "Organization local administration changes"
+    },
+    {
+      "migration": "supabase/migrations/20260923002500_connection_instance_state.sql",
+      "proof": "supabase/tests/connection-readiness-concurrency.test.sh",
+      "label": "Connection readiness"
     }
   ],
   "lintSchemas": [
@@ -212,6 +222,7 @@
     "vortex_module",
     "vortex_record",
     "vortex_event",
-    "record_data"
+    "record_data",
+    "vortex_connection"
   ]
 }

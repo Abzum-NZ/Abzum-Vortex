@@ -240,12 +240,19 @@ importers:
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@vortex/db':
+        specifier: workspace:*
+        version: link:../../db
       '@vortex/workflow':
         specifier: workspace:*
         version: link:../workflow
       server-only:
         specifier: 0.0.1
         version: 0.0.1
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.6)(vite@8.2.2(@types/node@24.13.6))
 
   runtime/definition:
     dependencies:
