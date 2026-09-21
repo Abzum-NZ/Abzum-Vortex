@@ -21,6 +21,16 @@ behaviour. "Improve the tests" is never a task on its own, and a task that
 turns into test maintenance instead of delivering the functionality it was
 dispatched for has drifted from its brief.
 
+## Root model and launch pin (latest direct user rule)
+
+The current root stays in the same session and Run as GPT-5.6 Sol low. Astra
+is allowed only for architecture-level tasks, not routine coordination, coding
+or routine review. Future root launches must explicitly use
+`codex --model gpt-5.6-sol -c model_reasoning_effort="low"`; saved defaults are
+insufficient because a higher-priority configuration can override them. Do not
+restart the current root just to change defaults. Do not launch a second root.
+Lower-cost Antigravity/OpenCode/Sonnet/Terra workers remain preferred.
+
 ## Topology
 
 Orca's unit of work is the agent session: one CLI agent in one terminal in one
@@ -37,6 +47,38 @@ agents do not change it or introduce global wildcard permission rules. A custom
 `--dangerously-skip-permissions` flag; that command-specific requirement does
 not authorize a global permission change.
 
+## Current cost routing and supervision (21 September 2026)
+
+The latest direct user instruction takes precedence over historical lane defaults.
+Keep one generic GPT-5.6 Sol low root and reuse the existing issue owners. For
+new routine implementation, fixture, registration, evidence and non-DB work, prefer Antigravity
+Gemini 3.8 Flash, OpenCode GLM 5.3, or Claude Sonnet after checking actual availability.
+Do not create routine Sol or Astra workers. Apart from the existing coordinator
+and owners, reserve Sol for genuinely complex
+analysis or security review. Existing near-finished workers may complete their
+bounded task without a provider switch. Do not discard partial edits to change models.
+
+Owners dispatch real, bounded, non-overlapping tasks in retained worktrees and
+verify the resolved model, canonical task/dispatch, terminal and actual task activity.
+Input acceptance alone is not a start. Re-list handles after runtime restarts.
+At a safe provider handoff, preserve edits and evidence and prove the old editor
+has stopped before starting its replacement. Custom `agy` always includes
+`--dangerously-skip-permissions`.
+
+Keep both local DB slots useful when corrected gates are ready; root issues one
+fresh allocation per invocation after reconciling releases. Never replay a consumed
+grant. Run independent ready non-DB work alongside verification. A fixture failure
+never authorizes wider runtime or production grants to make the harness pass.
+Cards and board dispatch fields name the actual active model and owner; waiting
+states identify the missing gate or dependency rather than implying active execution.
+
+Recurring duplicate supervisor launches are disabled. Event-driven inbox delivery
+continues under the sole root; do not resume the paused delivery monitor. Close
+settled stale sessions only with positive completion/exit evidence, and remove
+worktrees only after proving they are clean (including untracked files), merged
+or unneeded, and free of active ownership. Preserve dirty or unmerged work and
+all required evidence. Production remains disabled and unwanted.
+
 ## Roster and model assignment
 
 Model choice follows the shape of the work, not seniority. Privileged
@@ -47,19 +89,19 @@ treating it as fixed.
 
 | Lane | Model | Does | Owns |
 | --- | --- | --- | --- |
-| Orchestrator (root coordinator) | GPT 6 Astra · medium (Codex) | Supervises issue owners and single-slice workers, sequences work across issues, performs independent acceptance, and decides merges and promotions. Generic: it has no linked issue or pull request and no implementation ownership. If it starts writing code, the queue stops moving. | Cross-issue dependency order, database-verification admission, phase gates, merge and promotion decisions |
-| Issue owner / Planner | GPT 5.6 Sol · high (Codex) | Every issue-level orchestrator, issue owner and Planner: plans the whole issue, supervises its workers and corrects handoffs. No Astra child may fill these roles. | Issue slices, worker supervision and planning evidence |
+| Orchestrator (root coordinator) | GPT 5.6 Sol low (Codex) | Supervises issue owners and single-slice workers, sequences work across issues, performs independent acceptance, and decides merges and promotions. Generic: it has no linked issue or pull request and no implementation ownership. If it starts writing code, the queue stops moving. | Cross-issue dependency order, database-verification admission, phase gates, merge and promotion decisions |
+| Issue owner / Planner | GPT 5.6 Sol · high (Codex) | Every issue-level orchestrator, issue owner and Planner: plans the whole issue, supervises its workers and corrects handoffs. Astra may only perform explicitly scoped architecture-level tasks. | Issue slices, worker supervision and planning evidence |
 | Privileged review | Claude Opus 5 · high | Review only privileged database, security and concurrency work; do not use it as a general implementation or routine-review lane | Privileged review verdicts |
 | Runtime & contracts | Claude Sonnet 5 · high | TypeScript engines, contracts, adapters and the definition-led execution path for bounded coding after actual availability is verified. | `runtime/**`, `contracts/**` |
 | Proofs | Claude Sonnet 5 · high | pgTAP suites and the two-session concurrency harness; builds every fixture through the owning writer, never by direct insert; reports defects rather than softening assertions. | `supabase/tests/**` and verification registration |
-| Workhorse (OpenCode) | GLM 5.3 Flash (OpenCode) | High-volume, well-specified, low-blast-radius work where the answer is checkable: plan-document sync, registration and inventory sweeps, scaffolds, evidence collection and dependency audits | `docs/**`, manifests, selectors, audits |
+| Workhorse (OpenCode) | GLM 5.3 (OpenCode) | High-volume, well-specified, low-blast-radius work where the answer is checkable: plan-document sync, registration and inventory sweeps, scaffolds, evidence collection and dependency audits | `docs/**`, manifests, selectors, audits |
 | Workhorse | Claude Sonnet 5 · high, or GPT 5.6 Terra · medium/high (Codex) | Bounded coding when the assignment benefits from those lanes and actual availability is verified. | `docs/**`, manifests, selectors, audits |
 | Workhorse (Antigravity) | Gemini 3.8 Flash (`agy` TUI) | An allowed lane for the same workhorse tasks. Before dispatch, verify that `agy` is installed and that the exact model resolves in the launched terminal. Availability is not claimed without launch evidence. | Workhorse tasks, once launch is evidenced |
 | Triage | GPT 5.6 Terra · low (Codex) | Cheap and fast: read an issue, reproduce a failure, scan logs, confirm a premise, summarise a diff. The first responder that stops expensive agents being dispatched on false premises | Pre-dispatch premise checks, failure triage |
 | Mechanical workhorse | GPT 5.6 Luna | Checkable mechanical work under a concise, file-specific brief. | Mechanical `docs/**`, manifests, selectors and inventories |
 | Deep analysis | GPT 5.6 Sol · high (Codex) | Root-cause work and slice design when a defect resists the obvious reading, or when an issue owner needs the issue's scope split before anyone implements it. | Diagnosis notes, slice proposals, spec deltas |
 | Second lane | GPT 5.6 Terra · medium/high (Codex) | A balanced implementer for independent bounded coding. | Overflow implementation |
-| Independent Reviewer | GPT 5.6 Sol · high; Claude Opus 5 · high only for privileged work | A separate session verifies the patch against the issue and actual evidence. Independence means a distinct reviewer session and no author self-review; it does not require a different model family. No Astra child reviewer is launched. | Approve, reject, or name what is missing |
+| Independent Reviewer | Sonnet/Terra for routine review; Sol for complex/security; Opus privileged only | A separate session verifies the patch against the issue and actual evidence. Independence means a distinct reviewer session and no author self-review; it does not require a different model family. No Astra child reviewer is launched. | Approve, reject, or name what is missing |
 
 GPT lanes run through Codex's native worker mechanism; Claude lanes run as
 Claude Code agents; the Antigravity lane runs through the `agy` TUI. Do not
@@ -68,7 +110,7 @@ substitute an external CLI or another provider for a named worker —
 session are recorded.
 
 Documentation, manifests, inventories, dependency audits and evidence gathering
-are cost-routed to Gemini 3.8 Flash or GLM 5.3 Flash for bounded contracts,
+are cost-routed to Gemini 3.8 Flash or GLM 5.3 for bounded contracts,
 fixtures, documentation, evidence and mechanical work; Luna is also permitted
 for mechanical work. Use Terra or Sonnet for bounded coding, and Opus or Sol
 for complex authorization or SQL/security-sensitive review. Cost is measured by
@@ -105,7 +147,7 @@ an explicit per-command argument, not permission to modify a global rule.
 ## Escalation ladder
 
 The ladder is two rungs, not a staircase. A task that stalls or fails twice
-while assigned to **GPT 5.6 Terra, Gemini 3.8 Flash or GLM 5.3 Flash**
+while assigned to **GPT 5.6 Terra, Gemini 3.8 Flash or GLM 5.3**
 escalates directly to GPT 5.6 Sol (high). Escalate to Claude Opus 5 (high)
 only for privileged database, security or concurrency work — nothing in
 between.
@@ -119,7 +161,7 @@ next-action decision, not a third implementation attempt.
 
 ## Root coordinator and issue owners
 
-The root coordinator is the sole GPT-6 Astra orchestrator. It is generic: it is
+The root coordinator is the sole generic GPT-5.6 Sol low orchestrator. It is generic: it is
 not linked to any issue or pull request and owns no implementation. The root is
 the sole GitHub reader and issue/board mutation owner, publishes the shared
 evidence described below, performs independent acceptance, and decides
@@ -367,8 +409,8 @@ orphan worktree or stale branch after its work has ended.
 
 ### GLM stale sweep
 
-GLM stale-sweep automation runs every 15 minutes as a read-only observer. It
-writes `C:/Users/vijay/AppData/Local/Temp/vortex-fleet/stale-sweep.md` and sends
+The historical GLM stale-sweep automation is disabled and not fixed. When
+explicitly run as a bounded manual task, its observer writes `C:/Users/vijay/AppData/Local/Temp/vortex-fleet/stale-sweep.md` and sends
 its summary to the root. The root forwards each finding to the owning
 orchestrator and records that orchestrator's reply; it does not independently
 mutate an owner's worktree. This observer does not replace terminal readback,

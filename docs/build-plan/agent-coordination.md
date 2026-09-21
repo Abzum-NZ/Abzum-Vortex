@@ -10,6 +10,34 @@ Issue [#467](https://github.com/Abzum-NZ/Abzum-Vortex/issues/467) records the
 stable dispatch and board-accountability rules below; it does not represent a
 live delivery queue.
 
+## Root model and launch pin (latest direct user rule)
+
+The current root stays in the same session and Run as GPT-5.6 Sol low. Astra
+is allowed only for architecture-level tasks, not routine coordination, coding
+or routine review. Future root launches must explicitly use
+`codex --model gpt-5.6-sol -c model_reasoning_effort="low"`; saved defaults are
+insufficient because a higher-priority configuration can override them. Do not
+restart the current root just to change defaults. Do not launch a second root.
+Lower-cost Antigravity/OpenCode/Sonnet/Terra workers remain preferred.
+
+## Latest cost-routing override (21 September 2026)
+
+Reuse the existing issue owners and sole generic GPT-5.6 Sol low root. New routine work
+uses available Gemini 3.8 Flash through Antigravity, GLM 5.3 through OpenCode,
+or Claude Sonnet. Reserve new Sol assignments for genuinely complex analysis or
+security review; Astra is restricted to architecture-level tasks. Historical Sol
+owner/planner defaults
+below do not authorize routine new Sol sessions. Preserve near-finished work and
+partial edits at provider handoffs. Owners verify actual model, task/dispatch,
+and started activity; accepted input is insufficient. Revalidate runtime handles
+after a restart and keep board/card model and waiting-state labels truthful.
+
+Disable recurring duplicate-supervisor launches; do not resume Production or
+the paused delivery monitor. Root alone allocates the maximum two local DB slots,
+with fresh grants after consumed invocations. Dispatch independent non-DB work
+while gates run. Cleanup requires verified completion, clean tracked and untracked
+state, merged/unneeded work and no active ownership; preserve all other work.
+
 ## Responsibilities
 
 | Role | Work |
@@ -17,7 +45,7 @@ live delivery queue.
 | Coordinator (generic root) | Select dependency-ready tasks, commission reviews, dispatch corrected handoffs, monitor drift/blockers and usage, maintain progress, own all GitHub and board access, perform acceptance, and coordinate delivery after normal checks. It has no implementation issue or pull-request ownership. |
 | Planner (GPT 5.6 Sol) | Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. |
 | Developer | Execute a bounded approved plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction. |
-| Independent Reviewer (GPT 5.6 Sol; Claude Opus only for privileged work) | In a separate session, verify the implementation against the issue and approved product model, inspect actual evidence, and record findings or approval independently of the Developer. |
+| Independent Reviewer (Sonnet/Terra routine; Sol complex/security; Opus privileged only) | In a separate session, verify the implementation against the issue and approved product model, inspect actual evidence, and record findings or approval independently of the Developer. |
 | Architecture Reviewer | Own explicitly assigned full-system reviews across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Claude Opus is reserved for privileged database, security or concurrency review. Choose the simplest sufficient design. Do not use for routine work or implementation unless explicitly reassigned. |
 | Hosted Tester | Run the single entitled Testing execution, record its receipt and result, and never start a duplicate run while the original is live. |
 | User | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate. |
@@ -27,14 +55,14 @@ the naming format under Task handoff. Display names do not rename or replace
 immutable canonical task references. Also record the resolved model, session
 identifier and canonical task reference as execution metadata at handoff.
 
-GPT-6 Astra (Medium) is reserved exclusively for the one generic main fleet
-orchestrator. Every issue owner, issue-level orchestrator and Planner is GPT
-5.6 Sol. Do not launch Astra children, including Planner or Independent
-Reviewer children. Existing mismatches transition only at a safe handoff
+GPT-5.6 Sol low is the generic main fleet orchestrator. Keep existing issue
+owners and planners; do not launch routine new Sol workers. Astra is allowed
+only for explicitly scoped architecture-level tasks, never routine coordination,
+coding or review. Existing mismatches transition only at a safe handoff
 boundary, preserving work and evidence; board records retain the actual model
 until the replacement's task activity is verified.
 
-The permitted non-privileged execution lanes are GLM 5.3 Flash, Gemini 3.8
+The permitted non-privileged execution lanes are GLM 5.3, Gemini 3.8
 Flash, Claude Sonnet 5, GPT 5.6 Terra, GPT 5.6 Luna and GPT 5.6 Sol; Sol owns
 issue planning and deep analysis, and Luna is permitted for mechanical work.
 Route bounded contracts, fixtures, documentation, evidence and mechanical work
@@ -254,7 +282,7 @@ authority out of developer prompts unless explicitly needed for the assigned wor
 ## Autonomous fleet operation
 
 When this project runs as an unattended agent fleet inside Orca, one generic
-GPT-6 Astra root orchestrator carries out the Coordinator's dispatch,
+GPT-5.6 Sol low root orchestrator carries out the Coordinator's dispatch,
 GitHub/board, acceptance and monitoring duties. A GPT-5.6 Sol Planner carries
 out handoff correction for each task, and every multi-slice issue has a GPT-5.6
 Sol issue owner that supervises its workers; there is no owner or worker cap apart from the two
