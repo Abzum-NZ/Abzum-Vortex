@@ -312,7 +312,8 @@ begin
     conn.destination_fingerprint,
     conn.organization_id,
     pg_catalog.coalesce(
-      pg_catalog.array_agg(grants.application_root_id order by grants.application_root_id),
+      pg_catalog.array_agg(grants.application_root_id order by grants.application_root_id)
+        filter (where grants.application_root_id is not null),
       array[]::uuid[]
     ) as authorized_application_ids,
     conn.state,
