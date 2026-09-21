@@ -326,30 +326,6 @@ begin
       message = 'Record recovery policy requires application context';
   end if;
 
-  select state.* into current_row
-  from vortex_record.record_recovery_policy_states as state
-  where state.organization_id = context_organization_id
-    and state.application_root_id is not distinct from target_application_root_id
-    and state.storage_contract_id = p_storage_contract_id
-    and state.record_type_id = p_record_type_id
-  for update;
-
-  if found then
-    if current_row.policy_id <> p_policy_id
-      or p_policy_revision < current_row.policy_revision
-      or (p_policy_revision = current_row.policy_revision
-        and current_row.recovery_period_days <> p_recovery_period_days) then
-      raise exception using errcode = '40001',
-        message = 'Record recovery policy evidence is stale';
-    end if;
-    if p_policy_revision = current_row.policy_revision then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'recorded', 'policyRevision', current_row.policy_revision,
-        'replayed', true
-      );
-    end if;
-  end if;
-
   insert into vortex_record.record_recovery_policy_states (
     organization_id, application_root_id, storage_scope, storage_contract_id,
     record_type_id, policy_id, policy_revision, recovery_period_days, recorded_at
@@ -360,13 +336,53 @@ begin
   )
   on conflict (
     organization_id, application_scope_key, storage_contract_id, record_type_id
-  ) do update set
-    policy_revision = excluded.policy_revision,
-    recovery_period_days = excluded.recovery_period_days,
-    recorded_at = excluded.recorded_at;
+  ) do nothing
+  returning * into current_row;
+
+  if found then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'recorded', 'policyRevision', current_row.policy_revision,
+      'replayed', false
+    );
+  end if;
+
+  -- A conflicting first writer is complete before DO NOTHING returns. Lock its
+  -- committed row, then apply the same identity/revision rules as every later
+  -- writer; no absent-scope path can bypass this check.
+  select state.* into current_row
+  from vortex_record.record_recovery_policy_states as state
+  where state.organization_id = context_organization_id
+    and state.application_root_id is not distinct from target_application_root_id
+    and state.storage_contract_id = p_storage_contract_id
+    and state.record_type_id = p_record_type_id
+  for update;
+  if not found or current_row.policy_id <> p_policy_id
+    or p_policy_revision < current_row.policy_revision
+    or (p_policy_revision = current_row.policy_revision
+      and current_row.recovery_period_days <> p_recovery_period_days) then
+    raise exception using errcode = '40001',
+      message = 'Record recovery policy evidence is stale';
+  end if;
+  if p_policy_revision = current_row.policy_revision then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'recorded', 'policyRevision', current_row.policy_revision,
+      'replayed', true
+    );
+  end if;
+
+  update vortex_record.record_recovery_policy_states as state
+  set policy_revision = p_policy_revision,
+      recovery_period_days = p_recovery_period_days,
+      recorded_at = pg_catalog.statement_timestamp()
+  where state.organization_id = context_organization_id
+    and state.application_root_id is not distinct from target_application_root_id
+    and state.storage_contract_id = p_storage_contract_id
+    and state.record_type_id = p_record_type_id
+  returning * into current_row;
 
   return pg_catalog.jsonb_build_object(
-    'outcome', 'recorded', 'policyRevision', p_policy_revision, 'replayed', false
+    'outcome', 'recorded', 'policyRevision', current_row.policy_revision,
+    'replayed', false
   );
 end
 $function$;
@@ -746,18 +762,8 @@ begin
       message = 'Legal hold requires application context';
   end if;
 
-  execute pg_catalog.format(
-    'select true from record_data.%I as stored
-      where stored.organisation_id = $1
-        and stored.application_root_id is not distinct from $2
-        and stored.record_id = $3 for share',
-    catalogue_row.physical_table_token
-  ) into record_exists using context_organization_id, target_application_root_id,
-    p_record_id;
-  if not coalesce(record_exists, false) then
-    raise exception using errcode = '55000', message = 'Legal hold scope is unavailable';
-  end if;
-
+  -- Every recovery/hold/removal participant takes the exact guard first, then
+  -- the generated Record row. This common order prevents guard/row inversion.
   insert into vortex_record.record_removal_guards (
     organization_id, application_root_id, storage_scope, storage_contract_id,
     record_type_id, record_id
@@ -772,6 +778,18 @@ begin
     and guard.storage_contract_id = p_storage_contract_id
     and guard.record_id = p_record_id
   for update;
+
+  execute pg_catalog.format(
+    'select true from record_data.%I as stored
+      where stored.organisation_id = $1
+        and stored.application_root_id is not distinct from $2
+        and stored.record_id = $3 for share',
+    catalogue_row.physical_table_token
+  ) into record_exists using context_organization_id, target_application_root_id,
+    p_record_id;
+  if not coalesce(record_exists, false) then
+    raise exception using errcode = '55000', message = 'Legal hold scope is unavailable';
+  end if;
 
   if p_operation = 'apply' then
     insert into vortex_record.record_legal_holds (
