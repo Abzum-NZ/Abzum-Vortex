@@ -186,14 +186,14 @@ $function$;
 comment on function vortex_record.read_lifecycle_candidate_records(uuid) is
   '#408 Slice 1: reads retained record identity, creation UTC and current revision from a storage contract''s physical table under FORCE RLS. Returns all retained states (active, soft_deleted, removal_pending) for system lifecycle evaluation.';
 
-reset role;
-
 -- ============================================================================
 -- Grants.  Function is SECURITY DEFINER owned by vortex_record_adapter.
 -- Granted to vortex_request only.
 -- ============================================================================
 grant execute on function vortex_record.read_lifecycle_candidate_records(uuid)
   to vortex_request;
+
+reset role;
 
 -- Remove temporary schema CREATE privilege.
 set local role vortex_record_owner;
