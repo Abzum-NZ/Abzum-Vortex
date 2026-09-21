@@ -71,6 +71,7 @@ select ok(
 select ok(
   not pg_catalog.has_function_privilege('vortex_request', 'vortex_connection.register_connection_instance_internal(uuid,uuid,uuid,text,text,text,uuid,timestamptz)', 'EXECUTE')
   and not pg_catalog.has_function_privilege('vortex_request', 'vortex_connection.grant_connection_application_internal(uuid,uuid,uuid)', 'EXECUTE')
+  and not pg_catalog.has_function_privilege('vortex_request', 'vortex_connection.revoke_connection_application_internal(uuid,uuid,uuid)', 'EXECUTE')
   and not pg_catalog.has_function_privilege('vortex_request', 'vortex_connection.record_connection_health_check_internal(uuid,bigint,text,uuid)', 'EXECUTE')
   and not pg_catalog.has_function_privilege('vortex_request', 'vortex_connection.revoke_connection_instance_internal(uuid,bigint,uuid)', 'EXECUTE')
   and not pg_catalog.has_function_privilege('vortex_request', 'vortex_connection.reauthorize_connection_instance_internal(uuid,bigint,uuid,text,timestamptz)', 'EXECUTE'),
@@ -80,6 +81,7 @@ select ok(
 select ok(
   pg_catalog.has_function_privilege('vortex_runtime', 'vortex_connection.register_connection_instance_internal(uuid,uuid,uuid,text,text,text,uuid,timestamptz)', 'EXECUTE')
   and pg_catalog.has_function_privilege('vortex_runtime', 'vortex_connection.grant_connection_application_internal(uuid,uuid,uuid)', 'EXECUTE')
+  and pg_catalog.has_function_privilege('vortex_runtime', 'vortex_connection.revoke_connection_application_internal(uuid,uuid,uuid)', 'EXECUTE')
   and pg_catalog.has_function_privilege('vortex_runtime', 'vortex_connection.record_connection_health_check_internal(uuid,bigint,text,uuid)', 'EXECUTE')
   and pg_catalog.has_function_privilege('vortex_runtime', 'vortex_connection.revoke_connection_instance_internal(uuid,bigint,uuid)', 'EXECUTE')
   and pg_catalog.has_function_privilege('vortex_runtime', 'vortex_connection.reauthorize_connection_instance_internal(uuid,bigint,uuid,text,timestamptz)', 'EXECUTE'),
@@ -95,6 +97,16 @@ select ok(
       and pronamespace = 'vortex_connection'::regnamespace
   ),
   'resolve_connection_instance_readiness is VOLATILE for legal FOR SHARE row-locking'
+);
+
+select ok(
+  (
+    select provolatile = 'v'
+    from pg_catalog.pg_proc
+    where proname = 'read_active_connection_evidence'
+      and pronamespace = 'vortex_connection'::regnamespace
+  ),
+  'read_active_connection_evidence is VOLATILE for legal Connection and grant row locking'
 );
 
 -- ----------------------------------------------------------------------------
@@ -134,19 +146,34 @@ insert into vortex_identity.organization_accounts (
   organization_account_id, organization_id, identity_id, display_name, state,
   activated_at, changed_at, state_changed_at, state_changed_by,
   state_change_correlation_id, revision
-) values (
-  '54890000-0000-4000-8000-000000000001',
-  '24890000-0000-4000-8000-000000000001',
-  '44890000-0000-4000-8000-000000000001', 'Conn Admin Account',
-  'active', pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
-  pg_catalog.clock_timestamp(), '94890000-0000-4000-8000-000000000001',
-  'a4890000-0000-4000-8000-000000000002', 1
-);
+) values
+  (
+    '54890000-0000-4000-8000-000000000001',
+    '24890000-0000-4000-8000-000000000001',
+    '44890000-0000-4000-8000-000000000001', 'Conn Admin Account A',
+    'active', pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    pg_catalog.clock_timestamp(), '94890000-0000-4000-8000-000000000001',
+    'a4890000-0000-4000-8000-000000000002', 1
+  ),
+  (
+    '54890000-0000-4000-8000-000000000002',
+    '24890000-0000-4000-8000-000000000002',
+    '44890000-0000-4000-8000-000000000001', 'Conn Admin Account B',
+    'active', pg_catalog.clock_timestamp(), pg_catalog.clock_timestamp(),
+    pg_catalog.clock_timestamp(), '94890000-0000-4000-8000-000000000001',
+    'a4890000-0000-4000-8000-000000000004', 1
+  );
 
 select vortex_access.initialize_organization_access_version(
   '24890000-0000-4000-8000-000000000001',
   '94890000-0000-4000-8000-000000000001',
   'a4890000-0000-4000-8000-000000000003'
+);
+
+select vortex_access.initialize_organization_access_version(
+  '24890000-0000-4000-8000-000000000002',
+  '94890000-0000-4000-8000-000000000001',
+  'a4890000-0000-4000-8000-000000000005'
 );
 
 -- Seed real permanent roots in vortex_definition.roots
@@ -259,15 +286,122 @@ select throws_ok(
   'registration refuses nil administrator activity ID'
 );
 
+-- Canonical human administration rejects a stale Access version.
+reset role;
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'tenantId', '14890000-0000-4000-8000-000000000001',
+  'organizationId', '24890000-0000-4000-8000-000000000001',
+  'applicationRootId', '34890000-0000-4000-8000-000000000001',
+  'identityId', '44890000-0000-4000-8000-000000000001',
+  'organizationAccountId', '54890000-0000-4000-8000-000000000001',
+  'callerKind', 'human',
+  'sessionId', 'a4890000-0000-4000-8000-000000000012',
+  'correlationId', 'a4890000-0000-4000-8000-000000000013',
+  'accessVersion', 99,
+  'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
+  'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
+  'authenticationStrength', 'single_factor'
+));
+set local role vortex_runtime;
+select throws_ok(
+  $$select vortex_connection.grant_connection_application_internal(
+    '64890000-0000-4000-8000-000000000001',
+    '34890000-0000-4000-8000-000000000001',
+    '84890000-0000-4000-8000-000000000010'
+  )$$,
+  '42501'::char(5),
+  'Request access version is stale or unavailable',
+  'human administration refuses a stale organisation Access version'
+);
+
+-- Canonical human administration rejects a fabricated organisation-local account.
+reset role;
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'tenantId', '14890000-0000-4000-8000-000000000001',
+  'organizationId', '24890000-0000-4000-8000-000000000001',
+  'applicationRootId', '34890000-0000-4000-8000-000000000001',
+  'identityId', '44890000-0000-4000-8000-000000000001',
+  'organizationAccountId', '54890000-0000-4000-8000-000000000099',
+  'callerKind', 'human',
+  'sessionId', 'a4890000-0000-4000-8000-000000000014',
+  'correlationId', 'a4890000-0000-4000-8000-000000000015',
+  'accessVersion', 1,
+  'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
+  'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
+  'authenticationStrength', 'single_factor'
+));
+set local role vortex_runtime;
+select throws_ok(
+  $$select vortex_connection.grant_connection_application_internal(
+    '64890000-0000-4000-8000-000000000001',
+    '34890000-0000-4000-8000-000000000001',
+    '84890000-0000-4000-8000-000000000011'
+  )$$,
+  '42501'::char(5),
+  'Organisation-account context is inactive or unavailable',
+  'human administration refuses a fabricated organisation account'
+);
+
+-- Restore the real current Org A account and Access version.
+reset role;
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'tenantId', '14890000-0000-4000-8000-000000000001',
+  'organizationId', '24890000-0000-4000-8000-000000000001',
+  'applicationRootId', '34890000-0000-4000-8000-000000000001',
+  'identityId', '44890000-0000-4000-8000-000000000001',
+  'organizationAccountId', '54890000-0000-4000-8000-000000000001',
+  'callerKind', 'human',
+  'sessionId', 'a4890000-0000-4000-8000-000000000016',
+  'correlationId', 'a4890000-0000-4000-8000-000000000017',
+  'accessVersion', 1,
+  'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
+  'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
+  'authenticationStrength', 'single_factor'
+));
+set local role vortex_runtime;
+
 -- Application Grant Tests
 -- 1. Positive grant: real application root in same organisation
 select lives_ok(
   $$select vortex_connection.grant_connection_application_internal(
     '64890000-0000-4000-8000-000000000001',
     '34890000-0000-4000-8000-000000000001',
-    '84890000-0000-4000-8000-000000000001'
+    '84890000-0000-4000-8000-000000000020'
   )$$,
   'grant_connection_application_internal grants access to valid same-org application root'
+);
+
+reset role;
+select results_eq(
+  $$select activity_id, actor_kind, actor_id, action, subject_ids, source, outcome
+    from vortex_activity.organization_activity_entries
+    where organization_id = '24890000-0000-4000-8000-000000000001'
+      and activity_id = '84890000-0000-4000-8000-000000000020'$$,
+  $$values (
+    '84890000-0000-4000-8000-000000000020'::uuid,
+    'organization_account'::text,
+    '54890000-0000-4000-8000-000000000001'::uuid,
+    'connection_application_granted'::text,
+    array[
+      '34890000-0000-4000-8000-000000000001'::uuid,
+      '64890000-0000-4000-8000-000000000001'::uuid
+    ],
+    'connection'::text,
+    'completed'::text
+  )$$,
+  'grant transition persists exact administrator Activity evidence'
+);
+set local role vortex_runtime;
+
+select throws_ok(
+  $$select vortex_connection.grant_connection_application_internal(
+    '64890000-0000-4000-8000-000000000001',
+    '34890000-0000-4000-8000-000000000001',
+    '84890000-0000-4000-8000-000000000021'
+  )$$,
+  '23514'::char(5),
+  'Connection application grant already exists',
+  'grant refuses a duplicate transition instead of recording fictional Activity'
 );
 
 -- 2. Negative grant: application root in Org B (different organization)
@@ -468,6 +602,78 @@ select is(
   'resolver refuses organization mismatch'
 );
 
+-- Grant revocation removes authorization and records exact immutable Activity evidence.
+reset role;
+set local role vortex_runtime;
+select lives_ok(
+  $$select vortex_connection.revoke_connection_application_internal(
+    '64890000-0000-4000-8000-000000000001',
+    '34890000-0000-4000-8000-000000000001',
+    '84890000-0000-4000-8000-000000000022'
+  )$$,
+  'grant revocation succeeds for the exact existing application grant'
+);
+
+reset role;
+select results_eq(
+  $$select activity_id, actor_kind, actor_id, action, subject_ids, source, outcome
+    from vortex_activity.organization_activity_entries
+    where organization_id = '24890000-0000-4000-8000-000000000001'
+      and activity_id = '84890000-0000-4000-8000-000000000022'$$,
+  $$values (
+    '84890000-0000-4000-8000-000000000022'::uuid,
+    'organization_account'::text,
+    '54890000-0000-4000-8000-000000000001'::uuid,
+    'connection_application_revoked'::text,
+    array[
+      '34890000-0000-4000-8000-000000000001'::uuid,
+      '64890000-0000-4000-8000-000000000001'::uuid
+    ],
+    'connection'::text,
+    'completed'::text
+  )$$,
+  'grant revocation persists exact administrator Activity evidence'
+);
+
+set local role vortex_request;
+select is(
+  (
+    select readiness ->> 'reasonCode'
+    from vortex_connection.resolve_connection_instance_readiness(
+      '24890000-0000-4000-8000-000000000001',
+      '34890000-0000-4000-8000-000000000001',
+      '64890000-0000-4000-8000-000000000001',
+      'cold_archive_s3',
+      2,
+      'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'
+    ) as readiness
+  ),
+  'grant_unauthorized',
+  'readiness refuses immediately after exact grant revocation'
+);
+
+reset role;
+set local role vortex_runtime;
+select throws_ok(
+  $$select vortex_connection.revoke_connection_application_internal(
+    '64890000-0000-4000-8000-000000000001',
+    '34890000-0000-4000-8000-000000000001',
+    '84890000-0000-4000-8000-000000000024'
+  )$$,
+  'P0002'::char(5),
+  'Connection application grant not found',
+  'grant revocation refuses a missing source grant'
+);
+
+select lives_ok(
+  $$select vortex_connection.grant_connection_application_internal(
+    '64890000-0000-4000-8000-000000000001',
+    '34890000-0000-4000-8000-000000000001',
+    '84890000-0000-4000-8000-000000000023'
+  )$$,
+  'grant can be restored through a new evidenced transition'
+);
+
 -- ----------------------------------------------------------------------------
 -- 6. Terminal Revocation & Governed Reauthorization Tests
 -- ----------------------------------------------------------------------------
@@ -551,6 +757,145 @@ select is(
   'reauthorized instance becomes active only after successful health check with revision 5'
 );
 
+-- Exercise the separately governed system administration path and every illegal source state.
+reset role;
+select vortex_context.initialize(pg_catalog.jsonb_build_object(
+  'tenantId', '14890000-0000-4000-8000-000000000001',
+  'organizationId', '24890000-0000-4000-8000-000000000001',
+  'applicationRootId', '34890000-0000-4000-8000-000000000001',
+  'callerKind', 'system',
+  'sessionId', 'a4890000-0000-4000-8000-000000000030',
+  'correlationId', 'a4890000-0000-4000-8000-000000000031',
+  'systemActorId', '94890000-0000-4000-8000-000000000001',
+  'accessVersion', 1,
+  'issuedAt', pg_catalog.statement_timestamp() - interval '1 minute',
+  'expiresAt', pg_catalog.statement_timestamp() + interval '5 minutes',
+  'authenticationStrength', 'service'
+));
+set local role vortex_runtime;
+
+select lives_ok(
+  $$select vortex_connection.register_connection_instance_internal(
+    '64890000-0000-4000-8000-000000000004',
+    '24890000-0000-4000-8000-000000000001',
+    '74890000-0000-4000-8000-000000000001',
+    '1.0.0',
+    'system_state_probe',
+    'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
+    '84890000-0000-4000-8000-000000000030'
+  )$$,
+  'governed system context can register a pending connection'
+);
+
+select lives_ok(
+  $$select vortex_connection.grant_connection_application_internal(
+    '64890000-0000-4000-8000-000000000004',
+    '34890000-0000-4000-8000-000000000001',
+    '84890000-0000-4000-8000-000000000031'
+  )$$,
+  'governed system context can grant an application with Activity evidence'
+);
+
+select throws_ok(
+  $$select vortex_connection.reauthorize_connection_instance_internal(
+    '64890000-0000-4000-8000-000000000004', 1,
+    '84890000-0000-4000-8000-000000000032'
+  )$$,
+  '23514'::char(5),
+  'Connection reauthorization requires revoked source state',
+  'reauthorization refuses pending source state'
+);
+
+select is(
+  vortex_connection.record_connection_health_check_internal(
+    '64890000-0000-4000-8000-000000000004', 1, 'healthy',
+    '84890000-0000-4000-8000-000000000033'
+  ),
+  2::bigint,
+  'system probe transitions pending to active'
+);
+
+select throws_ok(
+  $$select vortex_connection.reauthorize_connection_instance_internal(
+    '64890000-0000-4000-8000-000000000004', 2,
+    '84890000-0000-4000-8000-000000000034'
+  )$$,
+  '23514'::char(5),
+  'Connection reauthorization requires revoked source state',
+  'reauthorization refuses active source state'
+);
+
+select is(
+  vortex_connection.record_connection_health_check_internal(
+    '64890000-0000-4000-8000-000000000004', 2, 'unhealthy',
+    '84890000-0000-4000-8000-000000000035'
+  ),
+  3::bigint,
+  'system probe transitions active to unhealthy'
+);
+
+select throws_ok(
+  $$select vortex_connection.reauthorize_connection_instance_internal(
+    '64890000-0000-4000-8000-000000000004', 3,
+    '84890000-0000-4000-8000-000000000036'
+  )$$,
+  '23514'::char(5),
+  'Connection reauthorization requires revoked source state',
+  'reauthorization refuses unhealthy source state'
+);
+
+select is(
+  vortex_connection.revoke_connection_instance_internal(
+    '64890000-0000-4000-8000-000000000004', 3,
+    '84890000-0000-4000-8000-000000000037'
+  ),
+  4::bigint,
+  'revocation accepts a non-revoked legal source state'
+);
+
+select throws_ok(
+  $$select vortex_connection.revoke_connection_instance_internal(
+    '64890000-0000-4000-8000-000000000004', 4,
+    '84890000-0000-4000-8000-000000000038'
+  )$$,
+  '23514'::char(5),
+  'Connection revocation requires a non-revoked source state',
+  'revocation refuses already-revoked source state'
+);
+
+select is(
+  vortex_connection.reauthorize_connection_instance_internal(
+    '64890000-0000-4000-8000-000000000004', 4,
+    '84890000-0000-4000-8000-000000000039'
+  ),
+  5::bigint,
+  'reauthorization accepts only the revoked source state'
+);
+
+select throws_ok(
+  $$select vortex_connection.reauthorize_connection_instance_internal(
+    '64890000-0000-4000-8000-000000000004', 5,
+    '84890000-0000-4000-8000-000000000040'
+  )$$,
+  '23514'::char(5),
+  'Connection reauthorization requires revoked source state',
+  'reauthorization refuses the resulting pending state'
+);
+
+reset role;
+select results_eq(
+  $$select actor_kind, actor_id, action
+    from vortex_activity.organization_activity_entries
+    where organization_id = '24890000-0000-4000-8000-000000000001'
+      and activity_id = '84890000-0000-4000-8000-000000000031'$$,
+  $$values (
+    'system'::text,
+    '94890000-0000-4000-8000-000000000001'::uuid,
+    'connection_application_granted'::text
+  )$$,
+  'system grant Activity retains the exact governed system actor'
+);
+
 -- ----------------------------------------------------------------------------
 -- 7. Active Connection Evidence Reader Tests
 -- ----------------------------------------------------------------------------
@@ -571,7 +916,7 @@ select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'organizationId', '24890000-0000-4000-8000-000000000002',
   'applicationRootId', '34890000-0000-4000-8000-000000000002',
   'identityId', '44890000-0000-4000-8000-000000000001',
-  'organizationAccountId', '54890000-0000-4000-8000-000000000001',
+  'organizationAccountId', '54890000-0000-4000-8000-000000000002',
   'callerKind', 'human',
   'sessionId', 'a4890000-0000-4000-8000-000000000020',
   'correlationId', 'a4890000-0000-4000-8000-000000000021',
@@ -611,5 +956,7 @@ select is(
 );
 
 reset role;
+
+select * from finish();
 
 rollback;

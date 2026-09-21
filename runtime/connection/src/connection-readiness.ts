@@ -3,8 +3,10 @@ import "server-only";
 import {
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
+  organizationIdSchema,
   applicationRootIdSchema,
   activeConnectionEvidenceSchema,
+  timestampSchema,
   type ActiveConnectionEvidence,
   type ArchiveDestinationReference,
   type ConnectionInstanceId,
@@ -135,11 +137,48 @@ export async function resolveConnectionInstanceReadiness(
 
     if (outcome === "ready") {
       const connId = connectionInstanceIdSchema.parse(raw.connectionInstanceId);
-      const orgId = raw.organizationId as OrganizationId;
+      const orgId = organizationIdSchema.parse(raw.organizationId);
       const appId = applicationRootIdSchema.parse(raw.applicationRootId);
       const destKey = archiveDestinationReferenceSchema.parse(raw.destinationKey);
-      const destFp = assertDestinationFingerprint(String(raw.destinationFingerprint));
+      if (typeof raw.destinationFingerprint !== "string") {
+        throw new ConnectionReadinessError(
+          "database_error",
+          "SQL readiness result destination fingerprint is not a string",
+        );
+      }
+      const destFp = assertDestinationFingerprint(raw.destinationFingerprint);
       const rev = assertSafeIntegerRevision(raw.revision, "SQL readiness revision");
+      const healthOutcome = raw.healthOutcome;
+      const state = raw.state;
+      const verifiedAt = timestampSchema.parse(raw.verifiedAt);
+
+      if (
+        connId !== validatedConnId ||
+        orgId !== organizationId ||
+        appId !== validatedAppId ||
+        destKey !== validatedDestKey ||
+        destFp !== validatedFingerprint ||
+        rev !== validatedRevision
+      ) {
+        throw new ConnectionReadinessError(
+          "database_error",
+          "SQL readiness result does not match the exact requested connection proof",
+        );
+      }
+
+      if (healthOutcome !== "healthy") {
+        throw new ConnectionReadinessError(
+          "database_error",
+          `SQL readiness result has invalid health outcome: ${String(healthOutcome)}`,
+        );
+      }
+
+      if (state !== "active") {
+        throw new ConnectionReadinessError(
+          "database_error",
+          `SQL readiness result has invalid state: ${String(state)}`,
+        );
+      }
 
       return Object.freeze({
         outcome: "ready",
@@ -149,23 +188,25 @@ export async function resolveConnectionInstanceReadiness(
         destinationKey: destKey,
         destinationFingerprint: destFp,
         revision: rev,
-        healthOutcome: "healthy",
-        state: "active",
-        verifiedAt: String(raw.verifiedAt),
+        healthOutcome,
+        state,
+        verifiedAt,
       });
     }
 
-    const reasonCode = (raw.reasonCode as ConnectionReadinessRefusalCode) ?? "connection_unavailable";
+    const reasonCode =
+      (raw.reasonCode as ConnectionReadinessRefusalCode) ?? "connection_unavailable";
     return Object.freeze({
       outcome: "refused",
       reasonCode,
       message: `Connection readiness refused: ${reasonCode}`,
-      currentState: raw.currentState ? String(raw.currentState) : undefined,
-      currentHealthOutcome: raw.currentHealthOutcome ? String(raw.currentHealthOutcome) : undefined,
-      currentRevision:
-        raw.currentRevision !== undefined && raw.currentRevision !== null
-          ? Number(raw.currentRevision)
-          : undefined,
+      ...(raw.currentState ? { currentState: String(raw.currentState) } : {}),
+      ...(raw.currentHealthOutcome
+        ? { currentHealthOutcome: String(raw.currentHealthOutcome) }
+        : {}),
+      ...(raw.currentRevision !== undefined && raw.currentRevision !== null
+        ? { currentRevision: Number(raw.currentRevision) }
+        : {}),
     });
   } catch (error) {
     return Object.freeze({
@@ -212,7 +253,7 @@ export async function readActiveConnectionEvidence(
   const row = rows[0];
   const connId = connectionInstanceIdSchema.parse(row.connection_instance_id);
   const destKey = archiveDestinationReferenceSchema.parse(row.destination_key);
-  const orgId = row.organization_id as OrganizationId;
+  const orgId = organizationIdSchema.parse(row.organization_id);
   const state = String(row.state);
   const healthOutcome = String(row.last_health_outcome);
 
@@ -231,9 +272,7 @@ export async function readActiveConnectionEvidence(
   }
 
   const revision = assertSafeIntegerRevision(row.revision, `Connection instance ${connId}`);
-  const destinationFingerprint = assertDestinationFingerprint(
-    String(row.destination_fingerprint),
-  );
+  const destinationFingerprint = assertDestinationFingerprint(String(row.destination_fingerprint));
 
   const rawAppIds = Array.isArray(row.authorized_application_ids)
     ? row.authorized_application_ids

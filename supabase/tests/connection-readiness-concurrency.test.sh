@@ -30,6 +30,7 @@ cleanup() {
     begin;
     set local session_replication_role = replica;
     drop function if exists public.vortex_test_connection_context();
+    delete from vortex_activity.organization_activity_entries where organization_id = '$organization_id';
     delete from vortex_connection.connection_application_grants where connection_instance_id = '$connection_id';
     delete from vortex_connection.connection_instances where connection_instance_id = '$connection_id';
     delete from vortex_definition.roots where root_id = '$application_root_id';
@@ -52,14 +53,26 @@ wait_for_file() {
     [ -f "$candidate" ] && return 0
     sleep 0.05
   done
-  echo "connection readiness proof did not reach its transaction barrier" >&2
+  echo "connection readiness proof did not reach its transaction barrier: $candidate" >&2
   return 1
+}
+
+assert_blocked_at_barrier() {
+  local started_file="$1"
+  local finished_file="$2"
+  wait_for_file "$started_file"
+  sleep 0.2
+  if [ -f "$finished_file" ]; then
+    echo "concurrent revocation crossed a reader-held row lock" >&2
+    return 1
+  fi
 }
 
 # ----------------------------------------------------------------------------
 # Setup fixtures
 # ----------------------------------------------------------------------------
 run_sql "
+  begin;
   create or replace function public.vortex_test_connection_context()
   returns jsonb
   language sql
@@ -107,164 +120,292 @@ run_sql "
     pg_catalog.clock_timestamp(), '$actor_id'
   );
 
+  select vortex_context.initialize(public.vortex_test_connection_context());
+  set local role vortex_runtime;
   select vortex_connection.register_connection_instance_internal(
-    '$connection_id',
-    '$organization_id',
-    '$conn_type_id',
-    '1.0.0',
-    'cold_archive_s3',
-    '$dest_fingerprint',
-    '$actor_id'
+    '$connection_id', '$organization_id', '$conn_type_id', '1.0.0',
+    'cold_archive_s3', '$dest_fingerprint',
+    '58000000-0000-4000-8000-000000000401'
   );
-
   select vortex_connection.grant_connection_application_internal(
-    '$connection_id',
-    '$application_root_id',
-    '$actor_id'
+    '$connection_id', '$application_root_id',
+    '58000000-0000-4000-8000-000000000402'
   );
-
   select vortex_connection.record_connection_health_check_internal(
-    '$connection_id',
-    1,
-    'healthy',
-    '$actor_id'
+    '$connection_id', 1, 'healthy',
+    '58000000-0000-4000-8000-000000000403'
   );
+  commit;
 "
 
 # ----------------------------------------------------------------------------
-# Part 1: Two-session Readiness vs. Revocation Row Lock Concurrency
-#
-# Session 1 resolves readiness under FOR SHARE lock and holds transaction.
-# Session 2 attempts revocation under FOR UPDATE lock.
-# Session 2 must be serialized behind Session 1, proving atomic row locking.
+# Part 1: Readiness decision vs exact application-grant revocation
 # ----------------------------------------------------------------------------
 (
   "${psql_command[@]}" <<SQL
 begin;
 set local role vortex_request;
 select vortex_context.initialize(public.vortex_test_connection_context());
-select vortex_connection.resolve_connection_instance_readiness(
-  '$organization_id',
-  '$application_root_id',
-  '$connection_id',
-  'cold_archive_s3',
-  2,
-  '$dest_fingerprint'
+select 'READINESS_RESULT:' || (
+  vortex_connection.resolve_connection_instance_readiness(
+    '$organization_id', '$application_root_id', '$connection_id',
+    'cold_archive_s3', 2, '$dest_fingerprint'
+  ) ->> 'outcome'
 );
-\! touch '$proof_root/reader-locked'
+\! touch '$proof_root/readiness-grant-locked'
 select pg_catalog.pg_sleep(2);
 commit;
-\! touch '$proof_root/reader-committed'
+\! touch '$proof_root/readiness-grant-committed'
 SQL
-) >"$proof_root/reader.log" 2>&1 &
-reader_pid=$!
+) >"$proof_root/readiness-grant-reader.log" 2>&1 &
+readiness_grant_reader_pid=$!
 
-wait_for_file "$proof_root/reader-locked"
-
-# Session 2 attempts revocation concurrently while Session 1 holds FOR SHARE lock
+wait_for_file "$proof_root/readiness-grant-locked"
 (
   "${psql_command[@]}" <<SQL
 begin;
 set local role vortex_runtime;
 select vortex_context.initialize(public.vortex_test_connection_context());
-select vortex_connection.revoke_connection_instance_internal(
-  '$connection_id',
-  2,
-  '$actor_id'
+\! touch '$proof_root/readiness-grant-revoker-started'
+select vortex_connection.revoke_connection_application_internal(
+  '$connection_id', '$application_root_id',
+  '58000000-0000-4000-8000-000000000404'
 );
 commit;
-\! touch '$proof_root/revoker-finished'
+\! touch '$proof_root/readiness-grant-revoker-finished'
 SQL
-) >"$proof_root/revoker.log" 2>&1 &
-revoker_pid=$!
+) >"$proof_root/readiness-grant-revoker.log" 2>&1 &
+readiness_grant_revoker_pid=$!
 
-wait "$reader_pid"
-wait "$revoker_pid"
+assert_blocked_at_barrier \
+  "$proof_root/readiness-grant-revoker-started" \
+  "$proof_root/readiness-grant-revoker-finished"
+wait "$readiness_grant_reader_pid"
+wait "$readiness_grant_revoker_pid"
 
-[ -f "$proof_root/reader-committed" ] && [ -f "$proof_root/revoker-finished" ] || {
-  echo "Readiness vs. Revocation concurrency proof failed to reach terminal barrier" >&2
+grep -Eq '^READINESS_RESULT:ready$' "$proof_root/readiness-grant-reader.log" || {
+  echo "readiness reader did not emit the anchored ready marker" >&2
+  exit 1
+}
+[ -f "$proof_root/readiness-grant-committed" ] && \
+  [ -f "$proof_root/readiness-grant-revoker-finished" ] || {
+  echo "readiness/grant-revocation race did not complete" >&2
   exit 1
 }
 
-# Verify instance is now revoked with revision 3
+grant_count="$(run_sql "
+  select count(*)
+  from vortex_connection.connection_application_grants
+  where connection_instance_id = '$connection_id'
+    and application_root_id = '$application_root_id';
+" | tr -d '\r\n')"
+[ "$grant_count" = '0' ] || {
+  echo "grant revocation did not remove the exact application grant" >&2
+  exit 1
+}
+
+run_sql "
+  begin;
+  set local role vortex_runtime;
+  select vortex_context.initialize(public.vortex_test_connection_context());
+  select vortex_connection.grant_connection_application_internal(
+    '$connection_id', '$application_root_id',
+    '58000000-0000-4000-8000-000000000405'
+  );
+  commit;
+"
+
+# ----------------------------------------------------------------------------
+# Part 2: Active-evidence decision vs exact application-grant revocation
+# ----------------------------------------------------------------------------
+(
+  "${psql_command[@]}" <<SQL
+begin;
+set local role vortex_request;
+select vortex_context.initialize(public.vortex_test_connection_context());
+select 'EVIDENCE_RESULT:' || count(*)::text
+from vortex_connection.read_active_connection_evidence('$connection_id');
+\! touch '$proof_root/evidence-grant-locked'
+select pg_catalog.pg_sleep(2);
+commit;
+\! touch '$proof_root/evidence-grant-committed'
+SQL
+) >"$proof_root/evidence-grant-reader.log" 2>&1 &
+evidence_grant_reader_pid=$!
+
+wait_for_file "$proof_root/evidence-grant-locked"
+(
+  "${psql_command[@]}" <<SQL
+begin;
+set local role vortex_runtime;
+select vortex_context.initialize(public.vortex_test_connection_context());
+\! touch '$proof_root/evidence-grant-revoker-started'
+select vortex_connection.revoke_connection_application_internal(
+  '$connection_id', '$application_root_id',
+  '58000000-0000-4000-8000-000000000406'
+);
+commit;
+\! touch '$proof_root/evidence-grant-revoker-finished'
+SQL
+) >"$proof_root/evidence-grant-revoker.log" 2>&1 &
+evidence_grant_revoker_pid=$!
+
+assert_blocked_at_barrier \
+  "$proof_root/evidence-grant-revoker-started" \
+  "$proof_root/evidence-grant-revoker-finished"
+wait "$evidence_grant_reader_pid"
+wait "$evidence_grant_revoker_pid"
+
+grep -Eq '^EVIDENCE_RESULT:1$' "$proof_root/evidence-grant-reader.log" || {
+  echo "evidence reader did not emit the anchored one-row marker" >&2
+  exit 1
+}
+[ -f "$proof_root/evidence-grant-committed" ] && \
+  [ -f "$proof_root/evidence-grant-revoker-finished" ] || {
+  echo "evidence/grant-revocation race did not complete" >&2
+  exit 1
+}
+
+run_sql "
+  begin;
+  set local role vortex_runtime;
+  select vortex_context.initialize(public.vortex_test_connection_context());
+  select vortex_connection.grant_connection_application_internal(
+    '$connection_id', '$application_root_id',
+    '58000000-0000-4000-8000-000000000407'
+  );
+  commit;
+"
+
+# ----------------------------------------------------------------------------
+# Part 3: Readiness decision vs Connection-instance revocation
+# ----------------------------------------------------------------------------
+(
+  "${psql_command[@]}" <<SQL
+begin;
+set local role vortex_request;
+select vortex_context.initialize(public.vortex_test_connection_context());
+select 'INSTANCE_READINESS_RESULT:' || (
+  vortex_connection.resolve_connection_instance_readiness(
+    '$organization_id', '$application_root_id', '$connection_id',
+    'cold_archive_s3', 2, '$dest_fingerprint'
+  ) ->> 'outcome'
+);
+\! touch '$proof_root/instance-reader-locked'
+select pg_catalog.pg_sleep(2);
+commit;
+\! touch '$proof_root/instance-reader-committed'
+SQL
+) >"$proof_root/instance-reader.log" 2>&1 &
+instance_reader_pid=$!
+
+wait_for_file "$proof_root/instance-reader-locked"
+(
+  "${psql_command[@]}" <<SQL
+begin;
+set local role vortex_runtime;
+select vortex_context.initialize(public.vortex_test_connection_context());
+\! touch '$proof_root/instance-revoker-started'
+select vortex_connection.revoke_connection_instance_internal(
+  '$connection_id', 2,
+  '58000000-0000-4000-8000-000000000408'
+);
+commit;
+\! touch '$proof_root/instance-revoker-finished'
+SQL
+) >"$proof_root/instance-revoker.log" 2>&1 &
+instance_revoker_pid=$!
+
+assert_blocked_at_barrier \
+  "$proof_root/instance-revoker-started" \
+  "$proof_root/instance-revoker-finished"
+wait "$instance_reader_pid"
+wait "$instance_revoker_pid"
+
+grep -Eq '^INSTANCE_READINESS_RESULT:ready$' "$proof_root/instance-reader.log" || {
+  echo "instance readiness reader did not emit the anchored ready marker" >&2
+  exit 1
+}
+
 post_revocation_state="$(run_sql "
   select pg_catalog.concat_ws(':', state, revision::text)
   from vortex_connection.connection_instances
   where connection_instance_id = '$connection_id';
 " | tr -d '\r\n')"
-
 [ "$post_revocation_state" = 'revoked:3' ] || {
   printf 'Unexpected post-revocation state: %q (expected revoked:3)\n' "$post_revocation_state" >&2
   exit 1
 }
 
 # ----------------------------------------------------------------------------
-# Part 2: Optimistic Revision Concurrency on Transitions
-#
-# Reauthorize connection to pending (revision 4).
-# Race two concurrent health check updates with the same expected revision 4.
-# Exactly one must succeed (advancing revision to 5); the second must fail with P0002.
+# Part 4: Real two-worker barrier and anchored optimistic-revision markers
 # ----------------------------------------------------------------------------
 run_sql "
+  begin;
+  set local role vortex_runtime;
+  select vortex_context.initialize(public.vortex_test_connection_context());
   select vortex_connection.reauthorize_connection_instance_internal(
-    '$connection_id',
-    3,
-    '$actor_id',
+    '$connection_id', 3,
+    '58000000-0000-4000-8000-000000000409',
     '$dest_fingerprint'
   );
+  commit;
 "
 
-touch "$proof_root/race-barrier"
-
-(
-  "${psql_command[@]}" <<SQL >"$proof_root/race-worker-1.log" 2>&1 || true
+for worker in 1 2; do
+  (
+    "${psql_command[@]}" <<SQL
+begin;
 set local role vortex_runtime;
 select vortex_context.initialize(public.vortex_test_connection_context());
-select vortex_connection.record_connection_health_check_internal(
-  '$connection_id',
-  4,
-  'healthy',
-  '$actor_id'
-);
+\! touch '$proof_root/race-worker-$worker-ready'
+\! while [ ! -f '$proof_root/race-release' ]; do sleep 0.02; done
+do \$race\$
+declare
+  result_revision bigint;
+begin
+  result_revision := vortex_connection.record_connection_health_check_internal(
+    '$connection_id', 4, 'healthy',
+    '58000000-0000-4000-8000-00000000041$worker'
+  );
+  raise notice 'RESULT_SUCCESS:%', result_revision;
+exception
+  when sqlstate 'P0002' then
+    raise notice 'RESULT_FAILURE:%', sqlerrm;
+end
+\$race\$;
+commit;
 SQL
-) &
-race1_pid=$!
+  ) >"$proof_root/race-worker-$worker.log" 2>&1 &
+  if [ "$worker" -eq 1 ]; then
+    race1_pid=$!
+  else
+    race2_pid=$!
+  fi
+done
 
-(
-  "${psql_command[@]}" <<SQL >"$proof_root/race-worker-2.log" 2>&1 || true
-set local role vortex_runtime;
-select vortex_context.initialize(public.vortex_test_connection_context());
-select vortex_connection.record_connection_health_check_internal(
-  '$connection_id',
-  4,
-  'healthy',
-  '$actor_id'
-);
-SQL
-) &
-race2_pid=$!
-
+wait_for_file "$proof_root/race-worker-1-ready"
+wait_for_file "$proof_root/race-worker-2-ready"
+touch "$proof_root/race-release"
 wait "$race1_pid"
 wait "$race2_pid"
 
 success_count=0
 failure_count=0
-
-if grep -q "5" "$proof_root/race-worker-1.log"; then
-  success_count=$((success_count + 1))
-elif grep -q "revision mismatch or not found" "$proof_root/race-worker-1.log"; then
-  failure_count=$((failure_count + 1))
-fi
-
-if grep -q "5" "$proof_root/race-worker-2.log"; then
-  success_count=$((success_count + 1))
-elif grep -q "revision mismatch or not found" "$proof_root/race-worker-2.log"; then
-  failure_count=$((failure_count + 1))
-fi
+for worker in 1 2; do
+  if grep -Eq '^NOTICE:[[:space:]]+RESULT_SUCCESS:5$' "$proof_root/race-worker-$worker.log"; then
+    success_count=$((success_count + 1))
+  elif grep -Eq '^NOTICE:[[:space:]]+RESULT_FAILURE:Connection instance health update failed: revision mismatch or not found$' "$proof_root/race-worker-$worker.log"; then
+    failure_count=$((failure_count + 1))
+  else
+    echo "race worker $worker emitted no anchored result marker" >&2
+    exit 1
+  fi
+done
 
 [ "$success_count" -eq 1 ] && [ "$failure_count" -eq 1 ] || {
-  echo "Optimistic revision concurrency race test failed: expected 1 success and 1 mismatch refusal" >&2
+  echo "optimistic revision race failed: expected one anchored success and one anchored mismatch" >&2
   exit 1
 }
 
-echo "Connection readiness and transition concurrency proofs passed successfully"
+echo "Connection grant, evidence, readiness, revocation, and revision concurrency proofs passed successfully"

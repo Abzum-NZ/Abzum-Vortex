@@ -74,6 +74,7 @@ describe("Connection Instance State & Projection", () => {
 
     const limits: OrganizationLifecycleLimits = {
       organizationId: state.organizationId,
+      settingsRevision: 1,
       maxRetentionDays: 365,
       maxRecordCount: 10000,
       allowUnlimitedRetentionDays: false,
@@ -85,21 +86,21 @@ describe("Connection Instance State & Projection", () => {
     const policy = {
       policyId: uuid(90),
       policyRevision: 1,
-      recordTypeId: uuid(91),
       organizationId: state.organizationId,
+      storageContractId: uuid(91),
       applicationRootId: uuid(30),
+      maxAgeDays: 30,
+      maxCount: 500,
+      allowUnlimitedAge: false,
+      allowUnlimitedCount: false,
       action: "archive_workflow" as const,
       archiveWorkflowId: uuid(92),
       expectedWorkflowRevision: 1,
       archiveConnectionInstanceId: state.connectionInstanceId,
       archiveDestination: state.destinationKey,
-      limits: {
-        maxAgeDays: 30,
-        maxCount: 500,
-        allowUnlimitedAge: false,
-        allowUnlimitedCount: false,
-      },
-      retentionPeriodDays: 30,
+      expectedConnectionRevision: state.revision,
+      expectedDestinationFingerprint: state.destinationFingerprint,
+      expectedConnectionHealthOutcome: "healthy" as const,
     };
 
     const readinessEvidence = {
@@ -126,9 +127,7 @@ describe("Connection Instance State & Projection", () => {
       "rejects connection in non-active state: %s",
       (state) => {
         const conn = createValidConnectionState({ state });
-        expect(() => projectActiveConnectionEvidence(conn)).toThrow(
-          ConnectionInstanceStateError,
-        );
+        expect(() => projectActiveConnectionEvidence(conn)).toThrow(ConnectionInstanceStateError);
         expect(() => projectActiveConnectionEvidence(conn)).toThrow(/is in state/);
       },
     );
@@ -137,9 +136,7 @@ describe("Connection Instance State & Projection", () => {
       "rejects connection with non-healthy health outcome: %s",
       (lastHealthOutcome) => {
         const conn = createValidConnectionState({ lastHealthOutcome });
-        expect(() => projectActiveConnectionEvidence(conn)).toThrow(
-          ConnectionInstanceStateError,
-        );
+        expect(() => projectActiveConnectionEvidence(conn)).toThrow(ConnectionInstanceStateError);
         expect(() => projectActiveConnectionEvidence(conn)).toThrow(/health outcome is/);
       },
     );
@@ -323,6 +320,86 @@ describe("Database Readiness Resolution & Active Evidence Reader", () => {
       expect(result.revision).toBe(1);
     }
   });
+
+  it.each([
+    ["connectionInstanceId", undefined],
+    ["organizationId", undefined],
+    ["applicationRootId", undefined],
+    ["destinationKey", undefined],
+    ["destinationFingerprint", undefined],
+    ["revision", undefined],
+    ["healthOutcome", "unhealthy"],
+    ["state", "pending"],
+    ["verifiedAt", "not-a-timestamp"],
+  ] as const)("fails closed on malformed SQL ready-result field %s", async (field, value) => {
+    const readinessResult: Record<string, unknown> = {
+      outcome: "ready",
+      connectionInstanceId: uuid(1),
+      organizationId: uuid(10),
+      applicationRootId: uuid(30),
+      destinationKey: "cold_archive_s3",
+      destinationFingerprint: validFingerprint,
+      revision: 1,
+      healthOutcome: "healthy",
+      state: "active",
+      verifiedAt: "2026-09-21T01:00:00.000Z",
+      [field]: value,
+    };
+    const mockTransaction: RequestDatabaseTransaction = {
+      query: vi.fn().mockResolvedValue([{ readiness_result: readinessResult }]),
+    };
+    const query: ConnectionReadinessQuery = {
+      connectionInstanceId: uuid(1) as ConnectionInstanceId,
+      destinationKey: "cold_archive_s3" as ArchiveDestinationReference,
+      applicationRootId: uuid(30) as ApplicationRootId,
+      expectedRevision: 1,
+      expectedFingerprint: validFingerprint,
+    };
+
+    await expect(
+      resolveConnectionInstanceReadiness(mockTransaction, query, uuid(10) as OrganizationId),
+    ).resolves.toMatchObject({ outcome: "refused", reasonCode: "database_error" });
+  });
+
+  it.each([
+    ["connectionInstanceId", uuid(2)],
+    ["organizationId", uuid(11)],
+    ["applicationRootId", uuid(31)],
+    ["destinationKey", "other_vault"],
+    ["destinationFingerprint", "0".repeat(64)],
+    ["revision", 2],
+  ] as const)(
+    "fails closed when SQL ready-result field %s mismatches the request",
+    async (field, value) => {
+      const readinessResult: Record<string, unknown> = {
+        outcome: "ready",
+        connectionInstanceId: uuid(1),
+        organizationId: uuid(10),
+        applicationRootId: uuid(30),
+        destinationKey: "cold_archive_s3",
+        destinationFingerprint: validFingerprint,
+        revision: 1,
+        healthOutcome: "healthy",
+        state: "active",
+        verifiedAt: "2026-09-21T01:00:00.000Z",
+        [field]: value,
+      };
+      const mockTransaction: RequestDatabaseTransaction = {
+        query: vi.fn().mockResolvedValue([{ readiness_result: readinessResult }]),
+      };
+      const query: ConnectionReadinessQuery = {
+        connectionInstanceId: uuid(1) as ConnectionInstanceId,
+        destinationKey: "cold_archive_s3" as ArchiveDestinationReference,
+        applicationRootId: uuid(30) as ApplicationRootId,
+        expectedRevision: 1,
+        expectedFingerprint: validFingerprint,
+      };
+
+      await expect(
+        resolveConnectionInstanceReadiness(mockTransaction, query, uuid(10) as OrganizationId),
+      ).resolves.toMatchObject({ outcome: "refused", reasonCode: "database_error" });
+    },
+  );
 
   it("handles refusal outcome from database resolution", async () => {
     const mockTransaction: RequestDatabaseTransaction = {

@@ -78,10 +78,7 @@ export class ConnectionInstanceStateError extends Error {
  * Validates that a revision number is a JSON-safe positive integer.
  * Fails closed on NaN, non-integers, numbers outside 1..2^53 - 1, or precision loss.
  */
-export function assertSafeIntegerRevision(
-  rawRevision: unknown,
-  contextMessage: string,
-): number {
+export function assertSafeIntegerRevision(rawRevision: unknown, contextMessage: string): number {
   if (rawRevision === null || rawRevision === undefined) {
     throw new ConnectionInstanceStateError(
       "CONNECTION_REVISION_UNSAFE",
@@ -110,7 +107,7 @@ export function assertSafeIntegerRevision(
     );
   }
 
-  if (typeof rawRevision === "string" && String(numericRevision) !== rawRevision.trim()) {
+  if (typeof rawRevision === "string" && String(numericRevision) !== rawRevision) {
     throw new ConnectionInstanceStateError(
       "CONNECTION_REVISION_UNSAFE",
       `${contextMessage}: precision loss in string revision: ${rawRevision}`,
@@ -178,9 +175,7 @@ export function projectActiveConnectionEvidence(
   // 3. Reject expired token if present
   if (state.tokenExpiresAt) {
     const expiresAtDate = new Date(state.tokenExpiresAt);
-    const refDate = options?.referenceTime
-      ? new Date(options.referenceTime)
-      : new Date();
+    const refDate = options?.referenceTime ? new Date(options.referenceTime) : new Date();
     if (expiresAtDate.getTime() <= refDate.getTime()) {
       throw new ConnectionInstanceStateError(
         "CONNECTION_TOKEN_EXPIRED",
