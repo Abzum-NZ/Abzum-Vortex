@@ -351,3 +351,87 @@ export type WorkflowValue = z.infer<typeof workflowValueSchema>;
 export type WorkflowExecutionReference = z.infer<typeof workflowExecutionReferenceSchema>;
 export type ProtectedOperationRequest = z.infer<typeof protectedOperationRequestSchema>;
 export type ProtectedOperationResponse = z.infer<typeof protectedOperationResponseSchema>;
+
+/**
+ * Authoritative workflow registration lifecycle states.
+ * - 'registered': initially registered candidate definition and metadata.
+ * - 'prepared': generated flows deployed/prepared in external engine.
+ * - 'verified': external flow identity and fingerprint verified.
+ * - 'active': activated and eligible for live execution / policy readiness.
+ * - 'inactive': explicitly deactivated or disabled.
+ * - 'superseded': retired after a strictly newer revision was activated.
+ */
+export const workflowRegistrationStateSchema = z.enum([
+  "registered",
+  "prepared",
+  "verified",
+  "active",
+  "inactive",
+  "superseded",
+]);
+
+export type WorkflowRegistrationState = z.infer<typeof workflowRegistrationStateSchema>;
+
+export const workflowRegistrationReadinessCheckSchema = z
+  .object({
+    workflowId: workflowIdSchema,
+    expectedRevision: revisionSchema,
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema.nullable(),
+    archiveDestination: z.string().min(1).max(120).optional(),
+    expectedFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+  })
+  .strict();
+
+export type WorkflowRegistrationReadinessCheck = z.infer<
+  typeof workflowRegistrationReadinessCheckSchema
+>;
+
+export const workflowRegistrationReadinessReasonCodeSchema = z.enum([
+  "invalid_workflow_identity",
+  "invalid_organization_identity",
+  "invalid_workflow_revision",
+  "invalid_application_identity",
+  "invalid_archive_destination",
+  "wrong_organization",
+  "archive_workflow_not_registered",
+  "archive_workflow_scope_mismatch",
+  "stale_revision",
+  "workflow_state_pending",
+  "workflow_state_inactive",
+  "workflow_state_superseded",
+  "workflow_not_active",
+  "stale_fingerprint",
+  "destination_mismatch",
+]);
+
+export type WorkflowRegistrationReadinessReasonCode = z.infer<
+  typeof workflowRegistrationReadinessReasonCodeSchema
+>;
+
+export const workflowRegistrationReadinessResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("ready"),
+      workflowId: workflowIdSchema,
+      workflowRevision: revisionSchema,
+      organizationId: organizationIdSchema,
+      applicationRootId: applicationRootIdSchema.nullable(),
+      state: z.literal("active"),
+      definitionFingerprint: z.string(),
+      verifiedFlowFingerprint: z.string(),
+      supportedDestinations: z.array(z.string()),
+    })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("refused"),
+      reasonCode: workflowRegistrationReadinessReasonCodeSchema,
+      reasonMessage: z.string(),
+    })
+    .strict(),
+]);
+
+export type WorkflowRegistrationReadinessResult = z.infer<
+  typeof workflowRegistrationReadinessResultSchema
+>;

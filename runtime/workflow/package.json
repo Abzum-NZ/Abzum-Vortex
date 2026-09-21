@@ -8,10 +8,12 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root ../.. runtime/workflow/test"
   },
   "dependencies": {
     "@vortex/contracts": "workspace:*",
+    "@vortex/db": "workspace:*",
     "@vortex/event": "workspace:*",
     "@vortex/record": "workspace:*",
     "@vortex/rule": "workspace:*",
@@ -23,5 +25,8 @@
     "ships": true,
     "engine": true,
     "service": "workflow"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   }
 }
