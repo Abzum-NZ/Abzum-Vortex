@@ -84,6 +84,9 @@ readonly permission_line_delete='c4950000-0000-4000-8000-000000000066'
 readonly permission_line_restore='c4950000-0000-4000-8000-000000000067'
 readonly permission_category_read='c4950000-0000-4000-8000-000000000068'
 readonly permission_category_update='c4950000-0000-4000-8000-000000000069'
+readonly permission_parent_create='c4950000-0000-4000-8000-00000000006a'
+readonly permission_line_create='c4950000-0000-4000-8000-00000000006b'
+readonly permission_category_create='c4950000-0000-4000-8000-00000000006c'
 
 readonly role_id='c4950000-0000-4000-8000-000000000070'
 readonly assignment_id='c4950000-0000-4000-8000-000000000071'
@@ -346,14 +349,17 @@ readonly line_fields="pg_catalog.jsonb_build_array('$field_line_amount','$field_
 readonly category_fields="pg_catalog.jsonb_build_array('$field_category_title','$field_category_total')"
 
 readonly permissions_sql="pg_catalog.jsonb_build_array(
+  $(record_permission "$permission_parent_create" 'parent_delete.parent.create' "$parent_type_id" 'create' "$parent_fields" "$parent_fields"),
   $(record_permission "$permission_parent_read" 'parent_delete.parent.read' "$parent_type_id" 'read' "$parent_fields" "'[]'::jsonb"),
   $(record_permission "$permission_parent_update" 'parent_delete.parent.update' "$parent_type_id" 'update' "$parent_fields" "$parent_fields"),
   $(record_permission "$permission_parent_delete" 'parent_delete.parent.delete' "$parent_type_id" 'delete' "$parent_fields" "'[]'::jsonb"),
   $(record_permission "$permission_parent_restore" 'parent_delete.parent.restore' "$parent_type_id" 'restore' "$parent_fields" "'[]'::jsonb"),
+  $(record_permission "$permission_line_create" 'parent_delete.line.create' "$line_type_id" 'create' "$line_fields" "$line_fields"),
   $(record_permission "$permission_line_read" 'parent_delete.line.read' "$line_type_id" 'read' "$line_fields" "'[]'::jsonb"),
   $(record_permission "$permission_line_update" 'parent_delete.line.update' "$line_type_id" 'update' "$line_fields" "$line_fields"),
   $(record_permission "$permission_line_delete" 'parent_delete.line.delete' "$line_type_id" 'delete' "$line_fields" "'[]'::jsonb"),
   $(record_permission "$permission_line_restore" 'parent_delete.line.restore' "$line_type_id" 'restore' "$line_fields" "'[]'::jsonb"),
+  $(record_permission "$permission_category_create" 'parent_delete.category.create' "$category_type_id" 'create' "$category_fields" "pg_catalog.jsonb_build_array('$field_category_title')"),
   $(record_permission "$permission_category_read" 'parent_delete.category.read' "$category_type_id" 'read' "$category_fields" "'[]'::jsonb"),
   $(record_permission "$permission_category_update" 'parent_delete.category.update' "$category_type_id" 'update' "$category_fields" "pg_catalog.jsonb_build_array('$field_category_title')"))"
 
@@ -371,7 +377,7 @@ readonly module_content="pg_catalog.jsonb_build_object(
           'required',true,'unique',false,'filterable',false,'sortable',false,
           'settings',pg_catalog.jsonb_build_object('maxLength',200))),
       'relationships','[]'::jsonb,
-      'standardActions',pg_catalog.jsonb_build_array('read','update','soft_delete','restore'),
+      'standardActions',pg_catalog.jsonb_build_array('create','read','update','soft_delete','restore'),
       'customActionIds','[]'::jsonb),
     pg_catalog.jsonb_build_object(
       'recordTypeId','$category_type_id','key','category','singularLabel','Category','pluralLabel','Categories',
@@ -386,7 +392,7 @@ readonly module_content="pg_catalog.jsonb_build_object(
           'settings',pg_catalog.jsonb_build_object('relationshipId','$relationship_line_category',
             'operation','sum','resultType','decimal_number','fieldId','$field_line_amount'))),
       'relationships','[]'::jsonb,
-      'standardActions',pg_catalog.jsonb_build_array('read','update'),
+      'standardActions',pg_catalog.jsonb_build_array('create','read','update'),
       'customActionIds','[]'::jsonb),
     pg_catalog.jsonb_build_object(
       'recordTypeId','$line_type_id','key','line','singularLabel','Line','pluralLabel','Lines',
@@ -420,7 +426,7 @@ readonly module_content="pg_catalog.jsonb_build_object(
           'toRecordType',pg_catalog.jsonb_build_object('state','resolved','moduleRootId','$module_root_id',
             'recordTypeId','$category_type_id'),
           'cardinality','many_to_one','onParentDelete','empty_optional')),
-      'standardActions',pg_catalog.jsonb_build_array('read','update','soft_delete','restore'),
+      'standardActions',pg_catalog.jsonb_build_array('create','read','update','soft_delete','restore'),
       'customActionIds','[]'::jsonb)),
   'permissions',$permissions_sql,
   'actions','[]'::jsonb,'events','[]'::jsonb,'rules','[]'::jsonb,
@@ -795,7 +801,8 @@ category_total_statement() {
 # generated tables carry a scope policy.
 race_state() {
   local parent_id="$1" line_id="$2" command_id="$3" activity_id="$4"
-  run_sql "
+  local state event_count
+  state="$(run_sql "
     begin;
     do \$context\$
     begin
@@ -834,13 +841,14 @@ race_state() {
       (select pg_catalog.count(*)::text from vortex_record.delete_command_effects
         where organization_id = '$organization_id' and command_id = '$command_id'),
       (select pg_catalog.count(*)::text from vortex_activity.organization_activity_entries
-        where organization_id = '$organization_id' and activity_id = '$activity_id'),
-      (select pg_catalog.count(*)::text from vortex_event.record_occurrences
-        where organization_id = '$organization_id' and record_id = '$parent_id'));
+        where organization_id = '$organization_id' and activity_id = '$activity_id'));
     reset role;
     delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
     commit;
-  "
+  ")"
+  event_count="$(run_sql "select pg_catalog.count(*) from vortex_event.event_outbox
+    where organization_id = '$organization_id' and record_id = '$parent_id';")"
+  printf '%s|%s\n' "$state" "$event_count"
 }
 
 category_state() {

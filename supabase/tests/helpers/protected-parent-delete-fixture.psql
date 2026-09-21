@@ -72,20 +72,26 @@
 \set p_parent_update 'c4950000-0000-4000-8000-000000000002'
 \set p_parent_delete 'c4950000-0000-4000-8000-000000000003'
 \set p_parent_restore 'c4950000-0000-4000-8000-000000000004'
+\set p_parent_create 'c4950000-0000-4000-8000-000000000005'
 \set p_guard_read 'c4950000-0000-4000-8000-000000000011'
+\set p_guard_create 'c4950000-0000-4000-8000-000000000012'
 \set p_note_read 'c4950000-0000-4000-8000-000000000021'
 \set p_note_update 'c4950000-0000-4000-8000-000000000022'
+\set p_note_create 'c4950000-0000-4000-8000-000000000023'
 \set p_category_read 'c4950000-0000-4000-8000-000000000031'
 \set p_category_update 'c4950000-0000-4000-8000-000000000032'
+\set p_category_create 'c4950000-0000-4000-8000-000000000033'
 \set p_line_read 'c4950000-0000-4000-8000-000000000041'
 \set p_line_update 'c4950000-0000-4000-8000-000000000042'
 \set p_line_delete 'c4950000-0000-4000-8000-000000000043'
 \set p_line_restore 'c4950000-0000-4000-8000-000000000044'
 \set p_line_delete_owned 'c4950000-0000-4000-8000-000000000045'
+\set p_line_create 'c4950000-0000-4000-8000-000000000046'
 \set p_subline_read 'c4950000-0000-4000-8000-000000000051'
 \set p_subline_update 'c4950000-0000-4000-8000-000000000052'
 \set p_subline_delete 'c4950000-0000-4000-8000-000000000053'
 \set p_subline_restore 'c4950000-0000-4000-8000-000000000054'
+\set p_subline_create 'c4950000-0000-4000-8000-000000000055'
 
 \set parent_table 'rt_b4950000000040008000000000000001'
 \set guard_table 'rt_b4950000000040008000000000000002'
@@ -171,7 +177,7 @@ returns jsonb language sql stable set search_path = '' as $function$
             '{"maxLength":200}'::jsonb, true)
         ),
         'relationships', '[]'::jsonb,
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'soft_delete', 'restore'),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update', 'soft_delete', 'restore'),
         'customActionIds', '[]'::jsonb
       ),
       -- G: the published `refuse` policy.
@@ -193,7 +199,7 @@ returns jsonb language sql stable set search_path = '' as $function$
             'f4950000-0000-4000-8000-000000000012'::uuid,
             'd4950000-0000-4000-8000-000000000001'::uuid, 'refuse')
         ),
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update'),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update'),
         'customActionIds', '[]'::jsonb
       ),
       -- N: the published `empty_optional` policy on a surviving child.
@@ -215,7 +221,7 @@ returns jsonb language sql stable set search_path = '' as $function$
             'f4950000-0000-4000-8000-000000000022'::uuid,
             'd4950000-0000-4000-8000-000000000001'::uuid, 'empty_optional')
         ),
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update'),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update'),
         'customActionIds', '[]'::jsonb
       ),
       -- C: the surviving total-bearing parent of both cascade-deleted types.
@@ -245,7 +251,7 @@ returns jsonb language sql stable set search_path = '' as $function$
               'fieldId', 'f4950000-0000-4000-8000-000000000051'::uuid))
         ),
         'relationships', '[]'::jsonb,
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update'),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update'),
         'customActionIds', '[]'::jsonb
       ),
       -- L: the published `soft_delete_dependent` policy, with inherited
@@ -276,7 +282,7 @@ returns jsonb language sql stable set search_path = '' as $function$
             'f4950000-0000-4000-8000-000000000043'::uuid,
             'd4950000-0000-4000-8000-000000000004'::uuid, 'empty_optional')
         ),
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'soft_delete', 'restore'),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update', 'soft_delete', 'restore'),
         'customActionIds', '[]'::jsonb
       ),
       -- S: the nested dependant, inherited through its own relationship to L.
@@ -306,11 +312,14 @@ returns jsonb language sql stable set search_path = '' as $function$
             'f4950000-0000-4000-8000-000000000053'::uuid,
             'd4950000-0000-4000-8000-000000000004'::uuid, 'empty_optional')
         ),
-        'standardActions', pg_catalog.jsonb_build_array('read', 'update', 'soft_delete', 'restore'),
+        'standardActions', pg_catalog.jsonb_build_array('create', 'read', 'update', 'soft_delete', 'restore'),
         'customActionIds', '[]'::jsonb
       )
     ),
     'permissions', pg_catalog.jsonb_build_array(
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000005'::uuid,
+        'delete.parent.create', 'd4950000-0000-4000-8000-000000000001'::uuid, 'create',
+        array['f4950000-0000-4000-8000-000000000001'::uuid]),
       pg_temp.delete_permission('c4950000-0000-4000-8000-000000000001'::uuid,
         'delete.parent.read', 'd4950000-0000-4000-8000-000000000001'::uuid, 'read',
         array['f4950000-0000-4000-8000-000000000001'::uuid]),
@@ -327,12 +336,20 @@ returns jsonb language sql stable set search_path = '' as $function$
         'delete.guard.read', 'd4950000-0000-4000-8000-000000000002'::uuid, 'read',
         array['f4950000-0000-4000-8000-000000000011'::uuid,
           'f4950000-0000-4000-8000-000000000012'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000012'::uuid,
+        'delete.guard.create', 'd4950000-0000-4000-8000-000000000002'::uuid, 'create',
+        array['f4950000-0000-4000-8000-000000000011'::uuid,
+          'f4950000-0000-4000-8000-000000000012'::uuid]),
       pg_temp.delete_permission('c4950000-0000-4000-8000-000000000021'::uuid,
         'delete.note.read', 'd4950000-0000-4000-8000-000000000003'::uuid, 'read',
         array['f4950000-0000-4000-8000-000000000021'::uuid,
           'f4950000-0000-4000-8000-000000000022'::uuid]),
       pg_temp.delete_permission('c4950000-0000-4000-8000-000000000022'::uuid,
         'delete.note.update', 'd4950000-0000-4000-8000-000000000003'::uuid, 'update',
+        array['f4950000-0000-4000-8000-000000000021'::uuid,
+          'f4950000-0000-4000-8000-000000000022'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000023'::uuid,
+        'delete.note.create', 'd4950000-0000-4000-8000-000000000003'::uuid, 'create',
         array['f4950000-0000-4000-8000-000000000021'::uuid,
           'f4950000-0000-4000-8000-000000000022'::uuid]),
       pg_temp.delete_permission('c4950000-0000-4000-8000-000000000031'::uuid,
@@ -343,6 +360,9 @@ returns jsonb language sql stable set search_path = '' as $function$
           'f4950000-0000-4000-8000-000000000034'::uuid]),
       pg_temp.delete_permission('c4950000-0000-4000-8000-000000000032'::uuid,
         'delete.category.update', 'd4950000-0000-4000-8000-000000000004'::uuid, 'update',
+        array['f4950000-0000-4000-8000-000000000031'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000033'::uuid,
+        'delete.category.create', 'd4950000-0000-4000-8000-000000000004'::uuid, 'create',
         array['f4950000-0000-4000-8000-000000000031'::uuid]),
       pg_temp.delete_permission('c4950000-0000-4000-8000-000000000041'::uuid,
         'delete.line.read', 'd4950000-0000-4000-8000-000000000005'::uuid, 'read',
@@ -368,6 +388,11 @@ returns jsonb language sql stable set search_path = '' as $function$
         'delete.line.delete_owned', 'd4950000-0000-4000-8000-000000000005'::uuid, 'delete',
         array['f4950000-0000-4000-8000-000000000041'::uuid],
         '[{"kind":"ownership"}]'::jsonb),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000046'::uuid,
+        'delete.line.create', 'd4950000-0000-4000-8000-000000000005'::uuid, 'create',
+        array['f4950000-0000-4000-8000-000000000041'::uuid,
+          'f4950000-0000-4000-8000-000000000042'::uuid,
+          'f4950000-0000-4000-8000-000000000043'::uuid]),
       pg_temp.delete_permission('c4950000-0000-4000-8000-000000000051'::uuid,
         'delete.subline.read', 'd4950000-0000-4000-8000-000000000006'::uuid, 'read',
         array['f4950000-0000-4000-8000-000000000051'::uuid,
@@ -383,7 +408,12 @@ returns jsonb language sql stable set search_path = '' as $function$
         array['f4950000-0000-4000-8000-000000000051'::uuid]),
       pg_temp.delete_permission('c4950000-0000-4000-8000-000000000054'::uuid,
         'delete.subline.restore', 'd4950000-0000-4000-8000-000000000006'::uuid, 'restore',
-        array['f4950000-0000-4000-8000-000000000051'::uuid])
+        array['f4950000-0000-4000-8000-000000000051'::uuid]),
+      pg_temp.delete_permission('c4950000-0000-4000-8000-000000000055'::uuid,
+        'delete.subline.create', 'd4950000-0000-4000-8000-000000000006'::uuid, 'create',
+        array['f4950000-0000-4000-8000-000000000051'::uuid,
+          'f4950000-0000-4000-8000-000000000052'::uuid,
+          'f4950000-0000-4000-8000-000000000053'::uuid])
     ),
     'actions', '[]'::jsonb, 'events', '[]'::jsonb, 'rules', '[]'::jsonb,
     'sharingConditions', '[]'::jsonb, 'extensionPoints', '[]'::jsonb
@@ -610,11 +640,11 @@ select pg_temp.delete_register_application();
 select pg_temp.delete_account('54950000-0000-4000-8000-000000000011','Full author') as full_account \gset
 select pg_temp.delete_account('54950000-0000-4000-8000-000000000012','Scoped author') as scoped_account \gset
 select pg_temp.delete_role('74950000-0000-4000-8000-000000000111','parent_delete_full', array[
-  :'p_parent_read'::uuid,:'p_parent_update'::uuid,:'p_parent_delete'::uuid,:'p_parent_restore'::uuid,
-  :'p_guard_read'::uuid,:'p_note_read'::uuid,:'p_note_update'::uuid,
-  :'p_category_read'::uuid,:'p_category_update'::uuid,
-  :'p_line_read'::uuid,:'p_line_update'::uuid,:'p_line_delete'::uuid,:'p_line_restore'::uuid,
-  :'p_subline_read'::uuid,:'p_subline_update'::uuid,:'p_subline_delete'::uuid,:'p_subline_restore'::uuid]);
+  :'p_parent_create'::uuid,:'p_parent_read'::uuid,:'p_parent_update'::uuid,:'p_parent_delete'::uuid,:'p_parent_restore'::uuid,
+  :'p_guard_create'::uuid,:'p_guard_read'::uuid,:'p_note_create'::uuid,:'p_note_read'::uuid,:'p_note_update'::uuid,
+  :'p_category_create'::uuid,:'p_category_read'::uuid,:'p_category_update'::uuid,
+  :'p_line_create'::uuid,:'p_line_read'::uuid,:'p_line_update'::uuid,:'p_line_delete'::uuid,:'p_line_restore'::uuid,
+  :'p_subline_create'::uuid,:'p_subline_read'::uuid,:'p_subline_update'::uuid,:'p_subline_delete'::uuid,:'p_subline_restore'::uuid]);
 select pg_temp.delete_role('74950000-0000-4000-8000-000000000112','parent_delete_scoped', array[
   :'p_parent_read'::uuid,:'p_parent_update'::uuid,:'p_parent_delete'::uuid,:'p_parent_restore'::uuid,
   :'p_guard_read'::uuid,:'p_note_read'::uuid,:'p_note_update'::uuid,

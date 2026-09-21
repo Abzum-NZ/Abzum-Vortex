@@ -226,7 +226,7 @@ select is(
   'a refused parent deletion appends no Activity'
 );
 select is(
-  (select pg_catalog.count(*) from vortex_event.record_occurrences
+  (select pg_catalog.count(*) from vortex_event.event_outbox
    where record_id = :'refused_parent_record'::uuid),
   0::bigint,
   'a refused parent deletion appends no Event'
@@ -570,7 +570,7 @@ select is(
   'the completed deletion appends exactly one delete Activity for the named parent'
 );
 select is(
-  (select pg_catalog.count(*) from vortex_event.record_occurrences as occurrence
+  (select pg_catalog.count(*) from vortex_event.event_outbox as occurrence
    where occurrence.record_id = :'deletable_parent_record'::uuid),
   1::bigint,
   'the completed deletion appends exactly one Event occurrence for the named parent'
