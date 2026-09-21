@@ -916,7 +916,7 @@ declare
   caught_sqlstate text;
   caught_message text;
 begin
-  perform * from vortex_record.read_lifecycle_candidate_records(:'storage_c1');
+  perform * from vortex_record.read_lifecycle_candidate_records('b4760000-0000-4000-8000-000000000002'::uuid);
 exception when others then
   get stacked diagnostics
     caught_sqlstate = returned_sqlstate,
@@ -1021,7 +1021,7 @@ declare
   caught_sqlstate text;
   caught_message text;
 begin
-  perform * from vortex_record.read_lifecycle_candidate_records(:'storage_s1');
+  perform * from vortex_record.read_lifecycle_candidate_records('b4760000-0000-4000-8000-000000000001'::uuid);
 exception when others then
   get stacked diagnostics
     caught_sqlstate = returned_sqlstate,
@@ -1089,7 +1089,7 @@ declare
   caught_sqlstate text;
   caught_message text;
 begin
-  perform * from vortex_record.read_lifecycle_candidate_records(:'storage_s1');
+  perform * from vortex_record.read_lifecycle_candidate_records('b4760000-0000-4000-8000-000000000001'::uuid);
 exception when others then
   get stacked diagnostics
     caught_sqlstate = returned_sqlstate,
@@ -1191,7 +1191,7 @@ do $capture$
 declare
   caught_sqlstate text;
 begin
-  perform * from vortex_record.read_lifecycle_candidate_records(:'storage_s1');
+  perform * from vortex_record.read_lifecycle_candidate_records('b4760000-0000-4000-8000-000000000001'::uuid);
 exception when others then
   get stacked diagnostics caught_sqlstate = returned_sqlstate;
   insert into runtime_lifecycle_reader_error values (caught_sqlstate);
