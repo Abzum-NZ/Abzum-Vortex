@@ -172,6 +172,23 @@ are retained; never claim that an existing agent was renamed. Record each role
 separately when an agent serves more than one issue. Clear the active owner when
 the work finishes and no next owner has accepted.
 
+### Completion to next action
+
+A settled result is a same-turn routing boundary, not a stopping point. Before
+the coordinator ends that turn, it must make and record the engineering
+acceptance or delivery disposition, verify one bounded next dispatch, or record
+a precise dependency blocker with its accountable owner and unblock event. A
+status update, vague “root approval pending”, or idle owner does not satisfy
+this obligation. Drain executable Ready handoffs through existing owners and
+worktrees before starting another supervisor or ending the turn.
+
+The root retains merge, acceptance, GitHub and board authority, but makes the
+decision from supplied evidence instead of postponing it. Owners prepare
+evidence, repair attributable defects and run affected checks. A failed or timed
+out gate gets an attributable diagnosis and affected proof. Never replay an
+unchanged full suite blindly; a bounded affected rerun is permitted when it
+tests a recorded intermittent-failure hypothesis.
+
 Respond to questions from the coordinating agent in the other chat before
 routine task work. Give verified answers, then resume the assigned task; a
 message requesting a correction is not evidence that the correction is done.

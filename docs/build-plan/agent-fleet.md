@@ -241,10 +241,11 @@ concurrency throttling can occur while those measured quotas remain.
 ## The dispatch loop
 
 The orchestrator runs one loop, continuously, without waiting for a human.
-Every pass with startable work dispatches at least one new owner or worker.
-Bookkeeping alone is not output. If none is dispatched, report one line
-listing each specific issue examined and why it was not startable. It stops
-only when the board has no startable work left.
+Every pass with startable work produces at least one executable advancement:
+accept, land, verify, repair, or dispatch. Prefer the existing owner, worker and
+worktree. Bookkeeping alone is not output. If none advances, report each issue
+examined, its exact blocker, accountable owner and unblock event. The loop stops
+only when the board has no executable work left.
 
 Every startable issue has an accountable owner. For a genuinely single-slice
 issue, the directly dispatched worker is that owner for the bounded task; the
@@ -253,7 +254,10 @@ root still does not decompose a multi-slice issue into its workers.
 1. **Select** — pick the next dependency-ready task; see Queue selection below.
 2. **Brief** — verify the premise from the root-published snapshot and issue dossier,
    then write a drift-proof brief; see Dispatch brief template below.
-3. **Dispatch** — start one agent in one new worktree on one branch, in a single command. The agent is an issue owner for a multi-slice issue and a worker for a single-slice one; see Root coordinator and issue owners above. For example:
+3. **Dispatch** — reuse the accountable owner and preserved worktree when safe;
+   otherwise start one agent in one isolated worktree on one branch. The agent
+   is an issue owner for a multi-slice issue and a worker for a single-slice one;
+   see Root coordinator and issue owners above. For example:
 
    ```
    orca worktree create --repo id:<repoId> --name <branch-name> \
@@ -271,12 +275,14 @@ root still does not decompose a multi-slice issue into its workers.
    for review only when authorized) and merge once gates and review pass; the
    root decides the merge. Promotion to `testing` remains a separate phase
    gate, subject to any user hold.
-7. **Reconcile and report — immediate step.** Immediately after any agent
-   finishes, its owner reports completion to the root. Before any other work,
-   the root batches the issue-field changes and confirms the changed row against
-   the snapshot. It posts one closing comment only when whole-issue acceptance
-   closes the issue, then scans the shared board for newly unblocked issues. A
-   task is not finished until its board row is true.
+7. **Reconcile, decide and continue — immediate step.** Immediately after an
+   agent finishes, its owner reports completion to the root. In the same turn,
+   the root batches truthful issue-field changes, confirms the row, and gives the
+   result one disposition: accept/deliver it, verify one bounded next dispatch,
+   or record the exact dependency blocker, accountable owner and unblock event.
+   A status update or vague “pending root approval” is not completion. Drain
+   executable Ready handoffs through existing owners before adding supervisors
+   or ending the turn.
 8. **Clean up.** Once the branch is merged and the board row is verified, remove
    the finished checkout with `orca worktree rm`; see Worktree cleanup below.
 
@@ -292,6 +298,13 @@ that the work was committed and pushed, or that it was explicitly discarded with
 the reason recorded by the root on the issue. Preserve partial and untracked
 evidence until that decision. A merged base alone never authorizes cleanup; the
 generic root's supervising worktree is exempt from merged-worktree cleanup.
+
+Do not pause at a completion receipt when authorized work remains executable.
+The root makes engineering acceptance and merge decisions from the evidence;
+owners prepare evidence, perform scoped repairs and run affected checks. Failed
+or timed-out checks require attributable diagnosis plus affected proof. Never
+replay an unchanged full suite blindly; a bounded affected rerun is permitted
+when it tests a recorded intermittent-failure hypothesis.
 
 For completion and every model handoff, use `git status --porcelain=v1
 --untracked-files=all`, not `git diff` alone, and report separate counts for
@@ -347,13 +360,15 @@ never promote merely to make a status label fit.
 
 Two feedback paths run outside that sequence. A stall or drift caught while
 watching can be steered, re-briefed, or escalated to a stronger model,
-returning to Brief. A failed gate never blocks the loop: it becomes a new
-tracked issue and re-enters Select on its own merits, rather than stopping
-work behind it.
+returning to Brief. A failed gate never blocks the loop. Repair an attributable
+defect as a bounded slice of the same issue by default. Create a separate
+tracked issue only when the evidence proves genuinely independent scope, then
+re-enter Select without stopping unrelated work.
 
-The root schedules cycles every 30 minutes to avoid overlapping root sessions.
-This does not weaken the terminal-supervision cadence. Never create a yielding
-duplicate root.
+The root refreshes its one complete board snapshot at most once per 30-minute
+cycle to avoid overlapping root sessions. This is a snapshot cadence, never a
+waiting barrier for completion, handoff, acceptance or executable next work.
+Never create a yielding duplicate root.
 
 Before the first database attempt in a reservation window, audit the entire
 fixture setup, role changes, request context, and TAP ownership transitions
