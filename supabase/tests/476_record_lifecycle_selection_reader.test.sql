@@ -438,6 +438,7 @@ set search_path = ''
 as $function$
 declare
   context_value jsonb;
+  operation_at constant timestamptz := pg_catalog.statement_timestamp();
 begin
   delete from vortex_context.request_contexts
   where backend_pid = pg_catalog.pg_backend_pid();
@@ -451,12 +452,12 @@ begin
     'identityId', account.identity_id,
     'sessionId', 'c4760000-0000-4000-8000-0000000000f2'::uuid,
     'authenticationStrength', 'single_factor',
-    'issuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
-    'expiresAt', pg_catalog.clock_timestamp() + interval '2 hours',
+    'issuedAt', operation_at,
+    'expiresAt', operation_at + interval '2 hours',
     'accessVersion', version.current_version,
     'correlationId', 'c4760000-0000-4000-8000-0000000000f3'::uuid,
-    'accessTokenIssuedAt', pg_catalog.clock_timestamp() - interval '1 minute',
-    'primaryAuthenticatedAt', pg_catalog.clock_timestamp() - interval '1 minute'
+    'accessTokenIssuedAt', operation_at,
+    'primaryAuthenticatedAt', operation_at
   ) || case
     when p_application_root_id is null then '{}'::jsonb
     else pg_catalog.jsonb_build_object('applicationRootId', p_application_root_id)
