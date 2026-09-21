@@ -1,0 +1,990 @@
+-- ============================================================================
+-- Migration: 20260923002500_connection_instance_state.sql
+-- #408: Source-owned Connection-instance state, explicit permanent-application
+-- grants, closed destination identity/fingerprint, and readiness projection.
+-- ============================================================================
+
+create schema if not exists vortex_connection authorization postgres;
+
+-- ----------------------------------------------------------------------------
+-- Authoritative Connection Instances Table
+-- ----------------------------------------------------------------------------
+create table vortex_connection.connection_instances (
+  connection_instance_id uuid primary key,
+  organization_id uuid not null
+    references vortex_identity.organizations (organization_id),
+  connection_type_id uuid not null,
+  connection_type_version text not null,
+  destination_key text not null,
+  destination_fingerprint text not null,
+  state text not null check (state in ('pending', 'active', 'unhealthy', 'revoked')),
+  last_health_outcome text not null check (last_health_outcome in ('healthy', 'unhealthy', 'unknown')),
+  revision bigint not null check (revision between 1 and 9007199254740991),
+  administrator_activity_id uuid not null,
+  token_expires_at timestamptz,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  constraint connection_instances_id_non_nil check (
+    connection_instance_id <> '00000000-0000-0000-0000-000000000000'::uuid
+  ),
+  constraint connection_instances_organization_non_nil check (
+    organization_id <> '00000000-0000-0000-0000-000000000000'::uuid
+  ),
+  constraint connection_instances_type_non_nil check (
+    connection_type_id <> '00000000-0000-0000-0000-000000000000'::uuid
+  ),
+  constraint connection_instances_activity_non_nil check (
+    administrator_activity_id <> '00000000-0000-0000-0000-000000000000'::uuid
+  ),
+  constraint connection_instances_destination_key_valid check (
+    destination_key = pg_catalog.btrim(destination_key)
+    and pg_catalog.char_length(destination_key) between 1 and 80
+    and destination_key ~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$'
+    and destination_key !~* 'https?:|postgres:|select\s|insert\s|delete\s|update\s|drop\s'
+  ),
+  constraint connection_instances_destination_fingerprint_valid check (
+    destination_fingerprint ~ '^[a-f0-9]{64}$'
+  ),
+  constraint connection_instances_time_order check (
+    updated_at >= created_at
+  ),
+  constraint connection_instances_org_destination_unique unique (
+    organization_id, destination_key
+  ),
+  constraint connection_instances_id_org_unique unique (
+    connection_instance_id, organization_id
+  )
+);
+
+alter table vortex_connection.connection_instances enable row level security;
+alter table vortex_connection.connection_instances force row level security;
+
+-- ----------------------------------------------------------------------------
+-- Explicit Permanent-Application Grants Table
+-- ----------------------------------------------------------------------------
+create table vortex_connection.connection_application_grants (
+  connection_instance_id uuid not null,
+  application_root_id uuid not null
+    references vortex_definition.roots (root_id)
+    on delete cascade,
+  organization_id uuid not null
+    references vortex_identity.organizations (organization_id),
+  granted_at timestamptz not null,
+  primary key (connection_instance_id, application_root_id),
+  constraint connection_grants_instance_org_fk foreign key (
+    connection_instance_id, organization_id
+  ) references vortex_connection.connection_instances (
+    connection_instance_id, organization_id
+  ) on delete cascade,
+  constraint connection_grants_app_non_nil check (
+    application_root_id <> '00000000-0000-0000-0000-000000000000'::uuid
+  ),
+  constraint connection_grants_organization_non_nil check (
+    organization_id <> '00000000-0000-0000-0000-000000000000'::uuid
+  )
+);
+
+alter table vortex_connection.connection_application_grants enable row level security;
+alter table vortex_connection.connection_application_grants force row level security;
+
+-- ----------------------------------------------------------------------------
+-- Grant Application Root Kind & Organization Integrity Trigger
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.enforce_grant_application_root()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  app_record record;
+begin
+  select root.organization_id, root.kind into app_record
+  from vortex_definition.roots as root
+  where root.root_id = new.application_root_id;
+
+  if not found then
+    raise exception using
+      errcode = '23503',
+      message = 'Referenced application root does not exist';
+  end if;
+
+  if app_record.kind <> 'application' then
+    raise exception using
+      errcode = '23514',
+      message = 'Referenced root must be of kind application';
+  end if;
+
+  if app_record.organization_id <> new.organization_id then
+    raise exception using
+      errcode = '23514',
+      message = 'Referenced application root organization does not match grant organization';
+  end if;
+
+  return new;
+end;
+$function$;
+
+create trigger connection_application_grants_root_validation
+  before insert or update on vortex_connection.connection_application_grants
+  for each row execute function vortex_connection.enforce_grant_application_root();
+
+-- ----------------------------------------------------------------------------
+-- RLS Scope Policies
+-- ----------------------------------------------------------------------------
+create policy connection_instances_request_read on vortex_connection.connection_instances
+  for select to vortex_request
+  using (
+    organization_id = vortex_context.organization_id()
+  );
+
+create policy connection_application_grants_request_read on vortex_connection.connection_application_grants
+  for select to vortex_request
+  using (
+    organization_id = vortex_context.organization_id()
+  );
+
+-- ----------------------------------------------------------------------------
+-- Administration Context Validation Helper
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.validated_administration_context(
+  p_organization_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  ctx jsonb;
+  ctx_org_id uuid;
+  ctx_caller_kind text;
+begin
+  ctx := vortex_context.current_context();
+  ctx_caller_kind := ctx ->> 'callerKind';
+
+  if ctx_caller_kind = 'human' then
+    ctx := vortex_access.validated_human_request_context();
+  elsif ctx_caller_kind = 'system' then
+    ctx := vortex_definition.validated_system_context();
+  else
+    raise exception using
+      errcode = '42501',
+      message = 'Connection operation requires validated system or human administration context';
+  end if;
+
+  ctx_org_id := (ctx ->> 'organizationId')::uuid;
+
+  if ctx_org_id is distinct from p_organization_id then
+    raise exception using
+      errcode = '42501',
+      message = 'Connection operation organization does not match request context organization';
+  end if;
+
+  return ctx;
+end;
+$function$;
+
+create or replace function vortex_connection.append_application_grant_activity_internal(
+  p_context jsonb,
+  p_activity_id uuid,
+  p_connection_instance_id uuid,
+  p_application_root_id uuid,
+  p_action text,
+  p_occurred_at timestamptz
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  actor_kind text;
+  actor_id uuid;
+  subject_ids uuid[];
+begin
+  if p_context ->> 'callerKind' = 'human' then
+    actor_kind := 'organization_account';
+    actor_id := (p_context ->> 'organizationAccountId')::uuid;
+  elsif p_context ->> 'callerKind' = 'system' then
+    actor_kind := 'system';
+    actor_id := (p_context ->> 'systemActorId')::uuid;
+  else
+    raise exception using
+      errcode = '42501',
+      message = 'Connection grant Activity requires validated human or system context';
+  end if;
+
+  select pg_catalog.array_agg(subject_id order by subject_id)
+  into subject_ids
+  from (
+    select distinct candidate.subject_id
+    from pg_catalog.unnest(array[p_connection_instance_id, p_application_root_id])
+      as candidate(subject_id)
+  ) as canonical_subjects;
+
+  perform vortex_activity.append_organization_activity_entry(
+    (p_context ->> 'organizationId')::uuid,
+    p_activity_id,
+    p_occurred_at,
+    actor_kind,
+    actor_id,
+    p_action,
+    subject_ids,
+    array[]::uuid[],
+    'connection',
+    (p_context ->> 'correlationId')::uuid,
+    'completed'
+  );
+end;
+$function$;
+
+-- ----------------------------------------------------------------------------
+-- Owner-Projected Readiness Check Function
+--
+-- Exposes an owner-projected read/check surface consumed by 20260923010000
+-- policy SQL. Declared VOLATILE because it acquires FOR SHARE row locks on
+-- connection and root records.
+--
+-- Fails closed:
+--   - Rejects missing, pending, unhealthy, or revoked connection
+--   - Rejects organization mismatch
+--   - Rejects missing explicit permanent-application grant
+--   - Rejects stale revision or destination fingerprint
+--   - Rejects destination key mismatch
+--   - Rejects expired credentials/tokens
+--   - Rejects caller-supplied boolean flags or mutable label bypasses
+--   - Outputs zero secret/credential material
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.resolve_connection_instance_readiness(
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_connection_instance_id uuid,
+  p_destination_key text,
+  p_expected_revision bigint,
+  p_expected_fingerprint text
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  context_value jsonb;
+  context_org_id uuid;
+  context_app_id uuid;
+  conn_row vortex_connection.connection_instances%rowtype;
+  now_ts timestamptz := pg_catalog.statement_timestamp();
+begin
+  -- 1. Validate parameter shapes (all mandatory)
+  if p_organization_id is null or p_organization_id = nil_uuid
+    or p_connection_instance_id is null or p_connection_instance_id = nil_uuid
+    or p_application_root_id is null or p_application_root_id = nil_uuid
+    or p_destination_key is null
+    or pg_catalog.char_length(p_destination_key) not between 1 and 80
+    or p_destination_key !~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$'
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991
+    or p_expected_fingerprint is null
+    or p_expected_fingerprint !~ '^[a-f0-9]{64}$' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'invalid_parameters'
+    );
+  end if;
+
+  -- 2. Validate request context binding
+  context_value := vortex_context.current_context();
+  context_org_id := vortex_context.organization_id();
+  if context_org_id is null or context_org_id <> p_organization_id then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'organization_mismatch'
+    );
+  end if;
+
+  -- Connection instances strictly require permanent application scope (not organisation-shared)
+  if context_value ? 'applicationRootId' then
+    context_app_id := (context_value ->> 'applicationRootId')::uuid;
+    if context_app_id is distinct from p_application_root_id then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused',
+        'reasonCode', 'application_mismatch'
+      );
+    end if;
+  end if;
+
+  -- 3. Read connection instance row under FOR SHARE lock
+  select conn.* into conn_row
+  from vortex_connection.connection_instances as conn
+  where conn.connection_instance_id = p_connection_instance_id
+    and conn.organization_id = p_organization_id
+  for share;
+
+  if not found then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'connection_unavailable'
+    );
+  end if;
+
+  -- 4. Check active state and health outcome
+  if conn_row.state <> 'active' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'connection_not_active',
+      'currentState', conn_row.state
+    );
+  end if;
+
+  if conn_row.last_health_outcome <> 'healthy' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'connection_unhealthy',
+      'currentHealthOutcome', conn_row.last_health_outcome
+    );
+  end if;
+
+  -- 5. Check token expiry if set
+  if conn_row.token_expires_at is not null and conn_row.token_expires_at <= now_ts then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'connection_token_expired'
+    );
+  end if;
+
+  -- 6. Check destination key
+  if conn_row.destination_key <> p_destination_key then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'destination_mismatch'
+    );
+  end if;
+
+  -- 7. Mandatory revision freshness check
+  if conn_row.revision <> p_expected_revision then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'stale_revision',
+      'currentRevision', conn_row.revision
+    );
+  end if;
+
+  -- 8. Mandatory destination fingerprint freshness check
+  if conn_row.destination_fingerprint <> p_expected_fingerprint then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'stale_fingerprint'
+    );
+  end if;
+
+  -- 9. Lock the exact application grant and its permanent root for the decision.
+  perform 1
+  from vortex_connection.connection_application_grants as grant_entry
+  join vortex_definition.roots as app_root
+    on app_root.root_id = grant_entry.application_root_id
+    and app_root.organization_id = grant_entry.organization_id
+    and app_root.kind = 'application'
+  where grant_entry.connection_instance_id = p_connection_instance_id
+    and grant_entry.application_root_id = p_application_root_id
+    and grant_entry.organization_id = p_organization_id
+  for share of grant_entry, app_root;
+
+  if not found then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', 'grant_unauthorized'
+    );
+  end if;
+
+  -- 10. Return authoritative owner-projected readiness evidence
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'ready',
+    'connectionInstanceId', conn_row.connection_instance_id,
+    'organizationId', conn_row.organization_id,
+    'applicationRootId', p_application_root_id,
+    'destinationKey', conn_row.destination_key,
+    'destinationFingerprint', conn_row.destination_fingerprint,
+    'revision', conn_row.revision,
+    'healthOutcome', conn_row.last_health_outcome,
+    'state', conn_row.state,
+    'verifiedAt', pg_catalog.to_jsonb(now_ts)
+  );
+end
+$function$;
+
+comment on function vortex_connection.resolve_connection_instance_readiness(
+  uuid, uuid, uuid, text, bigint, text
+) is
+  '#408: Authoritative owner-projected Connection-instance readiness resolver. Fails closed on inactive, unhealthy, expired, mismatched destination, ungranted application, or stale revision/fingerprint.';
+
+-- ----------------------------------------------------------------------------
+-- Active Connection Evidence Reader
+--
+-- Projects authoritative active connection evidence matching the canonical
+-- activeConnectionEvidenceSchema for lifecycle policy validation.
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.read_active_connection_evidence(
+  p_connection_instance_id uuid
+)
+returns table (
+  connection_instance_id uuid,
+  destination_key text,
+  destination_fingerprint text,
+  organization_id uuid,
+  authorized_application_ids uuid[],
+  state text,
+  revision bigint,
+  last_health_outcome text
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_org_id uuid;
+  conn_row vortex_connection.connection_instances%rowtype;
+  locked_authorized_application_ids uuid[];
+begin
+  context_org_id := vortex_context.organization_id();
+
+  select conn.* into conn_row
+  from vortex_connection.connection_instances as conn
+  where conn.connection_instance_id = p_connection_instance_id
+    and conn.organization_id = context_org_id
+    and conn.state = 'active'
+    and conn.last_health_outcome = 'healthy'
+    and (conn.token_expires_at is null or conn.token_expires_at > pg_catalog.statement_timestamp())
+  for share;
+
+  if not found then
+    return;
+  end if;
+
+  select pg_catalog.array_agg(
+    locked_grant.application_root_id order by locked_grant.application_root_id
+  )
+  into locked_authorized_application_ids
+  from (
+    select grant_entry.application_root_id
+    from vortex_connection.connection_application_grants as grant_entry
+    join vortex_definition.roots as app_root
+      on app_root.root_id = grant_entry.application_root_id
+      and app_root.organization_id = grant_entry.organization_id
+      and app_root.kind = 'application'
+    where grant_entry.connection_instance_id = conn_row.connection_instance_id
+      and grant_entry.organization_id = conn_row.organization_id
+    for share of grant_entry, app_root
+  ) as locked_grant;
+
+  if locked_authorized_application_ids is null then
+    return;
+  end if;
+
+  return query
+  select
+    conn_row.connection_instance_id,
+    conn_row.destination_key,
+    conn_row.destination_fingerprint,
+    conn_row.organization_id,
+    locked_authorized_application_ids,
+    conn_row.state,
+    conn_row.revision,
+    conn_row.last_health_outcome;
+end
+$function$;
+
+comment on function vortex_connection.read_active_connection_evidence(uuid) is
+  '#408: Reads active healthy Connection instance evidence scoped to current context organization.';
+
+-- ----------------------------------------------------------------------------
+-- Governed Registration Helper
+--
+-- Restricts initial state to legal baseline: state='pending', outcome='unknown',
+-- revision=1. Validates administration context and administrator activity ID.
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.register_connection_instance_internal(
+  p_connection_instance_id uuid,
+  p_organization_id uuid,
+  p_connection_type_id uuid,
+  p_connection_type_version text,
+  p_destination_key text,
+  p_destination_fingerprint text,
+  p_administrator_activity_id uuid,
+  p_token_expires_at timestamptz default null
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+begin
+  -- Validate administration context for target organization
+  perform vortex_connection.validated_administration_context(p_organization_id);
+
+  if p_administrator_activity_id is null or p_administrator_activity_id = nil_uuid then
+    raise exception using
+      errcode = '22023',
+      message = 'Connection registration requires non-nil administrator activity ID';
+  end if;
+
+  insert into vortex_connection.connection_instances (
+    connection_instance_id,
+    organization_id,
+    connection_type_id,
+    connection_type_version,
+    destination_key,
+    destination_fingerprint,
+    state,
+    last_health_outcome,
+    revision,
+    administrator_activity_id,
+    token_expires_at,
+    created_at,
+    updated_at
+  ) values (
+    p_connection_instance_id,
+    p_organization_id,
+    p_connection_type_id,
+    p_connection_type_version,
+    p_destination_key,
+    p_destination_fingerprint,
+    'pending',
+    'unknown',
+    1,
+    p_administrator_activity_id,
+    p_token_expires_at,
+    operation_at,
+    operation_at
+  );
+end
+$function$;
+
+-- ----------------------------------------------------------------------------
+-- Governed Application Grant Helpers
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.grant_connection_application_internal(
+  p_connection_instance_id uuid,
+  p_application_root_id uuid,
+  p_administrator_activity_id uuid
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  conn_row vortex_connection.connection_instances%rowtype;
+  app_org_id uuid;
+  app_kind text;
+  administration_context jsonb;
+  inserted_connection_instance_id uuid;
+begin
+  if p_administrator_activity_id is null or p_administrator_activity_id = nil_uuid then
+    raise exception using
+      errcode = '22023',
+      message = 'Connection grant requires non-nil administrator activity ID';
+  end if;
+
+  -- Lock connection instance row for share
+  select conn.* into conn_row
+  from vortex_connection.connection_instances as conn
+  where conn.connection_instance_id = p_connection_instance_id
+  for share;
+
+  if not found then
+    raise exception using
+      errcode = 'P0002',
+      message = 'Connection instance not found';
+  end if;
+
+  -- Validate administration context for connection's organization
+  administration_context := vortex_connection.validated_administration_context(conn_row.organization_id);
+
+  -- Resolve and lock application root
+  select root.organization_id, root.kind into app_org_id, app_kind
+  from vortex_definition.roots as root
+  where root.root_id = p_application_root_id
+  for share;
+
+  if not found then
+    raise exception using
+      errcode = '23503',
+      message = 'Referenced application root does not exist';
+  end if;
+
+  if app_kind <> 'application' then
+    raise exception using
+      errcode = '23514',
+      message = 'Referenced root must be of kind application';
+  end if;
+
+  if app_org_id <> conn_row.organization_id then
+    raise exception using
+      errcode = '23514',
+      message = 'Referenced application root organization does not match connection organization';
+  end if;
+
+  insert into vortex_connection.connection_application_grants (
+    connection_instance_id,
+    application_root_id,
+    organization_id,
+    granted_at
+  ) values (
+    p_connection_instance_id,
+    p_application_root_id,
+    conn_row.organization_id,
+    operation_at
+  )
+  on conflict (connection_instance_id, application_root_id) do nothing
+  returning connection_instance_id into inserted_connection_instance_id;
+
+  if inserted_connection_instance_id is null then
+    raise exception using
+      errcode = '23514',
+      message = 'Connection application grant already exists';
+  end if;
+
+  perform vortex_connection.append_application_grant_activity_internal(
+    administration_context,
+    p_administrator_activity_id,
+    p_connection_instance_id,
+    p_application_root_id,
+    'connection_application_granted',
+    operation_at
+  );
+end
+$function$;
+
+create or replace function vortex_connection.revoke_connection_application_internal(
+  p_connection_instance_id uuid,
+  p_application_root_id uuid,
+  p_administrator_activity_id uuid
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  conn_row vortex_connection.connection_instances%rowtype;
+  administration_context jsonb;
+  locked_application_root_id uuid;
+begin
+  if p_administrator_activity_id is null or p_administrator_activity_id = nil_uuid then
+    raise exception using
+      errcode = '22023',
+      message = 'Connection grant revocation requires non-nil administrator activity ID';
+  end if;
+
+  select conn.* into conn_row
+  from vortex_connection.connection_instances as conn
+  where conn.connection_instance_id = p_connection_instance_id
+  for share;
+
+  if not found then
+    raise exception using
+      errcode = 'P0002',
+      message = 'Connection instance not found';
+  end if;
+
+  administration_context := vortex_connection.validated_administration_context(conn_row.organization_id);
+
+  select grant_entry.application_root_id into locked_application_root_id
+  from vortex_connection.connection_application_grants as grant_entry
+  where grant_entry.connection_instance_id = p_connection_instance_id
+    and grant_entry.application_root_id = p_application_root_id
+    and grant_entry.organization_id = conn_row.organization_id
+  for update;
+
+  if not found then
+    raise exception using
+      errcode = 'P0002',
+      message = 'Connection application grant not found';
+  end if;
+
+  delete from vortex_connection.connection_application_grants
+  where connection_instance_id = p_connection_instance_id
+    and application_root_id = locked_application_root_id;
+
+  perform vortex_connection.append_application_grant_activity_internal(
+    administration_context,
+    p_administrator_activity_id,
+    p_connection_instance_id,
+    p_application_root_id,
+    'connection_application_revoked',
+    operation_at
+  );
+end
+$function$;
+
+-- ----------------------------------------------------------------------------
+-- Governed Health Check Helper
+--
+-- Enforces:
+--   - Validated administration context
+--   - Explicit monotonic state transition matrix:
+--       pending  + healthy   -> active
+--       pending  + unhealthy -> unhealthy
+--       active   + healthy   -> active
+--       active   + unhealthy -> unhealthy
+--       unhealthy+ healthy   -> active (recovered)
+--       unhealthy+ unhealthy -> unhealthy
+--   - Terminal revocation: revoked instances CANNOT transition via health check.
+--   - Expected revision optimistic concurrency.
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.record_connection_health_check_internal(
+  p_connection_instance_id uuid,
+  p_expected_revision bigint,
+  p_new_health_outcome text,
+  p_administrator_activity_id uuid default null
+)
+returns bigint
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  conn_row vortex_connection.connection_instances%rowtype;
+  next_state text;
+  new_revision bigint;
+begin
+  if p_new_health_outcome not in ('healthy', 'unhealthy') then
+    raise exception using
+      errcode = '22023',
+      message = 'Invalid health outcome: must be healthy or unhealthy';
+  end if;
+
+  -- Lock row for update
+  select conn.* into conn_row
+  from vortex_connection.connection_instances as conn
+  where conn.connection_instance_id = p_connection_instance_id
+  for update;
+
+  if not found or conn_row.revision <> p_expected_revision then
+    raise exception using
+      errcode = 'P0002',
+      message = 'Connection instance health update failed: revision mismatch or not found';
+  end if;
+
+  -- Validate context
+  perform vortex_connection.validated_administration_context(conn_row.organization_id);
+
+  -- Terminal revocation check
+  if conn_row.state = 'revoked' then
+    raise exception using
+      errcode = '42501',
+      message = 'Connection instance is revoked; revocation is terminal and cannot transition via health check';
+  end if;
+
+  -- Explicit monotonic state transition matrix
+  if p_new_health_outcome = 'healthy' then
+    next_state := 'active';
+  else
+    next_state := 'unhealthy';
+  end if;
+
+  update vortex_connection.connection_instances
+  set last_health_outcome = p_new_health_outcome,
+      state = next_state,
+      revision = revision + 1,
+      administrator_activity_id = coalesce(p_administrator_activity_id, administrator_activity_id),
+      updated_at = operation_at
+  where connection_instance_id = p_connection_instance_id
+    and revision = p_expected_revision
+  returning revision into new_revision;
+
+  return new_revision;
+end
+$function$;
+
+-- ----------------------------------------------------------------------------
+-- Governed Revocation Helper
+--
+-- Transitions instance to terminal 'revoked' state. Requires non-nil administrator
+-- activity ID, valid context, and matching expected revision.
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.revoke_connection_instance_internal(
+  p_connection_instance_id uuid,
+  p_expected_revision bigint,
+  p_administrator_activity_id uuid
+)
+returns bigint
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  conn_row vortex_connection.connection_instances%rowtype;
+  new_revision bigint;
+begin
+  if p_administrator_activity_id is null or p_administrator_activity_id = nil_uuid then
+    raise exception using
+      errcode = '22023',
+      message = 'Connection revocation requires non-nil administrator activity ID';
+  end if;
+
+  select conn.* into conn_row
+  from vortex_connection.connection_instances as conn
+  where conn.connection_instance_id = p_connection_instance_id
+  for update;
+
+  if not found or conn_row.revision <> p_expected_revision then
+    raise exception using
+      errcode = 'P0002',
+      message = 'Connection revocation failed: revision mismatch or not found';
+  end if;
+
+  perform vortex_connection.validated_administration_context(conn_row.organization_id);
+
+  if conn_row.state = 'revoked' then
+    raise exception using
+      errcode = '23514',
+      message = 'Connection revocation requires a non-revoked source state';
+  end if;
+
+  update vortex_connection.connection_instances
+  set state = 'revoked',
+      administrator_activity_id = p_administrator_activity_id,
+      revision = revision + 1,
+      updated_at = operation_at
+  where connection_instance_id = p_connection_instance_id
+    and revision = p_expected_revision
+  returning revision into new_revision;
+
+  return new_revision;
+end
+$function$;
+
+-- ----------------------------------------------------------------------------
+-- Governed Reauthorization Helper
+--
+-- Allows governed reauthorization only of a revoked instance.
+-- Moves state back to 'pending' with 'unknown' outcome to require re-verification.
+-- ----------------------------------------------------------------------------
+create or replace function vortex_connection.reauthorize_connection_instance_internal(
+  p_connection_instance_id uuid,
+  p_expected_revision bigint,
+  p_administrator_activity_id uuid,
+  p_destination_fingerprint text default null,
+  p_token_expires_at timestamptz default null
+)
+returns bigint
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  conn_row vortex_connection.connection_instances%rowtype;
+  new_revision bigint;
+begin
+  if p_administrator_activity_id is null or p_administrator_activity_id = nil_uuid then
+    raise exception using
+      errcode = '22023',
+      message = 'Connection reauthorization requires non-nil administrator activity ID';
+  end if;
+
+  if p_destination_fingerprint is not null and p_destination_fingerprint !~ '^[a-f0-9]{64}$' then
+    raise exception using
+      errcode = '22023',
+      message = 'Invalid destination fingerprint: must be 64 lowercase hex characters';
+  end if;
+
+  select conn.* into conn_row
+  from vortex_connection.connection_instances as conn
+  where conn.connection_instance_id = p_connection_instance_id
+  for update;
+
+  if not found or conn_row.revision <> p_expected_revision then
+    raise exception using
+      errcode = 'P0002',
+      message = 'Connection reauthorization failed: revision mismatch or not found';
+  end if;
+
+  perform vortex_connection.validated_administration_context(conn_row.organization_id);
+
+  if conn_row.state <> 'revoked' then
+    raise exception using
+      errcode = '23514',
+      message = 'Connection reauthorization requires revoked source state';
+  end if;
+
+  update vortex_connection.connection_instances
+  set state = 'pending',
+      last_health_outcome = 'unknown',
+      destination_fingerprint = coalesce(p_destination_fingerprint, destination_fingerprint),
+      token_expires_at = p_token_expires_at,
+      administrator_activity_id = p_administrator_activity_id,
+      revision = revision + 1,
+      updated_at = operation_at
+  where connection_instance_id = p_connection_instance_id
+    and revision = p_expected_revision
+  returning revision into new_revision;
+
+  return new_revision;
+end
+$function$;
+
+-- ----------------------------------------------------------------------------
+-- Permissions & Revocations
+-- ----------------------------------------------------------------------------
+revoke all on table vortex_connection.connection_instances
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+revoke all on table vortex_connection.connection_application_grants
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant select on table vortex_connection.connection_instances to vortex_request;
+grant select on table vortex_connection.connection_application_grants to vortex_request;
+
+revoke all on function
+  vortex_connection.enforce_grant_application_root(),
+  vortex_connection.validated_administration_context(uuid),
+  vortex_connection.append_application_grant_activity_internal(jsonb, uuid, uuid, uuid, text, timestamptz),
+  vortex_connection.resolve_connection_instance_readiness(uuid, uuid, uuid, text, bigint, text),
+  vortex_connection.read_active_connection_evidence(uuid),
+  vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamptz),
+  vortex_connection.grant_connection_application_internal(uuid, uuid, uuid),
+  vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid),
+  vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid),
+  vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid),
+  vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamptz)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function
+  vortex_connection.resolve_connection_instance_readiness(uuid, uuid, uuid, text, bigint, text),
+  vortex_connection.read_active_connection_evidence(uuid)
+  to vortex_request, vortex_runtime;
+
+grant execute on function
+  vortex_connection.register_connection_instance_internal(uuid, uuid, uuid, text, text, text, uuid, timestamptz),
+  vortex_connection.grant_connection_application_internal(uuid, uuid, uuid),
+  vortex_connection.revoke_connection_application_internal(uuid, uuid, uuid),
+  vortex_connection.record_connection_health_check_internal(uuid, bigint, text, uuid),
+  vortex_connection.revoke_connection_instance_internal(uuid, bigint, uuid),
+  vortex_connection.reauthorize_connection_instance_internal(uuid, bigint, uuid, text, timestamptz)
+  to vortex_runtime;
+
+grant usage on schema vortex_connection to vortex_request, vortex_runtime;
