@@ -93,7 +93,8 @@
     "supabase/tests/550_cluster_identity_lifecycle.test.sql",
     "supabase/tests/560_configured_tenant_lifecycle.test.sql",
     "supabase/tests/570_organization_local_administration_reads.test.sql",
-    "supabase/tests/580_organization_local_administration_changes.test.sql"
+    "supabase/tests/580_organization_local_administration_changes.test.sql",
+    "supabase/tests/585_account_offboarding_inventory_and_deletion.test.sql"
   ],
   "groups": [
     {
