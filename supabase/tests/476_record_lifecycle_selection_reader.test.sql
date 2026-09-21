@@ -718,25 +718,31 @@ reset role;
 select pg_temp.system_context(:'tenant', :'org_one');
 set local role vortex_record_adapter;
 
+create temporary table adapter_visibility_observations on commit drop as
+select
+  (select count(*)::integer from vortex_identity.organizations where organization_id = :'org_one') as org_one_count,
+  (select count(*)::integer from vortex_identity.organizations where organization_id = :'org_two') as org_two_count,
+  (select count(*)::integer from vortex_identity.organizations) as visible_count;
+
+reset role;
+
 select is(
-  (select count(*)::integer from vortex_identity.organizations where organization_id = :'org_one'),
+  (select org_one_count from adapter_visibility_observations),
   1,
   'Direct adapter SELECT under org_one context sees organization one'
 );
 
 select is(
-  (select count(*)::integer from vortex_identity.organizations where organization_id = :'org_two'),
+  (select org_two_count from adapter_visibility_observations),
   0,
   'Direct adapter SELECT under org_one context cannot see organization two'
 );
 
 select is(
-  (select count(*)::integer from vortex_identity.organizations),
+  (select visible_count from adapter_visibility_observations),
   1,
   'Direct adapter SELECT is strictly scoped to context organization (0 ambient visibility)'
 );
-
-reset role;
 
 -- ============================================================================
 -- Insert test records under vortex_record_adapter with scope policies active.
@@ -839,44 +845,63 @@ reset role;
 select pg_temp.system_context(:'tenant', :'org_one');
 set local role vortex_request;
 
+create temporary table shared_candidate_observations on commit drop as
+select
+  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_s1')) as candidate_count,
+  (select record_id from vortex_record.read_lifecycle_candidate_records(:'storage_s1') limit 1) as first_record_id,
+  (select record_revision from vortex_record.read_lifecycle_candidate_records(:'storage_s1')
+   where record_id = :'rec_s1_active') as active_revision,
+  (select record_revision from vortex_record.read_lifecycle_candidate_records(:'storage_s1')
+   where record_id = :'rec_s1_deleted') as deleted_revision,
+  (select record_revision from vortex_record.read_lifecycle_candidate_records(:'storage_s1')
+   where record_id = :'rec_s1_pending') as pending_revision,
+  (select created_at from vortex_record.read_lifecycle_candidate_records(:'storage_s1')
+   where record_id = :'rec_s1_active') as active_created_at;
+
+-- Capture restricted-role exceptions before resetting to the test owner. A
+-- call that unexpectedly succeeds inserts no row, so its TAP assertion fails.
+create temporary table request_lifecycle_reader_errors (
+  case_name text primary key,
+  returned_sqlstate text not null,
+  message_text text not null
+) on commit drop;
+
+reset role;
+
 -- Test 1: All 3 retained states are returned.
 select is(
-  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_s1')),
+  (select candidate_count from shared_candidate_observations),
   3,
   'Shared scope: returns all 3 retained states (active, soft_deleted, removal_pending)'
 );
 
 -- Test 2: Results ordered by created_at ascending (oldest first).
 select is(
-  (select record_id from vortex_record.read_lifecycle_candidate_records(:'storage_s1') limit 1),
+  (select first_record_id from shared_candidate_observations),
   :'rec_s1_active'::uuid,
   'Shared scope: oldest record (by created_at) appears first'
 );
 
 -- Test 3: Revision projection matches concurrency_number across states.
 select is(
-  (select record_revision from vortex_record.read_lifecycle_candidate_records(:'storage_s1')
-   where record_id = :'rec_s1_active'),
+  (select active_revision from shared_candidate_observations),
   5::bigint,
   'Revision projection: active record revision = 5'
 );
 select is(
-  (select record_revision from vortex_record.read_lifecycle_candidate_records(:'storage_s1')
-   where record_id = :'rec_s1_deleted'),
+  (select deleted_revision from shared_candidate_observations),
   2::bigint,
   'Revision projection: soft_deleted record revision = 2'
 );
 select is(
-  (select record_revision from vortex_record.read_lifecycle_candidate_records(:'storage_s1')
-   where record_id = :'rec_s1_pending'),
+  (select pending_revision from shared_candidate_observations),
   10::bigint,
   'Revision projection: removal_pending record revision = 10'
 );
 
 -- Test 4: Creation timestamp projection.
 select is(
-  (select created_at from vortex_record.read_lifecycle_candidate_records(:'storage_s1')
-   where record_id = :'rec_s1_active'),
+  (select active_created_at from shared_candidate_observations),
   '2026-08-01T10:00:00Z'::timestamptz,
   'Timestamp projection: active record created_at is correct'
 );
@@ -885,10 +910,26 @@ select is(
 -- Section 4: Contained storage and same-table application isolation.
 -- ============================================================================
 -- Contained storage without application root fails closed.
-select throws_ok(
-  format('select * from vortex_record.read_lifecycle_candidate_records(%L::uuid)', :'storage_c1'),
-  '42501',
-  'Lifecycle selection reader: application context is required for contained storage',
+set local role vortex_request;
+do $capture$
+declare
+  caught_sqlstate text;
+  caught_message text;
+begin
+  perform * from vortex_record.read_lifecycle_candidate_records(:'storage_c1');
+exception when others then
+  get stacked diagnostics
+    caught_sqlstate = returned_sqlstate,
+    caught_message = message_text;
+  insert into request_lifecycle_reader_errors values ('contained_without_app', caught_sqlstate, caught_message);
+end
+$capture$;
+reset role;
+
+select is(
+  (select returned_sqlstate || '|' || message_text
+   from request_lifecycle_reader_errors where case_name = 'contained_without_app'),
+  '42501|Lifecycle selection reader: application context is required for contained storage',
   'Contained storage without applicationRootId throws 42501'
 );
 
@@ -897,13 +938,20 @@ reset role;
 select pg_temp.system_context(:'tenant', :'org_one', :'app_one');
 set local role vortex_request;
 
+create temporary table app_one_candidate_observations on commit drop as
+select
+  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_c1')) as candidate_count,
+  (select record_id from vortex_record.read_lifecycle_candidate_records(:'storage_c1') limit 1) as first_record_id;
+
+reset role;
+
 select is(
-  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_c1')),
+  (select candidate_count from app_one_candidate_observations),
   1,
   'Contained scope under app_one: returns app_one contained record'
 );
 select is(
-  (select record_id from vortex_record.read_lifecycle_candidate_records(:'storage_c1') limit 1),
+  (select first_record_id from app_one_candidate_observations),
   :'rec_c1_a'::uuid,
   'Contained scope under app_one: correct record_id projected'
 );
@@ -913,8 +961,14 @@ reset role;
 select pg_temp.system_context(:'tenant', :'org_one', :'app_two');
 set local role vortex_request;
 
+create temporary table app_two_candidate_observations on commit drop as
+select
+  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_c1')) as candidate_count;
+
+reset role;
+
 select is(
-  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_c1')),
+  (select candidate_count from app_two_candidate_observations),
   0,
   'Same-table wrong-app isolation: app_two context sees 0 records in app_one contained table'
 );
@@ -926,22 +980,30 @@ reset role;
 select pg_temp.system_context(:'tenant', :'org_two');
 set local role vortex_request;
 
+create temporary table org_two_candidate_observations on commit drop as
+select
+  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_s1')) as org_one_candidate_count,
+  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_s2')) as org_two_candidate_count,
+  (select record_revision from vortex_record.read_lifecycle_candidate_records(:'storage_s2')
+   where record_id = :'rec_s2_a') as org_two_revision;
+
+reset role;
+
 -- Org two system context sees zero records from org one's storage contract.
 select is(
-  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_s1')),
+  (select org_one_candidate_count from org_two_candidate_observations),
   0,
   'Cross-org isolation: org two system context sees 0 records from org one storage'
 );
 
 -- Org two sees its own records.
 select is(
-  (select count(*)::integer from vortex_record.read_lifecycle_candidate_records(:'storage_s2')),
+  (select org_two_candidate_count from org_two_candidate_observations),
   1,
   'Org two: returns its own record from its own storage'
 );
 select is(
-  (select record_revision from vortex_record.read_lifecycle_candidate_records(:'storage_s2')
-   where record_id = :'rec_s2_a'),
+  (select org_two_revision from org_two_candidate_observations),
   3::bigint,
   'Org two: correct revision projected'
 );
@@ -954,10 +1016,25 @@ reset role;
 select pg_temp.adapter_context(:'org_one', null, '64760000-0000-4000-8000-0000000000a1');
 set local role vortex_request;
 
-select throws_ok(
-  format('select * from vortex_record.read_lifecycle_candidate_records(%L::uuid)', :'storage_s1'),
-  '42501',
-  'Lifecycle selection reader requires system context',
+do $capture$
+declare
+  caught_sqlstate text;
+  caught_message text;
+begin
+  perform * from vortex_record.read_lifecycle_candidate_records(:'storage_s1');
+exception when others then
+  get stacked diagnostics
+    caught_sqlstate = returned_sqlstate,
+    caught_message = message_text;
+  insert into request_lifecycle_reader_errors values ('human_context', caught_sqlstate, caught_message);
+end
+$capture$;
+reset role;
+
+select is(
+  (select returned_sqlstate || '|' || message_text
+   from request_lifecycle_reader_errors where case_name = 'human_context'),
+  '42501|Lifecycle selection reader requires system context',
   'Human caller context is rejected with 42501'
 );
 
@@ -1007,10 +1084,25 @@ reset role;
 select pg_temp.system_context('14760000-0000-4000-8000-ffffffffffff'::uuid, :'org_one');
 set local role vortex_request;
 
-select throws_ok(
-  format('select * from vortex_record.read_lifecycle_candidate_records(%L::uuid)', :'storage_s1'),
-  '23503',
-  'Lifecycle selection reader: context organization does not exist in its tenant',
+do $capture$
+declare
+  caught_sqlstate text;
+  caught_message text;
+begin
+  perform * from vortex_record.read_lifecycle_candidate_records(:'storage_s1');
+exception when others then
+  get stacked diagnostics
+    caught_sqlstate = returned_sqlstate,
+    caught_message = message_text;
+  insert into request_lifecycle_reader_errors values ('tenant_organization_mismatch', caught_sqlstate, caught_message);
+end
+$capture$;
+reset role;
+
+select is(
+  (select returned_sqlstate || '|' || message_text
+   from request_lifecycle_reader_errors where case_name = 'tenant_organization_mismatch'),
+  '23503|Lifecycle selection reader: context organization does not exist in its tenant',
   'Mismatched tenant/organization context fails closed with 23503'
 );
 
@@ -1021,28 +1113,67 @@ reset role;
 select pg_temp.system_context(:'tenant', :'org_one');
 set local role vortex_request;
 
-select throws_ok(
-  $$select * from vortex_record.read_lifecycle_candidate_records(
-    '00000000-0000-0000-0000-000000000000'::uuid
-  )$$,
-  '22023',
-  'Lifecycle selection reader: storage contract identifier is invalid',
+do $capture$
+declare
+  caught_sqlstate text;
+  caught_message text;
+begin
+  perform * from vortex_record.read_lifecycle_candidate_records('00000000-0000-0000-0000-000000000000'::uuid);
+exception when others then
+  get stacked diagnostics
+    caught_sqlstate = returned_sqlstate,
+    caught_message = message_text;
+  insert into request_lifecycle_reader_errors values ('nil_storage_contract', caught_sqlstate, caught_message);
+end
+$capture$;
+
+do $capture$
+declare
+  caught_sqlstate text;
+  caught_message text;
+begin
+  perform * from vortex_record.read_lifecycle_candidate_records(null);
+exception when others then
+  get stacked diagnostics
+    caught_sqlstate = returned_sqlstate,
+    caught_message = message_text;
+  insert into request_lifecycle_reader_errors values ('null_storage_contract', caught_sqlstate, caught_message);
+end
+$capture$;
+
+do $capture$
+declare
+  caught_sqlstate text;
+  caught_message text;
+begin
+  perform * from vortex_record.read_lifecycle_candidate_records('ffffffff-ffff-4fff-8fff-ffffffffffff'::uuid);
+exception when others then
+  get stacked diagnostics
+    caught_sqlstate = returned_sqlstate,
+    caught_message = message_text;
+  insert into request_lifecycle_reader_errors values ('missing_storage_contract', caught_sqlstate, caught_message);
+end
+$capture$;
+reset role;
+
+select is(
+  (select returned_sqlstate || '|' || message_text
+   from request_lifecycle_reader_errors where case_name = 'nil_storage_contract'),
+  '22023|Lifecycle selection reader: storage contract identifier is invalid',
   'Nil UUID storage contract is refused with 22023'
 );
 
-select throws_ok(
-  $$select * from vortex_record.read_lifecycle_candidate_records(null)$$,
-  '22023',
-  'Lifecycle selection reader: storage contract identifier is invalid',
+select is(
+  (select returned_sqlstate || '|' || message_text
+   from request_lifecycle_reader_errors where case_name = 'null_storage_contract'),
+  '22023|Lifecycle selection reader: storage contract identifier is invalid',
   'NULL storage contract is refused with 22023'
 );
 
-select throws_ok(
-  $$select * from vortex_record.read_lifecycle_candidate_records(
-    'ffffffff-ffff-4fff-8fff-ffffffffffff'::uuid
-  )$$,
-  '55000',
-  'Lifecycle selection reader: storage contract is unavailable',
+select is(
+  (select returned_sqlstate || '|' || message_text
+   from request_lifecycle_reader_errors where case_name = 'missing_storage_contract'),
+  '55000|Lifecycle selection reader: storage contract is unavailable',
   'Nonexistent storage contract is refused with 55000'
 );
 
@@ -1052,14 +1183,27 @@ select throws_ok(
 reset role;
 set local role vortex_runtime;
 
-select throws_ok(
-  format('select * from vortex_record.read_lifecycle_candidate_records(%L::uuid)', :'storage_s1'),
+create temporary table runtime_lifecycle_reader_error (
+  returned_sqlstate text not null
+) on commit drop;
+
+do $capture$
+declare
+  caught_sqlstate text;
+begin
+  perform * from vortex_record.read_lifecycle_candidate_records(:'storage_s1');
+exception when others then
+  get stacked diagnostics caught_sqlstate = returned_sqlstate;
+  insert into runtime_lifecycle_reader_error values (caught_sqlstate);
+end
+$capture$;
+reset role;
+
+select is(
+  (select returned_sqlstate from runtime_lifecycle_reader_error),
   '42501',
-  NULL,
   'vortex_runtime cannot execute vortex_record.read_lifecycle_candidate_records'
 );
-
-reset role;
 
 select * from finish();
 
