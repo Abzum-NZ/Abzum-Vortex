@@ -144,8 +144,8 @@ run_sql "
 (
   "${psql_command[@]}" <<SQL
 begin;
-set local role vortex_request;
 select vortex_context.initialize(public.vortex_test_connection_context());
+set local role vortex_request;
 select 'READINESS_RESULT:' || (
   vortex_connection.resolve_connection_instance_readiness(
     '$organization_id', '$application_root_id', '$connection_id',
@@ -221,8 +221,8 @@ run_sql "
 (
   "${psql_command[@]}" <<SQL
 begin;
-set local role vortex_request;
 select vortex_context.initialize(public.vortex_test_connection_context());
+set local role vortex_request;
 select 'EVIDENCE_RESULT:' || count(*)::text
 from vortex_connection.read_active_connection_evidence('$connection_id');
 \! touch '$proof_root/evidence-grant-locked'
@@ -283,8 +283,8 @@ run_sql "
 (
   "${psql_command[@]}" <<SQL
 begin;
-set local role vortex_request;
 select vortex_context.initialize(public.vortex_test_connection_context());
+set local role vortex_request;
 select 'INSTANCE_READINESS_RESULT:' || (
   vortex_connection.resolve_connection_instance_readiness(
     '$organization_id', '$application_root_id', '$connection_id',
