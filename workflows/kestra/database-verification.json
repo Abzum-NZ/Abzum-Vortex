@@ -200,6 +200,11 @@
       "migration": "supabase/migrations/20260914230000_organization_local_administration_changes.sql",
       "proof": "supabase/tests/organization-local-administration-changes-concurrency.test.sh",
       "label": "Organization local administration changes"
+    },
+    {
+      "migration": "supabase/migrations/20260923020000_protected_parent_deletion_with_relationship_totals.sql",
+      "proof": "supabase/tests/protected-parent-delete-concurrency.test.sh",
+      "label": "Protected parent deletion"
     }
   ],
   "lintSchemas": [
