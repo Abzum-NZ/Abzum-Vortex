@@ -144,13 +144,14 @@ describe("named action service", () => {
               readableFieldIds: [ids.field],
               changeableFieldIds: [ids.field],
               eventDescriptors: [],
+              createTargets: [],
               actorOrganizationAccountId: ids.account,
               correlationId: ids.correlation,
             },
           },
         ] as unknown as readonly Row[];
       }
-      if (sql.includes("prepare_named_action_relationship_totals"))
+      if (sql.includes("prepare_named_action_command_totals"))
         return [{ value: { outcome: "not_required" } }] as unknown as readonly Row[];
       if (sql.includes("validate_named_action_reference_inputs"))
         return [{ value: true }] as unknown as readonly Row[];
@@ -166,7 +167,7 @@ describe("named action service", () => {
             revision: "1",
           },
         ] as unknown as readonly Row[];
-      if (sql.includes("save_named_action_set_announce_with_relationship_totals"))
+      if (sql.includes("save_named_action_effects_with_relationship_totals"))
         return [
           {
             value: {
@@ -221,13 +222,169 @@ describe("named action service", () => {
     expect(prepareCalls).toBe(2);
     expect(occurrenceId).toHaveBeenCalledTimes(1);
     expect(
-      queries.filter((sql) =>
-        sql.includes("save_named_action_set_announce_with_relationship_totals"),
-      ),
+      queries.filter((sql) => sql.includes("save_named_action_effects_with_relationship_totals")),
     ).toHaveLength(1);
     expect(queries.some((sql) => sql.includes("save_base_record_with_relationship_totals"))).toBe(
       false,
     );
+  });
+
+  it("composes a create_record effect, keeps the subject unwritten and mints one creation occurrence", async () => {
+    const createFieldId = id(20);
+    const targetRecordTypeId = id(21);
+    const targetRecordType = recordTypeDefinitionV2Schema.parse({
+      ...recordType,
+      recordTypeId: targetRecordTypeId,
+      key: "note",
+      singularLabel: "Note",
+      pluralLabel: "Notes",
+      titleFieldId: createFieldId,
+      storageContractId: id(22),
+      fields: [
+        {
+          fieldId: createFieldId,
+          key: "body",
+          label: "Body",
+          required: true,
+          unique: false,
+          filterable: true,
+          sortable: true,
+          personalData: "none",
+          publicDisplay: "refused",
+          type: "text",
+          settings: { maxLength: 40 },
+        },
+      ],
+      customActionIds: [],
+    });
+    const createAction = actionDefinitionV2Schema.parse({
+      ...action,
+      effects: [
+        {
+          kind: "create_record",
+          recordType: {
+            state: "resolved",
+            moduleRootId: ids.module,
+            recordTypeId: targetRecordTypeId,
+          },
+          values: { [createFieldId]: { source: "input", inputKey: "title" } },
+        },
+      ],
+    });
+    const captured: { sql: string; values: readonly unknown[] }[] = [];
+    let prepareCalls = 0;
+    const query: RequestQuery = async <Row extends DatabaseRow>(
+      strings: TemplateStringsArray,
+      ...values: readonly unknown[]
+    ) => {
+      const sql = strings.join("$value");
+      captured.push({ sql, values });
+      if (
+        sql.includes("preview_named_action_set_announce") ||
+        sql.includes("prepare_named_action_set_announce(")
+      ) {
+        prepareCalls += 1;
+        return [
+          {
+            value: {
+              outcome: prepareCalls === 1 ? "previewed" : "prepared",
+              action: createAction,
+              validationContractVersion: "2.0.0",
+              recordType,
+              recordId: ids.record,
+              existingValues: { [ids.field]: "Before" },
+              readableFieldIds: [ids.field],
+              changeableFieldIds: [ids.field],
+              eventDescriptors: [],
+              createTargets: [
+                { ordinal: 0, recordTypeId: targetRecordTypeId, recordType: targetRecordType },
+              ],
+              actorOrganizationAccountId: ids.account,
+              correlationId: ids.correlation,
+            },
+          },
+        ] as unknown as readonly Row[];
+      }
+      if (sql.includes("prepare_named_action_command_totals"))
+        return [{ value: { outcome: "not_required" } }] as unknown as readonly Row[];
+      if (sql.includes("validate_named_action_reference_inputs"))
+        return [{ value: true }] as unknown as readonly Row[];
+      if (sql.includes("read_current_organization_runtime_settings_for_application"))
+        return [
+          {
+            organization_id: ids.organization,
+            language: "en-NZ",
+            time_zone: "Pacific/Auckland",
+            currency: "NZD",
+            date_format: "medium",
+            number_format: "auto",
+            revision: "1",
+          },
+        ] as unknown as readonly Row[];
+      if (sql.includes("save_named_action_effects_with_relationship_totals"))
+        return [
+          {
+            value: {
+              outcome: "saved",
+              recordId: ids.record,
+              concurrencyNumber: 2,
+              values: { [ids.field]: "Before" },
+              correlationId: ids.correlation,
+              backgroundDelivery: "pending",
+            },
+          },
+        ] as unknown as readonly Row[];
+      return [] as unknown as readonly Row[];
+    };
+    const occurrenceIds = [ids.occurrence, id(23)];
+    const occurrenceId = vi.fn(() => occurrenceIds.shift()!);
+    const service = createNamedActionService({
+      identityAuthorityId: ids.authority,
+      clock: () => new Date("2026-09-15T01:00:00.000Z"),
+      correlationId: () => ids.correlation,
+      activityId: () => ids.activity,
+      occurrenceId,
+      resolvedRequestTransaction: transactionRunner(query),
+    });
+
+    await expect(
+      service.execute(session, selection, {
+        contractVersion: "2.0.0",
+        commandId: ids.command,
+        action: {
+          ownerKind: "module",
+          ownerId: ids.module,
+          releaseRevision: 1,
+          actionId: ids.action,
+        },
+        recordTypeId: ids.recordType,
+        recordId: ids.record,
+        expectedConcurrencyNumber: 2,
+        inputs: { title: "Noted" },
+      }),
+    ).resolves.toMatchObject({ kind: "available", value: { outcome: "completed" } });
+
+    const persisted = captured.find((entry) =>
+      entry.sql.includes("save_named_action_effects_with_relationship_totals"),
+    );
+    if (persisted === undefined) throw new Error("The terminal writer was not reached");
+    const payload = persisted.values.map((value) =>
+      typeof value === "string" && value.startsWith("[") ? JSON.parse(value) : value,
+    );
+    // The subject carries no fabricated change, and the creation reaches the
+    // writer with both the authored map and its finalised values.
+    expect(persisted.values).toContain("{}");
+    expect(payload).toContainEqual([
+      {
+        ordinal: 0,
+        recordTypeId: targetRecordTypeId,
+        values: { [createFieldId]: "Noted" },
+        finalValues: { [createFieldId]: "Noted" },
+      },
+    ]);
+    expect(payload).toContainEqual([id(23)]);
+    // One standard subject occurrence id plus exactly one creation occurrence.
+    expect(occurrenceId).toHaveBeenCalledTimes(2);
   });
 
   it("turns a preview denial into exactly one locked owning refusal", async () => {
@@ -275,13 +432,9 @@ describe("named action service", () => {
       }),
     ).resolves.toEqual({ kind: "unavailable" });
     expect(preparationCalls).toBe(2);
-    expect(queries.some((sql) => sql.includes("prepare_named_action_relationship_totals"))).toBe(
-      false,
-    );
+    expect(queries.some((sql) => sql.includes("prepare_named_action_command_totals"))).toBe(false);
     expect(
-      queries.some((sql) =>
-        sql.includes("save_named_action_set_announce_with_relationship_totals"),
-      ),
+      queries.some((sql) => sql.includes("save_named_action_effects_with_relationship_totals")),
     ).toBe(false);
   });
 });

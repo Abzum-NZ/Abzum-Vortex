@@ -94,6 +94,109 @@ surfaces, and any page/MCP/workflow adapters. The System information and broader
 Event availability/occurrence work described elsewhere in this plan also remains;
 this bounded delivery does not close task #50.
 
+### Delivered `create_record` effect slice (2026-09-21)
+
+A named action may now mix ordered `create_record` effects with the delivered
+`set_field` and `announce_event` effects in the same protected transaction. Each
+authored field map is composed from the same six declared value sources against
+the target record type the published resolved reference names, and the command
+commits the subject change (when it has one), every created record with its
+derived ownership, allocated reference numbers and relationship edges, all
+affected parent totals, the content-free Activity for the subject and one
+completed Activity per created record, the standard `created` occurrence per
+created record, the declared occurrences, the queue message and the command
+receipt together. The public result contract is unchanged: it still reports the
+subject's identity, revision and readable values, and does not return created
+record identities. That omission is stated, not silent, and is the first
+question for the next slice.
+
+Three behaviours are worth stating exactly. Executing a permitted action still
+requires no ordinary read authority on its own subject, including when a created
+record links back to that subject: a named-action-specific edge writer decides
+that one target by re-evaluating the exact installed action, taking no
+caller-supplied trust, while every other link target keeps the ordinary read
+check unchanged. A create-only action writes the subject only when one of its
+own derived values actually changes, so a created record that moves the
+subject's total bumps the revision once and emits one `changed` occurrence,
+while one that does not leaves the subject untouched. An exact create decision
+only exists after the insert and the edges, so a target the actor may not create,
+or a target field outside the create field bounds, rolls the whole command back
+with no created record, no reference number, no edge, no Activity and no
+receipt, rather than returning a refusal that would be committed.
+
+The relationship total closure is now computed once for the whole command, with
+the subject and every creation as roots of one merged graph locked in a single
+canonical pass. Two preparations were rejected: they are numerically wrong
+whenever the subject and a created record share a total parent, because the
+second pass would be evaluated from a pre-mutation snapshot.
+
+Evidence is the existing real-PostgreSQL proof, extended with a neutral
+`created_note` target record type. It covers every value source into a target
+field map, the subject-link authority case beside an unrelated unreadable target
+refused on the same action and field, mixed set/create/announce in one commit,
+create-only with and without a subject total, a merged closure where the subject
+and its created sibling both reach one parent that advances by exactly one
+revision, exact replay creating nothing and burning no reference number,
+conflicting command reuse, stale revisions, forged action owners, and both late
+rollback classes. Twenty real concurrent iterations race the new create-bearing
+path against an ordinary create of the same target type linked to the same
+record, contending on the same reference-number counter, link-target row and
+relationship advisory key; both complete every time. The same real writer now
+refuses created-field person, file and permissioned-choice pending checks before
+its terminal call, with equality proofs over records, counters, edges, Activity,
+Event/outbox/queue rows and receipts.
+
+Because the unsynchronised full-service race cannot guarantee that two sessions
+hold the opposite resources at the same moment,
+`supabase/tests/named-action-create-concurrency.test.sh` separately isolates the
+named path's share-then-counter lock protocol with deterministic barriers. It
+does not claim to execute the full named-action preflight or terminal writer.
+One scenario holds the same link share while the ordinary create holds the
+reference counter and releases each into the other's resource; a second repeats
+it with an exclusive waiter queued on the link target so the only soft edge in
+the wait-for cycle is the ordinary create's queue position. Neither deadlocks.
+The shell proof records the exact shell/backend identities, barrier releases,
+exit statuses and live blocker state when a run fails.
+
+One earlier full-service run exceeded its unchanged 45-second Vitest budget,
+but its raw failure log and backend identity were not retained. Later sampled
+runs do not identify that missing process and therefore do not explain the
+failure. Reproduction with the new process evidence, or recovery of the
+original raw receipt, remains the exact prerequisite for diagnosing it.
+
+### Known limitation of this slice
+
+An action that combines a `set_field` on a **link** field with a `create_record`
+effect refuses as `unsupported`. This is a reported gap, not accepted final
+behaviour: whole #50 cannot close while it stands.
+
+The cause is exact. `save_named_action_set_fields_internal:591` writes the
+subject's relationship edge inside the same call that claims the command
+receipt, so the link target's `for share` and the relationship advisory key are
+necessarily taken before any creation can allocate a reference-number counter.
+Ordinary create takes those in the opposite order — `create_record_internal`
+allocates every counter in its field loop (`:787-806`) before its relationship
+loop (`:868-877`) reaches the edge writer. The resulting cycle is two hard
+waits, which no wait-queue rearrangement can break: this command would hold
+`A(relS, X)` and wait for `C(storage(S), refField)` while a concurrent ordinary
+create of `S` linked to `X` holds that counter and waits for `A(relS, X)`.
+
+The stated prerequisite to lift it is an explicit named-action subject writer
+that allocates the creations' reference numbers between claiming the receipt and
+writing the subject's edges. That is deliberately not built here: restating a
+~700-line reviewed writer is the drift risk the #511 post-mortem records.
+
+A second, pre-existing prerequisite is recorded rather than corrected. The two
+ordinary writers already order one record's edge locks differently from each
+other — the create primitive iterates the compiled relationships array with no
+`order by` (`20260913030000:868-870`), while the update path orders by field id
+(`20260920140000:586-589`) — so two ordinary commands on one record type with
+two link fields can already invert. Making that ordering total needs a canonical
+edge order inside the ordinary create primitive, which is outside this slice.
+
+`copy_relationships` and `soft_delete_subject` remain unimplemented and keep
+their stated dependencies. This slice closes none of #50.
+
 ### Event availability implementation
 
 Use a closed descriptor: either a standard event kind and record type, or a

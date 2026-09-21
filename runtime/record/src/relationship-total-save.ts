@@ -9,6 +9,7 @@ import { evaluateRecordCalculationsV2 } from "./calculations";
 import {
   finalizeRecordFieldCandidateV2,
   prepareInitialRecordFieldCandidateV2,
+  type RecordFieldValuePendingCheck,
   type PrepareRecordFieldValuesV2Result,
 } from "./field-values";
 import { evaluateRecordTotalsV2 } from "./totals";
@@ -50,10 +51,18 @@ export type RelationshipTotalParentMutation = Readonly<{
   finalValues: Readonly<Record<string, JsonValue | null>>;
 }>;
 
+/** One composed creation evaluated as its own root inside the merged closure. */
+export type RelationshipTotalCreationRoot = Readonly<{
+  ordinal: number;
+  values: Readonly<Record<string, JsonValue | null>>;
+}>;
+
 export type CalculateRelationshipTotalSaveResult =
   | Readonly<{
       success: true;
       sourceFinalValues: Readonly<Record<string, JsonValue | null>>;
+      creationFinalValues: Readonly<Record<number, Readonly<Record<string, JsonValue | null>>>>;
+      creationPendingChecks: Readonly<Record<number, readonly RecordFieldValuePendingCheck[]>>;
       parentMutations: readonly RelationshipTotalParentMutation[];
       pendingChecks: PrepareRecordFieldValuesV2Result extends infer Result
         ? Result extends { success: true; pendingChecks: infer Checks }
@@ -62,6 +71,9 @@ export type CalculateRelationshipTotalSaveResult =
         : never;
     }>
   | Readonly<{ success: false; issues: readonly RelationshipTotalCalculationIssue[] }>;
+
+/** Record key of creation `ordinal` inside one merged command closure. */
+export const creationRecordKey = (ordinal: number) => `create:${ordinal}`;
 
 const hasOwn = (value: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
@@ -156,6 +168,7 @@ export const calculateLockedRelationshipTotalSave = (
   input: Readonly<{
     command: SaveRecordCommandV2;
     preparation: LockedRelationshipTotalPreparation;
+    creations?: readonly RelationshipTotalCreationRoot[];
     organizationCurrency?: string;
     clock: Readonly<{ instant: string; organizationLocalDate: string }>;
   }>,
@@ -164,6 +177,15 @@ export const calculateLockedRelationshipTotalSave = (
   const root = records.get("root");
   if (root === undefined)
     return { success: false, issues: [{ code: "invalid_input", recordKey: "root", path: [] }] };
+  // Each composed creation is its own `create` root inside the one merged
+  // closure. Locking and evaluating every root together is what keeps a shared
+  // total parent authoritative; a second preparation would read the subject's
+  // pre-mutation values.
+  const creationRoots = new Map(
+    (input.creations ?? []).map((creation) => [creationRecordKey(creation.ordinal), creation]),
+  );
+  if ([...creationRoots.keys()].some((recordKey) => !records.has(recordKey)))
+    return { success: false, issues: [{ code: "invalid_input", recordKey: "root", path: [] }] };
 
   const initialByRecord = new Map<
     string,
@@ -171,13 +193,19 @@ export const calculateLockedRelationshipTotalSave = (
   >();
   const valuesByRecord = new Map<string, Record<string, JsonValue>>();
   for (const record of records.values()) {
+    const creationRoot = creationRoots.get(record.recordKey);
+    const operation =
+      record.recordKey === "root"
+        ? input.command.operation
+        : creationRoot !== undefined
+          ? ("create" as const)
+          : ("update" as const);
     const initial = prepareInitialRecordFieldCandidateV2({
-      operation: record.recordKey === "root" ? input.command.operation : "update",
+      operation,
       recordType: record.recordType,
-      submittedValues: record.recordKey === "root" ? input.command.submittedValues : {},
-      ...(record.recordKey === "root" && input.command.operation === "create"
-        ? {}
-        : { existingValues: record.existingValues }),
+      submittedValues:
+        record.recordKey === "root" ? input.command.submittedValues : (creationRoot?.values ?? {}),
+      ...(operation === "create" ? {} : { existingValues: record.existingValues }),
       ...(input.organizationCurrency === undefined
         ? {}
         : { organizationCurrency: input.organizationCurrency }),
@@ -324,9 +352,18 @@ export const calculateLockedRelationshipTotalSave = (
   const source = finalized.get("root")!;
   const sourceFinalValues: Record<string, JsonValue | null> = { ...source.setValues };
   for (const fieldId of source.clearFieldIds) sourceFinalValues[fieldId] = null;
+  const creationFinalValues: Record<number, Record<string, JsonValue | null>> = {};
+  const creationPendingChecks: Record<number, readonly RecordFieldValuePendingCheck[]> = {};
+  for (const [recordKey, creation] of creationRoots) {
+    const created = finalized.get(recordKey)!;
+    const values: Record<string, JsonValue | null> = { ...created.setValues };
+    for (const fieldId of created.clearFieldIds) values[fieldId] = null;
+    creationFinalValues[creation.ordinal] = values;
+    creationPendingChecks[creation.ordinal] = created.pendingChecks;
+  }
   const parentMutations: RelationshipTotalParentMutation[] = [];
   for (const record of records.values()) {
-    if (record.recordKey === "root") continue;
+    if (record.recordKey === "root" || creationRoots.has(record.recordKey)) continue;
     if (
       record.recordId === undefined ||
       record.concurrencyNumber === undefined ||
@@ -358,6 +395,8 @@ export const calculateLockedRelationshipTotalSave = (
   return {
     success: true,
     sourceFinalValues,
+    creationFinalValues,
+    creationPendingChecks,
     parentMutations,
     pendingChecks: source.pendingChecks,
   };
