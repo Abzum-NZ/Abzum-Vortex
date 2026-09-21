@@ -192,6 +192,30 @@ working copy. Preserve unrelated user changes. Review the submitted commit; if
 it changes, review the affected differences and rerun relevant checks rather than
 repeating unrelated completed reviews.
 
+Database verification uses owner reservation windows rather than per-attempt
+approval. One window permits up to three attempts or 30 minutes elapsed from
+its recorded start, whichever comes first, while the fleet-wide maximum remains
+two concurrent database clusters. Within that window, the owner or exclusive
+REVIEW-AND-FIX owner may fix an attributable fixture or harness defect and rerun
+only after an actual diff. Each attempt records unique identity, ready time,
+start delay, timing, result, and cleanup. Stop on an unchanged failure,
+product-scope change, ambiguous cleanup, or exhausted attempt/time budget. Never
+blindly replay a command.
+
+Before rerunning, audit the full fixture setup, role, request-context, and TAP
+transitions against known-good patterns, then run cheap executable lint,
+typecheck, and focused tests. The reviewer fixes scoped findings directly. Use a
+lightweight independent delta check only for security-sensitive or material
+logic changes.
+
+Run independent ready work in parallel on available Gemini 3.8 Flash, OpenCode
+GLM 5.3, Sonnet, or Terra lanes. Do not repeatedly probe a provider already
+known to be exhausted. Reserve Sol for complex correctness or security repairs
+and Astra for architecture-level work. Every in-flight card states the actual
+waiting blocker and next responsible agent. Duplicate supervision stays
+disabled; use existing board and dossier timestamps to monitor ready-to-start
+delay, attempts, and failures without adding an observability platform.
+
 Observe live progress. Repeated searches, retries or rewrites without new evidence
 require intervention: clarify the task, resolve a demonstrated blocker or reassign
 it. Do not restart a live session solely because an observation timed out.

@@ -184,6 +184,14 @@ Owners are bound by the same rules as the root:
   worker. The only shared limit is the two concurrent `pnpm db:*` verification
   clusters described in Queue selection; workers queue for a cluster, not for
   permission to exist.
+- Each database-verification owner receives one reservation window covering at
+  most three attempts or 30 minutes elapsed from the recorded window start,
+  whichever happens first. Within the window, the owner or exclusive
+  REVIEW-AND-FIX owner may correct an attributable fixture or harness failure
+  and rerun after an actual diff without another root approval. Every attempt
+  has a unique identity, timing, result, and cleanup receipt. Stop on an
+  unchanged failure, product-scope change, ambiguous cleanup, or budget expiry;
+  never replay an attempt blindly.
 - The root oversees owners and each owner oversees its workers. Existing
   non-Sol owners transition at safe handoff boundaries without losing drafts or
   evidence; no duplicate owner or Astra child is launched. Every handle and
@@ -344,6 +352,18 @@ work behind it.
 The root schedules cycles every 30 minutes to avoid overlapping root sessions.
 This does not weaken the terminal-supervision cadence. Never create a yielding
 duplicate root.
+
+Before the first database attempt in a reservation window, audit the entire
+fixture setup, role changes, request context, and TAP ownership transitions
+against known-good patterns. Run cheap executable lint, typecheck, and focused
+tests before any independent delta check. The REVIEW-AND-FIX owner directly
+repairs scoped findings. A material or security-sensitive authored delta gets
+one lightweight independent delta check, not a full review loop.
+
+Record ready-to-start time, actual start delay, attempt count, failures, window
+expiry, cleanup, the real waiting blocker, and the next responsible agent in
+the existing dossier and board fields. Do not create a separate observability
+system. Duplicate supervision stays disabled.
 
 ## Queue selection
 
