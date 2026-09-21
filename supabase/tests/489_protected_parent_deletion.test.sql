@@ -493,9 +493,9 @@ select pg_catalog.jsonb_agg(
     'expectedConcurrencyNumber', item.value -> 'concurrencyNumber',
     'finalValues', case when item.value ->> 'recordId' = :'category_record'
       then pg_catalog.jsonb_build_object(
-        :'f_category_line_total', '0.00',
-        :'f_category_display', '0.00',
-        :'f_category_subline_total', '0.00')
+        :'f_category_line_total', '0',
+        :'f_category_display', '0',
+        :'f_category_subline_total', '0')
       else '{}'::jsonb end)
   order by item.value ->> 'recordTypeId', item.value ->> 'recordId'
 )::text as parent_mutations
@@ -554,7 +554,7 @@ select is(
    from record_data.rt_b4950000000040008000000000000004 as stored
    where stored.record_id = :'category_record'::uuid),
   pg_catalog.jsonb_build_object(
-    'concurrencyNumber', 3, 'lineTotal', '0.00', 'display', '0.00', 'sublineTotal', '0.00'),
+    'concurrencyNumber', 3, 'lineTotal', 0, 'display', 0, 'sublineTotal', 0),
   'the surviving parent of every soft-deleted record keeps an authoritative total and calculation'
 );
 select is(

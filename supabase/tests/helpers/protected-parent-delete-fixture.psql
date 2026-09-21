@@ -732,7 +732,7 @@ insert into delete_fixture_records(label, record_id)
 select 'line', (vortex_record.create_record_internal(
   :'line_type'::uuid,
   pg_catalog.jsonb_build_object(
-    :'f_line_amount', '10.00',
+    :'f_line_amount', '10',
     :'f_line_parent', pg_catalog.jsonb_build_object(
       'recordTypeId', :'parent_type'::uuid,
       'recordId', (select record_id from delete_fixture_records where label = 'deletable_parent')),
@@ -745,7 +745,7 @@ insert into delete_fixture_records(label, record_id)
 select 'subline', (vortex_record.create_record_internal(
   :'subline_type'::uuid,
   pg_catalog.jsonb_build_object(
-    :'f_subline_amount', '4.00',
+    :'f_subline_amount', '4',
     :'f_subline_line', pg_catalog.jsonb_build_object(
       'recordTypeId', :'line_type'::uuid,
       'recordId', (select record_id from delete_fixture_records where label = 'line')),
@@ -762,9 +762,9 @@ select vortex_record.apply_relationship_total_parent_internal(
   (select record_id from delete_fixture_records where label = 'category'),
   1,
   pg_catalog.jsonb_build_object(
-    :'f_category_line_total', '10.00',
-    :'f_category_display', '14.00',
-    :'f_category_subline_total', '4.00')
+    :'f_category_line_total', '10',
+    :'f_category_display', '14',
+    :'f_category_subline_total', '4')
 );
 reset role;
 

@@ -663,19 +663,19 @@ run_sql "
       array['$field_category_title']::uuid[], null) ->> 'recordId')::uuid);
   insert into proof_records values
     ('reparent_line', (vortex_record.create_record_internal('$line_type_id'::uuid,
-      pg_catalog.jsonb_build_object('$field_line_amount','5.00','$field_line_parent',
+      pg_catalog.jsonb_build_object('$field_line_amount','5','$field_line_parent',
         pg_catalog.jsonb_build_object('recordTypeId','$parent_type_id',
           'recordId',(select record_id from proof_records where label='reparent_parent'))),
       array['$field_line_amount','$field_line_parent']::uuid[], null) ->> 'recordId')::uuid),
     ('totals_line', (vortex_record.create_record_internal('$line_type_id'::uuid,
-      pg_catalog.jsonb_build_object('$field_line_amount','10.00','$field_line_parent',
+      pg_catalog.jsonb_build_object('$field_line_amount','10','$field_line_parent',
         pg_catalog.jsonb_build_object('recordTypeId','$parent_type_id',
           'recordId',(select record_id from proof_records where label='totals_parent')),
         '$field_line_category',pg_catalog.jsonb_build_object('recordTypeId','$category_type_id',
           'recordId',(select record_id from proof_records where label='totals_category'))),
       array['$field_line_amount','$field_line_parent','$field_line_category']::uuid[], null) ->> 'recordId')::uuid),
     ('totals_rival_line', (vortex_record.create_record_internal('$line_type_id'::uuid,
-      pg_catalog.jsonb_build_object('$field_line_amount','3.00','$field_line_parent',
+      pg_catalog.jsonb_build_object('$field_line_amount','3','$field_line_parent',
         pg_catalog.jsonb_build_object('recordTypeId','$parent_type_id',
           'recordId',(select record_id from proof_records where label='reparent_other_parent')),
         '$field_line_category',pg_catalog.jsonb_build_object('recordTypeId','$category_type_id',
@@ -737,10 +737,10 @@ run_sql "
         then pg_catalog.jsonb_build_object('recordTypeId','$category_type_id','recordId','$totals_category_id')
       else $column_line_category end
   where organisation_id = '$organization_id';
-  -- The category aggregates 10.00 + 3.00 before either race runs.
+  -- The category aggregates 10 + 3 before either race runs.
   select vortex_record.apply_relationship_total_parent_internal('$category_type_id'::uuid,
     '$totals_category_id'::uuid, 1,
-    pg_catalog.jsonb_build_object('$field_category_total','13.00'));
+    pg_catalog.jsonb_build_object('$field_category_total','13'));
   reset role;
   delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   commit;
@@ -763,7 +763,7 @@ finalized_delete_statement() {
           'recordId', item.value -> 'recordId',
           'expectedConcurrencyNumber', item.value -> 'concurrencyNumber',
           'finalValues', case when item.value ->> 'recordId' = '%s'
-            then pg_catalog.jsonb_build_object('%s','3.00')
+            then pg_catalog.jsonb_build_object('%s','3')
             else '{}'::jsonb end)
         order by item.value ->> 'recordTypeId', item.value ->> 'recordId'
       ) filter (where item.value ->> 'recordKey' <> 'root'), '[]'::jsonb) as value
@@ -1003,7 +1003,7 @@ set local lock_timeout='30s'; set local statement_timeout='45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/totals-rival.pid'
 $(human_context "$access_version" 'c4950000-0000-4000-8000-0000000000f9' 'c4950000-0000-4000-8000-0000000000fa')
 set local role vortex_record_adapter;
-select coalesce(( select 'applied' from ( select $(category_total_statement 2 '3.00') ) as applied ),'applied')
+select coalesce(( select 'applied' from ( select $(category_total_statement 2 '3') ) as applied ),'applied')
   \g '$proof_root/totals-rival.result'
 reset role;
 commit;
@@ -1028,9 +1028,9 @@ totals_delete_result="$(tr -d '[:space:]' <"$proof_root/totals-delete.result" 2>
 # engine's own stale-revision refusal. Both are safe; silently overwriting is
 # not. The category starts at revision 2 after the owning setup writer. Whether
 # the rival or the delete obtains its lock first, exactly one real change to
-# 3.00 occurs and the category ends at revision 3.
+# 3 occurs and the category ends at revision 3.
 category_after="$(category_state | tr -d '[:space:]')"
-if [ "$category_after" != '3|3.00' ]; then
+if [ "$category_after" != '3|3' ]; then
   printf 'the totals race left the surviving parent in an unexpected state: %q\n' "$category_after" >&2
   exit 1
 fi
