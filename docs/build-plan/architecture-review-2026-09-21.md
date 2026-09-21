@@ -203,7 +203,7 @@ The resulting plan contains 228 remaining implementation leaves. Source inspecti
 
 Each task and child issue has a functional summary, bounded architectural build points, specification/source references, current dependencies, code-reviewable acceptance, planned agent, active-work estimate, pickup number and issue-based worktree/branch metadata.
 
-Prefer Luna for mechanical wiring and documentation when the owning contract is fixed, Terra for bounded feature implementation, and Sol for a demonstrated cross-service or authority design problem. Planned model assignment is not evidence that a worker is running.
+Use the provider-balanced routing in agent-fleet.md: GLM, Gemini Flash High and Sonnet for suitable implementation; Opus/Sol for difficult work. A separate Opus 5 or Sol agent owns review, fixes, final re-review and closure. Planned model assignment is not evidence that a worker is running.
 
 Estimates cover active implementation and code-review corrections. At the estimate, the coordinator inspects actual progress, the remaining change and any blocker. A progressing worker continues; elapsed time alone never discards a draft or triggers a duplicate worker.
 

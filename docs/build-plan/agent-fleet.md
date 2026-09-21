@@ -1,44 +1,45 @@
 # Agent fleet operation
 
-Use the [coordination rules](agent-coordination.md) and the [GitHub pickup queue](https://github.com/orgs/Abzum-NZ/projects/2/views/1). This document governs development work after the 21 September 2026 roadmap review.
+The current GitHub issue is the implementation contract. This policy supersedes older fleet prompts, proof requirements and fixed Codex-only routing.
 
-## Model routing
+## Models and usage
 
-| Work | Planned agent |
+| Work | Preferred implementation lane |
 | --- | --- |
-| Mechanical documents, catalogue entries, small explicit adapters | GPT 5.6 Luna (Codex - High) |
-| Bounded runtime, UI and service implementation | GPT 5.6 Terra (Codex - High) |
-| Cross-engine transactions, authorization and difficult design decisions | GPT 5.6 Sol (Codex - High) |
-| Whole-platform architecture and unresolved cross-phase decisions | Coordinator |
+| Mechanical edits, explicit schemas, catalogues and small adapters | OpenCode GLM 5.3 Flash |
+| Bounded UI components, pages, visual wiring and straightforward application code | Antigravity Gemini 3.8 Flash (High) |
+| Normal runtime, service and contract implementation | Claude Sonnet 5 (High) |
+| Complex authorization, transactions and cross-service implementation | Claude Opus 5 (High), or GPT 5.6 Sol (Codex - High) when capacity favours Codex |
+| Alternative bounded implementation | GPT 5.6 Terra or Luna when their capacity and task fit justify it |
+| Every final code review and its fixes | Claude Opus 5 (High) or GPT 5.6 Sol (Codex - High), in a separate session from the implementer |
 
-Choose the cheapest model able to own the bounded scope. Split large tasks before assigning a larger model. A routine code review can use Terra; use Sol when the changed authority or transaction boundary needs it. Do not add a compulsory planning agent, separate database reviewer, proof worker or hosted tester to each issue.
+Choose the least expensive suitable lane. Planned assignments are provisional. Before every pickup and review handoff, read `orca account list --json`: check Claude and Codex session/weekly usage, reset times, freshness and errors. During longer work, refresh at the 30-minute checkpoint. Unknown quota is not unlimited quota. GLM/Antigravity capacity may require observing the actual provider response.
 
-The issue records the planned lane. At dispatch, record the actual model, task reference and worktree. Check available capacity once and use an available suitable lane; do not loop on unavailable providers or duplicate a worker. Orca-managed workers use the installed Orca CLI. Native Codex reviewers may use native subagents when requested.
+Prefer the suitable provider with more remaining capacity; keep 15% weekly headroom for necessary review and recovery. Below 25% remaining, avoid routine implementation on that provider. At 15% remaining or less, move new work to another suitable provider. Never consume reset credits or buy capacity automatically. If both permitted reviewers are unavailable, keep the candidate in review and report the capacity blocker; do not substitute a cheaper reviewer or claim Done. Do not repeatedly probe a provider that has already returned a limit.
 
-## Coordinator loop
+Verify the actual model in the launch receipt or terminal. Installed identifiers at this reset: OpenCode `dahl/zai-org/GLM-5.3-Flash`; Antigravity `gemini-3.8-flash-high`. Claude aliases must resolve visibly to Sonnet 5 or Opus 5; never label another version as the requested model. Use the installed Orca CLI and its version-matched orchestration guide.
 
-Read the complete board and native dependencies. Inspect existing owner/worktree state before dispatch. Give each worker the current issue description, relevant specification, exact base, owned files, subtask estimate and code-review completion criterion. Start independent bounded work when file ownership permits it.
+## Sequential pickup and review ownership
 
-Use the issue estimate as the first progress checkpoint. Inspect actual changes, recent work and the remaining scope. Continue useful progress with a revised estimate, split a demonstrated expansion, or help resolve a concrete blocker. Do not terminate, restart or reassign only because the estimate was exceeded. For long tasks, also inspect progress at 30-minute intervals.
+1. Pick one implementation leaf: the lowest Pickup Order whose dependencies and prerequisite child scopes are complete. Parent and phase issues are rollups, never parallel implementation assignments.
+2. Read its current body, specification and source, plus its salvage entry. Select the agent using difficulty and current usage. Update Planned agent, estimate, worktree/branch metadata and current owner before dispatch. A reassignment updates the issue body, board fields and parent subtask row together.
+3. Create a fresh issue worktree from current `origin/main`. Extract only applicable product code from the preserved archive. Do not revive old agent conversations or merge old branches wholesale. Confirm the actual branch returned by Orca and record it; never publish a planned branch as the actual branch.
+4. Stop and settle the implementer after a committed candidate. Hand exclusive edit ownership of that same candidate to a fresh Opus 5 or Sol review agent. No competing editors remain.
+5. The review agent reads the complete diff against the issue, fixes findings itself, and re-reviews the final changed code. It does not send ordinary fixes back to the implementer. It owns PR preparation/integration and closes its assigned issue when the final implementation satisfies acceptance and is integrated. It must not close unrelated issues. An earlier review does not cover newly changed code.
+6. The coordinator consumes the reviewer's completion, updates the board once, rolls up completed parents and releases worker sessions. Remove the finished task worktree after its commits and any useful notes are preserved. Then pick the next issue. Keep only the active coordinator and current task worktree.
 
-After implementation, get a separate code review, resolve its findings, merge, and settle the board once. Reuse an existing review for unchanged code. No test creation, test execution, database review, hosted receipt, screenshot exercise, release rehearsal or promotion gate is required to finish a development issue.
+Code review is the only development acceptance activity. Do not create or run tests, request database/hosted reviews, require proof receipts or add testing gates. Product access checks, atomicity and correct error handling remain functionality. No backward-compatibility scaffolding is required for unused representations.
 
-## Assignment metadata
+## Estimates and stalls
 
-- Title begins `#<issue>`.
-- Phase label is `phase-<number>`.
-- Pickup Order is the numeric dependency-respecting sequence.
-- Planned agent names the model and effort.
-- Estimate is active-agent minutes including normal review corrections; parent totals are rollups.
-- Metadata names `#<issue> - <agent name>` and `codex/<issue>-<agent-slug>`.
-- Current owner and Dispatch reference are actual execution state, never a planned assignment.
+Estimates are planning estimates of active implementation plus review/fix work. Recalibrate at pickup when changing models or importing salvage. At the estimate or 30 minutes, inspect actual progress and remaining work. Help resolve a concrete blocker; continue useful progress with a revised estimate. Elapsed time alone never kills a worker. On confirmed provider failure, preserve the candidate and stop the old editor before selecting a replacement. Never launch a duplicate after an ambiguous send.
 
-Subtasks have their own issue, agent, estimate and dependencies. Do not dispatch the whole parent and a child to competing developers. Parents aggregate outcomes; epics aggregate phases.
+## Metadata and completion
 
-## Development boundaries
+Use the issue number in its title and worktree display name. Record planned implementation agent, review agent, active-minute estimate, phase, numeric pickup, actual branch/worktree, and current owner/dispatch separately. Parent estimates are child totals. An implementer's completion is In review, never Done. Only the Opus/Sol review-and-fix owner can close the task after final review and integration. Cancelled scope remains Not planned.
 
-All feature branches start from current `origin/main` and target `main`. Code review is the acceptance criterion. Hosting, environment administration and production release are outside this development pass.
+The coordinator alone makes shared board/planning changes; the review owner may close its assigned issue and prepare/integrate its PR. Before merge, account for repository automation. This development instruction does not authorize database execution, hosted administration or Production deployment; do not trigger those incidentally. Report a concrete integration conflict instead of silently weakening this boundary.
 
-Do not preserve obsolete representations for compatibility. Change callers and their owning contracts together. Keep exact publication identities, organisation isolation, access enforcement, atomic operations and safe error handling. These are functionality, not verification gates.
+## Clean fleet
 
-Preserve drafts and worktrees. Handoffs name existing files and commits, including untracked work. Never infer that a stopped terminal means the work was completed or discarded.
+The old fleet is retired. Historical commits, working files and terminal snapshots are preserved at `C:/Users/vijay/orca/archives/vortex-20260922-reset`. See its `SALVAGE.md` and `archive-manifest.json`. Historical instructions there are reference only. Keep no idle workers, superseded owner worktrees or stale automatic relaunches. Preserve useful changes before removing a workspace.

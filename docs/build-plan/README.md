@@ -40,11 +40,11 @@ This is a new application. Application, Module and Group owners replace obsolete
 
 ## Assignment and completion
 
-Use GPT 5.6 Luna (Codex - High) for mechanical, clearly bounded work; GPT 5.6 Terra (Codex - High) for normal implementation; GPT 5.6 Sol (Codex - High) for difficult authority and transaction boundaries. The issue names the model for each leaf. These are planned assignments, not evidence that an agent is running. Current owner and dispatch metadata describe actual execution only.
+Use the provider-balanced routing in [Agent fleet](agent-fleet.md): OpenCode GLM, Antigravity Gemini Flash High, Claude Sonnet, and Opus/Sol for difficult work. The coordinator checks Claude/Codex usage before pickup and can change the planned agent, estimate and metadata. Process one issue at a time. A separate Opus 5 or Sol review-and-fix agent fixes its findings, re-reviews the final code and closes the task after integration.
 
 Each leaf is complete when its stated functionality is implemented and accepted through code review. Do not create or run tests, require database or hosted review, collect proof receipts or screenshots, or create acceptance gates for this development plan. Existing test utilities are not a task prerequisite. Product permissions, transaction integrity, accessible UI behaviour and safe errors remain implementation requirements.
 
-Preserve existing drafts before dispatching replacements. In particular, #49 has a stopped reviewed candidate; #50 has an uncommitted draft; #407 contains only the merged inventory portion. Read their current issue metadata and existing worktrees before assigning remaining work.
+The old fleet is archived at `C:/Users/vijay/orca/archives/vortex-20260922-reset`. Read `SALVAGE.md` before dispatch; use new sessions and selectively import useful product code. In particular, #49 has a stopped reviewed candidate; #50 has an uncommitted draft; #407 contains only the merged inventory portion. Read their current issue metadata and existing worktrees before assigning remaining work.
 
 The current documentation change removes obsolete delivery requirements; it does not authorize Production activity. Future operational deployment remains a separate decision.
 
