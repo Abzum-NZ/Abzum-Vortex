@@ -16,7 +16,7 @@
         "title_field": "name",
         "storage_contract_id": "srt_00000001",
         "storage_scope": "organisation_shared",
-        "ownership_mode": "team",
+        "ownership_mode": "group",
         "standard_actions": [
           "create",
           "read",

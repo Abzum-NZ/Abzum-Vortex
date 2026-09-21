@@ -12,7 +12,7 @@ export const recordOwnershipModeSchema = z.enum([
 export const moduleSourceRecordOwnershipModeV1Schema = z.enum([
   "none",
   "organisation_account",
-  "team",
+  "group",
   "inherited",
 ]);
 
@@ -20,7 +20,7 @@ export const moduleSourceRecordOwnershipModeV1Schema = z.enum([
 export const moduleRecordOwnershipModeV1Schema = z.enum([
   "none",
   "organization_account",
-  "team",
+  "group",
   "inherited",
 ]);
 
@@ -29,14 +29,7 @@ export const readModuleSourceRecordOwnershipModeV1 = (
 ): z.infer<typeof recordOwnershipModeSchema> => {
   const mode = moduleSourceRecordOwnershipModeV1Schema.parse(candidate);
   if (mode === "organisation_account") return "organization_account";
-  return mode === "team" ? "group" : mode;
-};
-
-export const writeModuleRecordOwnershipModeV1 = (
-  candidate: unknown,
-): z.infer<typeof moduleRecordOwnershipModeV1Schema> => {
-  const mode = recordOwnershipModeSchema.parse(candidate);
-  return mode === "group" ? "team" : mode;
+  return mode;
 };
 
 export type RecordOwnershipMode = z.infer<typeof recordOwnershipModeSchema>;
