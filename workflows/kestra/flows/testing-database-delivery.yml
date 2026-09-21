@@ -19,74 +19,107 @@ tasks:
     key: database-testing-reusable-full-baseline
     errorOnMissing: false
 
-  - id: invalidate_reusable_full_baseline
-    type: io.kestra.plugin.core.kv.Set
-    namespace: vortex.operations
-    key: database-testing-reusable-full-baseline
-    value: |
-      {
-        "schema_version": 3,
-        "status": "invalidated",
-        "invalidated_by": {
-          "commit": "{{ trigger.body.after }}",
-          "execution_id": "{{ execution.id }}"
-        }
-      }
-    kvType: JSON
-    overwrite: true
-
-  - id: apply_and_verify
+  - id: admit_queued_database_delivery
     type: io.kestra.plugin.scripts.shell.Commands
     taskRunner:
       type: io.kestra.plugin.core.runner.Process
     commands:
-      - /app/vortex-operations/deliver-database.sh
-    inputFiles:
-      reusable-full-baseline-candidate.json: "{{ (outputs.load_reusable_full_baseline.value ?? null) | toJson }}"
+      - /app/vortex-operations/admit-database-delivery.sh
     env:
-      VORTEX_DELIVERY_OPERATION: apply
-      VORTEX_DELIVERY_ENVIRONMENT: testing
-      VORTEX_EXPECTED_REF: refs/heads/testing
       VORTEX_GITHUB_REPOSITORY: "{{ trigger.body.repository.full_name }}"
       VORTEX_GITHUB_REF: "{{ trigger.body.ref }}"
       VORTEX_GITHUB_COMMIT: "{{ trigger.body.after }}"
       VORTEX_EXECUTION_ID: "{{ execution.id }}"
-      VORTEX_EVIDENCE_PATH: delivery-evidence.json
-      VORTEX_REUSABLE_BASELINE_PATH: reusable-full-baseline.json
-      VORTEX_REUSE_CANDIDATE_PATH: reusable-full-baseline-candidate.json
-      VORTEX_FORCE_FULL_VERIFICATION: "{{ inputs.force_full_verification }}"
-      VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_TESTING_DOPPLER_TOKEN') }}"
-      VORTEX_DOPPLER_PROJECT: abzum-vortex
-      VORTEX_DOPPLER_CONFIG: ops_stg
-      VORTEX_EXPECTED_DATABASE_PROJECT_REF: abflfptnguasinoussws
+      VORTEX_KESTRA_API_URL: http://localhost:8080
+      VORTEX_KESTRA_API_USERNAME: "{{ secret('VORTEX_QUEUED_ADMISSION_KESTRA_API_USERNAME') }}"
+      VORTEX_KESTRA_API_PASSWORD: "{{ secret('VORTEX_QUEUED_ADMISSION_KESTRA_API_PASSWORD') }}"
     outputFiles:
-      - delivery-evidence.json
-      - reusable-full-baseline.json
+      - admission-decision.json
 
-  - id: publish_testing_evidence
-    type: io.kestra.plugin.core.kv.Set
-    namespace: vortex.operations
-    key: "database-testing-{{ trigger.body.after }}"
-    value: "{{ read(outputs.apply_and_verify.outputFiles['delivery-evidence.json']) }}"
-    kvType: JSON
-    overwrite: true
+  - id: route_queued_database_admission
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{ fromJson(read(outputs.admit_queued_database_delivery.outputFiles['admission-decision.json'])).decision == 'superseded' }}"
+    then:
+      - id: record_superseded_admission
+        type: io.kestra.plugin.core.kv.Set
+        namespace: vortex.operations
+        key: "database-testing-admission-{{ execution.id }}"
+        value: "{{ read(outputs.admit_queued_database_delivery.outputFiles['admission-decision.json']) }}"
+        kvType: JSON
+        overwrite: false
 
-  - id: publish_immutable_fresh_receipt
-    type: io.kestra.plugin.core.kv.Set
-    namespace: vortex.operations
-    key: >-
-      {{ fromJson(read(outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.receipt_key }}
-    value: "{{ read(outputs.apply_and_verify.outputFiles['delivery-evidence.json']) }}"
-    kvType: JSON
-    overwrite: false
+      - id: terminate_superseded_delivery
+        type: io.kestra.plugin.core.execution.Exit
+        state: CANCELED
+    else:
+      - id: invalidate_reusable_full_baseline
+        type: io.kestra.plugin.core.kv.Set
+        namespace: vortex.operations
+        key: database-testing-reusable-full-baseline
+        value: |
+          {
+            "schema_version": 3,
+            "status": "invalidated",
+            "invalidated_by": {
+              "commit": "{{ trigger.body.after }}",
+              "execution_id": "{{ execution.id }}"
+            }
+          }
+        kvType: JSON
+        overwrite: true
 
-  - id: publish_reusable_full_baseline
-    type: io.kestra.plugin.core.kv.Set
-    namespace: vortex.operations
-    key: database-testing-reusable-full-baseline
-    value: "{{ read(outputs.apply_and_verify.outputFiles['reusable-full-baseline.json']) }}"
-    kvType: JSON
-    overwrite: true
+      - id: apply_and_verify
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        commands:
+          - /app/vortex-operations/deliver-database.sh
+        inputFiles:
+          reusable-full-baseline-candidate.json: "{{ (outputs.load_reusable_full_baseline.value ?? null) | toJson }}"
+        env:
+          VORTEX_DELIVERY_OPERATION: apply
+          VORTEX_DELIVERY_ENVIRONMENT: testing
+          VORTEX_EXPECTED_REF: refs/heads/testing
+          VORTEX_GITHUB_REPOSITORY: "{{ trigger.body.repository.full_name }}"
+          VORTEX_GITHUB_REF: "{{ trigger.body.ref }}"
+          VORTEX_GITHUB_COMMIT: "{{ trigger.body.after }}"
+          VORTEX_EXECUTION_ID: "{{ execution.id }}"
+          VORTEX_EVIDENCE_PATH: delivery-evidence.json
+          VORTEX_REUSABLE_BASELINE_PATH: reusable-full-baseline.json
+          VORTEX_REUSE_CANDIDATE_PATH: reusable-full-baseline-candidate.json
+          VORTEX_FORCE_FULL_VERIFICATION: "{{ inputs.force_full_verification }}"
+          VORTEX_DOPPLER_TOKEN: "{{ secret('VORTEX_TESTING_DOPPLER_TOKEN') }}"
+          VORTEX_DOPPLER_PROJECT: abzum-vortex
+          VORTEX_DOPPLER_CONFIG: ops_stg
+          VORTEX_EXPECTED_DATABASE_PROJECT_REF: abflfptnguasinoussws
+        outputFiles:
+          - delivery-evidence.json
+          - reusable-full-baseline.json
+
+      - id: publish_testing_evidence
+        type: io.kestra.plugin.core.kv.Set
+        namespace: vortex.operations
+        key: "database-testing-{{ trigger.body.after }}"
+        value: "{{ read(outputs.route_queued_database_admission.outputs.apply_and_verify.outputFiles['delivery-evidence.json']) }}"
+        kvType: JSON
+        overwrite: true
+
+      - id: publish_immutable_fresh_receipt
+        type: io.kestra.plugin.core.kv.Set
+        namespace: vortex.operations
+        key: >-
+          {{ fromJson(read(outputs.route_queued_database_admission.outputs.apply_and_verify.outputFiles['delivery-evidence.json'])).verification.receipt_key }}
+        value: "{{ read(outputs.route_queued_database_admission.outputs.apply_and_verify.outputFiles['delivery-evidence.json']) }}"
+        kvType: JSON
+        overwrite: false
+
+      - id: publish_reusable_full_baseline
+        type: io.kestra.plugin.core.kv.Set
+        namespace: vortex.operations
+        key: database-testing-reusable-full-baseline
+        value: "{{ read(outputs.route_queued_database_admission.outputs.apply_and_verify.outputFiles['reusable-full-baseline.json']) }}"
+        kvType: JSON
+        overwrite: true
 
 triggers:
   - id: github_push_to_testing

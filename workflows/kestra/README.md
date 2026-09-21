@@ -49,6 +49,8 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `KESTRA_DB_PASSWORD` | The password for Kestra's own PostgreSQL |
 | `KESTRA_BASIC_AUTH_USERNAME` | The account the API and interface demand |
 | `KESTRA_BASIC_AUTH_PASSWORD` | Its password |
+| `KESTRA_BASIC_AUTH_USERNAME_BASE64` | Base64 encoding of the same existing operator username, supplied to the Testing queued-admission script as a Kestra secret |
+| `KESTRA_BASIC_AUTH_PASSWORD_BASE64` | Base64 encoding of the same existing operator password, supplied only to the Testing queued-admission script as a Kestra secret |
 | `KESTRA_PUBLIC_URL` | The public Kestra address used in generated links |
 | `VORTEX_TESTING_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of the unpredictable key for the protected Testing push webhook |
 | `VORTEX_PRODUCTION_MIGRATION_WEBHOOK_KEY_BASE64` | Base64 encoding of a different unpredictable key for the protected Production push webhook |
@@ -169,9 +171,18 @@ ran the SQL suites for commit `50b6d4e2a1b7b079d57f8f15d00ee42a29284780`, but it
 script ran only three concurrency proofs and linted four schemas. It is retained as partial historical
 evidence and is not an all-current-checks receipt for #235 or the final Phase 2 gate.
 
-Both flows queue at concurrency one. Supabase's migration history makes delivery of the same commit
-idempotent; the repository does not create another migration ledger. Production never runs seed data,
-and neither flow resets a shared database.
+Both flows queue at concurrency one. Before the Testing writer can invalidate a reusable baseline,
+resolve Doppler, or access a database credential, `testing_database_delivery` uses the same existing
+Kestra operator basic-auth credential through the two `SECRET_VORTEX_QUEUED_ADMISSION_KESTRA_API_*`
+secrets. It makes only read-only `GET /api/v1/main/executions/search` and execution-detail calls to
+find the oldest later `QUEUED` Testing webhook execution; it supersedes itself only when that candidate
+is a complete 40-character commit and an anonymous fetch proves it is a strict descendant. Any API,
+field, ordering, or Git uncertainty continues normally. A superseded execution writes only
+`database-testing-admission-<execution-id>` and then deliberately reaches Kestra's terminal `CANCELED`
+state through `io.kestra.plugin.core.execution.Exit`; it therefore publishes no success evidence, immutable
+receipt, or reusable-baseline update. Production has no admission task. Supabase's migration history
+makes normal delivery of the same commit idempotent; the repository does not create another migration
+ledger, and neither flow resets a shared database.
 
 GitHub sends every push event to both repository webhooks. Each webhook trigger therefore has an
 expression condition: the Testing flow accepts only `refs/heads/testing`, and the Production flow

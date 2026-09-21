@@ -1,0 +1,16 @@
+{
+  "id": "execution-b",
+  "namespace": "vortex.operations",
+  "flowId": "testing_database_delivery",
+  "state": { "current": "RUNNING", "startDate": "2026-09-21T08:00:00Z" },
+  "trigger": {
+    "type": "io.kestra.plugin.core.trigger.Webhook",
+    "variables": {
+      "body": {
+        "ref": "refs/heads/testing",
+        "after": "SELF_COMMIT",
+        "repository": { "full_name": "Abzum-NZ/Abzum-Vortex" }
+      }
+    }
+  }
+}
