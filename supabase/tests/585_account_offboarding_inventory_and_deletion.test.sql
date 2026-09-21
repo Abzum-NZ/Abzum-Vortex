@@ -111,16 +111,16 @@ select isnt(
   'the application-contained reader does not scan organisation-shared storage'
 );
 select ok(
-  pg_catalog.position(
-    'shared_transfer_authority_undecided' in
-      pg_catalog.pg_get_functiondef('vortex_record.list_offboarding_owned_records(uuid,text,uuid,text,uuid,uuid,integer)'::regprocedure)
+  pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef('vortex_record.list_offboarding_owned_records(uuid,text,uuid,text,uuid,uuid,integer)'::regprocedure),
+    'shared_transfer_authority_undecided'
   ) > 0,
   'the protected entry reports the shared transfer-authority product gate explicitly'
 );
 select ok(
-  pg_catalog.position(
-    'load_record_access_facts_for_transfer_installation_internal(' in
-      pg_catalog.pg_get_functiondef('vortex_record.list_offboarding_owned_records_internal(uuid,text,uuid,uuid,uuid,integer)'::regprocedure)
+  pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef('vortex_record.list_offboarding_owned_records_internal(uuid,text,uuid,uuid,uuid,integer)'::regprocedure),
+    'load_record_access_facts_for_transfer_installation_internal('
   ) > 0,
   'the preview reuses the existing exact transfer facts loader'
 );
