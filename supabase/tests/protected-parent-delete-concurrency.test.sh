@@ -210,15 +210,6 @@ cleanup_fixture() {
     do \$cleanup\$
     begin
     delete from vortex_record.relationship_edges where from_organisation_id = '$organization_id';
-      if pg_catalog.to_regclass('record_data.$line_table') is not null then
-        execute 'delete from record_data.$line_table where organisation_id = ''$organization_id''';
-      end if;
-      if pg_catalog.to_regclass('record_data.$category_table') is not null then
-        execute 'delete from record_data.$category_table where organisation_id = ''$organization_id''';
-      end if;
-      if pg_catalog.to_regclass('record_data.$parent_table') is not null then
-        execute 'delete from record_data.$parent_table where organisation_id = ''$organization_id''';
-      end if;
       execute 'drop table if exists record_data.$line_table';
       execute 'drop table if exists record_data.$category_table';
       execute 'drop table if exists record_data.$parent_table';
@@ -237,7 +228,6 @@ cleanup_fixture() {
     reset role;
     set local role vortex_module_owner;
     delete from vortex_module.installation_bindings where organization_id = '$organization_id';
-    delete from vortex_module.application_installations where organization_id = '$organization_id';
     reset role;
     delete from vortex_event.record_occurrences where organization_id = '$organization_id';
       delete from vortex_event.record_occurrence_sequences where organization_id = '$organization_id';
@@ -329,6 +319,18 @@ human_context() {
 
 current_version() {
   run_sql "select current_version from vortex_access.organization_access_versions where organization_id='$organization_id';"
+}
+
+current_category_revision() {
+  run_sql "
+    begin;
+    delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+    $(human_context "(select current_version from vortex_access.organization_access_versions where organization_id='$organization_id')")
+    set local role vortex_record_adapter;
+    select concurrency_number from record_data.$category_table where record_id='$totals_category_id';
+    reset role;
+    commit;
+  "
 }
 
 record_permission() {
@@ -732,7 +734,8 @@ run_sql "
   reset role;
   set local role vortex_record_adapter;
   select vortex_record.apply_relationship_total_parent_internal('$category_type_id'::uuid,
-    '$totals_category_id'::uuid, 1,
+    '$totals_category_id'::uuid, (select concurrency_number from record_data.$category_table
+      where record_id='$totals_category_id'),
     pg_catalog.jsonb_build_object('$field_category_total','13.00'));
   reset role;
   delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
@@ -858,6 +861,11 @@ category_state() {
 # dependent child contend on the child row.
 # ----------------------------------------------------------------------------
 access_version="$(current_version)"
+category_revision="$(current_category_revision | tr -d '[:space:]')"
+[[ "$category_revision" =~ ^[1-9][0-9]*$ ]] || {
+  printf 'the category fixture has an invalid concurrency number: %q\n' "$category_revision" >&2
+  exit 1
+}
 
 "${psql_command[@]}" >"$proof_root/reparent-holder.log" 2>&1 <<SQL &
 begin;
@@ -994,7 +1002,7 @@ set local lock_timeout='30s'; set local statement_timeout='45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/totals-rival.pid'
 $(human_context "$access_version" 'c4950000-0000-4000-8000-0000000000f9' 'c4950000-0000-4000-8000-0000000000fa')
 set local role vortex_record_adapter;
-select coalesce(( select 'applied' from ( select $(category_total_statement 2 '3.00') ) as applied ),'applied')
+select coalesce(( select 'applied' from ( select $(category_total_statement "$category_revision" '3.00') ) as applied ),'applied')
   \g '$proof_root/totals-rival.result'
 reset role;
 commit;
@@ -1017,11 +1025,10 @@ totals_delete_result="$(tr -d '[:space:]' <"$proof_root/totals-delete.result" 2>
 }
 # The rival write either applied against the revision it carried or raised the
 # engine's own stale-revision refusal. Both are safe; silently overwriting is
-# not. The category starts at revision 2 after the owning setup writer. Whether
-# the rival or the delete obtains its lock first, exactly one real change to
-# 3.00 occurs and the category ends at revision 3.
+# not. The captured fixture revision is shared by both contenders; whichever
+# wins applies exactly one real change to 3.00 and increments it once.
 category_after="$(category_state | tr -d '[:space:]')"
-if [ "$category_after" != '3|3.00' ]; then
+if [ "$category_after" != "$((category_revision + 1))|3.00" ]; then
   printf 'the totals race left the surviving parent in an unexpected state: %q\n' "$category_after" >&2
   exit 1
 fi
