@@ -2,7 +2,7 @@ begin;
 
 set local search_path = pg_catalog, extensions, public;
 
-select plan(12);
+select plan(13);
 
 select has_function(
   'vortex_record', 'list_offboarding_owned_records',
@@ -45,6 +45,12 @@ select ok(
     'EXECUTE'
   ),
   'the request role cannot bypass the accounts-manage entry'
+);
+select ok(
+  not pg_catalog.has_schema_privilege(
+    'vortex_record_adapter', 'vortex_record', 'CREATE'
+  ),
+  'the record adapter retains no schema CREATE capability after inventory installation'
 );
 select ok(
   not pg_catalog.has_function_privilege(
@@ -99,7 +105,7 @@ select ok(
   'the request role is the sole explicitly granted public inventory invoker'
 );
 select isnt(
-  pg_get_functiondef('vortex_record.list_offboarding_owned_records_internal(uuid,text,uuid,uuid,uuid,integer)'::regprocedure)
+  pg_catalog.pg_get_functiondef('vortex_record.list_offboarding_owned_records_internal(uuid,text,uuid,uuid,uuid,integer)'::regprocedure)
     like '%organization_shared%',
   true,
   'the application-contained reader does not scan organisation-shared storage'
@@ -107,14 +113,14 @@ select isnt(
 select ok(
   pg_catalog.position(
     'shared_transfer_authority_undecided' in
-      pg_get_functiondef('vortex_record.list_offboarding_owned_records(uuid,text,uuid,text,uuid,uuid,integer)'::regprocedure)
+      pg_catalog.pg_get_functiondef('vortex_record.list_offboarding_owned_records(uuid,text,uuid,text,uuid,uuid,integer)'::regprocedure)
   ) > 0,
   'the protected entry reports the shared transfer-authority product gate explicitly'
 );
 select ok(
   pg_catalog.position(
     'load_record_access_facts_for_transfer_installation_internal(' in
-      pg_get_functiondef('vortex_record.list_offboarding_owned_records_internal(uuid,text,uuid,uuid,uuid,integer)'::regprocedure)
+      pg_catalog.pg_get_functiondef('vortex_record.list_offboarding_owned_records_internal(uuid,text,uuid,uuid,uuid,integer)'::regprocedure)
   ) > 0,
   'the preview reuses the existing exact transfer facts loader'
 );

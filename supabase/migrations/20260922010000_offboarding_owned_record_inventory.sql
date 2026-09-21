@@ -369,3 +369,6 @@ comment on function vortex_record.list_offboarding_owned_records(
   'Protected account-offboarding inventory: accounts.manage once and per-record exact transfer disclosure for the current application; shared authority is explicitly blocked pending product policy.';
 
 reset role;
+set local role vortex_record_owner;
+revoke create on schema vortex_record from vortex_record_adapter;
+reset role;
