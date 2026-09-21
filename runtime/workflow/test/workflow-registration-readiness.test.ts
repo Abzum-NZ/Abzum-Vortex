@@ -3,9 +3,12 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 import {
   workflowRegistrationStateSchema,
   workflowRegistrationReadinessResultSchema,
+  registeredWorkflowReadinessEvidenceSchema,
   type ApplicationRootId,
+  type ArchiveDestinationReference,
+  type Fingerprint,
   type OrganizationId,
-  type RegisteredWorkflowEvidence,
+  type RegisteredWorkflowReadinessEvidence,
   type WorkflowId,
 } from "@vortex/contracts";
 import {
@@ -23,8 +26,12 @@ const APP_ROOT_ID_ONE = "33333333-3333-4333-8333-333333333333" as ApplicationRoo
 const APP_ROOT_ID_TWO = "44444444-4444-4444-8444-444444444444" as ApplicationRootId;
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
-const FINGERPRINT_A = "sha256:" + "a".repeat(64);
-const FINGERPRINT_B = "sha256:" + "b".repeat(64);
+const FINGERPRINT_A = ("sha256:" + "a".repeat(64)) as Fingerprint;
+const FINGERPRINT_B = ("sha256:" + "b".repeat(64)) as Fingerprint;
+const FINGERPRINT_FLOW = ("sha256:" + "c".repeat(64)) as Fingerprint;
+
+const DESTINATION_A = "cold_archive_s3" as ArchiveDestinationReference;
+const DESTINATION_B = "compliance-vault-1" as ArchiveDestinationReference;
 
 const createMockTransaction = (rows: readonly DatabaseRow[]): RequestDatabaseTransaction => ({
   query: vi.fn().mockResolvedValue(rows),
@@ -54,7 +61,7 @@ describe("workflowRegistrationStateSchema", () => {
 });
 
 describe("workflowRegistrationReadinessResultSchema", () => {
-  it("parses ready outcome shape", () => {
+  it("parses ready outcome shape with non-optional evidence fields", () => {
     const readyResult = {
       outcome: "ready",
       workflowId: WORKFLOW_ID_ONE,
@@ -63,15 +70,17 @@ describe("workflowRegistrationReadinessResultSchema", () => {
       applicationRootId: APP_ROOT_ID_ONE,
       state: "active",
       definitionFingerprint: FINGERPRINT_A,
-      verifiedFlowFingerprint: FINGERPRINT_A,
-      supportedDestinations: ["cold_archive_s3", "compliance-vault-1"],
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: [DESTINATION_A, DESTINATION_B],
     };
 
     const parsed = workflowRegistrationReadinessResultSchema.parse(readyResult);
     expect(parsed.outcome).toBe("ready");
     if (parsed.outcome === "ready") {
       expect(parsed.state).toBe("active");
-      expect(parsed.supportedDestinations).toContain("cold_archive_s3");
+      expect(parsed.definitionFingerprint).toBe(FINGERPRINT_A);
+      expect(parsed.verifiedFlowFingerprint).toBe(FINGERPRINT_FLOW);
+      expect(parsed.supportedDestinations).toEqual([DESTINATION_A, DESTINATION_B]);
     }
   });
 
@@ -88,6 +97,69 @@ describe("workflowRegistrationReadinessResultSchema", () => {
       expect(parsed.reasonCode).toBe("archive_workflow_not_registered");
     }
   });
+
+  it("rejects non-closed destination in result schema", () => {
+    const invalidResult = {
+      outcome: "ready",
+      workflowId: WORKFLOW_ID_ONE,
+      workflowRevision: 2,
+      organizationId: ORG_ID_ONE,
+      applicationRootId: APP_ROOT_ID_ONE,
+      state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: ["https://example.com/s3", "INVALID_UPPERCASE"],
+    };
+
+    expect(workflowRegistrationReadinessResultSchema.safeParse(invalidResult).success).toBe(false);
+  });
+});
+
+describe("registeredWorkflowReadinessEvidenceSchema", () => {
+  it("parses valid non-optional registered workflow readiness evidence", () => {
+    const evidence = {
+      workflowId: WORKFLOW_ID_ONE,
+      workflowRevision: 3,
+      organizationId: ORG_ID_ONE,
+      authorizedApplicationIds: [APP_ROOT_ID_ONE],
+      state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: [DESTINATION_A],
+    };
+
+    const parsed = registeredWorkflowReadinessEvidenceSchema.parse(evidence);
+    expect(parsed.workflowId).toBe(WORKFLOW_ID_ONE);
+    expect(parsed.definitionFingerprint).toBe(FINGERPRINT_A);
+    expect(parsed.verifiedFlowFingerprint).toBe(FINGERPRINT_FLOW);
+    expect(parsed.supportedDestinations).toEqual([DESTINATION_A]);
+  });
+
+  it("rejects evidence missing definition or verified flow fingerprints", () => {
+    const missingFp = {
+      workflowId: WORKFLOW_ID_ONE,
+      workflowRevision: 3,
+      organizationId: ORG_ID_ONE,
+      authorizedApplicationIds: [APP_ROOT_ID_ONE],
+      state: "active",
+      supportedDestinations: [DESTINATION_A],
+    };
+    expect(registeredWorkflowReadinessEvidenceSchema.safeParse(missingFp).success).toBe(false);
+  });
+
+  it("rejects evidence with non-canonical destination string", () => {
+    const badDest = {
+      workflowId: WORKFLOW_ID_ONE,
+      workflowRevision: 3,
+      organizationId: ORG_ID_ONE,
+      authorizedApplicationIds: [APP_ROOT_ID_ONE],
+      state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: ["s3://my-bucket/archive"],
+    };
+    expect(registeredWorkflowReadinessEvidenceSchema.safeParse(badDest).success).toBe(false);
+  });
 });
 
 describe("checkWorkflowRegistrationReadiness", () => {
@@ -96,7 +168,7 @@ describe("checkWorkflowRegistrationReadiness", () => {
     expectedRevision: 3,
     organizationId: ORG_ID_ONE,
     applicationRootId: APP_ROOT_ID_ONE,
-    archiveDestination: "cold_archive_s3",
+    archiveDestination: DESTINATION_A,
     expectedFingerprint: FINGERPRINT_A,
   };
 
@@ -109,8 +181,8 @@ describe("checkWorkflowRegistrationReadiness", () => {
       applicationRootId: APP_ROOT_ID_ONE,
       state: "active",
       definitionFingerprint: FINGERPRINT_A,
-      verifiedFlowFingerprint: FINGERPRINT_A,
-      supportedDestinations: ["cold_archive_s3"],
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: [DESTINATION_A],
     };
 
     const tx = createMockTransaction([{ result: readyPayload }]);
@@ -121,7 +193,9 @@ describe("checkWorkflowRegistrationReadiness", () => {
       expect(result.workflowId).toBe(WORKFLOW_ID_ONE);
       expect(result.workflowRevision).toBe(3);
       expect(result.state).toBe("active");
-      expect(result.supportedDestinations).toEqual(["cold_archive_s3"]);
+      expect(result.definitionFingerprint).toBe(FINGERPRINT_A);
+      expect(result.verifiedFlowFingerprint).toBe(FINGERPRINT_FLOW);
+      expect(result.supportedDestinations).toEqual([DESTINATION_A]);
     }
   });
 
@@ -192,7 +266,7 @@ describe("checkWorkflowRegistrationReadiness", () => {
     ]);
     const result = await checkWorkflowRegistrationReadiness(tx, {
       ...validInput,
-      archiveDestination: "unsupported_vault",
+      archiveDestination: "unsupported-destination",
     });
 
     expect(result.outcome).toBe("refused");
@@ -230,7 +304,7 @@ describe("checkWorkflowRegistrationReadiness", () => {
 });
 
 describe("readRegisteredWorkflowEvidence", () => {
-  it("returns parsed and validated RegisteredWorkflowEvidence items", async () => {
+  it("returns complete RegisteredWorkflowReadinessEvidence items with non-optional proofs", async () => {
     const mockRows = [
       {
         workflow_id: WORKFLOW_ID_ONE,
@@ -239,8 +313,8 @@ describe("readRegisteredWorkflowEvidence", () => {
         authorized_application_ids: [APP_ROOT_ID_ONE],
         state: "active",
         definition_fingerprint: FINGERPRINT_A,
-        verified_flow_fingerprint: FINGERPRINT_A,
-        supported_destinations: ["cold_archive_s3"],
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A],
       },
       {
         workflow_id: WORKFLOW_ID_TWO,
@@ -250,7 +324,7 @@ describe("readRegisteredWorkflowEvidence", () => {
         state: "active",
         definition_fingerprint: FINGERPRINT_B,
         verified_flow_fingerprint: FINGERPRINT_B,
-        supported_destinations: ["cold_archive_s3", "compliance-vault-1"],
+        supported_destinations: [DESTINATION_A, DESTINATION_B],
       },
     ];
 
@@ -264,6 +338,9 @@ describe("readRegisteredWorkflowEvidence", () => {
       organizationId: ORG_ID_ONE,
       authorizedApplicationIds: [APP_ROOT_ID_ONE],
       state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: [DESTINATION_A],
     });
     expect(result[1]).toEqual({
       workflowId: WORKFLOW_ID_TWO,
@@ -271,6 +348,9 @@ describe("readRegisteredWorkflowEvidence", () => {
       organizationId: ORG_ID_ONE,
       authorizedApplicationIds: [APP_ROOT_ID_ONE, APP_ROOT_ID_TWO],
       state: "active",
+      definitionFingerprint: FINGERPRINT_B,
+      verifiedFlowFingerprint: FINGERPRINT_B,
+      supportedDestinations: [DESTINATION_A, DESTINATION_B],
     });
   });
 
@@ -283,8 +363,8 @@ describe("readRegisteredWorkflowEvidence", () => {
         authorized_application_ids: [APP_ROOT_ID_ONE],
         state: "active",
         definition_fingerprint: FINGERPRINT_A,
-        verified_flow_fingerprint: FINGERPRINT_A,
-        supported_destinations: ["cold_archive_s3"],
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A],
       },
       {
         workflow_id: WORKFLOW_ID_ONE,
@@ -293,8 +373,8 @@ describe("readRegisteredWorkflowEvidence", () => {
         authorized_application_ids: [APP_ROOT_ID_ONE],
         state: "active",
         definition_fingerprint: FINGERPRINT_A,
-        verified_flow_fingerprint: FINGERPRINT_A,
-        supported_destinations: ["cold_archive_s3"],
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A],
       },
     ];
 
@@ -313,8 +393,8 @@ describe("readRegisteredWorkflowEvidence", () => {
         authorized_application_ids: [APP_ROOT_ID_ONE],
         state: "active",
         definition_fingerprint: FINGERPRINT_A,
-        verified_flow_fingerprint: FINGERPRINT_A,
-        supported_destinations: ["cold_archive_s3"],
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A],
       },
     ];
 
@@ -323,16 +403,39 @@ describe("readRegisteredWorkflowEvidence", () => {
       readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
     ).rejects.toThrow(/organization mismatch/);
   });
+
+  it("fails closed on non-active state in row", async () => {
+    const mockRows = [
+      {
+        workflow_id: WORKFLOW_ID_ONE,
+        workflow_revision: 1,
+        organization_id: ORG_ID_ONE,
+        authorized_application_ids: [APP_ROOT_ID_ONE],
+        state: "prepared",
+        definition_fingerprint: FINGERPRINT_A,
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A],
+      },
+    ];
+
+    const tx = createMockTransaction(mockRows);
+    await expect(
+      readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
+    ).rejects.toThrow(/non-active workflow/);
+  });
 });
 
 describe("evaluateWorkflowRegistrationReadinessLocally", () => {
-  const activeEvidence: RegisteredWorkflowEvidence[] = [
+  const completeActiveEvidence: readonly RegisteredWorkflowReadinessEvidence[] = [
     {
       workflowId: WORKFLOW_ID_ONE,
       workflowRevision: 3,
       organizationId: ORG_ID_ONE,
       authorizedApplicationIds: [APP_ROOT_ID_ONE],
       state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: [DESTINATION_A, DESTINATION_B],
     },
   ];
 
@@ -341,20 +444,14 @@ describe("evaluateWorkflowRegistrationReadinessLocally", () => {
     expectedRevision: 3,
     organizationId: ORG_ID_ONE,
     applicationRootId: APP_ROOT_ID_ONE,
-    archiveDestination: "cold_archive_s3",
+    archiveDestination: DESTINATION_A,
     expectedFingerprint: FINGERPRINT_A,
   };
 
-  const defaultMeta = {
-    supportedDestinations: ["cold_archive_s3"],
-    verifiedFlowFingerprint: FINGERPRINT_A,
-  };
-
-  it("returns ready when evidence matches completely", () => {
+  it("returns ready when evidence matches completely against definition fingerprint", () => {
     const result = evaluateWorkflowRegistrationReadinessLocally(
       defaultCheck,
-      activeEvidence,
-      defaultMeta,
+      completeActiveEvidence,
     );
 
     expect(result.outcome).toBe("ready");
@@ -362,79 +459,140 @@ describe("evaluateWorkflowRegistrationReadinessLocally", () => {
       expect(result.workflowId).toBe(WORKFLOW_ID_ONE);
       expect(result.workflowRevision).toBe(3);
       expect(result.state).toBe("active");
+      expect(result.definitionFingerprint).toBe(FINGERPRINT_A);
+      expect(result.verifiedFlowFingerprint).toBe(FINGERPRINT_FLOW);
+      expect(result.supportedDestinations).toEqual([DESTINATION_A, DESTINATION_B]);
+    }
+  });
+
+  it("returns ready when expected fingerprint matches verified flow fingerprint (SQL parity)", () => {
+    const result = evaluateWorkflowRegistrationReadinessLocally(
+      { ...defaultCheck, expectedFingerprint: FINGERPRINT_FLOW },
+      completeActiveEvidence,
+    );
+
+    expect(result.outcome).toBe("ready");
+    if (result.outcome === "ready") {
+      expect(result.definitionFingerprint).toBe(FINGERPRINT_A);
+      expect(result.verifiedFlowFingerprint).toBe(FINGERPRINT_FLOW);
     }
   });
 
   it("refuses when workflow is not registered in evidence", () => {
     const result = evaluateWorkflowRegistrationReadinessLocally(
       { ...defaultCheck, workflowId: WORKFLOW_ID_TWO },
-      activeEvidence,
-      defaultMeta,
+      completeActiveEvidence,
     );
 
     expect(result.outcome).toBe("refused");
     if (result.outcome === "refused") {
       expect(result.reasonCode).toBe("archive_workflow_not_registered");
+      expect(result.reasonMessage).toBe("Workflow is not registered in runtime workflows");
     }
   });
 
   it("refuses on organization mismatch", () => {
     const result = evaluateWorkflowRegistrationReadinessLocally(
       { ...defaultCheck, organizationId: ORG_ID_TWO },
-      activeEvidence,
-      defaultMeta,
+      completeActiveEvidence,
     );
 
     expect(result.outcome).toBe("refused");
     if (result.outcome === "refused") {
       expect(result.reasonCode).toBe("wrong_organization");
+      expect(result.reasonMessage).toBe("Workflow belongs to a different organization");
     }
   });
 
   it("refuses when application root is null (organisation-shared policy)", () => {
     const result = evaluateWorkflowRegistrationReadinessLocally(
       { ...defaultCheck, applicationRootId: null },
-      activeEvidence,
-      defaultMeta,
+      completeActiveEvidence,
     );
 
     expect(result.outcome).toBe("refused");
     if (result.outcome === "refused") {
       expect(result.reasonCode).toBe("archive_workflow_scope_mismatch");
+      expect(result.reasonMessage).toBe(
+        "Organisation-shared policy cannot activate archive_workflow because registered workflows require permanent application scope",
+      );
     }
   });
 
   it("refuses when application is not authorized for workflow", () => {
     const result = evaluateWorkflowRegistrationReadinessLocally(
       { ...defaultCheck, applicationRootId: APP_ROOT_ID_TWO },
-      activeEvidence,
-      defaultMeta,
+      completeActiveEvidence,
     );
 
     expect(result.outcome).toBe("refused");
     if (result.outcome === "refused") {
       expect(result.reasonCode).toBe("archive_workflow_scope_mismatch");
+      expect(result.reasonMessage).toBe(
+        "Registered workflow is not authorized for permanent application root",
+      );
     }
   });
 
   it("refuses on stale revision", () => {
     const result = evaluateWorkflowRegistrationReadinessLocally(
       { ...defaultCheck, expectedRevision: 2 },
-      activeEvidence,
-      defaultMeta,
+      completeActiveEvidence,
     );
 
     expect(result.outcome).toBe("refused");
     if (result.outcome === "refused") {
       expect(result.reasonCode).toBe("stale_revision");
+      expect(result.reasonMessage).toBe("Expected workflow revision does not exist");
     }
   });
 
-  it("refuses on stale fingerprint", () => {
+  it("refuses on stale fingerprint when expected matches neither definition nor verified-flow", () => {
     const result = evaluateWorkflowRegistrationReadinessLocally(
       { ...defaultCheck, expectedFingerprint: FINGERPRINT_B },
-      activeEvidence,
-      defaultMeta,
+      completeActiveEvidence,
+    );
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome === "refused") {
+      expect(result.reasonCode).toBe("stale_fingerprint");
+      expect(result.reasonMessage).toBe(
+        "Expected fingerprint does not match workflow definition or verified flow fingerprint",
+      );
+    }
+  });
+
+  it("refuses on destination mismatch", () => {
+    const result = evaluateWorkflowRegistrationReadinessLocally(
+      { ...defaultCheck, archiveDestination: "unsupported-destination" },
+      completeActiveEvidence,
+    );
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome === "refused") {
+      expect(result.reasonCode).toBe("destination_mismatch");
+      expect(result.reasonMessage).toBe(
+        "Workflow revision does not support the requested archive destination",
+      );
+    }
+  });
+
+  it("refuses on invalid destination reference format", () => {
+    const result = evaluateWorkflowRegistrationReadinessLocally(
+      { ...defaultCheck, archiveDestination: "INVALID_UPPERCASE" },
+      completeActiveEvidence,
+    );
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome === "refused") {
+      expect(result.reasonCode).toBe("invalid_archive_destination");
+    }
+  });
+
+  it("refuses on invalid fingerprint format", () => {
+    const result = evaluateWorkflowRegistrationReadinessLocally(
+      { ...defaultCheck, expectedFingerprint: "not-a-sha256-fingerprint" },
+      completeActiveEvidence,
     );
 
     expect(result.outcome).toBe("refused");
@@ -443,16 +601,51 @@ describe("evaluateWorkflowRegistrationReadinessLocally", () => {
     }
   });
 
-  it("refuses on destination mismatch", () => {
+  it("refuses on nil workflow ID", () => {
     const result = evaluateWorkflowRegistrationReadinessLocally(
-      { ...defaultCheck, archiveDestination: "unsupported_storage" },
-      activeEvidence,
-      defaultMeta,
+      { ...defaultCheck, workflowId: NIL_UUID as WorkflowId },
+      completeActiveEvidence,
     );
 
     expect(result.outcome).toBe("refused");
     if (result.outcome === "refused") {
-      expect(result.reasonCode).toBe("destination_mismatch");
+      expect(result.reasonCode).toBe("invalid_workflow_identity");
+    }
+  });
+
+  it("refuses on nil organization ID", () => {
+    const result = evaluateWorkflowRegistrationReadinessLocally(
+      { ...defaultCheck, organizationId: NIL_UUID as OrganizationId },
+      completeActiveEvidence,
+    );
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome === "refused") {
+      expect(result.reasonCode).toBe("invalid_organization_identity");
+    }
+  });
+
+  it("refuses on nil application root ID", () => {
+    const result = evaluateWorkflowRegistrationReadinessLocally(
+      { ...defaultCheck, applicationRootId: NIL_UUID as ApplicationRootId },
+      completeActiveEvidence,
+    );
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome === "refused") {
+      expect(result.reasonCode).toBe("invalid_application_identity");
+    }
+  });
+
+  it("refuses on non-positive revision", () => {
+    const result = evaluateWorkflowRegistrationReadinessLocally(
+      { ...defaultCheck, expectedRevision: 0 as never },
+      completeActiveEvidence,
+    );
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome === "refused") {
+      expect(result.reasonCode).toBe("invalid_workflow_revision");
     }
   });
 });

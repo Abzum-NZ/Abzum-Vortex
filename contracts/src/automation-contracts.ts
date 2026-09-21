@@ -7,6 +7,7 @@ import {
   builderKeySchema,
   containedComponentIdSchema,
   fieldIdSchema,
+  fingerprintSchema,
   namespacedKeySchema,
   organizationIdSchema,
   applicationRootIdSchema,
@@ -23,6 +24,7 @@ import {
   workflowRunIdSchema,
 } from "./identifiers";
 import { conditionNodeSchema } from "./module-contracts";
+import { archiveDestinationReferenceSchema } from "./record-lifecycle-policy";
 
 export const workflowValueSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("literal"), value: jsonValueSchema }).strict(),
@@ -378,8 +380,8 @@ export const workflowRegistrationReadinessCheckSchema = z
     expectedRevision: revisionSchema,
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema.nullable(),
-    archiveDestination: z.string().min(1).max(120).optional(),
-    expectedFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+    archiveDestination: archiveDestinationReferenceSchema.optional(),
+    expectedFingerprint: fingerprintSchema.optional(),
   })
   .strict();
 
@@ -418,9 +420,9 @@ export const workflowRegistrationReadinessResultSchema = z.discriminatedUnion("o
       organizationId: organizationIdSchema,
       applicationRootId: applicationRootIdSchema.nullable(),
       state: z.literal("active"),
-      definitionFingerprint: z.string(),
-      verifiedFlowFingerprint: z.string(),
-      supportedDestinations: z.array(z.string()),
+      definitionFingerprint: fingerprintSchema,
+      verifiedFlowFingerprint: fingerprintSchema,
+      supportedDestinations: z.array(archiveDestinationReferenceSchema),
     })
     .strict(),
   z
@@ -434,4 +436,25 @@ export const workflowRegistrationReadinessResultSchema = z.discriminatedUnion("o
 
 export type WorkflowRegistrationReadinessResult = z.infer<
   typeof workflowRegistrationReadinessResultSchema
+>;
+
+/**
+ * Complete, authoritative evidence shape for registered workflow readiness.
+ * Contains all capability proofs without optional fields or synthetic values.
+ */
+export const registeredWorkflowReadinessEvidenceSchema = z
+  .object({
+    workflowId: workflowIdSchema,
+    workflowRevision: revisionSchema,
+    organizationId: organizationIdSchema,
+    authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
+    state: z.literal("active"),
+    definitionFingerprint: fingerprintSchema,
+    verifiedFlowFingerprint: fingerprintSchema,
+    supportedDestinations: z.array(archiveDestinationReferenceSchema),
+  })
+  .strict();
+
+export type RegisteredWorkflowReadinessEvidence = z.infer<
+  typeof registeredWorkflowReadinessEvidenceSchema
 >;

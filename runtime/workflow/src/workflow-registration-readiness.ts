@@ -2,15 +2,19 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
+  archiveDestinationReferenceSchema,
+  fingerprintSchema,
   organizationIdSchema,
-  registeredWorkflowEvidenceSchema,
+  registeredWorkflowReadinessEvidenceSchema,
   revisionSchema,
   workflowIdSchema,
   workflowRegistrationReadinessReasonCodeSchema,
   workflowRegistrationReadinessResultSchema,
   type ApplicationRootId,
+  type ArchiveDestinationReference,
+  type Fingerprint,
   type OrganizationId,
-  type RegisteredWorkflowEvidence,
+  type RegisteredWorkflowReadinessEvidence,
   type Revision,
   type WorkflowId,
   type WorkflowRegistrationReadinessReasonCode,
@@ -26,8 +30,8 @@ export type WorkflowRegistrationReadinessInput = Readonly<{
   expectedRevision: Revision;
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId | null;
-  archiveDestination?: string | null;
-  expectedFingerprint?: string | null;
+  archiveDestination?: ArchiveDestinationReference | string | null;
+  expectedFingerprint?: Fingerprint | string | null;
 }>;
 
 /**
@@ -117,8 +121,8 @@ export async function checkWorkflowRegistrationReadiness(
 
 /**
  * Reads active registered workflow evidence for an organization (and optional application),
- * returning validated `RegisteredWorkflowEvidence` items suitable for feeding
- * `lifecycleReadinessEvidenceSchema`.
+ * returning complete, validated `RegisteredWorkflowReadinessEvidence` items with non-optional
+ * definition fingerprints, verified flow fingerprints, and supported destinations.
  */
 export async function readRegisteredWorkflowEvidence(
   transaction: RequestDatabaseTransaction,
@@ -126,7 +130,7 @@ export async function readRegisteredWorkflowEvidence(
     organizationId: OrganizationId;
     applicationRootId?: ApplicationRootId | null;
   },
-): Promise<readonly RegisteredWorkflowEvidence[]> {
+): Promise<readonly RegisteredWorkflowReadinessEvidence[]> {
   const organizationId = organizationIdSchema.parse(input.organizationId);
   const applicationRootId =
     input.applicationRootId !== null && input.applicationRootId !== undefined
@@ -149,7 +153,7 @@ export async function readRegisteredWorkflowEvidence(
   `;
 
   const seenWorkflowIds = new Set<string>();
-  const evidenceList: RegisteredWorkflowEvidence[] = [];
+  const evidenceList: RegisteredWorkflowReadinessEvidence[] = [];
 
   for (const row of rows) {
     const rawWorkflowId = workflowIdSchema.parse(row.workflow_id);
@@ -202,12 +206,25 @@ export async function readRegisteredWorkflowEvidence(
       applicationRootIdSchema.parse(id),
     );
 
-    const parsedItem = registeredWorkflowEvidenceSchema.parse({
+    const definitionFingerprint = fingerprintSchema.parse(row.definition_fingerprint);
+    const verifiedFlowFingerprint = fingerprintSchema.parse(row.verified_flow_fingerprint);
+
+    const rawDestinations = Array.isArray(row.supported_destinations)
+      ? row.supported_destinations
+      : [];
+    const supportedDestinations: ArchiveDestinationReference[] = rawDestinations.map((d) =>
+      archiveDestinationReferenceSchema.parse(d),
+    );
+
+    const parsedItem = registeredWorkflowReadinessEvidenceSchema.parse({
       workflowId: rawWorkflowId,
       workflowRevision: numericRevision,
       organizationId: rawOrgId,
       authorizedApplicationIds,
       state: "active",
+      definitionFingerprint,
+      verifiedFlowFingerprint,
+      supportedDestinations,
     });
 
     evidenceList.push(parsedItem);
@@ -218,61 +235,123 @@ export async function readRegisteredWorkflowEvidence(
 
 /**
  * Pure evaluation helper: checks readiness of an archive workflow policy
- * against in-memory registered workflow evidence items and registration metadata.
+ * against authoritative registered workflow readiness evidence.
  *
- * Explicitly rejects:
- *   - Pending/inactive/superseded workflow states
- *   - Organization mismatch
- *   - Application authorization mismatch
- *   - Stale revisions
- *   - Stale fingerprints
- *   - Destination mismatches
+ * Consumes complete, validated, non-optional evidence and enforces
+ * exact parity with SQL readiness semantics:
+ *   - Workflow root exists and belongs to matching organization
+ *   - Workflow is authorized for the requested permanent application root
+ *   - Exact revision match in active state
+ *   - Expected fingerprint matches either definition or verified-flow fingerprint
+ *   - Requested destination belongs to supported destinations
+ *
+ * Fails closed on any missing, nil, or incoherent proof; never manufactures values.
  */
 export function evaluateWorkflowRegistrationReadinessLocally(
   check: WorkflowRegistrationReadinessInput,
-  evidence: readonly RegisteredWorkflowEvidence[],
-  metadata?: Readonly<{
-    supportedDestinations?: readonly string[];
-    verifiedFlowFingerprint?: string;
-  }>,
+  evidence: readonly RegisteredWorkflowReadinessEvidence[],
 ): WorkflowRegistrationReadinessResult {
   // 1. Validate parameter boundaries
-  if (!check.workflowId || check.workflowId === "00000000-0000-0000-0000-000000000000") {
+  const nilUuid = "00000000-0000-0000-0000-000000000000";
+
+  if (!check.workflowId || check.workflowId === nilUuid) {
     return {
       outcome: "refused",
       reasonCode: "invalid_workflow_identity",
-      reasonMessage: "Workflow identity is invalid or nil",
+      reasonMessage: "Workflow identity is missing or nil",
     };
   }
 
-  if (!check.organizationId || check.organizationId === "00000000-0000-0000-0000-000000000000") {
+  const parsedWorkflowId = workflowIdSchema.safeParse(check.workflowId);
+  if (!parsedWorkflowId.success) {
+    return {
+      outcome: "refused",
+      reasonCode: "invalid_workflow_identity",
+      reasonMessage: "Workflow identity is invalid",
+    };
+  }
+
+  if (!check.organizationId || check.organizationId === nilUuid) {
     return {
       outcome: "refused",
       reasonCode: "invalid_organization_identity",
-      reasonMessage: "Organization identity is invalid or nil",
+      reasonMessage: "Organization identity is missing or nil",
+    };
+  }
+
+  const parsedOrgId = organizationIdSchema.safeParse(check.organizationId);
+  if (!parsedOrgId.success) {
+    return {
+      outcome: "refused",
+      reasonCode: "invalid_organization_identity",
+      reasonMessage: "Organization identity is invalid",
     };
   }
 
   if (
     typeof check.expectedRevision !== "number" ||
     !Number.isSafeInteger(check.expectedRevision) ||
-    check.expectedRevision < 1
+    check.expectedRevision < 1 ||
+    check.expectedRevision > 9007199254740991
   ) {
     return {
       outcome: "refused",
       reasonCode: "invalid_workflow_revision",
-      reasonMessage: "Expected workflow revision is invalid",
+      reasonMessage: "Expected workflow revision is out of range",
     };
   }
 
+  if (check.applicationRootId !== null && check.applicationRootId !== undefined) {
+    if (check.applicationRootId === nilUuid) {
+      return {
+        outcome: "refused",
+        reasonCode: "invalid_application_identity",
+        reasonMessage: "Application identity is nil UUID",
+      };
+    }
+    const parsedAppId = applicationRootIdSchema.safeParse(check.applicationRootId);
+    if (!parsedAppId.success) {
+      return {
+        outcome: "refused",
+        reasonCode: "invalid_application_identity",
+        reasonMessage: "Application identity is invalid",
+      };
+    }
+  }
+
+  if (check.archiveDestination !== undefined && check.archiveDestination !== null) {
+    const parsedDest = archiveDestinationReferenceSchema.safeParse(check.archiveDestination);
+    if (!parsedDest.success) {
+      return {
+        outcome: "refused",
+        reasonCode: "invalid_archive_destination",
+        reasonMessage:
+          "Archive destination reference must be a lowercase alphanumeric identifier using hyphen or underscore delimiters (max 80 chars)",
+      };
+    }
+  }
+
+  if (check.expectedFingerprint !== undefined && check.expectedFingerprint !== null) {
+    const parsedFp = fingerprintSchema.safeParse(check.expectedFingerprint);
+    if (!parsedFp.success) {
+      return {
+        outcome: "refused",
+        reasonCode: "stale_fingerprint",
+        reasonMessage: "Expected fingerprint format is invalid",
+      };
+    }
+  }
+
   // 2. Locate workflow in registered evidence
-  const matchingWorkflow = evidence.find((w) => w.workflowId === check.workflowId);
+  const matchingWorkflow = evidence.find(
+    (w) => w.workflowId.toLowerCase() === check.workflowId.toLowerCase(),
+  );
 
   if (!matchingWorkflow) {
     return {
       outcome: "refused",
       reasonCode: "archive_workflow_not_registered",
-      reasonMessage: `Active workflow ${check.workflowId} is not registered in runtime workflows`,
+      reasonMessage: "Workflow is not registered in runtime workflows",
     };
   }
 
@@ -281,7 +360,7 @@ export function evaluateWorkflowRegistrationReadinessLocally(
     return {
       outcome: "refused",
       reasonCode: "wrong_organization",
-      reasonMessage: `Workflow belongs to organization ${matchingWorkflow.organizationId}, not ${check.organizationId}`,
+      reasonMessage: "Workflow belongs to a different organization",
     };
   }
 
@@ -299,7 +378,7 @@ export function evaluateWorkflowRegistrationReadinessLocally(
     return {
       outcome: "refused",
       reasonCode: "archive_workflow_scope_mismatch",
-      reasonMessage: `Registered workflow ${check.workflowId} is not authorized for permanent application root ${check.applicationRootId}`,
+      reasonMessage: "Registered workflow is not authorized for permanent application root",
     };
   }
 
@@ -308,7 +387,7 @@ export function evaluateWorkflowRegistrationReadinessLocally(
     return {
       outcome: "refused",
       reasonCode: "stale_revision",
-      reasonMessage: `Workflow active revision (${matchingWorkflow.workflowRevision}) does not match expected revision (${check.expectedRevision})`,
+      reasonMessage: "Expected workflow revision does not exist",
     };
   }
 
@@ -317,30 +396,34 @@ export function evaluateWorkflowRegistrationReadinessLocally(
     return {
       outcome: "refused",
       reasonCode: "workflow_not_active",
-      reasonMessage: `Workflow state is ${matchingWorkflow.state}, expected active`,
+      reasonMessage: "Workflow revision is not in active state",
     };
   }
 
-  // 7. Fingerprint verification check
-  if (
-    check.expectedFingerprint &&
-    metadata?.verifiedFlowFingerprint &&
-    check.expectedFingerprint !== metadata.verifiedFlowFingerprint
-  ) {
-    return {
-      outcome: "refused",
-      reasonCode: "stale_fingerprint",
-      reasonMessage: "Expected fingerprint does not match verified flow fingerprint",
-    };
+  // 7. Fingerprint verification check (strict parity with SQL)
+  // SQL: p_expected_fingerprint = definition_fingerprint OR p_expected_fingerprint = verified_flow_fingerprint
+  if (check.expectedFingerprint) {
+    const matchesDefinition = check.expectedFingerprint === matchingWorkflow.definitionFingerprint;
+    const matchesVerifiedFlow =
+      check.expectedFingerprint === matchingWorkflow.verifiedFlowFingerprint;
+
+    if (!matchesDefinition && !matchesVerifiedFlow) {
+      return {
+        outcome: "refused",
+        reasonCode: "stale_fingerprint",
+        reasonMessage:
+          "Expected fingerprint does not match workflow definition or verified flow fingerprint",
+      };
+    }
   }
 
   // 8. Destination compatibility check
-  if (check.archiveDestination && metadata?.supportedDestinations) {
-    if (!metadata.supportedDestinations.includes(check.archiveDestination)) {
+  if (check.archiveDestination) {
+    if (!matchingWorkflow.supportedDestinations.includes(check.archiveDestination as ArchiveDestinationReference)) {
       return {
         outcome: "refused",
         reasonCode: "destination_mismatch",
-        reasonMessage: `Workflow does not support archive destination "${check.archiveDestination}"`,
+        reasonMessage: "Workflow revision does not support the requested archive destination",
       };
     }
   }
@@ -352,8 +435,8 @@ export function evaluateWorkflowRegistrationReadinessLocally(
     organizationId: matchingWorkflow.organizationId,
     applicationRootId: check.applicationRootId,
     state: "active",
-    definitionFingerprint: check.expectedFingerprint ?? "sha256:" + "0".repeat(64),
-    verifiedFlowFingerprint: metadata?.verifiedFlowFingerprint ?? "sha256:" + "0".repeat(64),
-    supportedDestinations: metadata?.supportedDestinations ? [...metadata.supportedDestinations] : [],
+    definitionFingerprint: matchingWorkflow.definitionFingerprint,
+    verifiedFlowFingerprint: matchingWorkflow.verifiedFlowFingerprint,
+    supportedDestinations: [...matchingWorkflow.supportedDestinations],
   };
 }
