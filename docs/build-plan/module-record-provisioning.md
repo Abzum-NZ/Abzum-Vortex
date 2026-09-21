@@ -27,7 +27,7 @@ Current issue descriptions own pickup order and bounded implementation scope. Co
 
 ## Ownership, links and numbering
 
-- Initial account ownership derives from the current account. Initial Group ownership requires current membership. The compiled ownership spelling is `team`.
+- Initial account ownership derives from the current account. Initial Group ownership requires current membership. Ownership uses the current Group vocabulary; [#283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283) removes the obsolete `team` spelling and its translation adapter.
 - Reference allocation starts at one when omitted, honours an explicit start and treats digit width as a minimum. Allocation serializes within its null-safe counter scope.
 - Link values and canonical edges change atomically. Link changes and target deletion lock affected rows and reread the actual link before applying declared behaviour. Optional clearing needs child update authority; dependent deletion needs child delete authority.
 - Restore uses retained data but rechecks current definition, access, required values and fixed-target relationship consistency after locking targets. Full final-value and live-reference checks belong to the complete save operation.

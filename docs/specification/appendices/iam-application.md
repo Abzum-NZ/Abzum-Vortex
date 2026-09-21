@@ -40,7 +40,6 @@ flowchart TB
 
 The records shown in IAM are connected to people by stable organisation-account references. A Group assignment also shows the currently affected members. Global identity is used only to relate the person's accounts, not to transfer grants between them. Exact live assignment facts retain their [protected Access contracts](data-contracts.md#permission-and-role-contracts); do not introduce an independently editable assignment copy merely to render a normal record page.
 
-
 ## Initial application setup
 
 Phase 6 includes bounded initial application setup under [#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72). App coordinates installation and Access owns the protected initial-operating-rights operation. Existing tenant provisioning nominates the first steward but does not already grant business-application roles.

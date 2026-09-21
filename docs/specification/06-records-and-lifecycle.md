@@ -53,7 +53,7 @@ participant, defined by Record and wired by the higher-level application
 composition, never an arbitrary callback supplied by a request. Both use the
 same existing request transaction. Event cannot commit separately, and a missing
 participant cannot be replaced with a successful no-op. The concrete delivery
-sequence is recorded in the [installation and save plan](../build-plan/module-record-provisioning.md#package-wiring-and-bounded-delivery).
+sequence is recorded in the [installation and save plan](../build-plan/module-record-provisioning.md#protected-save).
 
 The save transaction performs these steps in order:
 

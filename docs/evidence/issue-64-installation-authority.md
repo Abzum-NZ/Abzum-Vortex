@@ -1,7 +1,7 @@
 # Application installation authority catalogue
 
 [Application runtime #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) ·
-[Installation permission plan](../build-plan/issue-64-application-runtime.md#installation-permission-delivered-with-the-storage-engine)
+[Installation permission plan](../build-plan/issue-64-application-runtime.md)
 
 ## Implemented scope
 

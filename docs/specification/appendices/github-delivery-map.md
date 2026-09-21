@@ -13,7 +13,7 @@ The [project roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) conta
 | 7 | Visual designers and start pages | [#75](https://github.com/Abzum-NZ/Abzum-Vortex/issues/75) | 07, 08; Page builder and frontend rule designer |
 | 8 | Search, files and query caching | [#87](https://github.com/Abzum-NZ/Abzum-Vortex/issues/87) | 10, 11 |
 | 9 | Workflows and delegated execution | [#98](https://github.com/Abzum-NZ/Abzum-Vortex/issues/98) | 09; frontend rule designer and IAM |
-| 10 | Connections and interfaces | [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109) | 12, 13 |
+| 10 | Connections and interfaces | [#109](https://github.com/Abzum-NZ/Abzum-Vortex/issues/109) | 12 |
 | 11 | Sharing, copying and data exchange | [#164](https://github.com/Abzum-NZ/Abzum-Vortex/issues/164) | 16 |
 | 12 | Privacy, retention and capability limits | [#165](https://github.com/Abzum-NZ/Abzum-Vortex/issues/165) | 14, 15 |
 | 13 | Operational functionality | [#166](https://github.com/Abzum-NZ/Abzum-Vortex/issues/166) | 17, 19 |
