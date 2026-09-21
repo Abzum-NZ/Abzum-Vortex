@@ -200,13 +200,16 @@ cleanup_fixture() {
   run_sql "
     begin;
     set local session_replication_role = replica;
+    delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
+    set local role vortex_record_adapter;
+    delete from vortex_record.delete_command_effects where organization_id = '$organization_id';
+    delete from vortex_record.delete_command_receipts where organization_id = '$organization_id';
+    delete from vortex_record.save_command_receipts where organization_id = '$organization_id';
+    reset role;
+    set local role vortex_record_owner;
     do \$cleanup\$
     begin
-      delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
-      delete from vortex_record.delete_command_effects where organization_id = '$organization_id';
-      delete from vortex_record.delete_command_receipts where organization_id = '$organization_id';
-      delete from vortex_record.save_command_receipts where organization_id = '$organization_id';
-      delete from vortex_record.relationship_edges where from_organisation_id = '$organization_id';
+    delete from vortex_record.relationship_edges where from_organisation_id = '$organization_id';
       if pg_catalog.to_regclass('record_data.$line_table') is not null then
         execute 'delete from record_data.$line_table where organisation_id = ''$organization_id''';
       end if;
@@ -223,13 +226,20 @@ cleanup_fixture() {
       where storage_contract_id in ('$parent_storage_id','$line_storage_id','$category_storage_id');
       delete from vortex_record.relationship_storage_mappings
       where relationship_id in ('$relationship_line_parent','$relationship_line_category');
-      delete from vortex_record.storage_catalogue
+    delete from vortex_record.storage_catalogue
       where storage_contract_id in ('$parent_storage_id','$line_storage_id','$category_storage_id');
-      delete from vortex_record.record_data_versions where organisation_id = '$organization_id';
-      delete from vortex_record.record_reference_counters where organisation_id = '$organization_id';
-      delete from vortex_module.installation_bindings where organization_id = '$organization_id';
-      delete from vortex_module.application_installations where organization_id = '$organization_id';
-      delete from vortex_event.record_occurrences where organization_id = '$organization_id';
+    delete from vortex_record.record_data_versions where organisation_id = '$organization_id';
+    delete from vortex_record.record_reference_counters where organisation_id = '$organization_id';
+    exception when others then
+      raise warning 'parent delete proof owner cleanup: %', sqlerrm;
+    end
+    \$cleanup\$;
+    reset role;
+    set local role vortex_module_owner;
+    delete from vortex_module.installation_bindings where organization_id = '$organization_id';
+    delete from vortex_module.application_installations where organization_id = '$organization_id';
+    reset role;
+    delete from vortex_event.record_occurrences where organization_id = '$organization_id';
       delete from vortex_event.record_occurrence_sequences where organization_id = '$organization_id';
       delete from vortex_activity.organization_activity_entries where organization_id = '$organization_id';
       delete from vortex_access.organization_role_assignments where organization_id = '$organization_id';
@@ -249,11 +259,7 @@ cleanup_fixture() {
       where root_id in ('$module_root_id','$application_root_id');
       delete from vortex_identity.organization_accounts where organization_id = '$organization_id';
       delete from vortex_identity.organizations where organization_id = '$organization_id';
-      delete from vortex_identity.tenants where tenant_id = '$tenant_id';
-    exception when others then
-      raise warning 'parent delete proof cleanup: %', sqlerrm;
-    end
-    \$cleanup\$;
+    delete from vortex_identity.tenants where tenant_id = '$tenant_id';
     commit;
   " >/dev/null
 }
@@ -632,8 +638,10 @@ run_sql "
   begin;
   delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();
   $(human_context "(select current_version from vortex_access.organization_access_versions where organization_id='$organization_id')")
-  set local role vortex_record_adapter;
   create temporary table proof_records (label text primary key, record_id uuid) on commit drop;
+  grant select, insert on proof_records to vortex_record_adapter;
+  grant select on proof_records to vortex_record_owner;
+  set local role vortex_record_adapter;
   insert into proof_records values
     ('reparent_parent', (vortex_record.create_record_internal('$parent_type_id'::uuid,
       pg_catalog.jsonb_build_object('$field_parent_title','Reparent parent'),
@@ -667,7 +675,9 @@ run_sql "
         '$field_line_category',pg_catalog.jsonb_build_object('recordTypeId','$category_type_id',
           'recordId',(select record_id from proof_records where label='totals_category'))),
       array['$field_line_amount','$field_line_parent','$field_line_category']::uuid[], null) ->> 'recordId')::uuid);
-  -- Fixed identities for the race statements below.
+  -- Fixed identities and their edges are owner-managed fixture state.
+  reset role;
+  set local role vortex_record_owner;
   update record_data.$parent_table set record_id = '$reparent_parent_id'
     where record_id = (select record_id from proof_records where label='reparent_parent');
   update record_data.$parent_table set record_id = '$reparent_other_parent_id'
@@ -719,6 +729,8 @@ run_sql "
       else $column_line_category end
   where organisation_id = '$organization_id';
   -- The category aggregates 10.00 + 3.00 before either race runs.
+  reset role;
+  set local role vortex_record_adapter;
   select vortex_record.apply_relationship_total_parent_internal('$category_type_id'::uuid,
     '$totals_category_id'::uuid, 1,
     pg_catalog.jsonb_build_object('$field_category_total','13.00'));
