@@ -1,0 +1,474 @@
+import type { ComponentData, Content, Data } from "@puckeditor/core";
+import {
+  applicationShellV2Schema,
+  blockPropertyValueV2Schema,
+  immutablePlatformBlockCatalogueV2Schema,
+  placementSlotV2Schema,
+  type ApplicationShellV2,
+  type BlockPropertySchemaV2Contract,
+  type BlockPropertyValueV2Contract,
+  type PlatformBlockReleaseV2,
+  type richTextDocumentV2Schema,
+} from "@vortex/contracts";
+
+/** Actual Puck Data. Page, shell, and guided-step selection remain Vortex orchestration. */
+export type VortexPuckDataV2 = Data;
+export type VortexPuckContentV2 = Content;
+
+export class VortexPuckAdapterError extends Error {
+  override readonly name = "VortexPuckAdapterError";
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+  }
+}
+
+const clone = <T>(value: T): T => {
+  try {
+    return structuredClone(value);
+  } catch (error) {
+    throw new VortexPuckAdapterError("Failed to clone Puck adapter data", { cause: error });
+  }
+};
+
+const releaseKey = (block: { blockId: string; releaseVersion: string }) =>
+  `${block.blockId}:${block.releaseVersion}`;
+
+const asObject = (value: unknown, at: string): Record<string, unknown> => {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new VortexPuckAdapterError(`Invalid Puck adapter data at ${at}`);
+  return value as Record<string, unknown>;
+};
+
+const exact = (value: unknown, keys: readonly string[], at: string) => {
+  const result = asObject(value, at);
+  if (Object.keys(result).some((key) => !keys.includes(key)))
+    throw new VortexPuckAdapterError(`Private or transient Puck data at ${at}`);
+  return result;
+};
+
+const string = (value: unknown, at: string) => {
+  if (typeof value !== "string" || !value)
+    throw new VortexPuckAdapterError(`Invalid Puck adapter data at ${at}`);
+  return value;
+};
+
+const sameOrderMetadata = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
+  for (const breakpoint of ["desktop", "tablet", "phone"] as const) {
+    const listA = a[breakpoint];
+    const listB = b[breakpoint];
+    if (!Array.isArray(listA) || !Array.isArray(listB)) {
+      if (listA !== listB) return false;
+      continue;
+    }
+    if (listA.length !== listB.length) return false;
+    for (let i = 0; i < listA.length; i++) {
+      if (listA[i] !== listB[i]) return false;
+    }
+  }
+  return true;
+};
+
+type VortexSlot = ReturnType<typeof placementSlotV2Schema.parse>;
+type RichTextDocument = ReturnType<typeof richTextDocumentV2Schema.parse>;
+type RichTextInline = { kind: string; children?: RichTextInline[] };
+
+const richTextKinds = (document: RichTextDocument): Set<string> => {
+  const kinds = new Set<string>();
+  const visitInline = (inline: RichTextInline): void => {
+    if (inline.kind === "text") return;
+    kinds.add(inline.kind);
+    for (const child of inline.children ?? []) visitInline(child);
+  };
+  for (const block of document.blocks) {
+    kinds.add(block.kind);
+    if ("children" in block) {
+      for (const child of block.children) visitInline(child);
+    } else {
+      for (const item of block.items) {
+        for (const child of item) visitInline(child);
+      }
+    }
+  }
+  return kinds;
+};
+
+const validatePropertyValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaV2Contract,
+  at: string,
+): void => {
+  let parsed: BlockPropertyValueV2Contract;
+  try {
+    parsed = blockPropertyValueV2Schema.parse(value);
+  } catch (error) {
+    throw new VortexPuckAdapterError(`Invalid property value at ${at}`, { cause: error });
+  }
+
+  if (parsed.kind !== declaration.kind) {
+    throw new VortexPuckAdapterError(
+      `Property value kind mismatch at ${at}: expected ${declaration.kind}, got ${parsed.kind}`,
+    );
+  }
+
+  switch (declaration.kind) {
+    case "text": {
+      const textVal = (parsed as { kind: "text"; value: string }).value;
+      if (textVal.length < declaration.minLength || textVal.length > declaration.maxLength) {
+        throw new VortexPuckAdapterError(
+          `Text property length out of range [${declaration.minLength}, ${declaration.maxLength}] at ${at}`,
+        );
+      }
+      break;
+    }
+    case "number": {
+      const numVal = (parsed as { kind: "number"; value: number }).value;
+      if (declaration.integer && !Number.isInteger(numVal)) {
+        throw new VortexPuckAdapterError(`Number property at ${at} must be an integer`);
+      }
+      if (declaration.minimum !== undefined && numVal < declaration.minimum) {
+        throw new VortexPuckAdapterError(
+          `Number property below minimum ${declaration.minimum} at ${at}`,
+        );
+      }
+      if (declaration.maximum !== undefined && numVal > declaration.maximum) {
+        throw new VortexPuckAdapterError(
+          `Number property above maximum ${declaration.maximum} at ${at}`,
+        );
+      }
+      break;
+    }
+    case "choice": {
+      const choiceVal = (parsed as { kind: "choice"; value: string }).value;
+      if (!declaration.options.some((opt) => opt.key === choiceVal)) {
+        throw new VortexPuckAdapterError(
+          `Choice value "${choiceVal}" not in declared options at ${at}`,
+        );
+      }
+      break;
+    }
+    case "rich_text": {
+      const doc = (
+        parsed as {
+          kind: "rich_text";
+          value: RichTextDocument;
+        }
+      ).value;
+      const allowed = new Set(declaration.allowedElements);
+      for (const kind of richTextKinds(doc)) {
+        if (!allowed.has(kind as never)) {
+          throw new VortexPuckAdapterError(`Disallowed rich text element "${kind}" at ${at}`);
+        }
+      }
+      break;
+    }
+    case "group": {
+      const groupVal = parsed as {
+        kind: "group";
+        properties: Record<string, BlockPropertyValueV2Contract>;
+      };
+      const declaredProps = new Map(
+        declaration.properties.map((property) => [property.key, property]),
+      );
+      for (const key of Object.keys(groupVal.properties)) {
+        if (!declaredProps.has(key)) {
+          throw new VortexPuckAdapterError(`Undeclared group property key "${key}" at ${at}`);
+        }
+      }
+      for (const property of declaration.properties) {
+        const nested = groupVal.properties[property.key];
+        if (nested === undefined) {
+          if (property.required) {
+            throw new VortexPuckAdapterError(
+              `Missing required group property "${property.key}" at ${at}`,
+            );
+          }
+        } else {
+          validatePropertyValue(nested, property, `${at}.${property.key}`);
+        }
+      }
+      break;
+    }
+    case "list": {
+      const listVal = parsed as { kind: "list"; items: BlockPropertyValueV2Contract[] };
+      if (
+        listVal.items.length < declaration.minimumItems ||
+        listVal.items.length > declaration.maximumItems
+      ) {
+        throw new VortexPuckAdapterError(
+          `List item count out of bounds [${declaration.minimumItems}, ${declaration.maximumItems}] at ${at}`,
+        );
+      }
+      for (const [idx, item] of listVal.items.entries()) {
+        validatePropertyValue(item, declaration.item, `${at}[${idx}]`);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+};
+
+const validateSettings = (
+  rawSettings: unknown,
+  declarations: readonly BlockPropertySchemaV2Contract[],
+  at: string,
+): Record<string, unknown> => {
+  const settings = asObject(rawSettings, at);
+  const declaredProperties = new Map(declarations.map((property) => [property.key, property]));
+
+  for (const key of Object.keys(settings)) {
+    if (!declaredProperties.has(key)) {
+      throw new VortexPuckAdapterError(`Undeclared property key "${key}" at ${at}`);
+    }
+  }
+
+  for (const declaration of declarations) {
+    const value = settings[declaration.key];
+    if (value === undefined) {
+      if (declaration.required) {
+        throw new VortexPuckAdapterError(`Missing required property "${declaration.key}" at ${at}`);
+      }
+    } else {
+      validatePropertyValue(value, declaration, `${at}.${declaration.key}`);
+    }
+  }
+
+  return settings;
+};
+
+export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
+  const catalogue = immutablePlatformBlockCatalogueV2Schema.parse(catalogueInput);
+  const releases = new Map(catalogue.releases.map((release) => [releaseKey(release), release]));
+  const releaseFor = (block: {
+    blockId: string;
+    releaseVersion: string;
+  }): PlatformBlockReleaseV2 => {
+    const release = releases.get(releaseKey(block));
+    if (!release)
+      throw new VortexPuckAdapterError(
+        `No platform renderer mapping exists for ${block.blockId}@${block.releaseVersion}`,
+      );
+    return release;
+  };
+  const toContent = (slotInput: unknown): Content => {
+    const slot = placementSlotV2Schema.parse(slotInput);
+    return slot.order.desktop.map((id) => {
+      const placement = slot.placements[id]!;
+      const release = releaseFor(placement.block);
+      const props: Record<string, unknown> = {
+        id,
+        settings: clone(placement.settings),
+        vortex: {
+          block: clone(placement.block),
+          ...(placement.viewPermissionKey === undefined
+            ? {}
+            : { viewPermissionKey: placement.viewPermissionKey }),
+          ...(placement.usePermissionKey === undefined
+            ? {}
+            : { usePermissionKey: placement.usePermissionKey }),
+          ...(placement.visibilityCondition === undefined
+            ? {}
+            : { visibilityCondition: clone(placement.visibilityCondition) }),
+          ...(placement.queryId === undefined ? {} : { queryId: placement.queryId }),
+          themeOverrides: clone(placement.themeOverrides),
+          responsive: clone(placement.responsive),
+          order: clone(slot.order),
+        },
+      };
+      for (const [key, child] of Object.entries(placement.slots)) {
+        if (!release.slots.some((slot) => slot.key === key))
+          throw new VortexPuckAdapterError(
+            `Undeclared Puck slot ${key} for ${release.rendererKey}`,
+          );
+        props[key] = toContent(child);
+      }
+      return { type: release.rendererKey, props } as ComponentData;
+    });
+  };
+
+  const fromContent = (
+    input: unknown,
+    depth: number,
+    seenPlacementIds: Set<string>,
+    state: { totalPlacements: number },
+    parentSlotDecl?: PlatformBlockReleaseV2["slots"][number],
+    at = "content",
+  ): VortexSlot => {
+    if (!Array.isArray(input))
+      throw new VortexPuckAdapterError(`Invalid Puck adapter data at ${at}`);
+    const placements: Record<string, unknown> = {};
+    const desktop: string[] = [];
+    let savedOrder: Record<string, unknown> = { desktop: [], tablet: [], phone: [] };
+    for (const [index, raw] of input.entries()) {
+      if (depth > catalogue.compositionPolicy.maximumDepth) {
+        throw new VortexPuckAdapterError(
+          `Composition depth ${depth} exceeds maximumDepth ${catalogue.compositionPolicy.maximumDepth}`,
+        );
+      }
+      state.totalPlacements += 1;
+      if (state.totalPlacements > catalogue.compositionPolicy.maximumPlacements) {
+        throw new VortexPuckAdapterError(
+          `Placement count ${state.totalPlacements} exceeds maximumPlacements ${catalogue.compositionPolicy.maximumPlacements}`,
+        );
+      }
+      const node = exact(raw, ["type", "props", "readOnly"], `${at}[${index}]`);
+      const props = asObject(node.props, `${at}[${index}].props`);
+      const id = string(props.id, `${at}[${index}].props.id`);
+      if (seenPlacementIds.has(id))
+        throw new VortexPuckAdapterError(`Duplicate Puck placement identity ${id}`);
+      seenPlacementIds.add(id);
+
+      const meta = exact(
+        props.vortex,
+        [
+          "block",
+          "viewPermissionKey",
+          "usePermissionKey",
+          "visibilityCondition",
+          "queryId",
+          "themeOverrides",
+          "responsive",
+          "order",
+        ],
+        `${at}[${index}].props.vortex`,
+      );
+      const block = exact(
+        meta.block,
+        ["blockId", "releaseVersion"],
+        `${at}[${index}].props.vortex.block`,
+      );
+      const release = releaseFor({
+        blockId: string(block.blockId, "blockId"),
+        releaseVersion: string(block.releaseVersion, "releaseVersion"),
+      });
+      if (string(node.type, `${at}[${index}].type`) !== release.rendererKey)
+        throw new VortexPuckAdapterError("Puck renderer does not match Vortex block");
+
+      if (
+        parentSlotDecl !== undefined &&
+        !parentSlotDecl.allowedChildCategories.includes(release.paletteGroup)
+      ) {
+        throw new VortexPuckAdapterError(
+          `Block palette group "${release.paletteGroup}" is not allowed in slot "${parentSlotDecl.key}"`,
+        );
+      }
+
+      const allowed = new Set([
+        "id",
+        "settings",
+        "vortex",
+        ...release.slots.map((slot) => slot.key),
+      ]);
+      if (Object.keys(props).some((key) => !allowed.has(key)))
+        throw new VortexPuckAdapterError(`Private or transient Puck data at ${at}[${index}].props`);
+
+      const settings = validateSettings(
+        props.settings,
+        release.properties,
+        `${at}[${index}].props.settings`,
+      );
+
+      const slots: Record<string, VortexSlot> = {};
+      for (const declaration of release.slots) {
+        const slotInput = props[declaration.key];
+        if (slotInput === undefined) {
+          if (declaration.required) {
+            throw new VortexPuckAdapterError(
+              `Missing required slot "${declaration.key}" at ${at}[${index}].props`,
+            );
+          }
+          continue;
+        }
+        const childSlot = fromContent(
+          slotInput,
+          depth + 1,
+          seenPlacementIds,
+          state,
+          declaration,
+          `${at}[${index}].props.${declaration.key}`,
+        );
+        slots[declaration.key] = childSlot;
+      }
+
+      const currentOrder = exact(
+        meta.order,
+        ["desktop", "tablet", "phone"],
+        `${at}[${index}].props.vortex.order`,
+      );
+      if (index === 0) {
+        savedOrder = currentOrder;
+      } else if (!sameOrderMetadata(currentOrder, savedOrder)) {
+        throw new VortexPuckAdapterError(
+          `Contradictory responsive order metadata across siblings at ${at}[${index}].props.vortex.order`,
+        );
+      }
+      placements[id] = {
+        block,
+        settings: clone(settings),
+        ...(meta.viewPermissionKey === undefined
+          ? {}
+          : { viewPermissionKey: string(meta.viewPermissionKey, "viewPermissionKey") }),
+        ...(meta.usePermissionKey === undefined
+          ? {}
+          : { usePermissionKey: string(meta.usePermissionKey, "usePermissionKey") }),
+        ...(meta.visibilityCondition === undefined
+          ? {}
+          : { visibilityCondition: clone(meta.visibilityCondition) }),
+        ...(meta.queryId === undefined ? {} : { queryId: string(meta.queryId, "queryId") }),
+        themeOverrides: clone(asObject(meta.themeOverrides, "themeOverrides")),
+        responsive: clone(asObject(meta.responsive, "responsive")),
+        slots,
+      };
+      desktop.push(id);
+    }
+    try {
+      return placementSlotV2Schema.parse({ placements, order: { ...clone(savedOrder), desktop } });
+    } catch (error) {
+      throw new VortexPuckAdapterError("Invalid placement slot schema", { cause: error });
+    }
+  };
+
+  const toPuckData = (slot: unknown): Data => ({ root: {}, content: toContent(slot), zones: {} });
+
+  const fromPuckData = (input: unknown): VortexSlot => {
+    try {
+      const data = exact(input, ["root", "content", "zones"], "data");
+      exact(data.root, [], "data.root");
+      if (data.zones === undefined || Object.keys(asObject(data.zones, "data.zones")).length)
+        throw new VortexPuckAdapterError("Invalid Puck adapter zones");
+      const seenPlacementIds = new Set<string>();
+      const state = { totalPlacements: 0 };
+      return fromContent(data.content, 1, seenPlacementIds, state, undefined, "content");
+    } catch (error) {
+      if (error instanceof VortexPuckAdapterError) throw error;
+      throw new VortexPuckAdapterError("Inbound Puck data validation failed", { cause: error });
+    }
+  };
+
+  const fromPuckShell = (shell: ApplicationShellV2, data: unknown): ApplicationShellV2 => {
+    let parsedShell: ApplicationShellV2;
+    try {
+      parsedShell = applicationShellV2Schema.parse(shell);
+    } catch (error) {
+      throw new VortexPuckAdapterError("Invalid application shell input", { cause: error });
+    }
+    const layout = fromPuckData(data);
+    const assembled: ApplicationShellV2 = {
+      ...parsedShell,
+      layout,
+    };
+    try {
+      return applicationShellV2Schema.parse(assembled);
+    } catch (error) {
+      throw new VortexPuckAdapterError("Invalid assembled application shell", { cause: error });
+    }
+  };
+
+  return Object.freeze({
+    toPuckData,
+    fromPuckData,
+    toPuckShell: (shell: ApplicationShellV2): Data =>
+      toPuckData(applicationShellV2Schema.parse(shell).layout),
+    fromPuckShell,
+  });
+};
