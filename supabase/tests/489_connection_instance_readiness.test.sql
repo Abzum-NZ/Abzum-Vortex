@@ -219,6 +219,7 @@ select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'identityId', '44890000-0000-4000-8000-000000000001',
   'organizationAccountId', '54890000-0000-4000-8000-000000000001',
   'callerKind', 'human',
+  'identityAuthorityId', '94890000-0000-4000-8000-000000000002',
   'sessionId', 'a4890000-0000-4000-8000-000000000010',
   'correlationId', 'a4890000-0000-4000-8000-000000000011',
   'accessVersion', 1,
@@ -288,6 +289,8 @@ select throws_ok(
 
 -- Canonical human administration rejects a stale Access version.
 reset role;
+delete from vortex_context.request_contexts
+where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'tenantId', '14890000-0000-4000-8000-000000000001',
   'organizationId', '24890000-0000-4000-8000-000000000001',
@@ -295,6 +298,7 @@ select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'identityId', '44890000-0000-4000-8000-000000000001',
   'organizationAccountId', '54890000-0000-4000-8000-000000000001',
   'callerKind', 'human',
+  'identityAuthorityId', '94890000-0000-4000-8000-000000000002',
   'sessionId', 'a4890000-0000-4000-8000-000000000012',
   'correlationId', 'a4890000-0000-4000-8000-000000000013',
   'accessVersion', 99,
@@ -316,6 +320,8 @@ select throws_ok(
 
 -- Canonical human administration rejects a fabricated organisation-local account.
 reset role;
+delete from vortex_context.request_contexts
+where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'tenantId', '14890000-0000-4000-8000-000000000001',
   'organizationId', '24890000-0000-4000-8000-000000000001',
@@ -323,6 +329,7 @@ select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'identityId', '44890000-0000-4000-8000-000000000001',
   'organizationAccountId', '54890000-0000-4000-8000-000000000099',
   'callerKind', 'human',
+  'identityAuthorityId', '94890000-0000-4000-8000-000000000002',
   'sessionId', 'a4890000-0000-4000-8000-000000000014',
   'correlationId', 'a4890000-0000-4000-8000-000000000015',
   'accessVersion', 1,
@@ -344,6 +351,8 @@ select throws_ok(
 
 -- Restore the real current Org A account and Access version.
 reset role;
+delete from vortex_context.request_contexts
+where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'tenantId', '14890000-0000-4000-8000-000000000001',
   'organizationId', '24890000-0000-4000-8000-000000000001',
@@ -351,6 +360,7 @@ select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'identityId', '44890000-0000-4000-8000-000000000001',
   'organizationAccountId', '54890000-0000-4000-8000-000000000001',
   'callerKind', 'human',
+  'identityAuthorityId', '94890000-0000-4000-8000-000000000002',
   'sessionId', 'a4890000-0000-4000-8000-000000000016',
   'correlationId', 'a4890000-0000-4000-8000-000000000017',
   'accessVersion', 1,
@@ -759,6 +769,8 @@ select is(
 
 -- Exercise the separately governed system administration path and every illegal source state.
 reset role;
+delete from vortex_context.request_contexts
+where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'tenantId', '14890000-0000-4000-8000-000000000001',
   'organizationId', '24890000-0000-4000-8000-000000000001',
@@ -911,6 +923,8 @@ select results_eq(
 
 -- RLS Isolation: Org B request context cannot see Org A connection instances
 reset role;
+delete from vortex_context.request_contexts
+where backend_pid = pg_catalog.pg_backend_pid();
 select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'tenantId', '14890000-0000-4000-8000-000000000001',
   'organizationId', '24890000-0000-4000-8000-000000000002',
@@ -918,6 +932,7 @@ select vortex_context.initialize(pg_catalog.jsonb_build_object(
   'identityId', '44890000-0000-4000-8000-000000000001',
   'organizationAccountId', '54890000-0000-4000-8000-000000000002',
   'callerKind', 'human',
+  'identityAuthorityId', '94890000-0000-4000-8000-000000000002',
   'sessionId', 'a4890000-0000-4000-8000-000000000020',
   'correlationId', 'a4890000-0000-4000-8000-000000000021',
   'accessVersion', 1,

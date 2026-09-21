@@ -805,7 +805,7 @@ begin
   set last_health_outcome = p_new_health_outcome,
       state = next_state,
       revision = revision + 1,
-      administrator_activity_id = pg_catalog.coalesce(p_administrator_activity_id, administrator_activity_id),
+      administrator_activity_id = coalesce(p_administrator_activity_id, administrator_activity_id),
       updated_at = operation_at
   where connection_instance_id = p_connection_instance_id
     and revision = p_expected_revision
@@ -935,7 +935,7 @@ begin
   update vortex_connection.connection_instances
   set state = 'pending',
       last_health_outcome = 'unknown',
-      destination_fingerprint = pg_catalog.coalesce(p_destination_fingerprint, destination_fingerprint),
+      destination_fingerprint = coalesce(p_destination_fingerprint, destination_fingerprint),
       token_expires_at = p_token_expires_at,
       administrator_activity_id = p_administrator_activity_id,
       revision = revision + 1,
