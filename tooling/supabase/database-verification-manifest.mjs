@@ -5,6 +5,7 @@ const manifestRelativePath = "workflows/kestra/database-verification.json";
 const migrationPattern = /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/;
 const proofPattern = /^supabase\/tests\/[a-z0-9-]+-concurrency\.test\.sh$/;
 const schemaPattern = /^(?:public|record_data|vortex_[a-z0-9_]+)$/;
+const qualifiedCoalescePattern = /\bpg_catalog\.coalesce\s*\(/i;
 
 const sameValues = (left, right) =>
   left.length === right.length && left.every((value, index) => value === right[index]);
@@ -88,6 +89,10 @@ export const loadDatabaseVerificationManifest = async (root) => {
   );
   for (const migrationName of migrationNames) {
     const sql = await readFile(resolve(root, "supabase/migrations", migrationName), "utf8");
+    if (qualifiedCoalescePattern.test(sql))
+      throw new Error(
+        `Database migration must not schema-qualify the COALESCE special form: ${migrationName}`,
+      );
     for (const match of sql.matchAll(
       /\bcreate\s+schema\s+(?:if\s+not\s+exists\s+)?(record_data|vortex_[a-z0-9_]+)\b/gi,
     ))

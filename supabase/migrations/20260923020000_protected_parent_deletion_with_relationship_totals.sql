@@ -329,7 +329,7 @@ begin
     raise exception using errcode = '42501',
       message = 'Delete effect journal is unavailable';
   end if;
-  select pg_catalog.coalesce(pg_catalog.max(effect.effect_sequence), 0) + 1
+  select coalesce(pg_catalog.max(effect.effect_sequence), 0) + 1
   into next_sequence
   from vortex_record.delete_command_effects as effect
   where effect.organization_id = (context_value ->> 'organizationId')::uuid
@@ -429,7 +429,7 @@ begin
     raise exception using errcode = 'P0002', message = 'Record is unavailable';
   end if;
   deleted_field_values := pg_catalog.jsonb_strip_nulls(
-    pg_catalog.coalesce(record_fact -> 'fieldValues', '{}'::jsonb)
+    coalesce(record_fact -> 'fieldValues', '{}'::jsonb)
   );
   facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
     'binding', meta -> 'declaration' -> 'recordBinding'
@@ -624,7 +624,7 @@ begin
   ) then
     return null;
   end if;
-  select pg_catalog.coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
     'recordTypeId', pg_catalog.lower(effect.record_type_id::text),
     'recordId', pg_catalog.lower(effect.record_id::text),
     'storageContractId', pg_catalog.lower(effect.storage_contract_id::text),
@@ -863,7 +863,7 @@ begin
       end if;
       records := records || pg_catalog.jsonb_build_array(closure_record);
     end loop;
-    signatures := signatures || pg_catalog.coalesce((
+    signatures := signatures || coalesce((
       select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
         'from', case when item.value ->> 'from' = 'root'
           then seed_key else item.value ->> 'from' end,
@@ -878,7 +878,7 @@ begin
   return pg_catalog.jsonb_build_object(
     'records', records,
     'deletedRecordKeys', deleted_keys,
-    'signatures', pg_catalog.coalesce((
+    'signatures', coalesce((
       select pg_catalog.jsonb_agg(distinct item.value order by item.value)
       from pg_catalog.jsonb_array_elements(signatures) as item(value)
     ), '[]'::jsonb)
@@ -1042,7 +1042,7 @@ begin
   -- is refused rather than written stale. This follows the established
   -- unsupported refusal at 20260914013000:818-900; unlike the save path there
   -- is no outer writer left to defer to.
-  if pg_catalog.coalesce((catalogue ->> 'hasInstalledRules')::boolean, false)
+  if coalesce((catalogue ->> 'hasInstalledRules')::boolean, false)
     and exists (
       select 1
       from pg_catalog.jsonb_array_elements(after_closure -> 'records') as item(value)
@@ -1321,7 +1321,7 @@ begin
     if preparation ->> 'outcome' is distinct from 'prepared' then
       refusal_value := pg_catalog.jsonb_build_object(
         'outcome', 'refused',
-        'reasonCode', pg_catalog.coalesce(
+        'reasonCode', coalesce(
           preparation ->> 'reasonCode', 'unsupported_relationship_total_save'
         ),
         'correlationId', correlation_id_value
@@ -1427,12 +1427,12 @@ begin
       message = 'Protected parent delete preparation is no longer current';
   end if;
 
-  select pg_catalog.coalesce(pg_catalog.jsonb_agg(
+  select coalesce(pg_catalog.jsonb_agg(
     pg_catalog.jsonb_build_object(
       'recordTypeId', item.value -> 'recordTypeId',
       'recordId', item.value -> 'recordId',
       'expectedConcurrencyNumber', item.value -> 'concurrencyNumber',
-      'finalFieldIds', pg_catalog.coalesce((
+      'finalFieldIds', coalesce((
         select pg_catalog.jsonb_agg(
           pg_catalog.lower(field.value ->> 'fieldId')
           order by pg_catalog.lower(field.value ->> 'fieldId') collate "C"
@@ -1444,12 +1444,12 @@ begin
   ), '[]'::jsonb) into expected_parents
   from pg_catalog.jsonb_array_elements(preparation -> 'records') as item(value)
   where item.value ->> 'recordKey' <> 'root';
-  select pg_catalog.coalesce(pg_catalog.jsonb_agg(
+  select coalesce(pg_catalog.jsonb_agg(
     pg_catalog.jsonb_build_object(
       'recordTypeId', item.value -> 'recordTypeId',
       'recordId', item.value -> 'recordId',
       'expectedConcurrencyNumber', item.value -> 'expectedConcurrencyNumber',
-      'finalFieldIds', pg_catalog.coalesce((
+      'finalFieldIds', coalesce((
         select pg_catalog.jsonb_agg(field_id order by field_id collate "C")
         from pg_catalog.jsonb_object_keys(item.value -> 'finalValues') as field(field_id)
       ), '[]'::jsonb)
@@ -1482,11 +1482,11 @@ begin
     from pg_catalog.jsonb_array_elements(preparation -> 'records') as item(value)
     where item.value ->> 'recordTypeId' = parent_value ->> 'recordTypeId'
       and item.value ->> 'recordId' = parent_value ->> 'recordId';
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_object_agg(entry.key, entry.value), '{}'::jsonb
     ) into reduced_final_values
     from pg_catalog.jsonb_each(parent_value -> 'finalValues') as entry(key, value)
-    where entry.value is distinct from pg_catalog.coalesce(
+    where entry.value is distinct from coalesce(
       prepared_parent -> 'existingValues' -> entry.key, 'null'::jsonb
     );
     perform vortex_record.apply_relationship_total_parent_internal(

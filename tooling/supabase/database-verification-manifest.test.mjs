@@ -47,7 +47,7 @@ const createFixture = async ({
 };
 
 describe("Database verification manifest", () => {
-  test("includes the generated record-data schema in database lint", async () => {
+  test("includes generated record-data in lint and rejects qualified COALESCE", async () => {
     const root = await createFixture({
       lintSchemas: ["public", "vortex_fixture", "record_data"],
       migrationSql:
@@ -55,6 +55,14 @@ describe("Database verification manifest", () => {
     });
 
     expect((await loadDatabaseVerificationManifest(root)).lintSchemas).toContain("record_data");
+
+    const invalidRoot = await createFixture({
+      migrationSql:
+        "create schema vortex_fixture authorization postgres; select pg_catalog.coalesce(null, 1);\n",
+    });
+    await expect(loadDatabaseVerificationManifest(invalidRoot)).rejects.toThrow(
+      "must not schema-qualify the COALESCE special form",
+    );
   });
 
   test("refuses omission of the generated record-data schema", async () => {
