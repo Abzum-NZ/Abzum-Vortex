@@ -198,23 +198,60 @@ export async function readRegisteredWorkflowEvidence(
       );
     }
 
-    // Parse authorized applications
-    const rawAppIds = Array.isArray(row.authorized_application_ids)
-      ? row.authorized_application_ids
-      : [];
-    const authorizedApplicationIds: ApplicationRootId[] = rawAppIds.map((id) =>
-      applicationRootIdSchema.parse(id),
-    );
+    // Parse authorized applications: must be a real array, no fallback to []
+    if (!Array.isArray(row.authorized_application_ids)) {
+      throw new Error(
+        `Workflow registration readiness: missing or malformed authorized applications array for ${rawWorkflowId}`,
+      );
+    }
+    const seenAppIds = new Set<string>();
+    const authorizedApplicationIds: ApplicationRootId[] = [];
+    let prevAppId: string | null = null;
+    for (const rawAppId of row.authorized_application_ids) {
+      const parsedAppId = applicationRootIdSchema.parse(rawAppId);
+      if (seenAppIds.has(parsedAppId)) {
+        throw new Error(
+          `Workflow registration readiness: duplicate authorized application ID for ${rawWorkflowId}: ${parsedAppId}`,
+        );
+      }
+      if (prevAppId !== null && parsedAppId <= prevAppId) {
+        throw new Error(
+          `Workflow registration readiness: non-canonically ordered authorized application IDs for ${rawWorkflowId}`,
+        );
+      }
+      seenAppIds.add(parsedAppId);
+      prevAppId = parsedAppId;
+      authorizedApplicationIds.push(parsedAppId);
+    }
 
     const definitionFingerprint = fingerprintSchema.parse(row.definition_fingerprint);
     const verifiedFlowFingerprint = fingerprintSchema.parse(row.verified_flow_fingerprint);
 
-    const rawDestinations = Array.isArray(row.supported_destinations)
-      ? row.supported_destinations
-      : [];
-    const supportedDestinations: ArchiveDestinationReference[] = rawDestinations.map((d) =>
-      archiveDestinationReferenceSchema.parse(d),
-    );
+    // Parse supported destinations: must be a real array, no fallback to []
+    if (!Array.isArray(row.supported_destinations)) {
+      throw new Error(
+        `Workflow registration readiness: missing or malformed supported destinations array for ${rawWorkflowId}`,
+      );
+    }
+    const seenDestinations = new Set<string>();
+    const supportedDestinations: ArchiveDestinationReference[] = [];
+    let prevDest: string | null = null;
+    for (const rawDest of row.supported_destinations) {
+      const parsedDest = archiveDestinationReferenceSchema.parse(rawDest);
+      if (seenDestinations.has(parsedDest)) {
+        throw new Error(
+          `Workflow registration readiness: duplicate supported destination for ${rawWorkflowId}: ${parsedDest}`,
+        );
+      }
+      if (prevDest !== null && parsedDest <= prevDest) {
+        throw new Error(
+          `Workflow registration readiness: non-canonically ordered supported destinations for ${rawWorkflowId}`,
+        );
+      }
+      seenDestinations.add(parsedDest);
+      prevDest = parsedDest;
+      supportedDestinations.push(parsedDest);
+    }
 
     const parsedItem = registeredWorkflowReadinessEvidenceSchema.parse({
       workflowId: rawWorkflowId,

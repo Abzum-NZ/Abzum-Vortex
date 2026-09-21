@@ -77,6 +77,7 @@
     "supabase/tests/470_permission_record_scope_parity.test.sql",
     "supabase/tests/472_definition_field_policy_publication.test.sql",
     "supabase/tests/475_record_adapters.test.sql",
+    "supabase/tests/477_workflow_registration_state.test.sql",
     "supabase/tests/480_system_application_bound_release_set.test.sql",
     "supabase/tests/485_organization_runtime_settings.test.sql",
     "supabase/tests/485_private_event_append.test.sql",

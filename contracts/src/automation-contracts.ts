@@ -447,11 +447,19 @@ export const registeredWorkflowReadinessEvidenceSchema = z
     workflowId: workflowIdSchema,
     workflowRevision: revisionSchema,
     organizationId: organizationIdSchema,
-    authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
+    authorizedApplicationIds: z
+      .array(applicationRootIdSchema)
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: "authorizedApplicationIds must not contain duplicate entries",
+      }),
     state: z.literal("active"),
     definitionFingerprint: fingerprintSchema,
     verifiedFlowFingerprint: fingerprintSchema,
-    supportedDestinations: z.array(archiveDestinationReferenceSchema),
+    supportedDestinations: z
+      .array(archiveDestinationReferenceSchema)
+      .refine((dests) => new Set(dests).size === dests.length, {
+        message: "supportedDestinations must not contain duplicate entries",
+      }),
   })
   .strict();
 

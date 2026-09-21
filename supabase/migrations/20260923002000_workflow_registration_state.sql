@@ -110,6 +110,53 @@ create trigger workflow_roots_immutability
   for each row execute function vortex_workflow.protect_workflow_root_identity();
 
 -- ============================================================================
+-- Helper: vortex_workflow.supported_destinations_are_valid
+-- Validates supported destinations array at persistence time:
+-- Non-null 1-D array, elements strictly between 1 and 80 chars, lowercase kebab/snake-case,
+-- non-null elements, no duplicates, deterministically sorted in strictly ascending order.
+-- ============================================================================
+create function vortex_workflow.supported_destinations_are_valid(p_destinations text[])
+returns boolean
+language plpgsql
+immutable
+security invoker
+set search_path = ''
+as $function$
+declare
+  dest text;
+  previous_dest text := null;
+begin
+  if p_destinations is null then
+    return false;
+  end if;
+
+  if pg_catalog.array_ndims(p_destinations) is not null and pg_catalog.array_ndims(p_destinations) > 1 then
+    return false;
+  end if;
+
+  foreach dest in array p_destinations loop
+    if dest is null then
+      return false;
+    end if;
+
+    if pg_catalog.char_length(dest) < 1
+       or pg_catalog.char_length(dest) > 80
+       or dest !~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$' then
+      return false;
+    end if;
+
+    if previous_dest is not null and dest <= previous_dest then
+      return false;
+    end if;
+
+    previous_dest := dest;
+  end loop;
+
+  return true;
+end
+$function$;
+
+-- ============================================================================
 -- Table 2: vortex_workflow.workflow_revisions
 -- Exact registered, prepared, and verified revisions and fingerprints.
 -- ============================================================================
@@ -153,22 +200,7 @@ create table vortex_workflow.workflow_revisions (
     or (state in ('inactive', 'superseded'))
   ),
   constraint workflow_revisions_destinations_closed check (
-    supported_destinations is not null
-    and (
-      select coalesce(
-        bool_and(
-          pg_catalog.char_length(dest) between 1 and 80
-          and dest ~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$'
-        ),
-        true
-      )
-      from unnest(supported_destinations) as dest
-    )
-    and (
-      cardinality(supported_destinations) = (
-        select count(distinct d) from unnest(supported_destinations) as d
-      )
-    )
+    vortex_workflow.supported_destinations_are_valid(supported_destinations)
   ),
   constraint workflow_revisions_registered_at_finite check (
     registered_at <> '-infinity'::timestamptz and registered_at <> 'infinity'::timestamptz
@@ -217,31 +249,32 @@ begin
       message = 'Superseded workflow revision is permanent and immutable';
   end if;
 
-  -- Active revisions can only transition to superseded or inactive.
-  if old.state = 'active' and new.state not in ('active', 'superseded', 'inactive') then
+  -- Inactive revisions are terminal and cannot be reactivated.
+  if old.state = 'inactive' then
     raise exception using errcode = '23514',
-      message = 'Active workflow revision can only transition to superseded or inactive';
+      message = 'Inactive workflow revision cannot be reactivated';
+  end if;
+
+  -- Active revisions can only transition to superseded when replaced by a strictly newer activation.
+  if old.state = 'active' and new.state <> 'superseded' then
+    raise exception using errcode = '23514',
+      message = 'Active workflow revision can only transition to superseded';
   end if;
 
   -- Lifecycle progression guards:
-  if old.state = 'registered' and new.state not in ('registered', 'prepared', 'inactive') then
+  if old.state = 'registered' and new.state not in ('registered', 'prepared') then
     raise exception using errcode = '23514',
-      message = 'Registered workflow revision must be prepared before verification or activation';
+      message = 'Registered workflow revision can only transition to prepared';
   end if;
 
-  if old.state = 'prepared' and new.state not in ('prepared', 'verified', 'inactive') then
+  if old.state = 'prepared' and new.state not in ('prepared', 'verified') then
     raise exception using errcode = '23514',
-      message = 'Prepared workflow revision must be verified before activation';
+      message = 'Prepared workflow revision can only transition to verified';
   end if;
 
-  if old.state = 'verified' and new.state not in ('verified', 'active', 'inactive') then
+  if old.state = 'verified' and new.state not in ('verified', 'active') then
     raise exception using errcode = '23514',
-      message = 'Verified workflow revision can only transition to active or inactive';
-  end if;
-
-  if old.state = 'inactive' and new.state not in ('inactive', 'active') then
-    raise exception using errcode = '23514',
-      message = 'Inactive workflow revision can only transition to active';
+      message = 'Verified workflow revision can only transition to active';
   end if;
 
   return new;
@@ -414,7 +447,12 @@ begin
   end if;
 
   -- 3. Canonicalize destination list: reject nulls and invalid grammar, sort deterministically
-  if p_supported_destinations is not null and cardinality(p_supported_destinations) > 0 then
+  if p_supported_destinations is null then
+    raise exception using errcode = '22023',
+      message = 'Supported destinations array is required and cannot be null';
+  end if;
+
+  if cardinality(p_supported_destinations) > 0 then
     foreach dest_item in array p_supported_destinations loop
       if dest_item is null
         or pg_catalog.char_length(dest_item) < 1
@@ -635,46 +673,6 @@ begin
 end
 $function$;
 
--- Deactivate an active workflow revision to 'inactive'.
-create function vortex_workflow.deactivate_workflow_revision_internal(
-  p_workflow_id uuid,
-  p_revision bigint,
-  p_changed_by uuid,
-  p_change_correlation_id uuid
-)
-returns void
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-begin
-  -- Serialize per workflow root
-  perform 1
-  from vortex_workflow.workflow_roots as root
-  where root.workflow_id = p_workflow_id
-  for update;
-
-  if not found then
-    raise exception using errcode = 'P0002',
-      message = 'Workflow root not found for revision deactivation';
-  end if;
-
-  update vortex_workflow.workflow_revisions
-  set state = 'inactive',
-      changed_at = pg_catalog.statement_timestamp(),
-      changed_by = p_changed_by,
-      change_correlation_id = p_change_correlation_id
-  where workflow_id = p_workflow_id
-    and revision = p_revision
-    and state = 'active';
-
-  if not found then
-    raise exception using errcode = '55000',
-      message = 'Workflow revision cannot be deactivated: revision not found or not active';
-  end if;
-end
-$function$;
 
 -- ============================================================================
 -- Owner-projected read/check surface.

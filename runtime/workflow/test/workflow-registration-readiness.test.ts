@@ -147,6 +147,60 @@ describe("registeredWorkflowReadinessEvidenceSchema", () => {
     expect(registeredWorkflowReadinessEvidenceSchema.safeParse(missingFp).success).toBe(false);
   });
 
+  it("rejects evidence missing authorizedApplicationIds (no default)", () => {
+    const missingApps = {
+      workflowId: WORKFLOW_ID_ONE,
+      workflowRevision: 3,
+      organizationId: ORG_ID_ONE,
+      state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: [DESTINATION_A],
+    };
+    expect(registeredWorkflowReadinessEvidenceSchema.safeParse(missingApps).success).toBe(false);
+  });
+
+  it("rejects evidence with duplicate authorizedApplicationIds", () => {
+    const dupApps = {
+      workflowId: WORKFLOW_ID_ONE,
+      workflowRevision: 3,
+      organizationId: ORG_ID_ONE,
+      authorizedApplicationIds: [APP_ROOT_ID_ONE, APP_ROOT_ID_ONE],
+      state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: [DESTINATION_A],
+    };
+    expect(registeredWorkflowReadinessEvidenceSchema.safeParse(dupApps).success).toBe(false);
+  });
+
+  it("rejects evidence missing supportedDestinations", () => {
+    const missingDest = {
+      workflowId: WORKFLOW_ID_ONE,
+      workflowRevision: 3,
+      organizationId: ORG_ID_ONE,
+      authorizedApplicationIds: [APP_ROOT_ID_ONE],
+      state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+    };
+    expect(registeredWorkflowReadinessEvidenceSchema.safeParse(missingDest).success).toBe(false);
+  });
+
+  it("rejects evidence with duplicate supportedDestinations", () => {
+    const dupDest = {
+      workflowId: WORKFLOW_ID_ONE,
+      workflowRevision: 3,
+      organizationId: ORG_ID_ONE,
+      authorizedApplicationIds: [APP_ROOT_ID_ONE],
+      state: "active",
+      definitionFingerprint: FINGERPRINT_A,
+      verifiedFlowFingerprint: FINGERPRINT_FLOW,
+      supportedDestinations: [DESTINATION_A, DESTINATION_A],
+    };
+    expect(registeredWorkflowReadinessEvidenceSchema.safeParse(dupDest).success).toBe(false);
+  });
+
   it("rejects evidence with non-canonical destination string", () => {
     const badDest = {
       workflowId: WORKFLOW_ID_ONE,
@@ -422,6 +476,126 @@ describe("readRegisteredWorkflowEvidence", () => {
     await expect(
       readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
     ).rejects.toThrow(/non-active workflow/);
+  });
+
+  it("fails closed on non-array authorized_application_ids", async () => {
+    const mockRows = [
+      {
+        workflow_id: WORKFLOW_ID_ONE,
+        workflow_revision: 1,
+        organization_id: ORG_ID_ONE,
+        authorized_application_ids: null,
+        state: "active",
+        definition_fingerprint: FINGERPRINT_A,
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A],
+      },
+    ];
+
+    const tx = createMockTransaction(mockRows);
+    await expect(
+      readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
+    ).rejects.toThrow(/missing or malformed authorized applications array/);
+  });
+
+  it("fails closed on duplicate authorized_application_ids", async () => {
+    const mockRows = [
+      {
+        workflow_id: WORKFLOW_ID_ONE,
+        workflow_revision: 1,
+        organization_id: ORG_ID_ONE,
+        authorized_application_ids: [APP_ROOT_ID_ONE, APP_ROOT_ID_ONE],
+        state: "active",
+        definition_fingerprint: FINGERPRINT_A,
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A],
+      },
+    ];
+
+    const tx = createMockTransaction(mockRows);
+    await expect(
+      readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
+    ).rejects.toThrow(/duplicate authorized application ID/);
+  });
+
+  it("fails closed on unsorted authorized_application_ids", async () => {
+    const mockRows = [
+      {
+        workflow_id: WORKFLOW_ID_ONE,
+        workflow_revision: 1,
+        organization_id: ORG_ID_ONE,
+        authorized_application_ids: [APP_ROOT_ID_TWO, APP_ROOT_ID_ONE],
+        state: "active",
+        definition_fingerprint: FINGERPRINT_A,
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A],
+      },
+    ];
+
+    const tx = createMockTransaction(mockRows);
+    await expect(
+      readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
+    ).rejects.toThrow(/non-canonically ordered authorized application IDs/);
+  });
+
+  it("fails closed on non-array supported_destinations", async () => {
+    const mockRows = [
+      {
+        workflow_id: WORKFLOW_ID_ONE,
+        workflow_revision: 1,
+        organization_id: ORG_ID_ONE,
+        authorized_application_ids: [APP_ROOT_ID_ONE],
+        state: "active",
+        definition_fingerprint: FINGERPRINT_A,
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: null,
+      },
+    ];
+
+    const tx = createMockTransaction(mockRows);
+    await expect(
+      readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
+    ).rejects.toThrow(/missing or malformed supported destinations array/);
+  });
+
+  it("fails closed on duplicate supported_destinations", async () => {
+    const mockRows = [
+      {
+        workflow_id: WORKFLOW_ID_ONE,
+        workflow_revision: 1,
+        organization_id: ORG_ID_ONE,
+        authorized_application_ids: [APP_ROOT_ID_ONE],
+        state: "active",
+        definition_fingerprint: FINGERPRINT_A,
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_A, DESTINATION_A],
+      },
+    ];
+
+    const tx = createMockTransaction(mockRows);
+    await expect(
+      readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
+    ).rejects.toThrow(/duplicate supported destination/);
+  });
+
+  it("fails closed on unsorted supported_destinations", async () => {
+    const mockRows = [
+      {
+        workflow_id: WORKFLOW_ID_ONE,
+        workflow_revision: 1,
+        organization_id: ORG_ID_ONE,
+        authorized_application_ids: [APP_ROOT_ID_ONE],
+        state: "active",
+        definition_fingerprint: FINGERPRINT_A,
+        verified_flow_fingerprint: FINGERPRINT_FLOW,
+        supported_destinations: [DESTINATION_B, DESTINATION_A],
+      },
+    ];
+
+    const tx = createMockTransaction(mockRows);
+    await expect(
+      readRegisteredWorkflowEvidence(tx, { organizationId: ORG_ID_ONE }),
+    ).rejects.toThrow(/non-canonically ordered supported destinations/);
   });
 });
 

@@ -117,7 +117,7 @@ run_sql "
     '$app_root_id', '$organization_id', 'application', 'vortex.conc.app',
     clock_timestamp(), '$actor_id'
   );
-  select vortex_workflow.record_workflow_root_internal(
+  select vortex_workflow.register_workflow_root_internal(
     '$workflow_id', '$organization_id', 'test.conc.workflow', 'Concurrency test workflow', '$actor_id'
   );
   select vortex_workflow.authorize_workflow_application_internal(
@@ -134,7 +134,7 @@ begin;
 set lock_timeout = '30s';
 set statement_timeout = '45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/holder.pid'
-select vortex_workflow.record_workflow_revision_internal(
+select vortex_workflow.register_workflow_revision_internal(
   '$workflow_id', 1,
   'sha256:1111111111111111111111111111111111111111111111111111111111111111',
   array['cold_archive_s3'],
@@ -155,7 +155,7 @@ begin;
 set lock_timeout = '30s';
 set statement_timeout = '45s';
 select pg_catalog.pg_backend_pid() \g '$proof_root/waiter.pid'
-select vortex_workflow.record_workflow_revision_internal(
+select vortex_workflow.register_workflow_revision_internal(
   '$workflow_id', 2,
   'sha256:2222222222222222222222222222222222222222222222222222222222222222',
   array['cold_archive_s3'],
@@ -187,12 +187,12 @@ max_rev="$(run_sql "select max(revision) from vortex_workflow.workflow_revisions
 # Prepare, verify, and activate revision 1
 run_sql "
   begin;
-  select vortex_workflow.mark_workflow_revision_prepared_internal(
+  select vortex_workflow.prepare_workflow_revision_internal(
     '$workflow_id', 1,
     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     '$actor_id', '$correlation_holder'
   );
-  select vortex_workflow.mark_workflow_revision_verified_internal(
+  select vortex_workflow.verify_workflow_revision_internal(
     '$workflow_id', 1,
     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     '$actor_id', '$correlation_holder'
@@ -212,12 +212,12 @@ rev1_state="$(run_sql "select state from vortex_workflow.workflow_revisions wher
 # Prepare, verify, and activate revision 2 (strictly monotonic)
 run_sql "
   begin;
-  select vortex_workflow.mark_workflow_revision_prepared_internal(
+  select vortex_workflow.prepare_workflow_revision_internal(
     '$workflow_id', 2,
     'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     '$actor_id', '$correlation_waiter'
   );
-  select vortex_workflow.mark_workflow_revision_verified_internal(
+  select vortex_workflow.verify_workflow_revision_internal(
     '$workflow_id', 2,
     'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     '$actor_id', '$correlation_waiter'
@@ -249,7 +249,7 @@ if run_sql "
   exit 1
 fi
 
-grep -q "Activated revision must be strictly greater than all superseded revisions" "$proof_root/stale-activation.err" || {
+grep -q "Activated workflow revision must be strictly greater than all superseded revisions" "$proof_root/stale-activation.err" || {
   echo "stale activation failed with unexpected error:" >&2
   cat "$proof_root/stale-activation.err" >&2
   exit 1
@@ -257,7 +257,7 @@ grep -q "Activated revision must be strictly greater than all superseded revisio
 
 # Attempt stale registration: re-registering revision 1 or lower must be rejected
 if run_sql "
-  select vortex_workflow.record_workflow_revision_internal(
+  select vortex_workflow.register_workflow_revision_internal(
     '$workflow_id', 1,
     'sha256:1111111111111111111111111111111111111111111111111111111111111111',
     array['cold_archive_s3'],
@@ -268,18 +268,27 @@ if run_sql "
   exit 1
 fi
 
-grep -q "New workflow revision must be strictly greater than existing revisions" "$proof_root/stale-registration.err" || {
+grep -q "Newly registered workflow revision must be strictly greater than all prior revisions" "$proof_root/stale-registration.err" || {
   echo "stale registration failed with unexpected error:" >&2
   cat "$proof_root/stale-registration.err" >&2
   exit 1
 }
 
-# Idempotent re-activation of current active revision 2
-run_sql "
+# Re-activation of current active revision 2 must be rejected by monotonicity check
+if run_sql "
   select vortex_workflow.activate_workflow_revision_internal(
     '$workflow_id', 2, '$actor_id', '$correlation_waiter'
   );
-" >/dev/null
+" 2>"$proof_root/active-reactivation.err"; then
+  echo "expected re-activation of active revision 2 to fail, but it succeeded" >&2
+  exit 1
+fi
+
+grep -q "Activated workflow revision must be strictly greater than current active revision" "$proof_root/active-reactivation.err" || {
+  echo "re-activation of active revision failed with unexpected error:" >&2
+  cat "$proof_root/active-reactivation.err" >&2
+  exit 1
+}
 
 active_rev="$(run_sql "select revision from vortex_workflow.workflow_revisions where workflow_id = '$workflow_id' and state = 'active';")"
 [ "$active_rev" = '2' ] || {

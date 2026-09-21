@@ -1,5 +1,5 @@
 begin;
-select plan(46);
+select plan(52);
 
 set local search_path = pg_catalog, extensions, public;
 
@@ -129,10 +129,10 @@ select ok(
 );
 
 select ok(
-  not pg_catalog.has_function_privilege('vortex_request', 'vortex_workflow.record_workflow_root_internal(uuid,uuid,text,text,uuid)', 'EXECUTE')
-  and not pg_catalog.has_function_privilege('vortex_runtime', 'vortex_workflow.record_workflow_root_internal(uuid,uuid,text,text,uuid)', 'EXECUTE')
-  and not pg_catalog.has_function_privilege('vortex_request', 'vortex_workflow.record_workflow_revision_internal(uuid,bigint,text,text[],uuid,uuid)', 'EXECUTE')
-  and not pg_catalog.has_function_privilege('vortex_runtime', 'vortex_workflow.record_workflow_revision_internal(uuid,bigint,text,text[],uuid,uuid)', 'EXECUTE')
+  not pg_catalog.has_function_privilege('vortex_request', 'vortex_workflow.register_workflow_root_internal(uuid,uuid,text,text,uuid)', 'EXECUTE')
+  and not pg_catalog.has_function_privilege('vortex_runtime', 'vortex_workflow.register_workflow_root_internal(uuid,uuid,text,text,uuid)', 'EXECUTE')
+  and not pg_catalog.has_function_privilege('vortex_request', 'vortex_workflow.register_workflow_revision_internal(uuid,bigint,text,text[],uuid,uuid)', 'EXECUTE')
+  and not pg_catalog.has_function_privilege('vortex_runtime', 'vortex_workflow.register_workflow_revision_internal(uuid,bigint,text,text[],uuid,uuid)', 'EXECUTE')
   and not pg_catalog.has_function_privilege('vortex_request', 'vortex_workflow.activate_workflow_revision_internal(uuid,bigint,uuid,uuid)', 'EXECUTE')
   and not pg_catalog.has_function_privilege('vortex_runtime', 'vortex_workflow.activate_workflow_revision_internal(uuid,bigint,uuid,uuid)', 'EXECUTE'),
   'internal lifecycle mutators are denied to vortex_request and vortex_runtime'
@@ -184,8 +184,8 @@ insert into vortex_definition.roots (
     '94770000-0000-4000-8000-000000000001'
   );
 
--- Record workflow root
-select vortex_workflow.record_workflow_root_internal(
+-- Register workflow root
+select vortex_workflow.register_workflow_root_internal(
   '44770000-0000-4000-8000-000000000001',
   '24770000-0000-4000-8000-000000000001',
   'test.archive.pipeline_one',
@@ -204,7 +204,7 @@ select throws_ok(
 );
 
 -- Register revision 1
-select vortex_workflow.record_workflow_revision_internal(
+select vortex_workflow.register_workflow_revision_internal(
   '44770000-0000-4000-8000-000000000001',
   1,
   'sha256:1111111111111111111111111111111111111111111111111111111111111111',
@@ -215,7 +215,7 @@ select vortex_workflow.record_workflow_revision_internal(
 
 -- Monotonic registration check: re-registering revision 1 fails strictly
 select throws_ok(
-  $$select vortex_workflow.record_workflow_revision_internal(
+  $$select vortex_workflow.register_workflow_revision_internal(
     '44770000-0000-4000-8000-000000000001',
     1,
     'sha256:1111111111111111111111111111111111111111111111111111111111111111',
@@ -224,13 +224,13 @@ select throws_ok(
     'c4770000-0000-4000-8000-000000000002'
   )$$,
   '23514',
-  'New workflow revision must be strictly greater than existing revisions',
+  'Newly registered workflow revision must be strictly greater than all prior revisions',
   'workflow revision registration enforces strictly monotonic ordering'
 );
 
 -- Monotonic registration check: revision 0 fails check constraint
 select throws_ok(
-  $$select vortex_workflow.record_workflow_revision_internal(
+  $$select vortex_workflow.register_workflow_revision_internal(
     '44770000-0000-4000-8000-000000000001',
     0,
     'sha256:1111111111111111111111111111111111111111111111111111111111111111',
@@ -244,7 +244,7 @@ select throws_ok(
 );
 
 -- Prepare, verify, and activate revision 1
-select vortex_workflow.mark_workflow_revision_prepared_internal(
+select vortex_workflow.prepare_workflow_revision_internal(
   '44770000-0000-4000-8000-000000000001',
   1,
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -252,7 +252,7 @@ select vortex_workflow.mark_workflow_revision_prepared_internal(
   'c4770000-0000-4000-8000-000000000004'
 );
 
-select vortex_workflow.mark_workflow_revision_verified_internal(
+select vortex_workflow.verify_workflow_revision_internal(
   '44770000-0000-4000-8000-000000000001',
   1,
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -268,7 +268,7 @@ select vortex_workflow.activate_workflow_revision_internal(
 );
 
 -- Register revision 2
-select vortex_workflow.record_workflow_revision_internal(
+select vortex_workflow.register_workflow_revision_internal(
   '44770000-0000-4000-8000-000000000001',
   2,
   'sha256:2222222222222222222222222222222222222222222222222222222222222222',
@@ -278,7 +278,7 @@ select vortex_workflow.record_workflow_revision_internal(
 );
 
 -- Prepare, verify, and activate revision 2 (supersedes revision 1)
-select vortex_workflow.mark_workflow_revision_prepared_internal(
+select vortex_workflow.prepare_workflow_revision_internal(
   '44770000-0000-4000-8000-000000000001',
   2,
   'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -286,7 +286,7 @@ select vortex_workflow.mark_workflow_revision_prepared_internal(
   'c4770000-0000-4000-8000-000000000008'
 );
 
-select vortex_workflow.mark_workflow_revision_verified_internal(
+select vortex_workflow.verify_workflow_revision_internal(
   '44770000-0000-4000-8000-000000000001',
   2,
   'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -314,11 +314,11 @@ select throws_ok(
     set state = 'active'
     where workflow_id = '44770000-0000-4000-8000-000000000001' and revision = 1$$,
   '23514',
-  'Superseded workflow revisions are permanent and immutable',
+  'Superseded workflow revision is permanent and immutable',
   'superseded workflow revisions cannot transition back to active'
 );
 
--- Monotonic activation check: attempting to activate revision 1 again fails
+-- Monotonic activation check: attempting to activate revision 1 again fails (<= max superseded)
 select throws_ok(
   $$select vortex_workflow.activate_workflow_revision_internal(
     '44770000-0000-4000-8000-000000000001',
@@ -327,8 +327,95 @@ select throws_ok(
     'c4770000-0000-4000-8000-000000000011'
   )$$,
   '23514',
-  'Activated revision must be strictly greater than all superseded revisions',
+  'Activated workflow revision must be strictly greater than all superseded revisions',
   'activating a superseded or lower revision is prohibited'
+);
+
+-- Monotonic activation check: attempting to re-activate current active revision fails (<= current active)
+select throws_ok(
+  $$select vortex_workflow.activate_workflow_revision_internal(
+    '44770000-0000-4000-8000-000000000001',
+    2,
+    '94770000-0000-4000-8000-000000000001',
+    'c4770000-0000-4000-8000-000000000012'
+  )$$,
+  '23514',
+  'Activated workflow revision must be strictly greater than current active revision',
+  'activating current active revision is prohibited'
+);
+
+-- Active state terminal check: active revision cannot transition to inactive
+select throws_ok(
+  $$update vortex_workflow.workflow_revisions
+    set state = 'inactive'
+    where workflow_id = '44770000-0000-4000-8000-000000000001' and revision = 2$$,
+  '23514',
+  'Active workflow revision can only transition to superseded',
+  'active workflow revision cannot transition to inactive'
+);
+
+-- Destination persistence constraint: null element in supported_destinations fails check
+select throws_ok(
+  $$insert into vortex_workflow.workflow_revisions (
+    workflow_id, revision, state, definition_fingerprint,
+    supported_destinations, changed_by, change_correlation_id
+  ) values (
+    '44770000-0000-4000-8000-000000000001', 10, 'registered',
+    'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+    array['cold_archive_s3', null],
+    '94770000-0000-4000-8000-000000000001', 'c4770000-0000-4000-8000-000000000013'
+  )$$,
+  '23514',
+  null,
+  'null element in supported_destinations fails destinations_closed constraint'
+);
+
+-- Destination persistence constraint: duplicate elements in supported_destinations fail check
+select throws_ok(
+  $$insert into vortex_workflow.workflow_revisions (
+    workflow_id, revision, state, definition_fingerprint,
+    supported_destinations, changed_by, change_correlation_id
+  ) values (
+    '44770000-0000-4000-8000-000000000001', 11, 'registered',
+    'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+    array['cold_archive_s3', 'cold_archive_s3'],
+    '94770000-0000-4000-8000-000000000001', 'c4770000-0000-4000-8000-000000000014'
+  )$$,
+  '23514',
+  null,
+  'duplicate element in supported_destinations fails destinations_closed constraint'
+);
+
+-- Destination persistence constraint: unsorted elements in supported_destinations fail check
+select throws_ok(
+  $$insert into vortex_workflow.workflow_revisions (
+    workflow_id, revision, state, definition_fingerprint,
+    supported_destinations, changed_by, change_correlation_id
+  ) values (
+    '44770000-0000-4000-8000-000000000001', 12, 'registered',
+    'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+    array['compliance_vault_1', 'cold_archive_s3'],
+    '94770000-0000-4000-8000-000000000001', 'c4770000-0000-4000-8000-000000000015'
+  )$$,
+  '23514',
+  null,
+  'unsorted elements in supported_destinations fails destinations_closed constraint'
+);
+
+-- Destination persistence constraint: invalid grammar in supported_destinations fails check
+select throws_ok(
+  $$insert into vortex_workflow.workflow_revisions (
+    workflow_id, revision, state, definition_fingerprint,
+    supported_destinations, changed_by, change_correlation_id
+  ) values (
+    '44770000-0000-4000-8000-000000000001', 13, 'registered',
+    'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+    array['INVALID_UPPERCASE'],
+    '94770000-0000-4000-8000-000000000001', 'c4770000-0000-4000-8000-000000000016'
+  )$$,
+  '23514',
+  null,
+  'invalid destination grammar in supported_destinations fails destinations_closed constraint'
 );
 
 -- Authorize workflow for application root 1
