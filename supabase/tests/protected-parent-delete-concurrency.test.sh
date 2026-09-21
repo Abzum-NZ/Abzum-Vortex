@@ -228,8 +228,8 @@ cleanup_fixture() {
       where relationship_id in ('$relationship_line_parent','$relationship_line_category');
     delete from vortex_record.storage_catalogue
       where storage_contract_id in ('$parent_storage_id','$line_storage_id','$category_storage_id');
-    delete from vortex_record.record_data_versions where organisation_id = '$organization_id';
-    delete from vortex_record.record_reference_counters where organisation_id = '$organization_id';
+    delete from vortex_record.record_data_versions where organization_id = '$organization_id';
+    delete from vortex_record.record_reference_counters where organization_id = '$organization_id';
     exception when others then
       raise warning 'parent delete proof owner cleanup: %', sqlerrm;
     end
@@ -237,10 +237,10 @@ cleanup_fixture() {
     reset role;
     set local role vortex_module_owner;
     delete from vortex_module.installation_bindings where organization_id = '$organization_id';
-    delete from vortex_module.application_installations where organization_id = '$organization_id';
     reset role;
-    delete from vortex_event.record_occurrences where organization_id = '$organization_id';
-      delete from vortex_event.record_occurrence_sequences where organization_id = '$organization_id';
+    delete from pgmq.q_vortex_event_occurrences
+      where message ->> 'occurrenceId' in ('$reparent_occurrence','$totals_occurrence');
+      delete from vortex_event.event_outbox where organization_id = '$organization_id';
       delete from vortex_activity.organization_activity_entries where organization_id = '$organization_id';
       delete from vortex_access.organization_role_assignments where organization_id = '$organization_id';
       delete from vortex_access.organization_role_revisions where organization_id = '$organization_id';
@@ -675,9 +675,7 @@ run_sql "
         '$field_line_category',pg_catalog.jsonb_build_object('recordTypeId','$category_type_id',
           'recordId',(select record_id from proof_records where label='totals_category'))),
       array['$field_line_amount','$field_line_parent','$field_line_category']::uuid[], null) ->> 'recordId')::uuid);
-  -- Fixed identities and their edges are owner-managed fixture state.
-  reset role;
-  set local role vortex_record_owner;
+  -- Generated record identities remain adapter-managed under forced RLS.
   update record_data.$parent_table set record_id = '$reparent_parent_id'
     where record_id = (select record_id from proof_records where label='reparent_parent');
   update record_data.$parent_table set record_id = '$reparent_other_parent_id'
@@ -692,6 +690,9 @@ run_sql "
     where record_id = (select record_id from proof_records where label='totals_line');
   update record_data.$line_table set record_id = '$totals_rival_line_id'
     where record_id = (select record_id from proof_records where label='totals_rival_line');
+  -- Relationship-edge identities remain owner-managed fixture state.
+  reset role;
+  set local role vortex_record_owner;
   update vortex_record.relationship_edges as edge set
     from_record_id = mapped.new_id
   from (select record_id as old_id,
@@ -714,6 +715,8 @@ run_sql "
     from proof_records
     where label in ('reparent_parent','reparent_other_parent','totals_parent','totals_category')) as mapped
   where edge.to_record_id = mapped.old_id;
+  reset role;
+  set local role vortex_record_adapter;
   update record_data.$line_table set
     $column_line_parent = case
       when $column_line_parent ->> 'recordId' = (select record_id::text from proof_records where label='reparent_parent')
@@ -729,8 +732,6 @@ run_sql "
       else $column_line_category end
   where organisation_id = '$organization_id';
   -- The category aggregates 10.00 + 3.00 before either race runs.
-  reset role;
-  set local role vortex_record_adapter;
   select vortex_record.apply_relationship_total_parent_internal('$category_type_id'::uuid,
     '$totals_category_id'::uuid, 1,
     pg_catalog.jsonb_build_object('$field_category_total','13.00'));
