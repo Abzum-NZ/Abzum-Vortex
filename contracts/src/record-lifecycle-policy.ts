@@ -228,6 +228,8 @@ export const archiveWorkflowRecordLifecyclePolicySchema = z
     expectedWorkflowRevision: revisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
     archiveDestination: archiveDestinationReferenceSchema,
+    expectedConnectionRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER).optional(),
+    expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   })
   .strict()
   .superRefine(validatePolicyLimitsConsistency)
@@ -279,9 +281,13 @@ export const activeConnectionEvidenceSchema = z
   .object({
     connectionInstanceId: connectionInstanceIdSchema,
     destinationKey: archiveDestinationReferenceSchema,
+    destinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     organizationId: organizationIdSchema,
     authorizedApplicationIds: z.array(applicationRootIdSchema).min(1),
     state: z.literal("active"),
+    revision: revisionSchema.max(Number.MAX_SAFE_INTEGER),
+    lastHealthOutcome: z.literal("healthy"),
+    verifiedAt: timestampSchema.optional(),
   })
   .strict();
 export type ActiveConnectionEvidence = z.infer<typeof activeConnectionEvidenceSchema>;
@@ -723,6 +729,26 @@ export const validateRecordTypeLifecyclePolicy = (
             message: `Active connection instance ${policy.archiveConnectionInstanceId} for destination "${policy.archiveDestination}" in organisation ${policy.organizationId} is unavailable; archival cannot fall back to deletion`,
           });
         } else {
+          if (
+            policy.expectedConnectionRevision !== undefined &&
+            matchingConnection.revision !== policy.expectedConnectionRevision
+          ) {
+            issues.push({
+              code: "archive_connection_stale_revision",
+              path: ["archiveConnectionInstanceId"],
+              message: `Active connection instance ${policy.archiveConnectionInstanceId} revision (${matchingConnection.revision}) does not match expected (${policy.expectedConnectionRevision})`,
+            });
+          }
+          if (
+            policy.expectedDestinationFingerprint !== undefined &&
+            matchingConnection.destinationFingerprint !== policy.expectedDestinationFingerprint
+          ) {
+            issues.push({
+              code: "archive_connection_stale_fingerprint",
+              path: ["archiveConnectionInstanceId"],
+              message: `Active connection instance ${policy.archiveConnectionInstanceId} destination fingerprint does not match expected`,
+            });
+          }
           if (policy.applicationRootId === null) {
             issues.push({
               code: "archive_connection_scope_mismatch",
@@ -840,6 +866,8 @@ export const dueArchiveRecordHandoffItemSchema = z
     expectedWorkflowRevision: revisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
     archiveDestination: archiveDestinationReferenceSchema,
+    expectedConnectionRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER).optional(),
+    expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     createdAt: timestampSchema,
   })
   .strict()
@@ -917,6 +945,8 @@ export const recordLifecycleHandoffSchema = z
         expectedWorkflowRevision: revisionSchema,
         archiveConnectionInstanceId: connectionInstanceIdSchema,
         archiveDestination: archiveDestinationReferenceSchema,
+        expectedConnectionRevision: revisionSchema.max(Number.MAX_SAFE_INTEGER).optional(),
+        expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
       })
       .strict()
       .optional(),
@@ -984,6 +1014,26 @@ export const recordLifecycleHandoffSchema = z
               code: "custom",
               path: ["dueRecords", i, "archiveDestination"],
               message: `Due record archiveDestination (${item.archiveDestination}) does not match handoff archiveMetadata.archiveDestination (${handoff.archiveMetadata.archiveDestination})`,
+            });
+          }
+          if (
+            item.expectedConnectionRevision !==
+            handoff.archiveMetadata.expectedConnectionRevision
+          ) {
+            context.addIssue({
+              code: "custom",
+              path: ["dueRecords", i, "expectedConnectionRevision"],
+              message: `Due record expectedConnectionRevision (${item.expectedConnectionRevision}) does not match handoff archiveMetadata.expectedConnectionRevision (${handoff.archiveMetadata.expectedConnectionRevision})`,
+            });
+          }
+          if (
+            item.expectedDestinationFingerprint !==
+            handoff.archiveMetadata.expectedDestinationFingerprint
+          ) {
+            context.addIssue({
+              code: "custom",
+              path: ["dueRecords", i, "expectedDestinationFingerprint"],
+              message: `Due record expectedDestinationFingerprint (${item.expectedDestinationFingerprint}) does not match handoff archiveMetadata.expectedDestinationFingerprint (${handoff.archiveMetadata.expectedDestinationFingerprint})`,
             });
           }
         }
@@ -1336,6 +1386,12 @@ export const selectDueRecordsForLifecycleHandoff = (
           expectedWorkflowRevision: policy.expectedWorkflowRevision,
           archiveConnectionInstanceId: policy.archiveConnectionInstanceId,
           archiveDestination: policy.archiveDestination,
+          ...(policy.expectedConnectionRevision !== undefined
+            ? { expectedConnectionRevision: policy.expectedConnectionRevision }
+            : {}),
+          ...(policy.expectedDestinationFingerprint !== undefined
+            ? { expectedDestinationFingerprint: policy.expectedDestinationFingerprint }
+            : {}),
           createdAt: record.createdAt,
         });
       } else {
@@ -1404,6 +1460,12 @@ export const selectDueRecordsForLifecycleHandoff = (
             expectedWorkflowRevision: policy.expectedWorkflowRevision,
             archiveConnectionInstanceId: policy.archiveConnectionInstanceId,
             archiveDestination: policy.archiveDestination,
+            ...(policy.expectedConnectionRevision !== undefined
+              ? { expectedConnectionRevision: policy.expectedConnectionRevision }
+              : {}),
+            ...(policy.expectedDestinationFingerprint !== undefined
+              ? { expectedDestinationFingerprint: policy.expectedDestinationFingerprint }
+              : {}),
           },
         }
       : {}),

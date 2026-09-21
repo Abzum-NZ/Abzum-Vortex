@@ -111,9 +111,12 @@ describe("record lifecycle policy contracts and organisation limits", () => {
         {
           connectionInstanceId: uuid(50),
           destinationKey: "cold_archive_s3",
+          destinationFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           organizationId: orgA,
           authorizedApplicationIds: [uuid(30)],
           state: "active",
+          revision: 1,
+          lastHealthOutcome: "healthy",
         },
       ],
       ...overrides,
@@ -196,9 +199,12 @@ describe("record lifecycle policy contracts and organisation limits", () => {
       const conn = activeConnectionEvidenceSchema.parse({
         connectionInstanceId: uuid(2),
         destinationKey: "s3_archive",
+        destinationFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         organizationId: orgA,
         authorizedApplicationIds: [uuid(30)],
         state: "active",
+        revision: 1,
+        lastHealthOutcome: "healthy",
       });
       expect(conn.destinationKey).toBe("s3_archive");
       expect(conn.organizationId).toBe(orgA);
@@ -960,9 +966,12 @@ describe("record lifecycle policy contracts and organisation limits", () => {
           {
             connectionInstanceId: canonicalConnection.connectionInstanceId,
             destinationKey: "cold_archive_s3",
+            destinationFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             organizationId: canonicalConnection.organizationId,
             authorizedApplicationIds: canonicalConnection.authorizedApplicationIds,
             state: canonicalConnection.state,
+            revision: 1,
+            lastHealthOutcome: canonicalConnection.lastHealthOutcome,
           },
         ],
       });
@@ -982,9 +991,12 @@ describe("record lifecycle policy contracts and organisation limits", () => {
           {
             connectionInstanceId: canonicalWrongApp.connectionInstanceId,
             destinationKey: "cold_archive_s3",
+            destinationFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             organizationId: canonicalWrongApp.organizationId,
             authorizedApplicationIds: canonicalWrongApp.authorizedApplicationIds,
             state: canonicalWrongApp.state,
+            revision: 1,
+            lastHealthOutcome: canonicalWrongApp.lastHealthOutcome,
           },
         ],
       });
@@ -1008,6 +1020,65 @@ describe("record lifecycle policy contracts and organisation limits", () => {
 
     it("accepts archive_workflow when exact typed registration and connection evidence are verified", () => {
       const archivePolicy = createValidArchivePolicy();
+      const evidence = createValidReadinessEvidence();
+      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence, 1);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("refuses archive_workflow when expected connection revision is stale", () => {
+      const archivePolicy = createValidArchivePolicy({
+        expectedConnectionRevision: 99,
+      });
+      const evidence = createValidReadinessEvidence({
+        activeConnections: [
+          {
+            connectionInstanceId: uuid(50),
+            destinationKey: "cold_archive_s3",
+            destinationFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            organizationId: orgA,
+            authorizedApplicationIds: [uuid(30)],
+            state: "active",
+            revision: 1,
+            lastHealthOutcome: "healthy",
+          },
+        ],
+      });
+      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence, 1);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("revision (1) does not match expected (99)"))).toBe(true);
+    });
+
+    it("refuses archive_workflow when expected destination fingerprint is stale", () => {
+      const archivePolicy = createValidArchivePolicy({
+        expectedDestinationFingerprint: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      });
+      const evidence = createValidReadinessEvidence({
+        activeConnections: [
+          {
+            connectionInstanceId: uuid(50),
+            destinationKey: "cold_archive_s3",
+            destinationFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            organizationId: orgA,
+            authorizedApplicationIds: [uuid(30)],
+            state: "active",
+            revision: 1,
+            lastHealthOutcome: "healthy",
+          },
+        ],
+      });
+      const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence, 1);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => e.includes("destination fingerprint does not match expected")),
+      ).toBe(true);
+    });
+
+    it("accepts archive_workflow when expected connection revision and destination fingerprint match", () => {
+      const archivePolicy = createValidArchivePolicy({
+        expectedConnectionRevision: 1,
+        expectedDestinationFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      });
       const evidence = createValidReadinessEvidence();
       const result = validateRecordTypeLifecyclePolicy(archivePolicy, validOrgLimits, evidence, 1);
       expect(result.valid).toBe(true);

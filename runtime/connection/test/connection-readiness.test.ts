@@ -56,9 +56,12 @@ describe("Connection Instance State & Projection", () => {
     expect(evidence).toEqual({
       connectionInstanceId: state.connectionInstanceId,
       destinationKey: state.destinationKey,
+      destinationFingerprint: state.destinationFingerprint,
       organizationId: state.organizationId,
       authorizedApplicationIds: state.authorizedApplicationIds,
       state: "active",
+      revision: state.revision,
+      lastHealthOutcome: "healthy",
     });
 
     const parsed = activeConnectionEvidenceSchema.safeParse(evidence);
@@ -338,6 +341,8 @@ describe("Database Readiness Resolution & Active Evidence Reader", () => {
       connectionInstanceId: uuid(1) as ConnectionInstanceId,
       destinationKey: "cold_archive_s3" as ArchiveDestinationReference,
       applicationRootId: uuid(30) as ApplicationRootId,
+      expectedRevision: 1,
+      expectedFingerprint: validFingerprint,
     };
 
     const result = await resolveConnectionInstanceReadiness(
@@ -353,7 +358,111 @@ describe("Database Readiness Resolution & Active Evidence Reader", () => {
     }
   });
 
-  it("reads active connection evidence from database", async () => {
+  it("handles stale_revision outcome from database resolution", async () => {
+    const mockTransaction: RequestDatabaseTransaction = {
+      query: vi.fn().mockResolvedValue([
+        {
+          readiness_result: {
+            outcome: "refused",
+            reasonCode: "stale_revision",
+            currentRevision: 5,
+          },
+        },
+      ]),
+    };
+
+    const query: ConnectionReadinessQuery = {
+      connectionInstanceId: uuid(1) as ConnectionInstanceId,
+      destinationKey: "cold_archive_s3" as ArchiveDestinationReference,
+      applicationRootId: uuid(30) as ApplicationRootId,
+      expectedRevision: 1,
+      expectedFingerprint: validFingerprint,
+    };
+
+    const result = await resolveConnectionInstanceReadiness(
+      mockTransaction,
+      query,
+      uuid(10) as OrganizationId,
+    );
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome === "refused") {
+      expect(result.reasonCode).toBe("stale_revision");
+      expect(result.currentRevision).toBe(5);
+    }
+  });
+
+  it("handles stale_fingerprint outcome from database resolution", async () => {
+    const mockTransaction: RequestDatabaseTransaction = {
+      query: vi.fn().mockResolvedValue([
+        {
+          readiness_result: {
+            outcome: "refused",
+            reasonCode: "stale_fingerprint",
+          },
+        },
+      ]),
+    };
+
+    const query: ConnectionReadinessQuery = {
+      connectionInstanceId: uuid(1) as ConnectionInstanceId,
+      destinationKey: "cold_archive_s3" as ArchiveDestinationReference,
+      applicationRootId: uuid(30) as ApplicationRootId,
+      expectedRevision: 1,
+      expectedFingerprint: "0000000000000000000000000000000000000000000000000000000000000000",
+    };
+
+    const result = await resolveConnectionInstanceReadiness(
+      mockTransaction,
+      query,
+      uuid(10) as OrganizationId,
+    );
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome === "refused") {
+      expect(result.reasonCode).toBe("stale_fingerprint");
+    }
+  });
+
+  it("rejects non-safe integer or missing revision in query before executing SQL", async () => {
+    const mockTransaction: RequestDatabaseTransaction = {
+      query: vi.fn(),
+    };
+
+    const query = {
+      connectionInstanceId: uuid(1) as ConnectionInstanceId,
+      destinationKey: "cold_archive_s3" as ArchiveDestinationReference,
+      applicationRootId: uuid(30) as ApplicationRootId,
+      expectedRevision: 0,
+      expectedFingerprint: validFingerprint,
+    } as unknown as ConnectionReadinessQuery;
+
+    await expect(
+      resolveConnectionInstanceReadiness(mockTransaction, query, uuid(10) as OrganizationId),
+    ).rejects.toThrow(ConnectionInstanceStateError);
+    expect(mockTransaction.query).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid or missing destination fingerprint in query before executing SQL", async () => {
+    const mockTransaction: RequestDatabaseTransaction = {
+      query: vi.fn(),
+    };
+
+    const query = {
+      connectionInstanceId: uuid(1) as ConnectionInstanceId,
+      destinationKey: "cold_archive_s3" as ArchiveDestinationReference,
+      applicationRootId: uuid(30) as ApplicationRootId,
+      expectedRevision: 1,
+      expectedFingerprint: "invalid-fp",
+    } as unknown as ConnectionReadinessQuery;
+
+    await expect(
+      resolveConnectionInstanceReadiness(mockTransaction, query, uuid(10) as OrganizationId),
+    ).rejects.toThrow(ConnectionInstanceStateError);
+    expect(mockTransaction.query).not.toHaveBeenCalled();
+  });
+
+  it("reads active connection evidence from database retaining revision and fingerprint proof", async () => {
     const mockTransaction: RequestDatabaseTransaction = {
       query: vi.fn().mockResolvedValue([
         {
@@ -377,9 +486,12 @@ describe("Database Readiness Resolution & Active Evidence Reader", () => {
     expect(evidence).toEqual({
       connectionInstanceId: uuid(1),
       destinationKey: "cold_archive_s3",
+      destinationFingerprint: validFingerprint,
       organizationId: uuid(10),
       authorizedApplicationIds: [uuid(30), uuid(31)],
       state: "active",
+      revision: 3,
+      lastHealthOutcome: "healthy",
     });
   });
 

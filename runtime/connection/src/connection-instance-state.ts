@@ -243,9 +243,12 @@ export function projectActiveConnectionEvidence(
   const evidenceCandidate = {
     connectionInstanceId,
     destinationKey,
+    destinationFingerprint: state.destinationFingerprint,
     organizationId,
     authorizedApplicationIds: validatedAppIds,
     state: "active" as const,
+    revision: state.revision,
+    lastHealthOutcome: "healthy" as const,
   };
 
   return activeConnectionEvidenceSchema.parse(evidenceCandidate);

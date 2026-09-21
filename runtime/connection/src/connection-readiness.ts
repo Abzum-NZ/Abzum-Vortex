@@ -36,8 +36,8 @@ export interface ConnectionReadinessQuery {
   readonly connectionInstanceId: ConnectionInstanceId;
   readonly destinationKey: ArchiveDestinationReference;
   readonly applicationRootId: ApplicationRootId;
-  readonly expectedRevision?: number;
-  readonly expectedFingerprint?: string;
+  readonly expectedRevision: number;
+  readonly expectedFingerprint: string;
 }
 
 export type ConnectionReadinessResult =
@@ -104,19 +104,11 @@ export async function resolveConnectionInstanceReadiness(
   const validatedConnId = connectionInstanceIdSchema.parse(query.connectionInstanceId);
   const validatedDestKey = archiveDestinationReferenceSchema.parse(query.destinationKey);
   const validatedAppId = applicationRootIdSchema.parse(query.applicationRootId);
-
-  let validatedRevision: number | null = null;
-  if (query.expectedRevision !== undefined && query.expectedRevision !== null) {
-    validatedRevision = assertSafeIntegerRevision(
-      query.expectedRevision,
-      `Readiness check for connection ${validatedConnId}`,
-    );
-  }
-
-  let validatedFingerprint: string | null = null;
-  if (query.expectedFingerprint !== undefined && query.expectedFingerprint !== null) {
-    validatedFingerprint = assertDestinationFingerprint(query.expectedFingerprint);
-  }
+  const validatedRevision = assertSafeIntegerRevision(
+    query.expectedRevision,
+    `Readiness check for connection ${validatedConnId}`,
+  );
+  const validatedFingerprint = assertDestinationFingerprint(query.expectedFingerprint);
 
   try {
     const rows = await transaction.query<SqlReadinessRow>`
@@ -238,7 +230,10 @@ export async function readActiveConnectionEvidence(
     );
   }
 
-  assertSafeIntegerRevision(row.revision, `Connection instance ${connId}`);
+  const revision = assertSafeIntegerRevision(row.revision, `Connection instance ${connId}`);
+  const destinationFingerprint = assertDestinationFingerprint(
+    String(row.destination_fingerprint),
+  );
 
   const rawAppIds = Array.isArray(row.authorized_application_ids)
     ? row.authorized_application_ids
@@ -255,8 +250,11 @@ export async function readActiveConnectionEvidence(
   return activeConnectionEvidenceSchema.parse({
     connectionInstanceId: connId,
     destinationKey: destKey,
+    destinationFingerprint,
     organizationId: orgId,
     authorizedApplicationIds: authorizedAppIds,
     state: "active",
+    revision,
+    lastHealthOutcome: "healthy",
   });
 }
