@@ -313,12 +313,14 @@ owners supply this evidence to the root; the root alone writes it on the issue.
    open issues against their PRs, actual branch ancestry, local gates, applicable
    hosted receipts and remaining acceptance. A merged slice is not automatically
    a completed issue. Owners do not re-read GitHub for this step.
-2. Set the actual delivery stage. Use **In progress** only for accepted active
-   work; **In review** for an open review/delivery PR or Coordinator-owned work
-   merged to `main` but awaiting promotion. State that post-merge waiting stage
-   explicitly; do not imply that a PR or reviewer is still active. Use **Testing**
-   only when the work is actually on `testing` and awaiting its required receipt.
-   Record a promotion/run hold without inventing an active Hosted Tester.
+2. Set the actual delivery stage. Use **In progress** only when a verified
+   worker is actively implementing or correcting the current slice. Use **In
+   review** only while an actual review is running, and **Testing** only while a
+   verification execution is actively running. Queued review or verification
+   is **Ready** with its exact next action. A partly completed parent with no
+   active slice is Ready, or Backlog with an explicit dependency blocker when no
+   Blocked option exists. Ownership, an unfinished issue, a PR, or a live idle
+   session does not make work active.
    Use **Done** and close the issue only when its acceptance is met, local gates
    ran and any required hosted evidence exists. Do not return fully implemented
    work to Backlog merely because its worker finished. Backlog may describe
@@ -394,10 +396,17 @@ dependencies are.
 6. **Verify the premise before briefing.** Search the full commit history for
    the affected path and search closed issues. A fix that already exists on
    another branch is the single most expensive thing to re-implement.
-7. **Dispatch, then use one grouped transition.** The root immediately marks
-   the dispatched issue **In progress** with status, agent, resolved model,
-   worktree and started-at, then reads back the grouped transition. Verify the
-   resolved model in the launched terminal before treating the task as started.
+7. **Dispatch, then use one grouped transition.** Mark the issue **In progress**
+   only after the launched worker's resolved model and actual implementation or
+   correction activity are visible. Record agent, task, worktree and start time,
+   then read back the transition. An accepted prompt alone leaves the row Ready.
+8. **Let owners advance bounded work.** An issue owner may dispatch the next
+   bounded Ready slice, run cheap checks, route scoped REVIEW-AND-FIX work, and
+   continue attributable fixture or harness corrections inside an authorized
+   verification window without a fresh root handshake. The root arbitrates
+   cross-owner conflicts and shared database capacity and retains acceptance,
+   merge, GitHub and board-write authority. Owners report actual starts and
+   evidence; Planner acceptance is not a readiness gate.
 
 ## Watching
 

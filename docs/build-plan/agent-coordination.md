@@ -113,12 +113,13 @@ view. No owner or worker refreshes the board or an issue: missing or fresher
 context is requested from the root.
 
 Moving an issue into an active status does not itself launch work. The
-coordinator must first launch or explicitly hand off the task, confirm the
-recipient accepted it, and record the actual canonical worker/task name—not a
-planned role—in the issue's board record. A text-only assignment is planned
-work, not active work: keep it Backlog. Ready is reserved for work whose named
-GPT-5.6 Sol Planner has accepted the planning handoff; record its resolved model
-and session evidence.
+coordinator must confirm actual implementation or correction activity and record
+the canonical worker, task, model and evidence. A session, owner, unfinished
+slice, or accepted text handoff is not active work. **Ready** means the scope is
+executable and its dependencies are satisfied; no Planner acceptance gate is
+required. **Backlog** means unselected or deferred work. When no Blocked status
+exists, dependency-blocked work stays Backlog and names the exact blocker and
+next responsible owner.
 
 At every spawn, handoff and status transition, the root updates the board
 together with the issue status: current owner, canonical worker/task reference,
@@ -130,19 +131,24 @@ record its result before assigning the next owner. These are stable operating
 rules, not a live queue or a claim that a particular worker is currently
 available.
 
+Issue owners may dispatch the next bounded Ready slice, run cheap checks, route
+scoped REVIEW-AND-FIX work, and continue attributable fixture or harness fixes
+inside an authorized verification window without a fresh root handshake. The
+root arbitrates cross-owner conflicts and shared database capacity, and retains
+acceptance, merge, GitHub and board-write authority. Owners report actual starts
+and evidence to the root; they do not wait for a Planner acceptance ceremony.
+
 ### Status meaning
 
-Use each active board status for one accountable stage. **In progress** means
-an accepted Developer, Planner, or REVIEW-AND-FIX owner is changing or investigating the
-work. **In review** covers the bounded review-and-delivery gate: a REVIEW-AND-FIX
-owner is active until returning its reviewed-and-fixed result; afterward, the Coordinator may
-remain the active owner while the same status waits for the normal pull-request
-check and merge. The card must say explicitly which of those two states applies;
-never imply that a completed reviewer is still active. **Testing** begins only
-after the reviewed change is merged to Testing and the Hosted Tester owns the
-one exact execution. **Done** requires accepted evidence, completed applicable
-local gates, any required hosted receipt, a true board row, and closure work.
-A merged branch or finished worker alone is not Done.
+Use each active board status for one accountable stage. **In progress** means a
+verified Developer or REVIEW-AND-FIX owner is actively implementing or
+correcting the current slice. **In review** means an actual review is currently
+running. **Testing** means a verification run has actually started and remains
+active. Queued review or verification is Ready with its exact next action, or
+Backlog with its real dependency blocker. A partly completed parent with no
+active slice is Ready or dependency-blocked Backlog, never perpetual In
+progress. **Done** requires accepted evidence, applicable gates, required hosted
+receipts, a true board row, and closure work.
 
 This definition avoids inventing a second pre-Testing status while keeping
 reviewer and Coordinator ownership truthful.
@@ -170,8 +176,7 @@ Respond to questions from the coordinating agent in the other chat before
 routine task work. Give verified answers, then resume the assigned task; a
 message requesting a correction is not evidence that the correction is done.
 
-After the Planner reviews and corrects the task handoff, the Coordinator supplies the
-issue, exact base revision, working directory,
+The accountable owner supplies the issue, exact base revision, working directory,
 branch, role, functional outcome, included/excluded work, relevant references,
 required checks and stopping point. Each session verifies these before acting.
 Use separate architecture, development and REVIEW-AND-FIX sessions with
