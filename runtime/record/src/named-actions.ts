@@ -13,6 +13,7 @@ import {
   type ExecuteNamedActionCommandV2,
   type ExecuteNamedActionResultV2,
   type IdentitySession,
+  type JsonValue,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
 import {
@@ -21,7 +22,12 @@ import {
   type HumanOrganizationRequestResult,
 } from "@vortex/access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import { composeNamedAction, type PreparedNamedAction } from "./named-action-composition";
+import {
+  composeNamedAction,
+  type NamedActionCreateTarget,
+  type NamedActionCreation,
+  type PreparedNamedAction,
+} from "./named-action-composition";
 import { calculateLockedRelationshipTotalSave } from "./relationship-total-save";
 import {
   calculateAndFinalize,
@@ -85,6 +91,35 @@ const completedResult = (candidate: Record<string, unknown>) => {
   return result.success ? result.data : undefined;
 };
 
+const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarget[] | undefined => {
+  if (!Array.isArray(candidate)) return undefined;
+  const targets: NamedActionCreateTarget[] = [];
+  for (const entry of candidate) {
+    if (typeof entry !== "object" || entry === null) return undefined;
+    const value = entry as Record<string, unknown>;
+    const recordType = recordTypeDefinitionV2Schema.safeParse(value.recordType);
+    if (
+      !recordType.success ||
+      typeof value.ordinal !== "number" ||
+      !Number.isSafeInteger(value.ordinal) ||
+      value.ordinal < 0 ||
+      typeof value.recordTypeId !== "string" ||
+      value.recordTypeId.toLowerCase() !== recordType.data.recordTypeId.toLowerCase()
+    )
+      return undefined;
+    targets.push({
+      ordinal: value.ordinal,
+      recordTypeId: recordType.data.recordTypeId,
+      recordType: recordType.data,
+    });
+  }
+  return targets.every(
+    (target, index) => index === 0 || target.ordinal > targets[index - 1]!.ordinal,
+  )
+    ? targets
+    : undefined;
+};
+
 const parsePreparation = (candidate: unknown): ActionPreparation => {
   if (typeof candidate !== "object" || candidate === null) return { outcome: "refused" };
   const value = candidate as Record<string, unknown>;
@@ -108,9 +143,11 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
   const actionV2 = actionDefinitionV2Schema.safeParse(value.action);
   const actionV1 = actionDefinitionSchema.safeParse(value.action);
   const recordType = recordTypeDefinitionV2Schema.safeParse(value.recordType);
+  const createTargets = parseCreateTargets(value.createTargets);
   if (
     (!actionV2.success && !actionV1.success) ||
     !recordType.success ||
+    createTargets === undefined ||
     typeof value.validationContractVersion !== "string" ||
     !["1.0.0", "2.0.0", "3.0.0"].includes(value.validationContractVersion) ||
     typeof value.recordId !== "string" ||
@@ -132,6 +169,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     recordId: value.recordId,
     existingValues: value.existingValues as Readonly<Record<string, unknown>>,
     actorOrganizationAccountId: value.actorOrganizationAccountId,
+    createTargets,
     readableFieldIds: new Set(
       value.readableFieldIds.filter((item): item is string => typeof item === "string"),
     ),
@@ -141,6 +179,56 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     eventDescriptorCount: value.eventDescriptors.length,
     correlationId,
   };
+};
+
+/**
+ * Finalises each creation on its own when the merged closure reported
+ * `not_required` or `defer`, so a creation still reaches the writer with its
+ * complete generated field set. Totals cannot apply on this path by
+ * construction: the preparation only reports those outcomes when no root type
+ * participates in one.
+ */
+const creationFinalValues = (
+  prepared: PreparedAction,
+  creations: readonly NamedActionCreation[],
+  issuedAt: string,
+  organizationCurrency: string | undefined,
+  timeZone: string | undefined,
+): Record<number, Record<string, JsonValue | null>> | undefined => {
+  const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
+  const values: Record<number, Record<string, JsonValue | null>> = {};
+  for (const creation of creations) {
+    const target = targets.get(creation.ordinal);
+    if (target === undefined) return undefined;
+    const command = saveRecordCommandV2Schema.safeParse({
+      contractVersion: "2.0.0",
+      commandId: randomUUID(),
+      operation: "create",
+      recordTypeId: target.recordTypeId,
+      submittedValues: creation.values,
+    });
+    if (!command.success) return undefined;
+    const calculated = calculateAndFinalize(
+      {
+        outcome: "prepared",
+        recordType: target.recordType,
+        existingValues: {},
+        readableFieldIds: new Set(target.recordType.fields.map((field) => field.fieldId)),
+        correlationId: prepared.correlationId,
+      } satisfies PreparedSave,
+      command.data,
+      issuedAt,
+      organizationCurrency,
+      timeZone,
+    );
+    if (!calculated.success) return undefined;
+    if (calculated.pendingChecks.some((check) => check.kind !== "record_reference"))
+      return undefined;
+    const created: Record<string, JsonValue | null> = { ...calculated.setValues };
+    for (const fieldId of calculated.clearFieldIds) created[fieldId] = null;
+    values[creation.ordinal] = created;
+  }
+  return values;
 };
 
 const validateReferenceInputs = async (
@@ -192,13 +280,15 @@ const prepareTotals = async (
   transaction: RequestDatabaseTransaction,
   command: ExecuteNamedActionCommandV2,
   submittedValues: Readonly<Record<string, unknown>>,
+  creations: readonly NamedActionCreation[],
   activityId: string,
 ): Promise<RelationshipTotalPreparationOutcome> => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.prepare_named_action_relationship_totals(
-      ${command.commandId}::uuid, 'update', ${command.recordTypeId}::uuid,
+    select vortex_record.prepare_named_action_command_totals(
+      ${command.commandId}::uuid, ${command.recordTypeId}::uuid,
       ${command.recordId}::uuid, ${command.expectedConcurrencyNumber}::bigint,
-      ${JSON.stringify(submittedValues)}::text::jsonb, null::uuid,
+      ${JSON.stringify(submittedValues)}::text::jsonb,
+      ${JSON.stringify(creations)}::text::jsonb,
       ${activityId}::uuid, ${command.action.ownerKind}::text,
       ${command.action.ownerId}::uuid, ${command.action.releaseRevision}::bigint,
       ${command.action.actionId}::uuid
@@ -231,20 +321,24 @@ const persist = async (
   command: ExecuteNamedActionCommandV2,
   submittedValues: Readonly<Record<string, unknown>>,
   finalValues: Readonly<Record<string, unknown>>,
+  creations: readonly unknown[],
   activityId: string,
   standardOccurrenceId: string,
   declaredOccurrenceIds: readonly string[],
+  creationOccurrenceIds: readonly string[],
   parentMutations: readonly unknown[],
 ) => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.save_named_action_set_announce_with_relationship_totals(
-      ${command.commandId}::uuid, 'update', ${command.recordTypeId}::uuid,
+    select vortex_record.save_named_action_effects_with_relationship_totals(
+      ${command.commandId}::uuid, ${command.recordTypeId}::uuid,
       ${command.recordId}::uuid, ${command.expectedConcurrencyNumber}::bigint,
       ${JSON.stringify(submittedValues)}::text::jsonb,
-      ${JSON.stringify(finalValues)}::text::jsonb, null::uuid,
+      ${JSON.stringify(finalValues)}::text::jsonb,
       ${activityId}::uuid, ${standardOccurrenceId}::uuid,
       ${JSON.stringify(parentMutations)}::text::jsonb,
       ${JSON.stringify(declaredOccurrenceIds)}::text::jsonb,
+      ${JSON.stringify(creations)}::text::jsonb,
+      ${JSON.stringify(creationOccurrenceIds)}::text::jsonb,
       ${command.action.ownerKind}::text, ${command.action.ownerId}::uuid,
       ${command.action.releaseRevision}::bigint, ${command.action.actionId}::uuid,
       ${JSON.stringify(command.inputs)}::text::jsonb
@@ -284,6 +378,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
       }
       let standardOccurrenceId: string | undefined;
       let declaredOccurrenceIds: readonly string[] | undefined;
+      let creationOccurrenceIds: readonly string[] | undefined;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const result = await requests.runChange(
           session,
@@ -324,6 +419,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               transaction,
               command.data,
               previewComposition.submittedValues,
+              previewComposition.creations,
               activityId,
             );
             if (totalPreparation.outcome === "restart") return restart;
@@ -350,6 +446,8 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
             if (
               JSON.stringify(composition.submittedValues) !==
                 JSON.stringify(previewComposition.submittedValues) ||
+              JSON.stringify(composition.creations) !==
+                JSON.stringify(previewComposition.creations) ||
               JSON.stringify(composition.announcedEventKeys) !==
                 JSON.stringify(previewComposition.announcedEventKeys)
             )
@@ -363,7 +461,16 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
 
             let finalValues: Record<string, unknown> = {};
             let parentMutations: readonly unknown[] = [];
-            if (Object.keys(composition.submittedValues).length > 0) {
+            let creations: readonly Readonly<{
+              ordinal: number;
+              recordTypeId: string;
+              values: Readonly<Record<string, JsonValue | null>>;
+              finalValues: Readonly<Record<string, JsonValue | null>>;
+            }>[] = [];
+            if (
+              Object.keys(composition.submittedValues).length > 0 ||
+              composition.creations.length > 0
+            ) {
               const settings = await readOrganizationRuntimeSettings(transaction);
               const saveCommand = saveRecordCommandV2Schema.parse({
                 contractVersion: "2.0.0",
@@ -391,6 +498,7 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                   ? calculateLockedRelationshipTotalSave({
                       command: saveCommand,
                       preparation: totalPreparation,
+                      creations: composition.creations,
                       ...(settings?.currency ? { organizationCurrency: settings.currency } : {}),
                       clock,
                     })
@@ -416,6 +524,13 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
                 return safeRefusal(prepared.correlationId, "operation_refused");
               if (calculated.pendingChecks.some((check) => check.kind !== "record_reference"))
                 return safeRefusal(prepared.correlationId, "operation_refused");
+              if (
+                "creationPendingChecks" in calculated &&
+                Object.values(calculated.creationPendingChecks).some((checks) =>
+                  checks.some((check) => check.kind !== "record_reference"),
+                )
+              )
+                return safeRefusal(prepared.correlationId, "operation_refused");
               finalValues =
                 "sourceFinalValues" in calculated
                   ? { ...calculated.sourceFinalValues }
@@ -423,23 +538,63 @@ export const createNamedActionService = (dependencies: NamedActionServiceDepende
               if ("clearFieldIds" in calculated)
                 for (const fieldId of calculated.clearFieldIds) finalValues[fieldId] = null;
               if ("parentMutations" in calculated) parentMutations = calculated.parentMutations;
+              // The merged closure recomputes every derived subject field. An
+              // action with no set_field effect may therefore still carry a
+              // changed total; one whose derived values are unchanged must not
+              // fabricate a subject write, a revision bump or an occurrence.
+              if (Object.keys(composition.submittedValues).length === 0)
+                finalValues = Object.fromEntries(
+                  Object.entries(finalValues).filter(
+                    ([fieldId, value]) =>
+                      JSON.stringify(value ?? null) !==
+                      JSON.stringify(prepared.existingValues[fieldId] ?? null),
+                  ),
+                );
+              const createdFinalValues =
+                "creationFinalValues" in calculated
+                  ? calculated.creationFinalValues
+                  : creationFinalValues(
+                      prepared,
+                      composition.creations,
+                      issuedAt,
+                      settings?.currency,
+                      settings?.timeZone,
+                    );
+              if (createdFinalValues === undefined)
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              // `values` stays the composed authored field map, which the
+              // database re-derives from the installed action; `finalValues`
+              // adds the generated fields the evaluator produced, exactly as
+              // the subject's submitted/final split works.
+              creations = composition.creations.map((creation) => ({
+                ordinal: creation.ordinal,
+                recordTypeId: creation.recordTypeId,
+                values: creation.values,
+                finalValues: createdFinalValues[creation.ordinal] ?? creation.values,
+              }));
             }
             try {
               standardOccurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
               declaredOccurrenceIds ??= Array.from({ length: prepared.eventDescriptorCount }, () =>
                 eventOccurrenceIdSchema.parse(newOccurrenceId()),
               );
+              creationOccurrenceIds ??= Array.from({ length: creations.length }, () =>
+                eventOccurrenceIdSchema.parse(newOccurrenceId()),
+              );
             } catch {
               throw new Error("NAMED_ACTION_OCCURRENCE_ID_INVALID");
             }
+            if (creationOccurrenceIds.length !== creations.length) return restart;
             const stored = await persist(
               transaction,
               command.data,
               composition.submittedValues,
               finalValues,
+              creations,
               activityId,
               standardOccurrenceId,
               declaredOccurrenceIds,
+              creationOccurrenceIds,
               parentMutations,
             );
             if (stored.outcome === "restart") return restart;

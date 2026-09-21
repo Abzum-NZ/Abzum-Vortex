@@ -147,6 +147,11 @@
       "label": "Record change"
     },
     {
+      "migration": "supabase/migrations/20260921100000_named_action_create_record.sql",
+      "proof": "supabase/tests/named-action-create-concurrency.test.sh",
+      "label": "Named action create"
+    },
+    {
       "migration": "supabase/migrations/20260913060000_first_private_transactional_event_append.sql",
       "proof": "supabase/tests/event-append-concurrency.test.sh",
       "label": "Event append"

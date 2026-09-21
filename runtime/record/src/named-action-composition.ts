@@ -23,6 +23,16 @@ type NamedActionDefinition =
   | ReturnType<typeof actionDefinitionSchema.parse>
   | ReturnType<typeof actionDefinitionV2Schema.parse>;
 
+/**
+ * One `create_record` target resolved by the database from the published
+ * resolved record-type reference. The runtime never looks a target up itself.
+ */
+export type NamedActionCreateTarget = Readonly<{
+  ordinal: number;
+  recordTypeId: string;
+  recordType: ReturnType<typeof recordTypeDefinitionV2Schema.parse>;
+}>;
+
 export type PreparedNamedAction = Readonly<{
   validationContractVersion: "1.0.0" | "2.0.0" | "3.0.0";
   action: NamedActionDefinition;
@@ -30,10 +40,19 @@ export type PreparedNamedAction = Readonly<{
   recordId: string;
   existingValues: Readonly<Record<string, unknown>>;
   actorOrganizationAccountId: string;
+  createTargets: readonly NamedActionCreateTarget[];
+}>;
+
+/** One composed creation, in authored effect order. */
+export type NamedActionCreation = Readonly<{
+  ordinal: number;
+  recordTypeId: string;
+  values: Readonly<Record<string, JsonValue | null>>;
 }>;
 
 export type NamedActionComposition = Readonly<{
   submittedValues: Readonly<Record<string, JsonValue | null>>;
+  creations: readonly NamedActionCreation[];
   announcedEventKeys: readonly string[];
   normalizedInputs: Readonly<Record<string, JsonValue>>;
   preconditionSatisfied: boolean;
@@ -266,6 +285,44 @@ const evaluatePrecondition = (
   });
 };
 
+type ActionValue = Extract<
+  NamedActionDefinition["effects"][number],
+  { kind: "set_field" }
+>["value"];
+
+/**
+ * The six declared value sources, resolved against whichever record type owns
+ * the field being written. `create_record` reuses this unchanged against its
+ * target type; every source still reads only the subject, the inputs, the
+ * actor and the one checked operation time.
+ */
+const actionValue = (
+  prepared: PreparedNamedAction,
+  normalizedInputs: Readonly<Record<string, JsonValue>>,
+  issuedAt: string,
+  field: ReturnType<typeof recordTypeDefinitionV2Schema.parse>["fields"][number],
+  source: ActionValue,
+): JsonValue | undefined => {
+  let value: unknown;
+  if (source.source === "literal") value = source.value;
+  else if (source.source === "input") {
+    if (!hasOwn(normalizedInputs, source.inputKey)) return undefined;
+    value = normalizedInputs[source.inputKey];
+  } else if (source.source === "subject_field")
+    value = hasOwn(prepared.existingValues, source.fieldId)
+      ? prepared.existingValues[source.fieldId]
+      : null;
+  else if (source.source === "subject_record")
+    value = { recordTypeId: prepared.recordType.recordTypeId, recordId: prepared.recordId };
+  else if (source.source === "current_actor")
+    value =
+      field.type === "link_to_person"
+        ? { organizationAccountId: prepared.actorOrganizationAccountId }
+        : prepared.actorOrganizationAccountId;
+  else value = issuedAt;
+  return jsonValueSchema.safeParse(value).success ? (value as JsonValue) : undefined;
+};
+
 export const composeNamedAction = (
   prepared: PreparedNamedAction,
   suppliedInputs: Readonly<Record<string, unknown>>,
@@ -280,38 +337,50 @@ export const composeNamedAction = (
     return undefined;
   }
   const fields = new Map(prepared.recordType.fields.map((field) => [field.fieldId, field]));
+  const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
   const submittedValues: Record<string, JsonValue | null> = {};
+  const creations: NamedActionCreation[] = [];
   const announcedEventKeys: string[] = [];
-  for (const effect of prepared.action.effects) {
+  for (const [ordinal, effect] of prepared.action.effects.entries()) {
     if (effect.kind === "announce_event") {
       announcedEventKeys.push(effect.eventKey);
+      continue;
+    }
+    if (effect.kind === "create_record") {
+      const target = targets.get(ordinal);
+      if (
+        target === undefined ||
+        effect.recordType.state !== "resolved" ||
+        effect.recordType.recordTypeId.toLowerCase() !== target.recordTypeId.toLowerCase()
+      )
+        return undefined;
+      const targetFields = new Map<string, (typeof target.recordType.fields)[number]>(
+        target.recordType.fields.map((item) => [item.fieldId, item]),
+      );
+      const values: Record<string, JsonValue | null> = {};
+      for (const [fieldId, source] of Object.entries(effect.values)) {
+        const field = targetFields.get(fieldId);
+        if (field === undefined) return undefined;
+        const value = actionValue(prepared, normalizedInputs, issuedAt, field, source);
+        if (value === undefined) return undefined;
+        values[fieldId] = value;
+      }
+      creations.push({ ordinal, recordTypeId: target.recordTypeId, values });
       continue;
     }
     if (effect.kind !== "set_field") return undefined;
     const field = fields.get(effect.fieldId);
     if (field === undefined) return undefined;
-    let value: unknown;
-    if (effect.value.source === "literal") value = effect.value.value;
-    else if (effect.value.source === "input") {
-      if (!hasOwn(normalizedInputs, effect.value.inputKey)) return undefined;
-      value = normalizedInputs[effect.value.inputKey];
-    } else if (effect.value.source === "subject_field")
-      value = hasOwn(prepared.existingValues, effect.value.fieldId)
-        ? prepared.existingValues[effect.value.fieldId]
-        : null;
-    else if (effect.value.source === "subject_record")
-      value = {
-        recordTypeId: prepared.recordType.recordTypeId,
-        recordId: prepared.recordId,
-      };
-    else if (effect.value.source === "current_actor")
-      value =
-        field.type === "link_to_person"
-          ? { organizationAccountId: prepared.actorOrganizationAccountId }
-          : prepared.actorOrganizationAccountId;
-    else value = issuedAt;
-    if (!jsonValueSchema.safeParse(value).success) return undefined;
-    submittedValues[effect.fieldId] = value as JsonValue;
+    const value = actionValue(prepared, normalizedInputs, issuedAt, field, effect.value);
+    if (value === undefined) return undefined;
+    submittedValues[effect.fieldId] = value;
   }
-  return { submittedValues, announcedEventKeys, normalizedInputs, preconditionSatisfied };
+  if (creations.length !== prepared.createTargets.length) return undefined;
+  return {
+    submittedValues,
+    creations,
+    announcedEventKeys,
+    normalizedInputs,
+    preconditionSatisfied,
+  };
 };
