@@ -96,6 +96,8 @@ run_sql "
 
   grant execute on function public.vortex_test_connection_context() to vortex_runtime, vortex_request;
 
+  set local session_replication_role = replica;
+
   insert into vortex_identity.tenants (
     tenant_id, short_name, display_name, state, created_at, created_by,
     state_changed_at, revision
@@ -119,6 +121,8 @@ run_sql "
     '$application_root_id', '$organization_id', 'application', 'app.concurrency.test',
     pg_catalog.clock_timestamp(), '$actor_id'
   );
+
+  set local session_replication_role = origin;
 
   select vortex_context.initialize(public.vortex_test_connection_context());
   set local role vortex_runtime;
