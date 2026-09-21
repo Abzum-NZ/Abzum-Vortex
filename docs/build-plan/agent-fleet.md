@@ -101,7 +101,7 @@ treating it as fixed.
 | Mechanical workhorse | GPT 5.6 Luna | Checkable mechanical work under a concise, file-specific brief. | Mechanical `docs/**`, manifests, selectors and inventories |
 | Deep analysis | GPT 5.6 Sol · high (Codex) | Root-cause work and slice design when a defect resists the obvious reading, or when an issue owner needs the issue's scope split before anyone implements it. | Diagnosis notes, slice proposals, spec deltas |
 | Second lane | GPT 5.6 Terra · medium/high (Codex) | A balanced implementer for independent bounded coding. | Overflow implementation |
-| Independent Reviewer | Sonnet/Terra for routine review; Sol for complex/security; Opus privileged only | A separate session verifies the patch against the issue and actual evidence. Independence means a distinct reviewer session and no author self-review; it does not require a different model family. No Astra child reviewer is launched. | Approve, reject, or name what is missing |
+| REVIEW-AND-FIX owner | Claude Sonnet 5 for routine review and repair; GPT 5.6 Sol high for genuinely complex correctness or security repair; Opus privileged only | After the original editor checkpoints and stops, takes exclusive edit ownership of the preserved candidate, reproduces findings, implements scoped fixes, runs affected checks, and returns the exact diff or commit plus evidence in one bounded assignment. GPT-6 Astra is reserved for architecture-level tasks. | Reviewed-and-fixed outcome, remaining acceptance gaps, and evidence |
 
 GPT lanes run through Codex's native worker mechanism; Claude lanes run as
 Claude Code agents; the Antigravity lane runs through the `agy` TUI. Do not
@@ -258,7 +258,7 @@ root still does not decompose a multi-slice issue into its workers.
    an orphan worktree; never ignore it.
 
 4. **Watch** — check the agent at least every twenty minutes; see Watching below.
-5. **Gate** — run local verification and independent review where required; see Gates below.
+5. **Gate** — transfer the checkpointed candidate to a REVIEW-AND-FIX owner and run the applicable local verification; see Gates below.
 6. **Land** — open the pull request into `main` (an issue owner may open it
    for review only when authorized) and merge once gates and review pass; the
    root decides the merge. Promotion to `testing` remains a separate phase
@@ -274,7 +274,7 @@ root still does not decompose a multi-slice issue into its workers.
 
 ### Blocking completion and resume gate
 
-After every worker completion, review verdict, merge, hosted result or closure,
+After every worker completion, reviewed-and-fixed result, merge, hosted result or closure,
 and before the first dispatch after a resume, the root applies this central
 protocol:
 

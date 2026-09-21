@@ -45,7 +45,7 @@ state, merged/unneeded work and no active ownership; preserve all other work.
 | Coordinator (generic root) | Select dependency-ready tasks, commission reviews, dispatch corrected handoffs, monitor drift/blockers and usage, maintain progress, own all GitHub and board access, perform acceptance, and coordinate delivery after normal checks. It has no implementation issue or pull-request ownership. |
 | Planner (GPT 5.6 Sol) | Review and directly correct scope, acceptance, specification/build-plan wording and GitHub dependencies before developer handoff. |
 | Developer | Execute a bounded approved plan, test the real behaviour, propose relevant documentation changes and return an exact reviewable commit. Do not merge or start another task without coordinator direction. |
-| Independent Reviewer (Sonnet/Terra routine; Sol complex/security; Opus privileged only) | In a separate session, verify the implementation against the issue and approved product model, inspect actual evidence, and record findings or approval independently of the Developer. |
+| REVIEW-AND-FIX owner (Sonnet routine; Sol complex correctness/security; Opus privileged only) | After the original editor checkpoints and stops, take exclusive edit ownership of the preserved candidate, reproduce findings, implement scoped fixes, run affected checks, and return the exact diff or commit plus evidence in one bounded assignment. |
 | Architecture Reviewer | Own explicitly assigned full-system reviews across code, specification, build plan and GitHub task architecture, plus genuinely complex architecture, cross-system design and task decomposition. Claude Opus is reserved for privileged database, security or concurrency review. Choose the simplest sufficient design. Do not use for routine work or implementation unless explicitly reassigned. |
 | Hosted Tester | Run the single entitled Testing execution, record its receipt and result, and never start a duplicate run while the original is live. |
 | User | Decide unresolved business/product behaviour. Engineering choices do not require a new user approval gate. |
@@ -84,9 +84,10 @@ handoff. It is not evidence that a native GPT worker has been launched.
 The Architecture Reviewer handles explicitly assigned full-system reviews.
 The Planner assesses findings and directly corrects agreed specifications,
 plans, tasks and dependencies before the Coordinator dispatches bounded
-implementation. The Independent Reviewer verifies the resulting work.
-Historical review receipts remain valid. This does not authorize simultaneous
-conflicting edits or duplicate reviews.
+implementation. The REVIEW-AND-FIX owner receives the checkpointed candidate
+after the original editor stops, then reviews and repairs it without returning
+routine findings to that editor. Historical review receipts remain valid. This
+does not authorize simultaneous conflicting edits or duplicate reviews.
 
 The [GitHub project](https://github.com/orgs/Abzum-NZ/projects/2/views/1) remains
 the task board. Issues hold scope, acceptance, dependencies and status. Existing
@@ -132,9 +133,9 @@ available.
 ### Status meaning
 
 Use each active board status for one accountable stage. **In progress** means
-an accepted Developer, Planner, or Reviewer is changing or investigating the
-work. **In review** covers the bounded review-and-delivery gate: an Independent
-Reviewer is active until issuing a verdict; after approval, the Coordinator may
+an accepted Developer, Planner, or REVIEW-AND-FIX owner is changing or investigating the
+work. **In review** covers the bounded review-and-delivery gate: a REVIEW-AND-FIX
+owner is active until returning its reviewed-and-fixed result; afterward, the Coordinator may
 remain the active owner while the same status waits for the normal pull-request
 check and merge. The card must say explicitly which of those two states applies;
 never imply that a completed reviewer is still active. **Testing** begins only
@@ -173,11 +174,17 @@ After the Planner reviews and corrects the task handoff, the Coordinator supplie
 issue, exact base revision, working directory,
 branch, role, functional outcome, included/excluded work, relevant references,
 required checks and stopping point. Each session verifies these before acting.
-Use separate architecture, development and independent-review sessions with
+Use separate architecture, development and REVIEW-AND-FIX sessions with
 explicit model selection; record the resolved model, session identifier and
-actual task evidence. A reviewer must not review its own authoring session, but
-need not be from a different model family. Report an unavailable or changed
-model unless the current cost routing above authorizes the named replacement.
+actual task evidence. The original editor checkpoints and stops before the
+REVIEW-AND-FIX owner receives exclusive edit ownership of the same preserved
+candidate. Use Sonnet for routine work and Sol for genuinely complex correctness
+or security repair; reserve Astra for architecture-level tasks. Because the
+reviewer becomes an author, call the result reviewed-and-fixed rather than an
+independent approval. Use a lightweight independent delta check only for a
+security-sensitive or material logic change, without starting another full
+review loop. Report an unavailable or changed model unless the current cost
+routing above authorizes the named replacement.
 
 One developer writes a task worktree at a time. Independent concurrent tasks use
 separate worktrees. Never run competing dependency installations or edits in one
@@ -237,7 +244,7 @@ otherwise record the reset/blocker.
   Technical dependency: identify it and continue independent assigned work.
   Low-priority maintenance: recommend backlog. Engineering detail: architect
   decides, documents material reasoning, the Planner corrects the handoff, the
-  Developer implements and the Independent Reviewer verifies.
+  Developer implements and the REVIEW-AND-FIX owner reviews and repairs.
 - Prior safety denials remain binding across tools and agents. Do not recover a
   rejected patch from an older worktree or execute it through another agent as a workaround.
   Do not add global wildcard permission rules, copy credentials, broadly reset,
@@ -256,11 +263,19 @@ otherwise record the reset/blocker.
 
 Return: changed functionality; files/commit; tests actually run and results;
 remaining acceptance gaps; necessary spec/plan/task updates; and any real blocker.
-The Independent Reviewer, in a separate session, reviews the patch against the
-issue and approved product model using actual evidence and corrects any planning
-or acceptance errors before the Coordinator returns specific implementation
-findings to the Developer. Privileged database, security or concurrency changes
-also receive the privileged review required by the fleet rules. The Coordinator
+The REVIEW-AND-FIX owner, in a separate session after the original editor stops,
+reviews the preserved patch against the issue and approved product model,
+reproduces findings, implements scoped fixes, and runs affected checks. It
+returns the exact diff or commit, evidence, and remaining acceptance gaps in one
+bounded assignment. Product choices and scope expansion return to the
+Coordinator. For trivial fixture corrections, the Coordinator may authorize a
+bounded verification budget that persists across sequential corrections within
+the two-cluster cap; each invocation still records unique allocation and cleanup
+evidence. Because this owner authors the correction, its output is
+reviewed-and-fixed, not independent approval. Security-sensitive or material
+logic changes receive a lightweight independent delta check rather than another
+full review loop. Privileged database, security or concurrency changes also
+receive the privileged handling required by the fleet rules. The Coordinator
 merges only after applicable checks pass. Existing independent approval is
 reused for unchanged work.
 
