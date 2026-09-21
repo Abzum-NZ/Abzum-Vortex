@@ -364,7 +364,8 @@ select pg_temp.append_writer_release(
     ),
     'permissions', '[]'::jsonb,
     'sharingConditions', '[]'::jsonb
-  )
+  ),
+  '2.0.0'
 );
 
 -- App 1 and App 2 both bind Module 1 in Org One.
@@ -410,7 +411,8 @@ select pg_temp.append_writer_release(
     ),
     'permissions', '[]'::jsonb,
     'sharingConditions', '[]'::jsonb
-  )
+  ),
+  '2.0.0'
 );
 select pg_temp.append_writer_release(
   :'app_three', '1.0.0',
