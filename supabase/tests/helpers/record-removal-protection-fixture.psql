@@ -122,6 +122,138 @@ select * from vortex_access.adopt_shipped_platform_permission_catalogue(
   :'rph_actor', 'a4780000-0000-4000-8000-000000000045'
 );
 
+-- Canonical current installation authority. Catalogue revision 3 introduces
+-- applications.manage after stewardship adoption, so each active fixture
+-- account receives an explicit privileged standing role at the exact current
+-- permission registration/continuity revision before vortex_request provisions.
+insert into vortex_access.organization_roles (
+  organization_id, role_id, role_kind, role_key, live_revision,
+  created_by, created_at
+) values (
+  :'rph_org', 'a4780000-0000-4000-8000-000000000080', 'custom',
+  'application_installer', 1, :'rph_actor', pg_catalog.statement_timestamp()
+);
+insert into vortex_access.organization_role_permission_entries (
+  organization_id, role_id, role_revision, entry_ordinal, role_kind,
+  role_application_root_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id,
+  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
+  meaning_fingerprint
+)
+select entry.organization_id, 'a4780000-0000-4000-8000-000000000080'::uuid,
+  1, 1, 'custom', null, entry.application_root_id,
+  entry.owner_kind, entry.owner_id, entry.permission_id,
+  entry.registration_kind, entry.registration_owner_id,
+  entry.registration_revision, registration.permission_catalogue_fingerprint,
+  continuity.continuity_revision, entry.meaning_fingerprint
+from vortex_access.permission_catalogue_entries as entry
+join vortex_access.permission_registration_revisions as registration
+  on registration.organization_id = entry.organization_id
+  and registration.registration_kind = entry.registration_kind
+  and registration.registration_owner_id = entry.registration_owner_id
+  and registration.revision = entry.registration_revision
+join vortex_access.permission_continuities as continuity
+  on continuity.organization_id = entry.organization_id
+  and continuity.application_root_id is not distinct from entry.application_root_id
+  and continuity.owner_kind = entry.owner_kind
+  and continuity.owner_id = entry.owner_id
+  and continuity.permission_id = entry.permission_id
+where entry.organization_id = :'rph_org'
+  and entry.registration_kind = 'platform'
+  and entry.registration_revision = 3
+  and entry.permission_id = '7ecd3304-f16c-47d4-94db-0964980091ba';
+insert into vortex_access.organization_role_revisions (
+  organization_id, role_id, revision, role_kind, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
+  authority_continuity_revision, role_key, label, description,
+  changed_by, changed_at, change_correlation_id
+) values (
+  :'rph_org', 'a4780000-0000-4000-8000-000000000080', 1, 'custom', 'active',
+  'privileged', 'standing', 1, 1, 'application_installer',
+  'Application installer', 'Current storage provisioning authority for recovery tests.',
+  :'rph_actor', pg_catalog.statement_timestamp(),
+  'a4780000-0000-4000-8000-000000000082'
+);
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, group_id, assignment_kind, revision,
+  starts_at, expires_at, state, granted_by, granted_at,
+  grant_correlation_id, changed_by, changed_at, change_correlation_id
+) values (
+  :'rph_org', 'a4780000-0000-4000-8000-000000000081',
+  'a4780000-0000-4000-8000-000000000080', 'organization_account',
+  :'rph_account', null, 'standing', 1,
+  pg_catalog.statement_timestamp() - interval '1 minute', null, 'live',
+  :'rph_actor', pg_catalog.statement_timestamp(),
+  'a4780000-0000-4000-8000-000000000083',
+  :'rph_actor', pg_catalog.statement_timestamp(),
+  'a4780000-0000-4000-8000-000000000083'
+);
+
+insert into vortex_access.organization_roles (
+  organization_id, role_id, role_kind, role_key, live_revision,
+  created_by, created_at
+) values (
+  :'rph_org_two', 'a4780000-0000-4000-8000-000000000084', 'custom',
+  'application_installer', 1, :'rph_actor', pg_catalog.statement_timestamp()
+);
+insert into vortex_access.organization_role_permission_entries (
+  organization_id, role_id, role_revision, entry_ordinal, role_kind,
+  role_application_root_id, application_root_id, owner_kind, owner_id,
+  permission_id, registration_kind, registration_owner_id,
+  accepted_registration_revision, catalogue_fingerprint, continuity_revision,
+  meaning_fingerprint
+)
+select entry.organization_id, 'a4780000-0000-4000-8000-000000000084'::uuid,
+  1, 1, 'custom', null, entry.application_root_id,
+  entry.owner_kind, entry.owner_id, entry.permission_id,
+  entry.registration_kind, entry.registration_owner_id,
+  entry.registration_revision, registration.permission_catalogue_fingerprint,
+  continuity.continuity_revision, entry.meaning_fingerprint
+from vortex_access.permission_catalogue_entries as entry
+join vortex_access.permission_registration_revisions as registration
+  on registration.organization_id = entry.organization_id
+  and registration.registration_kind = entry.registration_kind
+  and registration.registration_owner_id = entry.registration_owner_id
+  and registration.revision = entry.registration_revision
+join vortex_access.permission_continuities as continuity
+  on continuity.organization_id = entry.organization_id
+  and continuity.application_root_id is not distinct from entry.application_root_id
+  and continuity.owner_kind = entry.owner_kind
+  and continuity.owner_id = entry.owner_id
+  and continuity.permission_id = entry.permission_id
+where entry.organization_id = :'rph_org_two'
+  and entry.registration_kind = 'platform'
+  and entry.registration_revision = 3
+  and entry.permission_id = '7ecd3304-f16c-47d4-94db-0964980091ba';
+insert into vortex_access.organization_role_revisions (
+  organization_id, role_id, revision, role_kind, lifecycle,
+  privilege_classification, assignment_policy, policy_continuity_revision,
+  authority_continuity_revision, role_key, label, description,
+  changed_by, changed_at, change_correlation_id
+) values (
+  :'rph_org_two', 'a4780000-0000-4000-8000-000000000084', 1, 'custom', 'active',
+  'privileged', 'standing', 1, 1, 'application_installer',
+  'Application installer', 'Current storage provisioning authority for recovery tests.',
+  :'rph_actor', pg_catalog.statement_timestamp(),
+  'a4780000-0000-4000-8000-000000000086'
+);
+insert into vortex_access.organization_role_assignments (
+  organization_id, role_assignment_id, role_id, assignee_kind,
+  organization_account_id, group_id, assignment_kind, revision,
+  starts_at, expires_at, state, granted_by, granted_at,
+  grant_correlation_id, changed_by, changed_at, change_correlation_id
+) values (
+  :'rph_org_two', 'a4780000-0000-4000-8000-000000000085',
+  'a4780000-0000-4000-8000-000000000084', 'organization_account',
+  :'rph_account_two', null, 'standing', 1,
+  pg_catalog.statement_timestamp() - interval '1 minute', null, 'live',
+  :'rph_actor', pg_catalog.statement_timestamp(),
+  'a4780000-0000-4000-8000-000000000087',
+  :'rph_actor', pg_catalog.statement_timestamp(),
+  'a4780000-0000-4000-8000-000000000087'
+);
+
 insert into vortex_definition.roots (
   root_id, organization_id, kind, key, created_at, created_by
 ) values
