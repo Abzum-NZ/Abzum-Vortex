@@ -4,6 +4,8 @@ import {
   applicationInstallationActivationCommandSchema,
   applicationInstallationDetachCommandSchema,
   applicationInstallationLifecycleResultSchema,
+  applicationLifecyclePolicyReadinessSchema,
+  validateRecordTypeLifecyclePolicy,
   type ApplicationInstallationActivationCommand,
   type ApplicationInstallationDetachCommand,
   type ApplicationInstallationLifecycleErrorCode,
@@ -12,6 +14,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
 
 type LifecycleRow = DatabaseRow & { readonly lifecycle_result: unknown };
+type LifecyclePolicyReadinessRow = DatabaseRow & { readonly lifecycle_readiness: unknown };
 
 export class ApplicationInstallationLifecycleError extends Error {
   readonly code: ApplicationInstallationLifecycleErrorCode;
@@ -64,6 +67,53 @@ const parseResult = (rows: readonly LifecycleRow[]): ApplicationInstallationLife
   return result.data;
 };
 
+/**
+ * Reads the exact #566 policy snapshot and live readiness projection from its
+ * Record-owned repository.  The stored procedure locks the target policy,
+ * limits, binding and archive readiness facts while this request activates the
+ * installation; Module never reads Record tables directly.
+ */
+const requireExecutableLifecyclePolicies = async (
+  transaction: RequestDatabaseTransaction,
+  command: ApplicationInstallationActivationCommand,
+): Promise<void> => {
+  const rows = await transaction.query<LifecyclePolicyReadinessRow>`
+    select vortex_record.read_application_lifecycle_policy_readiness(
+      ${command.applicationRootId}::uuid,
+      ${command.applicationReleaseRevision}::bigint,
+      ${JSON.stringify(command.expectedModuleBindings)}::jsonb
+    ) as lifecycle_readiness
+  `;
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw new ApplicationInstallationLifecycleError(
+      "APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE",
+    );
+  const readiness = applicationLifecyclePolicyReadinessSchema.safeParse(
+    rows[0].lifecycle_readiness,
+  );
+  if (!readiness.success || readiness.data.organizationLimits.organizationId !== readiness.data.organizationId)
+    throw new ApplicationInstallationLifecycleError(
+      "APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE",
+    );
+
+  for (const policy of readiness.data.policies) {
+    if (
+      policy.organizationId !== readiness.data.organizationId ||
+      (policy.applicationRootId !== readiness.data.applicationRootId &&
+        policy.applicationRootId !== null) ||
+      !validateRecordTypeLifecyclePolicy(
+        policy,
+        readiness.data.organizationLimits,
+        readiness.data.readinessEvidence,
+        readiness.data.organizationLimits.settingsRevision,
+      ).valid
+    )
+      throw new ApplicationInstallationLifecycleError(
+        "APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE",
+      );
+  }
+};
+
 export interface ApplicationInstallationLifecycleRepository {
   activate(
     command: ApplicationInstallationActivationCommand,
@@ -85,6 +135,7 @@ export const createApplicationInstallationLifecycleRepository = (
           "INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND",
         );
       try {
+        await requireExecutableLifecyclePolicies(transaction, command.data);
         return parseResult(
           await transaction.query<LifecycleRow>`
             select vortex_module.activate_application_installation(

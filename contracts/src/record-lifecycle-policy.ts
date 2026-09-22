@@ -3,6 +3,7 @@ import {
   applicationRootIdSchema,
   connectionInstanceIdSchema,
   organizationIdSchema,
+  recordTypeIdSchema,
   recordIdSchema,
   revisionSchema,
   storageContractIdSchema,
@@ -312,6 +313,140 @@ export const lifecycleReadinessEvidenceSchema = z
   })
   .strict();
 export type LifecycleReadinessEvidence = z.infer<typeof lifecycleReadinessEvidenceSchema>;
+
+/**
+ * The immutable facts a caller must carry into a recovery decision.  The
+ * record-type identity is intentionally paired with the stored-policy target:
+ * a storage contract is not itself an authority to restore another type.
+ */
+export const recordRecoveryPolicySchema = z
+  .object({
+    recordTypeId: recordTypeIdSchema,
+    policy: recordTypeLifecyclePolicySchema,
+    recoveryWindowDays: jsonSafePositiveIntegerSchema,
+  })
+  .strict();
+export type RecordRecoveryPolicy = z.infer<typeof recordRecoveryPolicySchema>;
+
+export const recordRecoveryEligibilityReasonSchema = z.enum([
+  "malformed_input",
+  "policy_unavailable",
+  "policy_revision_stale",
+  "scope_mismatch",
+  "recovery_action_ineligible",
+  "readiness_unavailable",
+  "recovery_window_expired",
+]);
+export type RecordRecoveryEligibilityReason = z.infer<
+  typeof recordRecoveryEligibilityReasonSchema
+>;
+
+/**
+ * Pure, state-free recovery decision input.  The caller supplies the current
+ * stored policy projection and readiness fact; this contract deliberately has
+ * no record ID, mutation command, totals, effects, or receipt fields.
+ */
+export const recordRecoveryEligibilityInputSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    storageContractId: storageContractIdSchema,
+    applicationRootId: applicationRootIdSchema.nullable(),
+    recordTypeId: recordTypeIdSchema,
+    deletedAt: timestampSchema,
+    decidedAt: timestampSchema,
+    expectedPolicyRevision: jsonSafeRevisionSchema,
+    readinessAvailable: z.boolean(),
+    governingPolicy: recordRecoveryPolicySchema,
+  })
+  .strict();
+export type RecordRecoveryEligibilityInput = z.infer<typeof recordRecoveryEligibilityInputSchema>;
+
+export const recordRecoveryEligibilityDecisionSchema = z.discriminatedUnion("allowed", [
+  z
+    .object({
+      allowed: z.literal(true),
+      reason: z.null(),
+      governingPolicyRevision: jsonSafeRevisionSchema,
+    })
+    .strict(),
+  z
+    .object({
+      allowed: z.literal(false),
+      reason: recordRecoveryEligibilityReasonSchema,
+      governingPolicyRevision: jsonSafeRevisionSchema.nullable(),
+    })
+    .strict(),
+]);
+export type RecordRecoveryEligibilityDecision = z.infer<
+  typeof recordRecoveryEligibilityDecisionSchema
+>;
+
+/**
+ * Protected Record-owned snapshot used immediately before Module activation.
+ * It contains no mutable request input: target completeness comes from the
+ * repository and each policy is checked again by the Module caller.
+ */
+export const applicationLifecyclePolicyReadinessSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    policies: z.array(recordTypeLifecyclePolicySchema).min(1),
+    organizationLimits: organizationLifecycleLimitsSchema,
+    readinessEvidence: lifecycleReadinessEvidenceSchema,
+  })
+  .strict();
+export type ApplicationLifecyclePolicyReadiness = z.infer<
+  typeof applicationLifecyclePolicyReadinessSchema
+>;
+
+const refusedRecovery = (
+  reason: RecordRecoveryEligibilityReason,
+  governingPolicyRevision: number | null,
+): RecordRecoveryEligibilityDecision => ({
+  allowed: false,
+  reason,
+  governingPolicyRevision,
+});
+
+/**
+ * Determines recovery eligibility without observing or changing Record state.
+ * Times are interpreted as UTC instants and a record is recoverable only while
+ * the elapsed interval is strictly shorter than its configured window.
+ */
+export const decideRecordRecoveryEligibility = (
+  candidate: unknown,
+): RecordRecoveryEligibilityDecision => {
+  const input = recordRecoveryEligibilityInputSchema.safeParse(candidate);
+  if (!input.success) return refusedRecovery("malformed_input", null);
+
+  const { governingPolicy, deletedAt, decidedAt } = input.data;
+  const policy = governingPolicy.policy;
+  const policyRevision = policy.policyRevision;
+  if (input.data.expectedPolicyRevision !== policyRevision)
+    return refusedRecovery("policy_revision_stale", policyRevision);
+  if (
+    policy.organizationId !== input.data.organizationId ||
+    policy.storageContractId !== input.data.storageContractId ||
+    policy.applicationRootId !== input.data.applicationRootId ||
+    governingPolicy.recordTypeId !== input.data.recordTypeId
+  )
+    return refusedRecovery("scope_mismatch", policyRevision);
+  if (policy.action !== "delete") return refusedRecovery("recovery_action_ineligible", policyRevision);
+  if (!input.data.readinessAvailable) return refusedRecovery("readiness_unavailable", policyRevision);
+
+  const deletedAtMs = new Date(deletedAt).getTime();
+  const decidedAtMs = new Date(decidedAt).getTime();
+  const recoveryWindowMs =
+    governingPolicy.recoveryWindowDays > Number.MAX_SAFE_INTEGER / (24 * 60 * 60 * 1000)
+      ? Number.POSITIVE_INFINITY
+      : governingPolicy.recoveryWindowDays * 24 * 60 * 60 * 1000;
+  if (!Number.isFinite(deletedAtMs) || !Number.isFinite(decidedAtMs))
+    return refusedRecovery("malformed_input", policyRevision);
+  if (decidedAtMs < deletedAtMs || decidedAtMs - deletedAtMs >= recoveryWindowMs)
+    return refusedRecovery("recovery_window_expired", policyRevision);
+
+  return { allowed: true, reason: null, governingPolicyRevision: policyRevision };
+};
 
 export interface PolicyValidationIssue {
   code: string;

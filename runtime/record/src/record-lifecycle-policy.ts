@@ -18,6 +18,8 @@ import {
   type OrganizationSelectionCandidate,
   type RecordTypeLifecyclePolicy,
 } from "@vortex/contracts";
+
+export { decideRecordRecoveryEligibility } from "@vortex/contracts";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
